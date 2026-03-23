@@ -14,5 +14,5 @@ export const config = defineConfig(
     "build/**",
     "next-env.d.ts",
   ]),
-  pluginNext.flatConfig.coreWebVitals
+  pluginNext.configs["core-web-vitals"]
 );

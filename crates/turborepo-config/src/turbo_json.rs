@@ -55,8 +55,10 @@ impl<'a> TurboJsonReader<'a> {
     }
 
     fn turbo_json_to_config_options(
-        turbo_json: RawTurboJson,
+        mut turbo_json: RawTurboJson,
     ) -> Result<ConfigurationOptions, Error> {
+        turbo_json.resolve_global_config();
+
         let mut opts = if let Some(remote_cache_options) = &turbo_json.remote_cache {
             remote_cache_options.into()
         } else {
@@ -93,16 +95,23 @@ impl<'a> TurboJsonReader<'a> {
 
         opts.future_flags = turbo_json.future_flags.map(|f| *f.as_inner());
 
-        // Only read observability config if futureFlags.experimentalObservability is
-        // enabled
-        if opts
-            .future_flags
-            .map(|f| f.experimental_observability)
-            .unwrap_or(false)
-            && let Some(raw_observability) = turbo_json.experimental_observability
-        {
-            opts.experimental_observability = Some(convert_raw_observability(raw_observability)?);
+        if let Some(raw_observability) = turbo_json.experimental_observability {
+            let otel_enabled = opts
+                .future_flags
+                .map(|f| f.experimental_observability)
+                .unwrap_or(false);
+
+            let converted = convert_raw_observability(raw_observability)?;
+
+            let effective = ExperimentalObservabilityOptions {
+                otel: if otel_enabled { converted.otel } else { None },
+            };
+
+            if effective.otel.is_some() {
+                opts.experimental_observability = Some(effective);
+            }
         }
+
         Ok(opts)
     }
 }
@@ -117,10 +126,12 @@ impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
             |_| turbo_json_path.as_str().to_owned(),
             |relative| relative.to_string(),
         );
-        let turbo_json = match turbo_json_path.read_existing_to_string()? {
-            Some(contents) => RawRootTurboJson::parse(&contents, &root_relative_turbo_json_path)
-                .map_err(turborepo_turbo_json::Error::from)?
-                .into(),
+        let turbo_json: RawTurboJson = match turbo_json_path.read_existing_to_string()? {
+            Some(contents) => {
+                let raw_root = RawRootTurboJson::parse(&contents, &root_relative_turbo_json_path)
+                    .map_err(turborepo_turbo_json::Error::from)?;
+                RawTurboJson::try_from(raw_root).map_err(Error::TurboJsonError)?
+            }
             None => RawTurboJson::default(),
         };
         Self::turbo_json_to_config_options(turbo_json)
@@ -272,7 +283,8 @@ mod test {
             "junk",
         )
         .unwrap()
-        .into();
+        .try_into()
+        .unwrap();
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
         assert!(config.enabled());
         assert_eq!(config.timeout(), timeout);
@@ -303,7 +315,8 @@ mod test {
             "turbo.json",
         )
         .unwrap()
-        .into();
+        .try_into()
+        .unwrap();
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
         assert_eq!(config.allow_no_package_manager(), expected);
     }
@@ -318,7 +331,8 @@ mod test {
             "turbo.json",
         )
         .unwrap()
-        .into();
+        .try_into()
+        .unwrap();
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
 
         assert!(config.no_update_notifier());
@@ -342,7 +356,8 @@ mod test {
             "turbo.json",
         )
         .unwrap()
-        .into();
+        .try_into()
+        .unwrap();
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
         // Should be None because future flag is disabled
         assert_eq!(config.experimental_observability(), None);
@@ -375,7 +390,8 @@ mod test {
             "turbo.json",
         )
         .unwrap()
-        .into();
+        .try_into()
+        .unwrap();
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
         let observability_config = config.experimental_observability();
         assert!(observability_config.is_some());
@@ -408,7 +424,8 @@ mod test {
             "turbo.json",
         )
         .unwrap()
-        .into();
+        .try_into()
+        .unwrap();
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
         // Should be None because future flag is not set (defaults to false)
         assert_eq!(config.experimental_observability(), None);
@@ -440,7 +457,8 @@ mod test {
             "turbo.json",
         )
         .unwrap()
-        .into();
+        .try_into()
+        .unwrap();
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
         let observability_config = config.experimental_observability();
         assert!(observability_config.is_some());
@@ -496,7 +514,8 @@ mod test {
         let turbo_json: turborepo_turbo_json::RawTurboJson =
             RawRootTurboJson::parse(&serde_json::to_string_pretty(&input).unwrap(), "turbo.json")
                 .unwrap()
-                .into();
+                .try_into()
+                .unwrap();
 
         let serialized = serde_json::to_string_pretty(&turbo_json).unwrap();
 
@@ -509,7 +528,8 @@ mod test {
         let reparsed: turborepo_turbo_json::RawTurboJson =
             RawRootTurboJson::parse(&serialized, "turbo.json")
                 .unwrap()
-                .into();
+                .try_into()
+                .unwrap();
 
         let config = TurboJsonReader::turbo_json_to_config_options(reparsed).unwrap();
         let otel = config

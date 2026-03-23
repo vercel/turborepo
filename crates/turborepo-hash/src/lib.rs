@@ -103,6 +103,7 @@ pub struct GlobalHashable<'a> {
     pub pass_through_env: &'a [String],
     pub env_mode: EnvMode,
     pub framework_inference: bool,
+    pub global_configuration: bool,
 }
 
 pub struct LockFilePackages(pub Vec<turborepo_lockfiles::Package>);
@@ -479,6 +480,7 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
         });
 
         builder.set_framework_inference(hashable.framework_inference);
+        builder.set_global_configuration(hashable.global_configuration);
 
         // We're okay to unwrap here because we haven't hit the nesting
         // limit and the message will not have cycles.
@@ -583,9 +585,54 @@ mod test {
             pass_through_env: &["pass_through_env".to_string()],
             env_mode: EnvMode::Strict,
             framework_inference: true,
+            global_configuration: false,
         };
 
         assert_eq!(global_hash.hash(), "5072bd005ec02799");
+    }
+
+    #[test]
+    fn global_hashable_with_global_configuration() {
+        let global_file_hash_map = vec![(
+            turbopath::RelativeUnixPathBuf::new("global_file_hash_map").unwrap(),
+            "global_file_hash_map".to_string(),
+        )]
+        .into_iter()
+        .collect();
+
+        let hash_without = GlobalHashable {
+            global_cache_key: "global_cache_key",
+            global_file_hash_map: &global_file_hash_map,
+            root_external_dependencies_hash: Some("0000000000000000"),
+            root_internal_dependencies_hash: Some("0000000000000001"),
+            engines: Default::default(),
+            env: &["env".to_string()],
+            resolved_env_vars: vec![],
+            pass_through_env: &["pass_through_env".to_string()],
+            env_mode: EnvMode::Strict,
+            framework_inference: true,
+            global_configuration: false,
+        };
+
+        let hash_with = GlobalHashable {
+            global_cache_key: "global_cache_key",
+            global_file_hash_map: &global_file_hash_map,
+            root_external_dependencies_hash: Some("0000000000000000"),
+            root_internal_dependencies_hash: Some("0000000000000001"),
+            engines: Default::default(),
+            env: &["env".to_string()],
+            resolved_env_vars: vec![],
+            pass_through_env: &["pass_through_env".to_string()],
+            env_mode: EnvMode::Strict,
+            framework_inference: true,
+            global_configuration: true,
+        };
+
+        assert_ne!(
+            hash_without.hash(),
+            hash_with.hash(),
+            "toggling global_configuration must change the hash"
+        );
     }
 
     #[test_case(vec![], "459c029558afe716" ; "empty")]

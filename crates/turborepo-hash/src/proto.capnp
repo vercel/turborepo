@@ -37,6 +37,7 @@ struct GlobalHashable {
   envMode @7 :EnvMode;
   frameworkInference @8 :Bool;
   engines @9 :List(Entry);
+  globalConfiguration @10 :Bool;
 
 
   enum EnvMode {

@@ -15,7 +15,7 @@ use serde::{Serialize, Serializer, ser::SerializeMap};
 /// control characters (ASCII C0, DEL, and Unicode C1) are removed.
 ///
 /// Returns `Cow::Borrowed` when no changes are needed.
-fn strip_control_chars(input: &str, preserve_newlines: bool) -> Cow<'_, str> {
+pub(crate) fn strip_control_chars(input: &str, preserve_newlines: bool) -> Cow<'_, str> {
     let needs_work = input
         .chars()
         .any(|c| c.is_control() && (!preserve_newlines || c != '\n'));
@@ -94,11 +94,29 @@ fn strip_control_chars(input: &str, preserve_newlines: bool) -> Cow<'_, str> {
 ///
 /// Strips control characters and ANSI escape sequences while
 /// preserving newlines (multi-line messages are common).
+/// Strip control characters but preserve ANSI escape sequences.
+///
+/// ANSI codes are kept so that the TerminalSink can render colors.
+/// Sinks that produce machine-readable output (StructuredLogSink,
+/// FileSink) strip ANSI at write time.
 fn sanitize_message(input: String) -> String {
-    match strip_control_chars(&input, true) {
-        Cow::Borrowed(_) => input,
-        Cow::Owned(sanitized) => sanitized,
+    // Only strip non-ANSI control characters (NUL, BEL, etc.)
+    // while preserving ANSI escape sequences and newlines.
+    let needs_strip = input.bytes().any(|b| {
+        // Control chars excluding \n (0x0A) and ESC (0x1B)
+        b < 0x20 && b != b'\n' && b != 0x1B
+    });
+    if !needs_strip {
+        return input;
     }
+    input
+        .chars()
+        .filter(|&c| {
+            let b = c as u32;
+            // Keep printable, newline, ESC, and everything >= 0x20
+            b >= 0x20 || c == '\n' || c == '\x1B'
+        })
+        .collect()
 }
 
 /// Severity level for user-facing log events.
@@ -886,23 +904,25 @@ mod tests {
     }
 
     #[test]
-    fn message_strips_full_ansi_sequences() {
+    fn message_preserves_ansi_strips_nul() {
         let event = LogEvent::new(
             Level::Warn,
             Source::turbo(Subsystem::Cache),
             "hello\x1b[31mworld\x00".to_string(),
         );
-        assert_eq!(event.message, "helloworld");
+        // ANSI preserved for terminal rendering, NUL stripped
+        assert_eq!(event.message, "hello\x1b[31mworld");
     }
 
     #[test]
-    fn message_strips_clear_screen_sequence() {
+    fn message_preserves_ansi_clear_screen() {
         let event = LogEvent::new(
             Level::Warn,
             Source::turbo(Subsystem::Cache),
             "before\x1b[2Jafter".to_string(),
         );
-        assert_eq!(event.message, "beforeafter");
+        // ANSI escape sequences preserved
+        assert_eq!(event.message, "before\x1b[2Jafter");
     }
 
     #[test]
@@ -1008,13 +1028,15 @@ mod tests {
     }
 
     #[test]
-    fn message_strips_c1_csi() {
+    fn message_preserves_c1_csi() {
+        // C1 CSI (0x9B) is a control character but part of ANSI escape
+        // sequences. The message preserves it for terminal rendering.
         let event = LogEvent::new(
             Level::Warn,
             Source::turbo(Subsystem::Cache),
             "\u{9b}31mred\u{9b}0m text",
         );
-        assert_eq!(event.message, "red text");
+        assert_eq!(event.message, "\u{9b}31mred\u{9b}0m text");
     }
 
     #[test]

@@ -2,6 +2,7 @@ use std::{env, sync::Arc};
 
 use tracing::error;
 use turborepo_api_client::SharedHttpClient;
+use turborepo_log::StructuredLogSink;
 use turborepo_query_api::QueryServer;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
@@ -22,7 +23,22 @@ pub async fn run(
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
-    let sinks = LogSinks::new(base.color_config);
+    let mut sinks = LogSinks::new(base.color_config);
+
+    // Set up structured logging before initializing the global logger so
+    // turbo messages during build() are also captured.
+    let structured_sink = create_structured_sink(base.opts.log_file_path.as_ref(), base.opts.json);
+    if let Some(ref sink) = structured_sink {
+        sinks.with_structured_sink(sink.clone());
+    }
+
+    // In --json mode, disable the TerminalSink before init_logger so ALL
+    // messages (including the shim warning below) go exclusively through
+    // the StructuredLogSink.
+    if base.opts.json {
+        sinks.terminal.disable();
+    }
+
     sinks.init_logger();
 
     if let Ok(message) = env::var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) {
@@ -61,11 +77,21 @@ pub async fn run(
             (Arc::new(run), analytics_handle)
         };
 
-        // Structured output modes own stdout for machine-readable data.
+        let json_mode = run.opts().json;
+
+        // JSON and other machine-readable modes own stdout.
         if run.opts().run_opts.graph.is_some()
             || matches!(run.opts().run_opts.dry_run, Some(DryRunMode::Json))
+            || json_mode
         {
             sinks.suppress_stdout();
+        }
+
+        // In --json mode, disable the TerminalSink entirely before the
+        // prelude so nothing leaks to the terminal. The StructuredLogSink
+        // captures everything via the Logger.
+        if json_mode {
+            sinks.terminal.disable();
         }
 
         // Emit the prelude while TerminalSink is still active so it
@@ -73,7 +99,9 @@ pub async fn run(
         // screen). TuiSink buffers these events and flushes on connect().
         run.emit_run_prelude_logs();
 
-        sinks.disable_for_tui();
+        if !json_mode {
+            sinks.disable_for_tui();
+        }
 
         let (sender, handle) = {
             let _span = tracing::info_span!("start_ui").entered();
@@ -91,7 +119,10 @@ pub async fn run(
             } else {
                 subscriber.suppress_stderr();
             }
-        } else {
+        } else if !json_mode {
+            // Only re-enable the TerminalSink when NOT in --json mode.
+            // In --json mode it stays disabled — all output goes through
+            // the StructuredLogSink.
             sinks.enable_for_stream();
             if subscriber.stderr_redirect_path().is_some() {
                 subscriber.restore_stderr();
@@ -140,4 +171,39 @@ pub async fn run(
 
     turborepo_log::flush();
     result
+}
+
+fn create_structured_sink(
+    file_path: Option<&turbopath::AbsoluteSystemPathBuf>,
+    terminal: bool,
+) -> Option<Arc<StructuredLogSink>> {
+    if file_path.is_none() && !terminal {
+        return None;
+    }
+
+    let mut builder = StructuredLogSink::builder();
+
+    if let Some(path) = file_path {
+        builder = builder.file_path(path.as_std_path());
+        // Warn that structured logs capture ALL output including potential secrets.
+        // This fires before the logger is initialized so we use eprintln.
+        eprintln!(
+            "turbo: structured logs will capture all output (including potential secrets) to {}",
+            path
+        );
+    }
+
+    if terminal {
+        builder = builder.terminal(true);
+    }
+
+    match builder.build() {
+        Ok(sink) => Some(Arc::new(sink)),
+        Err(e) => {
+            // Structured logging is best-effort. This fires before the
+            // global logger is initialized, so use eprintln directly.
+            eprintln!("turbo: failed to set up structured logging: {e}");
+            None
+        }
+    }
 }

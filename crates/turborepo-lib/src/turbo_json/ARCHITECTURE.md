@@ -44,6 +44,7 @@ Turborepo uses two different schemas for `turbo.json` files depending on their l
 
   - Can define global configuration options (`globalEnv`, `globalDependencies`, `globalPassThroughEnv`)
   - Can set repository-wide settings (`remoteCache`, `ui`, `daemon` (deprecated), `envMode`, etc.)
+  - When `futureFlags.globalConfiguration` is enabled, these move under a `global` key (`RawGlobalConfig`) with renamed fields (e.g. `globalDependencies` → `inputs`)
   - Cannot use `extends` field
 
 - **Package `turbo.json`** (`RawPackageTurboJson`): Located in workspace packages
@@ -66,9 +67,25 @@ Turborepo uses two different schemas for `turbo.json` files depending on their l
 1. **File Discovery**: Locate `turbo.json` or `turbo.jsonc` files
 2. **Schema Detection**: Determine if file is at repository root or in a package
 3. **Parsing**: Deserialize JSON into appropriate schema (`RawRootTurboJson` or `RawPackageTurboJson`)
-4. **Unification**: Convert to unified `RawTurboJson` structure
-5. **Basic Validation**: Convert to `TurboJson` with structural validation
+4. **Unification**: Convert to unified `RawTurboJson` structure via `TryFrom<RawRootTurboJson>` (validates `globalConfiguration` flag constraints — either the `global` key or the old top-level keys must be used, not both)
+5. **Basic Validation**: Convert to `TurboJson` with structural validation (calls `resolve_global_config()` to normalize `global` fields into top-level fields for downstream consumers)
 6. **Workspace Resolution**: Apply workspace-specific overrides
+
+#### `RawGlobalConfig` and the `global` key
+
+When `futureFlags.globalConfiguration` is enabled, `RawRootTurboJson` accepts a
+`global: Option<Spanned<RawGlobalConfig>>` field. During the `TryFrom`
+conversion to `RawTurboJson`:
+
+- **Flag on**: The `global` field is copied to `RawTurboJson.global`, top-level global keys are rejected with an error
+- **Flag off**: Top-level global keys are used as before, the `global` key is rejected
+
+The `resolve_global_config()` method on `RawTurboJson` moves fields from
+`global` into the top-level slots (e.g. `global.inputs` → `global_dependencies`,
+`global.env` → `global_env`). It is called on reading paths
+(`TurboJson::try_from`, `turbo_json_to_config_options`) but NOT before
+serialization, so `serde_json::to_string_pretty` preserves the original format
+(important for `turbo prune`).
 
 ## Phase 3: Processed Task Definition (Intermediate Representation)
 

@@ -184,12 +184,9 @@ impl LogSink for TerminalSink {
                 }
                 let stdout = io::stdout();
                 let mut handle = stdout.lock();
-                let _ = writeln!(
-                    handle,
-                    "{}",
-                    self.color_config
-                        .apply(crate::GREY.apply_to(event.message()))
-                );
+                // Print the raw message — it may carry its own ANSI
+                // formatting (e.g., summary colors). Don't wrap in GREY.
+                let _ = writeln!(handle, "{}", event.message());
             }
             Level::Warn | Level::Error => {
                 self.emit_stderr(event);

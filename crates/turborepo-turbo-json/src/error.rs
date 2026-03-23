@@ -276,6 +276,31 @@ pub enum Error {
         #[source_code]
         text: NamedSource<String>,
     },
+
+    #[error("The \"global\" key requires \"futureFlags.globalConfiguration\" to be enabled.")]
+    #[diagnostic(help(
+        "Add `\"futureFlags\": {{ \"globalConfiguration\": true }}` to your root turbo.json."
+    ))]
+    GlobalKeyWithoutFlag {
+        #[label("\"global\" key found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error(
+        "When \"futureFlags.globalConfiguration\" is enabled, \"{key}\" should be placed inside \
+         the \"global\" key{rename_hint}."
+    )]
+    #[diagnostic(help("Move the value to \"global\" and remove it from the top level."))]
+    TopLevelGlobalKeyWithFlag {
+        key: &'static str,
+        rename_hint: String,
+        #[label("move this inside \"global\"")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
 }
 
 impl From<crate::parser::BiomeParseError> for Error {

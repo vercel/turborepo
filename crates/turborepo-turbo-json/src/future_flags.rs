@@ -74,6 +74,14 @@ pub struct FutureFlags {
     /// traverse the task graph in addition to the package graph.
     #[serde(default)]
     pub filter_using_tasks: bool,
+    /// Move global configuration keys (like `globalDependencies`, `ui`,
+    /// `envMode`, etc.) under a top-level `global` key for clarity.
+    ///
+    /// When enabled, keys are renamed: `globalDependencies` becomes
+    /// `global.inputs`, `globalEnv` becomes `global.env`, and
+    /// `globalPassThroughEnv` becomes `global.passThroughEnv`.
+    #[serde(default)]
+    pub global_configuration: bool,
 }
 
 // Manual TS impl because #[derive(TS)] conflicts with the Iterable and
@@ -90,28 +98,32 @@ impl TS for FutureFlags {
     fn inline() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
          boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
-         pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean }"
+         pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
+         boolean }"
             .to_string()
     }
 
     fn inline_flattened() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
          boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
-         pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean }"
+         pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
+         boolean }"
             .to_string()
     }
 
     fn decl() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
-         boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean };"
+         boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
+         globalConfiguration?: boolean };"
             .to_string()
     }
 
     fn decl_concrete() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
-         boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean };"
+         boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
+         globalConfiguration?: boolean };"
             .to_string()
     }
 

@@ -12,7 +12,7 @@ use turborepo_types::{EnvMode, LogOrder, UIMode};
 
 use crate::{
     ConfigurationOptions, Error, ExperimentalObservabilityOptions, ExperimentalOtelOptions,
-    ResolvedConfigurationOptions,
+    LogFileConfig, ResolvedConfigurationOptions,
 };
 
 const TURBO_MAPPING: &[(&str, &str)] = [
@@ -46,6 +46,7 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_concurrency", "concurrency"),
     ("turbo_no_update_notifier", "no_update_notifier"),
     ("turbo_sso_login_callback_port", "sso_login_callback_port"),
+    ("turbo_log_file", "structured_log_file"),
     (
         "turbo_experimental_otel_enabled",
         "experimental_otel_enabled",
@@ -278,6 +279,20 @@ impl ResolvedConfigurationOptions for EnvVars {
             .map_err(Error::InvalidSsoLoginCallbackPort)?;
 
         let experimental_otel = ExperimentalOtelOptions::from_env_map(&self.output_map)?;
+
+        // TURBO_LOG_FILE: "1"/"true" → default location, path string → custom path
+        let log_file = self
+            .output_map
+            .get("structured_log_file")
+            .filter(|s| !s.is_empty())
+            .map(|s| {
+                if s == "1" || s == "true" {
+                    LogFileConfig::Enabled
+                } else {
+                    LogFileConfig::Path(s.clone())
+                }
+            });
+
         let experimental_observability =
             experimental_otel.map(|otel| ExperimentalObservabilityOptions { otel: Some(otel) });
 
@@ -318,6 +333,7 @@ impl ResolvedConfigurationOptions for EnvVars {
             // Do not allow future flags to be set by env var
             future_flags: None,
             experimental_observability,
+            log_file,
         };
 
         Ok(output)

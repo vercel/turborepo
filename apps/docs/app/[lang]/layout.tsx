@@ -11,8 +11,8 @@ import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   icons: {
-    icon: "/images/product-icons/repo-dark-32x32.png"
-  }
+    icon: "/images/product-icons/repo-dark-32x32.png",
+  },
 };
 
 const Layout = async ({ children, params }: LayoutProps<"/[lang]">) => {

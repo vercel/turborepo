@@ -6,7 +6,10 @@ use std::{
     },
 };
 
-use crate::{event::LogEvent, sink::LogSink};
+use crate::{
+    event::{LogEvent, strip_control_chars},
+    sink::LogSink,
+};
 
 /// Writes log events as newline-delimited JSON to a writer.
 ///
@@ -80,6 +83,18 @@ impl<W: Write + Send + 'static> FileSink<W> {
 
 impl<W: Write + Send + 'static> LogSink for FileSink<W> {
     fn emit(&self, event: &LogEvent) {
+        // Strip ANSI from the message for machine-readable output.
+        let clean_event;
+        let event = if event.message().bytes().any(|b| b == 0x1B) {
+            let mut cloned = event.clone();
+            let stripped = strip_control_chars(&cloned.message, true);
+            cloned.message = stripped.into_owned();
+            clean_event = cloned;
+            &clean_event
+        } else {
+            event
+        };
+
         // Serialize outside the lock to reduce contention when many tasks
         // emit concurrently. The tradeoff is one extra String allocation
         // per event, but lock hold time drops to just the write + size check.

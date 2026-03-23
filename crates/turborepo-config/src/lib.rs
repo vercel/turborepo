@@ -61,6 +61,39 @@ pub struct ExperimentalObservabilityOptions {
     pub otel: Option<ExperimentalOtelOptions>,
 }
 
+/// Configuration for structured log file output.
+///
+/// - `LogFileConfig::Enabled` — write to default location
+///   (`.turbo/logs/<epoch_millis>.json`)
+/// - `LogFileConfig::Path(p)` — write to a custom file path
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum LogFileConfig {
+    Enabled,
+    Path(String),
+}
+
+impl<'de> Deserialize<'de> for LogFileConfig {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(d)?;
+        match value {
+            serde_json::Value::Bool(true) => Ok(LogFileConfig::Enabled),
+            serde_json::Value::Bool(false) => Err(serde::de::Error::custom(
+                "use null/absent instead of false to disable log file",
+            )),
+            serde_json::Value::String(path) => Ok(LogFileConfig::Path(path)),
+            _ => Err(serde::de::Error::custom(
+                "expected true or a file path string",
+            )),
+        }
+    }
+}
+
+impl Merge for LogFileConfig {
+    fn merge(&mut self, _other: Self) {
+        // CLI/env takes precedence, no merging needed
+    }
+}
+
 // Re-export default constants for tests and external use
 pub const DEFAULT_API_URL: &str = "https://vercel.com/api";
 pub const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
@@ -276,6 +309,10 @@ pub struct ConfigurationOptions {
     pub future_flags: Option<FutureFlags>,
     #[serde(rename = "experimentalObservability")]
     pub experimental_observability: Option<ExperimentalObservabilityOptions>,
+    /// Structured log file destination, configured via `logFile` in
+    /// turbo.json or `TURBO_LOG_FILE` env var.
+    #[serde(rename = "logFile")]
+    pub log_file: Option<LogFileConfig>,
 }
 
 #[derive(Default)]
@@ -537,6 +574,10 @@ impl ConfigurationOptions {
 
     pub fn experimental_observability(&self) -> Option<&ExperimentalObservabilityOptions> {
         self.experimental_observability.as_ref()
+    }
+
+    pub fn log_file(&self) -> Option<&LogFileConfig> {
+        self.log_file.as_ref()
     }
 }
 

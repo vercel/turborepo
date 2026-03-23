@@ -17,7 +17,6 @@ mod cli;
 mod commands;
 mod config;
 pub mod devtools;
-mod diagnostics;
 mod engine;
 
 mod boundaries;

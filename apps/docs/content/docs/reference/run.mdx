@@ -11,6 +11,8 @@ related:
   - /docs/reference/options-overview
 ---
 
+import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
+
 Run tasks specified in `turbo.json`.
 
 ```bash title="Terminal"
@@ -378,6 +380,49 @@ turbo run build test lint --graph=my-graph.svg
   has no impact on execution, but the graph may overstate the number of packages
   and tasks involved.
 </Callout>
+
+### `--json` <ExperimentalBadge />
+
+Output machine-readable [NDJSON](https://github.com/ndjson/ndjson-spec) to stdout instead of human-readable text. Disables the TUI and forces stream mode.
+
+```bash title="Terminal"
+turbo run build --json
+```
+
+Each line is a JSON object with the following shape:
+
+```json
+{"timestamp":1710000000000,"source":"web#build","level":"stdout","text":"Compiled successfully"}
+```
+
+| Field | Description |
+| --- | --- |
+| `timestamp` | Unix epoch milliseconds |
+| `source` | `"turbo"` for Turborepo messages, or `"<package>#<task>"` for task output |
+| `level` | `"info"`, `"warn"`, `"error"` for Turborepo messages; `"stdout"`, `"stderr"` for task output |
+| `text` | The message content, with ANSI escape sequences stripped |
+
+Can be combined with `--log-file` to write to both stdout and a file simultaneously.
+
+<Callout type="warn">
+  Structured output captures **all** task output verbatim. If your build scripts echo secrets to stdout, those values will appear in the output.
+</Callout>
+
+### `--log-file [path]` <ExperimentalBadge />
+
+Write structured JSON logs to a file. If no path is given, writes to `.turbo/logs/<timestamp>.json`.
+
+```bash title="Terminal"
+# Default location
+turbo run build --log-file
+
+# Custom path
+turbo run build --log-file=build-log.json
+```
+
+The file is a valid JSON array at all times, even if the process is interrupted. Log files are created with owner-only permissions (`0600`) on Unix, and the path is restricted to the repository root.
+
+Can also be set with the [`TURBO_LOG_FILE`](/docs/reference/system-environment-variables#turbo_log_file) environment variable. The CLI flag takes precedence.
 
 ### `--log-order <option>`
 

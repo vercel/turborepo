@@ -50,6 +50,10 @@ pub struct EngineBuilder<'a, L: TurboJsonLoader> {
     add_all_tasks: bool,
     should_validate_engine: bool,
     validator: Validator,
+    /// When `futureFlags.globalConfiguration` is enabled, these globs are
+    /// prepended to every task's inputs instead of being included in the
+    /// global hash.
+    global_deps: Vec<String>,
 }
 
 impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
@@ -71,11 +75,17 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             add_all_tasks: false,
             should_validate_engine: true,
             validator: Validator::new(),
+            global_deps: Vec::new(),
         }
     }
 
     pub fn with_future_flags(mut self, future_flags: FutureFlags) -> Self {
         self.validator = self.validator.with_future_flags(future_flags);
+        self
+    }
+
+    pub fn with_global_deps(mut self, global_deps: Vec<String>) -> Self {
+        self.global_deps = global_deps;
         self
     }
 
@@ -605,8 +615,33 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let processed_task_definition = ProcessedTaskDefinition::from_iter(
             self.task_definition_chain_cached(turbo_json_loader, task_id, task_name, chain_cache)?,
         );
+        let had_explicit_inputs = processed_task_definition.inputs.is_some();
         let path_to_root = self.path_to_root(task_id.as_inner())?;
-        TaskDefinition::from_processed(processed_task_definition, &path_to_root)
+        let mut task_def =
+            TaskDefinition::from_processed(processed_task_definition, &path_to_root)?;
+
+        // Only prepend global inputs to tasks whose package actually has a
+        // script for this task. Phantom/transit tasks (packages without a
+        // matching script that exist solely for dependency ordering via
+        // `dependsOn: ["^task"]`) should not hash global input files — they
+        // don't execute, and including the files would cause their hash to
+        // change and cascade into downstream tasks that depend on them.
+        let package_has_script = self
+            .package_graph
+            .package_json(&PackageName::from(task_id.package()))
+            .and_then(|pj| pj.scripts.get(task_id.task()))
+            .is_some_and(|script| !script.is_empty());
+
+        if !self.global_deps.is_empty() && package_has_script {
+            crate::task_definition::prepend_global_inputs(
+                &mut task_def.inputs,
+                had_explicit_inputs,
+                &self.global_deps,
+                &path_to_root,
+            );
+        }
+
+        Ok(task_def)
     }
 
     /// Like `task_definition_chain` but caches the turbo.json chain per
@@ -1326,7 +1361,10 @@ mod test {
         let raw: RawTurboJson = if is_package {
             RawPackageTurboJson::parse(&json_text, "").unwrap().into()
         } else {
-            RawRootTurboJson::parse(&json_text, "").unwrap().into()
+            RawRootTurboJson::parse(&json_text, "")
+                .unwrap()
+                .try_into()
+                .unwrap()
         };
         TurboJson::try_from(raw).unwrap()
     }

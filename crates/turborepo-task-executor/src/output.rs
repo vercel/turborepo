@@ -98,3 +98,69 @@ impl std::io::Write for StdWriter {
         self.writer().flush()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+
+    use super::*;
+
+    /// A writer that tracks whether it has been dropped. Used to verify
+    /// that `set_stdin` in stream mode drops the stdin handle.
+    struct DropTracker {
+        dropped: Arc<AtomicBool>,
+    }
+
+    impl DropTracker {
+        fn new() -> (Self, Arc<AtomicBool>) {
+            let dropped = Arc::new(AtomicBool::new(false));
+            (
+                Self {
+                    dropped: dropped.clone(),
+                },
+                dropped,
+            )
+        }
+    }
+
+    impl std::io::Write for DropTracker {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Drop for DropTracker {
+        fn drop(&mut self) {
+            self.dropped.store(true, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn stream_mode_has_no_sender() {
+        let output = TaskOutput::stream();
+        assert!(output.sender().is_none());
+    }
+
+    /// Regression test for #12393: in stream mode, `set_stdin` has no TUI
+    /// sender to forward stdin to, so the stdin handle is dropped. This is
+    /// why the task executor must NOT pass stdin through `set_stdin` in
+    /// stream mode — it must hold it in a guard instead.
+    #[test]
+    fn stream_mode_set_stdin_drops_handle() {
+        let output = TaskOutput::stream();
+        let (tracker, dropped) = DropTracker::new();
+
+        assert!(!dropped.load(Ordering::SeqCst));
+        output.set_stdin(Box::new(tracker));
+        assert!(
+            dropped.load(Ordering::SeqCst),
+            "stdin should be dropped when set_stdin is called in stream mode"
+        );
+    }
+}

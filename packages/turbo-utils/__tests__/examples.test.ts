@@ -293,7 +293,7 @@ describe("examples", () => {
         "https://api.github.com/repos/vercel/turbo/contents/package.json?ref=main";
       await isUrlOk(url);
 
-      const callArgs = (global.fetch as jest.Mock).mock.calls[0] as [
+      const callArgs = jest.mocked(global.fetch).mock.calls[0] as [
         string,
         RequestInit
       ];
@@ -311,7 +311,7 @@ describe("examples", () => {
       const url = "https://example.com/some-api";
       await isUrlOk(url);
 
-      const callArgs = (global.fetch as jest.Mock).mock.calls[0] as [
+      const callArgs = jest.mocked(global.fetch).mock.calls[0] as [
         string,
         RequestInit
       ];
@@ -333,7 +333,7 @@ describe("examples", () => {
 
       await isUrlOk(url);
 
-      const callArgs = (global.fetch as jest.Mock).mock.calls[0] as [
+      const callArgs = jest.mocked(global.fetch).mock.calls[0] as [
         string,
         RequestInit
       ];
@@ -410,7 +410,7 @@ describe("examples", () => {
             branch: "main",
             filePath: ""
           })
-        ).rejects.toThrow();
+        ).rejects.toThrow("Failed to download");
 
         expect(global.fetch).toHaveBeenCalledTimes(1);
         expect(global.fetch).toHaveBeenCalledWith(

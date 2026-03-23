@@ -22,7 +22,7 @@ use crate::{
     cli::error::print_potential_tasks,
     commands::{
         bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link, login, logout,
-        ls, prune, query, run, scan, telemetry, unlink, CommandBase,
+        ls, prune, query, run, telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -690,8 +690,9 @@ pub enum Command {
         #[clap(subcommand)]
         command: Option<TelemetryCommand>,
     },
-    /// Turbo your monorepo by running a number of 'repo lints' to
-    /// identify common issues, suggest fixes, and improve performance.
+    /// [DEPRECATED] `turbo scan` has been removed. This command will be
+    /// fully removed in a future major version.
+    #[clap(hide = true)]
     Scan,
     #[clap(hide = true)]
     Config,
@@ -885,6 +886,28 @@ pub enum QuerySubcommand {
     /// Check which packages or tasks are affected by changes between two git
     /// refs
     Affected(AffectedArgs),
+    /// List packages in your monorepo (shorthand for a packages query)
+    Ls(LsArgs),
+}
+
+#[derive(clap::Args, Clone, Debug, PartialEq)]
+pub struct LsArgs {
+    /// Show only packages that are affected by changes between
+    /// the current branch and `main`
+    #[clap(long, group = "scope-filter-group")]
+    pub affected: bool,
+    /// Use the given selector to specify package(s) to act as
+    /// entry points. The syntax mirrors pnpm's syntax, and
+    /// additional documentation and examples can be found in
+    /// turbo's documentation https://turborepo.dev/docs/reference/command-line-reference/run#--filter
+    #[clap(short = 'F', long, group = "scope-filter-group")]
+    pub filter: Vec<String>,
+    /// Get insight into a specific package, such as
+    /// its dependencies and tasks
+    pub packages: Vec<String>,
+    /// Output format
+    #[clap(long, value_enum)]
+    pub output: Option<OutputFormat>,
 }
 
 #[derive(clap::Args, Clone, Debug, PartialEq)]
@@ -997,6 +1020,14 @@ pub struct ExecutionArgs {
     /// turbo decide based on its own heuristics. (default auto)
     #[clap(long, value_enum)]
     pub log_order: Option<LogOrder>,
+    /// Output machine-readable NDJSON to stdout instead of human-readable
+    /// text. Disables the TUI and forces stream mode.
+    #[clap(long)]
+    pub json: bool,
+    /// Write structured JSON logs to a file. If no path is given, writes to
+    /// `.turbo/logs/<epoch_millis>.json`.
+    #[clap(long)]
+    pub log_file: Option<Option<String>>,
     /// Only executes the tasks specified, does not execute parent tasks.
     #[clap(long)]
     pub only: bool,
@@ -1452,7 +1483,14 @@ async fn run_main(
 
     let mut command = get_command(&mut cli_args)?;
 
-    if should_print_version() {
+    // Suppress the version banner in --json mode — all output on stdout
+    // must be machine-readable NDJSON.
+    let is_json_mode = matches!(
+        &command,
+        Command::Run { execution_args, .. } | Command::Watch { execution_args, .. }
+            if execution_args.json
+    );
+    if should_print_version() && !is_json_mode {
         eprintln!("{}", GREY.apply_to(format!("• turbo {}", get_version())));
     }
 
@@ -1607,13 +1645,8 @@ async fn run_main(
         Command::Scan => {
             let event = CommandEventBuilder::new("scan").with_parent(&root_telemetry);
             event.track_call();
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
-            event.track_ui_mode(base.opts.run_opts.ui_mode);
-            if scan::run(base).await {
-                Ok(0)
-            } else {
-                Ok(1)
-            }
+            warn!("`turbo scan` is deprecated and will be removed in a future major version.");
+            Ok(1)
         }
         Command::Config => {
             CommandEventBuilder::new("config")
@@ -1625,6 +1658,9 @@ async fn run_main(
         Command::Ls {
             packages, output, ..
         } => {
+            let Some(ref query_server) = query_server else {
+                return Err(error::Error::QueryNotAvailable);
+            };
             let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);
 
             event.track_call();
@@ -1632,7 +1668,7 @@ async fn run_main(
             let packages = packages.clone();
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
-            ls::run(base, packages, event, output).await?;
+            ls::run(base, packages, event, output, query_server.as_ref()).await?;
 
             Ok(0)
         }
@@ -1781,7 +1817,6 @@ async fn run_main(
             let Some(ref query_server) = query_server else {
                 return Err(error::Error::QueryNotAvailable);
             };
-            warn!("query command is experimental and may change in the future");
             let subcommand = subcommand.clone();
             let query = query.clone();
             let variables = variables.clone();

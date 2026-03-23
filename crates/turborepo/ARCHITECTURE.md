@@ -231,6 +231,22 @@ Creates a "content identifier" for a specific task depending on current state of
   filesystem, but clean tracked matches reuse blob OIDs from the repo index
   instead of re-hashing file contents
 
+#### `globalConfiguration` and `global.inputs`
+
+When the `globalConfiguration` future flag is enabled, `global.inputs` (formerly
+`globalDependencies`) files are **not** included in the global hash. Instead,
+they are prepended as implicit input globs to every task's `TaskInputs` during
+engine construction (see `prepend_global_inputs` in
+`crates/turborepo-engine/src/task_definition.rs`).
+
+This means:
+- The global hash still exists (lockfile, engines, global env, root deps) but
+  does not include `global.inputs` file hashes
+- Tasks can exclude specific global input files via negation globs
+  (e.g. `"inputs": ["$TURBO_DEFAULT$", "!$TURBO_ROOT$/tsconfig.json"]`)
+- Tasks with no explicit `inputs` key get `default: true` set so package files
+  are still hashed alongside the global inputs
+
 #### Hash Calculation
 
 - Combines global and task-specific inputs
