@@ -15,7 +15,7 @@ merge-streams = "0.1.2"
 notify = { workspace = true }
 stop-token = "0.7.0"
 thiserror = { workspace = true }
-tokio = { version = "1.25.0", features = ["sync"] }
+tokio = { workspace = true, features = ["sync"] }
 tokio-stream = "0.1.12"
 tracing = "0.1.37"
 turbopath = { workspace = true }
@@ -23,7 +23,7 @@ unicode-segmentation = "1.12.0"
 
 [dev-dependencies]
 test-case = { workspace = true }
-tokio = { version = "1.25.0", features = [
+tokio = { workspace = true, features = [
   "rt",
   "rt-multi-thread",
   "time",
