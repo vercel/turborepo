@@ -162,6 +162,11 @@
 .prose h5,
 .prose h6 {
   @apply tracking-tight;
+  overflow-wrap: break-word;
+}
+
+.prose :not(pre) > code {
+  overflow-wrap: break-word;
 }
 
 /* Line numbers styles for code blocks */
