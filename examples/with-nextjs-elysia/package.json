@@ -1,0 +1,30 @@
+{
+  "name": "my-turborepo",
+  "version": "0.0.0",
+  "packageManager": "bun@1.3.10",
+  "private": true,
+  "description": "",
+  "author": "",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "turbo run dev --ui=tui",
+    "build": "turbo run build",
+    "check": "bunx ultracite check",
+    "fix": "bun x ultracite fix",
+    "check-types": "turbo run check-types"
+  },
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ]
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "ultracite": "7.2.5",
+    "turbo": "^2.8.17"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
