@@ -34,7 +34,7 @@ Each package and application are mostly written in [TypeScript](https://www.type
 - **Backend**: ElysiaJS - Type-safe, high-performance web framework
 - **Database**: PostgreSQL with Drizzle ORM
 - **API Contract**: TypeBox for runtime type validation
-- **Package Manager**: pnpm
+- **Package Manager**: Bun
 
 ### Utilities
 
@@ -52,21 +52,21 @@ This `Turborepo` already configured useful commands for all your apps and packag
 
 ```bash
 # Will build all the app & packages with the supported `build` script.
-pnpm run build
+bun run build
 ```
 
 #### Develop
 
 ```bash
 # Will run the development server for all the app & packages with the supported `dev` script.
-pnpm run dev
+bun run dev
 ```
 
 #### Lint
 
 ```bash
 # Will lint all the app & packages with the supported `lint` script.
-pnpm run lint
+bun run lint
 ```
 
 ### Remote Caching
