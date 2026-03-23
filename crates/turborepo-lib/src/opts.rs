@@ -18,7 +18,7 @@ use turborepo_types::{
 };
 
 use crate::{
-    cli::{Command, ExecutionArgs, RunArgs},
+    cli::{Command, ExecutionArgs, QuerySubcommand, RunArgs},
     config::{CacheDirResult, ConfigurationOptions, CONFIG_FILE},
     turbo_json::FutureFlags,
     Args,
@@ -176,6 +176,18 @@ impl Opts {
             Some(Command::Boundaries { filter, .. }) => {
                 let execution_args = ExecutionArgs {
                     filter: filter.clone(),
+                    ..Default::default()
+                };
+
+                (&Box::new(execution_args), &Box::default())
+            }
+            Some(Command::Query {
+                subcommand: Some(QuerySubcommand::Ls(ls_args)),
+                ..
+            }) => {
+                let execution_args = ExecutionArgs {
+                    filter: ls_args.filter.clone(),
+                    affected: ls_args.affected,
                     ..Default::default()
                 };
 

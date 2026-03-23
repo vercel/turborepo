@@ -10,7 +10,7 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{
     cli::{self, AffectedArgs, QuerySubcommand},
-    commands::CommandBase,
+    commands::{ls, CommandBase},
     run::builder::RunBuilder,
 };
 
@@ -85,7 +85,7 @@ fn affected_result_count(json: &str) -> Option<u64> {
         .and_then(|v| v.as_u64())
 }
 
-fn escape_graphql_string(s: &str) -> String {
+pub(crate) fn escape_graphql_string(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
         match c {
@@ -196,6 +196,20 @@ pub async fn run(
     include_schema: bool,
     query_server: &dyn QueryServer,
 ) -> Result<i32, cli::Error> {
+    // `turbo query ls` builds its own Run with filter/affected opts,
+    // so handle it before constructing the general-purpose query Run.
+    if let Some(QuerySubcommand::Ls(ls_args)) = subcommand {
+        ls::run(
+            base,
+            ls_args.packages,
+            telemetry,
+            ls_args.output,
+            query_server,
+        )
+        .await?;
+        return Ok(0);
+    }
+
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
@@ -230,6 +244,7 @@ pub async fn run(
 
                 return Ok(0);
             }
+            QuerySubcommand::Ls(_) => unreachable!("handled above"),
         }
     }
 
