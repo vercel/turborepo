@@ -71,6 +71,9 @@ pub const BUILTIN_PASS_THROUGH_ENV: &[&str] = &[
     // GitHub Actions
     "GITHUB_*",
     "RUNNER_*",
+    // NixOS
+    "__NIXOS_*",
+    "NIX_*",
     // Command Prompt casing of env variables
     "APPDATA",
     "PATH",
