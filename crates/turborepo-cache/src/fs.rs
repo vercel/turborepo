@@ -326,7 +326,7 @@ mod test {
             Utf8Path::new(""),
             repo_root_path,
             Some(analytics_sender.clone()),
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
 
         let expected_miss = cache.fetch(repo_root_path, test_case.hash)?;
@@ -388,19 +388,19 @@ mod test {
             Utf8Path::new("cache"),
             repo_root_path,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
         let cache2 = FSCache::new(
             Utf8Path::new("cache"),
             repo_root_path,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
         let cache3 = FSCache::new(
             Utf8Path::new("cache"),
             repo_root_path,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
 
         // Perform concurrent writes
@@ -430,7 +430,7 @@ mod test {
             Utf8Path::new("cache"),
             repo_root_path,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
         let result = cache.fetch(repo_root_path, hash)?;
         assert!(
@@ -462,7 +462,7 @@ mod test {
             Utf8Path::new("cache"),
             repo_root_path,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
         cache.put(repo_root_path, hash, &files, duration)?;
 
@@ -474,13 +474,13 @@ mod test {
             Utf8Path::new("cache"),
             repo_root_path,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
         let cache_read = FSCache::new(
             Utf8Path::new("cache"),
             repo_root_path,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
 
         let write_handle = {
@@ -527,7 +527,7 @@ mod test {
             Utf8Path::new("cache"),
             repo_root_path,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
         cache.put(repo_root_path, hash, &files, duration)?;
 
@@ -538,7 +538,7 @@ mod test {
                 Utf8Path::new("cache"),
                 repo_root_path,
                 None,
-                LazyScmState::new(),
+                LazyScmState::resolved(None),
             )?;
             let repo_root = repo_root_path.to_owned();
             handles.push(tokio::spawn(async move { cache.fetch(&repo_root, hash) }));
@@ -574,19 +574,19 @@ mod test {
             Utf8Path::new("cache"),
             repo_root_path,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
         let cache2 = FSCache::new(
             Utf8Path::new("cache"),
             repo_root_path,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
         let cache3 = FSCache::new(
             Utf8Path::new("cache"),
             repo_root_path,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
 
         let handle1 = {
@@ -680,7 +680,7 @@ mod test {
             Utf8Path::new("cache"),
             repo_root_path,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
         let files = vec![AnchoredSystemPathBuf::from_raw("test.txt")?];
         cache.put(repo_root_path, "no-scm-hash", &files, 10)?;

@@ -166,7 +166,7 @@ impl HTTPCache {
             .map(|signer| signer.generate_tag(hash.as_bytes(), &artifact_body))
             .transpose()?;
 
-        let resolved_scm = self.scm_state.get();
+        let resolved_scm = self.scm_state.get_resolved().await;
         let sha = resolved_scm.and_then(|s| s.sha.clone());
         let dirty_hash = resolved_scm.and_then(|s| s.dirty_hash.clone());
 
@@ -500,7 +500,7 @@ mod test {
             repo_root_path.to_owned(),
             api_auth,
             Some(analytics_recorder),
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )
         .unwrap();
 
@@ -649,14 +649,14 @@ mod test {
             team_slug: None,
         };
 
-        // No SCM state resolved
+        // No SCM state available
         let cache = HTTPCache::new(
             api_client,
             &opts,
             repo_root_path.to_owned(),
             api_auth,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )
         .unwrap();
 
@@ -756,7 +756,7 @@ mod test {
             repo_root_path,
             api_auth,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )
         .unwrap();
 
@@ -804,7 +804,7 @@ mod test {
             repo_root_path,
             initial_api_auth,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )
         .unwrap();
 
@@ -866,7 +866,7 @@ mod test {
                 repo_root_path,
                 api_auth,
                 None,
-                LazyScmState::new(),
+                LazyScmState::resolved(None),
             )
             .unwrap(),
         );
@@ -933,7 +933,7 @@ mod test {
             repo_root_path,
             api_auth,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         );
         unsafe {
             std::env::remove_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY");
@@ -990,7 +990,7 @@ mod test {
             repo_root_path,
             api_auth,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         );
         unsafe {
             std::env::remove_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY");
@@ -1042,7 +1042,7 @@ mod test {
             repo_root_path,
             api_auth,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         );
         unsafe {
             std::env::remove_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY");
