@@ -230,6 +230,16 @@ impl PackageJson {
                 .collect(),
         )
     }
+
+    /// Returns (name, optional version) from devEngines.packageManager if present.
+    /// See https://docs.npmjs.com/cli/v11/configuring-npm/package-json#devengines
+    pub fn dev_engines_package_manager(&self) -> Option<(&str, Option<&str>)> {
+        let dev_engines = self.other.get("devEngines")?.as_object()?;
+        let pm = dev_engines.get("packageManager")?.as_object()?;
+        let name = pm.get("name")?.as_str()?;
+        let version = pm.get("version").and_then(|v| v.as_str());
+        Some((name, version))
+    }
 }
 
 #[cfg(test)]
@@ -293,5 +303,72 @@ mod test {
             .collect();
         // dependencies must come first, then devDependencies, then peer
         assert_eq!(versions, vec!["2.0.0", "1.0.0", "*"]);
+    }
+
+    #[test]
+    fn test_dev_engines_package_manager() {
+        let json = json!({
+            "name": "test",
+            "devEngines": {
+                "packageManager": {
+                    "name": "pnpm",
+                    "version": "9.x"
+                }
+            }
+        });
+        let pkg = PackageJson::from_value(json).unwrap();
+        let (name, version) = pkg.dev_engines_package_manager().unwrap();
+        assert_eq!(name, "pnpm");
+        assert_eq!(version, Some("9.x"));
+    }
+
+    #[test]
+    fn test_dev_engines_package_manager_name_only() {
+        let json = json!({
+            "name": "test",
+            "devEngines": {
+                "packageManager": {
+                    "name": "yarn"
+                }
+            }
+        });
+        let pkg = PackageJson::from_value(json).unwrap();
+        let (name, version) = pkg.dev_engines_package_manager().unwrap();
+        assert_eq!(name, "yarn");
+        assert_eq!(version, None);
+    }
+
+    #[test]
+    fn test_dev_engines_package_manager_missing() {
+        let json = json!({"name": "test"});
+        let pkg = PackageJson::from_value(json).unwrap();
+        assert!(pkg.dev_engines_package_manager().is_none());
+    }
+
+    #[test]
+    fn test_dev_engines_package_manager_malformed() {
+        // devEngines.packageManager is a string instead of object
+        let json = json!({
+            "name": "test",
+            "devEngines": {
+                "packageManager": "pnpm"
+            }
+        });
+        let pkg = PackageJson::from_value(json).unwrap();
+        assert!(pkg.dev_engines_package_manager().is_none());
+    }
+
+    #[test]
+    fn test_dev_engines_package_manager_missing_name() {
+        let json = json!({
+            "name": "test",
+            "devEngines": {
+                "packageManager": {
+                    "version": "9.x"
+                }
+            }
+        });
+        let pkg = PackageJson::from_value(json).unwrap();
+        assert!(pkg.dev_engines_package_manager().is_none());
     }
 }

@@ -18,6 +18,20 @@ fn set_package_manager(dir: &std::path::Path, pm: &str) {
     fs::write(&pkg_path, serde_json::to_string_pretty(&pkg).unwrap()).unwrap();
 }
 
+/// Remove top-level `packageManager` and set `devEngines.packageManager` instead.
+fn set_dev_engines_package_manager(dir: &std::path::Path, name: &str, version: Option<&str>) {
+    let pkg_path = dir.join("package.json");
+    let contents = fs::read_to_string(&pkg_path).unwrap();
+    let mut pkg: serde_json::Value = serde_json::from_str(&contents).unwrap();
+    pkg.as_object_mut().unwrap().remove("packageManager");
+    let mut pm_obj = serde_json::json!({ "name": name });
+    if let Some(v) = version {
+        pm_obj["version"] = serde_json::Value::String(v.to_string());
+    }
+    pkg["devEngines"] = serde_json::json!({ "packageManager": pm_obj });
+    fs::write(&pkg_path, serde_json::to_string_pretty(&pkg).unwrap()).unwrap();
+}
+
 #[test]
 fn test_detect_npm() {
     let tempdir = tempfile::tempdir().unwrap();
@@ -70,4 +84,55 @@ fn test_detect_pnpm() {
     )
     .unwrap();
     assert_eq!(get_package_manager(tempdir.path()), "pnpm");
+}
+
+#[test]
+fn test_detect_dev_engines_npm() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@8.19.4", false).unwrap();
+    set_dev_engines_package_manager(tempdir.path(), "npm", Some("10.0.0"));
+    assert_eq!(get_package_manager(tempdir.path()), "npm");
+}
+
+#[test]
+fn test_detect_dev_engines_pnpm9() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@8.19.4", false).unwrap();
+    set_dev_engines_package_manager(tempdir.path(), "pnpm", Some("9.x"));
+    fs::write(
+        tempdir.path().join("pnpm-workspace.yaml"),
+        "packages:\n  - apps/*\n",
+    )
+    .unwrap();
+    assert_eq!(get_package_manager(tempdir.path()), "pnpm9");
+}
+
+#[test]
+fn test_detect_dev_engines_yarn_berry() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@8.19.4", false).unwrap();
+    set_dev_engines_package_manager(tempdir.path(), "yarn", Some("4.x"));
+    fs::write(
+        tempdir.path().join(".yarnrc.yml"),
+        "nodeLinker: node-modules\n",
+    )
+    .unwrap();
+    assert_eq!(get_package_manager(tempdir.path()), "berry");
+}
+
+#[test]
+fn test_detect_dev_engines_precedence() {
+    // Top-level packageManager should take precedence over devEngines
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@8.19.4", false).unwrap();
+    // Set devEngines to pnpm, but keep top-level as npm
+    let pkg_path = tempdir.path().join("package.json");
+    let contents = fs::read_to_string(&pkg_path).unwrap();
+    let mut pkg: serde_json::Value = serde_json::from_str(&contents).unwrap();
+    pkg["devEngines"] = serde_json::json!({
+        "packageManager": { "name": "pnpm", "version": "9.x" }
+    });
+    fs::write(&pkg_path, serde_json::to_string_pretty(&pkg).unwrap()).unwrap();
+    // Top-level npm should win
+    assert_eq!(get_package_manager(tempdir.path()), "npm");
 }
