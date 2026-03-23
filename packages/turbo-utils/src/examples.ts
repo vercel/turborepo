@@ -26,7 +26,8 @@ const GITHUB_API_HOSTS = new Set(["api.github.com", "codeload.github.com"]);
 function getGitHubToken(): string | undefined {
   const token = (process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "").trim();
   if (!token) return undefined;
-  if (/[\r\n\0]/.test(token)) {
+  // eslint-disable-next-line no-control-regex -- Intentional: reject tokens containing control characters
+  if (/[\r\n\u0000]/.test(token)) {
     warn("GITHUB_TOKEN/GH_TOKEN contains invalid characters, ignoring.");
     return undefined;
   }
@@ -108,9 +109,11 @@ function buildFetchInit(url: string, options: RequestInit = {}): RequestInit {
     let existing: Record<string, string> | undefined;
     if (options.headers instanceof Headers) {
       existing = {};
-      options.headers.forEach((value, key) => {
-        existing![key] = value;
-      });
+      for (const [key, value] of options.headers as unknown as Iterable<
+        [string, string]
+      >) {
+        existing[key] = value;
+      }
     } else if (Array.isArray(options.headers)) {
       existing = {};
       for (const [key, value] of options.headers) {

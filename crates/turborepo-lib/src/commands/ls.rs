@@ -1,25 +1,38 @@
 //! A command for outputting info about packages and tasks in a turborepo.
+//!
+//! Both `turbo ls` and `turbo query ls` are backed by this module. Data
+//! retrieval is done through the query server (GraphQL execution), keeping
+//! the ls command in sync with `turbo query` semantics.
+
+use std::sync::Arc;
 
 use miette::Diagnostic;
 use serde::Serialize;
 use thiserror::Error;
-use turbopath::AnchoredSystemPath;
-use turborepo_repository::package_graph::{PackageName, PackageNode};
+use turborepo_query_api::{QueryRun, QueryServer};
+use turborepo_repository::package_graph::PackageName;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, BOLD_GREEN, GREY};
 
-use crate::{
-    cli,
-    cli::OutputFormat,
-    commands::CommandBase,
-    run::{builder::RunBuilder, Run},
-};
+use crate::{cli, cli::OutputFormat, commands::CommandBase, run::builder::RunBuilder};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("Package `{package}` not found.")]
     PackageNotFound { package: String },
+    #[error("Query returned errors")]
+    QueryError,
+}
+
+// GraphQL query: list all packages with name and path
+const PACKAGES_QUERY: &str = "{ packages { items { name path } length } }";
+
+fn package_detail_query(name: &str) -> String {
+    let escaped = super::query::escape_graphql_string(name);
+    format!(
+        r#"{{ package(name: "{escaped}") {{ name path tasks {{ items {{ name script }} length }} allDependencies {{ items {{ name }} length }} allDependents {{ items {{ name }} length }} }} }}"#
+    )
 }
 
 #[derive(Serialize)]
@@ -28,18 +41,10 @@ struct ItemsWithCount<T> {
     items: Vec<T>,
 }
 
-#[derive(Clone, Serialize)]
-#[serde(into = "RepositoryDetailsDisplay")]
-struct RepositoryDetails<'a> {
-    color_config: ColorConfig,
-    package_manager: &'static str,
-    packages: Vec<(&'a PackageName, &'a AnchoredSystemPath)>,
-}
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RepositoryDetailsDisplay {
-    package_manager: &'static str,
+    package_manager: String,
     packages: ItemsWithCount<PackageDetailDisplay>,
 }
 
@@ -49,70 +54,24 @@ struct PackageDetailDisplay {
     path: String,
 }
 
-impl<'a> From<RepositoryDetails<'a>> for RepositoryDetailsDisplay {
-    fn from(val: RepositoryDetails) -> Self {
-        RepositoryDetailsDisplay {
-            package_manager: val.package_manager,
-            packages: ItemsWithCount {
-                count: val.packages.len(),
-                items: val
-                    .packages
-                    .into_iter()
-                    .map(|(name, path)| PackageDetailDisplay {
-                        name: name.to_string(),
-                        path: path.to_string(),
-                    })
-                    .collect(),
-            },
-        }
-    }
-}
-
 #[derive(Clone, Serialize)]
-struct PackageTask<'a> {
-    name: &'a str,
-    command: &'a str,
-}
-
-#[derive(Clone, Serialize)]
-#[serde(into = "PackageDetailsDisplay<'a>")]
-struct PackageDetails<'a> {
-    #[serde(skip)]
-    color_config: ColorConfig,
-    path: &'a AnchoredSystemPath,
-    name: &'a str,
-    tasks: Vec<PackageTask<'a>>,
-    dependencies: Vec<&'a str>,
-    dependents: Vec<&'a str>,
-}
-
-#[derive(Clone, Serialize)]
-struct PackageDetailsList<'a> {
-    packages: Vec<PackageDetails<'a>>,
+struct PackageTask {
+    name: String,
+    command: String,
 }
 
 #[derive(Serialize)]
-struct PackageDetailsDisplay<'a> {
-    name: &'a str,
-    path: &'a AnchoredSystemPath,
-    tasks: ItemsWithCount<PackageTask<'a>>,
-    dependencies: Vec<&'a str>,
-    dependents: Vec<&'a str>,
+struct PackageDetailsDisplay {
+    name: String,
+    path: String,
+    tasks: ItemsWithCount<PackageTask>,
+    dependencies: Vec<String>,
+    dependents: Vec<String>,
 }
 
-impl<'a> From<PackageDetails<'a>> for PackageDetailsDisplay<'a> {
-    fn from(val: PackageDetails<'a>) -> Self {
-        PackageDetailsDisplay {
-            name: val.name,
-            path: val.path,
-            dependencies: val.dependencies,
-            dependents: val.dependents,
-            tasks: ItemsWithCount {
-                count: val.tasks.len(),
-                items: val.tasks,
-            },
-        }
-    }
+#[derive(Serialize)]
+struct PackageDetailsList {
+    packages: Vec<PackageDetailsDisplay>,
 }
 
 pub async fn run(
@@ -120,32 +79,40 @@ pub async fn run(
     packages: Vec<String>,
     telemetry: CommandEventBuilder,
     output: Option<OutputFormat>,
+    query_server: &dyn QueryServer,
 ) -> Result<(), cli::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
+    let color_config = base.color_config;
+
     let run_builder = RunBuilder::new(base, None)?;
     let (run, _analytics) = run_builder.build(&handler, telemetry).await?;
 
+    let package_manager_name = run.pkg_dep_graph().package_manager().name().to_string();
+    let filtered_pkgs = run.filtered_pkgs().clone();
+    let run: Arc<dyn QueryRun> = Arc::new(run);
+
     if packages.is_empty() {
-        RepositoryDetails::new(&run).print(output)?;
+        let repo = query_packages(run, query_server, &filtered_pkgs, &package_manager_name).await?;
+        print_repo_details(&repo, color_config, output)?;
     } else {
         match output {
             Some(OutputFormat::Json) => {
-                let mut package_details_list = PackageDetailsList { packages: vec![] };
-                //  collect all package details
+                let mut details_list = Vec::new();
                 for package in &packages {
-                    let package_details = PackageDetails::new(&run, package)?;
-                    package_details_list.packages.push(package_details);
+                    let detail = query_package_detail(run.clone(), query_server, package).await?;
+                    details_list.push(detail);
                 }
-
-                let as_json = serde_json::to_string_pretty(&package_details_list)?;
-                println!("{}", as_json);
+                let list = PackageDetailsList {
+                    packages: details_list,
+                };
+                println!("{}", serde_json::to_string_pretty(&list)?);
             }
             Some(OutputFormat::Pretty) | None => {
-                for package in packages {
-                    let package_details = PackageDetails::new(&run, &package)?;
-                    package_details.print();
+                for package in &packages {
+                    let detail = query_package_detail(run.clone(), query_server, package).await?;
+                    print_package_detail(&detail, color_config);
                 }
             }
         }
@@ -154,163 +121,216 @@ pub async fn run(
     Ok(())
 }
 
-impl<'a> RepositoryDetails<'a> {
-    fn new(run: &'a Run) -> Self {
-        let color_config = run.color_config();
-        let package_graph = run.pkg_dep_graph();
-        let filtered_pkgs = run.filtered_pkgs();
+async fn query_packages(
+    run: Arc<dyn QueryRun>,
+    query_server: &dyn QueryServer,
+    filtered_pkgs: &std::collections::HashSet<PackageName>,
+    package_manager_name: &str,
+) -> Result<RepositoryDetailsDisplay, cli::Error> {
+    let result = query_server
+        .execute_query(run, PACKAGES_QUERY, None)
+        .await?;
 
-        let mut packages: Vec<_> = package_graph
-            .packages()
-            .filter_map(|(package_name, package_info)| {
-                if !filtered_pkgs.contains(package_name) {
-                    return None;
-                }
-                if matches!(package_name, PackageName::Root) {
-                    return None;
-                }
-
-                Some((package_name, package_info.package_path()))
-            })
-            .collect();
-        packages.sort_by(|a, b| a.0.cmp(b.0));
-
-        Self {
-            color_config,
-            package_manager: package_graph.package_manager().name(),
-            packages,
-        }
-    }
-    fn pretty_print(&self) {
-        let package_copy = match self.packages.len() {
-            0 => "no packages",
-            1 => "package",
-            _ => "packages",
-        };
-
-        cprint!(
-            self.color_config,
-            BOLD,
-            "{} {} ",
-            self.packages.len(),
-            package_copy
-        );
-        cprintln!(self.color_config, GREY, "({})\n", self.package_manager);
-
-        for (package_name, entry) in &self.packages {
-            println!("  {package_name} {}", GREY.apply_to(entry));
-        }
+    if !result.errors.is_empty() {
+        return Err(Error::QueryError.into());
     }
 
-    fn json_print(&self) -> Result<(), cli::Error> {
-        let as_json = serde_json::to_string_pretty(&self)?;
-        println!("{as_json}");
-        Ok(())
-    }
+    let value: serde_json::Value = serde_json::from_str(&result.result_json)?;
+    let items = value
+        .pointer("/data/packages/items")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
 
-    fn print(&self, output: Option<OutputFormat>) -> Result<(), cli::Error> {
-        match output {
-            Some(OutputFormat::Json) => {
-                self.json_print()?;
+    let mut packages: Vec<PackageDetailDisplay> = items
+        .into_iter()
+        .filter_map(|item| {
+            let name = item.get("name")?.as_str()?.to_string();
+            let path = item.get("path")?.as_str()?.to_string();
+            let pkg_name = PackageName::from(name.as_str());
+            if pkg_name == PackageName::Root {
+                return None;
             }
-            Some(OutputFormat::Pretty) | None => {
-                self.pretty_print();
+            if !filtered_pkgs.contains(&pkg_name) {
+                return None;
             }
-        }
+            Some(PackageDetailDisplay { name, path })
+        })
+        .collect();
+    packages.sort_by(|a, b| a.name.cmp(&b.name));
 
-        Ok(())
-    }
+    Ok(RepositoryDetailsDisplay {
+        package_manager: package_manager_name.to_string(),
+        packages: ItemsWithCount {
+            count: packages.len(),
+            items: packages,
+        },
+    })
 }
 
-impl<'a> PackageDetails<'a> {
-    fn new(run: &'a Run, package: &'a str) -> Result<Self, Error> {
-        let color_config = run.color_config();
-        let package_graph = run.pkg_dep_graph();
-        let package_node = match package {
-            "//" => PackageNode::Root,
-            name => PackageNode::Workspace(PackageName::Other(name.to_string())),
-        };
+async fn query_package_detail(
+    run: Arc<dyn QueryRun>,
+    query_server: &dyn QueryServer,
+    package: &str,
+) -> Result<PackageDetailsDisplay, cli::Error> {
+    let query = package_detail_query(package);
+    let result = query_server.execute_query(run, &query, None).await?;
 
-        let package_json = package_graph
-            .package_json(package_node.as_package_name())
-            .ok_or_else(|| Error::PackageNotFound {
-                package: package.to_string(),
-            })?;
+    if !result.errors.is_empty() {
+        return Err(Error::PackageNotFound {
+            package: package.to_string(),
+        }
+        .into());
+    }
 
-        let transitive_dependencies = package_graph.transitive_closure(Some(&package_node));
-        let package_path = package_graph
-            .package_info(package_node.as_package_name())
-            .ok_or_else(|| Error::PackageNotFound {
-                package: package.to_string(),
-            })?
-            .package_path();
+    let value: serde_json::Value = serde_json::from_str(&result.result_json)?;
+    let pkg = value
+        .pointer("/data/package")
+        .ok_or_else(|| Error::PackageNotFound {
+            package: package.to_string(),
+        })?;
 
-        let mut package_dep_names: Vec<&str> = transitive_dependencies
-            .into_iter()
-            .filter_map(|dependency| match dependency {
-                PackageNode::Root | PackageNode::Workspace(PackageName::Root) => None,
-                PackageNode::Workspace(PackageName::Other(dep_name)) if dep_name == package => None,
-                PackageNode::Workspace(PackageName::Other(dep_name)) => Some(dep_name.as_str()),
-            })
-            .collect();
-        package_dep_names.sort();
+    let name = pkg
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or(package)
+        .to_string();
+    let path = pkg
+        .get("path")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
 
-        let mut package_rdep_names: Vec<&str> = package_graph
-            .ancestors(&package_node)
-            .into_iter()
-            .filter_map(|dependent| match dependent {
-                PackageNode::Root | PackageNode::Workspace(PackageName::Root) => None,
-                PackageNode::Workspace(PackageName::Other(dep_name)) if dep_name == package => None,
-                PackageNode::Workspace(PackageName::Other(dep_name)) => Some(dep_name.as_str()),
-            })
-            .collect();
-        package_rdep_names.sort();
-
-        Ok(Self {
-            color_config,
-            path: package_path,
-            name: package,
-            dependencies: package_dep_names,
-            dependents: package_rdep_names,
-            tasks: package_json
-                .scripts
-                .iter()
-                .map(|(name, command)| PackageTask { name, command })
-                .collect(),
+    let tasks: Vec<PackageTask> = pkg
+        .pointer("/tasks/items")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|t| {
+                    let name = t.get("name")?.as_str()?.to_string();
+                    let command = t
+                        .get("script")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    Some(PackageTask { name, command })
+                })
+                .collect()
         })
-    }
+        .unwrap_or_default();
 
-    fn print(&self) {
-        let name = color!(self.color_config, BOLD_GREEN, "{}", self.name);
-        let depends_on = color!(self.color_config, BOLD, "depends on");
-        let dependencies = if self.dependencies.is_empty() {
-            "<no packages>".to_string()
-        } else {
-            self.dependencies.join(", ")
-        };
+    let dependencies: Vec<String> = pkg
+        .pointer("/allDependencies/items")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            let mut deps: Vec<String> = arr
+                .iter()
+                .filter_map(|d| {
+                    let dep_name = d.get("name")?.as_str()?;
+                    if dep_name == "//" || dep_name == name {
+                        return None;
+                    }
+                    Some(dep_name.to_string())
+                })
+                .collect();
+            deps.sort();
+            deps
+        })
+        .unwrap_or_default();
 
-        cprintln!(self.color_config, GREY, "{} ", self.path);
-        println!(
-            "{} {}: {}",
-            name,
-            depends_on,
-            color!(self.color_config, GREY, "{}", dependencies)
-        );
-        println!();
+    let dependents: Vec<String> = pkg
+        .pointer("/allDependents/items")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            let mut deps: Vec<String> = arr
+                .iter()
+                .filter_map(|d| {
+                    let dep_name = d.get("name")?.as_str()?;
+                    if dep_name == "//" || dep_name == name {
+                        return None;
+                    }
+                    Some(dep_name.to_string())
+                })
+                .collect();
+            deps.sort();
+            deps
+        })
+        .unwrap_or_default();
 
-        cprint!(self.color_config, BOLD, "tasks:");
-        if self.tasks.is_empty() {
-            println!(" <no tasks>");
-        } else {
-            println!();
+    Ok(PackageDetailsDisplay {
+        name,
+        path,
+        tasks: ItemsWithCount {
+            count: tasks.len(),
+            items: tasks,
+        },
+        dependencies,
+        dependents,
+    })
+}
+
+fn print_repo_details(
+    repo: &RepositoryDetailsDisplay,
+    color_config: ColorConfig,
+    output: Option<OutputFormat>,
+) -> Result<(), cli::Error> {
+    match output {
+        Some(OutputFormat::Json) => {
+            println!("{}", serde_json::to_string_pretty(repo)?);
         }
-        for task in &self.tasks {
-            println!(
-                "  {}: {}",
-                task.name,
-                color!(self.color_config, GREY, "{}", task.command)
+        Some(OutputFormat::Pretty) | None => {
+            let package_copy = match repo.packages.count {
+                0 => "no packages",
+                1 => "package",
+                _ => "packages",
+            };
+            cprint!(
+                color_config,
+                BOLD,
+                "{} {} ",
+                repo.packages.count,
+                package_copy
             );
+            cprintln!(color_config, GREY, "({})\n", repo.package_manager);
+
+            for pkg in &repo.packages.items {
+                println!("  {} {}", pkg.name, GREY.apply_to(&pkg.path));
+            }
         }
+    }
+    Ok(())
+}
+
+fn print_package_detail(detail: &PackageDetailsDisplay, color_config: ColorConfig) {
+    let name = color!(color_config, BOLD_GREEN, "{}", detail.name);
+    let depends_on = color!(color_config, BOLD, "depends on");
+    let dependencies = if detail.dependencies.is_empty() {
+        "<no packages>".to_string()
+    } else {
+        detail.dependencies.join(", ")
+    };
+
+    cprintln!(color_config, GREY, "{} ", detail.path);
+    println!(
+        "{} {}: {}",
+        name,
+        depends_on,
+        color!(color_config, GREY, "{}", dependencies)
+    );
+    println!();
+
+    cprint!(color_config, BOLD, "tasks:");
+    if detail.tasks.items.is_empty() {
+        println!(" <no tasks>");
+    } else {
         println!();
     }
+    for task in &detail.tasks.items {
+        println!(
+            "  {}: {}",
+            task.name,
+            color!(color_config, GREY, "{}", task.command)
+        );
+    }
+    println!();
 }
