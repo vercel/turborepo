@@ -43,13 +43,13 @@ use tracing::{debug, error, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation};
 #[cfg(feature = "manual_recursive_watch")]
 use {
+    ignore::WalkBuilder,
     notify::{
         ErrorKind,
         event::{CreateKind, EventAttributes},
     },
-    std::io,
+    std::{ffi::OsStr, io},
     tracing::trace,
-    walkdir::WalkDir,
 };
 
 pub mod cookies;
@@ -77,8 +77,6 @@ pub enum WatchError {
     Notify(#[from] notify::Error),
     #[error("filewatching stopped")]
     Stopped(#[from] std::sync::mpsc::RecvError),
-    #[error("enumerating recursive watch: {0}")]
-    WalkDir(#[from] walkdir::Error),
     #[error("filewatching failed to start: {0}")]
     Setup(String),
 }
@@ -139,7 +137,7 @@ impl FileSystemWatcher {
                 let cookie_dir_task = cookie_dir.clone();
                 let task = tokio::task::spawn_blocking(move || {
                     setup_cookie_dir(&cookie_dir_task)?;
-                    run_watcher(&watch_root_task, send_file_events)
+                    run_watcher(&watch_root_task, &cookie_dir_task, send_file_events)
                 });
 
                 let Ok(Ok(watcher)) = task.await else {
@@ -269,19 +267,13 @@ async fn watch_events(
                         {
                             if event.kind == EventKind::Create(CreateKind::Folder) {
                                 for new_path in &event.paths {
-                                    if let Err(err) = manually_add_recursive_watches(new_path, &mut watcher, Some(&broadcast_sender)) {
-                                        match err {
-                                            WatchError::WalkDir(err) => {
-                                                // Likely the path no longer exists
-                                                debug!("encountered error watching filesystem {}", err);
-                                                continue;
-                                            },
-                                            _ => {
-                                                warn!("encountered error watching filesystem {}", err);
-                                                break 'outer;
-                                            }
-
-                                        }
+                                    if let Err(err) = manually_add_recursive_watches(
+                                        new_path,
+                                        &mut watcher,
+                                        Some(&broadcast_sender),
+                                    ) {
+                                        warn!("encountered error watching filesystem {}", err);
+                                        break 'outer;
                                     }
                                 }
                             }
@@ -386,27 +378,43 @@ fn manually_add_recursive_watches(
     watcher: &mut Backend,
     sender: Option<&broadcast::Sender<Result<Event, NotifyError>>>,
 ) -> Result<(), WatchError> {
-    // Note that WalkDir yields the root as well as doing the walk.
-    for dir in WalkDir::new(root).follow_links(false).into_iter() {
-        let dir = dir?;
-        if dir.file_type().is_dir() {
-            trace!("manually watching {}", dir.path().display());
-            match watcher.watch(dir.path(), RecursiveMode::NonRecursive) {
+    // WalkBuilder respects ALL .gitignore files in the tree (root + nested),
+    // plus .git/info/exclude. hidden(false) ensures dirs prefixed with `.` are
+    // not skipped by the hidden-file filter (e.g. .turbo).
+    let walker = WalkBuilder::new(root)
+        .hidden(false)
+        .git_ignore(true)
+        .git_global(false) // skip ~/.gitignore — not predictable in CI
+        .follow_links(false)
+        .filter_entry(|e| e.file_name() != OsStr::new(".git"))
+        .build();
+
+    for entry in walker {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(e) => {
+                // Per-entry errors (e.g. permission denied) are non-fatal
+                debug!("error walking filesystem: {}", e);
+                continue;
+            }
+        };
+        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+        if is_dir {
+            trace!("manually watching {}", entry.path().display());
+            match watcher.watch(entry.path(), RecursiveMode::NonRecursive) {
                 Ok(()) => {}
-                // If we try to watch a non-existent path, we can just skip
-                // it.
                 Err(e) if is_not_found(&e) => continue,
                 Err(e) => return Err(e.into()),
             }
         }
         if let Some(sender) = sender.as_ref() {
-            let create_kind = if dir.file_type().is_dir() {
+            let create_kind = if is_dir {
                 CreateKind::Folder
             } else {
                 CreateKind::File
             };
             let event = Event {
-                paths: vec![dir.path().to_owned()],
+                paths: vec![entry.path().to_owned()],
                 kind: EventKind::Create(create_kind),
                 attrs: EventAttributes::default(),
             };
@@ -417,8 +425,30 @@ fn manually_add_recursive_watches(
     Ok(())
 }
 
+#[cfg(feature = "manual_recursive_watch")]
+fn ensure_watched_up_to_root(
+    root: &AbsoluteSystemPath,
+    cookie_dir: &AbsoluteSystemPath,
+    watcher: &mut Backend,
+) {
+    let mut current: &AbsoluteSystemPath = cookie_dir;
+    loop {
+        if let Err(e) = watcher.watch(current.as_std_path(), RecursiveMode::NonRecursive) {
+            warn!("failed to watch {}: {}", current, e);
+        }
+        if current == root {
+            break;
+        }
+        match current.parent() {
+            Some(p) => current = p,
+            None => break,
+        }
+    }
+}
+
 fn run_watcher(
     root: &AbsoluteSystemPath,
+    cookie_dir: &AbsoluteSystemPath,
     sender: mpsc::Sender<EventResult>,
 ) -> Result<Backend, WatchError> {
     let mut watcher = make_watcher(move |res| {
@@ -426,6 +456,15 @@ fn run_watcher(
     })?;
 
     watch_recursively(root, &mut watcher)?;
+
+    // The cookie dir (typically .turbo/cookies) may be inside a gitignored
+    // directory. On Linux (manual_recursive_watch), WalkBuilder skips gitignored
+    // dirs so we must explicitly add inotify watches for the cookie dir and its
+    // ancestors up to root.
+    #[cfg(feature = "manual_recursive_watch")]
+    ensure_watched_up_to_root(root, cookie_dir, &mut watcher);
+
+    let _ = cookie_dir;
 
     #[cfg(feature = "watch_ancestors")]
     watch_parents(root, &mut watcher)?;
@@ -532,6 +571,37 @@ mod test {
         }
     }
 
+    /// Receive events until the sentinel file is observed, asserting that no
+    /// event path falls under any of the `ignored_dirs`.
+    #[cfg(feature = "manual_recursive_watch")]
+    async fn assert_no_ignored_events(
+        recv: &mut broadcast::Receiver<Result<Event, NotifyError>>,
+        ignored_dirs: &[&AbsoluteSystemPath],
+        sentinel: &AbsoluteSystemPath,
+    ) {
+        loop {
+            let event = tokio::time::timeout(Duration::from_millis(3000), recv.recv())
+                .await
+                .expect("timed out waiting for sentinel event")
+                .expect("sender was dropped")
+                .expect("filewatching error");
+            for path in &event.paths {
+                for ignored in ignored_dirs {
+                    assert!(
+                        !path.starts_with(ignored.as_std_path()),
+                        "received unexpected event from ignored dir {ignored}: {path:?}"
+                    );
+                }
+            }
+            if event.paths.iter().any(|p| {
+                let p: &std::path::Path = p;
+                p == (sentinel as &AbsoluteSystemPath)
+            }) {
+                break;
+            }
+        }
+    }
+
     #[tokio::test]
     async fn test_file_watching() {
         // Directory layout:
@@ -588,8 +658,6 @@ mod test {
             .create_with_contents("test contents")
             .unwrap();
         expect_filesystem_event!(recv, test_file_path, EventKind::Create(_));
-
-        // TODO: implement default filtering (.git, node_modules)
     }
 
     #[tokio::test]
@@ -920,6 +988,155 @@ mod test {
             repo_root,
             EventKind::Modify(ModifyKind::Name(_)) | EventKind::Remove(_)
         );
+    }
+
+    // Verify that node_modules and .git are excluded from watching on Linux
+    // (where manual_recursive_watch is enabled) to avoid exhausting inotify
+    // watches.
+    #[cfg(feature = "manual_recursive_watch")]
+    #[tokio::test]
+    async fn test_file_watching_node_modules_excluded() {
+        let (repo_root, _tmp_repo_root) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+
+        repo_root
+            .join_component(".gitignore")
+            .create_with_contents("node_modules\n")
+            .unwrap();
+
+        let node_modules = repo_root.join_component("node_modules");
+        node_modules
+            .join_components(&["some-dep", "lib"])
+            .create_dir_all()
+            .unwrap();
+
+        let git_dir = repo_root.join_component(".git");
+        git_dir.create_dir_all().unwrap();
+
+        let src_dir = repo_root.join_component("src");
+        src_dir.create_dir_all().unwrap();
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let mut recv = watcher.subscribe().await.unwrap();
+
+        expect_watching(&mut recv, &[&repo_root, &src_dir]).await;
+
+        // Write to node_modules and .git — should NOT generate watch events
+        node_modules
+            .join_components(&["some-dep", "lib", "index.js"])
+            .create_with_contents("module.exports = {}")
+            .unwrap();
+        git_dir
+            .join_component("COMMIT_EDITMSG")
+            .create_with_contents("initial commit")
+            .unwrap();
+
+        let sentinel = src_dir.join_component("sentinel.js");
+        sentinel.create_with_contents("export {}").unwrap();
+
+        assert_no_ignored_events(&mut recv, &[&node_modules, &git_dir], &sentinel).await;
+    }
+
+    // Verify that nested .gitignore files are respected during watch registration
+    // on Linux.
+    #[cfg(feature = "manual_recursive_watch")]
+    #[tokio::test]
+    async fn test_file_watching_nested_gitignore() {
+        let (repo_root, _tmp_repo_root) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+
+        // .git/ is required for WalkBuilder to recognize the repo and respect
+        // .gitignore files.
+        repo_root.join_component(".git").create_dir_all().unwrap();
+
+        let package_dir = repo_root.join_components(&["packages", "my-lib"]);
+        package_dir.create_dir_all().unwrap();
+
+        package_dir
+            .join_component(".gitignore")
+            .create_with_contents("build\n")
+            .unwrap();
+
+        let build_dir = package_dir.join_component("build");
+        build_dir.create_dir_all().unwrap();
+
+        let src_dir = package_dir.join_component("src");
+        src_dir.create_dir_all().unwrap();
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let mut recv = watcher.subscribe().await.unwrap();
+
+        expect_watching(&mut recv, &[&repo_root, &package_dir, &src_dir]).await;
+
+        build_dir
+            .join_component("output.js")
+            .create_with_contents("bundled")
+            .unwrap();
+
+        let sentinel = src_dir.join_component("sentinel.ts");
+        sentinel.create_with_contents("export {}").unwrap();
+
+        assert_no_ignored_events(&mut recv, &[&build_dir], &sentinel).await;
+    }
+
+    // Verify that modifying nested .gitignore files at runtime does NOT affect
+    // existing inotify watches. Gitignore-aware registration only applies
+    // during the initial walk and when new directories are created — it never
+    // removes watches that are already set up.
+    #[cfg(feature = "manual_recursive_watch")]
+    #[tokio::test]
+    async fn test_file_watching_nested_gitignore_modified_at_runtime() {
+        let (repo_root, _tmp_repo_root) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+
+        repo_root.join_component(".git").create_dir_all().unwrap();
+
+        // Root .gitignore ignores node_modules
+        repo_root
+            .join_component(".gitignore")
+            .create_with_contents("node_modules\n")
+            .unwrap();
+
+        let package_dir = repo_root.join_components(&["packages", "my-lib"]);
+        package_dir.create_dir_all().unwrap();
+
+        // Nested .gitignore ignores build/
+        package_dir
+            .join_component(".gitignore")
+            .create_with_contents("build\n")
+            .unwrap();
+
+        let src_dir = package_dir.join_component("src");
+        src_dir.create_dir_all().unwrap();
+
+        // dist/ is NOT in any .gitignore — it gets watched at startup
+        let dist_dir = package_dir.join_component("dist");
+        dist_dir.create_dir_all().unwrap();
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let mut recv = watcher.subscribe().await.unwrap();
+
+        expect_watching(&mut recv, &[&repo_root, &package_dir, &src_dir, &dist_dir]).await;
+
+        // Modify the nested .gitignore to ALSO ignore dist/
+        package_dir
+            .join_component(".gitignore")
+            .create_with_contents("build\ndist\n")
+            .unwrap();
+
+        // Wait for the .gitignore modification event
+        expect_filesystem_event!(
+            recv,
+            package_dir.join_component(".gitignore"),
+            EventKind::Modify(_) | EventKind::Create(_)
+        );
+
+        // dist/ is STILL watched — existing inotify watches are not removed
+        // when .gitignore changes at runtime. This is the expected behavior:
+        // gitignore rules only affect initial registration and new-directory walks.
+        let dist_file = dist_dir.join_component("output.js");
+        dist_file.create_with_contents("built").unwrap();
+        expect_filesystem_event!(recv, dist_file, EventKind::Create(_));
     }
 
     #[tokio::test]
