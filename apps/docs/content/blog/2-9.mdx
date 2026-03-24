@@ -575,22 +575,22 @@ These two flags can also be combined, like `turbo run lint --json --log-file=log
 
 ## Future Flags and deprecations
 
-We're preparing Turborepo's API surface for 3.0 with [Future Flags](/docs/reference/configuration#futureflags) and deprecations. Future Flags let you opt into 3.0 behaviors now, giving you a gradual migration path instead of a big-bang upgrade. Our goal is for you to be able to upgrade from your 2.9+ codebase to 3.0 with a PR that deletes the Future Flags and upgrades your version - no functional change.
+We're preparing Turborepo's API surface for 3.0 with [Future Flags](/docs/reference/configuration#futureflags) and deprecations. Future Flags let you opt into 3.0 behaviors now, giving you a gradual migration path instead of a big-bang upgrade. Our goal is for you to be able to upgrade from your 2.9+ codebase to 3.0 with a PR that deletes the Future Flags and increments your version - no functional change.
 
 ### Future Flags
 
 Each Future Flag can be adopted at any time, individually, and at your own pace.
 
-| Flag                                                                                   | Description                                                                                                                                                                                                     |
-| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`globalConfiguration`](/docs/reference/configuration#globalconfiguration)             | Moves `globalDependencies`, `globalEnv`, and `globalPassThroughEnv` under a [`global` key](/docs/reference/configuration#global). `globalDependencies` becomes `global.inputs` with per-task hashing semantics. |
-| [`affectedUsingTaskInputs`](/docs/reference/configuration#affectedusingtaskinputs)     | `--affected` selects at task-level granularity using `inputs` globs instead of selecting all tasks in a changed package.                                                                                        |
-| [`watchUsingTaskInputs`](/docs/reference/configuration#watchusingtaskinputs)           | `turbo watch` re-runs only tasks whose `inputs` match changed files instead of all tasks in the package.                                                                                                        |
-| [`filterUsingTasks`](/docs/reference/configuration#filterusingtasks)                   | `--filter` resolves at the task level, using `inputs` globs for git-range filters and traversing the Task Graph for `...` syntax.                                                                               |
-| [`pruneIncludesGlobalFiles`](/docs/reference/configuration#pruneincludesglobalfiles)   | `turbo prune` copies files matching `globalDependencies` globs into the output directory.                                                                                                                       |
-| [`errorsOnlyShowHash`](/docs/reference/configuration#errorsonlyshowhash)               | Shows task hashes when using `outputLogs: "errors-only"` for better visibility into running tasks.                                                                                                              |
-| [`longerSignatureKey`](/docs/reference/configuration#longersignaturekey)               | Enforces a minimum 32-byte `TURBO_REMOTE_CACHE_SIGNATURE_KEY` to prevent weak HMAC signatures.                                                                                                                  |
-| [`experimentalObservability`](/docs/reference/configuration#experimentalobservability) | Gates the [OpenTelemetry support](#opentelemetry-experimental) described above.                                                                                                                                 |
+| Flag                                                                                   | Description                                                                                                                       |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| [`globalConfiguration`](/docs/reference/configuration#globalconfiguration)             | Moves top-level keys into a [`global` key](/docs/reference/configuration#global).                                                 |
+| [`affectedUsingTaskInputs`](/docs/reference/configuration#affectedusingtaskinputs)     | `--affected` selects at task-level granularity using `inputs` globs instead of selecting all tasks in a changed package.          |
+| [`watchUsingTaskInputs`](/docs/reference/configuration#watchusingtaskinputs)           | `turbo watch` re-runs only tasks whose `inputs` match changed files instead of all tasks in the package.                          |
+| [`filterUsingTasks`](/docs/reference/configuration#filterusingtasks)                   | `--filter` resolves at the task level, using `inputs` globs for git-range filters and traversing the Task Graph for `...` syntax. |
+| [`pruneIncludesGlobalFiles`](/docs/reference/configuration#pruneincludesglobalfiles)   | `turbo prune` copies files matching `globalDependencies` globs into the output directory.                                         |
+| [`errorsOnlyShowHash`](/docs/reference/configuration#errorsonlyshowhash)               | Shows task hashes when using `outputLogs: "errors-only"` for better visibility into running tasks.                                |
+| [`longerSignatureKey`](/docs/reference/configuration#longersignaturekey)               | Enforces a minimum 32-byte `TURBO_REMOTE_CACHE_SIGNATURE_KEY` to prevent weak HMAC signatures.                                    |
+| [`experimentalObservability`](/docs/reference/configuration#experimentalobservability) | Gates the [OpenTelemetry support](#opentelemetry-experimental) described above.                                                   |
 
 ### Deprecations
 
@@ -599,7 +599,7 @@ The following features are deprecated and will show warnings when used. Each dep
 | Deprecated                                                                                                                       | Replacement                                                                                                               |
 | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | [`turbo-ignore`](/docs/reference/turbo-ignore)                                                                                   | [`turbo query affected`](/docs/reference/query)                                                                           |
-| [`turbo scan`](/docs/reference/scan)                                                                                             | Removed, obsolete functionality                                                                                           |
+| [`turbo scan`](/docs/reference/scan)                                                                                             | None. Functionality is now obsolete.                                                                                      |
 | [`--parallel`](/docs/reference/run#--parallel)                                                                                   | [`persistent`](/docs/reference/configuration#persistent) and [`with`](/docs/reference/configuration#with) in `turbo.json` |
 | [`--no-cache`](/docs/reference/run#--no-cache)                                                                                   | [`--cache=local:r,remote:r`](/docs/reference/run#--cache-options)                                                         |
 | [`TURBO_REMOTE_ONLY`](/docs/reference/system-environment-variables#turbo_remote_only) environment variable                       | [`--cache=remote:rw`](/docs/reference/run#--cache-options)                                                                |
