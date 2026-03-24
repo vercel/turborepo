@@ -454,15 +454,18 @@ impl TaskCache {
             " (outputs already on disk)"
         };
 
+        let sha_context = format_sha_context(cache_status.as_ref());
+
         match self.task_output_logs {
             OutputLogsMode::HashOnly | OutputLogsMode::NewOnly => {
                 self.write_status(
                     task_handle,
                     tui_sender,
                     &format!(
-                        "cache hit{}, suppressing logs {}",
+                        "cache hit{}, suppressing logs {}{}",
                         more_context,
-                        color!(self.ui, GREY, "{}", self.hash)
+                        color!(self.ui, GREY, "{}", self.hash),
+                        sha_context,
                     ),
                     CacheResult::Hit,
                 );
@@ -473,9 +476,10 @@ impl TaskCache {
                     task_handle,
                     tui_sender,
                     &format!(
-                        "cache hit{}, replaying logs {}",
+                        "cache hit{}, replaying logs {}{}",
                         more_context,
-                        color!(self.ui, GREY, "{}", self.hash)
+                        color!(self.ui, GREY, "{}", self.hash),
+                        sha_context,
                     ),
                     CacheResult::Hit,
                 );
@@ -487,9 +491,10 @@ impl TaskCache {
                     task_handle,
                     tui_sender,
                     &format!(
-                        "cache hit{}, replaying logs (no errors) {}",
+                        "cache hit{}, replaying logs (no errors) {}{}",
                         more_context,
-                        color!(self.ui, GREY, "{}", self.hash)
+                        color!(self.ui, GREY, "{}", self.hash),
+                        sha_context,
                     ),
                     CacheResult::Hit,
                 );
@@ -669,6 +674,22 @@ impl ConfigCache {
         file_hashes.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
         Ok(FileHashes(file_hashes).hash())
     }
+}
+
+/// Build the " from sha: <sha>" or " from sha: <sha> (dirty)" suffix
+/// appended to cache-hit log lines. Returns an empty string when no SHA
+/// is available.
+fn format_sha_context(meta: Option<&CacheHitMetadata>) -> String {
+    meta.and_then(|m| m.sha.as_deref())
+        .map(|sha| {
+            let dirty = meta.and_then(|m| m.dirty_hash.as_deref()).is_some();
+            if dirty {
+                format!(" from sha: {sha} (dirty)")
+            } else {
+                format!(" from sha: {sha}")
+            }
+        })
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -905,5 +926,48 @@ mod test {
         // OutputWatcherError must be Send + Sync for use across async boundaries
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<OutputWatcherError>();
+    }
+
+    use turborepo_cache::{CacheHitMetadata, CacheSource};
+
+    #[test]
+    fn sha_context_with_sha_only() {
+        let meta = CacheHitMetadata {
+            source: CacheSource::Local,
+            time_saved: 0,
+            sha: Some("abc123".to_string()),
+            dirty_hash: None,
+        };
+        assert_eq!(super::format_sha_context(Some(&meta)), " from sha: abc123");
+    }
+
+    #[test]
+    fn sha_context_with_sha_and_dirty_hash() {
+        let meta = CacheHitMetadata {
+            source: CacheSource::Local,
+            time_saved: 0,
+            sha: Some("abc123".to_string()),
+            dirty_hash: Some("def456".to_string()),
+        };
+        assert_eq!(
+            super::format_sha_context(Some(&meta)),
+            " from sha: abc123 (dirty)"
+        );
+    }
+
+    #[test]
+    fn sha_context_without_sha() {
+        let meta = CacheHitMetadata {
+            source: CacheSource::Local,
+            time_saved: 0,
+            sha: None,
+            dirty_hash: None,
+        };
+        assert_eq!(super::format_sha_context(Some(&meta)), "");
+    }
+
+    #[test]
+    fn sha_context_with_no_metadata() {
+        assert_eq!(super::format_sha_context(None), "");
     }
 }
