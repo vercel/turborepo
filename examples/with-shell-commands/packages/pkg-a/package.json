@@ -1,7 +1,7 @@
 {
   "name": "pkg-a",
   "scripts": {
-    "build": "echo \"Building at the speed of Turbo.\" > output-file.txt && cat output-file.txt",
+    "build": "echo \"Building at the speed of Turbo.\" > output-file.txt && node -e \"process.stdout.write(require('fs').readFileSync('output-file.txt','utf8'))\"",
     "lint": "echo \"Linted!\"",
     "check-types": "echo \"Types checked!\""
   },
