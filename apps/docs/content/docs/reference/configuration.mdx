@@ -345,6 +345,94 @@ Without this flag, the `globalDependencies` entries are preserved in the pruned 
 
 With this configuration, running `turbo prune frontend` will include `tsconfig.json` and `.env` in the output alongside the pruned workspaces and lockfile. Both inclusion and `!` exclusion globs are supported.
 
+#### `filterUsingTasks` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+
+Default: `false`
+
+Resolve [`--filter`](/docs/reference/run#--filter-string) at the **task level** instead of the **package level**. Git-range filters (e.g. `--filter=[main]`) match changed files against each task's [`inputs`](#inputs) globs, and the `...` dependency/dependent syntax traverses the Task Graph in addition to the Package Graph.
+
+Without this flag, `--filter` operates on the Package Graph: a git-range selector marks entire packages as matched if any file in the package changed, and `...` follows package-level dependencies. With this flag, resolution moves to the Task Graph: only tasks whose `inputs` actually match the changed files are selected, and `...` follows task-level dependencies (e.g. `web#build -> schema#gen` is traversed even if `web` has no package-level dependency on `schema`).
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "filterUsingTasks": true,
+  },
+  "tasks": {
+    "build": {
+      "inputs": ["$TURBO_DEFAULT$", "!README.md"],
+    },
+  },
+}
+```
+
+In this example, `--filter=[main]` would not select `build` for a package if only `README.md` changed, because `README.md` is excluded from `build`'s inputs.
+
+<Callout type="info">
+  Changes to root configuration files (`package.json`, `turbo.json`,
+  `turbo.jsonc`), the package manager lockfile, or
+  [`globalDependencies`](#globaldependencies) will always cause all tasks to be
+  selected, regardless of individual task `inputs`.
+</Callout>
+
+#### `globalConfiguration` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+
+Default: `false`
+
+Move global configuration keys under a top-level [`global`](#global) key for clarity. When enabled, the following renames apply:
+
+| Old key | New location |
+| ------- | ------------ |
+| `globalDependencies` | `global.inputs` |
+| `globalEnv` | `global.env` |
+| `globalPassThroughEnv` | `global.passThroughEnv` |
+| `ui` | `global.ui` |
+| `envMode` | `global.envMode` |
+| `cacheDir` | `global.cacheDir` |
+| `concurrency` | `global.concurrency` |
+| `daemon` | `global.daemon` |
+| `noUpdateNotifier` | `global.noUpdateNotifier` |
+| `dangerouslyDisablePackageManagerCheck` | `global.dangerouslyDisablePackageManagerCheck` |
+| `remoteCache` | `global.remoteCache` |
+| `experimentalObservability` | `global.experimentalObservability` |
+
+Using any of the old top-level keys while this flag is enabled will produce a hard error with a rename hint.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "globalConfiguration": true,
+  },
+  "global": {
+    "inputs": ["tsconfig.json", ".env"],
+    "env": ["NODE_ENV"],
+  },
+  "tasks": {
+    "build": {},
+  },
+}
+```
+
+<Callout type="info">
+  `globalDependencies` is renamed to `global.inputs` and its semantics change:
+  files are prepended to every task's `inputs` for per-task hashing instead of
+  contributing to the global hash. This allows individual tasks to exclude
+  specific global files via negation globs.
+</Callout>
+
+#### `experimentalObservability`
+
+Default: `false`
+
+When enabled, Turborepo will honor the `experimentalObservability.otel` configuration block (if present) to send run summaries to an OpenTelemetry Protocol (OTLP) collector.
+
+<Callout type="info">
+  Invalid or incomplete OTEL configuration (e.g., missing endpoint, invalid
+  protocol) results in metrics being disabled rather than causing runs to fail.
+  Turborepo will continue executing tasks normally even if the exporter cannot
+  be initialized.
+</Callout>
+
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 
 ```jsonc title="./apps/web/turbo.json"
@@ -956,31 +1044,6 @@ Must start with `team_` or it will not be used.
 The slug of the Remote Cache team.
 Value will be passed as `slug` in the querystring for all Remote Cache HTTP calls.
 
-## Future flags
-
-Future flags allow you to opt-in to experimental features before they become the default behavior.
-
-```jsonc title="./turbo.json"
-{
-  "futureFlags": {
-    "experimentalObservability": true,
-  },
-}
-```
-
-### `experimentalObservability`
-
-Default: `false`
-
-When enabled, Turborepo will honor the `experimentalObservability.otel` configuration block (if present) to send run summaries to an OpenTelemetry Protocol (OTLP) collector.
-
-<Callout type="info">
-  Invalid or incomplete OTEL configuration (e.g., missing endpoint, invalid
-  protocol) results in metrics being disabled rather than causing runs to fail.
-  Turborepo will continue executing tasks normally even if the exporter cannot
-  be initialized.
-</Callout>
-
 ## Experimental observability
 
 <ExperimentalBadge>Experimental</ExperimentalBadge>
@@ -989,7 +1052,7 @@ Configure Turborepo to export metrics to observability backends like Datadog, Pr
 
 ### `experimentalObservability`
 
-The `experimentalObservability` configuration requires `futureFlags.experimentalObservability` to be set to `true` in your root `turbo.json`. This applies to all configuration sources, including the `turbo.json` block, environment variables, and CLI flags. Turborepo will error if observability is configured without the future flag enabled.
+The `experimentalObservability` configuration requires [`futureFlags.experimentalObservability`](#experimentalobservability) to be set to `true` in your root `turbo.json`. This applies to all configuration sources, including the `turbo.json` block, environment variables, and CLI flags. Turborepo will error if observability is configured without the future flag enabled.
 
 ```jsonc title="./turbo.json"
 {
