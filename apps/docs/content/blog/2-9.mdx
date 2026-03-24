@@ -145,12 +145,7 @@ bunx skills update vercel/turborepo
 
 ## Time to First Task improved up to 96%
 
-<<<<<<< HEAD
 Turborepo's most important job is to schedule your monorepo's tasks to be as fast as possible. Whenever you use `turbo run`, our first step is to analyze your monorepo's structure and scripts to create a graph of your tasks. The [Task Graph](/docs/core-concepts/package-and-task-graph#task-graph) describes what tasks depend on each other, so we know how to run work as soon as possible, and what work can be restored from cache.
-=======
-Turborepo's most important role is to schedule your monorepo's tasks to be as fast as possible. Whenever you use `turbo run`, our first step is to analyze your monorepo's structure and scripts to create a graph of your tasks. The [Task Graph](/docs/core-concepts/package-and-task-graph#task-graph) describes what tasks depend on each other, so we know how to run work as soon as possible, and what work can be restored from cache.
-
-> > > > > > > ad39e54f5de7114c53e9a64d69911d85fa44ad3b
 
 Once we're done creating your Task Graph, we begin executing your tasks. "Time to First Task" is our name for the time between when `turbo run` begins execution to the first script in your monorepo being executed. In general, Time To First Task represents Turborepo's overhead in your monorepo, and we've made it dramatically faster in this release.
 
