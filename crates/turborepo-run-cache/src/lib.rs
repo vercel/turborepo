@@ -456,17 +456,14 @@ impl TaskCache {
 
         let sha_context = format_sha_context(cache_status.as_ref());
 
+        let task_hash = format!(" (task hash: {})", color!(self.ui, GREY, "{}", self.hash));
+
         match self.task_output_logs {
             OutputLogsMode::HashOnly | OutputLogsMode::NewOnly => {
                 self.write_status(
                     task_handle,
                     tui_sender,
-                    &format!(
-                        "cache hit{}, suppressing logs {}{}",
-                        more_context,
-                        color!(self.ui, GREY, "{}", self.hash),
-                        sha_context,
-                    ),
+                    &format!("cache hit{sha_context}{more_context}, suppressing logs{task_hash}"),
                     CacheResult::Hit,
                 );
             }
@@ -475,12 +472,7 @@ impl TaskCache {
                 self.write_status(
                     task_handle,
                     tui_sender,
-                    &format!(
-                        "cache hit{}, replaying logs {}{}",
-                        more_context,
-                        color!(self.ui, GREY, "{}", self.hash),
-                        sha_context,
-                    ),
+                    &format!("cache hit{sha_context}{more_context}, replaying logs{task_hash}"),
                     CacheResult::Hit,
                 );
                 self.replay_log_file(task_handle)?;
@@ -491,10 +483,8 @@ impl TaskCache {
                     task_handle,
                     tui_sender,
                     &format!(
-                        "cache hit{}, replaying logs (no errors) {}{}",
-                        more_context,
-                        color!(self.ui, GREY, "{}", self.hash),
-                        sha_context,
+                        "cache hit{sha_context}{more_context}, replaying logs (no \
+                         errors){task_hash}"
                     ),
                     CacheResult::Hit,
                 );
