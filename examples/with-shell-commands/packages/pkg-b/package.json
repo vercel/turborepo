@@ -2,7 +2,7 @@
   "name": "pkg-b",
   "scripts": {
     "prebuild": "echo \"Executing pre-build step...\"",
-    "build": "echo \"Welcome to the Turboverse.\" > output-file.txt && node -e \"process.stdout.write(require('fs').readFileSync('output-file.txt','utf8'))\"",
+    "build": "echo \"Welcome to the Turboverse.\" > output-file.txt && cat output-file.txt",
     "check-types": "echo \"Types checked!\""
   },
   "dependencies": {
