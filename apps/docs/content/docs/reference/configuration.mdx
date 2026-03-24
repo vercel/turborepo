@@ -345,6 +345,19 @@ Without this flag, the `globalDependencies` entries are preserved in the pruned 
 
 With this configuration, running `turbo prune frontend` will include `tsconfig.json` and `.env` in the output alongside the pruned workspaces and lockfile. Both inclusion and `!` exclusion globs are supported.
 
+#### `experimentalObservability`
+
+Default: `false`
+
+When enabled, Turborepo will honor the `experimentalObservability.otel` configuration block (if present) to send run summaries to an OpenTelemetry Protocol (OTLP) collector.
+
+<Callout type="info">
+  Invalid or incomplete OTEL configuration (e.g., missing endpoint, invalid
+  protocol) results in metrics being disabled rather than causing runs to fail.
+  Turborepo will continue executing tasks normally even if the exporter cannot
+  be initialized.
+</Callout>
+
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 
 ```jsonc title="./apps/web/turbo.json"
@@ -956,31 +969,6 @@ Must start with `team_` or it will not be used.
 The slug of the Remote Cache team.
 Value will be passed as `slug` in the querystring for all Remote Cache HTTP calls.
 
-## Future flags
-
-Future flags allow you to opt-in to experimental features before they become the default behavior.
-
-```jsonc title="./turbo.json"
-{
-  "futureFlags": {
-    "experimentalObservability": true,
-  },
-}
-```
-
-### `experimentalObservability`
-
-Default: `false`
-
-When enabled, Turborepo will honor the `experimentalObservability.otel` configuration block (if present) to send run summaries to an OpenTelemetry Protocol (OTLP) collector.
-
-<Callout type="info">
-  Invalid or incomplete OTEL configuration (e.g., missing endpoint, invalid
-  protocol) results in metrics being disabled rather than causing runs to fail.
-  Turborepo will continue executing tasks normally even if the exporter cannot
-  be initialized.
-</Callout>
-
 ## Experimental observability
 
 <ExperimentalBadge>Experimental</ExperimentalBadge>
@@ -989,7 +977,7 @@ Configure Turborepo to export metrics to observability backends like Datadog, Pr
 
 ### `experimentalObservability`
 
-The `experimentalObservability` configuration requires `futureFlags.experimentalObservability` to be set to `true` in your root `turbo.json`. This applies to all configuration sources, including the `turbo.json` block, environment variables, and CLI flags. Turborepo will error if observability is configured without the future flag enabled.
+The `experimentalObservability` configuration requires [`futureFlags.experimentalObservability`](#experimentalobservability) to be set to `true` in your root `turbo.json`. This applies to all configuration sources, including the `turbo.json` block, environment variables, and CLI flags. Turborepo will error if observability is configured without the future flag enabled.
 
 ```jsonc title="./turbo.json"
 {
