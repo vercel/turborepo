@@ -158,7 +158,7 @@ fn test_add_keys_cache_and_output_logs() {
         "expected cache hit: {stdout}"
     );
     assert!(
-        stdout.contains("add-keys:add-keys-task: cache hit") && stdout.contains("suppressing logs"),
+        stdout.contains("add-keys:add-keys-task: cache hit, suppressing logs"),
         "outputLogs new-only should suppress on hit: {stdout}"
     );
 }

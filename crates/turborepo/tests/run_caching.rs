@@ -79,11 +79,7 @@ fn test_root_deps_caching() {
         &["build", "--filter=another", "--output-logs=hash-only"],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("cache hit")
-            && stdout.contains("suppressing logs")
-            && stdout.contains(initial_hash)
-    );
+    assert!(stdout.contains(&format!("cache hit, suppressing logs {initial_hash}")));
     assert!(stdout.contains("FULL TURBO"));
 
     // Touch a root internal dependency → cache miss with DIFFERENT hash
@@ -117,11 +113,7 @@ fn test_root_deps_caching() {
         &["build", "--filter=another", "--output-logs=hash-only"],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("cache hit")
-            && stdout.contains("suppressing logs")
-            && stdout.contains(new_hash)
-    );
+    assert!(stdout.contains(&format!("cache hit, suppressing logs {new_hash}")));
 
     // Dependants of root dep
     let output = run_turbo(tempdir.path(), &["build", "--filter=...util", "--dry=json"]);
@@ -316,9 +308,7 @@ fn test_excluded_inputs() {
     // Run 2: still cache hit with SAME hash (excluded file doesn't affect hash)
     let output = run_turbo(tempdir.path(), &["run", "build", "--filter=my-app"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("cache hit") && stdout.contains("replaying logs") && stdout.contains(hash)
-    );
+    assert!(stdout.contains(&format!("cache hit, replaying logs {hash}")));
     assert!(stdout.contains("1 cached, 1 total"));
     assert!(stdout.contains("FULL TURBO"));
 }

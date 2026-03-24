@@ -196,7 +196,7 @@ fn test_log_prefix_none_cache_hit() {
     // Second run: cache hit, still no prefixes
     let output = run_turbo(tempdir.path(), &["run", "build", "--log-prefix=none"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("cache hit") && stdout.contains("replaying logs"));
+    assert!(stdout.contains("cache hit, replaying logs"));
     assert!(stdout.contains("1 cached, 1 total"));
     assert!(stdout.contains("FULL TURBO"));
 }
@@ -212,7 +212,7 @@ fn test_log_prefix_default_shows_prefixes() {
     // Default prefix: should show prefixes
     let output = run_turbo(tempdir.path(), &["run", "build"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("app-a:build: cache hit") && stdout.contains("replaying logs"));
+    assert!(stdout.contains("app-a:build: cache hit, replaying logs"));
     assert!(stdout.contains("app-a:build: build-app-a"));
 }
 
@@ -477,7 +477,7 @@ fn test_errors_only_show_hash_cache_hit() {
     );
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("cache hit") && stdout.contains("replaying logs (no errors)"));
+    assert!(stdout.contains("cache hit, replaying logs (no errors)"));
 }
 
 #[test]
@@ -511,7 +511,7 @@ fn test_full_cache_hit_output() {
     // --output-logs=full: should show cached output
     let output = run_turbo(tempdir.path(), &["run", "build", "--output-logs=full"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let cache_hit_count = stdout.matches("replaying logs").count();
+    let cache_hit_count = stdout.matches("cache hit, replaying logs").count();
     assert_eq!(cache_hit_count, 2, "expected 2 cache hit messages");
 
     let building_count = stdout
@@ -528,7 +528,7 @@ fn test_full_cache_hit_output() {
     // --output-logs=hash-only
     let output = run_turbo(tempdir.path(), &["run", "build", "--output-logs=hash-only"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let suppressed_count = stdout.matches("suppressing logs").count();
+    let suppressed_count = stdout.matches("cache hit, suppressing logs").count();
     assert_eq!(suppressed_count, 2, "expected 2 suppressed log messages");
 
     // --output-logs=none

@@ -16,7 +16,7 @@ use std::{
 
 use itertools::Itertools;
 use tokio::sync::oneshot;
-use tracing::{debug, log::warn};
+use tracing::{debug, info, log::warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
@@ -454,16 +454,20 @@ impl TaskCache {
             " (outputs already on disk)"
         };
 
-        let sha_context = format_sha_context(cache_status.as_ref(), self.ui);
-
-        let task_hash = format!(" (task hash: {})", color!(self.ui, GREY, "{}", self.hash));
+        if let Some(sha_context) = format_sha_context(cache_status.as_ref()) {
+            info!("{}: {sha_context}", self.hash);
+        }
 
         match self.task_output_logs {
             OutputLogsMode::HashOnly | OutputLogsMode::NewOnly => {
                 self.write_status(
                     task_handle,
                     tui_sender,
-                    &format!("cache hit{sha_context}{more_context}, suppressing logs{task_hash}"),
+                    &format!(
+                        "cache hit{}, suppressing logs {}",
+                        more_context,
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ),
                     CacheResult::Hit,
                 );
             }
@@ -472,7 +476,11 @@ impl TaskCache {
                 self.write_status(
                     task_handle,
                     tui_sender,
-                    &format!("cache hit{sha_context}{more_context}, replaying logs{task_hash}"),
+                    &format!(
+                        "cache hit{}, replaying logs {}",
+                        more_context,
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ),
                     CacheResult::Hit,
                 );
                 self.replay_log_file(task_handle)?;
@@ -483,8 +491,9 @@ impl TaskCache {
                     task_handle,
                     tui_sender,
                     &format!(
-                        "cache hit{sha_context}{more_context}, replaying logs (no \
-                         errors){task_hash}"
+                        "cache hit{}, replaying logs (no errors) {}",
+                        more_context,
+                        color!(self.ui, GREY, "{}", self.hash)
                     ),
                     CacheResult::Hit,
                 );
@@ -666,20 +675,18 @@ impl ConfigCache {
     }
 }
 
-/// Build the " from sha: <sha>" or " from sha: <sha> (dirty)" suffix
-/// appended to cache-hit log lines. Returns an empty string when no SHA
-/// is available.
-fn format_sha_context(meta: Option<&CacheHitMetadata>, ui: ColorConfig) -> String {
-    meta.and_then(|m| m.sha.as_deref())
-        .map(|sha| {
-            let dirty = meta.and_then(|m| m.dirty_hash.as_deref()).is_some();
-            if dirty {
-                format!(" from sha: {} (dirty)", color!(ui, GREY, "{}", sha))
-            } else {
-                format!(" from sha: {}", color!(ui, GREY, "{}", sha))
-            }
-        })
-        .unwrap_or_default()
+/// Build a "cache hit produced by sha: <sha>" or "cache hit produced by sha:
+/// <sha> (dirty)" message for verbose logging. Returns `None` when no SHA is
+/// available.
+fn format_sha_context(meta: Option<&CacheHitMetadata>) -> Option<String> {
+    meta.and_then(|m| m.sha.as_deref()).map(|sha| {
+        let dirty = meta.and_then(|m| m.dirty_hash.as_deref()).is_some();
+        if dirty {
+            format!("cache hit produced by sha: {sha} (dirty)")
+        } else {
+            format!("cache hit produced by sha: {sha}")
+        }
+    })
 }
 
 #[cfg(test)]
@@ -916,56 +923,5 @@ mod test {
         // OutputWatcherError must be Send + Sync for use across async boundaries
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<OutputWatcherError>();
-    }
-
-    use turborepo_cache::{CacheHitMetadata, CacheSource};
-    use turborepo_ui::ColorConfig;
-
-    fn no_color() -> ColorConfig {
-        ColorConfig::new(true)
-    }
-
-    #[test]
-    fn sha_context_with_sha_only() {
-        let meta = CacheHitMetadata {
-            source: CacheSource::Local,
-            time_saved: 0,
-            sha: Some("abc123".to_string()),
-            dirty_hash: None,
-        };
-        assert_eq!(
-            super::format_sha_context(Some(&meta), no_color()),
-            " from sha: abc123"
-        );
-    }
-
-    #[test]
-    fn sha_context_with_sha_and_dirty_hash() {
-        let meta = CacheHitMetadata {
-            source: CacheSource::Local,
-            time_saved: 0,
-            sha: Some("abc123".to_string()),
-            dirty_hash: Some("def456".to_string()),
-        };
-        assert_eq!(
-            super::format_sha_context(Some(&meta), no_color()),
-            " from sha: abc123 (dirty)"
-        );
-    }
-
-    #[test]
-    fn sha_context_without_sha() {
-        let meta = CacheHitMetadata {
-            source: CacheSource::Local,
-            time_saved: 0,
-            sha: None,
-            dirty_hash: None,
-        };
-        assert_eq!(super::format_sha_context(Some(&meta), no_color()), "");
-    }
-
-    #[test]
-    fn sha_context_with_no_metadata() {
-        assert_eq!(super::format_sha_context(None, no_color()), "");
     }
 }
