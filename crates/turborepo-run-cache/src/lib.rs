@@ -454,7 +454,7 @@ impl TaskCache {
             " (outputs already on disk)"
         };
 
-        let sha_context = format_sha_context(cache_status.as_ref());
+        let sha_context = format_sha_context(cache_status.as_ref(), self.ui);
 
         let task_hash = format!(" (task hash: {})", color!(self.ui, GREY, "{}", self.hash));
 
@@ -669,14 +669,14 @@ impl ConfigCache {
 /// Build the " from sha: <sha>" or " from sha: <sha> (dirty)" suffix
 /// appended to cache-hit log lines. Returns an empty string when no SHA
 /// is available.
-fn format_sha_context(meta: Option<&CacheHitMetadata>) -> String {
+fn format_sha_context(meta: Option<&CacheHitMetadata>, ui: ColorConfig) -> String {
     meta.and_then(|m| m.sha.as_deref())
         .map(|sha| {
             let dirty = meta.and_then(|m| m.dirty_hash.as_deref()).is_some();
             if dirty {
-                format!(" from sha: {sha} (dirty)")
+                format!(" from sha: {} (dirty)", color!(ui, GREY, "{}", sha))
             } else {
-                format!(" from sha: {sha}")
+                format!(" from sha: {}", color!(ui, GREY, "{}", sha))
             }
         })
         .unwrap_or_default()
@@ -919,6 +919,11 @@ mod test {
     }
 
     use turborepo_cache::{CacheHitMetadata, CacheSource};
+    use turborepo_ui::ColorConfig;
+
+    fn no_color() -> ColorConfig {
+        ColorConfig::new(true)
+    }
 
     #[test]
     fn sha_context_with_sha_only() {
@@ -928,7 +933,10 @@ mod test {
             sha: Some("abc123".to_string()),
             dirty_hash: None,
         };
-        assert_eq!(super::format_sha_context(Some(&meta)), " from sha: abc123");
+        assert_eq!(
+            super::format_sha_context(Some(&meta), no_color()),
+            " from sha: abc123"
+        );
     }
 
     #[test]
@@ -940,7 +948,7 @@ mod test {
             dirty_hash: Some("def456".to_string()),
         };
         assert_eq!(
-            super::format_sha_context(Some(&meta)),
+            super::format_sha_context(Some(&meta), no_color()),
             " from sha: abc123 (dirty)"
         );
     }
@@ -953,11 +961,11 @@ mod test {
             sha: None,
             dirty_hash: None,
         };
-        assert_eq!(super::format_sha_context(Some(&meta)), "");
+        assert_eq!(super::format_sha_context(Some(&meta), no_color()), "");
     }
 
     #[test]
     fn sha_context_with_no_metadata() {
-        assert_eq!(super::format_sha_context(None), "");
+        assert_eq!(super::format_sha_context(None, no_color()), "");
     }
 }
