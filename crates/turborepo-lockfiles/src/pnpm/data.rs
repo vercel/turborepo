@@ -177,6 +177,14 @@ struct LockfileSettings {
     exclude_links_from_lockfile: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     inject_workspace_packages: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dedupe_peers: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    peers_suffix_max_length: Option<u32>,
+    // Catch-all for any future pnpm settings fields so they survive
+    // deserialization/re-serialization round-trips (e.g. turbo prune).
+    #[serde(flatten)]
+    other: Map<String, serde_yaml_ng::Value>,
 }
 
 impl PnpmLockfile {
@@ -1843,5 +1851,135 @@ snapshots:
                  HashMap iteration order)"
             );
         }
+    }
+
+    #[test]
+    fn test_lockfile_settings_preserve_dedupe_peers() {
+        // Regression test: pnpm 10.33.0 added dedupePeers to the lockfile
+        // settings block. turbo prune must preserve this field (and any other
+        // unknown settings) through a parse/serialize round-trip, otherwise
+        // `pnpm install --frozen-lockfile` fails with
+        // ERR_PNPM_LOCKFILE_CONFIG_MISMATCH.
+        let yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: false
+  dedupePeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+
+  apps/web:
+    dependencies:
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
+
+packages:
+
+  is-number@6.0.0:
+    resolution: {integrity: sha512-abc}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-ghi}
+
+snapshots:
+
+  is-number@6.0.0: {}
+
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+
+  lodash@4.17.21: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        // Verify the field was parsed
+        let settings = lockfile.settings.as_ref().expect("should have settings");
+        assert_eq!(settings.dedupe_peers, Some(true));
+        assert_eq!(settings.auto_install_peers, Some(false));
+
+        // Prune to apps/web
+        let workspace_packages = vec!["apps/web".to_string()];
+        let resolved_packages = vec!["lodash@4.17.21".to_string()];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        // Re-parse the pruned lockfile and verify dedupePeers survived
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+        let pruned_settings = pruned_lockfile
+            .settings
+            .as_ref()
+            .expect("pruned lockfile should have settings");
+        assert_eq!(
+            pruned_settings.dedupe_peers,
+            Some(true),
+            "dedupePeers must survive prune round-trip"
+        );
+        assert_eq!(pruned_settings.auto_install_peers, Some(false));
+        assert_eq!(pruned_settings.exclude_links_from_lockfile, Some(false));
+    }
+
+    #[test]
+    fn test_lockfile_settings_preserve_unknown_fields() {
+        // Forward-compatibility: any unknown settings field added by future
+        // pnpm versions should survive a parse/serialize round-trip via the
+        // #[serde(flatten)] catch-all on LockfileSettings.
+        let yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+  someFutureSetting: 42
+
+importers:
+
+  .:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+
+packages:
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+
+snapshots:
+
+  is-odd@3.0.1: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        // The unknown field should be captured in the `other` map
+        let settings = lockfile.settings.as_ref().expect("should have settings");
+        assert!(
+            settings.other.contains_key("someFutureSetting"),
+            "unknown settings field should be captured in the catch-all map"
+        );
+
+        // Round-trip: encode and re-parse
+        let encoded = lockfile.encode().unwrap();
+        let reparsed = PnpmLockfile::from_bytes(&encoded).unwrap();
+        let reparsed_settings = reparsed
+            .settings
+            .as_ref()
+            .expect("should have settings after round-trip");
+        assert!(
+            reparsed_settings.other.contains_key("someFutureSetting"),
+            "unknown settings field must survive encode/decode round-trip"
+        );
     }
 }
