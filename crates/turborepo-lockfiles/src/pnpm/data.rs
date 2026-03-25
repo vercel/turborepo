@@ -181,10 +181,6 @@ struct LockfileSettings {
     dedupe_peers: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     peers_suffix_max_length: Option<u32>,
-    // Catch-all for any future pnpm settings fields so they survive
-    // deserialization/re-serialization round-trips (e.g. turbo prune).
-    #[serde(flatten)]
-    other: Map<String, serde_yaml_ng::Value>,
 }
 
 impl PnpmLockfile {
@@ -1930,56 +1926,5 @@ snapshots:
         );
         assert_eq!(pruned_settings.auto_install_peers, Some(false));
         assert_eq!(pruned_settings.exclude_links_from_lockfile, Some(false));
-    }
-
-    #[test]
-    fn test_lockfile_settings_preserve_unknown_fields() {
-        // Forward-compatibility: any unknown settings field added by future
-        // pnpm versions should survive a parse/serialize round-trip via the
-        // #[serde(flatten)] catch-all on LockfileSettings.
-        let yaml = r#"lockfileVersion: '9.0'
-
-settings:
-  autoInstallPeers: true
-  excludeLinksFromLockfile: false
-  someFutureSetting: 42
-
-importers:
-
-  .:
-    dependencies:
-      is-odd:
-        specifier: 3.0.1
-        version: 3.0.1
-
-packages:
-
-  is-odd@3.0.1:
-    resolution: {integrity: sha512-def}
-
-snapshots:
-
-  is-odd@3.0.1: {}
-"#;
-        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
-
-        // The unknown field should be captured in the `other` map
-        let settings = lockfile.settings.as_ref().expect("should have settings");
-        assert!(
-            settings.other.contains_key("someFutureSetting"),
-            "unknown settings field should be captured in the catch-all map"
-        );
-
-        // Round-trip: encode and re-parse
-        let encoded = lockfile.encode().unwrap();
-        let reparsed = PnpmLockfile::from_bytes(&encoded).unwrap();
-        let reparsed_settings = reparsed
-            .settings
-            .as_ref()
-            .expect("should have settings after round-trip");
-        assert!(
-            reparsed_settings.other.contains_key("someFutureSetting"),
-            "unknown settings field must survive encode/decode round-trip"
-        );
     }
 }
