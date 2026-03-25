@@ -22,11 +22,11 @@ import { Accordion, Accordions } from "@/components/geistdocs/accordion";
 
 Turborepo 2.9 concentrates on quality, including improvements for performance, capability, and simplifying adoption paths:
 
-- [**Faster Time To First Task**](#96-faster): Up to 96% improvement, scaling with repository size and complexity
-- [**`turbo query` is now stable**](#turbo-query-is-stable): Query your monorepo with GraphQL or shorthands like `turbo query affected`
-- [**Easier adoption for large repos**](#package-graph-cycles): Circular package dependencies no longer block your Turborepo adoption
+- [**Faster Time To First Task**](#time-to-first-task-improved-up-to-96): Up to 96% improvement, scaling with repository size and complexity
+- [**`turbo query` is now stable**](#turbo-query-is-now-stable): Query your monorepo with GraphQL or shorthands like `turbo query affected`
+- [**Easier adoption for large repos**](#easier-adoption-for-large-repositories): Circular package dependencies no longer block your Turborepo adoption
 - [**OpenTelemetry (Experimental)**](#opentelemetry-experimental): Send task metrics to any OTLP-compatible observability backend
-- [**Structured logging (Experimental)**](#structured-logging): Machine-readable JSON output with `--json` and `--log-file`
+- [**Structured logging (Experimental)**](#structured-logging-experimental): Machine-readable JSON output with `--json` and `--log-file`
 - [**Future Flags and deprecations**](#future-flags-and-deprecations): Prepare early for 3.0 using pre-existing migration paths
 
 Additionally, we've closed 111 Issues since Turborepo 2.8, addressing 262 👍 reactions, reducing our total open Issue count by 48%.
@@ -145,7 +145,7 @@ bunx skills update vercel/turborepo
 
 ## Time to First Task improved up to 96%
 
-Turborepo's most important job is to schedule your monorepo's tasks to be as fast as possible. Whenever you use `turbo run`, our first step is to analyze your monorepo's structure and scripts to create a graph of your tasks. The [Task Graph](/docs/core-concepts/package-and-task-graph#task-graph) describes what tasks depend on each other, so we know how to run work as soon as possible, and what work can be restored from cache.
+Turborepo's most important job is to schedule your monorepo's tasks to be as fast as possible. Whenever you use `turbo run`, our first step is to analyze your monorepo's structure and scripts to create a graph of your tasks. The [Task Graph](/docs/core-concepts/package-and-task-graph#task-graph) describes what tasks depend on each other, so we know how to run and cache the work in your repository.
 
 Once we're done creating your Task Graph, we begin executing your tasks. "Time to First Task" is our name for the time between when `turbo run` begins execution to the first script in your monorepo being executed. In general, Time To First Task represents Turborepo's overhead in your monorepo, and we've made it dramatically faster in this release.
 
@@ -356,7 +356,6 @@ Once we're done creating your Task Graph, we begin executing your tasks. "Time t
             role="progressbar"
             aria-valuenow={20}
             aria-valuemin={0}
-            aria-valuemax={100}
             aria-label="After: 132 milliseconds"
           >
             <div
@@ -376,9 +375,9 @@ Once we're done creating your Task Graph, we begin executing your tasks. "Time t
         </div>
       </div>
     </div>
-    <p className="text-xs text-[var(--ds-gray-900)] mt-3">
+    <span className="block text-xs text-[var(--ds-gray-900)] mt-3">
       Benchmarked on Apple M4 Max, 36 GB RAM, macOS 15.7.1
-    </p>
+    </span>
   </div>
 </div>
 
@@ -452,7 +451,7 @@ By default, this command pretty prints for easier readability. You can also use 
 
 ## Easier adoption for large repositories
 
-Circular package dependencies are a common reality in large monorepos. While they're not a great architectural decision, they happen. The example below shows how easily packages can mutually depend on each other.
+Circular package dependencies are a common reality in large monorepos. While they come with significant drawbacks, they happen. The example below shows how easily packages can mutually depend on each other.
 
 <Tabs items={["UI package", "Utilities package"]}>
 
@@ -536,7 +535,7 @@ Follow the README for a Docker Compose setup with an OTel Collector and pre-conf
 
 To learn more about the experimental native OTEL collector, [visit the documentation](/docs/reference/configuration#experimentalobservability).
 
-## Structured logging
+## Structured logging (Experimental)
 
 Turborepo now supports machine-readable JSON output for programmatic consumption.
 
@@ -583,7 +582,7 @@ Each Future Flag can be adopted at any time, individually, and at your own pace.
 
 | Flag                                                                                   | Description                                                                                                                       |
 | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| [`globalConfiguration`](/docs/reference/configuration#globalconfiguration)             | Moves top-level keys into a [`global` key](/docs/reference/configuration#global).                                                 |
+| [`globalConfiguration`](/docs/reference/configuration#globalconfiguration)             | Moves top-level keys into a [`global`](/docs/reference/configuration#global) key.                                                 |
 | [`affectedUsingTaskInputs`](/docs/reference/configuration#affectedusingtaskinputs)     | `--affected` selects at task-level granularity using `inputs` globs instead of selecting all tasks in a changed package.          |
 | [`watchUsingTaskInputs`](/docs/reference/configuration#watchusingtaskinputs)           | `turbo watch` re-runs only tasks whose `inputs` match changed files instead of all tasks in the package.                          |
 | [`filterUsingTasks`](/docs/reference/configuration#filterusingtasks)                   | `--filter` resolves at the task level, using `inputs` globs for git-range filters and traversing the Task Graph for `...` syntax. |
@@ -598,7 +597,7 @@ The following features are deprecated and will show warnings when used. Each dep
 
 | Deprecated                                                                                                                       | Replacement                                                                                                               |
 | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| [`turbo-ignore`](/docs/reference/turbo-ignore)                                                                                   | [`turbo query affected`](/docs/reference/query)                                                                           |
+| [`turbo-ignore`](/docs/reference/turbo-ignore)                                                                                   | [`turbo query affected`](/docs/reference/query#affected)                                                                  |
 | [`turbo scan`](/docs/reference/scan)                                                                                             | None. Functionality is now obsolete.                                                                                      |
 | [`--parallel`](/docs/reference/run#--parallel)                                                                                   | [`persistent`](/docs/reference/configuration#persistent) and [`with`](/docs/reference/configuration#with) in `turbo.json` |
 | [`--no-cache`](/docs/reference/run#--no-cache)                                                                                   | [`--cache=local:r,remote:r`](/docs/reference/run#--cache-options)                                                         |
