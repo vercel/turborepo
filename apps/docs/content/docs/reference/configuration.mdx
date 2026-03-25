@@ -420,12 +420,7 @@ Default: `false`
 
 When enabled, Turborepo will honor the `experimentalObservability.otel` configuration block (if present) to send run summaries to an OpenTelemetry Protocol (OTLP) collector.
 
-<Callout type="info">
-  Invalid or incomplete OTEL configuration (e.g., missing endpoint, invalid
-  protocol) results in metrics being disabled rather than causing runs to fail.
-  Turborepo will continue executing tasks normally even if the exporter cannot
-  be initialized.
-</Callout>
+[Visit the Experimental observability section to learn more](#experimental-observability).
 
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 
@@ -1291,6 +1286,13 @@ This is useful when your OTLP collector uses the same authentication as your rem
   tasks normally. Invalid or incomplete configuration (e.g., missing endpoint
   when enabled) results in the exporter not being initialized, and metrics will
   be disabled for that run.
+</Callout>
+
+<Callout type="info">
+  Invalid or incomplete OTEL configuration (e.g., missing endpoint, invalid
+  protocol) results in metrics being disabled rather than causing runs to fail.
+  Turborepo will continue executing tasks normally even if the exporter cannot
+  be initialized.
 </Callout>
 
 ### Environment variables

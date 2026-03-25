@@ -147,7 +147,7 @@ bunx skills update vercel/turborepo
 
 Turborepo's most important job is to schedule your monorepo's tasks to be as fast as possible. Whenever you use `turbo run`, our first step is to analyze your monorepo's structure and scripts to create a graph of your tasks. The [Task Graph](/docs/core-concepts/package-and-task-graph#task-graph) describes what tasks depend on each other, so we know how to run and cache the work in your repository.
 
-Once we're done creating your Task Graph, we begin executing your tasks. "Time to First Task" is our name for the time between when `turbo run` begins execution to the first script in your monorepo being executed. In general, Time To First Task represents Turborepo's overhead in your monorepo, and we've made it dramatically faster in this release.
+Once we're done creating your Task Graph, we begin executing your tasks. "Time to First Task" is our name for the time between when you invoke `turbo run` and when the first script in your monorepo begins executing. In general, Time To First Task represents Turborepo's overhead in your monorepo, and we've made it dramatically faster in this release.
 
 <div
   className="not-prose my-8 rounded-lg border border-[var(--ds-gray-400)] overflow-hidden"
@@ -381,13 +381,13 @@ Once we're done creating your Task Graph, we begin executing your tasks. "Time t
   </div>
 </div>
 
-The performance boost you see will depend on the size and complexity of your repository - but we expect **dramatic** improvement for all Turborepos. We've tested these improvements across many open and closed source Turborepos, and the largest performance improvement we saw was 96%.
+The performance boost you see will depend on the size and complexity of your repository - but we expect **dramatic** improvement for all Turborepos. We've tested these improvements across many open and closed source Turborepos, and the largest performance upgrade we saw was 96%.
 
 For a technical deep dive on how we accomplished this, [read our post on the Vercel blog](TODO).
 
 ## `turbo query` is now stable
 
-[`turbo query`](/docs/reference/query) has graduated from Experimental to Stable. Originally introduced in Turborepo 2.2, `turbo query` lets you run GraphQL queries against your monorepo's Package and Task Graphs.
+[`turbo query`](/docs/reference/query) has graduated from Experimental status to Stable. Originally introduced in Turborepo 2.2, `turbo query` lets you run GraphQL queries against your monorepo's Package and Task Graphs.
 
 ```bash title="Terminal"
 # Open the GraphiQL playground
@@ -408,7 +408,7 @@ This feature lets you quickly answer questions like:
 
 And much more. We've also seen that coding agents are incredibly adept at writing queries to extract deep insights from Turborepo's knowledge of your repo, especially after putting the GraphQL schema into their context using [`turbo query --schema`](/docs/reference/query#--schema).
 
-We're also introducing a few shorthands so you don't have to write long GraphQL queries to answer your most common questions.
+We're also introducing a few shorthands so you don't have to write verbose GraphQL queries to answer your most common questions.
 
 ### `turbo query affected`
 
@@ -508,7 +508,7 @@ In practice, this makes it much easier to incrementally adopt Turborepo on a tas
 
 You can now send Turborepo build metrics to any [OTLP-compatible](https://opentelemetry.io/) observability backend like Grafana, Datadog, or Honeycomb.
 
-Enable it with the `experimentalObservability` Future Flag in your `turbo.json`:
+Enable it with [the `experimentalObservability` Future Flag](/docs/reference/configuration#experimentalobservability) in your `turbo.json`:
 
 ```json title="turbo.json"
 {
