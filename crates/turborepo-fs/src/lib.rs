@@ -69,9 +69,10 @@ pub fn recursive_copy(
                     if file_type.is_dir() {
                         let src_metadata = entry.metadata()?;
                         make_dir_copy(&target, &src_metadata)?;
-                    } else {
+                    } else if file_type.is_file() || file_type.is_symlink() {
                         copy_file_with_type(path, file_type, &target)?;
                     }
+                    // Skip special files (sockets, FIFOs, device nodes)
                 }
             }
         }

@@ -659,7 +659,7 @@ fn walk_compiled_globs(
                 .symlink_metadata()
                 .ok()
                 .is_some_and(|m| match walk_type {
-                    WalkType::Files => !m.is_dir(),
+                    WalkType::Files => m.is_file() || m.is_symlink(),
                     WalkType::Folders => m.is_dir(),
                     WalkType::All => true,
                 });
@@ -695,7 +695,7 @@ fn walk_compiled_globs(
         .filter_map(|candidate| {
             let meta = candidate.symlink_metadata().ok()?;
             let dominated = match walk_type {
-                WalkType::Files => !meta.is_dir(),
+                WalkType::Files => meta.is_file() || meta.is_symlink(),
                 WalkType::Folders => meta.is_dir(),
                 WalkType::All => true,
             };
@@ -769,7 +769,13 @@ fn visit_file(
     entry: Result<wax::walk::GlobEntry, wax::walk::WalkError>,
 ) -> Option<Result<AbsoluteSystemPathBuf, WalkError>> {
     match entry {
-        Ok(entry) if walk_type == WalkType::Files && entry.file_type().is_dir() => None,
+        Ok(entry)
+            if walk_type == WalkType::Files
+                && !entry.file_type().is_file()
+                && !entry.file_type().is_symlink() =>
+        {
+            None
+        }
         Ok(entry) => Some(AbsoluteSystemPathBuf::try_from(entry.path()).map_err(|e| e.into())),
         Err(e) => {
             let io_err = std::io::Error::from(e);
