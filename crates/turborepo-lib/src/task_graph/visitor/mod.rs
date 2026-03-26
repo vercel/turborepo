@@ -480,18 +480,40 @@ impl<'a> Visitor<'a> {
                     let tracker = self.run_tracker.track_task(info.into_owned());
                     let parent_span = Span::current();
 
-                    tasks.push(tokio::spawn(async move {
-                        exec_context
-                            .execute(
-                                parent_span.id(),
-                                tracker,
-                                task_output,
-                                task_handle,
-                                callback,
-                                &execution_telemetry,
-                            )
-                            .await
-                    }));
+                    if self.is_watch && task_definition.persistent {
+                        // In watch mode, persistent tasks are "fire-and-forget":
+                        // signal success to the engine immediately so dependent
+                        // tasks can proceed, then run the executor in a detached
+                        // background task. The child process stays tracked by
+                        // the ProcessManager for later stop_tasks() calls.
+                        let _ = callback.send(Ok(()));
+                        let (bg_callback, _) = tokio::sync::oneshot::channel();
+                        tokio::spawn(async move {
+                            exec_context
+                                .execute(
+                                    parent_span.id(),
+                                    tracker,
+                                    task_output,
+                                    task_handle,
+                                    bg_callback,
+                                    &execution_telemetry,
+                                )
+                                .await
+                        });
+                    } else {
+                        tasks.push(tokio::spawn(async move {
+                            exec_context
+                                .execute(
+                                    parent_span.id(),
+                                    tracker,
+                                    task_output,
+                                    task_handle,
+                                    callback,
+                                    &execution_telemetry,
+                                )
+                                .await
+                        }));
+                    }
                 }
             }
         }

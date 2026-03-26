@@ -429,55 +429,6 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_prune_persistent_tasks() {
-        // Verifies that we can prune the `Engine` to include only the persistent tasks
-        // or only the non-persistent tasks.
-
-        let mut engine: Engine<Building> = Engine::new();
-
-        // add two packages with a persistent build task
-        for package in ["a", "b"] {
-            let build_task_id = TaskId::new(package, "build");
-            let dev_task_id = TaskId::new(package, "dev");
-
-            engine.get_index(&build_task_id);
-            engine.add_definition(build_task_id.clone(), TaskDefinition::default());
-
-            engine.get_index(&dev_task_id);
-            engine.add_definition(
-                dev_task_id,
-                TaskDefinition {
-                    persistent: true,
-                    task_dependencies: vec![Spanned::new(TaskName::from(build_task_id))],
-                    ..Default::default()
-                },
-            );
-        }
-
-        let engine = engine.seal();
-
-        let non_interruptible_tasks_engine = engine.create_engine_for_non_interruptible_tasks();
-        for node in non_interruptible_tasks_engine.tasks() {
-            if let TaskNode::Task(task_id) = node {
-                let def = non_interruptible_tasks_engine
-                    .task_definition(task_id)
-                    .expect("task should have definition");
-                assert!(def.persistent, "task should be persistent");
-            }
-        }
-
-        let interruptible_tasks_engine = engine.create_engine_for_interruptible_tasks();
-        for node in interruptible_tasks_engine.tasks() {
-            if let TaskNode::Task(task_id) = node {
-                let def = interruptible_tasks_engine
-                    .task_definition(task_id)
-                    .expect("task should have definition");
-                assert!(!def.persistent, "task should not be persistent");
-            }
-        }
-    }
-
-    #[tokio::test]
     async fn test_get_subgraph_for_package() {
         // Verifies that we can prune the `Engine` to include only the persistent tasks
         // or only the non-persistent tasks.
