@@ -22,7 +22,7 @@ import { Accordion, Accordions } from "@/components/geistdocs/accordion";
 
 Turborepo 2.9 concentrates on quality, including improvements for performance, capability, and simplifying adoption paths:
 
-- [**Faster Time To First Task**](#time-to-first-task-improved-up-to-96): Up to 96% improvement, scaling with repository size and complexity
+- [**Faster Time to First Task**](#time-to-first-task-improved-up-to-96): Up to 96% improvement, scaling with repository size and complexity
 - [**`turbo query` is now stable**](#turbo-query-is-now-stable): Query your monorepo with GraphQL or shorthands like `turbo query affected`
 - [**Easier adoption for large repos**](#easier-adoption-for-large-repositories): Circular package dependencies no longer block your Turborepo adoption
 - [**OpenTelemetry (Experimental)**](#opentelemetry-experimental): Send task metrics to any OTLP-compatible observability backend
@@ -147,7 +147,7 @@ bunx skills update vercel/turborepo
 
 Turborepo's most important job is to schedule your monorepo's tasks to be as fast as possible. Whenever you use `turbo run`, our first step is to analyze your monorepo's structure and scripts to create a graph of your tasks. The [Task Graph](/docs/core-concepts/package-and-task-graph#task-graph) describes what tasks depend on each other, so we know how to run and cache the work in your repository.
 
-Once we're done creating your Task Graph, we begin executing your tasks. "Time to First Task" is our name for the time between when you invoke `turbo run` and when the first script in your monorepo begins executing. In general, Time To First Task represents Turborepo's overhead in your monorepo, and we've made it dramatically faster in this release.
+Once we're done creating your Task Graph, we begin executing your tasks. "Time to First Task" is our name for the time between when you invoke `turbo run` and when the first script in your monorepo begins executing. In general, Time to First Task represents Turborepo's overhead in your monorepo, and we've made it dramatically faster in this release.
 
 <div
   className="not-prose my-8 rounded-lg border border-[var(--ds-gray-400)] overflow-hidden"
@@ -533,7 +533,7 @@ npx create-turbo@latest -e with-otel
 
 Follow the README for a Docker Compose setup with an OTel Collector and pre-configured dashboards.
 
-To learn more about the experimental native OTEL collector, [visit the documentation](/docs/reference/configuration#experimentalobservability).
+To learn more about the experimental native OTel collector, [visit the documentation](/docs/reference/configuration#experimentalobservability).
 
 ## Structured logging (Experimental)
 
