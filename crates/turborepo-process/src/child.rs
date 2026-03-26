@@ -249,6 +249,14 @@ impl ChildHandle {
     /// session, which causes macOS Gatekeeper/XProtect to re-verify every
     /// binary. We bypass that by opening the PTY endpoint device ourselves and
     /// spawning with std::process::Command.
+    ///
+    /// `_pty_receiver` must stay alive until spawn completes. Dropping the
+    /// slave PTY handle early can reset termios settings on macOS.
+    ///
+    /// We intentionally omit TIOCSCTTY (setting the controlling terminal)
+    /// because it requires setsid(). This means SIGWINCH won't be delivered
+    /// to the child via the PTY — acceptable for build task output where
+    /// signal delivery goes through kill(-pgid, SIGINT) instead.
     #[cfg(unix)]
     fn spawn_pty_child_unix(
         command: Command,
@@ -257,11 +265,21 @@ impl ChildHandle {
     ) -> io::Result<Box<dyn PtyChild + Send + Sync>> {
         use std::{
             os::unix::{
-                io::{AsRawFd, FromRawFd},
+                io::{AsRawFd, FromRawFd, OwnedFd},
                 process::CommandExt,
             },
             process::Stdio,
         };
+
+        fn dup_to_owned(fd: std::os::unix::io::RawFd) -> io::Result<OwnedFd> {
+            // SAFETY: fd is a valid open file descriptor from the caller.
+            let new = unsafe { libc::dup(fd) };
+            if new < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            // SAFETY: dup() returned a new fd that we now own exclusively.
+            Ok(unsafe { OwnedFd::from_raw_fd(new) })
+        }
 
         let tty_name = controller
             .tty_name()
@@ -273,7 +291,8 @@ impl ChildHandle {
             .open(&tty_name)?;
         let pty_fd = pty_endpoint.as_raw_fd();
 
-        // Mark CLOEXEC so this fd doesn't leak into the child
+        // SAFETY: pty_fd is valid from OpenOptions::open above.
+        // Set CLOEXEC so this fd doesn't leak into the child.
         let flags = unsafe { libc::fcntl(pty_fd, libc::F_GETFD) };
         if flags < 0 {
             return Err(io::Error::last_os_error());
@@ -282,24 +301,28 @@ impl ChildHandle {
             return Err(io::Error::last_os_error());
         }
 
-        // Each Stdio::from_raw_fd takes ownership, so we dup separate fds
-        let stdin_fd = unsafe { libc::dup(pty_fd) };
-        let stdout_fd = unsafe { libc::dup(pty_fd) };
-        let stderr_fd = unsafe { libc::dup(pty_fd) };
-        if stdin_fd < 0 || stdout_fd < 0 || stderr_fd < 0 {
-            return Err(io::Error::last_os_error());
-        }
+        // Dup separate fds for stdin/stdout/stderr. OwnedFd provides RAII
+        // cleanup — if a later dup fails, earlier fds are closed on drop.
+        let stdin_fd = dup_to_owned(pty_fd)?;
+        let stdout_fd = dup_to_owned(pty_fd)?;
+        let stderr_fd = dup_to_owned(pty_fd)?;
 
         let mut cmd = command.into_std_command();
 
-        unsafe {
-            cmd.stdin(Stdio::from_raw_fd(stdin_fd))
-                .stdout(Stdio::from_raw_fd(stdout_fd))
-                .stderr(Stdio::from_raw_fd(stderr_fd));
-        }
+        cmd.stdin(Stdio::from(stdin_fd))
+            .stdout(Stdio::from(stdout_fd))
+            .stderr(Stdio::from(stderr_fd));
 
+        // Create a new process group (setpgid(0,0)) so graceful shutdown
+        // can signal the child and all its descendants via kill(-pgid, SIGINT).
+        // Unlike portable-pty's setsid() which creates both a new session AND
+        // process group, we only need the process group — the session creation
+        // is what triggers macOS Gatekeeper re-verification.
         cmd.process_group(0);
 
+        // SAFETY: pre_exec runs between fork() and exec() in the child.
+        // signal() and sigprocmask() are async-signal-safe per POSIX.
+        // close_random_fds() follows the same pattern as portable-pty.
         unsafe {
             cmd.pre_exec(|| {
                 for signo in &[
@@ -314,6 +337,12 @@ impl ChildHandle {
                 }
                 let empty_set: libc::sigset_t = std::mem::zeroed();
                 libc::sigprocmask(libc::SIG_SETMASK, &empty_set, std::ptr::null_mut());
+
+                // Close inherited fds from the parent process. On macOS,
+                // Cocoa leaks fds to child processes; on Linux, gnome/mutter
+                // does the same. Mirrors portable-pty's spawn behavior.
+                portable_pty::unix::close_random_fds();
+
                 Ok(())
             });
         }
@@ -1739,6 +1768,40 @@ mod test {
 
     #[cfg(unix)]
     #[tokio::test]
+    async fn test_pty_child_has_own_process_group() {
+        if !TEST_PTY {
+            return;
+        }
+        let script = find_script_dir().join_component("sleep_5_interruptable.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            Some(PtySize::default()),
+        )
+        .unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let child_pid = child.pid().expect("child should have a pid") as libc::pid_t;
+        let child_pgid = unsafe { libc::getpgid(child_pid) };
+        let parent_pgid = unsafe { libc::getpgid(0) };
+
+        assert_eq!(
+            child_pgid, child_pid,
+            "PTY child PGID ({child_pgid}) should equal child PID ({child_pid})"
+        );
+        assert_ne!(
+            child_pgid, parent_pgid,
+            "PTY child PGID ({child_pgid}) must differ from parent PGID ({parent_pgid})"
+        );
+
+        child.stop().await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
     async fn test_grandchild_inherits_child_process_group() {
         let script = find_script_dir().join_component("spawn_child_sleep.js");
         let mut cmd = Command::new("node");
@@ -1907,6 +1970,44 @@ mod test {
         assert_eq!(
             child_sid, parent_sid,
             "child SID ({child_sid}) should equal parent SID ({parent_sid})"
+        );
+
+        child.stop().await;
+    }
+
+    // Same invariant as above but for the PTY spawn path — the code path
+    // this PR actually changes. Without this test, someone could
+    // reintroduce setsid() in spawn_pty_child_unix and no test would catch it.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_pty_child_is_not_session_leader() {
+        if !TEST_PTY {
+            return;
+        }
+        let script = find_script_dir().join_component("sleep_5_interruptable.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            Some(PtySize::default()),
+        )
+        .unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let child_pid = child.pid().expect("child should have a pid") as libc::pid_t;
+        let child_sid = unsafe { libc::getsid(child_pid) };
+        let parent_sid = unsafe { libc::getsid(0) };
+
+        assert_ne!(
+            child_sid, child_pid,
+            "PTY child SID ({child_sid}) should NOT equal child PID ({child_pid}) — that would \
+             mean setsid() was called"
+        );
+        assert_eq!(
+            child_sid, parent_sid,
+            "PTY child SID ({child_sid}) should equal parent SID ({parent_sid})"
         );
 
         child.stop().await;
