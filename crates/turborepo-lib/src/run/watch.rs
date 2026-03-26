@@ -10,7 +10,7 @@ use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 use tokio::{
     select,
-    sync::{broadcast, oneshot, Notify},
+    sync::{broadcast, Notify},
     task::JoinHandle,
 };
 use tracing::{instrument, trace};
@@ -136,8 +136,11 @@ impl OutputWatcher for InProcessOutputWatcher {
 pub struct WatchClient {
     run: Arc<Run>,
     watched_packages: HashSet<PackageName>,
-    persistent_tasks_handle: Option<RunHandle>,
     active_runs: Vec<RunHandle>,
+    // Stoppers from completed runs whose ProcessManagers may still track
+    // background persistent processes. Used by stop_impacted_tasks to kill
+    // interruptible persistent tasks on file changes. Cleared on All rebuild.
+    background_stoppers: Vec<run::RunStopper>,
     _watching: FileWatching,
     output_watcher: Arc<dyn OutputWatcher>,
     // Subscribed eagerly (before building the Run) so we don't miss the
@@ -343,7 +346,7 @@ impl WatchClient {
             handler,
             telemetry,
             experimental_write_cache,
-            persistent_tasks_handle: None,
+            background_stoppers: Vec::new(),
             active_runs: Vec::new(),
             ui_sender,
             ui_handle,
@@ -422,6 +425,9 @@ impl WatchClient {
                             }
                         }
                         ChangedPackages::All => {
+                            for stopper in self.background_stoppers.drain(..) {
+                                stopper.stop().await;
+                            }
                             for handle in self.active_runs.drain(..) {
                                 handle.stopper.stop().await;
                                 let _ = handle.run_task.await;
@@ -435,11 +441,18 @@ impl WatchClient {
                     self.active_runs.push(new_run);
 
                     // Wait for runs to complete before processing more events.
-                    // Combined with the hash baseline pre-population in
-                    // PackageChangesWatcher, this ensures build output writes
-                    // don't trigger spurious rebuilds.
+                    // In watch mode the visitor treats persistent tasks as
+                    // fire-and-forget, so this only blocks on non-persistent
+                    // tasks (builds).
                     for handle in &mut self.active_runs {
                         let _ = (&mut handle.run_task).await;
+                    }
+                    // Save stoppers before retain drops them — their PMs may
+                    // still track background persistent processes.
+                    for handle in &self.active_runs {
+                        if handle.run_task.is_finished() {
+                            self.background_stoppers.push(handle.stopper.clone());
+                        }
                     }
                     self.active_runs.retain(|h| !h.run_task.is_finished());
                 }
@@ -489,13 +502,12 @@ impl WatchClient {
         if let Some(sender) = &self.ui_sender {
             sender.stop().await;
         }
+        for stopper in self.background_stoppers.drain(..) {
+            stopper.stop().await;
+        }
         for handle in self.active_runs.drain(..) {
             handle.stopper.stop().await;
             let _ = handle.run_task.await;
-        }
-        if let Some(RunHandle { stopper, run_task }) = self.persistent_tasks_handle.take() {
-            stopper.stop().await;
-            let _ = run_task.await;
         }
     }
 
@@ -517,8 +529,23 @@ impl WatchClient {
             .map(|task_id| PackageName::from(task_id.package()))
             .collect();
 
+        // Only stop tasks that are allowed to be restarted. Non-interruptible
+        // persistent tasks survive file changes — they are only killed on a
+        // full rebuild (ChangedPackages::All) or shutdown.
+        let stoppable_ids: Vec<_> = task_ids
+            .into_iter()
+            .filter(|tid| {
+                !engine
+                    .task_definition(tid)
+                    .is_some_and(|d| d.persistent && !d.interruptible)
+            })
+            .collect();
+
         for handle in &self.active_runs {
-            handle.stopper.stop_tasks(&task_ids).await;
+            handle.stopper.stop_tasks(&stoppable_ids).await;
+        }
+        for stopper in &self.background_stoppers {
+            stopper.stop_tasks(&stoppable_ids).await;
         }
 
         impacted_packages
@@ -529,12 +556,9 @@ impl WatchClient {
     /// If `changed_packages` is `Some(set)`, only tasks in those packages run.
     /// If `All`, we rebuild the entire Run struct and re-run everything.
     ///
-    /// Persistent (non-interruptible) tasks are split into a separate handle:
-    /// 1. First we run non-persistent + interruptible tasks
-    /// 2. The non-persistent tasks and the persistent tasks that are allowed to
-    ///    be interrupted
-    ///
-    /// Returns a handle to the task running (2)
+    /// Persistent tasks are handled as fire-and-forget by the visitor in watch
+    /// mode: they run as background processes tracked by the ProcessManager
+    /// while the run itself completes after non-persistent tasks finish.
     async fn execute_run(&mut self, changed_packages: ChangedPackages) -> Result<RunHandle, Error> {
         trace!("handling run with changed packages: {changed_packages:?}");
         match changed_packages {
@@ -614,10 +638,6 @@ impl WatchClient {
 
                 self.watched_packages = self.run.get_relevant_packages();
 
-                if let Some(RunHandle { stopper, run_task }) = self.persistent_tasks_handle.take() {
-                    stopper.stop().await;
-                    let _ = run_task.await;
-                }
                 if let Some(sender) = &self.ui_sender {
                     let task_names = self.run.engine.tasks_with_command(&self.run.pkg_dep_graph);
                     if let Err(err) = sender.update_tasks(task_names) {
@@ -625,54 +645,12 @@ impl WatchClient {
                     }
                 }
 
-                if self.run.has_non_interruptible_tasks() {
-                    debug_assert!(
-                        self.persistent_tasks_handle.is_none(),
-                        "persistent handle should be empty before creating a new one"
-                    );
-                    let persistent_run = self.run.create_run_for_non_interruptible_tasks();
-                    let non_persistent_run = self.run.create_run_for_interruptible_tasks();
-
-                    let persistent_stopper = persistent_run.stopper();
-                    let non_persistent_stopper = non_persistent_run.stopper();
-
-                    let non_persistent_ui_sender = self.ui_sender.clone();
-                    let persistent_ui_sender = self.ui_sender.clone();
-
-                    let (ready_tx, ready_rx) = oneshot::channel::<()>();
-
-                    let persistent_task = tokio::spawn(async move {
-                        match ready_rx.await {
-                            Ok(()) => persistent_run.run(persistent_ui_sender, true).await,
-                            Err(_) => Ok(0),
-                        }
-                    });
-
-                    self.persistent_tasks_handle = Some(RunHandle {
-                        stopper: persistent_stopper,
-                        run_task: persistent_task,
-                    });
-
-                    let non_persistent_task = tokio::spawn(async move {
-                        let result = non_persistent_run.run(non_persistent_ui_sender, true).await;
-                        if matches!(result, Ok(0)) {
-                            let _ = ready_tx.send(());
-                        }
-                        result
-                    });
-
-                    Ok(RunHandle {
-                        stopper: non_persistent_stopper,
-                        run_task: non_persistent_task,
-                    })
-                } else {
-                    let ui_sender = self.ui_sender.clone();
-                    let run = self.run.clone();
-                    Ok(RunHandle {
-                        stopper: run.stopper(),
-                        run_task: tokio::spawn(async move { run.run(ui_sender, true).await }),
-                    })
-                }
+                let ui_sender = self.ui_sender.clone();
+                let run = self.run.clone();
+                Ok(RunHandle {
+                    stopper: run.stopper(),
+                    run_task: tokio::spawn(async move { run.run(ui_sender, true).await }),
+                })
             }
         }
     }
@@ -685,7 +663,6 @@ mod test {
         sync::{Arc, Mutex},
     };
 
-    use tokio::sync::oneshot;
     use turbopath::AnchoredSystemPathBuf;
     use turborepo_daemon::PackageChangeEvent;
     use turborepo_repository::package_graph::PackageName;
@@ -933,89 +910,5 @@ mod test {
             }
             ChangedPackages::All => panic!("expected Some"),
         }
-    }
-
-    // -----------------------------------------------------------------------
-    // Oneshot coordination pattern tests
-    // -----------------------------------------------------------------------
-
-    fn simulate_non_persistent(
-        ready_tx: oneshot::Sender<()>,
-        result: Result<i32, &str>,
-    ) -> Result<i32, &str> {
-        if matches!(result, Ok(0)) {
-            let _ = ready_tx.send(());
-        }
-        result
-    }
-
-    #[tokio::test]
-    async fn persistent_starts_after_successful_build() {
-        let (ready_tx, ready_rx) = oneshot::channel::<()>();
-
-        let persistent = tokio::spawn(async move {
-            match ready_rx.await {
-                Ok(()) => "started",
-                Err(_) => "skipped",
-            }
-        });
-
-        let _ = simulate_non_persistent(ready_tx, Ok(0));
-
-        let outcome = persistent.await.unwrap();
-        assert_eq!(outcome, "started");
-    }
-
-    #[tokio::test]
-    async fn persistent_skipped_on_nonzero_exit() {
-        let (ready_tx, ready_rx) = oneshot::channel::<()>();
-
-        let persistent = tokio::spawn(async move {
-            match ready_rx.await {
-                Ok(()) => "started",
-                Err(_) => "skipped",
-            }
-        });
-
-        let result = simulate_non_persistent(ready_tx, Ok(1));
-        assert!(matches!(result, Ok(1)));
-
-        let outcome = persistent.await.unwrap();
-        assert_eq!(outcome, "skipped");
-    }
-
-    #[tokio::test]
-    async fn persistent_skipped_on_error() {
-        let (ready_tx, ready_rx) = oneshot::channel::<()>();
-
-        let persistent = tokio::spawn(async move {
-            match ready_rx.await {
-                Ok(()) => "started",
-                Err(_) => "skipped",
-            }
-        });
-
-        let result = simulate_non_persistent(ready_tx, Err("build failed"));
-        assert!(result.is_err());
-
-        let outcome = persistent.await.unwrap();
-        assert_eq!(outcome, "skipped");
-    }
-
-    #[tokio::test]
-    async fn persistent_skipped_when_sender_dropped_without_sending() {
-        let (ready_tx, ready_rx) = oneshot::channel::<()>();
-
-        let persistent = tokio::spawn(async move {
-            match ready_rx.await {
-                Ok(()) => "started",
-                Err(_) => "skipped",
-            }
-        });
-
-        drop(ready_tx);
-
-        let outcome = persistent.await.unwrap();
-        assert_eq!(outcome, "skipped");
     }
 }

@@ -779,3 +779,56 @@ fn watch_sigint_exits_with_zero() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Regression test for #12433: mixed interruptible persistent tasks
+// ---------------------------------------------------------------------------
+
+fn setup_watch_mixed_persistent_test() -> (tempfile::TempDir, PathBuf) {
+    let tempdir = tempfile::tempdir().expect("failed to create tempdir");
+    let test_dir = tempdir.path().to_path_buf();
+
+    setup::copy_fixture("watch_mixed_persistent_test", &test_dir).unwrap();
+    setup::setup_git(&test_dir).unwrap();
+
+    let gitignore = test_dir.join(".gitignore");
+    let mut gi = fs::read_to_string(&gitignore).unwrap_or_default();
+    gi.push_str(".markers/\n");
+    fs::write(&gitignore, gi).unwrap();
+
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "add markers ignore", "--quiet"],
+    );
+
+    (tempdir, test_dir)
+}
+
+/// Regression test for https://github.com/vercel/turborepo/issues/12433
+///
+/// When a monorepo has a mix of interruptible and non-interruptible
+/// persistent tasks, `turbo watch` must start ALL of them. Previously the
+/// interruptible run (which included persistent-but-interruptible tasks)
+/// never completed, so the oneshot gate never fired and the non-interruptible
+/// persistent tasks never started.
+#[test]
+#[cfg_attr(windows, ignore)]
+fn watch_mixed_persistent_tasks_all_start() {
+    let (_tempdir, test_dir) = setup_watch_mixed_persistent_test();
+    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks(&test_dir, &["dev"]));
+
+    let dev_a = wait_for_prefixed_markers(&test_dir, "app-a", "dev-", 1, Duration::from_secs(60));
+    let dev_b = wait_for_prefixed_markers(&test_dir, "app-b", "dev-", 1, Duration::from_secs(60));
+
+    drop(guard);
+
+    assert!(
+        dev_a >= 1,
+        "app-a dev (interruptible) should have started, but ran {dev_a} times"
+    );
+    assert!(
+        dev_b >= 1,
+        "app-b dev (non-interruptible) should have started, but ran {dev_b} times"
+    );
+}
