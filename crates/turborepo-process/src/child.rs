@@ -135,7 +135,6 @@ impl ChildHandle {
     pub fn spawn_pty(command: Command, size: PtySize) -> io::Result<SpawnResult> {
         let keep_stdin_open = command.will_open_stdin();
 
-        let command = portable_pty::CommandBuilder::from(command);
         let pty_system = native_pty_system();
         let size = portable_pty::PtySize {
             rows: size.rows,
@@ -151,7 +150,6 @@ impl ChildHandle {
             })?;
 
         let controller = pair.master;
-        let receiver = pair.slave;
 
         #[cfg(unix)]
         {
@@ -173,12 +171,28 @@ impl ChildHandle {
             }
         }
 
-        let child = receiver
-            .spawn_command(command)
-            .map_err(|err| match err.downcast() {
-                Ok(err) => err,
-                Err(err) => io::Error::other(err),
-            })?;
+        // On Unix, we bypass portable-pty's spawn to avoid calling setsid().
+        // setsid() creates a new session which causes macOS Gatekeeper/XProtect
+        // to re-verify every binary executed through the PTY, leading to severe
+        // CPU spikes with many concurrent tasks.
+        // See https://github.com/vercel/turborepo/issues/8801
+        #[cfg(unix)]
+        let child: Box<dyn PtyChild + Send + Sync> = {
+            // Pass the PTY receiver so it stays alive during spawn. Dropping it early
+            // can reset the PTY's terminal settings on macOS.
+            Self::spawn_pty_child_unix(command, &*controller, pair.slave)?
+        };
+
+        #[cfg(windows)]
+        let child = {
+            let command = portable_pty::CommandBuilder::from(command);
+            pair.slave
+                .spawn_command(command)
+                .map_err(|err| match err.downcast() {
+                    Ok(err) => err,
+                    Err(err) => io::Error::other(err),
+                })?
+        };
 
         let pid = child.process_id();
 
@@ -227,6 +241,85 @@ impl ChildHandle {
             },
             controller: Some(controller),
         })
+    }
+
+    /// Spawn a child process connected to a PTY without calling setsid().
+    ///
+    /// portable-pty's spawn_command() calls setsid() to create a new
+    /// session, which causes macOS Gatekeeper/XProtect to re-verify every
+    /// binary. We bypass that by opening the PTY endpoint device ourselves and
+    /// spawning with std::process::Command.
+    #[cfg(unix)]
+    fn spawn_pty_child_unix(
+        command: Command,
+        controller: &dyn PtyController,
+        _pty_receiver: Box<dyn portable_pty::SlavePty + Send>,
+    ) -> io::Result<Box<dyn PtyChild + Send + Sync>> {
+        use std::{
+            os::unix::{
+                io::{AsRawFd, FromRawFd},
+                process::CommandExt,
+            },
+            process::Stdio,
+        };
+
+        let tty_name = controller
+            .tty_name()
+            .ok_or_else(|| io::Error::other("failed to get pty device path"))?;
+
+        let pty_endpoint = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&tty_name)?;
+        let pty_fd = pty_endpoint.as_raw_fd();
+
+        // Mark CLOEXEC so this fd doesn't leak into the child
+        let flags = unsafe { libc::fcntl(pty_fd, libc::F_GETFD) };
+        if flags < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if unsafe { libc::fcntl(pty_fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) } < 0 {
+            return Err(io::Error::last_os_error());
+        }
+
+        // Each Stdio::from_raw_fd takes ownership, so we dup separate fds
+        let stdin_fd = unsafe { libc::dup(pty_fd) };
+        let stdout_fd = unsafe { libc::dup(pty_fd) };
+        let stderr_fd = unsafe { libc::dup(pty_fd) };
+        if stdin_fd < 0 || stdout_fd < 0 || stderr_fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+
+        let mut cmd = command.into_std_command();
+
+        unsafe {
+            cmd.stdin(Stdio::from_raw_fd(stdin_fd))
+                .stdout(Stdio::from_raw_fd(stdout_fd))
+                .stderr(Stdio::from_raw_fd(stderr_fd));
+        }
+
+        cmd.process_group(0);
+
+        unsafe {
+            cmd.pre_exec(|| {
+                for signo in &[
+                    libc::SIGCHLD,
+                    libc::SIGHUP,
+                    libc::SIGINT,
+                    libc::SIGQUIT,
+                    libc::SIGTERM,
+                    libc::SIGALRM,
+                ] {
+                    libc::signal(*signo, libc::SIG_DFL);
+                }
+                let empty_set: libc::sigset_t = std::mem::zeroed();
+                libc::sigprocmask(libc::SIG_SETMASK, &empty_set, std::ptr::null_mut());
+                Ok(())
+            });
+        }
+
+        let child = cmd.spawn()?;
+        Ok(Box::new(child))
     }
 
     pub fn pid(&self) -> Option<u32> {
