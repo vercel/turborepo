@@ -306,7 +306,15 @@ impl TaskCache {
         Ok(log_writer)
     }
 
+    /// Check if a cache entry exists for this task.
+    ///
+    /// Used by dry runs to report cache status without restoring outputs.
+    /// Mirrors the guard checks in `restore_outputs()` so that dry runs
+    /// and real runs agree on cache status.
     pub async fn exists(&self) -> Result<Option<CacheHitMetadata>, CacheError> {
+        if self.caching_disabled || self.run_cache.reads_disabled {
+            return Ok(None);
+        }
         self.run_cache.cache.exists(&self.hash).await
     }
 
