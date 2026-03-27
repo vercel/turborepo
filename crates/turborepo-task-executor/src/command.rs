@@ -17,7 +17,7 @@ use turborepo_repository::{
     package_manager::PackageManager,
     workspace_provider::{
         CargoWorkspaceProvider, TaskCommandProvider as WorkspaceTaskCommandProvider,
-        UvWorkspaceProvider,
+        TaskEnvironmentProvider, UvWorkspaceProvider,
     },
 };
 use turborepo_task_id::TaskId;
@@ -238,14 +238,41 @@ impl<'a, T: PackageInfoProvider> WorkspaceProviderCommandProvider<'a, T> {
             })
     }
 
-    fn inferred_command(&self, workspace_info: &PackageInfo, task_name: &str) -> Option<String> {
+    fn inferred_command(
+        &self,
+        workspace_info: &PackageInfo,
+        task_id: &TaskId,
+    ) -> Option<String> {
+        let task_name = task_id.task();
         let manifest_name = workspace_info.package_json_path().as_path().file_name()?;
         if manifest_name.eq_ignore_ascii_case("Cargo.toml") {
-            CargoWorkspaceProvider.resolve_task_command(task_name)
+            // Use targeted command (`cargo build -p <name>`) so tasks run from
+            // the workspace root instead of the crate directory.
+            let package_name = task_id.package();
+            CargoWorkspaceProvider
+                .resolve_targeted_command(task_name, package_name)
+                .or_else(|| CargoWorkspaceProvider.resolve_task_command(task_name))
         } else if manifest_name.eq_ignore_ascii_case("pyproject.toml") {
             UvWorkspaceProvider.resolve_task_command(task_name)
         } else {
             None
+        }
+    }
+
+    fn provider_environment(
+        &self,
+        workspace_info: &PackageInfo,
+        task_name: &str,
+    ) -> Vec<(String, String)> {
+        let Some(manifest_name) = workspace_info.package_json_path().as_path().file_name() else {
+            return Vec::new();
+        };
+        if manifest_name.eq_ignore_ascii_case("Cargo.toml") {
+            CargoWorkspaceProvider.task_environment(task_name)
+        } else if manifest_name.eq_ignore_ascii_case("pyproject.toml") {
+            UvWorkspaceProvider.task_environment(task_name)
+        } else {
+            Vec::new()
         }
     }
 }
@@ -259,14 +286,25 @@ impl<'a, T: PackageInfoProvider, E: From<CommandProviderError>> CommandProvider<
         environment: &EnvironmentVariableMap,
     ) -> Result<Option<Command>, E> {
         let workspace_info = self.package_info(task_id)?;
-        let Some(command) = self.inferred_command(workspace_info, task_id.task()) else {
+        let Some(command) = self.inferred_command(workspace_info, task_id) else {
             return Ok(None);
         };
         if command.is_empty() {
             return Ok(None);
         }
 
-        let package_dir = self.repo_root.resolve(workspace_info.package_path());
+        // Cargo tasks use targeted commands (`-p <name>`) and run from the
+        // workspace root. Other providers run from the package directory.
+        let is_cargo = workspace_info
+            .package_json_path()
+            .as_path()
+            .file_name()
+            .is_some_and(|n| n.eq_ignore_ascii_case("Cargo.toml"));
+        let working_dir = if is_cargo {
+            self.repo_root.to_owned()
+        } else {
+            self.repo_root.resolve(workspace_info.package_path())
+        };
 
         #[cfg(windows)]
         let mut cmd = {
@@ -281,9 +319,16 @@ impl<'a, T: PackageInfoProvider, E: From<CommandProviderError>> CommandProvider<
             cmd
         };
 
-        cmd.current_dir(package_dir);
+        cmd.current_dir(working_dir);
         cmd.env_clear();
         cmd.envs(environment.iter());
+
+        // Inject provider-specific environment (e.g., RUSTC_WRAPPER for Cargo)
+        let provider_env = self.provider_environment(workspace_info, task_id.task());
+        for (key, value) in &provider_env {
+            cmd.env(key, value);
+        }
+
         cmd.open_stdin();
 
         Ok(Some(cmd))

@@ -8108,6 +8108,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-rustc-cache"
+version = "0.1.0"
+dependencies = [
+ "dirs-next",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "test-case",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "turborepo-schema-gen"
 version = "0.1.0"
 dependencies = [

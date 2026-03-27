@@ -227,6 +227,58 @@ impl<T: TaskDefinitionInfo + Default + Clone> Engine<Building, T> {
     pub fn task_graph_mut(&mut self) -> &mut Graph<TaskNode, ()> {
         &mut self.task_graph
     }
+
+    /// Chain a set of tasks so they execute sequentially rather than in parallel.
+    ///
+    /// This is used for tasks that contend on a shared resource (e.g., Cargo
+    /// tasks sharing the `target/` directory lock). The tasks are ordered
+    /// topologically — respecting existing dependency edges — then additional
+    /// edges are added to form a total order.
+    ///
+    /// Tasks not present in the current graph are silently skipped.
+    pub fn serialize_tasks(&mut self, task_ids: &[TaskId<'static>]) {
+        // Collect only tasks that exist in the graph AND have definitions.
+        // Nodes can exist without definitions if they were created as
+        // dependency targets but never traversed during the build.
+        let indices: Vec<_> = task_ids
+            .iter()
+            .filter(|id| self.task_definitions.contains_key(*id))
+            .filter_map(|id| self.task_lookup.get(id).copied())
+            .collect();
+
+        if indices.len() < 2 {
+            return;
+        }
+
+        // Topological sort to respect existing dependency edges.
+        // petgraph's toposort returns nodes in dependency order (dependencies first).
+        let topo_order = match petgraph::algo::toposort(&self.task_graph, None) {
+            Ok(order) => order,
+            Err(_) => return, // cycle — bail, the engine will report it later
+        };
+
+        // Filter to only our target tasks, preserving topo order.
+        // petgraph's toposort returns dependents before dependencies
+        // (for edge u→v, u appears first). Reverse so dependencies come
+        // first — this is the order we want to run in.
+        let target_set: std::collections::HashSet<_> = indices.into_iter().collect();
+        let ordered: Vec<_> = topo_order
+            .into_iter()
+            .rev()
+            .filter(|idx| target_set.contains(idx))
+            .collect();
+
+        // Chain: each task depends on the previous one.
+        // After reversal, ordered[0] is a dependency (runs first),
+        // ordered[last] is a dependent (runs last).
+        // An edge from A → B means "A depends on B" (B runs first).
+        // So we add edge from ordered[i+1] → ordered[i].
+        for window in ordered.windows(2) {
+            let earlier = window[0]; // runs first (dependency)
+            let later = window[1]; // runs second (dependent)
+            self.task_graph.update_edge(later, earlier, ());
+        }
+    }
 }
 
 impl<T: TaskDefinitionInfo + Default + Clone> Default for Engine<Building, T> {

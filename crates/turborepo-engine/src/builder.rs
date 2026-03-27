@@ -150,7 +150,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         }
     }
 
-    pub fn build(mut self) -> Result<Engine<crate::Built, TaskDefinition>, BuilderError> {
+    /// Build the task graph, returning it in a mutable state so callers can
+    /// add edges (e.g., serializing Cargo tasks) before sealing.
+    pub fn build_mutable(mut self) -> Result<Engine<crate::Building, TaskDefinition>, BuilderError> {
         let turbo_json_loader = self
             .turbo_json_loader
             .take()
@@ -450,7 +452,14 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // execution. See #2559.
         graph::validate_graph(engine.task_graph_mut())?;
 
-        Ok(engine.seal())
+        Ok(engine)
+    }
+
+    /// Build the task graph and seal it, preventing further mutation.
+    /// This is the standard entry point for callers that don't need to
+    /// modify the graph after construction.
+    pub fn build(self) -> Result<Engine<crate::Built, TaskDefinition>, BuilderError> {
+        self.build_mutable().map(|e| e.seal())
     }
 
     // Helper methods used when building the engine

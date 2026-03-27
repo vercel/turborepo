@@ -31,7 +31,7 @@ use turborepo_repository::{
 use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
 use turborepo_signals::SignalHandler;
-use turborepo_task_id::TaskName;
+use turborepo_task_id::{TaskId, TaskName};
 use turborepo_telemetry::events::{
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
@@ -1299,7 +1299,15 @@ impl RunBuilder {
             builder = builder.do_not_validate_engine();
         }
 
-        let mut engine = builder.build()?;
+        let mut engine = builder.build_mutable()?;
+
+        // Serialize Cargo tasks to prevent file lock contention on target/.
+        // Cargo's workspace-level lock means parallel cargo invocations block
+        // each other. Chaining them avoids the overhead of lock contention
+        // while Cargo's fingerprinting ensures already-built crates are skipped.
+        self.serialize_cargo_tasks(&mut engine, pkg_dep_graph);
+
+        let mut engine = engine.seal();
 
         // In watch mode with the future flag, filter the engine to only tasks
         // whose declared inputs match the changed files.
@@ -1364,6 +1372,52 @@ impl RunBuilder {
         }
 
         Ok(engine)
+    }
+
+    /// Chain Cargo tasks of the same type so they run serially.
+    ///
+    /// Cargo's workspace-level file lock on `target/` means parallel
+    /// `cargo build` invocations block each other with "waiting for file
+    /// lock" messages. By adding dependency edges between Cargo tasks of
+    /// the same type (e.g., all `build` tasks), the engine runs them
+    /// sequentially. Cargo's fingerprinting means already-compiled crates
+    /// are skipped near-instantly, so the serialization cost is negligible.
+    fn serialize_cargo_tasks(
+        &self,
+        engine: &mut Engine<turborepo_engine::Building>,
+        pkg_dep_graph: &PackageGraph,
+    ) {
+        let tasks: Vec<String> = self
+            .opts
+            .run_opts
+            .tasks
+            .iter()
+            .map(|t| t.to_string())
+            .collect();
+
+        for task_name in &tasks {
+            let mut cargo_task_ids: Vec<TaskId<'static>> = Vec::new();
+
+            for (name, info) in pkg_dep_graph.packages() {
+                if matches!(name, PackageName::Root) {
+                    continue;
+                }
+
+                let is_cargo = info
+                    .package_json_path()
+                    .as_path()
+                    .file_name()
+                    .is_some_and(|f| f.eq_ignore_ascii_case("Cargo.toml"));
+
+                if is_cargo {
+                    cargo_task_ids.push(TaskId::new(name.as_str(), task_name).into_owned());
+                }
+            }
+
+            if cargo_task_ids.len() > 1 {
+                engine.serialize_tasks(&cargo_task_ids);
+            }
+        }
     }
 }
 

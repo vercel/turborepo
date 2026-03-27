@@ -1,9 +1,10 @@
 [package]
-name = "math-cli"
+name = "math-fmt"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
 math-core = { path = "../math-core" }
-math-ext = { path = "../math-ext" }
-math-fmt = { path = "../math-fmt" }

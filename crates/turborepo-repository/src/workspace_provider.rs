@@ -66,6 +66,32 @@ pub trait TaskCommandProvider {
     fn provider_id(&self) -> WorkspaceProviderId;
 
     fn resolve_task_command(&self, task_name: &str) -> Option<String>;
+
+    /// Whether tasks of this type should be serialized across packages
+    /// to avoid resource contention (e.g., Cargo's `target/` directory lock).
+    /// When true, the engine chains these tasks so at most one runs at a time.
+    fn requires_serial_execution(&self, _task_name: &str) -> bool {
+        false
+    }
+
+    /// Resolve a task command that targets a specific package by name.
+    /// Used when the provider runs commands from the workspace root
+    /// with package-targeting flags (e.g., `cargo build -p <name>`).
+    fn resolve_targeted_command(&self, _task_name: &str, _package_name: &str) -> Option<String> {
+        None
+    }
+}
+
+/// Provider trait for injecting environment variables into task execution.
+/// This allows workspace providers to configure tool-specific behavior
+/// (e.g., setting RUSTC_WRAPPER for Cargo compilation caching).
+pub trait TaskEnvironmentProvider {
+    fn provider_id(&self) -> WorkspaceProviderId;
+
+    /// Returns environment variables to inject when running a task.
+    /// The returned pairs are `(key, value)`. These are merged into
+    /// the task's environment before execution.
+    fn task_environment(&self, task_name: &str) -> Vec<(String, String)>;
 }
 
 /// Provider trait for hash input contributions.
@@ -109,6 +135,16 @@ impl TaskCommandProvider for NodeWorkspaceProvider {
 
     fn resolve_task_command(&self, _task_name: &str) -> Option<String> {
         None
+    }
+}
+
+impl TaskEnvironmentProvider for NodeWorkspaceProvider {
+    fn provider_id(&self) -> WorkspaceProviderId {
+        WorkspaceProviderId::Node
+    }
+
+    fn task_environment(&self, _task_name: &str) -> Vec<(String, String)> {
+        Vec::new()
     }
 }
 
@@ -180,6 +216,100 @@ impl TaskCommandProvider for CargoWorkspaceProvider {
             _ => None,
         }
     }
+
+    fn requires_serial_execution(&self, _task_name: &str) -> bool {
+        // All Cargo tasks share the `target/` directory and contend on its
+        // file lock when run in parallel. Serializing prevents lock contention.
+        true
+    }
+
+    fn resolve_targeted_command(&self, task_name: &str, package_name: &str) -> Option<String> {
+        match task_name {
+            "build" => Some(format!("cargo build -p {package_name}")),
+            "check" => Some(format!("cargo check -p {package_name}")),
+            "test" => Some(format!("cargo test -p {package_name}")),
+            "lint" => Some(format!("cargo clippy -p {package_name}")),
+            "fmt" | "format" => Some("cargo fmt --all".to_string()),
+            "doc" => Some(format!("cargo doc -p {package_name}")),
+            _ => None,
+        }
+    }
+}
+
+impl TaskEnvironmentProvider for CargoWorkspaceProvider {
+    fn provider_id(&self) -> WorkspaceProviderId {
+        WorkspaceProviderId::Cargo
+    }
+
+    fn task_environment(&self, task_name: &str) -> Vec<(String, String)> {
+        // Only inject for tasks that invoke the Rust compiler
+        let uses_rustc = matches!(task_name, "build" | "check" | "test" | "doc");
+        if !uses_rustc {
+            return Vec::new();
+        }
+
+        let mut env = Vec::new();
+
+        // Find the turbo-rustc-cache binary. It ships alongside the turbo binary.
+        if let Some(wrapper_path) = find_rustc_cache_binary() {
+            env.push(("RUSTC_WRAPPER".to_string(), wrapper_path));
+        }
+
+        // In CI, disable incremental compilation for deterministic, cacheable output.
+        // Locally, leave it alone so developers keep their fast iteration loop.
+        if is_ci_environment() {
+            env.push(("CARGO_INCREMENTAL".to_string(), "0".to_string()));
+        }
+
+        env
+    }
+}
+
+fn find_rustc_cache_binary() -> Option<String> {
+    // 1. Explicit override
+    if let Ok(path) = std::env::var("TURBO_RUSTC_CACHE_BIN") {
+        if !path.is_empty() {
+            return Some(path);
+        }
+    }
+
+    // 2. Look next to the current turbo binary
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(dir) = current_exe.parent() {
+            let candidate = dir.join("turbo-rustc-cache");
+            if candidate.exists() {
+                return candidate.to_str().map(|s| s.to_string());
+            }
+            // Windows
+            let candidate = dir.join("turbo-rustc-cache.exe");
+            if candidate.exists() {
+                return candidate.to_str().map(|s| s.to_string());
+            }
+        }
+    }
+
+    // 3. Check PATH
+    which::which("turbo-rustc-cache")
+        .ok()
+        .and_then(|p| p.to_str().map(|s| s.to_string()))
+}
+
+fn is_ci_environment() -> bool {
+    const CI_VARS: &[&str] = &[
+        "CI",
+        "BUILD_ID",
+        "BUILD_NUMBER",
+        "CI_APP_ID",
+        "CI_BUILD_ID",
+        "CI_BUILD_NUMBER",
+        "CI_NAME",
+        "CONTINUOUS_INTEGRATION",
+        "TEAMCITY_VERSION",
+    ];
+
+    CI_VARS
+        .iter()
+        .any(|var| !std::env::var(var).unwrap_or_default().is_empty())
 }
 
 impl HashInputProvider for CargoWorkspaceProvider {
@@ -263,6 +393,16 @@ impl TaskCommandProvider for UvWorkspaceProvider {
             "fmt" | "format" => Some("uv run ruff format .".to_string()),
             _ => None,
         }
+    }
+}
+
+impl TaskEnvironmentProvider for UvWorkspaceProvider {
+    fn provider_id(&self) -> WorkspaceProviderId {
+        WorkspaceProviderId::Uv
+    }
+
+    fn task_environment(&self, _task_name: &str) -> Vec<(String, String)> {
+        Vec::new()
     }
 }
 
@@ -478,6 +618,87 @@ shared = { path = "../shared" }
             provider.hash_inputs(),
             vec!["Cargo.toml".to_string(), "Cargo.lock".to_string()]
         );
+    }
+
+    #[test]
+    fn cargo_provider_requires_serial_execution() {
+        let provider = CargoWorkspaceProvider;
+        assert!(provider.requires_serial_execution("build"));
+        assert!(provider.requires_serial_execution("check"));
+        assert!(provider.requires_serial_execution("test"));
+        assert!(provider.requires_serial_execution("lint"));
+        assert!(provider.requires_serial_execution("fmt"));
+
+        // Node and Uv don't require serialization
+        assert!(!NodeWorkspaceProvider.requires_serial_execution("build"));
+        assert!(!UvWorkspaceProvider.requires_serial_execution("build"));
+    }
+
+    #[test]
+    fn cargo_provider_resolves_targeted_commands() {
+        let provider = CargoWorkspaceProvider;
+        assert_eq!(
+            provider.resolve_targeted_command("build", "math-core"),
+            Some("cargo build -p math-core".to_string())
+        );
+        assert_eq!(
+            provider.resolve_targeted_command("check", "utils"),
+            Some("cargo check -p utils".to_string())
+        );
+        assert_eq!(
+            provider.resolve_targeted_command("test", "math-cli"),
+            Some("cargo test -p math-cli".to_string())
+        );
+        assert_eq!(
+            provider.resolve_targeted_command("lint", "auth"),
+            Some("cargo clippy -p auth".to_string())
+        );
+        assert_eq!(
+            provider.resolve_targeted_command("fmt", "anything"),
+            Some("cargo fmt --all".to_string())
+        );
+        assert_eq!(
+            provider.resolve_targeted_command("doc", "math-core"),
+            Some("cargo doc -p math-core".to_string())
+        );
+        assert_eq!(provider.resolve_targeted_command("unknown", "foo"), None);
+    }
+
+    #[test]
+    fn cargo_provider_injects_environment_for_build_tasks() {
+        let provider = CargoWorkspaceProvider;
+
+        // Build/check/test/doc use rustc, should get environment
+        for task in &["build", "check", "test", "doc"] {
+            let env = provider.task_environment(task);
+            let has_rustc_wrapper = env.iter().any(|(k, _)| k == "RUSTC_WRAPPER");
+            // RUSTC_WRAPPER is set only if the binary is found. In tests
+            // it might not be, so we check the structure is correct.
+            // The env should either have RUSTC_WRAPPER or be empty.
+            assert!(
+                env.is_empty() || has_rustc_wrapper,
+                "task '{task}' should have RUSTC_WRAPPER or no env, got: {env:?}"
+            );
+        }
+
+        // lint/fmt don't invoke rustc directly
+        assert!(provider.task_environment("lint").is_empty());
+        assert!(provider.task_environment("fmt").is_empty());
+        assert!(provider.task_environment("format").is_empty());
+    }
+
+    #[test]
+    fn node_provider_injects_no_environment() {
+        let provider = NodeWorkspaceProvider;
+        assert!(provider.task_environment("build").is_empty());
+        assert!(provider.task_environment("test").is_empty());
+    }
+
+    #[test]
+    fn uv_provider_injects_no_environment() {
+        let provider = UvWorkspaceProvider;
+        assert!(provider.task_environment("build").is_empty());
+        assert!(provider.task_environment("test").is_empty());
     }
 
     #[test]

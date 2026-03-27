@@ -62,10 +62,17 @@ where
         }
     }
 
-    fn inferred_provider_command(workspace_info: &PackageInfo, task_name: &str) -> Option<String> {
+    fn inferred_provider_command(
+        workspace_info: &PackageInfo,
+        task_id: &TaskId,
+    ) -> Option<String> {
+        let task_name = task_id.task();
         let manifest_name = workspace_info.package_json_path().as_path().file_name()?;
         if manifest_name.eq_ignore_ascii_case("Cargo.toml") {
-            CargoWorkspaceProvider.resolve_task_command(task_name)
+            let package_name = task_id.package();
+            CargoWorkspaceProvider
+                .resolve_targeted_command(task_name, package_name)
+                .or_else(|| CargoWorkspaceProvider.resolve_task_command(task_name))
         } else if manifest_name.eq_ignore_ascii_case("pyproject.toml") {
             UvWorkspaceProvider.resolve_task_command(task_name)
         } else {
@@ -129,7 +136,7 @@ where
                     .get(task_id.task())
                     .map(|script| script.as_inner().clone())
             })
-            .or_else(|| Self::inferred_provider_command(workspace_info, task_id.task()))
+            .or_else(|| Self::inferred_provider_command(workspace_info, task_id))
             .unwrap_or_else(|| "<NONEXISTENT>".to_string());
 
         let expanded_outputs = self

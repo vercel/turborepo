@@ -1,3 +1,4 @@
+/// hi
 pub fn mean(values: &[f64]) -> Option<f64> {
     (!values.is_empty()).then(|| values.iter().sum::<f64>() / values.len() as f64)
 }

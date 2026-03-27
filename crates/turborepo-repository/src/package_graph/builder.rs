@@ -299,6 +299,48 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
                 Ok(())
             }
             std::collections::hash_map::Entry::Occupied(occupied) => {
+                let existing_is_cargo = occupied
+                    .get()
+                    .package_json_path
+                    .as_path()
+                    .file_name()
+                    .is_some_and(|f| f.eq_ignore_ascii_case("Cargo.toml"));
+                let new_is_cargo = entry
+                    .package_json_path
+                    .as_path()
+                    .file_name()
+                    .is_some_and(|f| f.eq_ignore_ascii_case("Cargo.toml"));
+
+                // In mixed workspaces (Node + Cargo), a Rust crate and an npm
+                // package can share the same name (e.g., napi bindings wrapping
+                // a Rust crate). When this happens, the non-Cargo package takes
+                // precedence — its package.json scripts are the intended build
+                // entry point.
+                if new_is_cargo && !existing_is_cargo {
+                    // New entry is Cargo, existing is Node — skip the Cargo one
+                    tracing::debug!(
+                        name = %occupied.key(),
+                        cargo_path = %entry.package_json_path,
+                        node_path = %occupied.get().package_json_path,
+                        "skipping Cargo crate that collides with existing Node package"
+                    );
+                    return Ok(());
+                }
+                if !new_is_cargo && existing_is_cargo {
+                    // New entry is Node, existing is Cargo — replace with Node
+                    tracing::debug!(
+                        name = %occupied.key(),
+                        node_path = %entry.package_json_path,
+                        cargo_path = %occupied.get().package_json_path,
+                        "Node package takes precedence over Cargo crate with same name"
+                    );
+                    let name = occupied.key().clone();
+                    *occupied.into_mut() = entry;
+                    // Node already in graph, no need to re-add
+                    return Ok(());
+                }
+
+                // Same provider type with same name — still an error
                 let existing_path = occupied.get().package_json_path.to_string();
                 let name = occupied.key().to_string();
                 Err(Error::DuplicateWorkspace {

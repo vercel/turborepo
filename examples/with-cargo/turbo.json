@@ -3,22 +3,15 @@
   "workspaceProviders": ["cargo"],
   "tasks": {
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["target/**"]
+      "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      "dependsOn": ["^build"]
     },
-    "lint": {
-      "outputs": []
-    },
-    "fmt": {
-      "outputs": []
-    },
+    "lint": {},
+    "fmt": {},
     "check": {
-      "dependsOn": ["^check"],
-      "outputs": []
+      "dependsOn": ["^check"]
     }
   }
 }

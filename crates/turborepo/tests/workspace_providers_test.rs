@@ -38,7 +38,7 @@ fn test_cargo_provider_infers_build_command() {
     );
     assert_eq!(
         dry_run_task_command(&output, "crate-a#build"),
-        "cargo build"
+        "cargo build -p crate-a"
     );
 }
 
@@ -75,7 +75,7 @@ fn test_mixed_provider_prefers_manifest_specific_commands() {
     assert_eq!(dry_run_task_command(&output, "web#build"), "echo web-build");
     assert_eq!(
         dry_run_task_command(&output, "rust-app#build"),
-        "cargo build"
+        "cargo build -p rust-app"
     );
     assert_eq!(dry_run_task_command(&output, "py-app#build"), "uv build");
 }
