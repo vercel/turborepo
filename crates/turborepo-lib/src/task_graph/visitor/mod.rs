@@ -560,10 +560,14 @@ impl<'a> Visitor<'a> {
         // Write out the traced-config.json file if we have one
         self.task_access.save().await;
 
-        let errors = Arc::into_inner(errors)
-            .expect("only one strong reference to errors should remain")
-            .into_inner()
-            .expect("mutex poisoned");
+        let errors = match Arc::try_unwrap(errors) {
+            Ok(mutex) => mutex.into_inner().expect("mutex poisoned"),
+            Err(arc) => {
+                // In watch mode, fire-and-forget persistent tasks may still
+                // hold references. Drain the collected errors from the mutex.
+                std::mem::take(&mut *arc.lock().expect("mutex poisoned"))
+            }
+        };
 
         Ok(errors)
     }
