@@ -39,22 +39,32 @@ export function getTurboVersion(
   }
 
   const turboJSONPath = path.join(root, "turbo.json");
+  const turboJSONCPath = path.join(root, "turbo.jsonc");
+  const turboConfigPath = fs.existsSync(turboJSONPath)
+    ? turboJSONPath
+    : fs.existsSync(turboJSONCPath)
+      ? turboJSONCPath
+      : turboJSONPath;
+
   try {
-    const rawTurboJson = fs.readFileSync(turboJSONPath, "utf8");
+    const rawTurboJson = fs.readFileSync(turboConfigPath, "utf8");
     const turboJson: { tasks?: unknown; pipeline?: unknown } =
       JSON5Parse(rawTurboJson);
+    const configFileName = path.basename(turboConfigPath);
     if ("tasks" in turboJson) {
-      info(`Inferred turbo version ^2 based on "tasks" in "turbo.json"`);
+      info(`Inferred turbo version ^2 based on "tasks" in "${configFileName}"`);
       return "^2";
     }
     if ("pipeline" in turboJson) {
-      info(`Inferred turbo version ^1 based on "pipeline" in "turbo.json"`);
+      info(
+        `Inferred turbo version ^1 based on "pipeline" in "${configFileName}"`
+      );
       return "^1";
     }
     return null;
   } catch (e) {
     error(
-      `"${turboJSONPath}" could not be read. turbo-ignore turbo version inference failed`
+      `"${turboConfigPath}" could not be read. turbo-ignore turbo version inference failed`
     );
     return null;
   }

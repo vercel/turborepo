@@ -35,7 +35,7 @@ export function getTurboRoot(cwd?: string, opts?: Options): string | null {
   let root: string | null = null;
   let lastCwd = currentDir;
 
-  while (lastCwd !== filesystemRoot) {
+  while (true) {
     const jsonPath = path.join(lastCwd, "turbo.json");
     const jsoncPath = path.join(lastCwd, "turbo.jsonc");
 
@@ -61,6 +61,10 @@ export function getTurboRoot(cwd?: string, opts?: Options): string | null {
       } catch {
         // ignore
       }
+    }
+
+    if (lastCwd === filesystemRoot) {
+      break;
     }
 
     lastCwd = path.dirname(lastCwd);

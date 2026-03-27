@@ -24,7 +24,7 @@ export function searchUp({
 
   let found = false;
   let lastCwd = cwd;
-  while (!found && lastCwd !== root) {
+  while (true) {
     if (contentCheck) {
       try {
         const content = fs.readFileSync(path.join(lastCwd, target)).toString();
@@ -37,6 +37,10 @@ export function searchUp({
       }
     } else if (fs.existsSync(path.join(lastCwd, target))) {
       found = true;
+      break;
+    }
+
+    if (lastCwd === root) {
       break;
     }
 

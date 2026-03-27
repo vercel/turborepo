@@ -30,11 +30,31 @@ describe("getWorkspace()", () => {
     );
   });
 
+  it("getTurboVersion returns version from package.json (devDependencies)", () => {
+    expect(getTurboVersion({}, "./__fixtures__/turbo_in_dev_deps")).toEqual(
+      "^88"
+    );
+    expect(mockConsole.log).toHaveBeenCalledWith(
+      "≫  ",
+      'Inferred turbo version "^88" from "package.json"'
+    );
+  });
+
   it("getTurboVersion infers ^2 if tasks in turbo.json", () => {
     expect(getTurboVersion({}, "./__fixtures__/no_turbo_deps")).toEqual("^2");
     expect(mockConsole.log).toHaveBeenCalledWith(
       "≫  ",
       'Inferred turbo version ^2 based on "tasks" in "turbo.json"'
+    );
+  });
+
+  it("getTurboVersion infers ^2 if tasks in turbo.jsonc", () => {
+    expect(getTurboVersion({}, "./__fixtures__/no_turbo_deps_jsonc")).toEqual(
+      "^2"
+    );
+    expect(mockConsole.log).toHaveBeenCalledWith(
+      "≫  ",
+      'Inferred turbo version ^2 based on "tasks" in "turbo.jsonc"'
     );
   });
 
@@ -67,6 +87,16 @@ describe("getWorkspace()", () => {
   it("getTurboVersion return null if invalid JSON", () => {
     expect(getTurboVersion({}, "./__fixtures__/invalid_turbo_json")).toEqual(
       null
+    );
+  });
+
+  it("getTurboVersion return null if invalid JSONC", () => {
+    expect(getTurboVersion({}, "./__fixtures__/invalid_turbo_jsonc")).toEqual(
+      null
+    );
+    expect(mockConsole.error).toHaveBeenCalledWith(
+      "≫  ",
+      '"__fixtures__/invalid_turbo_jsonc/turbo.jsonc" could not be read. turbo-ignore turbo version inference failed'
     );
   });
 
