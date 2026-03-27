@@ -162,6 +162,11 @@
 .prose h5,
 .prose h6 {
   @apply tracking-tight;
+  overflow-wrap: break-word;
+}
+
+.prose :not(pre) > code {
+  overflow-wrap: break-word;
 }
 
 /* Line numbers styles for code blocks */
@@ -182,6 +187,13 @@
 :root {
   --fd-layout-width: 100%;
   --fd-page-width: 100%;
+}
+
+/* The global `* { min-w-0 }` reset lets tab triggers shrink below their
+   content width even though their text has `whitespace-nowrap`, causing labels
+   to overlap instead of triggering the TabsList's `overflow-x-auto` scroll. */
+[role="tablist"] > [role="tab"] {
+  flex-shrink: 0;
 }
 
 /* Prevent TOC from being clipped on tablet displays */

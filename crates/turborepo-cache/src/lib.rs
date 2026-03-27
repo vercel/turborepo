@@ -115,8 +115,9 @@ impl From<turborepo_api_client::Error> for CacheError {
 /// can be traced back to the commit (and working-tree state) that
 /// produced them.
 ///
-/// Currently only written to the local filesystem cache's `-meta.json`
-/// sidecar. Remote cache entries do not include SCM state.
+/// Sent to the remote cache as `x-artifact-sha` and
+/// `x-artifact-dirty-hash` headers, and also written to the local
+/// filesystem cache's `-meta.json` sidecar.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CacheScmState {
     /// The HEAD commit SHA, if available.
@@ -130,34 +131,62 @@ pub struct CacheScmState {
 /// SCM state that is computed in the background and resolved lazily.
 ///
 /// Git operations (rev-parse, status, diff) are spawned at run start but
-/// the cache no longer blocks on them. `get()` returns the resolved state
-/// if the background work has finished, or `None` if it hasn't yet. This
-/// keeps git subprocesses off the critical startup path.
+/// the cache does not block on them synchronously. Consumers that need
+/// the SCM state should call [`get_resolved()`](Self::get_resolved) to
+/// await the background computation. This keeps git subprocesses off the
+/// critical startup path while guaranteeing that cache artifacts carry
+/// provenance metadata once the computation finishes.
 #[derive(Debug, Clone)]
-pub struct LazyScmState(Arc<OnceLock<Option<CacheScmState>>>);
+pub struct LazyScmState {
+    state: Arc<OnceLock<Option<CacheScmState>>>,
+    notify: Arc<tokio::sync::Notify>,
+}
 
 impl LazyScmState {
     pub fn new() -> Self {
-        Self(Arc::new(OnceLock::new()))
+        Self {
+            state: Arc::new(OnceLock::new()),
+            notify: Arc::new(tokio::sync::Notify::new()),
+        }
     }
 
     /// Create an already-resolved instance (useful in tests).
     pub fn resolved(state: Option<CacheScmState>) -> Self {
         let lock = OnceLock::new();
         let _ = lock.set(state);
-        Self(Arc::new(lock))
+        Self {
+            state: Arc::new(lock),
+            notify: Arc::new(tokio::sync::Notify::new()),
+        }
     }
 
     /// Set the resolved value. No-op if already set.
     pub fn resolve(&self, state: Option<CacheScmState>) {
-        let _ = self.0.set(state);
+        let _ = self.state.set(state);
+        self.notify.notify_waiters();
     }
 
-    /// Returns the SCM state if the background computation has finished
-    /// and produced a value. Returns `None` if still pending or if git
-    /// was unavailable.
+    /// Returns the SCM state without waiting. Returns `None` if the
+    /// background computation hasn't finished or git was unavailable.
     pub fn get(&self) -> Option<&CacheScmState> {
-        self.0.get().and_then(|s| s.as_ref())
+        self.state.get().and_then(|s| s.as_ref())
+    }
+
+    /// Waits for the background computation to finish, then returns the
+    /// SCM state (if git was available). Returns immediately if already
+    /// resolved.
+    pub async fn get_resolved(&self) -> Option<&CacheScmState> {
+        if let Some(state) = self.state.get() {
+            return state.as_ref();
+        }
+        // Register the waiter before re-checking to avoid a race where
+        // resolve() fires between our check and the registration.
+        let notified = self.notify.notified();
+        if let Some(state) = self.state.get() {
+            return state.as_ref();
+        }
+        notified.await;
+        self.state.get().and_then(|s| s.as_ref())
     }
 }
 

@@ -333,6 +333,8 @@ mod tests {
             _token: &turborepo_api_client::SecretString,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
+            _sha: Option<&str>,
+            _dirty_hash: Option<&str>,
         ) -> Result<(), turborepo_api_client::Error> {
             unimplemented!("set_artifact")
         }

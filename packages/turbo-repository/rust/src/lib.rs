@@ -1,9 +1,6 @@
 #![allow(clippy::result_large_err)]
 
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-};
+use std::collections::{HashMap, HashSet};
 
 use either::Either;
 use napi::Error;
@@ -188,6 +185,31 @@ impl Workspace {
             .collect();
 
         Ok(map)
+    }
+
+    /// Returns all external packages from the lockfile as
+    /// `npm/<name>@<version>` strings. Collects the transitive external
+    /// dependencies of every workspace package and formats them using the
+    /// lockfile's human-readable name.
+    #[napi]
+    pub async fn packages_from_lockfile(&self) -> Result<Vec<String>, napi::Error> {
+        let lockfile = self
+            .graph
+            .lockfile()
+            .ok_or_else(|| napi::Error::from_reason("No lockfile found"))?;
+
+        let mut seen = HashSet::new();
+        let mut result: Vec<String> = self
+            .graph
+            .packages()
+            .filter_map(|(_name, info)| info.transitive_dependencies.as_ref())
+            .flatten()
+            .filter(|pkg| seen.insert(&pkg.key))
+            .filter_map(|pkg| lockfile.human_name(pkg).map(|name| format!("npm/{name}")))
+            .collect();
+
+        result.sort();
+        Ok(result)
     }
 
     pub fn get_lockfile_contents(

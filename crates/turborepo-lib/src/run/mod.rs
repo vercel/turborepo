@@ -105,9 +105,6 @@ type WuiResult = UIResult<WebUISender>;
 type TuiResult = UIResult<TuiSender>;
 
 impl Run {
-    fn has_non_interruptible_tasks(&self) -> bool {
-        self.engine.has_non_interruptible_tasks
-    }
     /// Emit run prelude through `turborepo_log`. In stream mode,
     /// `TerminalSink` writes these to stdout; in TUI mode, `TuiSink`
     /// captures them for the log panel.
@@ -242,28 +239,6 @@ impl Run {
 
     pub fn root_turbo_json(&self) -> &TurboJson {
         &self.root_turbo_json
-    }
-
-    pub fn create_run_for_non_interruptible_tasks(&self) -> Self {
-        let mut new_run = Self {
-            // ProcessManager is shared via an `Arc`,
-            // so we want to explicitly recreate it instead of cloning
-            processes: ProcessManager::new(self.processes.use_pty()),
-            ..self.clone()
-        };
-
-        let new_engine = new_run.engine.create_engine_for_non_interruptible_tasks();
-        new_run.engine = Arc::new(new_engine);
-
-        new_run
-    }
-
-    pub fn create_run_for_interruptible_tasks(&self) -> Self {
-        let mut new_run = self.clone();
-        let new_engine = new_run.engine.create_engine_for_interruptible_tasks();
-        new_run.engine = Arc::new(new_engine);
-
-        new_run
     }
 
     // Produces the transitive closure of the filtered packages,

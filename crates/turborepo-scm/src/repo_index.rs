@@ -597,10 +597,9 @@ pub fn walk_candidate_files(
                 Err(_) => return ignore::WalkState::Continue,
             };
 
-            if entry.file_type().is_some_and(|ft| ft.is_dir()) {
-                return ignore::WalkState::Continue;
-            }
-            if entry.file_type().is_some_and(|ft| ft.is_symlink()) {
+            // Skip anything that isn't a regular file (directories,
+            // symlinks, sockets, FIFOs, device nodes).
+            if !entry.file_type().is_some_and(|ft| ft.is_file()) {
                 return ignore::WalkState::Continue;
             }
 
@@ -834,10 +833,9 @@ fn find_untracked_files(
                 Err(_) => return ignore::WalkState::Continue,
             };
 
-            if entry.file_type().is_some_and(|ft| ft.is_dir()) {
-                return ignore::WalkState::Continue;
-            }
-            if entry.file_type().is_some_and(|ft| ft.is_symlink()) {
+            // Skip anything that isn't a regular file (directories,
+            // symlinks, sockets, FIFOs, device nodes).
+            if !entry.file_type().is_some_and(|ft| ft.is_file()) {
                 return ignore::WalkState::Continue;
             }
 

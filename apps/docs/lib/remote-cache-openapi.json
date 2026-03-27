@@ -124,6 +124,18 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "x-artifact-sha": {
+                "description": "The git SHA of the commit that produced this artifact (if stored)",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "x-artifact-dirty-hash": {
+                "description": "A hash summarizing uncommitted changes in the working tree when this artifact was produced (if stored)",
+                "schema": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -177,6 +189,18 @@
               },
               "x-artifact-tag": {
                 "description": "The signature/tag of the artifact for verification. This value was provided during upload and can be used by the client to verify artifact integrity.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "x-artifact-sha": {
+                "description": "The git SHA of the commit that produced this artifact. This value was provided during upload.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "x-artifact-dirty-hash": {
+                "description": "A hash summarizing uncommitted changes in the working tree when this artifact was produced. This value was provided during upload.",
                 "schema": {
                   "type": "string"
                 }
@@ -245,6 +269,24 @@
             "schema": {
               "type": "string",
               "maxLength": 600
+            }
+          },
+          {
+            "name": "x-artifact-sha",
+            "in": "header",
+            "required": false,
+            "description": "The git SHA of the HEAD commit at the time this artifact was produced. This value is stored and returned when the artifact is downloaded or checked via the `x-artifact-sha` response header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-artifact-dirty-hash",
+            "in": "header",
+            "required": false,
+            "description": "A hash summarizing all uncommitted changes (staged, unstaged, and untracked files) in the working tree when this artifact was produced. This value is stored and returned when the artifact is downloaded or checked via the `x-artifact-dirty-hash` response header.",
+            "schema": {
+              "type": "string"
             }
           },
           {

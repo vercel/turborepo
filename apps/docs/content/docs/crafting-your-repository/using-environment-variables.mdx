@@ -189,6 +189,28 @@ You can capture multiple `.env` files at once using a `*`.
 
 ## Best practices
 
+### Environment variables from dependencies
+
+When an application consumes a package that relies on environment variables, those variables must be accounted for in your `turbo.json` to ensure cache correctness.
+
+For example, if an app called `docs` depends on a package `common`, there are two scenarios for handling environment variables:
+
+1. **The application depends on the package's task**
+   If the `docs` app's `build` task depends on the `common` package's `build` task (e.g., `"dependsOn": ["^build"]`), and `common` declares an environment variable in its own `turbo.json`, Turborepo handles this automatically. Changing the environment variable will cause `common` to miss the cache and rebuild, which in turn causes `docs` to rebuild because of the dependency relationship.
+
+2. **The application imports the package directly without a build step**
+   If the `common` package does not have a build step, but exposes variables that the `docs` app uses at build time (like `process.env.MY_VAR`), the `docs` application _must_ declare the environment variable directly in its own `env` or `globalEnv` key in its `turbo.json`.
+
+```json title="./apps/docs/turbo.json"
+{
+  "tasks": {
+    "build": {
+      "env": ["MY_VAR"]
+    }
+  }
+}
+```
+
 ### Use `.env` files in Application Packages
 
 Using a `.env` file at the root of the repository is not recommended. Instead, we recommend placing your `.env` files into the [Application Packages](/docs/core-concepts/package-types#application-packages) where they're used.
@@ -198,7 +220,8 @@ This practice more closely models the runtime behavior of your applications sinc
 <Callout type="info">
   You may find it easier to use a root `.env` file when incrementally migrating
   to a monorepo. Tools like [dotenv](https://www.npmjs.com/package/dotenv) can
-  load `.env` files from different locations. We encourage making a goal of not using a root `.env` file after completing your migration.
+  load `.env` files from different locations. We encourage making a goal of not
+  using a root `.env` file after completing your migration.
 </Callout>
 
 ### Use `eslint-config-turbo`

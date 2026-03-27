@@ -313,7 +313,7 @@ mod tests {
             Some(api_client),
             api_auth,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
 
         // Ensure that the cache is empty
@@ -405,7 +405,7 @@ mod tests {
             None,
             api_auth,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
 
         // Ensure that the cache is empty
@@ -506,7 +506,7 @@ mod tests {
             None,
             api_auth,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
 
         assert_matches!(async_cache.exists(&hash).await, Ok(None));
@@ -586,7 +586,7 @@ mod tests {
             Some(api_client),
             api_auth,
             None,
-            LazyScmState::new(),
+            LazyScmState::resolved(None),
         )?;
 
         // Ensure that the cache is empty

@@ -39,7 +39,17 @@ fn hash_file_with_retry(
 /// call is bounded by `BUF_SIZE` (~64KB) regardless of file size.
 fn hash_file(path: &AbsoluteSystemPath) -> Result<gix_index::hash::ObjectId, std::io::Error> {
     let file = std::fs::File::open(path)?;
-    let file_len = file.metadata()?.len();
+    let metadata = file.metadata()?;
+    // Reject exotic file types (sockets, FIFOs, device nodes) that cause
+    // EOPNOTSUPP on read(). Directories pass through to fail naturally
+    // with a descriptive IsADirectory error.
+    if !metadata.is_file() && !metadata.is_dir() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("{path}: not a regular file"),
+        ));
+    }
+    let file_len = metadata.len();
 
     // Build the hasher with the blob loose header pre-written, exactly as
     // gix_object::compute_hash does internally.
@@ -103,9 +113,11 @@ pub(crate) fn hash_objects(
                     )))
                 }
                 Err(e) => {
+                    // Gracefully skip non-regular files (symlinks, sockets,
+                    // FIFOs, device nodes) that can't be read as normal files.
                     if full_file_path
                         .symlink_metadata()
-                        .map(|md| md.is_symlink())
+                        .map(|md| !md.is_file())
                         .unwrap_or(false)
                     {
                         Ok(None)

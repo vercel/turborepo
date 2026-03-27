@@ -27,7 +27,18 @@ use crate::{Error, GitHashes, OidHash};
 fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<OidHash, Error> {
     let mut hasher = Sha1::new();
     let f = path.open()?;
-    let file_len = f.metadata()?.len();
+    let metadata = f.metadata()?;
+    // Reject exotic file types (sockets, FIFOs, device nodes) that cause
+    // EOPNOTSUPP on read(). Directories pass through to fail naturally
+    // with a descriptive IsADirectory error.
+    if !metadata.is_file() && !metadata.is_dir() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("{path}: not a regular file"),
+        )
+        .into());
+    }
+    let file_len = metadata.len();
 
     hasher.update(b"blob ");
     hasher.update(file_len.to_string().as_bytes());
@@ -208,9 +219,10 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     for dirent in walker {
         let dirent = dirent?;
         let metadata = dirent.metadata()?;
-        // We need to do this here, rather than as a filter, because the root
-        // directory is always yielded and not subject to the supplied filter.
-        if metadata.is_dir() {
+        // Skip anything that isn't a regular file (directories, symlinks,
+        // sockets, FIFOs, device nodes). This must be here rather than as a
+        // walker filter because the root directory is always yielded.
+        if !metadata.is_file() {
             continue;
         }
 
@@ -232,10 +244,6 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             continue;
         }
 
-        // FIXME: we don't hash symlinks...
-        if metadata.is_symlink() {
-            continue;
-        }
         let hash = git_like_hash_file(path)?;
         hashes.insert(relative_path, hash);
     }
@@ -253,9 +261,10 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
         for dirent in walker {
             let dirent = dirent?;
             let metadata = dirent.metadata()?;
-            // We need to do this here, rather than as a filter, because the root
-            // directory is always yielded and not subject to the supplied filter.
-            if metadata.is_dir() || metadata.is_symlink() {
+            // Skip anything that isn't a regular file. Must be here rather
+            // than as a walker filter because the root directory is always
+            // yielded.
+            if !metadata.is_file() {
                 continue;
             }
 

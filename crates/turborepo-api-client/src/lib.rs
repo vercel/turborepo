@@ -83,6 +83,8 @@ pub trait CacheClient {
         token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
+        sha: Option<&str>,
+        dirty_hash: Option<&str>,
     ) -> impl Future<Output = Result<()>> + Send;
     fn artifact_exists(
         &self,
@@ -360,6 +362,8 @@ impl CacheClient for APIClient {
         token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
+        sha: Option<&str>,
+        dirty_hash: Option<&str>,
     ) -> Result<()> {
         let mut request_url = self.make_url(&format!("/v8/artifacts/{hash}"))?;
         let mut allow_auth = true;
@@ -370,7 +374,8 @@ impl CacheClient for APIClient {
                     token,
                     request_url.clone(),
                     "PUT",
-                    "Authorization, Content-Type, User-Agent, x-artifact-duration, x-artifact-tag",
+                    "Authorization, Content-Type, User-Agent, x-artifact-duration, \
+                     x-artifact-tag, x-artifact-sha, x-artifact-dirty-hash",
                 )
                 .await?;
 
@@ -398,6 +403,14 @@ impl CacheClient for APIClient {
 
         if let Some(tag) = tag {
             request_builder = request_builder.header("x-artifact-tag", tag);
+        }
+
+        if let Some(sha) = sha {
+            request_builder = request_builder.header("x-artifact-sha", sha);
+        }
+
+        if let Some(dirty_hash) = dirty_hash {
+            request_builder = request_builder.header("x-artifact-dirty-hash", dirty_hash);
         }
 
         let response =
@@ -1045,6 +1058,8 @@ mod test {
                 &token,
                 None,
                 None,
+                None,
+                None,
             )
             .await?;
 
@@ -1282,6 +1297,8 @@ mod test {
                 &token,
                 None,
                 None,
+                None,
+                None,
             )
             .await?;
 
@@ -1339,6 +1356,8 @@ mod test {
                 &token,
                 None,
                 None,
+                None,
+                None,
             )
             .await?;
 
@@ -1371,6 +1390,8 @@ mod test {
                 100,
                 None,
                 &token,
+                None,
+                None,
                 None,
                 None,
             )

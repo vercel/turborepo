@@ -26,6 +26,7 @@ pub struct CacheMultiplexer {
     cache_config: CacheConfig,
     fs: Option<FSCache>,
     http: Option<HTTPCache>,
+    scm_state: LazyScmState,
 }
 
 impl CacheMultiplexer {
@@ -62,7 +63,7 @@ impl CacheMultiplexer {
                     &opts.cache_dir,
                     repo_root,
                     analytics_recorder.clone(),
-                    scm_state,
+                    scm_state.clone(),
                 )
             })
             .transpose()?;
@@ -75,6 +76,7 @@ impl CacheMultiplexer {
                     repo_root.to_owned(),
                     api_auth,
                     analytics_recorder.clone(),
+                    scm_state.clone(),
                 )?),
                 _ => None,
             }
@@ -88,6 +90,7 @@ impl CacheMultiplexer {
             cache_config: opts.cache,
             fs: fs_cache,
             http: http_cache,
+            scm_state,
         })
     }
 
@@ -113,6 +116,11 @@ impl CacheMultiplexer {
         files: &[AnchoredSystemPathBuf],
         duration: u64,
     ) -> Result<(), CacheError> {
+        // Wait for the background SCM computation to finish so that both
+        // the FS sidecar metadata and the HTTP headers carry provenance
+        // info. This is a no-op when the state is already resolved.
+        self.scm_state.get_resolved().await;
+
         if self.cache_config.local.write {
             self.fs
                 .as_ref()
