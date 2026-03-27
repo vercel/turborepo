@@ -20,7 +20,7 @@ function trackMd(
   request: NextRequest,
   context: NextFetchEvent,
   path: string,
-  requestType?: "md-url" | "header-negotiated"
+  requestType?: "md-url" | "header-negotiated" | "agent-rewrite"
 ): void {
   context.waitUntil(
     trackMdRequest({
@@ -59,6 +59,19 @@ const proxy = (request: NextRequest, context: NextFetchEvent) => {
       const trackingPath = result.replace(/^\/[a-z]{2}\//, "/");
       trackMd(request, context, trackingPath, "header-negotiated");
       return NextResponse.rewrite(new URL(result, request.nextUrl));
+    }
+  }
+
+  // Handle AI agent detection — serve markdown automatically
+  if (pathname === "/docs" || pathname.startsWith("/docs/")) {
+    const { detected } = isAIAgent(request);
+    if (detected) {
+      const result = rewriteLLM(pathname);
+      if (result) {
+        const trackingPath = result.replace(/^\/[a-z]{2}\//, "/");
+        trackMd(request, context, trackingPath, "agent-rewrite");
+        return NextResponse.rewrite(new URL(result, request.nextUrl));
+      }
     }
   }
 
