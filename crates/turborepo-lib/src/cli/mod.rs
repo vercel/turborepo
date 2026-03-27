@@ -460,17 +460,23 @@ impl Args {
     pub(crate) fn parse(os_args: Vec<OsString>) -> Result<Self, clap::Error> {
         let (is_single_package, single_package_free) = Self::remove_single_package(os_args);
         let mut args = Args::try_parse_from(single_package_free)?;
-        // And then only add them back in when we're in `run`.
-        // The value can appear in two places in the struct.
+        // --single-package is stripped before clap parsing, so we need to
+        // propagate it back. The value can appear in two places in the struct.
         // We defensively attempt to set both.
         if let Some(ref mut execution_args) = args.execution_args {
             execution_args.single_package = is_single_package
         }
 
-        if let Some(Command::Run {
-            run_args: _,
-            ref mut execution_args,
-        }) = args.command
+        if let Some(
+            Command::Run {
+                ref mut execution_args,
+                ..
+            }
+            | Command::Watch {
+                ref mut execution_args,
+                ..
+            },
+        ) = args.command.as_mut()
         {
             execution_args.single_package = is_single_package;
         }
@@ -3629,6 +3635,23 @@ mod test {
             .command
             .as_ref()
             .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
+                Some(execution_args.single_package)
+            } else {
+                None
+            })
+            .unwrap_or(false));
+
+        let watch = Args::parse(
+            ["turbo", "watch", "--single-package", "build"]
+                .iter()
+                .map(|s| OsString::from(*s))
+                .collect(),
+        )
+        .unwrap();
+        assert!(watch
+            .command
+            .as_ref()
+            .and_then(|cmd| if let Command::Watch { execution_args, .. } = cmd {
                 Some(execution_args.single_package)
             } else {
                 None
