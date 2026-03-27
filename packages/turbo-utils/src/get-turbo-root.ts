@@ -1,3 +1,5 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
 import type { Schema } from "@turbo/types";
 import { findRootSync } from "@manypkg/find-root";
 import json5 from "json5";
@@ -29,12 +31,40 @@ export function getTurboRoot(cwd?: string, opts?: Options): string | null {
     return configCache[currentDir];
   }
 
-  // Turborepo root can be determined by a turbo.json without an extends key
-  let root = searchUp({
-    target: "turbo.json",
-    cwd: currentDir,
-    contentCheck
-  });
+  const { root: filesystemRoot } = path.parse(currentDir);
+  let root: string | null = null;
+  let lastCwd = currentDir;
+
+  while (lastCwd !== filesystemRoot) {
+    const jsonPath = path.join(lastCwd, "turbo.json");
+    const jsoncPath = path.join(lastCwd, "turbo.jsonc");
+
+    if (fs.existsSync(jsonPath)) {
+      try {
+        const content = fs.readFileSync(jsonPath, "utf-8");
+        if (contentCheck(content)) {
+          root = lastCwd;
+          break;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (fs.existsSync(jsoncPath)) {
+      try {
+        const content = fs.readFileSync(jsoncPath, "utf-8");
+        if (contentCheck(content)) {
+          root = lastCwd;
+          break;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    lastCwd = path.dirname(lastCwd);
+  }
 
   if (!root) {
     try {
