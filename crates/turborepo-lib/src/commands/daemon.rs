@@ -345,6 +345,7 @@ pub async fn daemon_server(
                 args.file_events,
                 args.hash_watcher,
                 args.custom_turbo_json_path,
+                false,
             )
         },
     );
