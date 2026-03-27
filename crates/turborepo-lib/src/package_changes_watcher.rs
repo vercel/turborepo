@@ -564,7 +564,9 @@ impl Subscriber {
                             filtered_pkgs.into_keys().collect();
                         // Only propagate root package changes when the config defines
                         // root tasks; otherwise the event just creates output noise.
-                        if filtered_pkgs.contains(&root_pkg) {
+                        // In single-package mode the root IS the only package, so
+                        // all changes must propagate regardless.
+                        if !self.single_package && filtered_pkgs.contains(&root_pkg) {
                             let has_root_tasks = repo_state
                                 .root_turbo_json
                                 .as_ref()
@@ -1165,8 +1167,13 @@ mod test {
             scm,
         ));
 
-        let watcher =
-            PackageChangesWatcher::new(repo_root.clone(), opt_watch, hash_watcher, None, single_package);
+        let watcher = PackageChangesWatcher::new(
+            repo_root.clone(),
+            opt_watch,
+            hash_watcher,
+            None,
+            single_package,
+        );
 
         TestWatcherHandle {
             watcher,
