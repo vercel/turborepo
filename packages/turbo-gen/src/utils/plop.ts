@@ -24,81 +24,70 @@ const SUPPORTED_ROOT_GENERATOR_CONFIGS = [
 export type Generator = PlopGenerator & {
   basePath: string;
   name: string;
+  workspace: string;
+  configPath: string;
+  destBasePath: string;
 };
 
-export async function getPlop({
-  project,
-  configPath
-}: {
-  project: Project;
-  configPath?: string;
-}): Promise<NodePlopAPI | undefined> {
-  const workspaceConfigs = getWorkspaceGeneratorConfigs({ project });
-  let plop: NodePlopAPI | undefined;
+interface GeneratorConfig {
+  config: string;
+  root: string;
+  workspace: string;
+}
 
+async function createPlopFromConfig(
+  configPath: string,
+  destBasePath: string
+): Promise<NodePlopAPI | undefined> {
   try {
-    if (configPath) {
-      if (!fs.existsSync(configPath)) {
-        throw new GeneratorError(`No config at "${configPath}"`, {
-          type: "plop_no_config"
-        });
-      }
+    return await nodePlop(await bundleConfigForLoading(configPath), {
+      destBasePath,
+      force: false
+    });
+  } catch (e) {
+    logger.error(e);
+    return undefined;
+  }
+}
 
-      try {
-        plop = await nodePlop(await bundleConfigForLoading(configPath), {
-          destBasePath: configPath,
-          force: false
-        });
-      } catch (e) {
-        logger.error(e);
-      }
-    } else {
-      for (const possiblePath of SUPPORTED_ROOT_GENERATOR_CONFIGS) {
-        const plopFile = path.join(project.paths.root, possiblePath);
-        if (!fs.existsSync(plopFile)) {
-          continue;
-        }
-
-        try {
-          plop = await nodePlop(await bundleConfigForLoading(plopFile), {
-            destBasePath: project.paths.root,
-            force: false
-          });
-          break;
-        } catch (e) {
-          logger.error(e);
-        }
-      }
-
-      if (!plop && workspaceConfigs.length > 0) {
-        plop = await nodePlop(
-          await bundleConfigForLoading(workspaceConfigs[0].config),
-          {
-            destBasePath: workspaceConfigs[0].root,
-            force: false
-          }
-        );
-        workspaceConfigs.shift();
-      }
+function discoverGeneratorConfigs(
+  project: Project,
+  configPath?: string
+): Array<GeneratorConfig> {
+  if (configPath) {
+    if (!fs.existsSync(configPath)) {
+      throw new GeneratorError(`No config at "${configPath}"`, {
+        type: "plop_no_config"
+      });
     }
-
-    if (plop) {
-      for (const c of workspaceConfigs) {
-        try {
-          await plop.load(await bundleConfigForLoading(c.config), {
-            destBasePath: c.root,
-            force: false
-          });
-        } catch (e) {
-          logger.error(e);
-        }
-      }
-    }
-  } finally {
-    cleanupBundledConfigs();
+    return [{ config: configPath, root: configPath, workspace: "root" }];
   }
 
-  return plop;
+  const configs: Array<GeneratorConfig> = [];
+
+  for (const possiblePath of SUPPORTED_ROOT_GENERATOR_CONFIGS) {
+    const plopFile = path.join(project.paths.root, possiblePath);
+    if (fs.existsSync(plopFile)) {
+      configs.push({
+        config: plopFile,
+        root: project.paths.root,
+        workspace: "root"
+      });
+      break;
+    }
+  }
+
+  for (const entry of getWorkspaceGeneratorConfigs({ project })) {
+    const workspace = project.workspaceData.workspaces.find(
+      (w) => w.paths.root === entry.root
+    );
+    configs.push({
+      ...entry,
+      workspace: workspace?.name ?? path.basename(entry.root)
+    });
+  }
+
+  return configs;
 }
 
 export async function getCustomGenerators({
@@ -108,75 +97,55 @@ export async function getCustomGenerators({
   project: Project;
   configPath?: string;
 }): Promise<Array<Generator | InstanceType<typeof Separator>>> {
-  const plop = await getPlop({ project, configPath });
-
-  if (!plop) {
-    return [];
-  }
-
-  const gens = plop.getGeneratorList();
-  const gensWithDetails = gens.map((g) => plop.getGenerator(g.name));
+  const configs = discoverGeneratorConfigs(project, configPath);
 
   const gensByWorkspace: Record<string, Array<Generator>> = {};
-  for (const g of gensWithDetails) {
-    const generatorDetails = g as Generator;
-    const gensWorkspace = project.workspaceData.workspaces.find((w) => {
-      if (generatorDetails.basePath === project.paths.root) {
-        return false;
-      }
-      const parts = generatorDetails.basePath.split(path.sep);
-      parts.pop();
-      parts.pop();
-      const workspaceRoot = path.join("/", ...parts);
-      return workspaceRoot === w.paths.root;
-    });
-
-    if (gensWorkspace) {
-      if (!(gensWorkspace.name in gensByWorkspace)) {
-        gensByWorkspace[gensWorkspace.name] = [];
-      }
-      gensByWorkspace[gensWorkspace.name].push(generatorDetails);
-    } else {
-      if (!("root" in gensByWorkspace)) {
-        gensByWorkspace.root = [];
-      }
-      gensByWorkspace.root.push(generatorDetails);
-    }
-  }
-
-  const gensWithSeparators: Array<Generator | InstanceType<typeof Separator>> =
-    [];
-  for (const group of Object.keys(gensByWorkspace)) {
-    gensWithSeparators.push(new Separator(group));
-    gensWithSeparators.push(...gensByWorkspace[group]);
-  }
-
-  return gensWithSeparators;
-}
-
-export async function getCustomGenerator({
-  project,
-  generator,
-  configPath
-}: {
-  project: Project;
-  generator: string;
-  configPath?: string;
-}): Promise<string | undefined> {
-  const plop = await getPlop({ project, configPath });
-  if (!plop) {
-    return undefined;
-  }
 
   try {
-    const gen = plop.getGenerator(generator) as PlopGenerator | undefined;
-    if (gen) {
-      return generator;
+    for (const conf of configs) {
+      const plop = await createPlopFromConfig(conf.config, conf.root);
+      if (!plop) {
+        continue;
+      }
+
+      for (const g of plop.getGeneratorList()) {
+        const gen = plop.getGenerator(g.name) as Generator;
+        gen.workspace = conf.workspace;
+        gen.configPath = conf.config;
+        gen.destBasePath = conf.root;
+
+        gensByWorkspace[conf.workspace] ??= [];
+        gensByWorkspace[conf.workspace].push(gen);
+      }
     }
-    return undefined;
-  } catch (e) {
-    return undefined;
+  } finally {
+    cleanupBundledConfigs();
   }
+
+  const result: Array<Generator | InstanceType<typeof Separator>> = [];
+  for (const [workspace, gens] of Object.entries(gensByWorkspace)) {
+    result.push(new Separator(workspace));
+    result.push(...gens);
+  }
+  return result;
+}
+
+export function qualifiedName(gen: Generator): string {
+  return `${gen.workspace}/${gen.name}`;
+}
+
+export function parseQualifiedName(name: string): {
+  workspace: string;
+  generator: string;
+} | null {
+  const slashIndex = name.indexOf("/");
+  if (slashIndex === -1) {
+    return null;
+  }
+  return {
+    workspace: name.slice(0, slashIndex),
+    generator: name.slice(slashIndex + 1)
+  };
 }
 
 function injectTurborepoData({
@@ -380,22 +349,38 @@ export async function runCustomGenerator({
   configPath
 }: {
   project: Project;
-  generator: string;
+  generator: Generator;
   bypassArgs?: Array<string>;
   configPath?: string;
 }): Promise<void> {
-  const plop = await getPlop({ project, configPath });
+  const resolvedConfigPath = configPath ?? generator.configPath;
+  const destBasePath = configPath ?? generator.destBasePath;
+
+  let plop: NodePlopAPI | undefined;
+  try {
+    plop = await createPlopFromConfig(resolvedConfigPath, destBasePath);
+  } finally {
+    cleanupBundledConfigs();
+  }
+
   if (!plop) {
     throw new GeneratorError("Unable to load generators", {
       type: "plop_unable_to_load_config"
     });
   }
-  const gen = plop.getGenerator(generator) as PlopGenerator | undefined;
+
+  let gen: PlopGenerator | undefined;
+  try {
+    gen = plop.getGenerator(generator.name) as PlopGenerator | undefined;
+  } catch {
+    // plop throws when generator not found
+  }
 
   if (!gen) {
-    throw new GeneratorError(`Generator ${generator} not found`, {
-      type: "plop_generator_not_found"
-    });
+    throw new GeneratorError(
+      `Generator ${qualifiedName(generator)} not found`,
+      { type: "plop_generator_not_found" }
+    );
   }
 
   const answers = (await gen.runPrompts(bypassArgs)) as Array<unknown>;
@@ -416,9 +401,10 @@ export async function runCustomGenerator({
         logger.error(`Error - ${f.error}. Unable to ${f.type} to "${f.path}"`);
       }
     }
-    throw new GeneratorError(`Failed to run "${generator}" generator`, {
-      type: "plop_error_running_generator"
-    });
+    throw new GeneratorError(
+      `Failed to run "${qualifiedName(generator)}" generator`,
+      { type: "plop_error_running_generator" }
+    );
   }
 
   if (results.changes.length > 0) {
