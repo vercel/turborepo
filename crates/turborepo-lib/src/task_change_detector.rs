@@ -21,7 +21,7 @@ use crate::engine::Engine;
 /// - `turbo.json`/`turbo.jsonc`: task definitions, global deps, pipelines
 ///
 /// Lockfile changes are detected separately via the package manager.
-const DEFAULT_GLOBAL_DEPS: &[&str] = &["package.json", "turbo.json", "turbo.jsonc"];
+const DEFAULT_GLOBAL_DEPS: &[&str] = &["turbo.json", "turbo.jsonc"];
 
 /// Determines which tasks are directly affected by the given set of changed
 /// files. Does NOT include transitive dependents — use
@@ -201,7 +201,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn global_package_json_change_returns_all() {
+    async fn root_package_json_change_is_not_global() {
         let tmp = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
         let pkg_graph = make_pkg_graph(root, &["lib-a"]).await;
@@ -216,10 +216,13 @@ mod tests {
             &[],
         );
 
+        // root package.json is not in the global hash (when a lockfile exists),
+        // so changing it should not affect all tasks.
         let result = affected_task_ids(&engine, &pkg_graph, &changed(&["package.json"]), &[]);
-        assert_eq!(result.len(), 2);
-        assert!(result.contains(&a_build));
-        assert!(result.contains(&a_test));
+        assert!(
+            result.is_empty(),
+            "root package.json should not globally affect tasks: {result:?}"
+        );
     }
 
     #[tokio::test]

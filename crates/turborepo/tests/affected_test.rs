@@ -676,11 +676,12 @@ fn test_affected_tasks_md_change_no_propagation() {
 }
 
 #[test]
-fn test_affected_tasks_default_global_file_change() {
+fn test_root_package_json_change_does_not_globally_affect_tasks() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_affected_tasks_fixture(tempdir.path());
 
-    // package.json is a default global file — changing it marks everything affected
+    // root package.json is not in the global hash (when a lockfile exists),
+    // so changing it should not mark all tasks as affected.
     let root_pkg = tempdir.path().join("package.json");
     let contents = fs::read_to_string(&root_pkg).unwrap();
     let mut pkg: serde_json::Value = serde_json::from_str(&contents).unwrap();
@@ -689,22 +690,14 @@ fn test_affected_tasks_default_global_file_change() {
 
     let output = run_turbo(
         tempdir.path(),
-        &[
-            "query",
-            "query { affectedTasks { length items { reason { __typename } } } }",
-        ],
+        &["query", "query { affectedTasks { length } }"],
     );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let length = json["data"]["affectedTasks"]["length"].as_i64().unwrap();
-    assert!(length > 0, "all tasks should be affected");
-
-    let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
-    for item in items {
-        assert_eq!(
-            item["reason"]["__typename"], "TaskGlobalFileChanged",
-            "default global file change should produce TaskGlobalFileChanged: {item:?}"
-        );
-    }
+    assert_eq!(
+        length, 0,
+        "root package.json change should not globally affect tasks"
+    );
 }
 
 #[test]
@@ -971,11 +964,12 @@ fn test_task_level_affected_test_file_excludes_typecheck() {
 }
 
 #[test]
-fn test_task_level_affected_global_file_runs_everything() {
+fn test_task_level_affected_root_package_json_not_global() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_task_level_affected(tempdir.path());
 
-    // Change root package.json — a default global dependency.
+    // root package.json is not in the global hash when a lockfile exists,
+    // so changing it should not cause all tasks to be affected.
     let root_pkg = tempdir.path().join("package.json");
     let contents = fs::read_to_string(&root_pkg).unwrap();
     let mut pkg: serde_json::Value = serde_json::from_str(&contents).unwrap();
@@ -999,28 +993,9 @@ fn test_task_level_affected_global_file_runs_everything() {
         .unwrap_or_else(|e| panic!("failed to parse dry run JSON: {e}\nstdout: {stdout}"));
 
     let tasks = json["tasks"].as_array().expect("tasks array");
-    let task_ids: Vec<&str> = tasks
-        .iter()
-        .map(|t| t["taskId"].as_str().unwrap())
-        .collect();
-
-    // All tasks in both packages should be affected when a global file changes.
     assert!(
-        task_ids.contains(&"lib-a#build"),
-        "global change should affect all tasks: {task_ids:?}"
-    );
-    assert!(
-        task_ids.contains(&"lib-a#test"),
-        "global change should affect all tasks: {task_ids:?}"
-    );
-    assert!(
-        task_ids.contains(&"app-a#build"),
-        "global change should affect all tasks: {task_ids:?}"
-    );
-    assert!(
-        task_ids.len() >= 4,
-        "global change should affect many tasks, got {}: {task_ids:?}",
-        task_ids.len()
+        tasks.is_empty(),
+        "root package.json change should not globally affect tasks: {tasks:?}"
     );
 }
 
