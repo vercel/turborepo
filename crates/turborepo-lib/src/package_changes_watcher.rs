@@ -48,6 +48,7 @@ impl PackageChangesWatcher {
         file_events_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
         hash_watcher: Arc<HashWatcher>,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+        single_package: bool,
     ) -> Self {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (package_change_events_tx, package_change_events_rx) =
@@ -58,6 +59,7 @@ impl PackageChangesWatcher {
             package_change_events_tx,
             hash_watcher,
             custom_turbo_json_path,
+            single_package,
         );
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
@@ -103,6 +105,7 @@ struct Subscriber {
     package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
     hash_watcher: Arc<HashWatcher>,
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    single_package: bool,
 }
 
 // This is a workaround because `ignore` doesn't match against a path's
@@ -236,6 +239,7 @@ impl Subscriber {
         package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
         hash_watcher: Arc<HashWatcher>,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+        single_package: bool,
     ) -> Self {
         // Try to canonicalize the custom path to match what the file watcher reports
         let normalized_custom_path = custom_turbo_json_path.map(|path| {
@@ -276,6 +280,7 @@ impl Subscriber {
             package_change_events_tx,
             hash_watcher,
             custom_turbo_json_path: normalized_custom_path,
+            single_package,
         }
     }
 
@@ -286,9 +291,11 @@ impl Subscriber {
             tracing::debug!("no package.json found, package watcher not available");
             return None;
         };
-        let Ok(pkg_dep_graph) = PackageGraphBuilder::new(&self.repo_root, root_package_json)
-            .build()
-            .await
+        let Ok(pkg_dep_graph) =
+            PackageGraphBuilder::new(&self.repo_root, root_package_json.clone())
+                .with_single_package_mode(self.single_package)
+                .build()
+                .await
         else {
             tracing::debug!("package graph not available, package watcher not available");
             return None;
@@ -314,11 +321,12 @@ impl Subscriber {
             }
         };
 
-        let root_turbo_json = UnifiedTurboJsonLoader::workspace(
-            TurboJsonReader::new(self.repo_root.clone()),
-            config_path,
-            pkg_dep_graph.packages(),
-        )
+        let reader = TurboJsonReader::new(self.repo_root.clone());
+        let root_turbo_json = if self.single_package {
+            UnifiedTurboJsonLoader::single_package(reader, config_path, root_package_json)
+        } else {
+            UnifiedTurboJsonLoader::workspace(reader, config_path, pkg_dep_graph.packages())
+        }
         .load(&PackageName::Root)
         .ok()
         .cloned();
@@ -556,7 +564,9 @@ impl Subscriber {
                             filtered_pkgs.into_keys().collect();
                         // Only propagate root package changes when the config defines
                         // root tasks; otherwise the event just creates output noise.
-                        if filtered_pkgs.contains(&root_pkg) {
+                        // In single-package mode the root IS the only package, so
+                        // all changes must propagate regardless.
+                        if !self.single_package && filtered_pkgs.contains(&root_pkg) {
                             let has_root_tasks = repo_state
                                 .root_turbo_json
                                 .as_ref()
@@ -1126,6 +1136,13 @@ mod test {
 
     /// Create a PackageChangesWatcher backed by a synthetic file event channel.
     fn create_test_watcher(repo_root: &AbsoluteSystemPathBuf) -> TestWatcherHandle {
+        create_test_watcher_with_opts(repo_root, false)
+    }
+
+    fn create_test_watcher_with_opts(
+        repo_root: &AbsoluteSystemPathBuf,
+        single_package: bool,
+    ) -> TestWatcherHandle {
         let (file_events_tx, file_events_rx) = broadcast::channel(128);
         let (opt_tx, opt_watch) = OptionalWatch::new();
         opt_tx.send(Some(file_events_rx)).unwrap();
@@ -1150,7 +1167,13 @@ mod test {
             scm,
         ));
 
-        let watcher = PackageChangesWatcher::new(repo_root.clone(), opt_watch, hash_watcher, None);
+        let watcher = PackageChangesWatcher::new(
+            repo_root.clone(),
+            opt_watch,
+            hash_watcher,
+            None,
+            single_package,
+        );
 
         TestWatcherHandle {
             watcher,
@@ -1371,6 +1394,116 @@ mod test {
             matches!(event, Some(PackageChangeEvent::Rediscover)),
             "expected Rediscover from turbo.json sentinel, got {:?}",
             event
+        );
+    }
+
+    /// Set up a git-initialized temp dir with a single-package (non-monorepo)
+    /// layout and return everything needed to create a PackageChangesWatcher.
+    fn setup_single_package_git_repo() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root =
+            AbsoluteSystemPathBuf::new(tmp.path().to_str().unwrap().to_string()).unwrap();
+        let repo_root = repo_root.to_realpath().unwrap();
+
+        // git init
+        std::process::Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(repo_root.as_std_path())
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["config", "user.name", "test"])
+            .current_dir(repo_root.as_std_path())
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(repo_root.as_std_path())
+            .status()
+            .unwrap();
+
+        // Root package.json — no "workspaces" field
+        let root_pkg = repo_root.join_component("package.json");
+        root_pkg
+            .create_with_contents(
+                r#"{"name":"my-app","packageManager":"npm@10.0.0","scripts":{"build":"echo built","lint":"echo linted"}}"#
+                    .as_bytes(),
+            )
+            .unwrap();
+
+        let lockfile = repo_root.join_component("package-lock.json");
+        lockfile
+            .create_with_contents(r#"{"lockfileVersion":3}"#.as_bytes())
+            .unwrap();
+
+        // turbo.json with root tasks (no "//" prefix needed in single-package)
+        let turbo_json = repo_root.join_component("turbo.json");
+        turbo_json
+            .create_with_contents(r#"{"tasks":{"build":{},"lint":{}}}"#.as_bytes())
+            .unwrap();
+
+        // .gitignore
+        let gitignore = repo_root.join_component(".gitignore");
+        gitignore
+            .create_with_contents("node_modules/\n.turbo/\n".as_bytes())
+            .unwrap();
+
+        // Source file
+        let src_dir = repo_root.join_component("src");
+        src_dir.create_dir_all().unwrap();
+        src_dir
+            .join_component("index.ts")
+            .create_with_contents(b"console.log('hello');")
+            .unwrap();
+
+        // Initial commit
+        std::process::Command::new("git")
+            .args(["add", "."])
+            .current_dir(repo_root.as_std_path())
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "-m", "init", "--quiet"])
+            .current_dir(repo_root.as_std_path())
+            .status()
+            .unwrap();
+
+        (tmp, repo_root)
+    }
+
+    #[tokio::test]
+    async fn single_package_watcher_sends_initial_rediscover() {
+        let (_tmp, repo_root) = setup_single_package_git_repo();
+        let handle = create_test_watcher_with_opts(&repo_root, true);
+        let mut rx = handle.watcher.package_change_events_rx.resubscribe();
+
+        let event = recv_event(&mut rx, Duration::from_secs(2)).await;
+        assert!(
+            matches!(event, Some(PackageChangeEvent::Rediscover)),
+            "expected Rediscover from single-package watcher, got {:?}",
+            event
+        );
+    }
+
+    #[tokio::test]
+    async fn single_package_subscriber_can_initialize_repo_state() {
+        let (_tmp, repo_root) = setup_single_package_git_repo();
+
+        let root_pkg_json = PackageJson::load(&repo_root.join_component("package.json")).unwrap();
+        let pkg_graph = PackageGraphBuilder::new(&repo_root, root_pkg_json)
+            .with_single_package_mode(true)
+            .build()
+            .await
+            .unwrap();
+
+        let pkg_names: Vec<_> = pkg_graph
+            .packages()
+            .map(|(name, _)| name.to_string())
+            .collect();
+        assert!(
+            pkg_names.iter().any(|n| n == "//"),
+            "root package '//' not found in graph. packages: {:?}",
+            pkg_names
         );
     }
 

@@ -264,6 +264,7 @@ impl WatchClient {
             recv,
             hash_watcher,
             custom_turbo_json_path,
+            base.opts().run_opts.single_package,
         );
 
         // Subscribe before building the Run so we don't miss the initial

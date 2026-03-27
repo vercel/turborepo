@@ -276,7 +276,12 @@ impl NpmLockfile {
         workspace_packages: &std::collections::HashSet<&str>,
         requested: &std::collections::HashSet<&str>,
     ) {
-        let mut to_rehoist: Vec<(String, String)> = Vec::new();
+        // Group workspace-nested entries by their target hoisted key. When
+        // multiple workspaces each have their own nested copy of the same
+        // package (common with install-strategy=shallow), promoting any one
+        // of them would silently discard the others. Only rehoist when
+        // exactly one workspace claims a given hoisted position.
+        let mut candidates: HashMap<String, Vec<String>> = HashMap::new();
 
         for key in pruned.keys() {
             let Some(idx) = key.find("/node_modules/") else {
@@ -299,11 +304,19 @@ impl NpmLockfile {
                 continue;
             }
 
-            // Either the hoisted slot is empty or it holds a version that
-            // wasn't requested (it was pulled in only via subgraph's
-            // workspace entry insertion). Safe to replace.
-            to_rehoist.push((key.clone(), hoisted_key));
+            candidates.entry(hoisted_key).or_default().push(key.clone());
         }
+
+        let to_rehoist: Vec<(String, String)> = candidates
+            .into_iter()
+            .filter_map(|(hoisted_key, nested_keys)| {
+                if nested_keys.len() == 1 {
+                    Some((nested_keys.into_iter().next().unwrap(), hoisted_key))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         for (nested_key, hoisted_key) in to_rehoist {
             // Remove old hoisted entry and its sub-deps.
@@ -593,6 +606,96 @@ mod test {
                 "pruned lockfile is missing {key:?} — deeply nested deps were dropped"
             );
         }
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/12139
+    // With install-strategy=shallow, each workspace has its own node_modules
+    // with potentially different versions of the same package. rehoist_packages
+    // must not collapse them into a single hoisted entry.
+    #[test]
+    fn test_subgraph_preserves_multiple_workspace_versions() {
+        let json = r#"{
+            "lockfileVersion": 3,
+            "requires": true,
+            "packages": {
+                "": {
+                    "name": "monorepo",
+                    "workspaces": ["apps/*", "packages/*"]
+                },
+                "node_modules/app-a": {
+                    "resolved": "apps/app-a",
+                    "link": true
+                },
+                "node_modules/pkg-b": {
+                    "resolved": "packages/pkg-b",
+                    "link": true
+                },
+                "apps/app-a": {
+                    "version": "1.0.0",
+                    "dependencies": {
+                        "pkg-b": "*",
+                        "chai": "^5.0.0"
+                    }
+                },
+                "apps/app-a/node_modules/chai": {
+                    "version": "5.3.3",
+                    "dependencies": {
+                        "deep-eql": "^5.0.0"
+                    }
+                },
+                "apps/app-a/node_modules/chai/node_modules/deep-eql": {
+                    "version": "5.0.2"
+                },
+                "packages/pkg-b": {
+                    "version": "0.0.0",
+                    "devDependencies": {
+                        "chai": "^4.0.0"
+                    }
+                },
+                "packages/pkg-b/node_modules/chai": {
+                    "version": "4.5.0"
+                }
+            }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/app-a".to_string(), "packages/pkg-b".to_string()];
+        let packages = vec![
+            "apps/app-a/node_modules/chai".to_string(),
+            "apps/app-a/node_modules/chai/node_modules/deep-eql".to_string(),
+            "packages/pkg-b/node_modules/chai".to_string(),
+        ];
+
+        let pruned = lockfile.subgraph(&workspace_packages, &packages).unwrap();
+        let encoded = pruned.encode().unwrap();
+        let reparsed: NpmLockfile = NpmLockfile::load(&encoded).unwrap();
+
+        // Both workspace-nested versions must survive — neither should be
+        // collapsed into node_modules/chai.
+        assert!(
+            reparsed
+                .packages
+                .contains_key("apps/app-a/node_modules/chai"),
+            "app-a's chai was incorrectly rehoisted"
+        );
+        assert!(
+            reparsed
+                .packages
+                .contains_key("packages/pkg-b/node_modules/chai"),
+            "pkg-b's chai was incorrectly rehoisted"
+        );
+        assert!(
+            reparsed
+                .packages
+                .contains_key("apps/app-a/node_modules/chai/node_modules/deep-eql"),
+            "chai's sub-dep deep-eql was dropped"
+        );
+        // There should be no hoisted chai since both workspaces have their own
+        assert!(
+            !reparsed.packages.contains_key("node_modules/chai"),
+            "a spurious hoisted node_modules/chai was created"
+        );
     }
 
     #[test]
