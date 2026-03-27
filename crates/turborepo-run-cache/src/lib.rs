@@ -16,7 +16,7 @@ use std::{
 
 use itertools::Itertools;
 use tokio::sync::oneshot;
-use tracing::{debug, log::warn};
+use tracing::{debug, info, log::warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
@@ -462,6 +462,10 @@ impl TaskCache {
             " (outputs already on disk)"
         };
 
+        if let Some(sha_context) = format_sha_context(cache_status.as_ref()) {
+            info!("{}: {sha_context}", self.hash);
+        }
+
         match self.task_output_logs {
             OutputLogsMode::HashOnly | OutputLogsMode::NewOnly => {
                 self.write_status(
@@ -677,6 +681,20 @@ impl ConfigCache {
         file_hashes.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
         Ok(FileHashes(file_hashes).hash())
     }
+}
+
+/// Build a "cache hit produced by sha: <sha>" or "cache hit produced by sha:
+/// <sha> (dirty)" message for verbose logging. Returns `None` when no SHA is
+/// available.
+fn format_sha_context(meta: Option<&CacheHitMetadata>) -> Option<String> {
+    meta.and_then(|m| m.sha.as_deref()).map(|sha| {
+        let dirty = meta.and_then(|m| m.dirty_hash.as_deref()).is_some();
+        if dirty {
+            format!("cache hit produced by sha: {sha} (dirty)")
+        } else {
+            format!("cache hit produced by sha: {sha}")
+        }
+    })
 }
 
 #[cfg(test)]
