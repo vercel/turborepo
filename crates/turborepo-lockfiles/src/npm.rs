@@ -1,7 +1,7 @@
 use std::{any::Any, collections::HashMap};
 
 use semver::Version;
-use serde::{Deserialize, Serialize, ser::SerializeMap};
+use serde::{ser::SerializeMap, Deserialize, Serialize};
 use serde_json::Value;
 
 use super::{Error, Lockfile, Package};
