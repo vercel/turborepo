@@ -829,7 +829,13 @@ impl Run {
         // When a proxy is present, the signal handler only stops processes on OS
         // signal. For normal completion without user interruption, we need an
         // explicit stop here.
-        self.processes.stop().await;
+        //
+        // In watch mode, persistent tasks run as fire-and-forget background
+        // processes that outlive the visit() call. The watch coordinator
+        // manages their lifecycle via RunStopper, so we must not kill them here.
+        if !is_watch {
+            self.processes.stop().await;
+        }
 
         visitor
             .finish(
