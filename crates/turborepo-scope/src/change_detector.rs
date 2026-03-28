@@ -14,7 +14,7 @@ use turborepo_repository::{
     },
     package_graph::{PackageGraph, PackageName},
 };
-use turborepo_scm::{SCM, git::InvalidRange};
+use turborepo_scm::{Error as ScmError, SCM, git::InvalidRange};
 
 use crate::ResolutionError;
 
@@ -133,10 +133,10 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                     })
                     .collect());
             }
-            Err(err) => {
+            Err(ScmError::Path(err, _)) => {
                 warn!(
-                    "SCM error while detecting changed files: {err}. Defaulting to all packages \
-                     changed."
+                    "SCM path error while detecting changed files: {err}. Defaulting to all \
+                     packages changed."
                 );
                 return Ok(self
                     .pkg_graph
@@ -151,6 +151,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                     })
                     .collect());
             }
+            Err(err) => return Err(err.into()),
         };
 
         let lockfile_contents = self.get_lockfile_contents(from_ref, &changed_files);
