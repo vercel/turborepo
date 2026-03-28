@@ -2,7 +2,7 @@ use std::{
     backtrace::Backtrace,
     collections::HashSet,
     env::{self, VarError},
-    fs::{self},
+    fs,
     path::PathBuf,
     process::Command,
 };
@@ -414,7 +414,7 @@ impl GitRepo {
         }
 
         let output = self.execute_git_command(&args, pathspec)?;
-        self.add_files_from_stdout(&mut files, turbo_root, output);
+        self.add_files_from_stdout(&mut files, turbo_root, output)?;
 
         // We only care about non-tracked files if we haven't specified both ends up the
         // comparison
@@ -431,11 +431,11 @@ impl GitRepo {
                 ],
                 pathspec,
             )?;
-            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output);
+            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output)?;
             // Include any files that have been staged, but not committed
             let diff_output =
                 self.execute_git_command(&["diff", "--name-only", "--cached", "-z"], pathspec)?;
-            self.add_files_from_stdout(&mut files, turbo_root, diff_output);
+            self.add_files_from_stdout(&mut files, turbo_root, diff_output)?;
         }
 
         Ok(files)
@@ -467,18 +467,18 @@ impl GitRepo {
         files: &mut HashSet<AnchoredSystemPathBuf>,
         turbo_root: &AbsoluteSystemPath,
         stdout: Vec<u8>,
-    ) {
+    ) -> Result<(), Error> {
         let stdout = String::from_utf8_lossy(&stdout);
         for line in stdout.split('\0') {
             if line.is_empty() {
                 continue;
             }
-            let path = RelativeUnixPath::new(line).unwrap();
-            let anchored_to_turbo_root_file_path = self
-                .reanchor_path_from_git_root_to_turbo_root(turbo_root, path)
-                .unwrap();
+            let path = RelativeUnixPath::new(line)?;
+            let anchored_to_turbo_root_file_path =
+                self.reanchor_path_from_git_root_to_turbo_root(turbo_root, path)?;
             files.insert(anchored_to_turbo_root_file_path);
         }
+        Ok(())
     }
 
     fn reanchor_path_from_git_root_to_turbo_root(
@@ -1637,5 +1637,72 @@ mod tests {
             hash_a, hash_b,
             "different staged content in a fresh repo should produce different hashes"
         );
+    }
+
+    fn make_git_repo(root: &AbsoluteSystemPath) -> GitRepo {
+        let bin = GitRepo::find_bin().expect("git binary required for tests");
+        GitRepo {
+            root: root.to_owned(),
+            bin,
+        }
+    }
+
+    #[test]
+    fn test_add_files_from_stdout_rejects_absolute_paths() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let repo = make_git_repo(&root);
+
+        let stdout = b"/absolute/path\0normal/file\0".to_vec();
+        let mut files = HashSet::new();
+        let result = repo.add_files_from_stdout(&mut files, &root, stdout);
+
+        assert_matches!(result, Err(Error::Path(PathError::NotRelative(_), _)));
+        assert!(
+            files.is_empty(),
+            "no files should be added before the error"
+        );
+    }
+
+    #[test]
+    fn test_add_files_from_stdout_rejects_unanchorable_paths() {
+        let git_root_dir = tempfile::tempdir().unwrap();
+        let turbo_root_dir = tempfile::tempdir().unwrap();
+        let git_root = AbsoluteSystemPathBuf::try_from(git_root_dir.path()).unwrap();
+        let turbo_root = AbsoluteSystemPathBuf::try_from(turbo_root_dir.path()).unwrap();
+        let repo = make_git_repo(&git_root);
+
+        // Path is valid and relative, but when joined with git_root it produces an
+        // absolute path that isn't under turbo_root — reanchoring fails.
+        let stdout = b"some/file.txt\0".to_vec();
+        let mut files = HashSet::new();
+        let result = repo.add_files_from_stdout(&mut files, &turbo_root, stdout);
+
+        assert_matches!(result, Err(Error::Path(PathError::NotParent(_, _), _)));
+    }
+
+    #[test]
+    fn test_changed_files_propagates_path_error() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(None)?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let file = root.join_component("foo.txt");
+        file.create_with_contents("content")?;
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        let new_file = root.join_component("bar.txt");
+        new_file.create_with_contents("new content")?;
+
+        // Use a turbo_root that is NOT a subdirectory of the git root.
+        // The turbo_root_relative_to_git_root check at the start of changed_files
+        // will fail, producing Error::Path.
+        let separate_dir = tempfile::tempdir()?;
+        let bad_turbo_root = AbsoluteSystemPathBuf::try_from(separate_dir.path()).unwrap();
+        let scm = SCM::new(&root);
+
+        let result = scm.changed_files(&bad_turbo_root, Some("HEAD"), None, true, false, false);
+        assert_matches!(result, Err(Error::Path(PathError::NotParent(_, _), _)));
+
+        Ok(())
     }
 }

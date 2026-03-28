@@ -20,7 +20,7 @@ use crate::package_graph::{
 
 mod package;
 
-const DEFAULT_GLOBAL_DEPS: &[&str] = ["package.json", "turbo.json", "turbo.jsonc"].as_slice();
+const DEFAULT_GLOBAL_DEPS: &[&str] = ["turbo.json", "turbo.jsonc"].as_slice();
 
 // We may not be able to load the lockfile contents, but we
 // still want to be able to express a generic change.
@@ -86,6 +86,9 @@ pub enum AllPackageChangeReason {
     GitRefNotFound {
         from_ref: Option<String>,
         to_ref: Option<String>,
+    },
+    ScmError {
+        error: String,
     },
 }
 

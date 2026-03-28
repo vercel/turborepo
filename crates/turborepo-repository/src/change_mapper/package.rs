@@ -283,4 +283,110 @@ mod tests {
 
         Ok(())
     }
+
+    #[tokio::test]
+    async fn root_package_json_not_global_with_global_deps_mapper() -> Result<(), anyhow::Error> {
+        let repo_root = tempdir()?;
+        let pkg_graph = PackageGraphBuilder::new(
+            AbsoluteSystemPath::from_std_path(repo_root.path())?,
+            PackageJson::default(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .build()
+        .await?;
+
+        let detector = GlobalDepsPackageChangeMapper::new(&pkg_graph, std::iter::empty::<&str>())?;
+        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], detector);
+
+        // root package.json is not in the global hash when a lockfile exists,
+        // so it should only affect the root workspace — not all packages.
+        let result = change_mapper.changed_packages(
+            [AnchoredSystemPathBuf::from_raw("package.json")?]
+                .into_iter()
+                .collect(),
+            LockfileContents::Unchanged,
+        )?;
+
+        assert_eq!(
+            result,
+            PackageChanges::Some(
+                [(
+                    WorkspacePackage::root(),
+                    PackageInclusionReason::FileChanged {
+                        file: AnchoredSystemPathBuf::from_raw("package.json")?,
+                    }
+                )]
+                .into_iter()
+                .collect()
+            )
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn turbo_json_still_global() -> Result<(), anyhow::Error> {
+        let repo_root = tempdir()?;
+        let pkg_graph = PackageGraphBuilder::new(
+            AbsoluteSystemPath::from_std_path(repo_root.path())?,
+            PackageJson::default(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .build()
+        .await?;
+
+        let detector = GlobalDepsPackageChangeMapper::new(&pkg_graph, std::iter::empty::<&str>())?;
+        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], detector);
+
+        // turbo.json task definitions are part of every task hash,
+        // so it must remain a global trigger.
+        let result = change_mapper.changed_packages(
+            [AnchoredSystemPathBuf::from_raw("turbo.json")?]
+                .into_iter()
+                .collect(),
+            LockfileContents::Unchanged,
+        )?;
+
+        assert_eq!(
+            result,
+            PackageChanges::All(AllPackageChangeReason::DefaultGlobalFileChanged {
+                file: AnchoredSystemPathBuf::from_raw("turbo.json")?,
+            })
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn package_json_in_global_deps_triggers_all() -> Result<(), anyhow::Error> {
+        let repo_root = tempdir()?;
+        let pkg_graph = PackageGraphBuilder::new(
+            AbsoluteSystemPath::from_std_path(repo_root.path())?,
+            PackageJson::default(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .build()
+        .await?;
+
+        // Users can opt-in to the old behavior via globalDependencies.
+        let detector =
+            GlobalDepsPackageChangeMapper::new(&pkg_graph, ["package.json"].into_iter())?;
+        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], detector);
+
+        let result = change_mapper.changed_packages(
+            [AnchoredSystemPathBuf::from_raw("package.json")?]
+                .into_iter()
+                .collect(),
+            LockfileContents::Unchanged,
+        )?;
+
+        assert_eq!(
+            result,
+            PackageChanges::All(AllPackageChangeReason::GlobalDepsChanged {
+                file: AnchoredSystemPathBuf::from_raw("package.json")?,
+            })
+        );
+
+        Ok(())
+    }
 }

@@ -621,6 +621,23 @@ impl<W> App<W> {
         Ok(())
     }
 
+    /// Write the run summary (Tasks/Cached/Time) to stdout after TUI cleanup.
+    ///
+    /// These events were emitted by `ExecutionSummary::print()` while the TUI
+    /// owned the screen. They're already stored in `self.log_events` with ANSI
+    /// color codes baked in — we just need to replay the `Subsystem::Summary`
+    /// subset to the terminal now that we've left the alternate screen.
+    pub fn persist_summary(&self) -> std::io::Result<()> {
+        let mut stdout = std::io::stdout().lock();
+        for event in &self.log_events {
+            if event.source() == &turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary) {
+                stdout.write_all(event.message().as_bytes())?;
+                stdout.write_all(b"\r\n")?;
+            }
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self))]
     pub fn set_status(
         &mut self,
@@ -818,6 +835,7 @@ pub async fn run_app(
         // Even if TUI never started, still persist task output and flush preferences
         let tasks_started = app.tasks_by_status.tasks_started();
         app.persist_tasks(tasks_started)?;
+        app.persist_summary()?;
         app.preferences.flush_to_disk().ok();
         if let Some(callback) = callback {
             // Signal completion even if we never started the terminal
@@ -1030,6 +1048,7 @@ fn cleanup<B: Backend<Error = io::Error> + io::Write>(
 
     let tasks_started = app.tasks_by_status.tasks_started();
     app.persist_tasks(tasks_started)?;
+    app.persist_summary()?;
     app.preferences.flush_to_disk().ok();
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;

@@ -537,11 +537,10 @@ impl<'a> Visitor<'a> {
         }
         drop(factory);
 
-        if !self.is_watch {
-            if let Some(handle) = &self.ui_sender {
-                handle.stop().await;
-            }
-        }
+        // Don't send Event::Stop here. The caller (commands/run.rs) sends Stop
+        // after run.run() returns, which is after visitor.finish() has emitted
+        // the run summary through the logger. Stopping the TUI here would kill
+        // the event loop before the summary events reach app.log_events.
 
         // Propagate the dispatch error first — the engine error is an expected
         // consequence of us closing the channel early, not a root cause.

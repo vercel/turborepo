@@ -4,7 +4,47 @@ import {
   Separator
 } from "@inquirer/prompts";
 import { logger } from "@turbo/utils";
-import type { Generator } from "../../utils/plop";
+import {
+  qualifiedName,
+  parseQualifiedName,
+  type Generator
+} from "../../utils/plop";
+
+function findGenerator(
+  generators: Array<Generator | Separator>,
+  name: string
+): Generator | undefined {
+  const parsed = parseQualifiedName(name);
+
+  if (parsed) {
+    return generators.find(
+      (g): g is Generator =>
+        !(g instanceof Separator) &&
+        g.name === parsed.generator &&
+        g.workspace === parsed.workspace
+    );
+  }
+
+  const matches = generators.filter(
+    (g): g is Generator => !(g instanceof Separator) && g.name === name
+  );
+
+  if (matches.length === 1) {
+    return matches[0];
+  }
+
+  if (matches.length > 1) {
+    logger.warn(
+      `Multiple generators named "${name}" found. Use a qualified name to disambiguate:`
+    );
+    for (const m of matches) {
+      logger.item(qualifiedName(m));
+    }
+    logger.log();
+  }
+
+  return undefined;
+}
 
 export async function customGenerators({
   generators,
@@ -12,31 +52,27 @@ export async function customGenerators({
 }: {
   generators: Array<Generator | Separator>;
   generator?: string;
-}) {
+}): Promise<{ selectedGenerator: Generator }> {
   if (generator) {
-    if (
-      generators.some((g) => !(g instanceof Separator) && g.name === generator)
-    ) {
-      return {
-        selectedGenerator: generator
-      };
+    const match = findGenerator(generators, generator);
+    if (match) {
+      return { selectedGenerator: match };
     }
 
     logger.warn(`Generator "${generator}" not found`);
     logger.log();
   }
 
-  const selectedGenerator = await select({
+  const selectedGenerator = await select<Generator>({
     message: `Select generator to run`,
     choices: generators.map((gen) => {
       if (gen instanceof Separator) {
         return gen;
       }
+      const qName = qualifiedName(gen);
       return {
-        name: gen.description
-          ? `  ${gen.name}: ${gen.description}`
-          : `  ${gen.name}`,
-        value: gen.name
+        name: gen.description ? `  ${qName}: ${gen.description}` : `  ${qName}`,
+        value: gen
       };
     })
   });
