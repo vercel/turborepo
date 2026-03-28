@@ -7,7 +7,11 @@
 pnpm exec lint-staged
 turbo run format check:toml
 
-export RUSTFLAGS="-D warnings"
-cargo fmt --check
-cargo lint
-cargo check --workspace
+if command -v cargo >/dev/null 2>&1; then
+  export RUSTFLAGS="-D warnings"
+  cargo fmt --check
+  cargo lint
+  cargo check --workspace
+else
+  echo "≫  Cargo not found, skipping Rust checks"
+fi
