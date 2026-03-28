@@ -1714,6 +1714,16 @@ impl BunLockfile {
                     continue;
                 }
 
+                let is_bundled = entry
+                    .info
+                    .as_ref()
+                    .and_then(|info| info.other.get("bundled"))
+                    .and_then(|value| value.as_bool())
+                    .unwrap_or(false);
+                if is_bundled {
+                    continue;
+                }
+
                 let pkg_name = ident.name().to_string();
                 if !top_level_pkg_names.contains(&pkg_name) {
                     promote_target = Some((pkg_name, key.clone()));
@@ -3349,6 +3359,66 @@ mod test {
             "color-convert@1.9.3"
         );
         assert_eq!(pruned.data.packages["color-name"].ident, "color-name@1.1.3");
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/12262
+    // Bundled dependencies must stay nested under their parent package. If we
+    // promote them to top-level, turbo prune invents phantom packages that were
+    // never present in the source bun.lock.
+    #[test]
+    fn test_bundled_dependencies_are_not_promoted_to_top_level() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "configVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test-monorepo"
+                },
+                "apps/web": {
+                    "name": "web",
+                    "dependencies": {
+                        "npm": "^10.0.0"
+                    }
+                }
+            },
+            "packages": {
+                "web": ["web@workspace:apps/web"],
+                "npm": ["npm@10.0.0", "", {
+                    "dependencies": {
+                        "@npmcli/agent": "^4.0.0"
+                    }
+                }, "sha512-npm"],
+                "npm/@npmcli/agent": ["@npmcli/agent@4.0.0", "", { "bundled": true }, "sha512-agent"]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+        let mut web_deps = std::collections::BTreeMap::new();
+        web_deps.insert("npm".to_string(), "^10.0.0".to_string());
+        let closure = crate::transitive_closure(&lockfile, "apps/web", web_deps, false).unwrap();
+        let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+        let subgraph = lockfile
+            .subgraph(&["apps/web".into()], &package_idents)
+            .unwrap();
+
+        let encoded = subgraph.encode().unwrap();
+        let encoded_str = String::from_utf8(encoded).unwrap();
+        let pruned =
+            BunLockfile::from_str(&encoded_str).expect("pruned lockfile should be parseable");
+
+        assert!(
+            pruned.data.packages.contains_key("npm/@npmcli/agent"),
+            "bundled dependency should stay nested under npm"
+        );
+        assert!(
+            !pruned.data.packages.contains_key("@npmcli/agent"),
+            "bundled dependency should not be promoted to a phantom top-level package"
+        );
+        assert!(
+            pruned.index.get_bundled("npm", "@npmcli/agent").is_some(),
+            "bundled dependency should still be indexed under its parent"
+        );
     }
 
     // Regression test for https://github.com/vercel/turborepo/issues/11701
