@@ -759,6 +759,13 @@ pub struct RawTaskDefinition {
     #[serde(rename = "with")]
     #[ts(optional)]
     pub with: Option<Vec<Spanned<UnescapedString>>>,
+
+    #[serde(rename = "experimentalCI")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[deserializable(rename = "experimentalCI")]
+    #[schemars(skip)]
+    #[ts(skip)]
+    pub experimental_ci: Option<Spanned<bool>>,
 }
 
 impl HasConfigBeyondExtends for RawTaskDefinition {

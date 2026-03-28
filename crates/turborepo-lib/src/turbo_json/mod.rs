@@ -134,6 +134,7 @@ mod tests {
             interruptible: Some(Spanned::new(true).with_range(342..346)),
             env_mode: None,
             with: None,
+            experimental_ci: None,
         },
         TaskDefinition {
           env: vec!["OS".to_string()],
@@ -182,6 +183,7 @@ mod tests {
             interactive: None,
             env_mode: None,
             with: None,
+            experimental_ci: None,
         },
         TaskDefinition {
             env: vec!["OS".to_string()],
