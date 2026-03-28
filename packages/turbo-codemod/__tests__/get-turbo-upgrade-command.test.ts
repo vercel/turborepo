@@ -239,6 +239,36 @@ const LOCAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManagerVersion: "3.3.4",
     fixture: "single-package",
     expected: "yarn add turbo@latest"
+  },
+  // yarn 4.x - workspaces
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "4.1.0",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn add turbo@latest --dev"
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "4.1.0",
+    fixture: "normal-workspaces",
+    expected: "yarn add turbo@latest"
+  },
+  // yarn 4.x - single package
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "4.1.0",
+    fixture: "single-package-dev-install",
+    expected: "yarn add turbo@latest --dev"
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "4.1.0",
+    fixture: "single-package",
+    expected: "yarn add turbo@latest"
   }
 ];
 
@@ -351,77 +381,106 @@ const GLOBAL_INSTALL_COMMANDS: Array<TestCase> = [
     fixture: "single-package-dev-install",
     expected: "yarn global add turbo@latest"
   },
-  // yarn 2.x
+  // yarn 2.x - falls through to local install (yarn 2+ has no `yarn global`)
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "2.3.4",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn global add turbo@latest"
+    expected: "yarn add turbo@latest --dev"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "2.3.4",
     fixture: "normal-workspaces",
-    expected: "yarn global add turbo@latest"
+    expected: "yarn add turbo@latest"
   },
   {
     version: "1.6.3",
     packageManager: "yarn",
     packageManagerVersion: "2.3.4",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn global add turbo@1.6.3"
+    expected: "yarn add turbo@1.6.3 --dev"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "2.3.4",
     fixture: "single-package",
-    expected: "yarn global add turbo@latest"
+    expected: "yarn add turbo@latest"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "2.3.4",
     fixture: "single-package-dev-install",
-    expected: "yarn global add turbo@latest"
+    expected: "yarn add turbo@latest --dev"
   },
-  // yarn 3.x
+  // yarn 3.x - falls through to local install (yarn 3+ has no `yarn global`)
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "3.3.3",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn global add turbo@latest"
+    expected: "yarn add turbo@latest --dev"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "3.3.3",
     fixture: "normal-workspaces",
-    expected: "yarn global add turbo@latest"
+    expected: "yarn add turbo@latest"
   },
   {
     version: "1.6.3",
     packageManager: "yarn",
     packageManagerVersion: "3.3.3",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn global add turbo@1.6.3"
+    expected: "yarn add turbo@1.6.3 --dev"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "3.3.4",
     fixture: "single-package",
-    expected: "yarn global add turbo@latest"
+    expected: "yarn add turbo@latest"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "3.3.4",
     fixture: "single-package-dev-install",
-    expected: "yarn global add turbo@latest"
+    expected: "yarn add turbo@latest --dev"
+  },
+  // yarn 4.x - falls through to local install (yarn 4+ has no `yarn global`)
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "4.1.0",
+    fixture: "normal-workspaces-dev-install",
+    expected: "yarn add turbo@latest --dev"
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "4.1.0",
+    fixture: "normal-workspaces",
+    expected: "yarn add turbo@latest"
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "4.1.0",
+    fixture: "single-package",
+    expected: "yarn add turbo@latest"
+  },
+  {
+    version: "latest",
+    packageManager: "yarn",
+    packageManagerVersion: "4.1.0",
+    fixture: "single-package-dev-install",
+    expected: "yarn add turbo@latest --dev"
   }
 ];
 

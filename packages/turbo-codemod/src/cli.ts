@@ -1,8 +1,13 @@
 #!/usr/bin/env node
 
 import picocolors from "picocolors";
-import { logger, createNotifyUpdate } from "@turbo/utils";
+import {
+  logger,
+  createNotifyUpdate,
+  getAvailablePackageManagers
+} from "@turbo/utils";
 import { getWorkspaceDetails } from "@turbo/workspaces";
+import { gte } from "semver";
 import { Command } from "commander";
 import cliPkg from "../package.json";
 import { transform, migrate } from "./commands";
@@ -15,6 +20,11 @@ const notifyUpdate = createNotifyUpdate({
         root: process.cwd()
       });
       if (packageManager === "yarn") {
+        const available = await getAvailablePackageManagers();
+        const yarnVersion = available.yarn;
+        if (yarnVersion && gte(yarnVersion, "2.0.0")) {
+          return "yarn dlx @turbo/codemod";
+        }
         return "yarn global add @turbo/codemod";
       } else if (packageManager === "pnpm") {
         return "pnpm i -g @turbo/codemod";

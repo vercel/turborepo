@@ -13,12 +13,22 @@ import { exec } from "../utils";
 
 type InstallType = "dependencies" | "devDependencies";
 
-function getGlobalUpgradeCommand(
-  packageManager: PackageManager,
+function getGlobalUpgradeCommand({
+  packageManager,
+  packageManagerVersion,
   to = "latest"
-) {
+}: {
+  packageManager: PackageManager;
+  packageManagerVersion?: string;
+  to?: string;
+}): string | undefined {
   switch (packageManager) {
     case "yarn": {
+      // Yarn 2+ (Berry) removed `yarn global`. There is no global install
+      // equivalent, so return undefined to fall through to local install.
+      if (packageManagerVersion && gte(packageManagerVersion, "2.0.0")) {
+        return undefined;
+      }
       return `yarn global add turbo@${to}`;
     }
     case "npm": {
@@ -134,6 +144,8 @@ export async function getTurboUpgradeCommand({
   project: Project;
   to?: string;
 }) {
+  const availablePackageManagers = await getAvailablePackageManagers();
+
   const turboBinaryPathFromGlobal = exec("turbo bin", {
     cwd: project.paths.root,
     stdio: "pipe"
@@ -152,14 +164,21 @@ export async function getTurboUpgradeCommand({
   }) as PackageManager | undefined;
 
   if (turboBinaryPathFromGlobal && globalPackageManager) {
-    // figure which package manager we need to upgrade
-    return getGlobalUpgradeCommand(globalPackageManager, to);
+    const globalCommand = getGlobalUpgradeCommand({
+      packageManager: globalPackageManager,
+      packageManagerVersion: availablePackageManagers[globalPackageManager],
+      to
+    });
+    if (globalCommand) {
+      return globalCommand;
+    }
+    // Package manager doesn't support global installs (e.g. Yarn 2+).
+    // Fall through to local install.
   }
+
   const { packageManager } = project;
-  // we didn't find a global install, so we'll try to find a local one
   const isUsingWorkspaces = project.workspaceData.globs.length > 0;
   const installType = getInstallType({ root: project.paths.root });
-  const availablePackageManagers = await getAvailablePackageManagers();
   const version = availablePackageManagers[packageManager];
 
   if (version && installType) {
