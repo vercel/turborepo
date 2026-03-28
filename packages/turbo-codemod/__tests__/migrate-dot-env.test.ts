@@ -6,32 +6,33 @@ import { transformer } from "../src/transforms/migrate-dot-env";
 describe("migrate-dot-env", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
-    test: "migrate-dot-env",
+    test: "migrate-dot-env"
   });
+
   it("migrates turbo.json dot-env - basic", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "with-dot-env",
+      fixture: "with-dot-env"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       globalDependencies: [".env"],
       tasks: {
         "build-one": {
-          inputs: ["$TURBO_DEFAULT$", "build-one/.env"],
+          inputs: ["$TURBO_DEFAULT$", "build-one/.env"]
         },
         "build-two": {
-          inputs: ["build-two/main.js", "build-two/.env"],
+          inputs: ["build-two/main.js", "build-two/.env"]
         },
-        "build-three": {},
-      },
+        "build-three": {}
+      }
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -49,54 +50,54 @@ describe("migrate-dot-env", () => {
   it("migrates turbo.json dot-env - workspace configs", () => {
     // load the fixture for the test
     const { root, readJson } = useFixture({
-      fixture: "workspace-configs",
+      fixture: "workspace-configs"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(readJson("turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       tasks: {
         "build-one": {
-          inputs: ["$TURBO_DEFAULT$", "build-one/.env"],
+          inputs: ["$TURBO_DEFAULT$", "build-one/.env"]
         },
         "build-two": {
-          inputs: ["build-two/**/*.ts", "build-two/.env"],
+          inputs: ["build-two/**/*.ts", "build-two/.env"]
         },
-        "build-three": {},
-      },
+        "build-three": {}
+      }
     });
 
     expect(readJson("apps/docs/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       extends: ["//"],
       tasks: {
-        build: {},
-      },
+        build: {}
+      }
     });
 
     expect(readJson("apps/web/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       extends: ["//"],
       tasks: {
         build: {
-          inputs: ["src/**/*.ts", ".env"],
-        },
-      },
+          inputs: ["src/**/*.ts", ".env"]
+        }
+      }
     });
 
     expect(readJson("packages/ui/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       extends: ["//"],
       tasks: {
         "build-three": {
-          inputs: ["$TURBO_DEFAULT$", ".env"],
-        },
-      },
+          inputs: ["$TURBO_DEFAULT$", ".env"]
+        }
+      }
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -129,7 +130,7 @@ describe("migrate-dot-env", () => {
   it("migrates turbo.json dot-env - dry", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "with-dot-env",
+      fixture: "with-dot-env"
     });
 
     const turboJson = JSON.parse(read("turbo.json") || "{}") as Schema;
@@ -137,7 +138,7 @@ describe("migrate-dot-env", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: true, print: false },
+      options: { force: false, dryRun: true, print: false }
     });
 
     // make sure it didn't change
@@ -158,27 +159,27 @@ describe("migrate-dot-env", () => {
   it("migrates turbo.json dot-env - print", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "with-dot-env",
+      fixture: "with-dot-env"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: true },
+      options: { force: false, dryRun: false, print: true }
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       globalDependencies: [".env"],
       tasks: {
         "build-one": {
-          inputs: ["$TURBO_DEFAULT$", "build-one/.env"],
+          inputs: ["$TURBO_DEFAULT$", "build-one/.env"]
         },
         "build-three": {},
         "build-two": {
-          inputs: ["build-two/main.js", "build-two/.env"],
-        },
-      },
+          inputs: ["build-two/main.js", "build-two/.env"]
+        }
+      }
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -196,7 +197,7 @@ describe("migrate-dot-env", () => {
   it("migrates turbo.json dot-env - dry & print", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "with-dot-env",
+      fixture: "with-dot-env"
     });
 
     const turboJson = JSON.parse(read("turbo.json") || "{}") as Schema;
@@ -204,7 +205,7 @@ describe("migrate-dot-env", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: true, print: false },
+      options: { force: false, dryRun: true, print: false }
     });
 
     // make sure it didn't change
@@ -225,19 +226,19 @@ describe("migrate-dot-env", () => {
   it("migrates turbo.json dot-env - config with no pipeline", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "no-pipeline",
+      fixture: "no-pipeline"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       globalDependencies: ["$NEXT_PUBLIC_API_KEY", "$STRIPE_API_KEY", ".env"],
-      tasks: {},
+      tasks: {}
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -255,28 +256,28 @@ describe("migrate-dot-env", () => {
   it("migrates turbo.json dot-env - config with no dot env", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "no-dot-env",
+      fixture: "no-dot-env"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       tasks: {
         "build-one": {
-          dependsOn: ["build-two"],
+          dependsOn: ["build-two"]
         },
         "build-two": {
-          cache: false,
+          cache: false
         },
         "build-three": {
-          persistent: true,
-        },
-      },
+          persistent: true
+        }
+      }
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -294,7 +295,7 @@ describe("migrate-dot-env", () => {
   it("errors if no turbo.json can be found", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "no-turbo-json",
+      fixture: "no-turbo-json"
     });
 
     expect(read("turbo.json")).toBeUndefined();
@@ -302,7 +303,7 @@ describe("migrate-dot-env", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(read("turbo.json")).toBeUndefined();

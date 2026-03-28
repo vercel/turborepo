@@ -1,0 +1,16 @@
+{
+  "name": "root",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "moleculer": "0.14.28"
+  },
+  "packageManager": "pnpm@7.33.0",
+  "pnpm": {
+    "patchedDependencies": {
+      "is-odd@3.0.1": "patches/is-odd@3.0.1.patch",
+      "@babel/core@7.20.12": "patches/@babel__core@7.20.12.patch",
+      "moleculer@0.14.28": "patches/moleculer@0.14.28.patch"
+    }
+  }
+}

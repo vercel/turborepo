@@ -167,7 +167,7 @@ impl TelemetryConfig {
                         color_config,
                         GREY,
                         "{}",
-                        "https://turborepo.com/docs/telemetry"
+                        "https://turborepo.dev/docs/telemetry"
                     )
                 ),
             );

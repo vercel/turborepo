@@ -13,7 +13,7 @@ pub enum Error {
     #[error("Unable to convert from json: {0}")]
     BiomeJsonError(String),
     #[error("Unable to convert to yaml: {0}")]
-    Yaml(#[from] serde_yaml::Error),
+    Yaml(#[from] serde_yaml_ng::Error),
     #[error("Turborepo doesn't support npm lockfiles without a 'packages' field")]
     UnsupportedNpmVersion,
     #[error("Unsupported bun lockfile version: {0}")]

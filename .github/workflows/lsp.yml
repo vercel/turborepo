@@ -1,9 +1,9 @@
-# Turborepo LSP Pipeline
+# LSP Pipeline
 #
 # Currently this just dumps the LSP binaries into the artifacts, but in the future
 # we will want to do the entire packaging process here.
 
-name: Turborepo LSP
+name: LSP
 
 on:
   workflow_dispatch:
@@ -40,6 +40,7 @@ jobs:
             setup: "rustup set default-host aarch64-pc-windows-msvc"
             container-options: "--rm"
     runs-on: ${{ matrix.settings.host }}
+    timeout-minutes: 30
     container:
       image: ${{ matrix.settings.container }}
       options: ${{ matrix.settings.container-options }}
@@ -49,12 +50,6 @@ jobs:
       - name: Setup Container
         if: ${{ matrix.settings.container-setup }}
         run: ${{ matrix.settings.container-setup }}
-
-      - name: Setup Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "26.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup capnproto
         uses: ./.github/actions/setup-capnproto

@@ -71,4 +71,4 @@ Examples of **correct** code for this rule:
 
 ## Further Reading
 
-- [Environment Variable Inputs](https://turborepo.com/docs/crafting-your-repository/using-environment-variables)
+- [Environment Variable Inputs](https://turborepo.dev/docs/crafting-your-repository/using-environment-variables)

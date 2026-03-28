@@ -1,6 +1,9 @@
 //! Package indexing for efficient lockfile lookups.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use super::{PackageEntry, types::PackageKey};
 
@@ -22,7 +25,8 @@ pub struct PackageIndex {
 
     /// Bundled dependency lookup
     /// Maps (parent_key, dep_name) -> lockfile key
-    bundled_deps: HashMap<(StringRef, StringRef), StringRef>,
+    /// BTreeMap for deterministic iteration in find_package().
+    bundled_deps: BTreeMap<(StringRef, StringRef), StringRef>,
 }
 
 impl PackageIndex {
@@ -31,7 +35,7 @@ impl PackageIndex {
         let mut by_key = HashMap::with_capacity(packages.len());
         let mut by_ident: HashMap<StringRef, Vec<StringRef>> = HashMap::new();
         let mut workspace_scoped = HashMap::new();
-        let mut bundled_deps = HashMap::new();
+        let mut bundled_deps = BTreeMap::new();
 
         // First pass: populate by_key and by_ident
         for (key, entry) in packages {

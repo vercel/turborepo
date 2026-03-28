@@ -1,0 +1,29 @@
+// Ultracite oxfmt Configuration
+// https://oxc.rs/docs/guide/usage/formatter/config-file-reference.html
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 80,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": false,
+  "quoteProps": "as-needed",
+  "jsxSingleQuote": false,
+  "trailingComma": "none",
+  "bracketSpacing": true,
+  "bracketSameLine": false,
+  "arrowParens": "always",
+  "endOfLine": "lf",
+  "ignorePatterns": [
+    "build/",
+    "crates/",
+    "cli/",
+    "examples/",
+    "packages/eslint-plugin-turbo/__fixtures__",
+    "packages/create-turbo/templates",
+    "turborepo-tests/",
+    "buildcontainer/",
+    "scripts/",
+    "apps/docs"
+  ]
+}

@@ -10,7 +10,7 @@ export class Logger {
 
   constructor({
     interactive,
-    dry,
+    dry
   }: { interactive?: boolean; dry?: boolean } = {}) {
     this.interactive = interactive ?? true;
     this.dry = dry ?? false;

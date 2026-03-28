@@ -1,14 +1,14 @@
 // eslint-disable-next-line camelcase -- This is a test file
 import child_process, {
   type ChildProcess,
-  type ExecException,
+  type ExecException
 } from "node:child_process";
 import {
   spyConsole,
   spyExit,
   type SpyExit,
   mockEnv,
-  validateLogs,
+  validateLogs
 } from "@turbo/test-utils";
 import { describe, it, expect, jest } from "@jest/globals";
 import { TurboIgnoreTelemetry, TelemetryConfig } from "@turbo/telemetry";
@@ -31,22 +31,22 @@ describe("turboIgnore()", () => {
     api: "https://example.com",
     packageInfo: {
       name: "turbo-ignore",
-      version: "1.0.0",
+      version: "1.0.0"
     },
     config: new TelemetryConfig({
       configPath: "test-config-path",
       config: {
         telemetry_enabled: false,
         telemetry_id: "telemetry-test-id",
-        telemetry_salt: "telemetry-salt",
-      },
-    }),
+        telemetry_salt: "telemetry-salt"
+      }
+    })
   });
 
   it("throws error and allows build when exec fails", () => {
     const mockExec = jest
-      .spyOn(child_process, "exec")
-      .mockImplementation((command, options, callback) => {
+      .spyOn(child_process, "execFile")
+      .mockImplementation((file, args, options, callback) => {
         if (callback) {
           return callback(
             { message: "error details" } as unknown as ExecException,
@@ -60,7 +60,15 @@ describe("turboIgnore()", () => {
     turboIgnore("test-workspace", { telemetry });
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx -y turbo@^2 run build --filter="test-workspace...[HEAD^]" --dry=json`,
+      "npx",
+      [
+        "-y",
+        "turbo@^2",
+        "run",
+        "build",
+        "--filter=test-workspace...[HEAD^]",
+        "--dry=json"
+      ],
       expect.anything(),
       expect.anything()
     );
@@ -77,13 +85,13 @@ describe("turboIgnore()", () => {
 
   it("throws pretty error and allows build when exec fails", () => {
     const mockExec = jest
-      .spyOn(child_process, "exec")
-      .mockImplementation((command, options, callback) => {
+      .spyOn(child_process, "execFile")
+      .mockImplementation((file, args, options, callback) => {
         if (callback) {
           return callback(
             {
               message:
-                "run failed: We did not detect an in-use package manager for your project",
+                "run failed: We did not detect an in-use package manager for your project"
             } as unknown as ExecException,
             "stdout",
             "stderr"
@@ -95,13 +103,21 @@ describe("turboIgnore()", () => {
     turboIgnore("test-workspace", {});
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx -y turbo@^2 run build --filter="test-workspace...[HEAD^]" --dry=json`,
+      "npx",
+      [
+        "-y",
+        "turbo@^2",
+        "run",
+        "build",
+        "--filter=test-workspace...[HEAD^]",
+        "--dry=json"
+      ],
       expect.anything(),
       expect.anything()
     );
 
     expect(mockConsole.warn).toHaveBeenNthCalledWith(
-      1,
+      3,
       "≫  ",
       `turbo-ignore could not complete - no package manager detected, please commit a lockfile, or set "packageManager" in your root "package.json"`
     );
@@ -116,17 +132,17 @@ describe("turboIgnore()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
 
     const mockExecSync = jest
-      .spyOn(child_process, "execSync")
+      .spyOn(child_process, "execFileSync")
       .mockReturnValue("commit");
 
     const mockExec = jest
-      .spyOn(child_process, "exec")
-      .mockImplementation((command, options, callback) => {
+      .spyOn(child_process, "execFile")
+      .mockImplementation((file, args, options, callback) => {
         if (callback) {
           return callback(
             {
               message:
-                " ERROR  run failed: failed to resolve packages to run: commit too-far-back does not exist",
+                " ERROR  run failed: failed to resolve packages to run: commit too-far-back does not exist"
             } as unknown as ExecException,
             "stdout",
             "stderr"
@@ -138,13 +154,21 @@ describe("turboIgnore()", () => {
     turboIgnore("test-workspace", { telemetry });
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx -y turbo@^2 run build --filter="test-workspace...[too-far-back]" --dry=json`,
+      "npx",
+      [
+        "-y",
+        "turbo@^2",
+        "run",
+        "build",
+        "--filter=test-workspace...[too-far-back]",
+        "--dry=json"
+      ],
       expect.anything(),
       expect.anything()
     );
 
     expect(mockConsole.warn).toHaveBeenNthCalledWith(
-      1,
+      3,
       "≫  ",
       `turbo-ignore could not complete - a ref or SHA is invalid. It could have been removed from the branch history via a force push, or this could be a shallow clone with insufficient history`
     );
@@ -156,13 +180,13 @@ describe("turboIgnore()", () => {
 
   it("throws pretty error and allows build when fallback fails", () => {
     const mockExec = jest
-      .spyOn(child_process, "exec")
-      .mockImplementation((command, options, callback) => {
+      .spyOn(child_process, "execFile")
+      .mockImplementation((file, args, options, callback) => {
         if (callback) {
           return callback(
             {
               message:
-                "ERROR run failed: failed to resolve packages to run: commit HEAD^ does not exist",
+                "ERROR run failed: failed to resolve packages to run: commit HEAD^ does not exist"
             } as unknown as ExecException,
             "stdout",
             "stderr"
@@ -174,13 +198,21 @@ describe("turboIgnore()", () => {
     turboIgnore("test-workspace", { fallback: "HEAD^" });
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx -y turbo@^2 run build --filter="test-workspace...[HEAD^]" --dry=json`,
+      "npx",
+      [
+        "-y",
+        "turbo@^2",
+        "run",
+        "build",
+        "--filter=test-workspace...[HEAD^]",
+        "--dry=json"
+      ],
       expect.anything(),
       expect.anything()
     );
 
     expect(mockConsole.warn).toHaveBeenNthCalledWith(
-      1,
+      3,
       "≫  ",
       `turbo-ignore could not complete - parent commit does not exist or is unreachable`
     );
@@ -252,12 +284,12 @@ describe("turboIgnore()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
 
     const mockExecSync = jest
-      .spyOn(child_process, "execSync")
+      .spyOn(child_process, "execFileSync")
       .mockReturnValue("commit");
 
     const mockExec = jest
-      .spyOn(child_process, "exec")
-      .mockImplementation((command, options, callback) => {
+      .spyOn(child_process, "execFile")
+      .mockImplementation((file, args, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -271,21 +303,21 @@ describe("turboIgnore()", () => {
     validateLogs(mockConsole.log, [
       [
         "≫  ",
-        "Using Turborepo to determine if this project is affected by the commit...\n",
+        "Using Turborepo to determine if this project is affected by the commit...\n"
       ],
       ["≫  ", 'Inferred "test-app" as workspace from "package.json"'],
       ["≫  ", 'Inferred turbo version ^2 based on "tasks" in "turbo.json"'],
       ["≫  ", 'Using "build" as the task as it was unspecified'],
       [
         "≫  ",
-        `Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"`,
+        `Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"`
       ],
       [
         "≫  ",
-        'Analyzing results of `npx -y turbo@^2 run build --filter="test-app...[last-deployed-sha]" --dry=json`',
+        'Analyzing results of `npx -y turbo@^2 run build --filter="test-app...[last-deployed-sha]" --dry=json`'
       ],
       ["≫  ", "This project and its dependencies are not affected"],
-      [expect.stringContaining("⏭ Ignoring the change")],
+      [expect.stringContaining("⏭ Ignoring the change")]
     ]);
 
     expectIgnore(mockExit);
@@ -299,12 +331,12 @@ describe("turboIgnore()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
 
     const mockExecSync = jest
-      .spyOn(child_process, "execSync")
+      .spyOn(child_process, "execFileSync")
       .mockReturnValue("commit");
 
     const mockExec = jest
-      .spyOn(child_process, "exec")
-      .mockImplementation((command, options, callback) => {
+      .spyOn(child_process, "execFile")
+      .mockImplementation((file, args, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -316,26 +348,26 @@ describe("turboIgnore()", () => {
       });
     turboIgnore(undefined, {
       task: "workspace#build",
-      directory: "__fixtures__/app",
+      directory: "__fixtures__/app"
     });
     validateLogs(mockConsole.log, [
       [
         "≫  ",
-        "Using Turborepo to determine if this project is affected by the commit...\n",
+        "Using Turborepo to determine if this project is affected by the commit...\n"
       ],
       ["≫  ", 'Inferred "test-app" as workspace from "package.json"'],
       ["≫  ", 'Inferred turbo version ^2 based on "tasks" in "turbo.json"'],
       ["≫  ", 'Using "workspace#build" as the task from the arguments'],
       [
         "≫  ",
-        'Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"',
+        'Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"'
       ],
       [
         "≫  ",
-        'Analyzing results of `npx -y turbo@^2 run "workspace#build" --filter="test-app...[last-deployed-sha]" --dry=json`',
+        'Analyzing results of `npx -y turbo@^2 run "workspace#build" --filter="test-app...[last-deployed-sha]" --dry=json`'
       ],
       ["≫  ", 'This commit affects "test-app"'],
-      [expect.stringContaining("✓ Proceeding with deployment")],
+      [expect.stringContaining("✓ Proceeding with deployment")]
     ]);
 
     expectBuild(mockExit);
@@ -349,12 +381,12 @@ describe("turboIgnore()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
 
     const mockExecSync = jest
-      .spyOn(child_process, "execSync")
+      .spyOn(child_process, "execFileSync")
       .mockReturnValue("commit");
 
     const mockExec = jest
-      .spyOn(child_process, "exec")
-      .mockImplementation((command, options, callback) => {
+      .spyOn(child_process, "execFile")
+      .mockImplementation((file, args, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -368,21 +400,21 @@ describe("turboIgnore()", () => {
     validateLogs(mockConsole.log, [
       [
         "≫  ",
-        "Using Turborepo to determine if this project is affected by the commit...\n",
+        "Using Turborepo to determine if this project is affected by the commit...\n"
       ],
       ["≫  ", 'Inferred "test-app" as workspace from "package.json"'],
       ["≫  ", 'Inferred turbo version ^2 based on "tasks" in "turbo.json"'],
       ["≫  ", 'Using "build" as the task as it was unspecified'],
       [
         "≫  ",
-        'Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"',
+        'Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"'
       ],
       [
         "≫  ",
-        'Analyzing results of `npx -y turbo@^2 run build --filter="test-app...[last-deployed-sha]" --dry=json`',
+        'Analyzing results of `npx -y turbo@^2 run build --filter="test-app...[last-deployed-sha]" --dry=json`'
       ],
       ["≫  ", 'This commit affects "test-app" and 1 dependency (ui)'],
-      [expect.stringContaining("✓ Proceeding with deployment")],
+      [expect.stringContaining("✓ Proceeding with deployment")]
     ]);
 
     expectBuild(mockExit);
@@ -396,12 +428,12 @@ describe("turboIgnore()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
 
     const mockExecSync = jest
-      .spyOn(child_process, "execSync")
+      .spyOn(child_process, "execFileSync")
       .mockReturnValue("commit");
 
     const mockExec = jest
-      .spyOn(child_process, "exec")
-      .mockImplementation((command, options, callback) => {
+      .spyOn(child_process, "execFile")
+      .mockImplementation((file, args, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -415,24 +447,24 @@ describe("turboIgnore()", () => {
     validateLogs(mockConsole.log, [
       [
         "≫  ",
-        "Using Turborepo to determine if this project is affected by the commit...\n",
+        "Using Turborepo to determine if this project is affected by the commit...\n"
       ],
       ["≫  ", 'Inferred "test-app" as workspace from "package.json"'],
       ["≫  ", 'Inferred turbo version ^2 based on "tasks" in "turbo.json"'],
       ["≫  ", 'Using "build" as the task as it was unspecified'],
       [
         "≫  ",
-        'Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"',
+        'Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"'
       ],
       [
         "≫  ",
-        'Analyzing results of `npx -y turbo@^2 run build --filter="test-app...[last-deployed-sha]" --dry=json`',
+        'Analyzing results of `npx -y turbo@^2 run build --filter="test-app...[last-deployed-sha]" --dry=json`'
       ],
       [
         "≫  ",
-        'This commit affects "test-app" and 2 dependencies (ui, tsconfig)',
+        'This commit affects "test-app" and 2 dependencies (ui, tsconfig)'
       ],
-      [expect.stringContaining("✓ Proceeding with deployment")],
+      [expect.stringContaining("✓ Proceeding with deployment")]
     ]);
 
     expectBuild(mockExit);
@@ -446,17 +478,17 @@ describe("turboIgnore()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
 
     const mockExecSync = jest
-      .spyOn(child_process, "execSync")
-      .mockImplementation((cmd: string) => {
-        if (cmd.includes("git cat-file")) {
+      .spyOn(child_process, "execFileSync")
+      .mockImplementation((file: string, args?: ReadonlyArray<string>) => {
+        if (file === "git" && args && args[0] === "cat-file") {
           throw new Error("fatal: Not a valid object name last-deployed-sha");
         }
         return "";
       });
 
     const mockExec = jest
-      .spyOn(child_process, "exec")
-      .mockImplementation((command, options, callback) => {
+      .spyOn(child_process, "execFile")
+      .mockImplementation((file, args, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -469,27 +501,27 @@ describe("turboIgnore()", () => {
     turboIgnore(undefined, {
       task: "workspace#build",
       fallback: "HEAD^2",
-      directory: "__fixtures__/app",
+      directory: "__fixtures__/app"
     });
     validateLogs(mockConsole.log, [
       [
         "≫  ",
-        "Using Turborepo to determine if this project is affected by the commit...\n",
+        "Using Turborepo to determine if this project is affected by the commit...\n"
       ],
       ["≫  ", 'Inferred "test-app" as workspace from "package.json"'],
       ["≫  ", 'Inferred turbo version ^2 based on "tasks" in "turbo.json"'],
       ["≫  ", 'Using "workspace#build" as the task from the arguments'],
       [
         "≫  ",
-        'Previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch" is unreachable.',
+        'Previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch" is unreachable.'
       ],
       ["≫  ", "Falling back to ref HEAD^2"],
       [
         "≫  ",
-        'Analyzing results of `npx -y turbo@^2 run "workspace#build" --filter="test-app...[HEAD^2]" --dry=json`',
+        'Analyzing results of `npx -y turbo@^2 run "workspace#build" --filter="test-app...[HEAD^2]" --dry=json`'
       ],
       ["≫  ", 'This commit affects "test-app"'],
-      [expect.stringContaining("✓ Proceeding with deployment")],
+      [expect.stringContaining("✓ Proceeding with deployment")]
     ]);
 
     expectBuild(mockExit);
@@ -499,8 +531,8 @@ describe("turboIgnore()", () => {
 
   it("throws error and allows build when json cannot be parsed", () => {
     const mockExec = jest
-      .spyOn(child_process, "exec")
-      .mockImplementation((command, options, callback) => {
+      .spyOn(child_process, "execFile")
+      .mockImplementation((file, args, options, callback) => {
         if (callback) {
           return callback(null, "stdout", "stderr") as unknown as ChildProcess;
         }
@@ -510,7 +542,15 @@ describe("turboIgnore()", () => {
     turboIgnore(undefined, { directory: "__fixtures__/app" });
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx -y turbo@^2 run build --filter="test-app...[HEAD^]" --dry=json`,
+      "npx",
+      [
+        "-y",
+        "turbo@^2",
+        "run",
+        "build",
+        "--filter=test-app...[HEAD^]",
+        "--dry=json"
+      ],
       expect.anything(),
       expect.anything()
     );
@@ -527,8 +567,8 @@ describe("turboIgnore()", () => {
 
   it("throws error and allows build when stdout is null", () => {
     const mockExec = jest
-      .spyOn(child_process, "exec")
-      .mockImplementation((command, options, callback) => {
+      .spyOn(child_process, "execFile")
+      .mockImplementation((file, args, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -542,7 +582,15 @@ describe("turboIgnore()", () => {
     turboIgnore(undefined, { directory: "__fixtures__/app" });
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx -y turbo@^2 run build --filter="test-app...[HEAD^]" --dry=json`,
+      "npx",
+      [
+        "-y",
+        "turbo@^2",
+        "run",
+        "build",
+        "--filter=test-app...[HEAD^]",
+        "--dry=json"
+      ],
       expect.anything(),
       expect.anything()
     );
@@ -566,13 +614,13 @@ describe("turboIgnore()", () => {
     validateLogs(mockConsole.log, [
       [
         "≫  ",
-        "Using Turborepo to determine if this project is affected by the commit...\n",
+        "Using Turborepo to determine if this project is affected by the commit...\n"
       ],
       ["≫  ", 'Inferred "test-app" as workspace from "package.json"'],
       ["≫  ", 'Inferred turbo version ^2 based on "tasks" in "turbo.json"'],
       ["≫  ", 'Using "build" as the task as it was unspecified'],
       ["≫  ", "Found commit message: [vercel skip]"],
-      [expect.stringContaining("⏭ Ignoring the change")],
+      [expect.stringContaining("⏭ Ignoring the change")]
     ]);
 
     expectIgnore(mockExit);
@@ -587,13 +635,13 @@ describe("turboIgnore()", () => {
     validateLogs(mockConsole.log, [
       [
         "≫  ",
-        "Using Turborepo to determine if this project is affected by the commit...\n",
+        "Using Turborepo to determine if this project is affected by the commit...\n"
       ],
       ["≫  ", 'Inferred "test-app" as workspace from "package.json"'],
       ["≫  ", 'Inferred turbo version ^2 based on "tasks" in "turbo.json"'],
       ["≫  ", 'Using "build" as the task as it was unspecified'],
       ["≫  ", "Found commit message: [vercel deploy]"],
-      [expect.stringContaining("✓ Proceeding with deployment")],
+      [expect.stringContaining("✓ Proceeding with deployment")]
     ]);
 
     expectBuild(mockExit);
@@ -606,12 +654,12 @@ describe("turboIgnore()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
 
     const mockExecSync = jest
-      .spyOn(child_process, "execSync")
+      .spyOn(child_process, "execFileSync")
       .mockReturnValue("commit");
 
     const mockExec = jest
-      .spyOn(child_process, "exec")
-      .mockImplementation((command, options, callback) => {
+      .spyOn(child_process, "execFile")
+      .mockImplementation((file, args, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -627,25 +675,25 @@ describe("turboIgnore()", () => {
     validateLogs(mockConsole.log, [
       [
         "≫  ",
-        "Using Turborepo to determine if this project is affected by the commit...\n",
+        "Using Turborepo to determine if this project is affected by the commit...\n"
       ],
       ["≫  ", 'Inferred "test-app" as workspace from "package.json"'],
       ["≫  ", 'Inferred turbo version ^2 based on "tasks" in "turbo.json"'],
       ["≫  ", 'Using "build" as the task as it was unspecified'],
       [
         "≫  ",
-        "Conflicting commit messages found: [vercel deploy] and [vercel skip]",
+        "Conflicting commit messages found: [vercel deploy] and [vercel skip]"
       ],
       [
         "≫  ",
-        `Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"`,
+        `Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"`
       ],
       [
         "≫  ",
-        'Analyzing results of `npx -y turbo@^2 run build --filter="test-app...[last-deployed-sha]" --dry=json`',
+        'Analyzing results of `npx -y turbo@^2 run build --filter="test-app...[last-deployed-sha]" --dry=json`'
       ],
       ["≫  ", "This project and its dependencies are not affected"],
-      [expect.stringContaining("Ignoring the change")],
+      [expect.stringContaining("Ignoring the change")]
     ]);
 
     expectIgnore(mockExit);
@@ -655,8 +703,8 @@ describe("turboIgnore()", () => {
 
   it("passes max buffer to turbo execution", () => {
     const mockExec = jest
-      .spyOn(child_process, "exec")
-      .mockImplementation((command, options, callback) => {
+      .spyOn(child_process, "execFile")
+      .mockImplementation((file, args, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -670,7 +718,15 @@ describe("turboIgnore()", () => {
     turboIgnore(undefined, { directory: "__fixtures__/app", maxBuffer: 1024 });
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx -y turbo@^2 run build --filter="test-app...[HEAD^]" --dry=json`,
+      "npx",
+      [
+        "-y",
+        "turbo@^2",
+        "run",
+        "build",
+        "--filter=test-app...[HEAD^]",
+        "--dry=json"
+      ],
       expect.objectContaining({ maxBuffer: 1024 }),
       expect.anything()
     );
@@ -680,8 +736,8 @@ describe("turboIgnore()", () => {
 
   it("runs with telemetry", () => {
     const mockExec = jest
-      .spyOn(child_process, "exec")
-      .mockImplementation((command, options, callback) => {
+      .spyOn(child_process, "execFile")
+      .mockImplementation((file, args, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -695,11 +751,19 @@ describe("turboIgnore()", () => {
     turboIgnore(undefined, {
       directory: "__fixtures__/app",
       maxBuffer: 1024,
-      telemetry,
+      telemetry
     });
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx -y turbo@^2 run build --filter="test-app...[HEAD^]" --dry=json`,
+      "npx",
+      [
+        "-y",
+        "turbo@^2",
+        "run",
+        "build",
+        "--filter=test-app...[HEAD^]",
+        "--dry=json"
+      ],
       expect.objectContaining({ maxBuffer: 1024 }),
       expect.anything()
     );
@@ -709,8 +773,8 @@ describe("turboIgnore()", () => {
 
   it("allows build if packages is missing", () => {
     const mockExec = jest
-      .spyOn(child_process, "exec")
-      .mockImplementation((command, options, callback) => {
+      .spyOn(child_process, "execFile")
+      .mockImplementation((file, args, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -722,7 +786,7 @@ describe("turboIgnore()", () => {
       });
 
     turboIgnore(undefined, {
-      directory: "__fixtures__/app",
+      directory: "__fixtures__/app"
     });
 
     expectBuild(mockExit);
@@ -731,8 +795,8 @@ describe("turboIgnore()", () => {
 
   it("defaults to latest turbo if no hints for version", () => {
     const mockExec = jest
-      .spyOn(child_process, "exec")
-      .mockImplementation((command, options, callback) => {
+      .spyOn(child_process, "execFile")
+      .mockImplementation((file, args, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -746,7 +810,15 @@ describe("turboIgnore()", () => {
     turboIgnore(undefined, { directory: "__fixtures__/invalid_turbo_json" });
 
     expect(mockExec).toHaveBeenCalledWith(
-      `npx -y turbo run build --filter="test-app...[HEAD^]" --dry=json`,
+      "npx",
+      [
+        "-y",
+        "turbo",
+        "run",
+        "build",
+        "--filter=test-app...[HEAD^]",
+        "--dry=json"
+      ],
       expect.anything(),
       expect.anything()
     );

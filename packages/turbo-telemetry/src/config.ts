@@ -14,7 +14,7 @@ const ConfigSchema = z.object({
   telemetry_enabled: z.boolean(),
   telemetry_id: z.string(),
   telemetry_salt: z.string(),
-  telemetry_alerted: z.string().optional(),
+  telemetry_alerted: z.string().optional()
 });
 
 type Config = z.infer<typeof ConfigSchema>;
@@ -67,7 +67,7 @@ export class TelemetryConfig {
   }
 
   static create({
-    configPath,
+    configPath
   }: {
     configPath: string;
   }): TelemetryConfig | undefined {
@@ -75,7 +75,7 @@ export class TelemetryConfig {
     const telemetrySalt = randomUUID();
     const telemetryId = utils.oneWayHashWithSalt({
       input: RawTelemetryId,
-      salt: telemetrySalt,
+      salt: telemetrySalt
     });
 
     const config = new TelemetryConfig({
@@ -83,8 +83,8 @@ export class TelemetryConfig {
       config: {
         telemetry_enabled: true,
         telemetry_id: telemetryId,
-        telemetry_salt: telemetrySalt,
-      },
+        telemetry_salt: telemetrySalt
+      }
     });
 
     const saved = config.tryWrite();
@@ -107,7 +107,7 @@ export class TelemetryConfig {
   static tryRemove({ configPath }: { configPath: string }): boolean {
     try {
       rmSync(configPath, {
-        force: true,
+        force: true
       });
       return true;
     } catch (e) {
@@ -167,7 +167,7 @@ export class TelemetryConfig {
       logger.grey(
         "You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:"
       );
-      logger.underline(picocolors.gray("https://turborepo.com/docs/telemetry"));
+      logger.underline(picocolors.gray("https://turborepo.dev/docs/telemetry"));
     }
 
     this.alertShown();
@@ -196,7 +196,7 @@ export class TelemetryConfig {
   oneWayHash(input: string): string {
     return utils.oneWayHashWithSalt({
       input,
-      salt: this.config.telemetry_salt,
+      salt: this.config.telemetry_salt
     });
   }
 

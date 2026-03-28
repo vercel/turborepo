@@ -3,8 +3,9 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "dependsOn": ["cli#rust-src"],
-      "env": ["NODE_VERSION"]
+      "dependsOn": ["@turbo/cli#rust-src"],
+      "env": ["NODE_VERSION", "CARGO_BUILD_JOBS", "RUSTFLAGS"],
+      "outputs": ["js/dist/**/*", "native/**/*"]
     },
     "test": {
       "dependsOn": ["build"]

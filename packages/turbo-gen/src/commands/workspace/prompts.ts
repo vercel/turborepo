@@ -1,6 +1,12 @@
 import path from "node:path";
 import fs from "fs-extra";
-import { prompt, Separator } from "inquirer";
+import {
+  input,
+  select,
+  checkbox,
+  confirm as inquirerConfirm,
+  Separator
+} from "@inquirer/prompts";
 import { minimatch } from "minimatch";
 import validName from "validate-npm-package-name";
 import type { Project, Workspace } from "@turbo/workspaces";
@@ -8,16 +14,16 @@ import {
   validateDirectory,
   logger,
   type DependencyGroups,
-  type PackageJson,
+  type PackageJson
 } from "@turbo/utils";
-import { getWorkspaceStructure } from "../../utils/getWorkspaceStructure";
+import { getWorkspaceStructure } from "../../utils/get-workspace-structure";
 import type { WorkspaceType } from "../../generators/types";
-import { getWorkspaceList } from "../../utils/getWorkspaceList";
+import { getWorkspaceList } from "../../utils/get-workspace-list";
 
 export async function name({
   override,
   suggestion,
-  workspaceType,
+  workspaceType
 }: {
   override?: string;
   suggestion?: string;
@@ -27,21 +33,20 @@ export async function name({
   if (override && validForNewPackages) {
     return { answer: override };
   }
-  return prompt<{ answer: string }>({
-    type: "input",
-    name: "answer",
-    default: suggestion,
-    validate: (input: string) => {
-      const { validForNewPackages: isValid } = validName(input);
-      return isValid || `Invalid ${workspaceType} name`;
-    },
+  const answer = await input({
     message: `What is the name of the ${workspaceType}?`,
+    default: suggestion,
+    validate: (val: string) => {
+      const { validForNewPackages: isValid } = validName(val);
+      return isValid || `Invalid ${workspaceType} name`;
+    }
   });
+  return { answer };
 }
 
 export async function type({
   override,
-  message,
+  message
 }: {
   override?: WorkspaceType;
   message?: string;
@@ -50,28 +55,27 @@ export async function type({
     return { answer: override };
   }
 
-  return prompt<{ answer: WorkspaceType }>({
-    type: "list",
-    name: "answer",
+  const answer = await select<WorkspaceType>({
     message: message ?? "What type of workspace should be added?",
     choices: [
       {
         name: "app",
-        value: "app",
+        value: "app" as const
       },
       {
         name: "package",
-        value: "package",
-      },
-    ],
+        value: "package" as const
+      }
+    ]
   });
+  return { answer };
 }
 
 export async function location({
   workspaceType,
   workspaceName,
   destination,
-  project,
+  project
 }: {
   workspaceType: WorkspaceType;
   workspaceName: string;
@@ -89,7 +93,7 @@ export async function location({
     if (valid) {
       return {
         absolute: root,
-        relative: path.relative(project.paths.root, root),
+        relative: path.relative(project.paths.root, root)
       };
     }
   }
@@ -107,20 +111,16 @@ export async function location({
     newWorkspaceLocation = `${project.paths.root}/packages/${nameAsPath}`;
   }
 
-  const { answer } = await prompt<{
-    answer: string;
-  }>({
-    type: "input",
-    name: "answer",
+  const answer = await input({
     message: `Where should "${workspaceName}" be added?`,
     default: newWorkspaceLocation
       ? path.relative(project.paths.root, newWorkspaceLocation)
       : undefined,
-    validate: (input: string) => {
-      const base = path.join(project.paths.root, input);
+    validate: (val: string) => {
+      const base = path.join(project.paths.root, val);
       const { valid, error } = validateDirectory(base);
       const isWorkspace = project.workspaceData.globs.some((glob) =>
-        minimatch(input, glob)
+        minimatch(val, glob)
       );
 
       if (valid && isWorkspace) {
@@ -128,23 +128,23 @@ export async function location({
       }
 
       if (!isWorkspace) {
-        return `${input} is not a valid workspace location`;
+        return `${val} is not a valid workspace location`;
       }
 
-      return error;
-    },
+      return error ?? "Invalid directory";
+    }
   });
 
   return {
     absolute: path.join(project.paths.root, answer),
-    relative: answer,
+    relative: answer
   };
 }
 
 export async function source({
   override,
   workspaces,
-  workspaceName,
+  workspaceName
 }: {
   override?: string;
   workspaces: Array<Workspace | Separator>;
@@ -164,33 +164,29 @@ export async function source({
     logger.log();
   }
 
-  const sourceAnswer = await prompt<{
-    answer: Workspace;
-  }>({
-    type: "list",
-    name: "answer",
+  const answer = await select<Workspace>({
+    message: `Which workspace should "${workspaceName}" start from?`,
     loop: false,
     pageSize: 25,
-    message: `Which workspace should "${workspaceName}" start from?`,
     choices: workspaces.map((choice) => {
       if (choice instanceof Separator) {
         return choice;
       }
       return {
         name: `  ${choice.name}`,
-        value: choice,
+        value: choice
       };
-    }),
+    })
   });
 
-  return sourceAnswer;
+  return { answer };
 }
 
 export async function dependencies({
   workspaceName,
   project,
   workspaceSource,
-  showAllDependencies,
+  showAllDependencies
 }: {
   workspaceName: string;
   project: Project;
@@ -201,35 +197,31 @@ export async function dependencies({
     dependencies: {},
     devDependencies: {},
     peerDependencies: {},
-    optionalDependencies: {},
+    optionalDependencies: {}
   };
   const { answer: addDependencies } = await confirm({
-    message: `Add workspace dependencies to "${workspaceName}"?`,
+    message: `Add workspace dependencies to "${workspaceName}"?`
   });
   if (!addDependencies) {
     return selectedDependencies;
   }
 
-  const { answer: dependencyGroups } = await prompt<{
-    answer: Array<keyof DependencyGroups>;
-  }>({
-    type: "checkbox",
-    name: "answer",
+  const dependencyGroups = await checkbox<keyof DependencyGroups>({
     message: `Select all dependencies types to modify for "${workspaceName}"`,
     loop: false,
     choices: [
-      { name: "dependencies", value: "dependencies" },
-      { name: "devDependencies", value: "devDependencies" },
-      { name: "peerDependencies", value: "peerDependencies" },
-      { name: "optionalDependencies", value: "optionalDependencies" },
-    ],
+      { name: "dependencies", value: "dependencies" as const },
+      { name: "devDependencies", value: "devDependencies" as const },
+      { name: "peerDependencies", value: "peerDependencies" as const },
+      { name: "optionalDependencies", value: "optionalDependencies" as const }
+    ]
   });
 
   // supported workspace dependencies (apps can never be dependencies)
   const depChoices = getWorkspaceList({
     project,
     type: "package",
-    showAllDependencies,
+    showAllDependencies
   });
 
   const sourcePackageJson = workspaceSource
@@ -238,14 +230,9 @@ export async function dependencies({
 
   for (const group of dependencyGroups) {
     // eslint-disable-next-line no-await-in-loop -- we want to ask this question group by group
-    const { answer: selected } = await prompt<{
-      answer: Array<string>;
-    }>({
-      type: "checkbox",
-      name: "answer",
-      default: sourcePackageJson && Object.keys(sourcePackageJson[group] || {}),
-      pageSize: 15,
+    const selected = await checkbox<string>({
       message: `Which packages should be added as ${group} to "${workspaceName}?`,
+      pageSize: 15,
       loop: false,
       choices: depChoices.map((choice) => {
         if (choice instanceof Separator) {
@@ -253,28 +240,28 @@ export async function dependencies({
         }
         return {
           name: `  ${choice.name}`,
-          value: choice.name,
+          value: choice.name
         };
-      }),
+      })
     });
 
     const newDependencyGroup = sourcePackageJson?.[group] || {};
     if (Object.keys(newDependencyGroup).length) {
       const existingDependencyKeys = new Set(Object.keys(newDependencyGroup));
 
-      selected.forEach((dep) => {
+      for (const dep of selected) {
         if (!existingDependencyKeys.has(dep)) {
           newDependencyGroup[dep] =
             project.packageManager === "pnpm" ? "workspace:*" : "*";
         }
-      });
+      }
 
       selectedDependencies[group] = newDependencyGroup;
     } else {
       selectedDependencies[group] = selected.reduce(
         (acc, dep) => ({
           ...acc,
-          [dep]: project.packageManager === "pnpm" ? "workspace:*" : "*",
+          [dep]: project.packageManager === "pnpm" ? "workspace:*" : "*"
         }),
         {}
       );
@@ -285,9 +272,8 @@ export async function dependencies({
 }
 
 export async function confirm({ message }: { message: string }) {
-  return prompt<{ answer: boolean }>({
-    type: "confirm",
-    name: "answer",
-    message,
+  const answer = await inquirerConfirm({
+    message
   });
+  return { answer };
 }

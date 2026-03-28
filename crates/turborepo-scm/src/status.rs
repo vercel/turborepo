@@ -1,6 +1,3 @@
-// This module does not require git2, but is only used by modules that require
-// git2
-#![cfg(feature = "git2")]
 use std::{
     io::{BufRead, BufReader, Read},
     process::{Command, Stdio},
@@ -10,6 +7,11 @@ use nom::Finish;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
 use crate::{Error, GitHashes, GitRepo, wait_for_success};
+
+pub(crate) struct RepoStatusEntry {
+    pub path: RelativeUnixPathBuf,
+    pub is_delete: bool,
+}
 
 impl GitRepo {
     #[tracing::instrument(skip(self, root_path, hashes))]
@@ -54,11 +56,13 @@ fn read_status<R: Read>(
     hashes: &mut GitHashes,
 ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
     let mut to_hash = Vec::new();
-    let mut reader = BufReader::new(reader);
+    let mut reader = BufReader::with_capacity(64 * 1024, reader);
     let mut buffer = Vec::new();
     while reader.read_until(b'\0', &mut buffer)? != 0 {
         let entry = parse_status(&buffer)?;
-        let path = RelativeUnixPathBuf::new(String::from_utf8(entry.filename.to_owned())?)?;
+        let filename = std::str::from_utf8(entry.filename)
+            .map_err(|e| Error::git_error(format!("invalid utf8 in git status: {e}")))?;
+        let path = RelativeUnixPathBuf::new(filename)?;
         if entry.is_delete {
             let path = path.strip_prefix(pkg_prefix).map_err(|_| {
                 Error::git_error(format!(
@@ -73,6 +77,25 @@ fn read_status<R: Read>(
         buffer.clear();
     }
     Ok(to_hash)
+}
+
+#[allow(dead_code)]
+fn read_status_raw<R: Read>(reader: R) -> Result<Vec<RepoStatusEntry>, Error> {
+    let mut entries = Vec::new();
+    let mut reader = BufReader::with_capacity(64 * 1024, reader);
+    let mut buffer = Vec::new();
+    while reader.read_until(b'\0', &mut buffer)? != 0 {
+        let entry = parse_status(&buffer)?;
+        let filename = std::str::from_utf8(entry.filename)
+            .map_err(|e| Error::git_error(format!("invalid utf8 in git status: {e}")))?;
+        let path = RelativeUnixPathBuf::new(filename)?;
+        entries.push(RepoStatusEntry {
+            path,
+            is_delete: entry.is_delete,
+        });
+        buffer.clear();
+    }
+    Ok(entries)
 }
 
 struct StatusEntry<'a> {
@@ -113,7 +136,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
     use super::read_status;
-    use crate::GitHashes;
+    use crate::{GitHashes, OidHash};
 
     #[test]
     fn test_status() {
@@ -149,10 +172,12 @@ mod tests {
     }
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
-        HashMap::from_iter(
-            pairs
-                .iter()
-                .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
-        )
+        HashMap::from_iter(pairs.iter().map(|(path, hash)| {
+            let padded = format!("{:0<40}", hash);
+            (
+                RelativeUnixPathBuf::new(*path).unwrap(),
+                OidHash::from_hex_str(&padded),
+            )
+        }))
     }
 }

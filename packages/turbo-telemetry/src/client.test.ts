@@ -17,30 +17,30 @@ describe("TelemetryClient", () => {
       config: {
         telemetry_enabled: true,
         telemetry_id: "telemetry-test-id",
-        telemetry_salt: "telemetry-salt",
-      },
+        telemetry_salt: "telemetry-salt"
+      }
     });
 
     const client = new TelemetryClient({
       api: "https://example.com",
       packageInfo: {
         name: "create-turbo",
-        version: "1.0.0",
+        version: "1.0.0"
       },
       config,
       opts: {
-        batchSize: 2,
-      },
+        batchSize: 2
+      }
     });
 
     // add two events to trigger the batch flush
     client.trackCommandStatus({
       command: "test-command",
-      status: "start",
+      status: "start"
     });
     client.trackCommandStatus({
       command: "test-command",
-      status: "end",
+      status: "end"
     });
 
     assert.equal(mockPost.mock.callCount() > 0, true);
@@ -129,22 +129,22 @@ describe("TelemetryClient", () => {
       config: {
         telemetry_enabled: true,
         telemetry_id: "telemetry-test-id",
-        telemetry_salt: "telemetry-salt",
-      },
+        telemetry_salt: "telemetry-salt"
+      }
     });
 
     const client = new TelemetryClient({
       api: "https://example.com",
       packageInfo: {
         name: "create-turbo",
-        version: "1.0.0",
+        version: "1.0.0"
       },
-      config,
+      config
     });
 
     client.trackCommandStatus({
       command: "test-command",
-      status: "start",
+      status: "start"
     });
     assert.equal(mockPost.mock.callCount(), 0);
     assert.equal(client.hasPendingEvents(), true);
@@ -158,22 +158,22 @@ describe("TelemetryClient", () => {
       config: {
         telemetry_enabled: false,
         telemetry_id: "telemetry-test-id",
-        telemetry_salt: "telemetry-salt",
-      },
+        telemetry_salt: "telemetry-salt"
+      }
     });
 
     const client = new TelemetryClient({
       api: "https://example.com",
       packageInfo: {
         name: "create-turbo",
-        version: "1.0.0",
+        version: "1.0.0"
       },
-      config,
+      config
     });
 
     client.trackCommandStatus({
       command: "test-command",
-      status: "start",
+      status: "start"
     });
     assert.equal(mockPost.mock.callCount(), 0);
     assert.equal(client.hasPendingEvents(), false);
@@ -190,26 +190,26 @@ describe("TelemetryClient", () => {
       config: {
         telemetry_enabled: true,
         telemetry_id: "telemetry-test-id",
-        telemetry_salt: "telemetry-salt",
-      },
+        telemetry_salt: "telemetry-salt"
+      }
     });
 
     const client = new TelemetryClient({
       api: "https://example.com",
       packageInfo: {
         name: "create-turbo",
-        version: "1.0.0",
+        version: "1.0.0"
       },
       config,
       opts: {
-        batchSize: 2,
-      },
+        batchSize: 2
+      }
     });
 
     // add one event
     client.trackCommandStatus({
       command: "test-command",
-      status: "start",
+      status: "start"
     });
 
     assert.equal(mockPost.mock.callCount(), 0);

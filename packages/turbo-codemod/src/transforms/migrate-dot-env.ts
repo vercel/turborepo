@@ -3,13 +3,13 @@ import fs from "fs-extra";
 import {
   type PackageJson,
   getTurboConfigs,
-  forEachTaskDef,
+  forEachTaskDef
 } from "@turbo/utils";
 import type { SchemaV1 } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { TransformerResults } from "../runner";
-import { loadTurboJson } from "../utils/loadTurboJson";
+import { loadTurboJson } from "../utils/load-turbo-json";
 
 // transformer details
 const TRANSFORMER = "migrate-dot-env";
@@ -44,12 +44,12 @@ function migrateConfig(configV1: SchemaV1) {
 
 export function transformer({
   root,
-  options,
+  options
 }: TransformerArgs): TransformerResults {
   const { log, runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
-    options,
+    options
   });
 
   // If `turbo` key is detected in package.json, require user to run the other codemod first.
@@ -66,7 +66,7 @@ export function transformer({
   if ("turbo" in packageJSON) {
     return runner.abortTransform({
       reason:
-        '"turbo" key detected in package.json. Run `npx @turbo/codemod transform create-turbo-config` first',
+        '"turbo" key detected in package.json. Run `npx @turbo/codemod transform create-turbo-config` first'
     });
   }
 
@@ -74,25 +74,27 @@ export function transformer({
   const turboConfigPath = path.join(root, "turbo.json");
   if (!fs.existsSync(turboConfigPath)) {
     return runner.abortTransform({
-      reason: `No turbo.json found at ${root}. Is the path correct?`,
+      reason: `No turbo.json found at ${root}. Is the path correct?`
     });
   }
 
   const turboJson = loadTurboJson<SchemaV1>(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
-    after: migrateConfig(turboJson),
+    after: migrateConfig(turboJson)
   });
 
   // find and migrate any workspace configs
   const workspaceConfigs = getTurboConfigs(root);
-  workspaceConfigs.forEach((workspaceConfig) => {
+  for (const workspaceConfig of workspaceConfigs) {
     const { config, turboConfigPath: filePath } = workspaceConfig;
-    runner.modifyFile({
-      filePath,
-      after: migrateConfig(config),
-    });
-  });
+    if ("pipeline" in config || "tasks" in config) {
+      runner.modifyFile({
+        filePath,
+        after: migrateConfig(config)
+      });
+    }
+  }
 
   return runner.finish();
 }
@@ -101,7 +103,7 @@ const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
-  transformer,
+  transformer
 };
 
 // eslint-disable-next-line import/no-default-export -- transforms require default export

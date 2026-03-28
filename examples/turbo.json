@@ -7,6 +7,9 @@
     // We override inputs to avoid a costly globwalk
     "lint:prettier": {
       "inputs": []
+    },
+    "check-examples": {
+      "passThroughEnv": ["VERCEL_TOKEN"]
     }
   }
 }

@@ -13,10 +13,11 @@ use axum::{
     routing::{get, head, options, post, put},
 };
 use futures_util::StreamExt;
+use serde::Serialize;
 use tokio::{net::TcpListener, sync::Mutex};
 use turborepo_vercel_api::{
     AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse,
-    User, UserResponse, VerificationResponse, telemetry::TelemetryEvent,
+    User, UserResponse, telemetry::TelemetryEvent,
 };
 
 pub const EXPECTED_TOKEN: &str = "expected_token";
@@ -33,6 +34,9 @@ pub const EXPECTED_TEAM_CREATED_AT: u64 = 0;
 pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
 pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
 
+/// Per-artifact SCM metadata: (sha, dirty_hash).
+type ArtifactScmMetadata = HashMap<String, (Option<String>, Option<String>)>;
+
 pub async fn start_test_server(
     port: u16,
     ready_tx: Option<tokio::sync::oneshot::Sender<()>>,
@@ -40,6 +44,10 @@ pub async fn start_test_server(
     let get_durations_ref = Arc::new(Mutex::new(HashMap::new()));
     let head_durations_ref = get_durations_ref.clone();
     let put_durations_ref = get_durations_ref.clone();
+
+    let get_metadata_ref: Arc<Mutex<ArtifactScmMetadata>> = Arc::new(Mutex::new(HashMap::new()));
+    let head_metadata_ref = get_metadata_ref.clone();
+    let put_metadata_ref = get_metadata_ref.clone();
     let put_tempdir_ref = Arc::new(tempfile::tempdir()?);
     let get_tempdir_ref = put_tempdir_ref.clone();
 
@@ -89,14 +97,20 @@ pub async fn start_test_server(
         .route(
             "/registration/verify",
             get(|| async move {
-                Json(VerificationResponse {
+                #[derive(Serialize)]
+                #[serde(rename_all = "camelCase")]
+                struct MockVerificationResponse {
+                    token: String,
+                    team_id: Option<String>,
+                }
+                Json(MockVerificationResponse {
                     token: EXPECTED_TOKEN.to_string(),
                     team_id: Some(EXPECTED_SSO_TEAM_ID.to_string()),
                 })
             }),
         )
         .route(
-            "/v8/artifacts/:hash",
+            "/v8/artifacts/{hash}",
             put(
                 |Path(hash): Path<String>, headers: HeaderMap, body: Body| async move {
                     let root_path = put_tempdir_ref.path();
@@ -121,6 +135,19 @@ pub async fn start_test_server(
                     let mut durations_map = put_durations_ref.lock().await;
                     durations_map.insert(hash.clone(), duration);
 
+                    let sha = headers
+                        .get("x-artifact-sha")
+                        .and_then(|v| v.to_str().ok())
+                        .map(|s| s.to_string());
+                    let dirty_hash = headers
+                        .get("x-artifact-dirty-hash")
+                        .and_then(|v| v.to_str().ok())
+                        .map(|s| s.to_string());
+                    put_metadata_ref
+                        .lock()
+                        .await
+                        .insert(hash.clone(), (sha, dirty_hash));
+
                     let mut body_stream = body.into_data_stream();
                     while let Some(item) = body_stream.next().await {
                         let chunk = item.unwrap();
@@ -132,7 +159,7 @@ pub async fn start_test_server(
             ),
         )
         .route(
-            "/v8/artifacts/:hash",
+            "/v8/artifacts/{hash}",
             get(|Path(hash): Path<String>| async move {
                 let root_path = get_tempdir_ref.path();
                 let file_path = root_path.join(&hash);
@@ -152,11 +179,23 @@ pub async fn start_test_server(
                     HeaderValue::from_str(&duration.to_string()).unwrap(),
                 );
 
+                if let Some((sha, dirty_hash)) = get_metadata_ref.lock().await.get(&hash).cloned() {
+                    if let Some(sha) = sha {
+                        headers.insert("x-artifact-sha", HeaderValue::from_str(&sha).unwrap());
+                    }
+                    if let Some(dirty_hash) = dirty_hash {
+                        headers.insert(
+                            "x-artifact-dirty-hash",
+                            HeaderValue::from_str(&dirty_hash).unwrap(),
+                        );
+                    }
+                }
+
                 (StatusCode::FOUND, headers, buffer)
             }),
         )
         .route(
-            "/v8/artifacts/:hash",
+            "/v8/artifacts/{hash}",
             head(|Path(hash): Path<String>| async move {
                 let mut headers = HeaderMap::new();
 
@@ -168,6 +207,19 @@ pub async fn start_test_server(
                     "x-artifact-duration",
                     HeaderValue::from_str(&duration.to_string()).unwrap(),
                 );
+
+                if let Some((sha, dirty_hash)) = head_metadata_ref.lock().await.get(&hash).cloned()
+                {
+                    if let Some(sha) = sha {
+                        headers.insert("x-artifact-sha", HeaderValue::from_str(&sha).unwrap());
+                    }
+                    if let Some(dirty_hash) = dirty_hash {
+                        headers.insert(
+                            "x-artifact-dirty-hash",
+                            HeaderValue::from_str(&dirty_hash).unwrap(),
+                        );
+                    }
+                }
 
                 (StatusCode::OK, headers)
             }),

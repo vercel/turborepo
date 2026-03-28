@@ -1,0 +1,28 @@
+name: "Setup Protoc"
+description: "Sets up Protocol Buffer compiler with retry logic"
+inputs:
+  github-token:
+    description: "GitHub token. You can pass secrets.GITHUB_TOKEN"
+    required: true
+  version:
+    description: "Protoc version to install"
+    required: false
+    default: "26.x"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set Up Protoc
+      id: set-up-protoc
+      continue-on-error: true
+      uses: arduino/setup-protoc@v3
+      with:
+        version: ${{ inputs.version }}
+        repo-token: ${{ inputs.github-token }}
+
+    - name: Set Up Protoc (second try)
+      if: steps.set-up-protoc.outcome == 'failure'
+      uses: arduino/setup-protoc@v3
+      with:
+        version: ${{ inputs.version }}
+        repo-token: ${{ inputs.github-token }}

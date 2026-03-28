@@ -78,9 +78,20 @@ pub fn cycles_and_cut_candidates<N: Clone + Hash + Eq, E: Clone>(
 /// in a cycle no longer being present.
 /// Minimal here means that if the cycle can be broken by only removing n edges,
 /// then only sets containing n edges will be returned.
+///
+/// For large SCCs the powerset enumeration is O(2^E) which becomes infeasible.
+/// When the edge count exceeds `MAX_EDGES_FOR_CUT_ANALYSIS` we skip the
+/// cut-candidate computation and return an empty `cuts` vec so callers still
+/// get the cycle members without hanging.
+const MAX_EDGES_FOR_CUT_ANALYSIS: usize = 15;
+
 fn edges_to_break_cycle<N: Clone + Hash + Eq, E: Clone>(
     graph: &Graph<N, E>,
 ) -> Vec<HashSet<(N, N)>> {
+    if graph.edge_count() > MAX_EDGES_FOR_CUT_ANALYSIS {
+        return Vec::new();
+    }
+
     let edge_sets = graph.edge_indices().powerset();
     let mut breaking_edge_sets = Vec::new();
 
@@ -123,12 +134,21 @@ pub fn validate_graph<N: Display + Clone + Hash + Eq>(graph: &Graph<N, ()>) -> R
         .into_iter()
         .map(|Cycle { nodes, cuts }| {
             let workspaces = nodes.into_iter().map(|id| graph.node_weight(id).unwrap());
-            let cuts = cuts.into_iter().map(format_cut).format("\n\t");
-            format!(
-                "\t{}\n\nThe cycle can be broken by removing any of these sets of \
-                 dependencies:\n\t{cuts}",
-                workspaces.format(", ")
-            )
+            if cuts.is_empty() {
+                format!(
+                    "\t{}\n\nCheck the `dependsOn` configuration for these tasks in turbo.json. \
+                     Cycles can be caused by topological (^) dependencies flowing through a \
+                     package dependency cycle, or by explicit task references that form a loop.",
+                    workspaces.format(", ")
+                )
+            } else {
+                let cuts = cuts.into_iter().map(format_cut).format("\n\t");
+                format!(
+                    "\t{}\n\nThe cycle can be broken by removing any of these sets of \
+                     dependencies:\n\t{cuts}",
+                    workspaces.format(", ")
+                )
+            }
         })
         .join("\n");
 
@@ -155,7 +175,7 @@ fn format_cut<N: Display>(edges: impl IntoIterator<Item = (N, N)>) -> String {
         .sorted()
         .format(", ");
 
-    format!("{{ {edges} }}")
+    edges.to_string()
 }
 
 struct CycleDetector {
@@ -249,7 +269,7 @@ mod test {
         	d, c, b, a
 
         The cycle can be broken by removing any of these sets of dependencies:
-        	{ b -> c }
+        	b -> c
         "###);
     }
 

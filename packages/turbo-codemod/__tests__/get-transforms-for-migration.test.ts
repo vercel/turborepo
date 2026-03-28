@@ -1,11 +1,11 @@
 import { describe, it, expect } from "@jest/globals";
-import { getTransformsForMigration } from "../src/commands/migrate/steps/getTransformsForMigration";
+import { getTransformsForMigration } from "../src/commands/migrate/steps/get-transforms-for-migration";
 
 describe("get-transforms-for-migration", () => {
   it("ordering", () => {
     const results = getTransformsForMigration({
       fromVersion: "1.0.0",
-      toVersion: "1.10.0",
+      toVersion: "1.10.0"
     });
 
     expect(results.map((transform) => transform.name)).toEqual([
@@ -14,7 +14,7 @@ describe("get-transforms-for-migration", () => {
       "migrate-env-var-dependencies",
       "set-default-outputs",
       "stabilize-env-mode",
-      "transform-env-literals-to-wildcards",
+      "transform-env-literals-to-wildcards"
     ]);
   });
 });

@@ -1,9 +1,9 @@
 import path from "node:path";
-import inquirer from "inquirer";
+import { input } from "@inquirer/prompts";
 import picocolors from "picocolors";
 import { Logger } from "../../logger";
 import { directoryInfo } from "../../utils";
-import { getWorkspaceDetails } from "../../getWorkspaceDetails";
+import { getWorkspaceDetails } from "../../get-workspace-details";
 import type { Workspace } from "../../types";
 import type { SummaryCommandArgument } from "./types";
 
@@ -11,27 +11,25 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
   const logger = new Logger();
   logger.hero();
 
-  const answer = await inquirer.prompt<{
-    directoryInput?: string;
-  }>({
-    type: "input",
-    name: "directoryInput",
-    message: "Where is the root of the repo?",
-    when: !directory,
-    default: ".",
-    validate: (d: string) => {
-      const { exists, absolute } = directoryInfo({ directory: d });
-      if (exists) {
-        return true;
-      }
-      return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
-    },
-    filter: (d: string) => d.trim(),
-  });
+  let selectedDirectory = directory;
+  if (!selectedDirectory) {
+    selectedDirectory = await input({
+      message: "Where is the root of the repo?",
+      default: ".",
+      validate: (d: string) => {
+        const { exists, absolute } = directoryInfo({ directory: d });
+        if (exists) {
+          return true;
+        }
+        return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
+      },
+      transformer: (d: string) => d.trim()
+    });
+    selectedDirectory = selectedDirectory.trim();
+  }
 
-  const { directoryInput: selectedDirectory = directory } = answer;
   const { exists, absolute: root } = directoryInfo({
-    directory: selectedDirectory,
+    directory: selectedDirectory
   });
   if (!exists) {
     logger.error(`Directory ${picocolors.dim(`(${root})`)} does not exist`);
@@ -44,14 +42,14 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
   const hasWorkspaces = numWorkspaces > 0;
   // group workspaces
   const workspacesByDirectory: Record<string, Array<Workspace>> = {};
-  project.workspaceData.workspaces.forEach((workspace) => {
+  for (const workspace of project.workspaceData.workspaces) {
     const workspacePath = path.relative(root, workspace.paths.root);
     const rootDirectory = workspacePath.split(path.sep)[0];
     if (!(rootDirectory in workspacesByDirectory)) {
       workspacesByDirectory[rootDirectory] = [];
     }
     workspacesByDirectory[rootDirectory].push(workspace);
-  });
+  }
 
   const renderWorkspace = (w: Workspace) => {
     return `${w.name} (${picocolors.italic(
@@ -62,16 +60,16 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
   const renderDirectory = ({
     number,
     dir,
-    workspaces,
+    workspaces
   }: {
     number: number;
     dir: string;
     workspaces: Array<Workspace>;
   }) => {
     logger.indented(2, `${number}. ${picocolors.bold(dir)}`);
-    workspaces.forEach((workspace, idx) => {
+    for (const [idx, workspace] of workspaces.entries()) {
       logger.indented(3, `${idx + 1}. ${renderWorkspace(workspace)}`);
-    });
+    }
   };
 
   // repo header
@@ -90,13 +88,13 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
       1,
       `Workspaces (${picocolors.bold(numWorkspaces.toString())}):`
     );
-    Object.keys(workspacesByDirectory).forEach((dir, idx) => {
+    for (const [idx, dir] of Object.keys(workspacesByDirectory).entries()) {
       renderDirectory({
         number: idx + 1,
         workspaces: workspacesByDirectory[dir],
-        dir,
+        dir
       });
-    });
+    }
     logger.blankLine();
   }
 }

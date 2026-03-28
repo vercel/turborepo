@@ -15,9 +15,9 @@ use turborepo_api_client::{
 };
 
 use crate::{
-    CacheError, CacheHitMetadata, CacheOpts, CacheSource,
+    CacheError, CacheHitMetadata, CacheOpts, CacheSource, LazyScmState,
     cache_archive::{CacheReader, CacheWriter},
-    signature_authentication::ArtifactSignatureAuthenticator,
+    signature_authentication::{ArtifactSignatureAuthenticator, SignatureError},
     upload_progress::{UploadProgress, UploadProgressQuery},
 };
 
@@ -30,6 +30,7 @@ pub struct HTTPCache {
     api_auth: Arc<Mutex<APIAuth>>,
     analytics_recorder: Option<AnalyticsSender>,
     uploads: Arc<Mutex<UploadMap>>,
+    scm_state: LazyScmState,
 }
 
 impl HTTPCache {
@@ -40,13 +41,15 @@ impl HTTPCache {
         repo_root: AbsoluteSystemPathBuf,
         api_auth: APIAuth,
         analytics_recorder: Option<AnalyticsSender>,
-    ) -> HTTPCache {
-        let signer_verifier = if opts
-            .remote_cache_opts
-            .as_ref()
-            .is_some_and(|remote_cache_opts| remote_cache_opts.signature)
-        {
-            Some(ArtifactSignatureAuthenticator {
+        scm_state: LazyScmState,
+    ) -> Result<HTTPCache, CacheError> {
+        let remote_cache_opts = opts.remote_cache_opts.as_ref();
+        let wants_signature = remote_cache_opts.is_some_and(|o| o.signature);
+        let enforce_key_length =
+            remote_cache_opts.is_some_and(|o| o.enforce_signature_key_length());
+
+        let signer_verifier = if wants_signature {
+            let authenticator = ArtifactSignatureAuthenticator {
                 team_id: api_auth
                     .team_id
                     .as_deref()
@@ -54,19 +57,36 @@ impl HTTPCache {
                     .as_bytes()
                     .to_vec(),
                 secret_key_override: None,
-            })
+            };
+
+            if let Err(e) = authenticator.validate_key_length() {
+                if enforce_key_length {
+                    return Err(e.into());
+                }
+
+                if matches!(e, SignatureError::SignatureKeyTooShort { .. }) {
+                    warn!(
+                        "{e} This will become a fatal error in the next major version of \
+                         Turborepo. Enable `futureFlags.longerSignatureKey` in turbo.json to \
+                         enforce this now."
+                    );
+                }
+            }
+
+            Some(authenticator)
         } else {
             None
         };
 
-        HTTPCache {
+        Ok(HTTPCache {
             client,
             signer_verifier,
             repo_root,
             uploads: Arc::new(Mutex::new(HashMap::new())),
             api_auth: Arc::new(Mutex::new(api_auth)),
             analytics_recorder,
-        }
+            scm_state,
+        })
     }
 
     /// Attempts to refresh the auth token when a cache operation encounters a
@@ -146,18 +166,26 @@ impl HTTPCache {
             .map(|signer| signer.generate_tag(hash.as_bytes(), &artifact_body))
             .transpose()?;
 
+        let resolved_scm = self.scm_state.get_resolved().await;
+        let sha = resolved_scm.and_then(|s| s.sha.clone());
+        let dirty_hash = resolved_scm.and_then(|s| s.dirty_hash.clone());
+
         tracing::debug!("uploading {}", hash);
 
         // Use the helper method to handle token refresh on 403 errors
         let artifact_body_clone = artifact_body.clone(); // Store the artifact body for retry
         let tag_clone = tag.clone();
         let uploads_clone = self.uploads.clone();
+        let sha_clone = sha.clone();
+        let dirty_hash_clone = dirty_hash.clone();
 
         self.execute_with_token_refresh(hash, |api_auth| {
             let client = &self.client;
             let tag_ref = tag_clone.as_deref();
             let artifact_body_ref = artifact_body_clone.clone();
             let uploads_ref = uploads_clone.clone();
+            let sha_ref = sha_clone.clone();
+            let dirty_hash_ref = dirty_hash_clone.clone();
 
             async move {
                 // Create the stream inside the closure so it can be used for retry
@@ -187,6 +215,8 @@ impl HTTPCache {
                         &api_auth.token,
                         api_auth.team_id.as_deref(),
                         api_auth.team_slug.as_deref(),
+                        sha_ref.as_deref(),
+                        dirty_hash_ref.as_deref(),
                     )
                     .await
             }
@@ -235,11 +265,23 @@ impl HTTPCache {
         };
 
         let duration = Self::get_duration_from_response(&response)?;
+        let sha = Self::get_header_string(&response, "x-artifact-sha");
+        let dirty_hash = Self::get_header_string(&response, "x-artifact-dirty-hash");
 
         Ok(Some(CacheHitMetadata {
             source: CacheSource::Remote,
             time_saved: duration,
+            sha,
+            dirty_hash,
         }))
+    }
+
+    fn get_header_string(response: &Response, name: &str) -> Option<String> {
+        response
+            .headers()
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string())
     }
 
     fn get_duration_from_response(response: &Response) -> Result<u64, CacheError> {
@@ -298,6 +340,8 @@ impl HTTPCache {
         };
 
         let duration = Self::get_duration_from_response(&response)?;
+        let sha = Self::get_header_string(&response, "x-artifact-sha");
+        let dirty_hash = Self::get_header_string(&response, "x-artifact-dirty-hash");
 
         let body = if let Some(signer_verifier) = &self.signer_verifier {
             let expected_tag = response
@@ -339,6 +383,8 @@ impl HTTPCache {
             CacheHitMetadata {
                 source: CacheSource::Remote,
                 time_saved: duration,
+                sha,
+                dirty_hash,
             },
             files,
         )))
@@ -354,7 +400,8 @@ impl HTTPCache {
         body: &[u8],
     ) -> Result<Vec<AnchoredSystemPathBuf>, CacheError> {
         let mut cache_reader = CacheReader::from_reader(body, true)?;
-        cache_reader.restore(root)
+        let (files, _manifest) = cache_reader.restore(root, None)?;
+        Ok(files)
     }
 
     fn convert_api_error(hash: &str, err: turborepo_api_client::Error) -> CacheError {
@@ -383,11 +430,11 @@ mod test {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_analytics::start_analytics;
-    use turborepo_api_client::{APIClient, analytics};
+    use turborepo_api_client::{APIClient, SecretString, analytics};
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
-        CacheOpts, CacheSource,
+        CacheOpts, CacheSource, LazyScmState,
         http::{APIAuth, HTTPCache},
         test_cases::{TestCase, get_test_cases, validate_analytics},
     };
@@ -441,7 +488,7 @@ mod test {
         };
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: "my-token".to_string(),
+            token: SecretString::new("my-token".to_string()),
             team_slug: None,
         };
         let (analytics_recorder, analytics_handle) =
@@ -453,7 +500,9 @@ mod test {
             repo_root_path.to_owned(),
             api_auth,
             Some(analytics_recorder),
-        );
+            LazyScmState::resolved(None),
+        )
+        .unwrap();
 
         // Should be a cache miss at first
         let miss = cache.fetch(hash).await?;
@@ -485,6 +534,151 @@ mod test {
 
         analytics_handle.close_with_timeout().await;
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_http_cache_scm_metadata_round_trip() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start within timeout"))??;
+
+        let test_case = &get_test_cases()[0];
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
+        test_case.initialize(&repo_root_path)?;
+
+        let hash = format!("{}-scm", test_case.hash);
+
+        let api_client = APIClient::new(
+            format!("http://localhost:{port}"),
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: None,
+        };
+        let api_auth = APIAuth {
+            team_id: Some("my-team".to_string()),
+            token: SecretString::new("my-token".to_string()),
+            team_slug: None,
+        };
+
+        let scm_state = LazyScmState::resolved(Some(crate::CacheScmState {
+            sha: Some("abc123def456".to_string()),
+            dirty_hash: Some("dirty789".to_string()),
+        }));
+
+        let cache = HTTPCache::new(
+            api_client,
+            &opts,
+            repo_root_path.to_owned(),
+            api_auth,
+            None,
+            scm_state,
+        )
+        .unwrap();
+
+        let anchored_files: Vec<_> = test_case
+            .files
+            .iter()
+            .map(|f| f.path().to_owned())
+            .collect();
+        cache
+            .put(&repo_root_path, &hash, &anchored_files, test_case.duration)
+            .await?;
+
+        // Verify exists returns scm metadata
+        let exists_response = cache.exists(&hash).await?.unwrap();
+        assert_eq!(exists_response.source, CacheSource::Remote);
+        assert_eq!(exists_response.sha.as_deref(), Some("abc123def456"));
+        assert_eq!(exists_response.dirty_hash.as_deref(), Some("dirty789"));
+
+        // Verify fetch returns scm metadata
+        let (fetch_response, _files) = cache.fetch(&hash).await?.unwrap();
+        assert_eq!(fetch_response.source, CacheSource::Remote);
+        assert_eq!(fetch_response.sha.as_deref(), Some("abc123def456"));
+        assert_eq!(fetch_response.dirty_hash.as_deref(), Some("dirty789"));
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_http_cache_no_scm_metadata() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start within timeout"))??;
+
+        let test_case = &get_test_cases()[0];
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
+        test_case.initialize(&repo_root_path)?;
+
+        let hash = format!("{}-no-scm", test_case.hash);
+
+        let api_client = APIClient::new(
+            format!("http://localhost:{port}"),
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: None,
+        };
+        let api_auth = APIAuth {
+            team_id: Some("my-team".to_string()),
+            token: SecretString::new("my-token".to_string()),
+            team_slug: None,
+        };
+
+        // No SCM state available
+        let cache = HTTPCache::new(
+            api_client,
+            &opts,
+            repo_root_path.to_owned(),
+            api_auth,
+            None,
+            LazyScmState::resolved(None),
+        )
+        .unwrap();
+
+        let anchored_files: Vec<_> = test_case
+            .files
+            .iter()
+            .map(|f| f.path().to_owned())
+            .collect();
+        cache
+            .put(&repo_root_path, &hash, &anchored_files, test_case.duration)
+            .await?;
+
+        // Without SCM state, sha and dirty_hash should be None
+        let exists_response = cache.exists(&hash).await?.unwrap();
+        assert_eq!(exists_response.sha, None);
+        assert_eq!(exists_response.dirty_hash, None);
+
+        let (fetch_response, _files) = cache.fetch(&hash).await?.unwrap();
+        assert_eq!(fetch_response.sha, None);
+        assert_eq!(fetch_response.dirty_hash, None);
+
+        handle.abort();
         Ok(())
     }
 
@@ -552,11 +746,19 @@ mod test {
 
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: "expired-token".to_string(),
+            token: SecretString::new("expired-token".to_string()),
             team_slug: None,
         };
 
-        let cache = HTTPCache::new(api_client, &opts, repo_root_path, api_auth, None);
+        let cache = HTTPCache::new(
+            api_client,
+            &opts,
+            repo_root_path,
+            api_auth,
+            None,
+            LazyScmState::resolved(None),
+        )
+        .unwrap();
 
         // Verify that the cache has the token refresh capability
         // The actual token refresh would be tested in integration tests with a proper
@@ -592,15 +794,23 @@ mod test {
 
         let initial_api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: "initial-token".to_string(),
+            token: SecretString::new("initial-token".to_string()),
             team_slug: None,
         };
 
-        let cache = HTTPCache::new(api_client, &opts, repo_root_path, initial_api_auth, None);
+        let cache = HTTPCache::new(
+            api_client,
+            &opts,
+            repo_root_path,
+            initial_api_auth,
+            None,
+            LazyScmState::resolved(None),
+        )
+        .unwrap();
 
         // Verify initial token
         let initial_auth = cache.api_auth.lock().unwrap().clone();
-        assert_eq!(initial_auth.token, "initial-token");
+        assert_eq!(initial_auth.token.expose(), "initial-token");
 
         // Test the token refresh mechanism (without actual HTTP call)
         // In a real scenario, try_refresh_token would call
@@ -613,10 +823,10 @@ mod test {
 
         if refresh_result {
             // If refresh succeeded, token should have been updated
-            assert_ne!(final_auth.token, "initial-token");
+            assert_ne!(final_auth.token.expose(), "initial-token");
         } else {
             // If refresh failed, token should remain unchanged
-            assert_eq!(final_auth.token, "initial-token");
+            assert_eq!(final_auth.token.expose(), "initial-token");
         }
     }
 
@@ -645,17 +855,21 @@ mod test {
 
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: "thread-test-token".to_string(),
+            token: SecretString::new("thread-test-token".to_string()),
             team_slug: None,
         };
 
-        let cache = Arc::new(HTTPCache::new(
-            api_client,
-            &opts,
-            repo_root_path,
-            api_auth,
-            None,
-        ));
+        let cache = Arc::new(
+            HTTPCache::new(
+                api_client,
+                &opts,
+                repo_root_path,
+                api_auth,
+                None,
+                LazyScmState::resolved(None),
+            )
+            .unwrap(),
+        );
 
         // Test concurrent access to the auth mutex
         let handles: Vec<_> = (0..5)
@@ -663,7 +877,7 @@ mod test {
                 let cache_clone = Arc::clone(&cache);
                 thread::spawn(move || {
                     let auth = cache_clone.api_auth.lock().unwrap();
-                    assert_eq!(auth.token, "thread-test-token");
+                    assert_eq!(auth.token.expose(), "thread-test-token");
                     assert_eq!(auth.team_id, Some("my-team".to_string()));
                     // Simulate some work
                     thread::sleep(std::time::Duration::from_millis(10));
@@ -677,5 +891,163 @@ mod test {
             let result = handle.join().unwrap();
             assert!(result.starts_with("thread-"));
         }
+    }
+
+    #[test]
+    fn test_short_signature_key_rejected_when_enforced() {
+        let repo_root = tempfile::tempdir().unwrap();
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let api_client = APIClient::new(
+            "http://localhost:8000",
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            false,
+        )
+        .unwrap();
+
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: Some(crate::RemoteCacheOpts::new(
+                None, true, // signature enabled
+                true, // enforce key length
+            )),
+        };
+
+        let api_auth = APIAuth {
+            team_id: Some("my-team".to_string()),
+            token: SecretString::new("my-token".to_string()),
+            team_slug: None,
+        };
+
+        // SAFETY: test-only, no other thread reads this env var concurrently
+        unsafe {
+            std::env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", "short");
+        }
+        let result = HTTPCache::new(
+            api_client,
+            &opts,
+            repo_root_path,
+            api_auth,
+            None,
+            LazyScmState::resolved(None),
+        );
+        unsafe {
+            std::env::remove_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY");
+        }
+
+        let err = result.err().expect("expected an error for short key");
+        assert_snapshot!(err.to_string(), @"artifact signature error");
+
+        // Verify the source chain carries the detail
+        let source = std::error::Error::source(&err).expect("should have a source error");
+        assert_snapshot!(
+            source.to_string(),
+            @"TURBO_REMOTE_CACHE_SIGNATURE_KEY is too short (5 bytes). A minimum of 32 bytes is required for cryptographic strength."
+        );
+    }
+
+    #[test]
+    fn test_short_signature_key_accepted_without_enforcement() {
+        let repo_root = tempfile::tempdir().unwrap();
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let api_client = APIClient::new(
+            "http://localhost:8000",
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            false,
+        )
+        .unwrap();
+
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: Some(crate::RemoteCacheOpts::new(
+                None, true,  // signature enabled
+                false, // enforcement OFF (no future flag)
+            )),
+        };
+
+        let api_auth = APIAuth {
+            team_id: Some("my-team".to_string()),
+            token: SecretString::new("my-token".to_string()),
+            team_slug: None,
+        };
+
+        // SAFETY: test-only, no other thread reads this env var concurrently
+        unsafe {
+            std::env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", "short");
+        }
+        let result = HTTPCache::new(
+            api_client,
+            &opts,
+            repo_root_path,
+            api_auth,
+            None,
+            LazyScmState::resolved(None),
+        );
+        unsafe {
+            std::env::remove_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY");
+        }
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_valid_signature_key_accepted_when_enforced() {
+        let repo_root = tempfile::tempdir().unwrap();
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let api_client = APIClient::new(
+            "http://localhost:8000",
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            false,
+        )
+        .unwrap();
+
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: Some(crate::RemoteCacheOpts::new(
+                None, true, // signature enabled
+                true, // enforce key length
+            )),
+        };
+
+        let api_auth = APIAuth {
+            team_id: Some("my-team".to_string()),
+            token: SecretString::new("my-token".to_string()),
+            team_slug: None,
+        };
+
+        // SAFETY: test-only, no other thread reads this env var concurrently
+        unsafe {
+            std::env::set_var(
+                "TURBO_REMOTE_CACHE_SIGNATURE_KEY",
+                "this-key-is-at-least-32-bytes-!!", // exactly 32 bytes
+            );
+        }
+        let result = HTTPCache::new(
+            api_client,
+            &opts,
+            repo_root_path,
+            api_auth,
+            None,
+            LazyScmState::resolved(None),
+        );
+        unsafe {
+            std::env::remove_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY");
+        }
+
+        assert!(result.is_ok());
     }
 }

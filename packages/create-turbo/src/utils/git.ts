@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { rmSync } from "node:fs";
 
@@ -29,44 +29,73 @@ yarn-error.log*
 .vercel
 `;
 
-export const GIT_REPO_COMMAND = "git rev-parse --is-inside-work-tree";
-export const HG_REPO_COMMAND = "hg --cwd . root";
+const SHELL_METACHARACTERS = /[`$(){}|;&<>!#]/;
 
-export function isInGitRepository(): boolean {
-  try {
-    execSync(GIT_REPO_COMMAND, { stdio: "ignore" });
-    return true;
-  } catch (_) {
-    // do nothing
+function assertSafeDirectory(dir: string): void {
+  if (SHELL_METACHARACTERS.test(dir)) {
+    throw new Error(
+      `Directory path contains potentially unsafe characters: ${dir}`
+    );
   }
-  return false;
 }
 
-export function isInMercurialRepository(): boolean {
-  try {
-    execSync(HG_REPO_COMMAND, { stdio: "ignore" });
-    return true;
-  } catch (_) {
-    // do nothing
+function git(args: Array<string>, cwd: string): boolean {
+  const result = spawnSync("git", args, { stdio: "ignore", cwd });
+  if (result.status !== 0) {
+    throw new Error(`git ${args[0]} failed`);
   }
-  return false;
+  return true;
 }
 
-export function tryGitInit(root: string, message: string): boolean {
+function isInGitRepository(root: string): boolean {
+  try {
+    git(["rev-parse", "--is-inside-work-tree"], root);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function isInMercurialRepository(root: string): boolean {
+  try {
+    const result = spawnSync("hg", ["--cwd", ".", "root"], {
+      stdio: "ignore",
+      cwd: root
+    });
+    if (result.status !== 0) {
+      throw new Error("hg check failed");
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Initialize a git repository in the given directory with a single commit.
+ * This should be called once at the end of the create process, after all
+ * files have been created and transforms have been applied.
+ *
+ * @param root - The absolute path to the directory where the git repository should be initialized
+ * @returns true if the repository was initialized successfully, false otherwise
+ */
+export function tryGitInit(root: string): boolean {
+  assertSafeDirectory(root);
+
+  // Skip if already in a git or mercurial repository
+  if (isInGitRepository(root) || isInMercurialRepository(root)) {
+    return false;
+  }
+
   let didInit = false;
   try {
-    if (isInGitRepository() || isInMercurialRepository()) {
-      return false;
-    }
-
-    execSync("git init", { stdio: "ignore" });
-    execSync("git add -A", { stdio: "ignore" });
-
+    git(["init"], root);
     didInit = true;
 
-    execSync("git checkout -b main", { stdio: "ignore" });
+    git(["checkout", "-b", "main"], root);
+    git(["add", "-A"], root);
+    git(["commit", "-m", "Initial commit from create-turbo"], root);
 
-    gitCommit(message);
     return true;
   } catch (err) {
     if (didInit) {
@@ -78,36 +107,6 @@ export function tryGitInit(root: string, message: string): boolean {
     }
     return false;
   }
-}
-
-export function tryGitCommit(message: string): boolean {
-  try {
-    gitCommit(message);
-    return true;
-  } catch (err) {
-    return false;
-  }
-}
-
-export function tryGitAdd(): void {
-  try {
-    gitAddAll();
-  } catch (err) {
-    // do nothing
-  }
-}
-
-function gitAddAll() {
-  execSync("git add -A", { stdio: "ignore" });
-}
-
-function gitCommit(message: string) {
-  execSync(
-    `git commit --author="Turbobot <turbobot@vercel.com>" -am "${message}"`,
-    {
-      stdio: "ignore",
-    }
-  );
 }
 
 export function removeGitDirectory(root: string): boolean {

@@ -4,7 +4,7 @@ import * as path from "path";
 
 /** Note: this script intentionally doesn't run during regular `pnpm install` from the project root because it's not something we expect to need to do all the time and integrating it into the project install flow is excessive */
 
-const examplesDir = path.resolve(__dirname);
+const examplesDir = path.dirname(new URL(import.meta.url).pathname);
 
 /** Get all directories in the examples folder */
 const exampleDirs = readdirSync(examplesDir).filter((dir) =>
@@ -38,7 +38,7 @@ exampleDirs.forEach((dir) => {
     console.log(`Running ${installCmd} in ${dir}...`);
     execSync(installCmd, {
       stdio: "inherit",
-      cwd: path.join(examplesDir, dir),
+      cwd: path.join(examplesDir, dir)
     });
   } catch (error) {
     throw new Error(`Failed to process ${packageJsonPath}: ${error}`);

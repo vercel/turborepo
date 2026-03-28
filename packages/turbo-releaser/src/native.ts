@@ -5,18 +5,18 @@ import type {
   HumanArch,
   Platform,
   SupportedOS,
-  NpmOs,
+  NpmOs
 } from "./types";
 
 export const archToHuman: Record<SupportedArch, HumanArch> = {
   x64: "64",
-  arm64: "arm64",
+  arm64: "arm64"
 };
 
 export const nodeOSLookup: Record<SupportedOS, NpmOs> = {
   darwin: "darwin",
   linux: "linux",
-  windows: "win32",
+  windows: "win32"
 };
 
 const templateDir = path.join(__dirname, "..", "template");
@@ -25,10 +25,14 @@ async function generateNativePackage({
   platform,
   version,
   outputDir,
+  packagePrefix = "turbo",
+  description
 }: {
   platform: Platform;
   version: string;
   outputDir: string;
+  packagePrefix?: string;
+  description?: string;
 }) {
   const { os, arch } = platform;
   console.log(`Generating native package for ${os}-${arch}...`);
@@ -53,18 +57,25 @@ async function generateNativePackage({
   await copyFromTemplate("LICENSE");
 
   console.log("Generating package.json...");
-  const packageJson = {
-    name: `turbo-${os}-${archToHuman[arch]}`,
+  const isScoped = packagePrefix.startsWith("@");
+  const separator = isScoped ? "/" : "-";
+  const packageJson: Record<string, unknown> = {
+    name: `${packagePrefix}${separator}${os}-${archToHuman[arch]}`,
     version,
-    description: `The ${os}-${arch} binary for turbo, a monorepo build system.`,
+    description:
+      description ||
+      `The ${os}-${arch} binary for turbo, a monorepo build system.`,
     repository: "https://github.com/vercel/turborepo",
     bugs: "https://github.com/vercel/turborepo/issues",
-    homepage: "https://turborepo.com",
+    homepage: "https://turborepo.dev",
     license: "MIT",
     os: [nodeOSLookup[os]],
     cpu: [arch],
-    preferUnplugged: true,
+    preferUnplugged: true
   };
+  if (isScoped) {
+    packageJson.publishConfig = { access: "public" };
+  }
   await writeFile(
     path.join(outputDir, "package.json"),
     JSON.stringify(packageJson, null, 2)

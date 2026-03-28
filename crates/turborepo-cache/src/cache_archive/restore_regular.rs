@@ -9,22 +9,22 @@ pub fn restore_regular(
     dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     entry: &mut Entry<impl Read>,
+    manifest: Option<&super::restore_manifest::RestoreManifest>,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
-    // Assuming this was a `turbo`-created input, we currently have an
-    // RelativeUnixPath. Assuming this is malicious input we don't really care
-    // if we do the wrong thing.
-    //
-    // Note that we don't use `header.path()` as some archive formats have support
-    // for longer path names described in separate entries instead of solely in the
-    // header
     let processed_name = AnchoredSystemPathBuf::from_system_path(&entry.path()?)?;
+    let resolved_path = anchor.resolve(&processed_name);
 
-    // We need to traverse `processedName` from base to root split at
-    // `os.Separator` to make sure we don't end up following a symlink
-    // outside of the restore path.
+    // Check if the file on disk already matches the manifest entry.
+    // If so, skip the write and just advance the tar stream.
+    if let Some(manifest) = manifest
+        && manifest.file_matches(processed_name.as_str(), &resolved_path)
+    {
+        io::copy(entry, &mut io::sink())?;
+        return Ok(processed_name);
+    }
+
     dir_cache.safe_mkdir_file(anchor, &processed_name)?;
 
-    let resolved_path = anchor.resolve(&processed_name);
     let mut open_options = OpenOptions::new();
     open_options.write(true).truncate(true).create(true);
 

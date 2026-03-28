@@ -18,7 +18,7 @@ describe("packager", () => {
 
       const platforms: Array<Platform> = [
         { os: "darwin", arch: "x64" },
-        { os: "linux", arch: "arm64" },
+        { os: "linux", arch: "arm64" }
       ];
       const version = "1.0.0";
       const npmTag = "latest";
@@ -29,7 +29,7 @@ describe("packager", () => {
       assert.equal(mockPublishArtifacts.mock.calls.length, 1);
       assert.deepEqual(mockPublishArtifacts.mock.calls[0].arguments, [
         ["/path/to/artifact.tgz", "/path/to/artifact.tgz"],
-        "latest",
+        "latest"
       ]);
     });
 

@@ -16,6 +16,9 @@ pub struct TerminalOutput<W> {
     pub task_result: Option<TaskResult>,
     pub cache_result: Option<CacheResult>,
     pub scrollback_len: u64,
+    /// Pending selection start position (row, col) - set on mouse down, used on
+    /// first drag
+    selection_start: Option<(u16, u16)>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -36,6 +39,7 @@ impl<W> TerminalOutput<W> {
             task_result: None,
             cache_result: None,
             scrollback_len,
+            selection_start: None,
         }
     }
 
@@ -51,8 +55,9 @@ impl<W> TerminalOutput<W> {
     }
 
     pub fn process(&mut self, bytes: &[u8]) {
-        self.parser.process(bytes);
-        self.output.extend_from_slice(bytes);
+        let normalized = normalize_newlines(bytes);
+        self.parser.process(&normalized);
+        self.output.extend_from_slice(&normalized);
     }
 
     pub fn resize(&mut self, rows: u16, cols: u16) {
@@ -141,11 +146,18 @@ impl<W> TerminalOutput<W> {
     pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
         match event.kind {
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                // We need to update the vterm so we don't continue to render the selection
+                // Clear any existing selection and store the click position for potential drag
                 self.parser.screen_mut().clear_selection();
+                self.selection_start = Some((event.row, event.column));
             }
             crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
-                // Update selection of underlying parser
+                // On first drag, start selection from the initial click position
+                if let Some((start_row, start_col)) = self.selection_start.take() {
+                    self.parser
+                        .screen_mut()
+                        .update_selection(start_row, start_col);
+                }
+                // Update selection end point to current drag position
                 self.parser
                     .screen_mut()
                     .update_selection(event.row, event.column);
@@ -176,5 +188,110 @@ impl<W> TerminalOutput<W> {
 
         // clear screen and reset cursor
         self.process(b"\x1bc");
+    }
+}
+
+/// Ensures every `\n` (LF) is preceded by `\r` (CR).
+///
+/// Child processes running in a PTY may disable the kernel's ONLCR flag
+/// (e.g. Node.js calling `setRawMode(true)`), which means their output
+/// contains bare `\n` without `\r`. The vt100 parser treats `\n` as a
+/// line feed only (cursor moves down, column unchanged), so without `\r`
+/// subsequent lines start at whatever column the cursor was at, producing
+/// garbled overlapping text.
+fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
+    let has_bare_lf =
+        bytes.windows(2).any(|w| w[0] != b'\r' && w[1] == b'\n') || bytes.first() == Some(&b'\n');
+
+    if !has_bare_lf {
+        return bytes.to_vec();
+    }
+
+    let mut result = Vec::with_capacity(bytes.len() + bytes.len() / 10);
+    for (i, &byte) in bytes.iter().enumerate() {
+        if byte == b'\n' && (i == 0 || bytes[i - 1] != b'\r') {
+            result.push(b'\r');
+        }
+        result.push(byte);
+    }
+    result
+}
+
+#[cfg(test)]
+mod newline_tests {
+    use super::*;
+
+    #[test]
+    fn no_newlines_passthrough() {
+        assert_eq!(normalize_newlines(b"hello"), b"hello");
+    }
+
+    #[test]
+    fn crlf_unchanged() {
+        assert_eq!(normalize_newlines(b"hello\r\nworld"), b"hello\r\nworld");
+    }
+
+    #[test]
+    fn bare_lf_gets_cr() {
+        assert_eq!(normalize_newlines(b"hello\nworld"), b"hello\r\nworld");
+    }
+
+    #[test]
+    fn leading_lf_gets_cr() {
+        assert_eq!(normalize_newlines(b"\nhello"), b"\r\nhello");
+    }
+
+    #[test]
+    fn mixed_lf_and_crlf() {
+        assert_eq!(
+            normalize_newlines(b"a\r\nb\nc\r\nd\n"),
+            b"a\r\nb\r\nc\r\nd\r\n"
+        );
+    }
+
+    #[test]
+    fn bare_lf_causes_garbled_output_without_normalize() {
+        // Simulate the exact scenario: a child process writes two lines
+        // with bare \n. Without normalization, the second line starts at
+        // the column where the first line ended.
+        let mut parser = turborepo_vt100::Parser::new(5, 20, 0);
+
+        // Write "hello" then bare \n then "world"
+        parser.process(b"hello\nworld");
+        let screen = parser.screen();
+
+        // Without CR, "world" starts at column 5 (where "hello" ended)
+        let row0 = (0..20)
+            .map(|c| screen.cell(0, c).unwrap().contents())
+            .collect::<String>();
+        let row1 = (0..20)
+            .map(|c| screen.cell(1, c).unwrap().contents())
+            .collect::<String>();
+
+        assert_eq!(row0.trim(), "hello");
+        // Without normalize, "world" starts at col 5
+        assert_eq!(row1.trim(), "world");
+        assert_eq!(screen.cell(1, 5).unwrap().contents(), "w");
+    }
+
+    #[test]
+    fn normalize_fixes_garbled_output() {
+        let mut parser = turborepo_vt100::Parser::new(5, 20, 0);
+
+        let normalized = normalize_newlines(b"hello\nworld");
+        parser.process(&normalized);
+        let screen = parser.screen();
+
+        let row0 = (0..20)
+            .map(|c| screen.cell(0, c).unwrap().contents())
+            .collect::<String>();
+        let row1 = (0..20)
+            .map(|c| screen.cell(1, c).unwrap().contents())
+            .collect::<String>();
+
+        assert_eq!(row0.trim(), "hello");
+        assert_eq!(row1.trim(), "world");
+        // After normalize, "world" starts at col 0
+        assert_eq!(screen.cell(1, 0).unwrap().contents(), "w");
     }
 }

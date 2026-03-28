@@ -33,13 +33,13 @@ hmac = "0.12.1"
 miette = { workspace = true }
 os_str_bytes = "6.5.0"
 path-clean = { workspace = true }
-petgraph = "0.6.3"
+petgraph = { workspace = true }
 pin-project = "1.1.5"
 reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-tar = "0.4.38"
+tar = "0.4.45"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = "0.1.15"
@@ -49,4 +49,5 @@ turbopath = { workspace = true }
 turborepo-analytics = { workspace = true }
 turborepo-api-client = { workspace = true }
 turborepo-auth = { workspace = true }
-zstd = "0.12.3"
+turborepo-log = { path = "../turborepo-log" }
+zstd = { version = "0.13.3", default-features = false }

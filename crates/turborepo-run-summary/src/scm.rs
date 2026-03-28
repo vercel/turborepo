@@ -1,0 +1,70 @@
+use serde::{Deserialize, Serialize};
+use turbopath::AbsoluteSystemPath;
+use turborepo_ci::Vendor;
+use turborepo_env::EnvironmentVariableMap;
+use turborepo_scm::SCM;
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum SCMType {
+    Git,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct SCMState {
+    #[serde(rename = "type")]
+    ty: SCMType,
+    pub sha: Option<String>,
+    pub branch: Option<String>,
+}
+
+impl SCMState {
+    /// Resolve SCM state from CI environment variables, falling back to git
+    /// subprocess calls if not in CI. The git fallback spawns two subprocesses
+    /// (`git branch --show-current` and `git rev-parse HEAD`), so callers
+    /// should defer this until the data is actually needed (e.g., summary
+    /// generation) rather than calling it eagerly at run start.
+    pub fn get(env_vars: &EnvironmentVariableMap, scm: &SCM, dir: &AbsoluteSystemPath) -> Self {
+        let mut state = SCMState {
+            ty: SCMType::Git,
+            sha: None,
+            branch: None,
+        };
+
+        if turborepo_ci::is_ci()
+            && let Some(vendor) = Vendor::infer()
+        {
+            if let Some(sha_env_var) = vendor.sha_env_var {
+                state.sha = env_vars.get(sha_env_var).cloned()
+            }
+
+            if let Some(branch_env_var) = vendor.branch_env_var {
+                state.branch = env_vars.get(branch_env_var).cloned()
+            }
+        }
+
+        // Fall back to using git. Combined call opens the repo once via
+        // libgit2 instead of spawning two git subprocesses.
+        if state.branch.is_none() && state.sha.is_none() {
+            let (branch, sha) = scm.get_current_branch_and_sha(dir);
+            if state.branch.is_none() {
+                state.branch = branch;
+            }
+            if state.sha.is_none() {
+                state.sha = sha;
+            }
+        }
+
+        state
+    }
+
+    // Used in observability/otel.rs to populate RunMetricsPayload.scm_branch
+    pub(crate) fn branch(&self) -> Option<&str> {
+        self.branch.as_deref()
+    }
+
+    // Used in observability/otel.rs to populate RunMetricsPayload.scm_revision
+    pub(crate) fn sha(&self) -> Option<&str> {
+        self.sha.as_deref()
+    }
+}

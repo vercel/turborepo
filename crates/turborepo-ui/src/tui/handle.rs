@@ -47,6 +47,17 @@ impl TuiSender {
 }
 
 impl TuiSender {
+    /// Test-only constructor that wraps an existing channel sender
+    /// without spawning a tick task.
+    #[cfg(test)]
+    pub(crate) fn new_for_test(sender: mpsc::UnboundedSender<Event>) -> Self {
+        Self { primary: sender }
+    }
+
+    pub fn log_event(&self, event: turborepo_log::LogEvent) {
+        self.primary.send(Event::LogEvent(event)).ok();
+    }
+
     pub fn start_task(&self, task: String, output_logs: OutputLogs) {
         self.primary
             .send(Event::StartTask { task, output_logs })

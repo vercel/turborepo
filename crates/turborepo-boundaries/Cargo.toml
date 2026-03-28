@@ -1,0 +1,44 @@
+[package]
+name = "turborepo-boundaries"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+biome_deserialize = { workspace = true }
+biome_deserialize_macros = { workspace = true }
+biome_diagnostics = { workspace = true }
+camino = "1.1.4"
+globwalk = { path = "../turborepo-globwalk" }
+indicatif = { workspace = true }
+itertools = { workspace = true }
+miette = { workspace = true, features = ["fancy"] }
+oxc_allocator = { workspace = true }
+oxc_ast = { workspace = true }
+oxc_parser = { workspace = true }
+oxc_span = { workspace = true }
+oxc_syntax = { workspace = true }
+regex = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+struct_iterable = "0.1.1"
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+ts-rs = { workspace = true }
+turbo-trace = { workspace = true }
+turbopath = { workspace = true }
+turborepo-errors = { workspace = true }
+turborepo-lockfiles = { workspace = true }
+turborepo-log = { workspace = true }
+turborepo-repository = { path = "../turborepo-repository" }
+turborepo-ui = { workspace = true }
+unrs_resolver = { workspace = true }
+
+[dev-dependencies]
+dunce = { workspace = true }
+tempfile = { workspace = true }
+test-case = { workspace = true }

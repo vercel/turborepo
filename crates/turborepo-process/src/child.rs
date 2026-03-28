@@ -20,7 +20,10 @@ const CHILD_POLL_INTERVAL: Duration = Duration::from_micros(50);
 use std::{
     fmt,
     io::{self, BufRead, Read, Write},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 
@@ -60,6 +63,7 @@ pub enum ShutdownStyle {
 }
 
 /// Child process stopped.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct ShutdownFailed;
 
@@ -72,6 +76,8 @@ impl From<std::io::Error> for ShutdownFailed {
 struct ChildHandle {
     pid: Option<u32>,
     imp: ChildHandleImpl,
+    #[cfg(windows)]
+    _job: Option<super::job_object::JobObject>,
 }
 
 enum ChildHandleImpl {
@@ -84,20 +90,21 @@ impl ChildHandle {
     pub fn spawn_normal(command: Command) -> io::Result<SpawnResult> {
         let mut command = TokioCommand::from(command);
 
-        // Create a process group for the child on unix like systems
+        // Create a new process group so we can send signals (e.g. SIGINT) to
+        // the child and all of its descendants via kill(-pgid, sig).
         #[cfg(unix)]
-        {
-            use nix::unistd::setsid;
-            unsafe {
-                command.pre_exec(|| {
-                    setsid()?;
-                    Ok(())
-                });
-            }
-        }
+        command.process_group(0);
 
         let mut child = command.spawn()?;
         let pid = child.id();
+
+        #[cfg(windows)]
+        let job = pid.and_then(|pid| {
+            super::job_object::JobObject::new()
+                .and_then(|job| job.assign_pid(pid).map(|_| job))
+                .map_err(|e| debug!("failed to set up job object for process {pid}: {e}"))
+                .ok()
+        });
 
         let stdin = child.stdin.take().map(ChildInput::Std);
         let stdout = child
@@ -113,6 +120,8 @@ impl ChildHandle {
             handle: Self {
                 pid,
                 imp: ChildHandleImpl::Tokio(child),
+                #[cfg(windows)]
+                _job: job,
             },
             io: ChildIO {
                 stdin,
@@ -126,7 +135,6 @@ impl ChildHandle {
     pub fn spawn_pty(command: Command, size: PtySize) -> io::Result<SpawnResult> {
         let keep_stdin_open = command.will_open_stdin();
 
-        let command = portable_pty::CommandBuilder::from(command);
         let pty_system = native_pty_system();
         let size = portable_pty::PtySize {
             rows: size.rows,
@@ -142,7 +150,6 @@ impl ChildHandle {
             })?;
 
         let controller = pair.master;
-        let receiver = pair.slave;
 
         #[cfg(unix)]
         {
@@ -164,17 +171,56 @@ impl ChildHandle {
             }
         }
 
-        let child = receiver
-            .spawn_command(command)
-            .map_err(|err| match err.downcast() {
-                Ok(err) => err,
-                Err(err) => io::Error::other(err),
-            })?;
+        // On Unix, we bypass portable-pty's spawn to avoid calling setsid().
+        // setsid() creates a new session which causes macOS Gatekeeper/XProtect
+        // to re-verify every binary executed through the PTY, leading to severe
+        // CPU spikes with many concurrent tasks.
+        // See https://github.com/vercel/turborepo/issues/8801
+        #[cfg(unix)]
+        let child: Box<dyn PtyChild + Send + Sync> = {
+            // Pass the PTY receiver so it stays alive during spawn. Dropping it early
+            // can reset the PTY's terminal settings on macOS.
+            Self::spawn_pty_child_unix(command, &*controller, pair.slave)?
+        };
+
+        #[cfg(windows)]
+        let child = {
+            let command = portable_pty::CommandBuilder::from(command);
+            pair.slave
+                .spawn_command(command)
+                .map_err(|err| match err.downcast() {
+                    Ok(err) => err,
+                    Err(err) => io::Error::other(err),
+                })?
+        };
 
         let pid = child.process_id();
 
+        #[cfg(windows)]
+        let job = pid.and_then(|pid| {
+            super::job_object::JobObject::new()
+                .and_then(|job| job.assign_pid(pid).map(|_| job))
+                .map_err(|e| debug!("failed to set up job object for PTY process {pid}: {e}"))
+                .ok()
+        });
+
         let mut stdin = controller.take_writer().ok();
         let output = controller.try_clone_reader().ok().map(ChildOutput::Pty);
+
+        // portable-pty 0.9.0 creates ConPTY with PSEUDOCONSOLE_INHERIT_CURSOR,
+        // which sends a Device Status Report (DSR) cursor position request
+        // (\x1b[6n) on the output pipe during initialization. ConPTY blocks
+        // until the host responds with a Cursor Position Report on stdin.
+        // Without this response the PTY hangs indefinitely.
+        // See https://github.com/vercel/turborepo/issues/11808
+        #[cfg(windows)]
+        if let Some(ref mut writer) = stdin {
+            // Respond with cursor at position (1,1). The actual position
+            // doesn't matter — ConPTY just needs a valid CPR to unblock.
+            if let Err(e) = writer.write_all(b"\x1b[1;1R") {
+                debug!("failed to write ConPTY cursor position response: {e}");
+            }
+        }
 
         // If we don't want to keep stdin open we take it here and it is immediately
         // dropped resulting in a EOF being sent to the child process.
@@ -186,6 +232,8 @@ impl ChildHandle {
             handle: Self {
                 pid,
                 imp: ChildHandleImpl::Pty(child),
+                #[cfg(windows)]
+                _job: job,
             },
             io: ChildIO {
                 stdin: stdin.map(ChildInput::Pty),
@@ -193,6 +241,114 @@ impl ChildHandle {
             },
             controller: Some(controller),
         })
+    }
+
+    /// Spawn a child process connected to a PTY without calling setsid().
+    ///
+    /// portable-pty's spawn_command() calls setsid() to create a new
+    /// session, which causes macOS Gatekeeper/XProtect to re-verify every
+    /// binary. We bypass that by opening the PTY endpoint device ourselves and
+    /// spawning with std::process::Command.
+    ///
+    /// `_pty_receiver` must stay alive until spawn completes. Dropping the
+    /// slave PTY handle early can reset termios settings on macOS.
+    ///
+    /// We intentionally omit TIOCSCTTY (setting the controlling terminal)
+    /// because it requires setsid(). This means SIGWINCH won't be delivered
+    /// to the child via the PTY — acceptable for build task output where
+    /// signal delivery goes through kill(-pgid, SIGINT) instead.
+    #[cfg(unix)]
+    fn spawn_pty_child_unix(
+        command: Command,
+        controller: &dyn PtyController,
+        _pty_receiver: Box<dyn portable_pty::SlavePty + Send>,
+    ) -> io::Result<Box<dyn PtyChild + Send + Sync>> {
+        use std::{
+            os::unix::{
+                io::{AsRawFd, FromRawFd, OwnedFd},
+                process::CommandExt,
+            },
+            process::Stdio,
+        };
+
+        fn dup_to_owned(fd: std::os::unix::io::RawFd) -> io::Result<OwnedFd> {
+            // SAFETY: fd is a valid open file descriptor from the caller.
+            let new = unsafe { libc::dup(fd) };
+            if new < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            // SAFETY: dup() returned a new fd that we now own exclusively.
+            Ok(unsafe { OwnedFd::from_raw_fd(new) })
+        }
+
+        let tty_name = controller
+            .tty_name()
+            .ok_or_else(|| io::Error::other("failed to get pty device path"))?;
+
+        let pty_endpoint = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&tty_name)?;
+        let pty_fd = pty_endpoint.as_raw_fd();
+
+        // SAFETY: pty_fd is valid from OpenOptions::open above.
+        // Set CLOEXEC so this fd doesn't leak into the child.
+        let flags = unsafe { libc::fcntl(pty_fd, libc::F_GETFD) };
+        if flags < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if unsafe { libc::fcntl(pty_fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) } < 0 {
+            return Err(io::Error::last_os_error());
+        }
+
+        // Dup separate fds for stdin/stdout/stderr. OwnedFd provides RAII
+        // cleanup — if a later dup fails, earlier fds are closed on drop.
+        let stdin_fd = dup_to_owned(pty_fd)?;
+        let stdout_fd = dup_to_owned(pty_fd)?;
+        let stderr_fd = dup_to_owned(pty_fd)?;
+
+        let mut cmd = command.into_std_command();
+
+        cmd.stdin(Stdio::from(stdin_fd))
+            .stdout(Stdio::from(stdout_fd))
+            .stderr(Stdio::from(stderr_fd));
+
+        // Create a new process group (setpgid(0,0)) so graceful shutdown
+        // can signal the child and all its descendants via kill(-pgid, SIGINT).
+        // Unlike portable-pty's setsid() which creates both a new session AND
+        // process group, we only need the process group — the session creation
+        // is what triggers macOS Gatekeeper re-verification.
+        cmd.process_group(0);
+
+        // SAFETY: pre_exec runs between fork() and exec() in the child.
+        // signal() and sigprocmask() are async-signal-safe per POSIX.
+        // close_random_fds() follows the same pattern as portable-pty.
+        unsafe {
+            cmd.pre_exec(|| {
+                for signo in &[
+                    libc::SIGCHLD,
+                    libc::SIGHUP,
+                    libc::SIGINT,
+                    libc::SIGQUIT,
+                    libc::SIGTERM,
+                    libc::SIGALRM,
+                ] {
+                    libc::signal(*signo, libc::SIG_DFL);
+                }
+                let empty_set: libc::sigset_t = std::mem::zeroed();
+                libc::sigprocmask(libc::SIG_SETMASK, &empty_set, std::ptr::null_mut());
+
+                // Close inherited fds from the parent process. On macOS,
+                // Cocoa leaks fds to child processes; on Linux, gnome/mutter
+                // does the same. Mirrors portable-pty's spawn behavior.
+                portable_pty::unix::close_random_fds();
+
+                Ok(())
+            });
+        }
+
+        let child = cmd.spawn()?;
+        Ok(Box::new(child))
     }
 
     pub fn pid(&self) -> Option<u32> {
@@ -381,6 +537,9 @@ pub struct Child {
     stdin: Arc<Mutex<Option<ChildInput>>>,
     output: Arc<Mutex<Option<ChildOutput>>>,
     label: String,
+    /// Flag indicating this child is being stopped as part of a shutdown of the
+    /// ProcessManager, rather than individually stopped.
+    closing: Arc<AtomicBool>,
 }
 
 #[derive(Clone, Debug)]
@@ -469,6 +628,7 @@ impl Child {
             stdin: Arc::new(Mutex::new(stdin)),
             output: Arc::new(Mutex::new(output)),
             label,
+            closing: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -536,6 +696,16 @@ impl Child {
                 .await
             }
             Some(ChildOutput::Pty(output)) => {
+                // On Unix, drop stdin before reading so the master PTY writer
+                // sends EOT and releases its fd, allowing the reader to reach
+                // EOF once the controller is dropped after the child exits.
+                //
+                // On Windows, do NOT drop stdin here: ConPTY treats a closed
+                // stdin pipe as the session ending and immediately terminates
+                // the child process.
+                if !cfg!(windows) {
+                    drop(self.stdin_inner());
+                }
                 self.wait_with_piped_sync_output(stdout_pipe, std::io::BufReader::new(output))
                     .await
             }
@@ -679,6 +849,16 @@ impl Child {
 
     pub fn label(&self) -> &str {
         &self.label
+    }
+
+    /// Mark this child as being stopped as part of a ProcessManager shutdown
+    pub fn set_closing(&self) {
+        self.closing.store(true, Ordering::Release);
+    }
+
+    /// Check if this child was stopped as part of a ProcessManager shutdown
+    pub fn is_closing(&self) -> bool {
+        self.closing.load(Ordering::Acquire)
     }
 }
 
@@ -1071,7 +1251,7 @@ mod test {
     }
 
     #[test_case(false)]
-    #[test_case(true)]
+    #[test_case(TEST_PTY)]
     #[tokio::test]
     async fn test_wait_with_single_output(use_pty: bool) {
         let script = find_script_dir().join_component("hello_world_hello_moon.js");
@@ -1240,5 +1420,626 @@ mod test {
             .expect("timed out")
             .is_some()
         {}
+    }
+
+    // Regression tests for https://github.com/vercel/turborepo/issues/11808
+    //
+    // On Windows, portable-pty 0.9.0 added PSEUDOCONSOLE_INHERIT_CURSOR to
+    // ConPTY creation, which requires the host to handle DSR (Device Status
+    // Report) escape sequences. Turborepo doesn't, causing ConPTY to hang.
+    //
+    // Additionally, an unconditional `drop(stdin)` in the PTY path of
+    // wait_with_piped_outputs would kill ConPTY children on Windows because
+    // closing ConPTY stdin terminates the session.
+    //
+    // These tests verify the fixes: PTY children start, produce output, and
+    // exit normally without hanging or being killed by stdin closure.
+
+    /// Verifies that a PTY-spawned short-lived process produces output and
+    /// exits cleanly via wait_with_piped_outputs. Uses a timeout to catch
+    /// the ConPTY hang that occurred with PSEUDOCONSOLE_INHERIT_CURSOR.
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    async fn test_pty_child_does_not_hang(use_pty: bool) {
+        let script = find_script_dir().join_component("hello_world.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
+
+        let mut out = Vec::new();
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            child.wait_with_piped_outputs(&mut out),
+        )
+        .await;
+
+        let exit = result
+            .expect("PTY child hung — likely PSEUDOCONSOLE_INHERIT_CURSOR regression")
+            .unwrap();
+
+        let output = String::from_utf8(out).unwrap();
+        let trimmed = output.trim().strip_prefix(EOT).unwrap_or(output.trim());
+        assert_eq!(trimmed, "hello world");
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    /// Simulates the persistent-task flow: stdin is taken by the caller
+    /// (as the TUI does for interactive tasks) BEFORE wait_with_piped_outputs
+    /// is called. The child should still produce output and exit normally
+    /// without wait_with_piped_outputs interfering with stdin.
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    async fn test_pty_stdin_taken_before_piped_outputs(use_pty: bool) {
+        let script = find_script_dir().join_component("hello_world.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
+
+        // Take stdin before piping outputs, simulating TUI taking ownership.
+        // For PTY children, this returns Some; for non-PTY, stdin() returns None
+        // (Std variant is filtered out), but stdin_inner still removes it.
+        let _stdin_guard = child.stdin();
+
+        // Verify stdin_inner is now empty (already taken).
+        assert!(
+            child.stdin_inner().is_none(),
+            "stdin should already be taken"
+        );
+
+        let mut out = Vec::new();
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            child.wait_with_piped_outputs(&mut out),
+        )
+        .await;
+
+        let exit = result
+            .expect("child hung — wait_with_piped_outputs likely interfered with taken stdin")
+            .unwrap();
+
+        let output = String::from_utf8(out).unwrap();
+        let trimmed = output.trim().strip_prefix(EOT).unwrap_or(output.trim());
+        assert_eq!(trimmed, "hello world");
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    /// Verifies that a PTY-spawned process with open stdin that has NOT been
+    /// taken by the caller still completes normally. This is the non-persistent
+    /// task path where exec.rs does not take stdin before
+    /// wait_with_piped_outputs.
+    ///
+    /// Before the fix, on Windows the unconditional stdin drop inside
+    /// wait_with_piped_outputs would kill the ConPTY child immediately.
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    async fn test_pty_untaken_stdin_does_not_kill_child(use_pty: bool) {
+        let script = find_script_dir().join_component("hello_world.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
+
+        // Do NOT take stdin — this simulates a non-persistent task where
+        // exec.rs skips stdin handling on Windows (closing_stdin_ends_process).
+        // wait_with_piped_outputs should still work without killing the child.
+        let mut out = Vec::new();
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            child.wait_with_piped_outputs(&mut out),
+        )
+        .await;
+
+        let exit = result
+            .expect("child process hung or was killed by premature stdin closure")
+            .unwrap();
+
+        let output = String::from_utf8(out).unwrap();
+        let trimmed = output.trim().strip_prefix(EOT).unwrap_or(output.trim());
+        assert_eq!(trimmed, "hello world");
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    /// Regression test for #12393: proves that dropping stdin causes a
+    /// persistent-style child (one that exits on stdin EOF) to terminate.
+    ///
+    /// This documents the mechanism behind the bug: when the task executor
+    /// took stdin and passed it to `TaskOutput::set_stdin()` in stream mode,
+    /// the stdin was dropped immediately, sending EOF to the child.
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    async fn test_dropping_stdin_terminates_persistent_child(use_pty: bool) {
+        let script = find_script_dir().join_component("persistent_server.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        // Take stdin and immediately drop it — simulates the bug where
+        // TaskOutput::stream().set_stdin() dropped stdin in stream mode.
+        {
+            let _dropped = child.stdin();
+        }
+
+        // The child should exit because it received EOF on stdin.
+        let mut out = Vec::new();
+        let result = tokio::time::timeout(
+            Duration::from_secs(5),
+            child.wait_with_piped_outputs(&mut out),
+        )
+        .await;
+
+        let exit = result
+            .expect("child should have exited after stdin was dropped")
+            .unwrap();
+
+        let output = String::from_utf8(out).unwrap();
+        assert!(
+            output.contains("server ready"),
+            "expected 'server ready' in output, got: {output:?}"
+        );
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    /// Regression test for #12393: proves that holding stdin in a guard
+    /// keeps a persistent-style child alive.
+    ///
+    /// This is the correct behavior after the fix: in stream mode, stdin
+    /// is held by `_stdin_guard` instead of being passed to
+    /// `TaskOutput::set_stdin()` which would drop it.
+    ///
+    /// PTY-only: `child.stdin()` returns `None` for non-PTY children
+    /// (`ChildInput::Std` is filtered out), so the guard mechanism only
+    /// applies to PTY-spawned processes — which is the production path
+    /// for persistent tasks on Unix.
+    #[tokio::test]
+    async fn test_held_stdin_keeps_persistent_child_alive() {
+        if !TEST_PTY {
+            return;
+        }
+        let script = find_script_dir().join_component("persistent_server.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, Some(PtySize::default())).unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        // Hold stdin in a guard — simulates the correct persistent task flow.
+        let _stdin_guard = child.stdin();
+        assert!(
+            _stdin_guard.is_some(),
+            "PTY child should return Some from stdin()"
+        );
+
+        // The child should NOT exit while we hold stdin. Give it a moment
+        // and verify it's still alive by checking that wait times out.
+        let result = tokio::time::timeout(Duration::from_secs(2), child.wait()).await;
+        assert!(
+            result.is_err(),
+            "child should still be alive while stdin is held"
+        );
+
+        // Now drop the guard — child should exit.
+        drop(_stdin_guard);
+
+        let exit = tokio::time::timeout(Duration::from_secs(5), child.wait())
+            .await
+            .expect("child should exit after stdin guard is dropped");
+
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    /// Verifies that stopping a parent process also kills its child processes.
+    ///
+    /// On Unix this works via process groups (setpgid + kill(-pgid)).
+    /// On Windows this works via Job Objects
+    /// (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE).
+    ///
+    /// The test spawns a Node.js script that itself spawns a long-running child
+    /// process, captures the grandchild's PID from stdout, stops the parent,
+    /// and then checks that the grandchild is no longer alive.
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    #[traced_test]
+    async fn test_process_tree_cleanup(use_pty: bool) {
+        let script = find_script_dir().join_component("spawn_child_sleep.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            use_pty.then(PtySize::default),
+        )
+        .unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        // Read stdout to get the grandchild PID
+        let grandchild_pid = {
+            let mut out = Vec::new();
+            match child.outputs().unwrap() {
+                ChildOutput::Std { mut stdout, .. } => {
+                    let mut buf = vec![0u8; 256];
+                    let n = tokio::time::timeout(Duration::from_secs(5), stdout.read(&mut buf))
+                        .await
+                        .expect("timed out reading grandchild PID")
+                        .expect("failed to read stdout");
+                    out.extend_from_slice(&buf[..n]);
+                }
+                ChildOutput::Pty(mut reader) => {
+                    let mut buf = vec![0u8; 256];
+                    let n = reader.read(&mut buf).expect("failed to read pty output");
+                    out.extend_from_slice(&buf[..n]);
+                }
+            };
+            let output = String::from_utf8(out).unwrap();
+            let pid_line = output
+                .lines()
+                .find(|line| line.contains("CHILD_PID="))
+                .unwrap_or_else(|| panic!("CHILD_PID not found in output: {output}"));
+            pid_line
+                .split('=')
+                .nth(1)
+                .unwrap()
+                .trim()
+                .parse::<u32>()
+                .unwrap()
+        };
+
+        // Verify grandchild is alive before we stop
+        assert!(
+            is_process_alive(grandchild_pid),
+            "grandchild process {grandchild_pid} should be alive before stop"
+        );
+
+        // Stop the parent process
+        child.stop().await;
+
+        // Give the OS a moment to clean up
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // Verify grandchild is dead
+        assert!(
+            !is_process_alive(grandchild_pid),
+            "grandchild process {grandchild_pid} should have been killed"
+        );
+    }
+
+    // Regression tests for the pre_exec/setsid -> process_group(0) migration.
+    //
+    // We replaced an unsafe pre_exec callback that called setsid() with tokio's
+    // safe process_group(0) API. These tests verify the critical invariants:
+    //
+    // 1. The child gets its own process group (PGID == child PID, not parent's)
+    // 2. Grandchildren inherit the child's process group
+    // 3. kill(-pgid, SIGINT) reaches both child and grandchild
+    // 4. The child is NOT a session leader (regression guard against setsid)
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_child_has_own_process_group() {
+        let script = find_script_dir().join_component("sleep_5_interruptable.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            None,
+        )
+        .unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let child_pid = child.pid().expect("child should have a pid") as libc::pid_t;
+        let child_pgid = unsafe { libc::getpgid(child_pid) };
+        let parent_pgid = unsafe { libc::getpgid(0) };
+
+        // process_group(0) should make the child's PGID equal its own PID
+        assert_eq!(
+            child_pgid, child_pid,
+            "child PGID ({child_pgid}) should equal child PID ({child_pid})"
+        );
+
+        // The child's process group must differ from the parent's
+        assert_ne!(
+            child_pgid, parent_pgid,
+            "child PGID ({child_pgid}) must differ from parent PGID ({parent_pgid})"
+        );
+
+        child.stop().await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_pty_child_has_own_process_group() {
+        if !TEST_PTY {
+            return;
+        }
+        let script = find_script_dir().join_component("sleep_5_interruptable.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            Some(PtySize::default()),
+        )
+        .unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let child_pid = child.pid().expect("child should have a pid") as libc::pid_t;
+        let child_pgid = unsafe { libc::getpgid(child_pid) };
+        let parent_pgid = unsafe { libc::getpgid(0) };
+
+        assert_eq!(
+            child_pgid, child_pid,
+            "PTY child PGID ({child_pgid}) should equal child PID ({child_pid})"
+        );
+        assert_ne!(
+            child_pgid, parent_pgid,
+            "PTY child PGID ({child_pgid}) must differ from parent PGID ({parent_pgid})"
+        );
+
+        child.stop().await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_grandchild_inherits_child_process_group() {
+        let script = find_script_dir().join_component("spawn_child_sleep.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            None,
+        )
+        .unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let child_pid = child.pid().expect("child should have a pid") as libc::pid_t;
+
+        // Read the grandchild PID from stdout
+        let grandchild_pid = {
+            let mut out = Vec::new();
+            match child.outputs().unwrap() {
+                ChildOutput::Std { mut stdout, .. } => {
+                    let mut buf = vec![0u8; 256];
+                    let n = tokio::time::timeout(Duration::from_secs(5), stdout.read(&mut buf))
+                        .await
+                        .expect("timed out reading grandchild PID")
+                        .expect("failed to read stdout");
+                    out.extend_from_slice(&buf[..n]);
+                }
+                ChildOutput::Pty(_) => unreachable!("test uses non-PTY mode"),
+            };
+            let output = String::from_utf8(out).unwrap();
+            let pid_line = output
+                .lines()
+                .find(|line| line.contains("CHILD_PID="))
+                .unwrap_or_else(|| panic!("CHILD_PID not found in output: {output}"));
+            pid_line
+                .split('=')
+                .nth(1)
+                .unwrap()
+                .trim()
+                .parse::<libc::pid_t>()
+                .unwrap()
+        };
+
+        let child_pgid = unsafe { libc::getpgid(child_pid) };
+        let grandchild_pgid = unsafe { libc::getpgid(grandchild_pid) };
+
+        // Grandchild should be in the same process group as the child
+        assert_eq!(
+            grandchild_pgid, child_pgid,
+            "grandchild PGID ({grandchild_pgid}) should match child PGID ({child_pgid})"
+        );
+
+        // Both should use child_pid as the group ID
+        assert_eq!(
+            child_pgid, child_pid,
+            "process group ID ({child_pgid}) should equal child PID ({child_pid})"
+        );
+
+        child.stop().await;
+        // Give OS time to clean up
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_sigint_to_process_group_reaches_grandchild() {
+        let script = find_script_dir().join_component("spawn_child_sleep.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(2000)),
+            None,
+        )
+        .unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let child_pid = child.pid().expect("child should have a pid");
+
+        // Read the grandchild PID
+        let grandchild_pid = {
+            let mut out = Vec::new();
+            match child.outputs().unwrap() {
+                ChildOutput::Std { mut stdout, .. } => {
+                    let mut buf = vec![0u8; 256];
+                    let n = tokio::time::timeout(Duration::from_secs(5), stdout.read(&mut buf))
+                        .await
+                        .expect("timed out reading grandchild PID")
+                        .expect("failed to read stdout");
+                    out.extend_from_slice(&buf[..n]);
+                }
+                ChildOutput::Pty(_) => unreachable!("test uses non-PTY mode"),
+            };
+            let output = String::from_utf8(out).unwrap();
+            let pid_line = output
+                .lines()
+                .find(|line| line.contains("CHILD_PID="))
+                .unwrap_or_else(|| panic!("CHILD_PID not found in output: {output}"));
+            pid_line
+                .split('=')
+                .nth(1)
+                .unwrap()
+                .trim()
+                .parse::<u32>()
+                .unwrap()
+        };
+
+        assert!(
+            is_process_alive(grandchild_pid),
+            "grandchild should be alive before signal"
+        );
+
+        // Send SIGINT to the process group (negative PID), exactly as
+        // ShutdownStyle::Graceful does in production code
+        let pgid = -(child_pid as i32);
+        unsafe {
+            libc::kill(pgid, libc::SIGINT);
+        }
+
+        // Wait for processes to die
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        assert!(
+            !is_process_alive(grandchild_pid),
+            "grandchild should be dead after SIGINT to process group"
+        );
+
+        // Consume the exit
+        child.wait().await;
+    }
+
+    // Guard against accidentally reverting to setsid(). With process_group(0),
+    // the child calls setpgid(0, 0) which creates a new process group but does
+    // NOT create a new session. If someone reintroduces setsid(), the child's
+    // SID would equal its PID. With setpgid, the SID is inherited from the
+    // parent.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_child_is_not_session_leader() {
+        let script = find_script_dir().join_component("sleep_5_interruptable.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            None,
+        )
+        .unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let child_pid = child.pid().expect("child should have a pid") as libc::pid_t;
+        let child_sid = unsafe { libc::getsid(child_pid) };
+        let parent_sid = unsafe { libc::getsid(0) };
+
+        // With process_group(0), the child inherits the parent's session.
+        // If setsid() were used instead, child_sid would equal child_pid.
+        assert_ne!(
+            child_sid, child_pid,
+            "child SID ({child_sid}) should NOT equal child PID ({child_pid}) — that would mean \
+             setsid() was called"
+        );
+        assert_eq!(
+            child_sid, parent_sid,
+            "child SID ({child_sid}) should equal parent SID ({parent_sid})"
+        );
+
+        child.stop().await;
+    }
+
+    // Same invariant as above but for the PTY spawn path — the code path
+    // this PR actually changes. Without this test, someone could
+    // reintroduce setsid() in spawn_pty_child_unix and no test would catch it.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_pty_child_is_not_session_leader() {
+        if !TEST_PTY {
+            return;
+        }
+        let script = find_script_dir().join_component("sleep_5_interruptable.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            Some(PtySize::default()),
+        )
+        .unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let child_pid = child.pid().expect("child should have a pid") as libc::pid_t;
+        let child_sid = unsafe { libc::getsid(child_pid) };
+        let parent_sid = unsafe { libc::getsid(0) };
+
+        assert_ne!(
+            child_sid, child_pid,
+            "PTY child SID ({child_sid}) should NOT equal child PID ({child_pid}) — that would \
+             mean setsid() was called"
+        );
+        assert_eq!(
+            child_sid, parent_sid,
+            "PTY child SID ({child_sid}) should equal parent SID ({parent_sid})"
+        );
+
+        child.stop().await;
+    }
+
+    fn is_process_alive(pid: u32) -> bool {
+        #[cfg(unix)]
+        {
+            // kill(pid, 0) checks if process exists without sending a signal
+            unsafe { libc::kill(pid as i32, 0) == 0 }
+        }
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::{
+                Foundation::CloseHandle,
+                System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION},
+            };
+            unsafe {
+                let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+                if handle.is_null() {
+                    return false;
+                }
+                // Process handle opened — check if it's actually still running
+                let mut exit_code: u32 = 0;
+                let result = windows_sys::Win32::System::Threading::GetExitCodeProcess(
+                    handle,
+                    &mut exit_code,
+                );
+                CloseHandle(handle);
+                // STILL_ACTIVE (259) means the process is still running
+                result != 0 && exit_code == 259
+            }
+        }
     }
 }

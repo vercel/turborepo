@@ -1,24 +1,24 @@
 import os from "node:os";
 import { execSync } from "node:child_process";
 import picocolors from "picocolors";
-import { prompt } from "inquirer";
+import { input } from "@inquirer/prompts";
 import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
 import { logger } from "@turbo/utils";
-import { checkGitStatus } from "../../utils/checkGitStatus";
-import { directoryInfo } from "../../utils/directoryInfo";
-import { Runner } from "../../runner/Runner";
-import { looksLikeRepo } from "../../utils/looksLikeRepo";
+import { checkGitStatus } from "../../utils/check-git-status";
+import { directoryInfo } from "../../utils/directory-info";
+import { Runner } from "../../runner/runner";
+import { looksLikeRepo } from "../../utils/looks-like-repo";
 import type { TransformerResults } from "../../runner";
-import { getCurrentVersion } from "./steps/getCurrentVersion";
-import { getLatestVersion } from "./steps/getLatestVersion";
-import { getTransformsForMigration } from "./steps/getTransformsForMigration";
-import { getTurboUpgradeCommand } from "./steps/getTurboUpgradeCommand";
+import { getCurrentVersion } from "./steps/get-current-version";
+import { getLatestVersion } from "./steps/get-latest-version";
+import { getTransformsForMigration } from "./steps/get-transforms-for-migration";
+import { getTurboUpgradeCommand } from "./steps/get-turbo-upgrade-command";
 import type { MigrateCommandArgument, MigrateCommandOptions } from "./types";
-import { shutdownDaemon } from "./steps/shutdownDaemon";
+import { shutdownDaemon } from "./steps/shutdown-daemon";
 
 function endMigration({
   message,
-  success,
+  success
 }: {
   message?: string;
   success: boolean;
@@ -57,14 +57,10 @@ export async function migrate(
     checkGitStatus({ directory, force: options.force });
   }
 
-  const answers = await prompt<{
-    directoryInput?: string;
-  }>([
-    {
-      type: "input",
-      name: "directoryInput",
+  let selectedDirectory = directory;
+  if (!selectedDirectory) {
+    selectedDirectory = await input({
       message: "Where is the root of the repo to migrate?",
-      when: !directory,
       default: ".",
       validate: (d: string) => {
         const { exists, absolute } = directoryInfo({ directory: d });
@@ -73,19 +69,17 @@ export async function migrate(
         }
         return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
       },
-      filter: (d: string) => d.trim(),
-    },
-  ]);
-
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- we know it exists because of the prompt
-  const { directoryInput: selectedDirectory = directory! } = answers;
+      transformer: (d: string) => d.trim()
+    });
+    selectedDirectory = selectedDirectory.trim();
+  }
   const { exists, absolute: root } = directoryInfo({
-    directory: selectedDirectory,
+    directory: selectedDirectory
   });
   if (!exists) {
     return endMigration({
       success: false,
-      message: `Directory ${picocolors.dim(`(${root})`)} does not exist`,
+      message: `Directory ${picocolors.dim(`(${root})`)} does not exist`
     });
   }
 
@@ -94,7 +88,7 @@ export async function migrate(
       success: false,
       message: `Directory (${picocolors.dim(
         root
-      )}) does not appear to be a repository`,
+      )}) does not appear to be a repository`
     });
   }
 
@@ -106,7 +100,7 @@ export async function migrate(
       success: false,
       message: `Unable to read determine package manager details from ${picocolors.dim(
         root
-      )}`,
+      )}`
     });
   }
 
@@ -115,7 +109,7 @@ export async function migrate(
   if (!fromVersion) {
     return endMigration({
       success: false,
-      message: `Unable to infer the version of turbo being used by ${project.name}`,
+      message: `Unable to infer the version of turbo being used by ${project.name}`
     });
   }
 
@@ -130,14 +124,14 @@ export async function migrate(
     }
     return endMigration({
       success: false,
-      message,
+      message
     });
   }
 
   if (!toVersion) {
     return endMigration({
       success: false,
-      message: "Unable to fetch the latest version of turbo",
+      message: "Unable to fetch the latest version of turbo"
     });
   }
 
@@ -146,7 +140,7 @@ export async function migrate(
       success: true,
       message: `Nothing to do, current version (${picocolors.bold(
         fromVersion
-      )}) is the same as the requested version (${picocolors.bold(toVersion)})`,
+      )}) is the same as the requested version (${picocolors.bold(toVersion)})`
     });
   }
 
@@ -190,7 +184,7 @@ export async function migrate(
     // eslint-disable-next-line no-await-in-loop -- transforms have to run serially to avoid conflicts
     const result = await codemod.transformer({
       root: project.paths.root,
-      options,
+      options: { ...options, toVersion }
     });
     Runner.logResults(result);
     results.push(result);
@@ -206,7 +200,7 @@ export async function migrate(
     return endMigration({
       success: false,
       message:
-        "Could not complete migration due to codemod errors. Please fix the errors and try again.",
+        "Could not complete migration due to codemod errors. Please fix the errors and try again."
     });
   }
 
@@ -215,13 +209,13 @@ export async function migrate(
   // find the upgrade command, and run it
   const upgradeCommand = await getTurboUpgradeCommand({
     project,
-    to: options.to,
+    to: options.to
   });
 
   if (!upgradeCommand) {
     return endMigration({
       success: false,
-      message: "Unable to determine upgrade command",
+      message: "Unable to determine upgrade command"
     });
   }
 
@@ -244,7 +238,7 @@ export async function migrate(
       } catch (err: unknown) {
         return endMigration({
           success: false,
-          message: `Unable to upgrade turbo: ${String(err)}`,
+          message: `Unable to upgrade turbo: ${String(err)}`
         });
       }
     }

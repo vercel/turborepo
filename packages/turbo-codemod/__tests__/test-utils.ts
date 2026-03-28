@@ -5,7 +5,7 @@ import type { Project } from "@turbo/workspaces";
 export function getWorkspaceDetailsMockReturnValue({
   root,
   packageManager = "npm",
-  singlePackage = false,
+  singlePackage = false
 }: {
   root: string;
   packageManager: PackageManager;
@@ -18,7 +18,7 @@ export function getWorkspaceDetailsMockReturnValue({
       root,
       packageJson: path.join(root, "package.json"),
       lockfile: path.join(root, "yarn.lock"),
-      nodeModules: path.join(root, "node_modules"),
+      nodeModules: path.join(root, "node_modules")
     },
     workspaceData: {
       globs: singlePackage ? [] : ["packages/*"],
@@ -36,10 +36,10 @@ export function getWorkspaceDetailsMockReturnValue({
                 nodeModules: path.join(
                   root,
                   "packages/mock-package/node_modules"
-                ),
-              },
-            },
-          ],
-    },
+                )
+              }
+            }
+          ]
+    }
   };
 }

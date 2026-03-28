@@ -1,0 +1,48 @@
+# Nextest configuration for Turborepo
+# See https://nexte.st/book/configuration.html
+
+[profile.default]
+failure-output = "immediate-final"
+
+[test-groups]
+# turborepo-process tests should run serially to avoid resource contention
+# and timing issues, especially on macOS where PTY devices are limited
+turborepo-process-serial = { max-threads = 1 }
+
+# turborepo-dirs tests should run serially to avoid race conditions
+# with environment variable manipulation
+turborepo-dirs-serial = { max-threads = 1 }
+
+# turbo watch tests spawn daemon processes and file watchers that fight
+# over resources when run concurrently
+turbo-watch-serial = { max-threads = 1 }
+
+[[profile.default.overrides]]
+# These tests run package installs from the network during setup, which can
+# take 20-60s+ on cold CI runners. Give them extra time instead of retries.
+filter = 'package(turbo) and (test(prune_test::test_prune_composable_config) or test(lockfile-aware-caching/new-package))'
+slow-timeout = { period = "120s", terminate-after = 2 }
+
+[[profile.default.overrides]]
+# Run all tests in the turborepo-process crate serially
+filter = 'package(turborepo-process)'
+test-group = 'turborepo-process-serial'
+
+[[profile.default.overrides]]
+# Run all tests in the turborepo-dirs crate serially
+# These tests manipulate environment variables
+filter = 'package(turborepo-dirs)'
+test-group = 'turborepo-dirs-serial'
+
+[[profile.default.overrides]]
+# Watch tests spawn long-running turbo watch processes with 30s internal
+# timeouts. Serialize to avoid daemon socket contention and give extra time.
+filter = 'package(turbo) and test(/^watch_/)'
+test-group = 'turbo-watch-serial'
+slow-timeout = { period = "60s", terminate-after = 2 }
+
+[[profile.default.overrides]]
+# Cyclic package graph tests could deadlock if the validate_graph guard
+# ever regresses, so cap them to prevent 45-min CI hangs.
+filter = 'test(/cyclic/) or test(/cycle/)'
+slow-timeout = { period = "30s", terminate-after = 2 }

@@ -20,23 +20,26 @@ use thiserror::Error;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
 
-pub mod clone;
 pub mod git;
 mod hash_object;
 mod ls_tree;
 pub mod manual;
 pub mod package_deps;
+mod repo_index;
 mod status;
+pub mod worktree;
+
+#[cfg(test)]
+mod git_index_regression_tests;
+#[cfg(test)]
+mod test_utils;
+
+pub use repo_index::{RepoGitIndex, walk_candidate_files};
+pub use turborepo_hash::OidHash;
+pub use worktree::WorktreeInfo;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[cfg(feature = "git2")]
-    #[error("Git error on {1}: {0}")]
-    Git2(
-        #[source] git2::Error,
-        String,
-        #[backtrace] backtrace::Backtrace,
-    ),
     #[error("Git error: {0}")]
     Git(String, #[backtrace] backtrace::Backtrace),
     #[error(
@@ -69,7 +72,32 @@ pub enum Error {
     UnableToResolveRef,
 }
 
-pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
+pub type GitHashes = HashMap<RelativeUnixPathBuf, OidHash>;
+
+fn is_os_resource_error(e: &std::io::Error) -> bool {
+    matches!(
+        e.raw_os_error(),
+        Some(24) // EMFILE: too many open files
+        | Some(12) // ENOMEM: out of memory
+    )
+}
+
+fn walk_error_is_resource_exhaustion(e: &globwalk::WalkError) -> bool {
+    // Walk the error source chain looking for an underlying io::Error.
+    let mut source: Option<&dyn std::error::Error> = Some(e);
+    while let Some(err) = source {
+        if let Some(io_err) = err.downcast_ref::<std::io::Error>()
+            && is_os_resource_error(io_err)
+        {
+            return true;
+        }
+        source = err.source();
+    }
+    // wax wraps errors in ways that can break the downcast chain.
+    // Fall back to checking the Display string.
+    let msg = e.to_string();
+    msg.contains("Too many open files") || msg.contains("os error 24")
+}
 
 impl From<wax::BuildError> for Error {
     fn from(value: wax::BuildError) -> Self {
@@ -82,9 +110,14 @@ impl Error {
         Error::Git(s.into(), Backtrace::capture())
     }
 
-    #[cfg(feature = "git2")]
-    pub(crate) fn git2_error_context(error: git2::Error, error_context: String) -> Self {
-        Error::Git2(error, error_context, Backtrace::capture())
+    /// Returns true if this error indicates OS resource exhaustion (e.g. too
+    /// many open files) where a fallback to manual hashing would also fail.
+    pub fn is_resource_exhaustion(&self) -> bool {
+        match self {
+            Error::Io(e, _) => is_os_resource_error(e),
+            Error::Walk(e) => walk_error_is_resource_exhaustion(e),
+            _ => false,
+        }
     }
 }
 
@@ -251,8 +284,161 @@ impl SCM {
             })
     }
 
+    /// Creates an SCM instance using a pre-resolved git root, avoiding the
+    /// `git rev-parse --show-cdup` subprocess call that `new` would perform.
+    /// Falls back to `new` if the git binary cannot be found.
+    #[tracing::instrument]
+    pub fn new_with_git_root(
+        path_in_repo: &AbsoluteSystemPath,
+        git_root: AbsoluteSystemPathBuf,
+    ) -> SCM {
+        match GitRepo::find_bin() {
+            Ok(bin) => SCM::Git(GitRepo {
+                root: git_root,
+                bin,
+            }),
+            Err(e) => {
+                debug!(
+                    "git binary not found: {}, continuing with manual hashing",
+                    e
+                );
+                SCM::Manual
+            }
+        }
+    }
+
     pub fn is_manual(&self) -> bool {
         matches!(self, SCM::Manual)
+    }
+
+    pub fn git_root(&self) -> Option<&AbsoluteSystemPath> {
+        match self {
+            SCM::Git(git) => Some(&git.root),
+            SCM::Manual => None,
+        }
+    }
+
+    /// Build a repo-wide git index that caches `git ls-tree` and `git status`
+    /// results. Returns `None` for manual SCM mode or when the package count
+    /// is too small to benefit. Callers should build this once before parallel
+    /// file hashing and pass it through to `get_package_file_hashes`.
+    pub fn build_repo_index(&self, package_count: usize) -> Option<RepoGitIndex> {
+        // The repo index trades 2N subprocess spawns for 2 repo-wide git
+        // commands + a BTreeMap build. For small repos, the overhead of
+        // scanning the entire repo outweighs the subprocess savings.
+        if package_count < 16 {
+            debug!(
+                "skipping repo index for small repo (package_count={})",
+                package_count,
+            );
+            return None;
+        }
+
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new(git) {
+                Ok(index) => {
+                    debug!("repo git index built successfully");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build repo git index: {}. Will hash per-package.",
+                        e
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
+    }
+
+    /// Build the repo index without a package-count threshold.
+    ///
+    /// This is intended for early, speculative construction: we spawn it on a
+    /// background thread before the package graph is built so the git I/O
+    /// overlaps with package discovery. If the repo turns out to be small the
+    /// caller can simply ignore the result.
+    pub fn build_repo_index_eager(&self) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new(git) {
+                Ok(index) => {
+                    debug!("repo git index built eagerly");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build repo git index eagerly: {}. Will hash per-package.",
+                        e,
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
+    }
+
+    /// Build only the tracked portion of the repo index.
+    ///
+    /// This is intended for speculative startup work on the `turbo run` path.
+    /// Untracked-file discovery can be layered on later once the selected
+    /// package set is known.
+    pub fn build_tracked_repo_index_eager(&self) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new_tracked(git) {
+                Ok(index) => {
+                    debug!("tracked repo git index built eagerly");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build tracked repo git index eagerly: {}. Will hash \
+                         per-package.",
+                        e,
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
+    }
+
+    /// Build the full repo index (tracked + untracked) using parallel git
+    /// subprocesses for the tracked index, and a race between
+    /// `walk_candidate_files` and `git ls-files --others` for untracked
+    /// discovery. The race ensures optimal performance on both macOS
+    /// (where the walk wins) and Linux (where ls-files wins).
+    pub fn build_repo_index_from_subprocesses(
+        &self,
+        prefixes: &[RelativeUnixPathBuf],
+    ) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new_from_subprocess_and_walk(git, prefixes) {
+                Ok(index) => {
+                    debug!("repo git index built from subprocess + walk race");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build repo git index from subprocesses: {}. Will hash \
+                         per-package.",
+                        e,
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
+    }
+
+    pub fn populate_repo_index_untracked(
+        &self,
+        repo_index: &mut RepoGitIndex,
+        prefixes: &[RelativeUnixPathBuf],
+    ) -> Result<(), Error> {
+        match self {
+            SCM::Git(git) => repo_index.populate_untracked_for_prefixes(git, prefixes),
+            SCM::Manual => Ok(()),
+        }
     }
 }
 

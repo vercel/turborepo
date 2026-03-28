@@ -3,6 +3,9 @@
 //! Any parsing of files should attempt to produce value of `Spanned<T>` so if
 //! we need to reference where T came from the span is available.
 
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
+
 use std::{
     fmt::Display,
     iter,
@@ -13,8 +16,10 @@ use std::{
 
 use biome_deserialize::{Deserializable, DeserializableValue, DeserializationDiagnostic};
 use miette::{Diagnostic, NamedSource, SourceSpan};
+use schemars::{JsonSchema, r#gen::SchemaGenerator, schema::Schema};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use ts_rs::TS;
 
 /// Base URL for links supplied in error messages. You can use the TURBO_SITE
 /// environment variable at compile time to set a base URL for easier debugging.
@@ -23,7 +28,7 @@ use thiserror::Error;
 /// used.
 pub const TURBO_SITE: &str = match option_env!("TURBO_SITE") {
     Some(url) => url,
-    None => "https://turborepo.com",
+    None => "https://turborepo.dev",
 };
 
 /// A little helper to convert from biome's syntax errors to miette.
@@ -81,6 +86,50 @@ pub struct Spanned<T> {
     pub path: Option<Arc<str>>,
     #[serde(skip)]
     pub text: Option<Arc<str>>,
+}
+
+/// `Spanned<T>` is transparent for JSON Schema - it generates the same schema
+/// as `T`. This is because `Spanned` is marked `#[serde(transparent)]` and only
+/// adds source location metadata that is not serialized.
+impl<T: JsonSchema> JsonSchema for Spanned<T> {
+    fn schema_name() -> String {
+        T::schema_name()
+    }
+
+    fn json_schema(generator: &mut SchemaGenerator) -> Schema {
+        T::json_schema(generator)
+    }
+}
+
+/// `Spanned<T>` is transparent for TypeScript - it generates the same type as
+/// `T`.
+impl<T: TS + 'static> TS for Spanned<T> {
+    type WithoutGenerics = T::WithoutGenerics;
+    type OptionInnerType = Self;
+
+    fn name() -> String {
+        T::name()
+    }
+
+    fn decl() -> String {
+        T::decl()
+    }
+
+    fn decl_concrete() -> String {
+        T::decl_concrete()
+    }
+
+    fn inline() -> String {
+        T::inline()
+    }
+
+    fn inline_flattened() -> String {
+        T::inline_flattened()
+    }
+
+    fn dependencies() -> Vec<ts_rs::Dependency> {
+        T::dependencies()
+    }
 }
 
 impl<T> IntoIterator for Spanned<T> {

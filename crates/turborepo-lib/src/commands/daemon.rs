@@ -8,17 +8,16 @@ use time::{format_description, OffsetDateTime};
 use tokio::signal::ctrl_c;
 use tracing::{trace, warn};
 use turbopath::AbsoluteSystemPath;
+use turborepo_daemon::{
+    endpoint::SocketOpenError, CloseReason, DaemonConnector, DaemonConnectorError, DaemonError,
+    Paths, TurboGrpcService,
+};
 use turborepo_ui::{color, BOLD_GREEN, BOLD_RED, GREY};
 use which::which;
 
 use super::CommandBase;
 use crate::{
-    cli::DaemonCommand,
-    daemon::{
-        endpoint::SocketOpenError, CloseReason, DaemonConnector, DaemonConnectorError, DaemonError,
-        Paths,
-    },
-    tracing::TurboSubscriber,
+    cli::DaemonCommand, package_changes_watcher::PackageChangesWatcher, tracing::TurboSubscriber,
 };
 
 const DAEMON_NOT_RUNNING_MESSAGE: &str =
@@ -68,7 +67,11 @@ pub async fn daemon_client(
     match command {
         DaemonCommand::Restart => {
             let result: Result<_, DaemonError> = try {
-                let client = connector.clone().connect().await?;
+                let client = connector
+                    .clone()
+                    .connect()
+                    .await
+                    .map_err(DaemonError::DaemonConnect)?;
                 client.restart().await?
             };
 
@@ -330,12 +333,21 @@ pub async fn daemon_server(
         CloseReason::Interrupt
     });
     let custom_turbo_json_path = convert_turbo_json_path(turbo_json_path.as_deref())?;
-    let server = crate::daemon::TurboGrpcService::new(
+    let server = TurboGrpcService::new(
         base.repo_root.clone(),
         paths,
         timeout,
         exit_signal,
         custom_turbo_json_path,
+        |args| {
+            PackageChangesWatcher::new(
+                args.repo_root,
+                args.file_events,
+                args.hash_watcher,
+                args.custom_turbo_json_path,
+                false,
+            )
+        },
     );
 
     let reason = server.serve().await?;

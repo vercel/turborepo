@@ -8,8 +8,10 @@ license = "MIT"
 workspace = true
 
 [dependencies]
+schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
+ts-rs = { workspace = true }
 turborepo-repository = { workspace = true }
 
 [dev-dependencies]

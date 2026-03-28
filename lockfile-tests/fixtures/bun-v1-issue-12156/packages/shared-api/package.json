@@ -1,0 +1,30 @@
+{
+  "name": "@hebo/shared-api",
+  "version": "0.0.1",
+  "dependencies": {
+    "@opentelemetry/api": "catalog:",
+    "@opentelemetry/api-logs": "^0.212.0",
+    "@opentelemetry/exporter-logs-otlp-proto": "^0.212.0",
+    "@opentelemetry/exporter-metrics-otlp-proto": "^0.212.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.212.0",
+    "@opentelemetry/otlp-exporter-base": "^0.212.0",
+    "@opentelemetry/resources": "^2.5.1",
+    "@opentelemetry/sdk-logs": "^0.212.0",
+    "@opentelemetry/sdk-metrics": "^2.5.0",
+    "@opentelemetry/sdk-trace-base": "^2.5.0",
+    "@prisma/adapter-pg": "catalog:",
+    "@prisma/instrumentation": "catalog:",
+    "@sindresorhus/slugify": "^3.0.0",
+    "better-auth": "catalog:",
+    "crypto-random-string": "^5.0.0"
+  },
+  "devDependencies": {
+    "@hebo/typescript-config": "workspace:*",
+    "@types/bun": "catalog:"
+  },
+  "peerDependencies": {
+    "@elysiajs/opentelemetry": "catalog:",
+    "elysia": "catalog:",
+    "sst": "catalog:"
+  }
+}

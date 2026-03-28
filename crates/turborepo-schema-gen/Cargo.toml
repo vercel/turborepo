@@ -1,0 +1,27 @@
+[package]
+name = "turborepo-schema-gen"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "JSON Schema and TypeScript type generator for turbo.json configuration"
+
+[[bin]]
+name = "turbo-schema-gen"
+path = "src/main.rs"
+
+[dependencies]
+# Schema generation
+schemars = { workspace = true }
+ts-rs = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# CLI
+clap = { workspace = true, features = ["derive"] }
+
+# Turborepo types
+turborepo-boundaries = { path = "../turborepo-boundaries" }
+turborepo-turbo-json = { path = "../turborepo-turbo-json" }
+turborepo-types = { path = "../turborepo-types" }

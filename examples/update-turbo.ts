@@ -4,7 +4,7 @@ import * as path from "path";
 
 /** Script to update the "turbo" package across all example directories */
 
-const examplesDir = path.resolve(__dirname);
+const examplesDir = path.dirname(new URL(import.meta.url).pathname);
 
 /** Get all directories in the examples folder */
 const exampleDirs = readdirSync(examplesDir).filter((dir) =>
@@ -43,11 +43,17 @@ exampleDirs.forEach((dir) => {
       throw new Error(`Unknown package manager "${packageManager}" in ${dir}`);
     }
 
+    const cwd = path.join(examplesDir, dir);
+
+    // Yarn Classic refuses to upgrade if the lockfile is out of sync.
+    // Sync it first so the upgrade command can proceed.
+    if (packageManager.startsWith("yarn")) {
+      console.log(`Running yarn install in ${dir} (syncing lockfile)...`);
+      execSync("yarn install", { stdio: "inherit", cwd });
+    }
+
     console.log(`Running ${updateCmd} in ${dir}...`);
-    execSync(updateCmd, {
-      stdio: "inherit",
-      cwd: path.join(examplesDir, dir),
-    });
+    execSync(updateCmd, { stdio: "inherit", cwd });
   } catch (error) {
     throw new Error(`Failed to process ${packageJsonPath}: ${error}`);
   }

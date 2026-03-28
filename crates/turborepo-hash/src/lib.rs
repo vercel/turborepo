@@ -1,0 +1,823 @@
+//! Turborepo Hash
+//!
+//! This crate provides hashing utilities for turborepo. It uses Cap'n Proto for
+//! deterministic serialization across languages and platforms, then applies
+//! xxHash64 for fast hashing.
+
+mod oid_hash;
+mod traits;
+
+use std::{collections::HashMap, sync::Arc};
+
+use capnp::message::{Builder, HeapAllocator};
+pub use oid_hash::OidHash;
+pub use traits::TurboHash;
+// Re-export for backward compatibility. New code should import from `turborepo_types`.
+#[deprecated(
+    since = "2.4.0",
+    note = "Import `EnvMode` directly from `turborepo_types` instead"
+)]
+pub use turborepo_types::EnvMode;
+#[deprecated(
+    since = "2.4.0",
+    note = "Import `TaskOutputs` directly from `turborepo_types` instead"
+)]
+pub use turborepo_types::TaskOutputs;
+
+#[allow(dead_code)]
+mod proto_capnp {
+    use turborepo_types::EnvMode;
+
+    include!(concat!(env!("OUT_DIR"), "/src/proto_capnp.rs"));
+
+    impl From<EnvMode> for global_hashable::EnvMode {
+        fn from(value: EnvMode) -> Self {
+            match value {
+                EnvMode::Loose => global_hashable::EnvMode::Loose,
+                EnvMode::Strict => global_hashable::EnvMode::Strict,
+            }
+        }
+    }
+
+    impl From<EnvMode> for task_hashable::EnvMode {
+        fn from(value: EnvMode) -> Self {
+            match value {
+                EnvMode::Loose => task_hashable::EnvMode::Loose,
+                EnvMode::Strict => task_hashable::EnvMode::Strict,
+            }
+        }
+    }
+}
+
+/// Type alias for environment variable pairs used in hashing.
+pub type EnvVarPairs = Vec<String>;
+
+/// Type alias for environment variable pairs (same as EnvVarPairs).
+/// This matches the type from turborepo-env::EnvironmentVariablePairs.
+pub type EnvironmentVariablePairs = Vec<String>;
+
+#[derive(Debug)]
+pub struct TaskHashable<'a> {
+    // hashes
+    pub global_hash: &'a str,
+    pub task_dependency_hashes: Vec<Arc<str>>,
+    pub hash_of_files: &'a str,
+    pub external_deps_hash: Option<&'a str>,
+
+    // task
+    pub package_dir: Option<turbopath::RelativeUnixPathBuf>,
+    pub task: &'a str,
+    pub outputs: TaskOutputs,
+    pub pass_through_args: &'a [String],
+
+    // env
+    pub env: &'a [String],
+    pub resolved_env_vars: EnvVarPairs,
+    pub pass_through_env: &'a [String],
+    pub env_mode: EnvMode,
+}
+
+impl TaskHashable<'_> {
+    /// Calculate the task hash, applying env_mode rules.
+    ///
+    /// In Loose mode, pass_through_env is cleared before hashing.
+    pub fn calculate_task_hash(mut self) -> String {
+        if matches!(self.env_mode, EnvMode::Loose) {
+            self.pass_through_env = &[];
+        }
+
+        self.hash()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GlobalHashable<'a> {
+    pub global_cache_key: &'static str,
+    pub global_file_hash_map: &'a HashMap<turbopath::RelativeUnixPathBuf, String>,
+    // These are None in single package mode
+    pub root_external_dependencies_hash: Option<&'a str>,
+    pub root_internal_dependencies_hash: Option<&'a str>,
+    pub engines: HashMap<&'a str, &'a str>,
+    pub env: &'a [String],
+    pub resolved_env_vars: EnvironmentVariablePairs,
+    pub pass_through_env: &'a [String],
+    pub env_mode: EnvMode,
+    pub framework_inference: bool,
+    pub global_configuration: bool,
+}
+
+pub struct LockFilePackages(pub Vec<turborepo_lockfiles::Package>);
+
+pub struct LockFilePackagesRef<'a>(pub Vec<&'a turborepo_lockfiles::Package>);
+
+#[derive(Debug, Clone)]
+pub struct FileHashes(pub Vec<(turbopath::RelativeUnixPathBuf, OidHash)>);
+
+/// Wrapper type for TaskOutputs to enable capnp serialization.
+/// This is needed due to Rust's orphan rule - we can't implement From
+/// for two foreign types (TaskOutputs and Builder).
+pub struct HashableTaskOutputs(pub TaskOutputs);
+
+impl From<TaskOutputs> for HashableTaskOutputs {
+    fn from(value: TaskOutputs) -> Self {
+        HashableTaskOutputs(value)
+    }
+}
+
+impl From<HashableTaskOutputs> for Builder<HeapAllocator> {
+    fn from(HashableTaskOutputs(value): HashableTaskOutputs) -> Self {
+        let mut message = ::capnp::message::TypedBuilder::<
+            proto_capnp::task_outputs::Owned,
+            HeapAllocator,
+        >::new_default();
+        let mut builder = message.init_root();
+
+        {
+            let mut inclusions = builder
+                .reborrow()
+                .init_inclusions(value.inclusions.len() as u32);
+            for (i, inclusion) in value.inclusions.iter().enumerate() {
+                inclusions.set(i as u32, inclusion);
+            }
+        }
+
+        {
+            let mut exclusions = builder
+                .reborrow()
+                .init_exclusions(value.exclusions.len() as u32);
+            for (i, exclusion) in value.exclusions.iter().enumerate() {
+                exclusions.set(i as u32, exclusion);
+            }
+        }
+
+        message.into_inner()
+    }
+}
+
+impl From<LockFilePackages> for Builder<HeapAllocator> {
+    fn from(LockFilePackages(packages): LockFilePackages) -> Self {
+        let mut message = ::capnp::message::TypedBuilder::<
+            proto_capnp::lock_file_packages::Owned,
+            HeapAllocator,
+        >::new_default();
+        let mut builder = message.init_root();
+
+        {
+            let mut packages_builder = builder.reborrow().init_packages(packages.len() as u32);
+            for (i, turborepo_lockfiles::Package { key, version }) in packages.iter().enumerate() {
+                let mut package = packages_builder.reborrow().get(i as u32);
+                package.set_key(key);
+                package.set_version(version);
+                // we don't track this in rust, set it to true
+                package.set_found(true);
+            }
+        }
+
+        // We're okay to unwrap here because we haven't hit the nesting
+        // limit and the message will not have cycles.
+        let size = builder
+            .total_size()
+            .expect("unable to calculate total size")
+            .word_count
+            + 1; // + 1 to solve an off by one error inside capnp
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
+        canon_builder
+            .set_root_canonical(builder.reborrow_as_reader())
+            .expect("can't fail");
+
+        canon_builder
+    }
+}
+
+impl<'a> From<LockFilePackagesRef<'a>> for Builder<HeapAllocator> {
+    fn from(LockFilePackagesRef(packages): LockFilePackagesRef<'a>) -> Self {
+        let mut message = ::capnp::message::TypedBuilder::<
+            proto_capnp::lock_file_packages::Owned,
+            HeapAllocator,
+        >::new_default();
+        let mut builder = message.init_root();
+
+        {
+            let mut packages_builder = builder.reborrow().init_packages(packages.len() as u32);
+            for (i, pkg) in packages.iter().enumerate() {
+                let mut package = packages_builder.reborrow().get(i as u32);
+                package.set_key(&pkg.key);
+                package.set_version(&pkg.version);
+                // we don't track this in rust, set it to true
+                package.set_found(true);
+            }
+        }
+
+        // We're okay to unwrap here because we haven't hit the nesting
+        // limit and the message will not have cycles.
+        let size = builder
+            .total_size()
+            .expect("unable to calculate total size")
+            .word_count
+            + 1; // + 1 to solve an off by one error inside capnp
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
+        canon_builder
+            .set_root_canonical(builder.reborrow_as_reader())
+            .expect("can't fail");
+
+        canon_builder
+    }
+}
+
+impl From<FileHashes> for Builder<HeapAllocator> {
+    fn from(FileHashes(file_hashes): FileHashes) -> Self {
+        debug_assert!(
+            file_hashes.windows(2).all(|w| w[0].0 <= w[1].0),
+            "FileHashes inner Vec must be sorted by key"
+        );
+
+        let mut message = ::capnp::message::TypedBuilder::<
+            proto_capnp::file_hashes::Owned,
+            HeapAllocator,
+        >::new_default();
+        let mut builder = message.init_root();
+
+        {
+            let mut entries = builder
+                .reborrow()
+                .init_file_hashes(file_hashes.len() as u32);
+
+            for (i, (key, value)) in file_hashes.iter().enumerate() {
+                let mut entry = entries.reborrow().get(i as u32);
+                entry.set_key(key.as_str());
+                entry.set_value(&**value);
+            }
+        }
+
+        // We're okay to unwrap here because we haven't hit the nesting
+        // limit and the message will not have cycles.
+        let size = builder
+            .total_size()
+            .expect("unable to calculate total size")
+            .word_count
+            + 1; // + 1 to solve an off by one error inside capnp
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
+        canon_builder
+            .set_root_canonical(builder.reborrow_as_reader())
+            .expect("can't fail");
+
+        canon_builder
+    }
+}
+
+impl From<&FileHashes> for Builder<HeapAllocator> {
+    fn from(FileHashes(file_hashes): &FileHashes) -> Self {
+        debug_assert!(
+            file_hashes.windows(2).all(|w| w[0].0 <= w[1].0),
+            "FileHashes inner Vec must be sorted by key"
+        );
+
+        let mut message = ::capnp::message::TypedBuilder::<
+            proto_capnp::file_hashes::Owned,
+            HeapAllocator,
+        >::new_default();
+        let mut builder = message.init_root();
+
+        {
+            let mut entries = builder
+                .reborrow()
+                .init_file_hashes(file_hashes.len() as u32);
+
+            for (i, (key, value)) in file_hashes.iter().enumerate() {
+                let mut entry = entries.reborrow().get(i as u32);
+                entry.set_key(key.as_str());
+                entry.set_value(&**value);
+            }
+        }
+
+        // We're okay to unwrap here because we haven't hit the nesting
+        // limit and the message will not have cycles.
+        let size = builder
+            .total_size()
+            .expect("unable to calculate total size")
+            .word_count
+            + 1; // + 1 to solve an off by one error inside capnp
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
+        canon_builder
+            .set_root_canonical(builder.reborrow_as_reader())
+            .expect("can't fail");
+
+        canon_builder
+    }
+}
+
+impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
+    fn from(task_hashable: TaskHashable) -> Self {
+        let mut message =
+            ::capnp::message::TypedBuilder::<proto_capnp::task_hashable::Owned>::new_default();
+        let mut builder = message.init_root();
+
+        builder.set_global_hash(task_hashable.global_hash);
+        if let Some(package_dir) = task_hashable.package_dir {
+            builder.set_package_dir(package_dir.to_string());
+        }
+
+        builder.set_hash_of_files(task_hashable.hash_of_files);
+        if let Some(external_deps_hash) = task_hashable.external_deps_hash {
+            builder.set_external_deps_hash(external_deps_hash);
+        }
+
+        builder.set_task(task_hashable.task);
+        builder.set_env_mode(task_hashable.env_mode.into());
+
+        {
+            let output_builder: Builder<_> = HashableTaskOutputs(task_hashable.outputs).into();
+            builder
+                .set_outputs(output_builder.get_root_as_reader().unwrap())
+                .unwrap();
+        }
+
+        {
+            let mut task_dependency_hashes_builder = builder
+                .reborrow()
+                .init_task_dependency_hashes(task_hashable.task_dependency_hashes.len() as u32);
+            for (i, hash) in task_hashable.task_dependency_hashes.iter().enumerate() {
+                task_dependency_hashes_builder.set(i as u32, &**hash);
+            }
+        }
+
+        {
+            let mut pass_through_args_builder = builder
+                .reborrow()
+                .init_pass_thru_args(task_hashable.pass_through_args.len() as u32);
+            for (i, arg) in task_hashable.pass_through_args.iter().enumerate() {
+                pass_through_args_builder.set(i as u32, arg);
+            }
+        }
+
+        {
+            let mut env_builder = builder.reborrow().init_env(task_hashable.env.len() as u32);
+            for (i, env) in task_hashable.env.iter().enumerate() {
+                env_builder.set(i as u32, env);
+            }
+        }
+
+        {
+            let mut pass_through_env_builder = builder
+                .reborrow()
+                .init_pass_thru_env(task_hashable.pass_through_env.len() as u32);
+            for (i, env) in task_hashable.pass_through_env.iter().enumerate() {
+                pass_through_env_builder.set(i as u32, env);
+            }
+        }
+
+        {
+            let mut resolved_env_vars_builder = builder
+                .reborrow()
+                .init_resolved_env_vars(task_hashable.resolved_env_vars.len() as u32);
+            for (i, env) in task_hashable.resolved_env_vars.iter().enumerate() {
+                resolved_env_vars_builder.set(i as u32, env);
+            }
+        }
+
+        // We're okay to unwrap here because we haven't hit the nesting
+        // limit and the message will not have cycles.
+        let size = builder
+            .total_size()
+            .expect("unable to calculate total size")
+            .word_count
+            + 1; // + 1 to solve an off by one error inside capnp
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
+        canon_builder
+            .set_root_canonical(builder.reborrow_as_reader())
+            .expect("can't fail");
+
+        canon_builder
+    }
+}
+
+impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
+    fn from(hashable: GlobalHashable) -> Self {
+        let mut message =
+            ::capnp::message::TypedBuilder::<proto_capnp::global_hashable::Owned>::new_default();
+
+        let mut builder = message.init_root();
+
+        builder.set_global_cache_key(hashable.global_cache_key);
+
+        {
+            let mut entries = builder
+                .reborrow()
+                .init_global_file_hash_map(hashable.global_file_hash_map.len() as u32);
+
+            // get a sorted iterator over keys and values of the hashmap
+            // and set the entries in the capnp message
+
+            let mut hashable: Vec<_> = hashable.global_file_hash_map.iter().collect();
+            hashable.sort_unstable_by(|a, b| a.0.cmp(b.0));
+
+            for (i, (key, value)) in hashable.iter().enumerate() {
+                let mut entry = entries.reborrow().get(i as u32);
+                entry.set_key(key.as_str());
+                entry.set_value(value);
+            }
+        }
+
+        {
+            let mut entries = builder
+                .reborrow()
+                .init_engines(hashable.engines.len() as u32);
+
+            // get a sorted iterator over keys and values of the hashmap
+            // and set the entries in the capnp message
+
+            let mut hashable: Vec<_> = hashable.engines.iter().collect();
+            hashable.sort_unstable_by(|a, b| a.0.cmp(b.0));
+
+            for (i, (key, value)) in hashable.iter().enumerate() {
+                let mut entry = entries.reborrow().get(i as u32);
+                entry.set_key(key);
+                entry.set_value(value);
+            }
+        }
+
+        if let Some(root_external_dependencies_hash) = hashable.root_external_dependencies_hash {
+            builder.set_root_external_deps_hash(root_external_dependencies_hash);
+        }
+
+        if let Some(root_internal_dependencies_hash) = hashable.root_internal_dependencies_hash {
+            builder.set_root_internal_deps_hash(root_internal_dependencies_hash);
+        }
+
+        {
+            let mut entries = builder.reborrow().init_env(hashable.env.len() as u32);
+            for (i, env) in hashable.env.iter().enumerate() {
+                entries.set(i as u32, env);
+            }
+        }
+
+        {
+            let mut resolved_env_vars = builder
+                .reborrow()
+                .init_resolved_env_vars(hashable.resolved_env_vars.len() as u32);
+            for (i, env) in hashable.resolved_env_vars.iter().enumerate() {
+                resolved_env_vars.set(i as u32, env);
+            }
+        }
+
+        {
+            let mut pass_through_env = builder
+                .reborrow()
+                .init_pass_through_env(hashable.pass_through_env.len() as u32);
+            for (i, env) in hashable.pass_through_env.iter().enumerate() {
+                pass_through_env.set(i as u32, env);
+            }
+        }
+
+        builder.set_env_mode(match hashable.env_mode {
+            EnvMode::Loose => proto_capnp::global_hashable::EnvMode::Loose,
+            EnvMode::Strict => proto_capnp::global_hashable::EnvMode::Strict,
+        });
+
+        builder.set_framework_inference(hashable.framework_inference);
+        builder.set_global_configuration(hashable.global_configuration);
+
+        // We're okay to unwrap here because we haven't hit the nesting
+        // limit and the message will not have cycles.
+        let size = builder
+            .total_size()
+            .expect("unable to calculate total size")
+            .word_count
+            + 1; // + 1 to solve an off by one error inside capnp
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
+        canon_builder
+            .set_root_canonical(builder.reborrow_as_reader())
+            .expect("can't fail");
+
+        canon_builder
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::sync::Arc;
+
+    use test_case::test_case;
+    use turborepo_lockfiles::Package;
+    use turborepo_types::{EnvMode, TaskOutputs};
+
+    use super::{
+        FileHashes, GlobalHashable, LockFilePackages, LockFilePackagesRef, OidHash, TaskHashable,
+        TurboHash,
+    };
+
+    #[test]
+    fn task_hashable() {
+        let task_hashable = TaskHashable {
+            global_hash: "global_hash",
+            task_dependency_hashes: vec![Arc::from("task_dependency_hash")],
+            package_dir: Some(turbopath::RelativeUnixPathBuf::new("package_dir").unwrap()),
+            hash_of_files: "hash_of_files",
+            external_deps_hash: Some("external_deps_hash"),
+            task: "task",
+            outputs: TaskOutputs {
+                inclusions: vec!["inclusions".to_string()],
+                exclusions: vec!["exclusions".to_string()],
+            },
+            pass_through_args: &["pass_thru_args".to_string()],
+            env: &["env".to_string()],
+            resolved_env_vars: vec![],
+            pass_through_env: &["pass_thru_env".to_string()],
+            env_mode: EnvMode::Loose,
+        };
+
+        assert_eq!(task_hashable.hash(), "1f8b13161f57fca1");
+    }
+
+    #[test]
+    fn task_hashable_multiple_dependency_hashes() {
+        let task_hashable = TaskHashable {
+            global_hash: "global_hash",
+            task_dependency_hashes: vec![
+                Arc::from("dep_hash_a"),
+                Arc::from("dep_hash_b"),
+                Arc::from("dep_hash_c"),
+            ],
+            package_dir: Some(turbopath::RelativeUnixPathBuf::new("package_dir").unwrap()),
+            hash_of_files: "hash_of_files",
+            external_deps_hash: Some("external_deps_hash"),
+            task: "task",
+            outputs: TaskOutputs {
+                inclusions: vec!["inclusions".to_string()],
+                exclusions: vec!["exclusions".to_string()],
+            },
+            pass_through_args: &["pass_thru_args".to_string()],
+            env: &["env".to_string()],
+            resolved_env_vars: vec![],
+            pass_through_env: &["pass_thru_env".to_string()],
+            env_mode: EnvMode::Strict,
+        };
+
+        let hash = task_hashable.hash();
+        assert!(!hash.is_empty());
+        // Pin the hash so any serialization change is caught
+        assert_eq!(hash, "7676d7bb7c86d257");
+    }
+
+    #[test]
+    fn global_hashable() {
+        let global_file_hash_map = vec![(
+            turbopath::RelativeUnixPathBuf::new("global_file_hash_map").unwrap(),
+            "global_file_hash_map".to_string(),
+        )]
+        .into_iter()
+        .collect();
+
+        let global_hash = GlobalHashable {
+            global_cache_key: "global_cache_key",
+            global_file_hash_map: &global_file_hash_map,
+            root_external_dependencies_hash: Some("0000000000000000"),
+            root_internal_dependencies_hash: Some("0000000000000001"),
+            engines: Default::default(),
+            env: &["env".to_string()],
+            resolved_env_vars: vec![],
+            pass_through_env: &["pass_through_env".to_string()],
+            env_mode: EnvMode::Strict,
+            framework_inference: true,
+            global_configuration: false,
+        };
+
+        assert_eq!(global_hash.hash(), "5072bd005ec02799");
+    }
+
+    #[test]
+    fn global_hashable_with_global_configuration() {
+        let global_file_hash_map = vec![(
+            turbopath::RelativeUnixPathBuf::new("global_file_hash_map").unwrap(),
+            "global_file_hash_map".to_string(),
+        )]
+        .into_iter()
+        .collect();
+
+        let hash_without = GlobalHashable {
+            global_cache_key: "global_cache_key",
+            global_file_hash_map: &global_file_hash_map,
+            root_external_dependencies_hash: Some("0000000000000000"),
+            root_internal_dependencies_hash: Some("0000000000000001"),
+            engines: Default::default(),
+            env: &["env".to_string()],
+            resolved_env_vars: vec![],
+            pass_through_env: &["pass_through_env".to_string()],
+            env_mode: EnvMode::Strict,
+            framework_inference: true,
+            global_configuration: false,
+        };
+
+        let hash_with = GlobalHashable {
+            global_cache_key: "global_cache_key",
+            global_file_hash_map: &global_file_hash_map,
+            root_external_dependencies_hash: Some("0000000000000000"),
+            root_internal_dependencies_hash: Some("0000000000000001"),
+            engines: Default::default(),
+            env: &["env".to_string()],
+            resolved_env_vars: vec![],
+            pass_through_env: &["pass_through_env".to_string()],
+            env_mode: EnvMode::Strict,
+            framework_inference: true,
+            global_configuration: true,
+        };
+
+        assert_ne!(
+            hash_without.hash(),
+            hash_with.hash(),
+            "toggling global_configuration must change the hash"
+        );
+    }
+
+    #[test_case(vec![], "459c029558afe716" ; "empty")]
+    #[test_case(vec![Package {
+        key: "key".to_string(),
+        version: "version".to_string(),
+    }], "1b266409f3ae154e" ; "non-empty")]
+    #[test_case(vec![Package {
+        key: "key".to_string(),
+        version: "".to_string(),
+    }], "bde280722f61644a" ; "empty version")]
+    #[test_case(vec![Package {
+        key: "key".to_string(),
+        version: "version".to_string(),
+    }, Package {
+        key: "zey".to_string(),
+        version: "version".to_string(),
+    }], "6c0185544234b6dc" ; "multiple in-order")]
+    #[test_case(vec![Package {
+        key: "zey".to_string(),
+        version: "version".to_string(),
+    }, Package {
+        key: "key".to_string(),
+        version: "version".to_string(),
+    }], "26a67c9beeb0d16f" ; "care about order")]
+    fn lock_file_packages(vec: Vec<Package>, expected: &str) {
+        let packages = LockFilePackages(vec);
+        assert_eq!(packages.hash(), expected);
+    }
+
+    #[test]
+    fn long_lock_file_packages() {
+        let packages = (0..100).map(|i| Package {
+            key: format!("key{}", i),
+            version: format!("version{}", i),
+        });
+
+        lock_file_packages(packages.collect(), "4fd770c37194168e");
+    }
+
+    fn sorted_file_hashes(pairs: Vec<(&str, &str)>) -> FileHashes {
+        let mut v: Vec<(turbopath::RelativeUnixPathBuf, OidHash)> = pairs
+            .into_iter()
+            .map(|(a, b)| {
+                (
+                    turbopath::RelativeUnixPathBuf::new(a).unwrap(),
+                    OidHash::from_hex_str(b),
+                )
+            })
+            .collect();
+        v.sort_by(|(a, _), (b, _)| a.cmp(b));
+        FileHashes(v)
+    }
+
+    // OID-sized test hashes (40 hex chars each)
+    const OID_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const OID_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const OID_C: &str = "cccccccccccccccccccccccccccccccccccccccc";
+    const OID_D: &str = "dddddddddddddddddddddddddddddddddddddddd";
+
+    #[test_case(vec![], "459c029558afe716" ; "empty")]
+    #[test_case(vec![
+        ("a", OID_A),
+        ("c", OID_B),
+    ], "03e24e42bd35dcaf" ; "non-empty")]
+    #[test_case(vec![
+        ("c", OID_B),
+        ("a", OID_A),
+    ], "03e24e42bd35dcaf" ; "order resistant")]
+    fn file_hashes(pairs: Vec<(&str, &str)>, expected: &str) {
+        assert_eq!(sorted_file_hashes(pairs).hash(), expected);
+    }
+
+    #[test]
+    fn file_hashes_ref_matches_owned() {
+        let file_hashes = sorted_file_hashes(vec![("c", OID_B), ("a", OID_A)]);
+
+        let ref_hash = (&file_hashes).hash();
+        let owned_hash = file_hashes.hash();
+        assert_eq!(ref_hash, owned_hash);
+    }
+
+    #[test]
+    fn file_hashes_ref_large() {
+        // Verify reference-based hashing with a larger dataset.
+        // Zero-padded so lexicographic order matches numeric order.
+        let file_hashes = FileHashes(
+            (0..500)
+                .map(|i| {
+                    (
+                        turbopath::RelativeUnixPathBuf::new(format!("path/to/file_{i:03}"))
+                            .unwrap(),
+                        OidHash::from_hex_str(&format!("{i:040x}")),
+                    )
+                })
+                .collect(),
+        );
+
+        let ref_hash = (&file_hashes).hash();
+        let owned_hash = file_hashes.hash();
+        assert_eq!(ref_hash, owned_hash);
+    }
+
+    #[test_case(vec![], "459c029558afe716" ; "empty")]
+    #[test_case(vec![Package {
+        key: "key".to_string(),
+        version: "version".to_string(),
+    }], "1b266409f3ae154e" ; "non-empty")]
+    #[test_case(vec![Package {
+        key: "key".to_string(),
+        version: "version".to_string(),
+    }, Package {
+        key: "zey".to_string(),
+        version: "version".to_string(),
+    }], "6c0185544234b6dc" ; "multiple in-order")]
+    fn lock_file_packages_ref(vec: Vec<Package>, expected: &str) {
+        // Verify LockFilePackagesRef produces the same hash as LockFilePackages
+        let refs: Vec<&Package> = vec.iter().collect();
+        let ref_hash = LockFilePackagesRef(refs).hash();
+        let owned_hash = LockFilePackages(vec).hash();
+        assert_eq!(ref_hash, owned_hash);
+        assert_eq!(ref_hash, expected);
+    }
+
+    #[test]
+    fn long_lock_file_packages_ref() {
+        let packages: Vec<Package> = (0..100)
+            .map(|i| Package {
+                key: format!("key{}", i),
+                version: format!("version{}", i),
+            })
+            .collect();
+
+        let refs: Vec<&Package> = packages.iter().collect();
+        let ref_hash = LockFilePackagesRef(refs).hash();
+        let owned_hash = LockFilePackages(packages).hash();
+        assert_eq!(ref_hash, owned_hash);
+        assert_eq!(ref_hash, "4fd770c37194168e");
+    }
+
+    // Regression: FileHashes constructed from a pre-sorted Vec must produce
+    // identical hashes regardless of input order.
+    #[test]
+    fn file_hashes_sorted_vec_pinned_values() {
+        let pairs = vec![
+            ("c/z.ts", OID_C),
+            ("a/b.ts", OID_A),
+            ("a/a.ts", OID_B),
+            ("b.ts", OID_D),
+        ];
+
+        let fh = sorted_file_hashes(pairs.clone());
+        let hash = fh.hash();
+
+        // Verify ref and owned produce same hash
+        let fh2 = sorted_file_hashes(pairs);
+        assert_eq!((&fh2).hash(), hash);
+    }
+
+    // Regression: large FileHashes must produce deterministic hashes regardless
+    // of original insertion order.
+    #[test]
+    fn file_hashes_large_deterministic() {
+        let pairs_forward: Vec<_> = (0..1000)
+            .map(|i| {
+                // Leak to get &'static str for the test helper
+                let path: &str = Box::leak(format!("pkg/file_{i:04}").into_boxed_str());
+                let hash: &str = Box::leak(format!("{i:040x}").into_boxed_str());
+                (path, hash)
+            })
+            .collect();
+
+        let pairs_reverse: Vec<_> = (0..1000)
+            .rev()
+            .map(|i| {
+                let path: &str = Box::leak(format!("pkg/file_{i:04}").into_boxed_str());
+                let hash: &str = Box::leak(format!("{i:040x}").into_boxed_str());
+                (path, hash)
+            })
+            .collect();
+
+        assert_eq!(
+            sorted_file_hashes(pairs_forward).hash(),
+            sorted_file_hashes(pairs_reverse).hash(),
+            "insertion order must not affect hash output"
+        );
+    }
+}

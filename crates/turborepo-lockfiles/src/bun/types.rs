@@ -276,6 +276,15 @@ impl PackageIdent {
     pub fn is_workspace(&self) -> bool {
         matches!(self, Self::Workspace { .. })
     }
+
+    /// Returns true if this is a file, link, or tarball ident.
+    /// These package types use 2-element arrays: [ident, INFO]
+    pub fn is_local_package(&self) -> bool {
+        matches!(
+            self,
+            Self::File { .. } | Self::Link { .. } | Self::Tarball { .. }
+        )
+    }
 }
 
 impl fmt::Display for PackageIdent {

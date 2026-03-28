@@ -4,7 +4,7 @@ import path from "node:path";
 import type { WorkspaceConfig } from "@turbo/utils";
 import { getWorkspaceConfigs } from "@turbo/utils";
 import type { PipelineV1, RootSchemaV1, RootSchemaV2 } from "@turbo/types";
-import { forEachTaskDef } from "@turbo/utils/src/getTurboConfigs";
+import { forEachTaskDef } from "@turbo/utils/src/get-turbo-configs";
 import { dotEnv } from "./dotenv-processing";
 import { wildcardTests } from "./wildcard-processing";
 
@@ -58,12 +58,15 @@ function processLegacyConfig(
 
   // After processing length is 0, 1, or more than 1.
   switch (processed.length) {
-    case 0:
+    case 0: {
       return [];
-    case 1:
+    }
+    case 1: {
       return processed;
-    default:
+    }
+    default: {
       return [...new Set(processed)].sort();
+    }
   }
 }
 
@@ -73,12 +76,15 @@ function processEnv(env: Array<string> | undefined): Array<string> {
   }
 
   switch (env.length) {
-    case 0:
+    case 0: {
       return [];
-    case 1:
+    }
+    case 1: {
       return [env[0]];
-    default:
+    }
+    default: {
       return [...new Set(env)].sort();
+    }
   }
 }
 
@@ -90,12 +96,15 @@ function processPassThroughEnv(
   }
 
   switch (passThroughEnv.length) {
-    case 0:
+    case 0: {
       return [];
-    case 1:
+    }
+    case 1: {
       return [passThroughEnv[0]];
-    default:
+    }
+    default: {
       return [...new Set(passThroughEnv)].sort();
+    }
   }
 }
 
@@ -123,7 +132,7 @@ function processDotEnv(
 
   return {
     filePaths,
-    hashes: Object.fromEntries(hashEntries),
+    hashes: Object.fromEntries(hashEntries)
   };
 }
 
@@ -140,7 +149,7 @@ function processGlobal(
     dotEnv: processDotEnv(
       workspacePath,
       "globalDotEnv" in schema ? schema.globalDotEnv : undefined
-    ),
+    )
   };
 }
 
@@ -152,7 +161,7 @@ function processTask(
     legacyConfig: processLegacyConfig(task.dependsOn),
     env: processEnv(task.env),
     passThroughEnv: processPassThroughEnv(task.passThroughEnv),
-    dotEnv: processDotEnv(workspacePath, task.dotEnv),
+    dotEnv: processDotEnv(workspacePath, task.dotEnv)
   };
 }
 
@@ -165,7 +174,7 @@ function generateEnvironmentTest(
     legacyConfig: TEST_FALSE,
     env: TEST_FALSE,
     passThroughEnv: TEST_FALSE,
-    dotEnv: TEST_FALSE,
+    dotEnv: TEST_FALSE
   };
 
   if (config.legacyConfig.length > 0) {
@@ -208,7 +217,7 @@ function environmentTestArray(envContext: EnvironmentTest) {
     envContext.legacyConfig,
     envContext.env,
     envContext.passThroughEnv,
-    envContext.dotEnv,
+    envContext.dotEnv
   ];
 }
 
@@ -229,7 +238,7 @@ function getTaskAddress(taskName: string): {
   if (firstIndexOf === -1) {
     return {
       workspaceName: null,
-      scriptName: taskName,
+      scriptName: taskName
     };
   }
 
@@ -242,7 +251,7 @@ function getTaskAddress(taskName: string): {
 
   return {
     workspaceName,
-    scriptName,
+    scriptName
   };
 }
 
@@ -301,7 +310,7 @@ export class Project {
       legacyConfig: [],
       env: [],
       passThroughEnv: null,
-      dotEnv: null,
+      dotEnv: null
     };
     const globalTasks: Record<string, EnvironmentConfig> = {};
     const workspaceTasks: Record<
@@ -340,9 +349,9 @@ export class Project {
       );
     }
 
-    this.projectWorkspaces.forEach((projectWorkspace) => {
+    for (const projectWorkspace of this.projectWorkspaces) {
       if (!projectWorkspace.turboConfig) {
-        return;
+        continue;
       }
 
       forEachTaskDef(
@@ -367,12 +376,12 @@ export class Project {
           );
         }
       );
-    });
+    }
 
     return {
       global,
       globalTasks,
-      workspaceTasks,
+      workspaceTasks
     };
   }
 
@@ -392,7 +401,7 @@ export class Project {
         Object.entries(this._key.globalTasks).map(([script, config]) => {
           return [
             script,
-            generateEnvironmentTest(config, this.projectRoot?.workspacePath),
+            generateEnvironmentTest(config, this.projectRoot?.workspacePath)
           ];
         })
       ),
@@ -406,14 +415,14 @@ export class Project {
                 Object.entries(taskConfigs).map(([script, config]) => {
                   return [
                     script,
-                    generateEnvironmentTest(config, workspacePath),
+                    generateEnvironmentTest(config, workspacePath)
                   ];
                 })
-              ),
+              )
             ];
           }
         )
-      ),
+      )
     };
   }
 
@@ -426,7 +435,7 @@ export class Project {
       environmentTestArray(this._test.global),
       ...Object.values(this._test.globalTasks).map((context) =>
         environmentTestArray(context)
-      ),
+      )
     ];
 
     if (workspaceName && workspaceName in this._test.workspaceTasks) {

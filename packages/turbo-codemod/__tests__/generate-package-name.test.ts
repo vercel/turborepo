@@ -6,20 +6,20 @@ describe("getNewPkgName", () => {
     {
       pkgPath: "/packages/ui/package.json",
       pkgName: "old-name",
-      expected: "ui-old-name",
+      expected: "ui-old-name"
     },
     // scoped
     {
       pkgPath: "/packages/ui/package.json",
       pkgName: "@acme/name",
-      expected: "@acme/ui-name",
+      expected: "@acme/ui-name"
     },
     // no name
     {
       pkgPath: "/packages/ui/package.json",
       pkgName: undefined,
-      expected: "ui",
-    },
+      expected: "ui"
+    }
   ])(
     "should return a new package name for pkgPath: $pkgPath and pkgName: $pkgName",
     ({ pkgPath, pkgName, expected }) => {

@@ -8,6 +8,8 @@ use thiserror::Error;
 
 type HmacSha256 = Hmac<Sha256>;
 
+pub const MIN_SIGNATURE_KEY_LENGTH: usize = 32;
+
 #[derive(Debug, Error)]
 pub enum SignatureError {
     #[error(
@@ -15,6 +17,15 @@ pub enum SignatureError {
          TURBO_REMOTE_CACHE_SIGNATURE_KEY environment variable"
     )]
     NoSignatureSecretKey,
+    #[error(
+        "TURBO_REMOTE_CACHE_SIGNATURE_KEY is too short ({got} {got_unit}). A minimum of {min} \
+         bytes is required for cryptographic strength."
+    )]
+    SignatureKeyTooShort {
+        got: usize,
+        got_unit: &'static str,
+        min: usize,
+    },
     #[error("serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
     #[error("base64 encoding error: {0}")]
@@ -36,6 +47,19 @@ impl ArtifactSignatureAuthenticator {
             team_id,
             secret_key_override,
         }
+    }
+
+    pub fn validate_key_length(&self) -> Result<(), SignatureError> {
+        let key = self.secret_key()?;
+        if key.len() < MIN_SIGNATURE_KEY_LENGTH {
+            let len = key.len();
+            return Err(SignatureError::SignatureKeyTooShort {
+                got: len,
+                got_unit: if len == 1 { "byte" } else { "bytes" },
+                min: MIN_SIGNATURE_KEY_LENGTH,
+            });
+        }
+        Ok(())
     }
 
     // Gets secret key from either secret key override or environment variable.
@@ -244,10 +268,10 @@ mod tests {
     }
 
     fn test_signature(test_case: TestCase) -> Result<()> {
-        unsafe { env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", test_case.secret_key) };
+        let secret_key = test_case.secret_key.as_bytes().to_vec();
         let signature = ArtifactSignatureAuthenticator {
             team_id: test_case.team_id.to_vec(),
-            secret_key_override: None,
+            secret_key_override: Some(secret_key),
         };
 
         let hash = test_case.artifact_hash;
@@ -260,17 +284,74 @@ mod tests {
         let bad_tag = BASE64_STANDARD.encode(b"bad tag");
         assert!(!signature.validate(hash, artifact_body, &bad_tag)?);
 
-        // Change the key
-        unsafe { env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", "some other key") };
+        // Use a different key and confirm the original tag is no longer valid
+        let different_signature = ArtifactSignatureAuthenticator {
+            team_id: test_case.team_id.to_vec(),
+            secret_key_override: Some(b"some other key".to_vec()),
+        };
 
-        // Confirm that the tag is no longer valid
-        assert!(!signature.validate_tag(hash, artifact_body, tag.as_ref())?);
+        assert!(!different_signature.validate_tag(hash, artifact_body, tag.as_ref())?);
 
-        // Generate new tag
-        let tag = signature.generate_tag(hash, artifact_body)?;
+        // Generate new tag with the different key
+        let tag = different_signature.generate_tag(hash, artifact_body)?;
 
-        // Confirm it's valid
-        assert!(signature.validate(hash, artifact_body, &tag)?);
+        // Confirm it's valid with the same key
+        assert!(different_signature.validate(hash, artifact_body, &tag)?);
         Ok(())
+    }
+
+    #[test]
+    fn test_key_too_short_rejected() {
+        let auth = ArtifactSignatureAuthenticator {
+            team_id: b"team".to_vec(),
+            secret_key_override: Some(b"only31bytes_padded_to_31_bytes!".to_vec()),
+        };
+        assert_eq!(auth.secret_key().unwrap().len(), 31);
+
+        let err = auth.validate_key_length().unwrap_err();
+        assert!(
+            matches!(
+                err,
+                SignatureError::SignatureKeyTooShort {
+                    got: 31,
+                    got_unit: "bytes",
+                    min: 32
+                }
+            ),
+            "expected SignatureKeyTooShort, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_key_exactly_32_bytes_accepted() {
+        let auth = ArtifactSignatureAuthenticator {
+            team_id: b"team".to_vec(),
+            secret_key_override: Some(b"exactly_32_bytes_long_key_value!".to_vec()),
+        };
+        assert_eq!(auth.secret_key().unwrap().len(), 32);
+        auth.validate_key_length().unwrap();
+    }
+
+    #[test]
+    fn test_key_longer_than_32_bytes_accepted() {
+        let auth = ArtifactSignatureAuthenticator {
+            team_id: b"team".to_vec(),
+            secret_key_override: Some(
+                b"this_key_is_definitely_longer_than_32_bytes_total".to_vec(),
+            ),
+        };
+        assert!(auth.secret_key().unwrap().len() > 32);
+        auth.validate_key_length().unwrap();
+    }
+
+    #[test]
+    fn test_short_key_still_works_for_signing() {
+        // Without the future flag, short keys must still work (backward compat)
+        let auth = ArtifactSignatureAuthenticator {
+            team_id: b"team".to_vec(),
+            secret_key_override: Some(b"short".to_vec()),
+        };
+        let tag = auth.generate_tag(b"hash", b"body").unwrap();
+        assert!(auth.validate(b"hash", b"body", &tag).unwrap());
     }
 }

@@ -1,0 +1,33 @@
+---
+source: crates/turborepo/tests/task_dependencies.rs
+expression: stdout.to_string()
+---
+digraph {
+	compound = "true"
+	newrank = "true"
+	subgraph "root" {
+		"[root] app-a#prepare" -> "[root] ___ROOT___"
+		"[root] app-a#test" -> "[root] app-a#prepare"
+		"[root] app-a#test" -> "[root] lib-a#build0"
+		"[root] app-b#prepare" -> "[root] ___ROOT___"
+		"[root] app-b#test" -> "[root] app-b#prepare"
+		"[root] app-b#test" -> "[root] lib-b#build0"
+		"[root] app-b#test" -> "[root] lib-c#build0"
+		"[root] lib-a#build0" -> "[root] lib-a#prepare"
+		"[root] lib-a#build0" -> "[root] lib-b#build0"
+		"[root] lib-a#prepare" -> "[root] ___ROOT___"
+		"[root] lib-a#test" -> "[root] lib-a#prepare"
+		"[root] lib-a#test" -> "[root] lib-b#build0"
+		"[root] lib-b#build0" -> "[root] lib-b#prepare"
+		"[root] lib-b#build0" -> "[root] lib-d#build0"
+		"[root] lib-b#prepare" -> "[root] ___ROOT___"
+		"[root] lib-b#test" -> "[root] lib-b#prepare"
+		"[root] lib-b#test" -> "[root] lib-d#build0"
+		"[root] lib-c#build0" -> "[root] lib-c#prepare"
+		"[root] lib-c#prepare" -> "[root] ___ROOT___"
+		"[root] lib-c#test" -> "[root] lib-c#prepare"
+		"[root] lib-d#build0" -> "[root] lib-d#prepare"
+		"[root] lib-d#prepare" -> "[root] ___ROOT___"
+		"[root] lib-d#test" -> "[root] lib-d#prepare"
+	}
+}

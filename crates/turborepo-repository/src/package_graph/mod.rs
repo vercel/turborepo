@@ -1,16 +1,19 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt,
+    sync::OnceLock,
 };
 
 use itertools::Itertools;
-use petgraph::graph::{Edge, NodeIndex};
+use petgraph::{
+    graph::{Edge, NodeIndex},
+    visit::EdgeRef,
+};
 use serde::Serialize;
 use tracing::debug;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
-use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 
 use crate::{
@@ -34,6 +37,8 @@ pub struct PackageGraph {
     package_manager: PackageManager,
     lockfile: Option<Box<dyn Lockfile>>,
     repo_root: AbsoluteSystemPathBuf,
+    external_dep_to_internal_dependents:
+        OnceLock<HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>>>,
 }
 
 /// The WorkspacePackage.
@@ -153,6 +158,20 @@ impl PackageGraph {
         PackageGraphBuilder::new(repo_root, root_package_json)
     }
 
+    /// Validates that every non-root package has a `name` field in its
+    /// package.json.
+    ///
+    /// Structural invariants (cycles, self-dependencies) are intentionally not
+    /// checked here — those are caught at the task graph level by the engine
+    /// builder, since package-level cycles don't necessarily produce invalid
+    /// task execution orders. A warning is logged when cycles or
+    /// self-dependencies are detected so users have visibility into the graph
+    /// structure.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::PackageJsonMissingName` if any non-root package is
+    /// missing a `name` field in its package.json.
     #[tracing::instrument(skip(self))]
     pub fn validate(&self) -> Result<(), Error> {
         for (package_name, info) in self.packages.iter() {
@@ -168,7 +187,38 @@ impl PackageGraph {
                 Some(_) => continue,
             }
         }
-        graph::validate_graph(&self.graph).map_err(Error::InvalidPackageGraph)?;
+
+        for edge in self.graph.edge_references() {
+            if edge.source() == edge.target()
+                && let Some(PackageNode::Workspace(PackageName::Other(name))) =
+                    self.graph.node_weight(edge.source())
+            {
+                tracing::warn!("Package \"{name}\" depends on itself");
+            }
+        }
+
+        if petgraph::algo::is_cyclic_directed(&self.graph) {
+            let sccs = petgraph::algo::tarjan_scc(&self.graph);
+            let cycle_members: Vec<String> = sccs
+                .into_iter()
+                .filter(|scc| scc.len() > 1)
+                .flat_map(|scc| {
+                    scc.into_iter()
+                        .filter_map(|idx| match self.graph.node_weight(idx)? {
+                            PackageNode::Workspace(PackageName::Other(name)) => {
+                                Some(name.to_string())
+                            }
+                            _ => None,
+                        })
+                })
+                .collect();
+            if !cycle_members.is_empty() {
+                tracing::warn!(
+                    "Circular package dependency detected: {}",
+                    cycle_members.join(", ")
+                );
+            }
+        }
 
         Ok(())
     }
@@ -301,6 +351,9 @@ impl PackageGraph {
     /// a -> b -> c (external)
     ///
     /// dependencies(a) = {b, c}
+    ///
+    /// If the package graph contains cycles, the returned set will include
+    /// all members of any cycle reachable from `node`.
     #[allow(dead_code)]
     pub fn dependencies<'a>(&'a self, node: &PackageNode) -> HashSet<&'a PackageNode> {
         let mut dependencies = turborepo_graph_utils::transitive_closure(
@@ -323,6 +376,9 @@ impl PackageGraph {
     /// a -> b -> c (external)
     ///
     /// ancestors(c) = {a, b}
+    ///
+    /// If the package graph contains cycles, the returned set will include
+    /// all members of any cycle reachable from `node`.
     pub fn ancestors(&self, node: &PackageNode) -> HashSet<&PackageNode> {
         // If node is a root dep, then *every* package is an ancestor of this one
         let mut dependents = if self.root_internal_dependencies().contains(node) {
@@ -372,10 +428,11 @@ impl PackageGraph {
             .collect()
     }
 
-    /// Provides a path from the root package to package
+    /// Provides a path from the root package to package.
     ///
     /// Currently only provides the shortest path as calculating all paths can
-    /// be O(n!)
+    /// be O(n!). If the package graph contains cycles, the shortest path may
+    /// traverse through cycle members.
     pub fn root_internal_dependency_explanation(
         &self,
         package: &WorkspacePackage,
@@ -425,6 +482,9 @@ impl PackageGraph {
     /// the dependencies, or the dependents, use `dependencies` or `ancestors`.
     /// Alternatively, if you need just direct dependents, use
     /// `immediate_dependents`.
+    ///
+    /// If the package graph contains cycles, the returned set will include
+    /// all members of any cycle reachable from the starting nodes.
     pub fn transitive_closure<'a, 'b, I: IntoIterator<Item = &'b PackageNode>>(
         &'a self,
         nodes: I,
@@ -471,7 +531,7 @@ impl PackageGraph {
                     )
                 })
             })
-            .collect::<HashMap<_, HashMap<_, _>>>();
+            .collect::<HashMap<_, BTreeMap<_, _>>>();
 
         // We're comparing to a previous lockfile, it's possible that a package was
         // added and thus won't exist in the previous lockfile. In that case,
@@ -558,6 +618,61 @@ impl PackageGraph {
         }))
     }
 
+    pub fn internal_dependencies_for_external_dependency(
+        &self,
+        external_package: &turborepo_lockfiles::Package,
+    ) -> Option<&HashSet<PackageNode>> {
+        // In order to answer this once we have to calculate the info for every external
+        // package so we store the results
+        let map = self
+            .external_dep_to_internal_dependents
+            .get_or_init(|| self.build_external_dep_to_internal_dependents_map());
+        map.get(external_package)
+    }
+
+    /// Builds a map from external dependencies to the set of internal workspace
+    /// packages that depend on them (including transitive dependents).
+    fn build_external_dep_to_internal_dependents_map(
+        &self,
+    ) -> HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>> {
+        // TODO: provide size hint from Lockfile trait
+        let mut map: HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>> = HashMap::new();
+        // First find which packages directly depend on each external package
+        for (pkg, info) in self.packages.iter() {
+            for dep in info.transitive_dependencies.iter().flatten() {
+                let rdeps = map.entry(dep.clone()).or_default();
+                rdeps.insert(PackageNode::Workspace(pkg.clone()));
+            }
+        }
+        // Now trace through all ancestors of the direct dependants
+        let root_internal_dependencies = self
+            .root_internal_dependencies()
+            .into_iter()
+            .cloned()
+            .collect::<HashSet<_>>();
+        let root_external_dependencies =
+            self.transitive_external_dependencies(Some(&PackageName::Root));
+        for (external_pkg, rdeps) in map.iter_mut() {
+            // If one of the reverse dependencies of this external package is a root
+            // dependency, everything depends on this
+            if root_external_dependencies.contains(external_pkg)
+                || !root_internal_dependencies.is_disjoint(rdeps)
+            {
+                rdeps.extend(self.graph.node_weights().cloned());
+            } else {
+                let transitive_rdeps = turborepo_graph_utils::transitive_closure(
+                    &self.graph,
+                    rdeps
+                        .iter()
+                        .filter_map(|node| self.node_lookup.get(node).copied()),
+                    petgraph::Direction::Incoming,
+                );
+                rdeps.extend(transitive_rdeps.into_iter().cloned());
+            }
+        }
+        map
+    }
+
     // Returns a map of package name and version for external dependencies
     #[allow(dead_code)]
     fn external_dependencies(
@@ -620,8 +735,6 @@ impl AsRef<str> for PackageName {
 
 #[cfg(test)]
 mod test {
-    use std::assert_matches::assert_matches;
-
     use serde_json::json;
     use turborepo_errors::Spanned;
 
@@ -768,21 +881,23 @@ mod test {
         fn all_dependencies(
             &self,
             key: &str,
-        ) -> std::result::Result<Option<HashMap<String, String>>, turborepo_lockfiles::Error>
-        {
+        ) -> std::result::Result<
+            Option<std::borrow::Cow<'_, BTreeMap<String, String>>>,
+            turborepo_lockfiles::Error,
+        > {
             match key {
-                "key:a" => Ok(Some(
+                "key:a" => Ok(Some(std::borrow::Cow::Owned(
                     [("c", "1")]
                         .iter()
                         .map(|(k, v)| (k.to_string(), v.to_string()))
                         .collect(),
-                )),
-                "key:b" => Ok(Some(
+                ))),
+                "key:b" => Ok(Some(std::borrow::Cow::Owned(
                     [("c", "1")]
                         .iter()
                         .map(|(k, v)| (k.to_string(), v.to_string()))
                         .collect(),
-                )),
+                ))),
                 "key:c" => Ok(None),
                 _ => Ok(None),
             }
@@ -924,11 +1039,35 @@ mod test {
         .await
         .unwrap();
 
-        assert_matches!(
-            pkg_graph.validate(),
-            Err(builder::Error::InvalidPackageGraph(
-                graph::Error::CyclicDependencies { .. }
-            ))
+        // Package graph cycles are intentionally allowed (#2559) — only task
+        // graph cycles block execution (checked in the engine builder).
+        assert!(pkg_graph.validate().is_ok());
+
+        let foo_node = PackageNode::Workspace("foo".into());
+        let bar_node = PackageNode::Workspace("bar".into());
+        let baz_node = PackageNode::Workspace("baz".into());
+
+        // transitive_closure starting from any cycle member includes all members
+        let closure = pkg_graph.transitive_closure(Some(&foo_node));
+        assert!(
+            closure.contains(&foo_node)
+                && closure.contains(&bar_node)
+                && closure.contains(&baz_node),
+            "transitive_closure on a cycle member should include all cycle members: {closure:?}"
+        );
+
+        // dependencies of a cycle member includes the other cycle members
+        let deps = pkg_graph.dependencies(&foo_node);
+        assert!(
+            deps.contains(&bar_node) && deps.contains(&baz_node),
+            "dependencies on a cycle member should include other cycle members: {deps:?}"
+        );
+
+        // ancestors of a cycle member includes the other cycle members
+        let anc = pkg_graph.ancestors(&foo_node);
+        assert!(
+            anc.contains(&bar_node) && anc.contains(&baz_node),
+            "ancestors on a cycle member should include other cycle members: {anc:?}"
         );
     }
 
@@ -960,11 +1099,30 @@ mod test {
         .await
         .unwrap();
 
-        assert_matches!(
-            pkg_graph.validate(),
-            Err(builder::Error::InvalidPackageGraph(
-                graph::Error::SelfDependency(_)
-            ))
+        // Package graph self-dependencies are intentionally allowed (#2559) —
+        // if this causes a task-level cycle it will be caught by the engine
+        // builder.
+        assert!(pkg_graph.validate().is_ok());
+
+        let foo_node = PackageNode::Workspace("foo".into());
+
+        // Self-dep doesn't cause infinite loops in traversal methods
+        let closure = pkg_graph.transitive_closure(Some(&foo_node));
+        assert!(
+            closure.contains(&foo_node),
+            "transitive_closure on self-dep should include the package itself: {closure:?}"
+        );
+
+        let deps = pkg_graph.dependencies(&foo_node);
+        assert!(
+            !deps.contains(&foo_node),
+            "dependencies() excludes the node itself: {deps:?}"
+        );
+
+        let anc = pkg_graph.ancestors(&foo_node);
+        assert!(
+            !anc.contains(&foo_node),
+            "ancestors() excludes the node itself: {anc:?}"
         );
     }
 

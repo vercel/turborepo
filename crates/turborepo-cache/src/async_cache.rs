@@ -2,13 +2,14 @@ use std::sync::{Arc, Mutex, atomic::AtomicU8};
 
 use futures::{StreamExt, stream::FuturesUnordered};
 use tokio::sync::{Semaphore, mpsc, oneshot};
-use tracing::{Instrument, Level, warn};
+use tracing::{Instrument, Level};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
 
 use crate::{
-    CacheError, CacheHitMetadata, CacheOpts, http::UploadMap, multiplexer::CacheMultiplexer,
+    CacheError, CacheHitMetadata, CacheOpts, LazyScmState, http::UploadMap,
+    multiplexer::CacheMultiplexer,
 };
 
 const WARNING_CUTOFF: u8 = 4;
@@ -37,9 +38,10 @@ impl AsyncCache {
     pub fn new(
         opts: &CacheOpts,
         repo_root: &AbsoluteSystemPath,
-        api_client: APIClient,
+        api_client: Option<APIClient>,
         api_auth: Option<APIAuth>,
         analytics_recorder: Option<AnalyticsSender>,
+        scm_state: LazyScmState,
     ) -> Result<AsyncCache, CacheError> {
         let max_workers = opts.workers.try_into().expect("usize is smaller than u32");
         let real_cache = Arc::new(CacheMultiplexer::new(
@@ -48,8 +50,12 @@ impl AsyncCache {
             api_client,
             api_auth,
             analytics_recorder,
+            scm_state,
         )?);
-        let (writer_sender, mut write_consumer) = mpsc::channel(1);
+        // Buffer up to max_workers requests so that callers don't block
+        // waiting for a semaphore permit inside the worker loop. The
+        // semaphore already limits actual concurrency.
+        let (writer_sender, mut write_consumer) = mpsc::channel(max_workers);
 
         // start a task to manage workers
         let worker_real_cache = real_cache.clone();
@@ -84,7 +90,13 @@ impl AsyncCache {
                                             num_warnings + 1,
                                             std::sync::atomic::Ordering::Release,
                                         );
-                                        warn!("{err}");
+                                        turborepo_log::warn(
+                                            turborepo_log::Source::turbo(
+                                                turborepo_log::Subsystem::Cache,
+                                            ),
+                                            format!("{err}"),
+                                        )
+                                        .emit();
                                     }
                                 }
                                 // Release permit once we're done with the write
@@ -199,7 +211,10 @@ impl AsyncCache {
             .send(WorkerRequest::Shutdown(closing_tx, closed_tx))
             .await
             .map_err(|_| CacheError::CacheShuttingDown)?;
-        Ok((closing_rx.await.unwrap(), closed_rx)) // todo
+        closing_rx
+            .await
+            .map(|status| (status, closed_rx))
+            .map_err(|_| CacheError::CacheShuttingDown)
     }
 
     /// Shut down the cache, waiting for all workers to finish writing.
@@ -222,12 +237,12 @@ mod tests {
     use futures::future::try_join_all;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_api_client::{APIAuth, APIClient};
+    use turborepo_api_client::{APIAuth, APIClient, SecretString};
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
         AsyncCache, CacheActions, CacheConfig, CacheHitMetadata, CacheOpts, CacheSource,
-        RemoteCacheOpts,
+        LazyScmState, RemoteCacheOpts,
         test_cases::{TestCase, get_test_cases},
     };
 
@@ -276,6 +291,7 @@ mod tests {
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
                 signature: false,
+                enforce_signature_key_length: false,
             }),
         };
 
@@ -288,10 +304,17 @@ mod tests {
         )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
-            token: "my-token".to_string(),
+            token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
-        let async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
+        let async_cache = AsyncCache::new(
+            &opts,
+            &repo_root_path,
+            Some(api_client),
+            api_auth,
+            None,
+            LazyScmState::resolved(None),
+        )?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
@@ -329,7 +352,9 @@ mod tests {
             response,
             Some(CacheHitMetadata {
                 source: CacheSource::Remote,
-                time_saved: test_case.duration
+                time_saved: test_case.duration,
+                sha: None,
+                dirty_hash: None,
             })
         );
 
@@ -365,24 +390,23 @@ mod tests {
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
                 signature: false,
+                enforce_signature_key_length: false,
             }),
         };
 
-        // Initialize client with invalid API url to ensure that we don't hit the
-        // network
-        let api_client = APIClient::new(
-            "http://example.com",
-            Some(Duration::from_secs(200)),
-            None,
-            "2.0.0",
-            true,
-        )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
-            token: "my-token".to_string(),
+            token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
-        let async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
+        let async_cache = AsyncCache::new(
+            &opts,
+            &repo_root_path,
+            None,
+            api_auth,
+            None,
+            LazyScmState::resolved(None),
+        )?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
@@ -420,7 +444,9 @@ mod tests {
             response,
             Some(CacheHitMetadata {
                 source: CacheSource::Local,
-                time_saved: test_case.duration
+                time_saved: test_case.duration,
+                sha: None,
+                dirty_hash: None,
             })
         );
 
@@ -437,6 +463,80 @@ mod tests {
             async_cache.shutdown().await.is_err(),
             "second shutdown should error"
         );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_local_only_cache_does_not_require_api_client() -> Result<()> {
+        let test_case = get_test_cases().into_iter().next().unwrap();
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
+        test_case.initialize(&repo_root_path)?;
+
+        let hash = format!("{}-local-only", test_case.hash);
+        let opts = CacheOpts {
+            cache_dir: Utf8PathBuf::from(".turbo/cache"),
+            cache: CacheConfig {
+                local: CacheActions {
+                    read: true,
+                    write: true,
+                },
+                remote: CacheActions {
+                    read: false,
+                    write: false,
+                },
+            },
+            workers: 1,
+            remote_cache_opts: Some(RemoteCacheOpts {
+                unused_team_id: Some("my-team".to_string()),
+                signature: false,
+                enforce_signature_key_length: false,
+            }),
+        };
+
+        let api_auth = Some(APIAuth {
+            team_id: Some("my-team-id".to_string()),
+            token: SecretString::new("my-token".to_string()),
+            team_slug: None,
+        });
+        let async_cache = AsyncCache::new(
+            &opts,
+            &repo_root_path,
+            None,
+            api_auth,
+            None,
+            LazyScmState::resolved(None),
+        )?;
+
+        assert_matches!(async_cache.exists(&hash).await, Ok(None));
+
+        async_cache
+            .put(
+                repo_root_path.clone(),
+                hash.clone(),
+                test_case
+                    .files
+                    .iter()
+                    .map(|f| f.path().to_owned())
+                    .collect(),
+                test_case.duration,
+            )
+            .await?;
+
+        async_cache.wait().await?;
+
+        assert_eq!(
+            async_cache.exists(&hash).await?,
+            Some(CacheHitMetadata {
+                source: CacheSource::Local,
+                time_saved: test_case.duration,
+                sha: None,
+                dirty_hash: None,
+            })
+        );
+
+        async_cache.shutdown().await?;
 
         Ok(())
     }
@@ -464,6 +564,7 @@ mod tests {
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
                 signature: false,
+                enforce_signature_key_length: false,
             }),
         };
 
@@ -476,10 +577,17 @@ mod tests {
         )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
-            token: "my-token".to_string(),
+            token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
-        let async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
+        let async_cache = AsyncCache::new(
+            &opts,
+            &repo_root_path,
+            Some(api_client),
+            api_auth,
+            None,
+            LazyScmState::resolved(None),
+        )?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
@@ -517,7 +625,9 @@ mod tests {
             response,
             Some(CacheHitMetadata {
                 source: CacheSource::Local,
-                time_saved: test_case.duration
+                time_saved: test_case.duration,
+                sha: None,
+                dirty_hash: None,
             })
         );
 
@@ -531,7 +641,9 @@ mod tests {
             response,
             Some(CacheHitMetadata {
                 source: CacheSource::Remote,
-                time_saved: test_case.duration
+                time_saved: test_case.duration,
+                sha: None,
+                dirty_hash: None,
             })
         );
 

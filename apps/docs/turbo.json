@@ -1,0 +1,41 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "env": [
+        "TINYBIRD_TIME_SAVED_TOKEN",
+        "ENABLE_EXPERIMENTAL_COREPACK",
+        "FLAGS",
+        "FLAGS_SECRET",
+        "UPSTASH_REDIS_REST_URL",
+        "UPSTASH_REDIS_REST_TOKEN"
+      ],
+      "inputs": ["$TURBO_DEFAULT$", "content/**"],
+      "outputs": [".next/**", "!.next/cache/**"],
+      "dependsOn": ["^build", "schema", "collect-examples-data"]
+    },
+    "dev": {
+      "dependsOn": ["schema", "collect-examples-data"],
+      "persistent": true,
+      "cache": false
+    },
+    "schema": {
+      "dependsOn": ["@turbo/types#build"],
+      "inputs": ["scripts/copy-json-schema.ts"],
+      "outputs": ["public/schema*.json"],
+      "env": []
+    },
+
+    "collect-examples-data": {
+      "cache": false
+    },
+    "check-links": {
+      "inputs": ["content/**/*.mdx", "../../link-checker/src/**"],
+      "cache": false
+    },
+    "check-types": {
+      "dependsOn": ["collect-examples-data"]
+    }
+  }
+}

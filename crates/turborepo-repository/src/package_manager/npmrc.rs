@@ -22,6 +22,10 @@ pub struct NpmRc {
     /// declared without an explicit workspace protocol
     /// can target a workspace package.
     pub link_workspace_packages: Option<bool>,
+    /// Used by pnpm to determine whether a single lockfile is used at the root
+    /// or each workspace gets its own lockfile. Defaults to true.
+    /// When false, pnpm creates a pnpm-lock.yaml in each workspace directory.
+    pub shared_workspace_lockfile: Option<bool>,
 }
 
 impl NpmRc {
@@ -46,8 +50,13 @@ impl NpmRc {
             .get_from::<&str>(None, "link-workspace-packages")
             .and_then(parse_link_workspace_packages);
 
+        let shared_workspace_lockfile = ini
+            .get_from::<&str>(None, "shared-workspace-lockfile")
+            .and_then(parse_bool);
+
         Self {
             link_workspace_packages,
+            shared_workspace_lockfile,
         }
     }
 }
@@ -57,6 +66,14 @@ fn parse_link_workspace_packages(value: &str) -> Option<bool> {
         // "deep" changes the underlying linking strategy used by pnpm, but it still results
         // in workspace packages being used over npm packages
         "true" | "deep" => Some(true),
+        "false" => Some(false),
+        _ => None,
+    }
+}
+
+fn parse_bool(value: &str) -> Option<bool> {
+    match value {
+        "true" => Some(true),
         "false" => Some(false),
         _ => None,
     }
@@ -72,7 +89,8 @@ mod test {
         assert_eq!(
             empty,
             NpmRc {
-                link_workspace_packages: None
+                link_workspace_packages: None,
+                shared_workspace_lockfile: None,
             }
         );
     }
@@ -88,7 +106,34 @@ mod test {
         assert_eq!(
             example,
             NpmRc {
-                link_workspace_packages: Some(false)
+                link_workspace_packages: Some(false),
+                shared_workspace_lockfile: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_shared_workspace_lockfile_false() {
+        let contents = b"shared-workspace-lockfile=false".as_slice();
+        let result = NpmRc::from_reader(contents).unwrap();
+        assert_eq!(
+            result,
+            NpmRc {
+                link_workspace_packages: None,
+                shared_workspace_lockfile: Some(false),
+            }
+        );
+    }
+
+    #[test]
+    fn test_shared_workspace_lockfile_true() {
+        let contents = b"shared-workspace-lockfile=true".as_slice();
+        let result = NpmRc::from_reader(contents).unwrap();
+        assert_eq!(
+            result,
+            NpmRc {
+                link_workspace_packages: None,
+                shared_workspace_lockfile: Some(true),
             }
         );
     }

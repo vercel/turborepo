@@ -1,27 +1,20 @@
 #!/usr/bin/env node
 
-import http from "node:http";
-import https from "node:https";
 import picocolors from "picocolors";
 import { Command, Option } from "commander";
-import { logger } from "@turbo/utils";
+import { logger, createNotifyUpdate } from "@turbo/utils";
 import {
   type CreateTurboTelemetry,
   initTelemetry,
-  withTelemetryCommand,
+  withTelemetryCommand
 } from "@turbo/telemetry";
-import { ProxyAgent } from "proxy-agent";
 import cliPkg from "../package.json";
-import { notifyUpdate } from "./utils/notifyUpdate";
 import { create } from "./commands";
+
+const notifyUpdate = createNotifyUpdate({ packageInfo: cliPkg });
 
 // Global telemetry client
 let telemetryClient: CreateTurboTelemetry | undefined;
-
-// Support http proxy vars
-const agent = new ProxyAgent();
-http.globalAgent = agent;
-https.globalAgent = agent;
 
 const createTurboCli = new Command();
 
@@ -34,8 +27,8 @@ createTurboCli
     const { telemetry } = await initTelemetry<"create-turbo">({
       packageInfo: {
         name: "create-turbo",
-        version: cliPkg.version,
-      },
+        version: cliPkg.version
+      }
     });
     // inject telemetry into the action as an option
     thisAction.addOption(
@@ -85,11 +78,7 @@ createTurboCli
   --example-path foo/bar
 `
   )
-  .option(
-    "--no-git",
-    "Remove the .git directory after creating the project",
-    false
-  )
+  .option("--no-git", "Skip initializing a git repository")
   .version(cliPkg.version, "-v, --version", "Output the current version")
   .helpOption("-h, --help", "Display help for command")
   .action(create);
@@ -99,12 +88,11 @@ withTelemetryCommand(createTurboCli);
 
 createTurboCli
   .parseAsync()
-  .then(notifyUpdate)
+  .then(() => notifyUpdate())
   .catch(async (reason) => {
     logger.log();
     logger.error("Unexpected error. Please report it as a bug:");
     logger.log(reason);
     logger.log();
-    await notifyUpdate();
-    process.exit(1);
+    await notifyUpdate(1);
   });

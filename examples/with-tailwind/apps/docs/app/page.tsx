@@ -6,17 +6,17 @@ import { TurborepoLogo } from "@repo/ui/turborepo-logo";
 const LINKS = [
   {
     title: "Docs",
-    href: "https://turborepo.com/docs",
+    href: "https://turborepo.dev/docs",
     description: "Find in-depth information about Turborepo features and API.",
   },
   {
     title: "Learn",
-    href: "https://turborepo.com/docs/handbook",
+    href: "https://turborepo.dev/docs/handbook",
     description: "Learn more about monorepos with our handbook.",
   },
   {
     title: "Templates",
-    href: "https://turborepo.com/docs/getting-started/from-example",
+    href: "https://turborepo.dev/docs/getting-started/from-example",
     description: "Choose from over 15 examples and deploy with a single click.",
   },
   {

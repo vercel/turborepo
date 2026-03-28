@@ -7,6 +7,8 @@
 //! as well as the architecture documentation in `packages/turbo-vsc`.
 
 #![feature(box_patterns)]
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
 #![deny(clippy::all)]
 #![warn(clippy::unwrap_used)]
 
@@ -36,6 +38,7 @@ use turborepo_lib::{
 };
 use turborepo_repository::{
     discovery::{self, DiscoveryResponse, PackageDiscovery, WorkspaceData},
+    inference::RepoState,
     package_json::PackageJson,
 };
 
@@ -69,6 +72,15 @@ impl LanguageServer for Backend {
             // convert uri file:///absolute-path to AbsoluteSystemPathBuf
             let repo_root =
                 AbsoluteSystemPathBuf::new(repo_root).expect("file is always an absolute path");
+
+            // Walk up from the editor's root_uri to find the actual monorepo
+            // root. In multi-root VSCode workspaces the editor can send a
+            // subdirectory, which would cause the daemon to start with the
+            // wrong root and write cookie files in the wrong location.
+            let repo_root = match RepoState::infer(&repo_root) {
+                Ok(state) => state.root,
+                Err(_) => repo_root,
+            };
 
             self.repo_root
                 .lock()
@@ -137,19 +149,32 @@ impl LanguageServer for Backend {
 
             let mut lock = pidlock::Pidlock::new(paths.lsp_pid_file.as_std_path().to_owned());
 
-            if let Err(e) = lock.acquire() {
-                self.client
-                    .log_message(
-                        MessageType::ERROR,
-                        format!(
-                            "failed to acquire pidlock, is another lsp instance running? - {e}"
-                        ),
-                    )
-                    .await;
-                return Err(Error::internal_error());
+            match lock.acquire() {
+                Ok(()) => {
+                    *self.pidlock.lock().expect("only fails if poisoned") = Some(lock);
+                }
+                Err(pidlock::PidlockError::AlreadyOwned) => {
+                    // Another LSP instance (e.g., another VSCode window) already holds the lock.
+                    // This lock is only used for exclusive optimize features, so proceed without
+                    // it.
+                    self.client
+                        .log_message(
+                            MessageType::INFO,
+                            "another LSP instance holds lock; continuing without exclusive \
+                             optimize features.",
+                        )
+                        .await;
+                }
+                Err(e) => {
+                    self.client
+                        .log_message(
+                            MessageType::ERROR,
+                            format!("Failed to acquire pidlock: {e}"),
+                        )
+                        .await;
+                    return Err(Error::internal_error());
+                }
             }
-
-            *self.pidlock.lock().expect("only fails if poisoned") = Some(lock);
         }
 
         Ok(InitializeResult {

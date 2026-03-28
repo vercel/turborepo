@@ -28,7 +28,7 @@ import { convert, getWorkspaceDetails } from "@turbo/workspaces";
 
 // detect the package manager
 const project = getWorkspaceDetails({
-  root: process.cwd(),
+  root: process.cwd()
 });
 
 // if the package manager is not pnpm, convert to pnpm
@@ -38,12 +38,12 @@ if (project.packageManager !== "pnpm") {
     to: "pnpm",
     options: {
       dry: false,
-      install: true,
-    },
+      install: true
+    }
   });
 }
 ```
 
 ---
 
-For more information about Turborepo, visit [turborepo.com](https://turborepo.com) and follow us on X ([@turborepo](https://x.com/turborepo))!
+For more information about Turborepo, visit [turborepo.dev](https://turborepo.dev) and follow us on X ([@turborepo](https://x.com/turborepo))!

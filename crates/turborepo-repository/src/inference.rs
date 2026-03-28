@@ -73,6 +73,7 @@ impl RepoState {
     /// * `reference_dir`: Turbo's invocation directory
     ///
     /// returns: Result<RepoState, Error>
+    #[tracing::instrument(skip_all)]
     pub fn infer(reference_dir: &AbsoluteSystemPath) -> Result<Self, Error> {
         reference_dir
             .ancestors()
@@ -351,8 +352,8 @@ mod test {
 
     #[test]
     fn test_gh_8599() {
-        // TODO: this test documents existing broken behavior, when we have time we
-        // should fix this and update the assertions
+        // Test that workspace globs with leading "./" are properly handled
+        // See https://github.com/vercel/turborepo/issues/8599
         let (_tmp, tmp_dir) = tmp_dir();
         let monorepo_root = tmp_dir.join_component("monorepo_root");
         let monorepo_pkg_json = monorepo_root.join_component("package.json");
@@ -366,11 +367,7 @@ mod test {
             .unwrap();
 
         let repo_state = RepoState::infer(&package_foo).unwrap();
-        // These assertions are the buggy behavior
-        assert_eq!(repo_state.root, package_foo);
-        assert_eq!(repo_state.mode, RepoMode::SinglePackage);
-        // TODO: the following assertions are the correct behavior
-        // assert_eq!(repo_state.root, monorepo_root);
-        // assert_eq!(repo_state.mode, RepoMode::MultiPackage);
+        assert_eq!(repo_state.root, monorepo_root);
+        assert_eq!(repo_state.mode, RepoMode::MultiPackage);
     }
 }

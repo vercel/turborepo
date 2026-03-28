@@ -8,10 +8,15 @@ import rule from "../../../../lib/rules/no-undeclared-env-vars";
 import { Project } from "../../../../lib/utils/calculate-inputs";
 
 const ruleTester = new RuleTester({
-  parserOptions: { ecmaVersion: 2020, sourceType: "module" },
+  languageOptions: { ecmaVersion: 2020, sourceType: "module" }
 });
 
-const cwd = path.join(__dirname, "../../../../__fixtures__/workspace-configs");
+// Use a dedicated fixture directory for reload tests to avoid conflicts
+// with other tests that read from workspace-configs
+const cwd = path.join(
+  __dirname,
+  "../../../../__fixtures__/workspace-configs-reload"
+);
 const webFilename = path.join(cwd, "/apps/web/index.js");
 
 describe("Project reload functionality", () => {
@@ -39,7 +44,7 @@ describe("Project reload functionality", () => {
 
     // Verify that configurations were reloaded
     expect(project.allConfigs).not.toBe(initialConfigs);
-    expect(project.allConfigs.length).toBe(initialConfigs.length);
+    expect(project.allConfigs).toHaveLength(initialConfigs.length);
 
     // Verify that project root and workspaces were updated
     expect(project.projectRoot).toBeDefined();
@@ -68,9 +73,9 @@ describe("Project reload functionality", () => {
       pipeline: {
         ...(JSON.parse(originalTurboJson) as SchemaV1).pipeline,
         newTask: {
-          outputs: [],
-        },
-      },
+          outputs: []
+        }
+      }
     };
     fs.writeFileSync(turboJsonPath, JSON.stringify(modifiedConfig, null, 2));
 
@@ -107,7 +112,7 @@ describe("Project reload functionality", () => {
     project.reload();
 
     // Verify that the final state is consistent
-    expect(project.allConfigs.length).toBe(initialConfigs.length);
+    expect(project.allConfigs).toHaveLength(initialConfigs.length);
     expect(project.projectRoot).toBeDefined();
     expect(project.projectWorkspaces.length).toBeGreaterThan(0);
   });
@@ -121,8 +126,8 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
         const { ENV_2 } = import.meta.env;
       `,
       options: [{ cwd }],
-      filename: webFilename,
-    },
+      filename: webFilename
+    }
   ],
   invalid: [
     {
@@ -134,9 +139,9 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       errors: [
         {
           message:
-            "ENV_3 is not listed as a dependency in the root turbo.json or workspace (apps/web) turbo.json",
-        },
-      ],
-    },
-  ],
+            "ENV_3 is not listed as a dependency in the root turbo.json or workspace (apps/web) turbo.json"
+        }
+      ]
+    }
+  ]
 });

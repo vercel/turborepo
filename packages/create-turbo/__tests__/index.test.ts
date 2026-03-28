@@ -16,13 +16,13 @@ import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
 jest.mock<typeof import("@turbo/workspaces")>("@turbo/workspaces", () => ({
   __esModule: true,
-  ...jest.requireActual("@turbo/workspaces"),
+  ...jest.requireActual("@turbo/workspaces")
 }));
 
 describe("create-turbo", () => {
   const { useFixture } = setupTestFixtures({
     directory: path.join(__dirname, "../"),
-    options: { emptyFixture: true },
+    options: { emptyFixture: true }
   });
 
   const mockConsole = spyConsole();
@@ -31,23 +31,23 @@ describe("create-turbo", () => {
     api: "https://example.com",
     packageInfo: {
       name: "create-turbo",
-      version: "1.0.0",
+      version: "1.0.0"
     },
     config: new TelemetryConfig({
       configPath: "test-config-path",
       config: {
         telemetry_enabled: false,
         telemetry_id: "telemetry-test-id",
-        telemetry_salt: "telemetry-salt",
-      },
-    }),
+        telemetry_salt: "telemetry-salt"
+      }
+    })
   });
 
   it.each<{ packageManager: PackageManager }>([
     { packageManager: "yarn" },
     { packageManager: "npm" },
     { packageManager: "pnpm" },
-    { packageManager: "bun" },
+    { packageManager: "bun" }
   ])(
     "outputs expected console messages when using $packageManager (option)",
     async ({ packageManager }) => {
@@ -61,7 +61,7 @@ describe("create-turbo", () => {
           npm: "8.19.2",
           yarn: "1.22.10",
           pnpm: "7.22.2",
-          bun: "1.0.1",
+          bun: "1.0.1"
         });
 
       const mockCreateProject = jest
@@ -69,7 +69,7 @@ describe("create-turbo", () => {
         .mockResolvedValue({
           cdPath: "",
           hasPackageJson: true,
-          availableScripts,
+          availableScripts
         });
 
       const mockGetWorkspaceDetails = jest
@@ -77,21 +77,26 @@ describe("create-turbo", () => {
         .mockResolvedValue(
           getWorkspaceDetailsMockReturnValue({
             root,
-            packageManager,
+            packageManager
           })
         );
 
-      const mockExecSync = jest
-        .spyOn(childProcess, "execSync")
-        .mockImplementation(() => {
-          return "success";
+      const mockSpawnSync = jest
+        .spyOn(childProcess, "spawnSync")
+        .mockReturnValue({
+          pid: 1,
+          output: [],
+          stdout: Buffer.from(""),
+          stderr: Buffer.from(""),
+          status: 0,
+          signal: null
         });
 
       await create(root as CreateCommandArgument, {
         packageManager,
         skipInstall: true,
         example: "default",
-        telemetry,
+        telemetry
       });
 
       const expected = `${picocolors.bold(
@@ -113,13 +118,13 @@ describe("create-turbo", () => {
         "- Run commands with Turborepo:"
       );
 
-      availableScripts.forEach((script) => {
+      for (const script of availableScripts) {
         expect(mockConsole.log).toHaveBeenCalledWith(
           expect.stringContaining(
             picocolors.cyan(`${packageManager} run ${script}`)
           )
         );
-      });
+      }
 
       expect(mockConsole.log).toHaveBeenCalledWith(
         "- Run a command twice to hit cache"
@@ -128,7 +133,7 @@ describe("create-turbo", () => {
       mockAvailablePackageManagers.mockRestore();
       mockCreateProject.mockRestore();
       mockGetWorkspaceDetails.mockRestore();
-      mockExecSync.mockRestore();
+      mockSpawnSync.mockRestore();
     }
   );
 
@@ -136,7 +141,7 @@ describe("create-turbo", () => {
     { packageManager: "yarn" },
     { packageManager: "npm" },
     { packageManager: "pnpm" },
-    { packageManager: "bun" },
+    { packageManager: "bun" }
   ])(
     "outputs expected console messages when using $packageManager (arg)",
     async ({ packageManager }) => {
@@ -150,7 +155,7 @@ describe("create-turbo", () => {
           npm: "8.19.2",
           yarn: "1.22.10",
           pnpm: "7.22.2",
-          bun: "1.0.1",
+          bun: "1.0.1"
         });
 
       const mockCreateProject = jest
@@ -158,7 +163,7 @@ describe("create-turbo", () => {
         .mockResolvedValue({
           cdPath: "",
           hasPackageJson: true,
-          availableScripts,
+          availableScripts
         });
 
       const mockGetWorkspaceDetails = jest
@@ -166,21 +171,26 @@ describe("create-turbo", () => {
         .mockResolvedValue(
           getWorkspaceDetailsMockReturnValue({
             root,
-            packageManager,
+            packageManager
           })
         );
 
-      const mockExecSync = jest
-        .spyOn(childProcess, "execSync")
-        .mockImplementation(() => {
-          return "success";
+      const mockSpawnSync = jest
+        .spyOn(childProcess, "spawnSync")
+        .mockReturnValue({
+          pid: 1,
+          output: [],
+          stdout: Buffer.from(""),
+          stderr: Buffer.from(""),
+          status: 0,
+          signal: null
         });
 
       await create(root as CreateCommandArgument, {
         packageManager,
         skipInstall: true,
         example: "default",
-        telemetry,
+        telemetry
       });
 
       const expected = `${picocolors.bold(
@@ -202,13 +212,13 @@ describe("create-turbo", () => {
         "- Run commands with Turborepo:"
       );
 
-      availableScripts.forEach((script) => {
+      for (const script of availableScripts) {
         expect(mockConsole.log).toHaveBeenCalledWith(
           expect.stringContaining(
             picocolors.cyan(`${packageManager} run ${script}`)
           )
         );
-      });
+      }
 
       expect(mockConsole.log).toHaveBeenCalledWith(
         "- Run a command twice to hit cache"
@@ -216,7 +226,7 @@ describe("create-turbo", () => {
       mockAvailablePackageManagers.mockRestore();
       mockCreateProject.mockRestore();
       mockGetWorkspaceDetails.mockRestore();
-      mockExecSync.mockRestore();
+      mockSpawnSync.mockRestore();
     }
   );
 
@@ -229,7 +239,7 @@ describe("create-turbo", () => {
         npm: "8.19.2",
         yarn: "1.22.10",
         pnpm: "7.22.2",
-        bun: "1.0.1",
+        bun: "1.0.1"
       });
 
     const mockCreateProject = jest
@@ -241,21 +251,26 @@ describe("create-turbo", () => {
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
-    const mockExecSync = jest
-      .spyOn(childProcess, "execSync")
-      .mockImplementation(() => {
-        return "success";
+    const mockSpawnSync = jest
+      .spyOn(childProcess, "spawnSync")
+      .mockReturnValue({
+        pid: 1,
+        output: [],
+        stdout: Buffer.from(""),
+        stderr: Buffer.from(""),
+        status: 0,
+        signal: null
       });
 
     await create(root as CreateCommandArgument, {
       packageManager,
       skipInstall: true,
       example: "default",
-      telemetry,
+      telemetry
     });
 
     expect(mockConsole.error).toHaveBeenCalledTimes(2);
@@ -274,10 +289,10 @@ describe("create-turbo", () => {
     mockAvailablePackageManagers.mockRestore();
     mockCreateProject.mockRestore();
     mockGetWorkspaceDetails.mockRestore();
-    mockExecSync.mockRestore();
+    mockSpawnSync.mockRestore();
   });
 
-  it("removes .git directory when --no-git flag is used", async () => {
+  it("does not initialize git and removes .git directory when --no-git flag is used", async () => {
     const { root } = useFixture({ fixture: "create-turbo-no-git" });
     const packageManager = "npm";
 
@@ -287,7 +302,7 @@ describe("create-turbo", () => {
         npm: "8.19.2",
         yarn: "1.22.10",
         pnpm: "7.22.2",
-        bun: "1.0.1",
+        bun: "1.0.1"
       });
 
     const mockCreateProject = jest
@@ -295,7 +310,7 @@ describe("create-turbo", () => {
       .mockResolvedValue({
         cdPath: "",
         hasPackageJson: true,
-        availableScripts: ["build", "test", "dev"],
+        availableScripts: ["build", "test", "dev"]
       });
 
     const mockGetWorkspaceDetails = jest
@@ -303,15 +318,24 @@ describe("create-turbo", () => {
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
-    const mockExecSync = jest
-      .spyOn(childProcess, "execSync")
-      .mockImplementation(() => {
-        return "success";
+    const mockSpawnSync = jest
+      .spyOn(childProcess, "spawnSync")
+      .mockReturnValue({
+        pid: 1,
+        output: [],
+        stdout: Buffer.from(""),
+        stderr: Buffer.from(""),
+        status: 0,
+        signal: null
       });
+
+    const mockTryGitInit = jest
+      .spyOn(gitUtils, "tryGitInit")
+      .mockReturnValue(true);
 
     const mockRemoveGitDirectory = jest
       .spyOn(gitUtils, "removeGitDirectory")
@@ -321,20 +345,22 @@ describe("create-turbo", () => {
       packageManager,
       skipInstall: true,
       example: "default",
-      noGit: true,
-      telemetry,
+      git: false,
+      telemetry
     });
 
+    expect(mockTryGitInit).not.toHaveBeenCalled();
     expect(mockRemoveGitDirectory).toHaveBeenCalledWith(root);
 
     mockAvailablePackageManagers.mockRestore();
     mockCreateProject.mockRestore();
     mockGetWorkspaceDetails.mockRestore();
-    mockExecSync.mockRestore();
+    mockSpawnSync.mockRestore();
+    mockTryGitInit.mockRestore();
     mockRemoveGitDirectory.mockRestore();
   });
 
-  it("does not remove .git directory when --no-git flag is not used", async () => {
+  it("initializes git and does not remove .git directory when --no-git flag is not used", async () => {
     const { root } = useFixture({ fixture: "create-turbo-with-git" });
     const packageManager = "npm";
 
@@ -344,7 +370,7 @@ describe("create-turbo", () => {
         npm: "8.19.2",
         yarn: "1.22.10",
         pnpm: "7.22.2",
-        bun: "1.0.1",
+        bun: "1.0.1"
       });
 
     const mockCreateProject = jest
@@ -352,7 +378,7 @@ describe("create-turbo", () => {
       .mockResolvedValue({
         cdPath: "",
         hasPackageJson: true,
-        availableScripts: ["build", "test", "dev"],
+        availableScripts: ["build", "test", "dev"]
       });
 
     const mockGetWorkspaceDetails = jest
@@ -360,15 +386,24 @@ describe("create-turbo", () => {
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
-    const mockExecSync = jest
-      .spyOn(childProcess, "execSync")
-      .mockImplementation(() => {
-        return "success";
+    const mockSpawnSync = jest
+      .spyOn(childProcess, "spawnSync")
+      .mockReturnValue({
+        pid: 1,
+        output: [],
+        stdout: Buffer.from(""),
+        stderr: Buffer.from(""),
+        status: 0,
+        signal: null
       });
+
+    const mockTryGitInit = jest
+      .spyOn(gitUtils, "tryGitInit")
+      .mockReturnValue(true);
 
     const mockRemoveGitDirectory = jest
       .spyOn(gitUtils, "removeGitDirectory")
@@ -378,16 +413,18 @@ describe("create-turbo", () => {
       packageManager,
       skipInstall: true,
       example: "default",
-      noGit: false,
-      telemetry,
+      git: true,
+      telemetry
     });
 
+    expect(mockTryGitInit).toHaveBeenCalledWith(root);
     expect(mockRemoveGitDirectory).not.toHaveBeenCalled();
 
     mockAvailablePackageManagers.mockRestore();
     mockCreateProject.mockRestore();
     mockGetWorkspaceDetails.mockRestore();
-    mockExecSync.mockRestore();
+    mockSpawnSync.mockRestore();
+    mockTryGitInit.mockRestore();
     mockRemoveGitDirectory.mockRestore();
   });
 });

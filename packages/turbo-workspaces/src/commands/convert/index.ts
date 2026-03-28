@@ -1,16 +1,17 @@
-import inquirer from "inquirer";
+import { input, select } from "@inquirer/prompts";
 import picocolors from "picocolors";
-import { getAvailablePackageManagers, type PackageManager } from "@turbo/utils";
+import { getAvailablePackageManagers } from "@turbo/utils";
+import type { PackageManager } from "../../types";
 import { Logger } from "../../logger";
 import { directoryInfo } from "../../utils";
-import { getWorkspaceDetails } from "../../getWorkspaceDetails";
+import { getWorkspaceDetails } from "../../get-workspace-details";
 import { convertProject } from "../../convert";
 import type { ConvertCommandArgument, ConvertCommandOptions } from "./types";
 
 function isPackageManagerDisabled({
   packageManager,
   currentWorkspaceManger,
-  availablePackageManagers,
+  availablePackageManagers
 }: {
   packageManager: PackageManager;
   currentWorkspaceManger: PackageManager;
@@ -38,27 +39,25 @@ export async function convertCommand(
   logger.header("Welcome, let's convert your project.");
   logger.blankLine();
 
-  const directoryAnswer = await inquirer.prompt<{
-    directoryInput: string;
-  }>({
-    type: "input",
-    name: "directoryInput",
-    message: "Where is the root of your repo?",
-    when: !directory,
-    default: ".",
-    validate: (d: string) => {
-      const { exists, absolute } = directoryInfo({ directory: d });
-      if (exists) {
-        return true;
-      }
-      return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
-    },
-    filter: (d: string) => d.trim(),
-  });
+  let selectedDirectory = directory;
+  if (!selectedDirectory) {
+    selectedDirectory = await input({
+      message: "Where is the root of your repo?",
+      default: ".",
+      validate: (d: string) => {
+        const { exists, absolute } = directoryInfo({ directory: d });
+        if (exists) {
+          return true;
+        }
+        return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
+      },
+      transformer: (d: string) => d.trim()
+    });
+    selectedDirectory = selectedDirectory.trim();
+  }
 
-  const { directoryInput: selectedDirectory = directory } = directoryAnswer;
   const { exists, absolute: root } = directoryInfo({
-    directory: selectedDirectory,
+    directory: selectedDirectory
   });
   if (!exists) {
     logger.error(`Directory ${picocolors.dim(`(${root})`)} does not exist`);
@@ -67,46 +66,43 @@ export async function convertCommand(
 
   const [project, availablePackageManagers] = await Promise.all([
     getWorkspaceDetails({ root }),
-    getAvailablePackageManagers(),
+    getAvailablePackageManagers()
   ]);
 
-  const packageManagerAnswer = await inquirer.prompt<{
-    packageManagerInput?: PackageManager;
-  }>({
-    name: "packageManagerInput",
-    type: "list",
-    message: `Convert from ${project.packageManager} to:`,
-    when:
-      !packageManager ||
-      !Object.keys(availablePackageManagers).includes(packageManager),
-    choices: [
-      { pm: "npm", label: "npm" },
-      { pm: "pnpm", label: "pnpm" },
-      { pm: "yarn", label: "yarn" },
-      { pm: "bun", label: "Bun (beta)" },
-    ].map(({ pm, label }) => ({
-      name: label,
-      value: pm,
-      disabled: isPackageManagerDisabled({
-        packageManager: pm as PackageManager,
-        currentWorkspaceManger: project.packageManager,
-        availablePackageManagers,
-      }),
-    })),
-  });
-  const {
-    packageManagerInput:
-      selectedPackageManager = packageManager as PackageManager,
-  } = packageManagerAnswer;
+  let selectedPackageManager: PackageManager;
+  if (
+    packageManager &&
+    Object.keys(availablePackageManagers).includes(packageManager)
+  ) {
+    selectedPackageManager = packageManager as PackageManager;
+  } else {
+    selectedPackageManager = await select<PackageManager>({
+      message: `Convert from ${project.packageManager} to:`,
+      choices: [
+        { pm: "npm", label: "npm" },
+        { pm: "pnpm", label: "pnpm" },
+        { pm: "yarn", label: "yarn" },
+        { pm: "bun", label: "Bun (beta)" }
+      ].map(({ pm, label }) => ({
+        name: label,
+        value: pm as PackageManager,
+        disabled: isPackageManagerDisabled({
+          packageManager: pm as PackageManager,
+          currentWorkspaceManger: project.packageManager,
+          availablePackageManagers
+        })
+      }))
+    });
+  }
 
   await convertProject({
     project,
     convertTo: {
       name: selectedPackageManager,
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- selectedPackageManager is validated against availablePackageManagers
-      version: availablePackageManagers[selectedPackageManager]!,
+      version: availablePackageManagers[selectedPackageManager]!
     },
     logger,
-    options,
+    options
   });
 }

@@ -6,7 +6,13 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{Error, GitHashes, GitRepo, wait_for_success};
+use crate::{Error, GitHashes, GitRepo, OidHash, wait_for_success};
+
+/// Sorted list of (path, hash) pairs from `git ls-tree`. Uses a `Vec` instead
+/// of `BTreeMap` because git output is already sorted by pathname, giving us
+/// free insertion order with better cache locality for the `partition_point`
+/// range lookups performed in `RepoGitIndex::get_package_hashes`.
+pub(crate) type SortedGitHashes = Vec<(RelativeUnixPathBuf, OidHash)>;
 
 impl GitRepo {
     #[tracing::instrument(skip(self))]
@@ -32,16 +38,196 @@ impl GitRepo {
         wait_for_success(git, &mut stderr, "git ls-tree", root_path, parse_result)?;
         Ok(hashes)
     }
+
+    /// Run `git ls-tree` once at the git repo root, returning all committed
+    /// file hashes keyed by git-root-relative paths.
+    #[tracing::instrument(skip(self))]
+    pub fn git_ls_tree_repo_root(&self) -> Result<GitHashes, Error> {
+        self.git_ls_tree(&self.root)
+    }
+
+    /// Run `git ls-tree -r HEAD -z` at the repo root, returning a sorted Vec
+    /// suitable for binary-search range queries in `RepoGitIndex`.
+    #[tracing::instrument(skip(self))]
+    pub(crate) fn git_ls_tree_repo_root_sorted(&self) -> Result<SortedGitHashes, Error> {
+        let mut git = Command::new(self.bin.as_std_path())
+            .args(["ls-tree", "-r", "-z", "HEAD"])
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            .current_dir(&self.root)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let stdout = git
+            .stdout
+            .as_mut()
+            .ok_or_else(|| Error::git_error("failed to get stdout for git ls-tree"))?;
+        let mut stderr = git
+            .stderr
+            .take()
+            .ok_or_else(|| Error::git_error("failed to get stderr for git ls-tree"))?;
+        let mut hashes = SortedGitHashes::new();
+        let parse_result = read_ls_tree_sorted(stdout, &mut hashes);
+        wait_for_success(git, &mut stderr, "git ls-tree", &self.root, parse_result)?;
+        Ok(hashes)
+    }
+
+    /// Run `git diff-index HEAD -z` to find modified/deleted files relative to
+    /// HEAD. Returns sorted `RepoStatusEntry` entries.
+    #[tracing::instrument(skip(self))]
+    pub(crate) fn git_diff_index_repo_root(
+        &self,
+    ) -> Result<Vec<crate::status::RepoStatusEntry>, Error> {
+        let mut git = Command::new(self.bin.as_std_path())
+            .args([
+                "diff-index",
+                "HEAD",
+                "-z",
+                "--diff-filter=ADM",
+                "--no-renames",
+            ])
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            .current_dir(&self.root)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let stdout = git
+            .stdout
+            .as_mut()
+            .ok_or_else(|| Error::git_error("failed to get stdout for git diff-index"))?;
+        let mut stderr = git
+            .stderr
+            .take()
+            .ok_or_else(|| Error::git_error("failed to get stderr for git diff-index"))?;
+        let mut entries = Vec::new();
+        let parse_result = read_diff_index(stdout, &mut entries);
+        wait_for_success(git, &mut stderr, "git diff-index", &self.root, parse_result)?;
+        entries.sort_by(|a, b| a.path.cmp(&b.path));
+        Ok(entries)
+    }
+
+    /// Run `git ls-files --others --exclude-standard -z` to find untracked
+    /// files.
+    #[tracing::instrument(skip(self))]
+    pub(crate) fn git_ls_files_untracked(&self) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+        let mut git = Command::new(self.bin.as_std_path())
+            .args(["ls-files", "--others", "--exclude-standard", "-z"])
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            .current_dir(&self.root)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let stdout = git
+            .stdout
+            .as_mut()
+            .ok_or_else(|| Error::git_error("failed to get stdout for git ls-files"))?;
+        let mut stderr = git
+            .stderr
+            .take()
+            .ok_or_else(|| Error::git_error("failed to get stderr for git ls-files"))?;
+        let mut paths = Vec::new();
+        let parse_result = read_null_terminated_paths(stdout, &mut paths);
+        wait_for_success(git, &mut stderr, "git ls-files", &self.root, parse_result)?;
+        Ok(paths)
+    }
 }
 
 fn read_ls_tree<R: Read>(reader: R, hashes: &mut GitHashes) -> Result<(), Error> {
-    let mut reader = BufReader::new(reader);
+    let mut reader = BufReader::with_capacity(64 * 1024, reader);
     let mut buffer = Vec::new();
     while reader.read_until(b'\0', &mut buffer)? != 0 {
         let entry = parse_ls_tree(&buffer)?;
-        let hash = String::from_utf8(entry.hash.to_vec())?;
-        let path = RelativeUnixPathBuf::new(String::from_utf8(entry.filename.to_vec())?)?;
-        hashes.insert(path, hash);
+        let hash = std::str::from_utf8(entry.hash)
+            .map_err(|e| Error::git_error(format!("invalid utf8 in ls-tree hash: {e}")))?;
+        let filename = std::str::from_utf8(entry.filename)
+            .map_err(|e| Error::git_error(format!("invalid utf8 in ls-tree filename: {e}")))?;
+        let path = RelativeUnixPathBuf::new(filename)?;
+        hashes.insert(path, OidHash::from_hex_str(hash));
+        buffer.clear();
+    }
+    Ok(())
+}
+
+pub(crate) fn read_ls_tree_sorted<R: Read>(
+    reader: R,
+    hashes: &mut SortedGitHashes,
+) -> Result<(), Error> {
+    let mut reader = BufReader::with_capacity(64 * 1024, reader);
+    let mut buffer = Vec::new();
+    while reader.read_until(b'\0', &mut buffer)? != 0 {
+        let entry = parse_ls_tree(&buffer)?;
+        let hash = std::str::from_utf8(entry.hash)
+            .map_err(|e| Error::git_error(format!("invalid utf8 in ls-tree hash: {e}")))?;
+        let filename = std::str::from_utf8(entry.filename)
+            .map_err(|e| Error::git_error(format!("invalid utf8 in ls-tree filename: {e}")))?;
+        let path = RelativeUnixPathBuf::new(filename)?;
+        hashes.push((path, OidHash::from_hex_str(hash)));
+        buffer.clear();
+    }
+    debug_assert!(
+        hashes.windows(2).all(|w| w[0].0 < w[1].0),
+        "git ls-tree output should be sorted by pathname"
+    );
+    Ok(())
+}
+
+fn read_diff_index<R: Read>(
+    reader: R,
+    entries: &mut Vec<crate::status::RepoStatusEntry>,
+) -> Result<(), Error> {
+    // git diff-index -z output: ":old_mode new_mode old_sha new_sha status\0path\0"
+    // Each record is two null-terminated fields: the diff header and the path.
+    let mut reader = BufReader::with_capacity(64 * 1024, reader);
+    let mut header_buf = Vec::new();
+    let mut path_buf = Vec::new();
+    loop {
+        header_buf.clear();
+        if reader.read_until(b'\0', &mut header_buf)? == 0 {
+            break;
+        }
+        path_buf.clear();
+        if reader.read_until(b'\0', &mut path_buf)? == 0 {
+            break;
+        }
+        // Trim trailing null
+        if path_buf.last() == Some(&b'\0') {
+            path_buf.pop();
+        }
+        let path_str = std::str::from_utf8(&path_buf)
+            .map_err(|e| Error::git_error(format!("invalid utf8 in diff-index path: {e}")))?;
+        let path = RelativeUnixPathBuf::new(path_str)?;
+
+        // Status letter is the last non-null char in the header
+        let header = header_buf.strip_suffix(b"\0").unwrap_or(&header_buf);
+        let status_byte = header.last().copied().unwrap_or(b'M');
+        let is_delete = status_byte == b'D';
+
+        entries.push(crate::status::RepoStatusEntry { path, is_delete });
+    }
+    Ok(())
+}
+
+fn read_null_terminated_paths<R: Read>(
+    reader: R,
+    paths: &mut Vec<RelativeUnixPathBuf>,
+) -> Result<(), Error> {
+    let mut reader = BufReader::with_capacity(64 * 1024, reader);
+    let mut buffer = Vec::new();
+    while reader.read_until(b'\0', &mut buffer)? != 0 {
+        // Trim trailing null
+        if buffer.last() == Some(&b'\0') {
+            buffer.pop();
+        }
+        if buffer.is_empty() {
+            buffer.clear();
+            continue;
+        }
+        let path_str = std::str::from_utf8(&buffer)
+            .map_err(|e| Error::git_error(format!("invalid utf8 in path: {e}")))?;
+        let path = RelativeUnixPathBuf::new(path_str)?;
+        paths.push(path);
         buffer.clear();
     }
     Ok(())
@@ -82,14 +268,68 @@ mod tests {
 
     use turbopath::RelativeUnixPathBuf;
 
-    use crate::{GitHashes, ls_tree::read_ls_tree};
+    use crate::{GitHashes, OidHash, ls_tree::read_ls_tree};
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
-        HashMap::from_iter(
-            pairs
-                .iter()
-                .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
-        )
+        HashMap::from_iter(pairs.iter().map(|(path, hash)| {
+            (
+                RelativeUnixPathBuf::new(*path).unwrap(),
+                OidHash::from_hex_str(hash),
+            )
+        }))
+    }
+
+    fn to_sorted_hashes(pairs: &[(&str, &str)]) -> super::SortedGitHashes {
+        pairs
+            .iter()
+            .map(|(path, hash)| {
+                (
+                    RelativeUnixPathBuf::new(*path).unwrap(),
+                    OidHash::from_hex_str(hash),
+                )
+            })
+            .collect()
+    }
+
+    // Verifies that read_ls_tree_sorted produces correct sorted Vec entries
+    // from git ls-tree output.
+    #[test]
+    fn test_ls_tree_sorted() {
+        let input = "100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\tpackage.json\x00100644 \
+                     blob 5b999efa470b056e329b4c23a73904e0794bdc2f\tsrc/index.ts\x00100644 blob \
+                     f44f57fff95196c5f7139dfa0b96875f1e9650a9\tsrc/utils.ts\0";
+
+        let expected = to_sorted_hashes(&[
+            ("package.json", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"),
+            ("src/index.ts", "5b999efa470b056e329b4c23a73904e0794bdc2f"),
+            ("src/utils.ts", "f44f57fff95196c5f7139dfa0b96875f1e9650a9"),
+        ]);
+
+        let mut hashes = super::SortedGitHashes::new();
+        super::read_ls_tree_sorted(input.as_bytes(), &mut hashes).unwrap();
+        assert_eq!(hashes, expected);
+
+        // Verify entries are sorted (invariant needed for binary search)
+        assert!(
+            hashes.windows(2).all(|w| w[0].0 < w[1].0),
+            "sorted Vec should maintain sorted order"
+        );
+    }
+
+    // Verifies read_ls_tree_sorted handles all the edge cases that read_ls_tree
+    // handles. Both parsers share the same `parse_ls_tree` function.
+    #[test]
+    fn test_ls_tree_sorted_edge_cases() {
+        // Single entry without trailing NUL
+        let input = "100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\tpackage.json";
+        let mut hashes = super::SortedGitHashes::new();
+        super::read_ls_tree_sorted(input.as_bytes(), &mut hashes).unwrap();
+        assert_eq!(hashes.len(), 1);
+
+        // Empty input
+        let mut hashes = super::SortedGitHashes::new();
+        super::read_ls_tree_sorted("".as_bytes(), &mut hashes).unwrap();
+        assert_eq!(hashes.len(), 0);
     }
 
     #[test]

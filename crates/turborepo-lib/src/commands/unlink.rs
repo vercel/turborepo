@@ -1,6 +1,7 @@
+use turborepo_json_rewrite::unset_path;
 use turborepo_ui::GREY;
 
-use crate::{cli, commands::CommandBase, config, rewrite_json::unset_path};
+use crate::{cli, commands::CommandBase, config};
 
 fn unlink_remote_caching(base: &mut CommandBase) -> Result<(), cli::Error> {
     let needs_disabling = base.opts.api_client_opts.team_id.is_some()

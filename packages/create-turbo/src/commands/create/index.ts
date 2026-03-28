@@ -5,24 +5,18 @@ import {
   getWorkspaceDetails,
   install,
   getPackageManagerMeta,
-  ConvertError,
+  ConvertError
 } from "@turbo/workspaces";
 import {
   getAvailablePackageManagers,
   createProject,
   DownloadError,
-  logger,
+  logger
 } from "@turbo/utils";
-import {
-  tryGitCommit,
-  tryGitInit,
-  tryGitAdd,
-  removeGitDirectory,
-} from "../../utils/git";
-import { isOnline } from "../../utils/isOnline";
+import { tryGitInit, removeGitDirectory } from "../../utils/git";
 import { transforms } from "../../transforms";
 import { TransformError } from "../../transforms/errors";
-import { isDefaultExample } from "../../utils/isDefaultExample";
+import { isDefaultExample } from "../../utils/is-default-example";
 import * as prompts from "./prompts";
 import type { CreateCommandArgument, CreateCommandOptions } from "./types";
 
@@ -69,7 +63,7 @@ const SCRIPTS_TO_DISPLAY: Record<string, string> = {
   build: "Build",
   dev: "Develop",
   test: "Test",
-  lint: "Lint",
+  lint: "Lint"
 };
 
 export async function create(
@@ -83,19 +77,10 @@ export async function create(
 
   let isMaintainedByCoreTeam = false;
 
-  const { packageManager, skipInstall, skipTransforms, noGit } = opts;
+  const { packageManager, skipInstall, skipTransforms, git } = opts;
 
-  const [online, availablePackageManagers] = await Promise.all([
-    isOnline(),
-    getAvailablePackageManagers(),
-  ]);
+  const availablePackageManagers = await getAvailablePackageManagers();
 
-  if (!online) {
-    error(
-      "You appear to be offline. Please check your network connection and try again."
-    );
-    process.exit(1);
-  }
   const { root, projectName } = await prompts.directory({ dir: directory });
   const relativeProjectDir = path.relative(process.cwd(), root);
   const projectDirIsCurrentDir = relativeProjectDir === "";
@@ -103,7 +88,7 @@ export async function create(
   // selected package manager can be undefined if the user chooses to skip transforms
   const selectedPackageManagerDetails = await prompts.packageManager({
     manager: packageManager,
-    skipTransforms,
+    skipTransforms
   });
 
   if (packageManager && opts.skipTransforms) {
@@ -121,16 +106,13 @@ export async function create(
       appPath: root,
       example: exampleName,
       isDefaultExample: isDefaultExample(exampleName),
-      examplePath,
+      examplePath
     });
   } catch (err) {
     handleErrors(err, opts.telemetry);
   }
 
   const { hasPackageJson, availableScripts, repoInfo } = projectData;
-
-  // create a new git repo after creating the project
-  tryGitInit(root, `feat(create-turbo): create ${exampleName}`);
 
   // read the project after creating it to get details about workspaces, package manager, etc.
   let project: Project = {} as Project;
@@ -148,24 +130,16 @@ export async function create(
         const transformResult = await transform({
           example: {
             repo: repoInfo,
-            name: exampleName,
+            name: exampleName
           },
           project,
           prompts: {
             projectName,
             root,
-            packageManager: selectedPackageManagerDetails,
+            packageManager: selectedPackageManagerDetails
           },
-          opts,
+          opts
         });
-
-        if (transformResult.result === "success") {
-          // add first to ensure any transforms that add new files are included
-          tryGitAdd();
-          tryGitCommit(
-            `feat(create-turbo): apply ${transformResult.name} transform`
-          );
-        }
 
         if (transformResult.metaJson?.maintainedByCoreTeam) {
           isMaintainedByCoreTeam = true;
@@ -181,7 +155,7 @@ export async function create(
     skipTransforms || !selectedPackageManagerDetails
       ? {
           name: project.packageManager,
-          version: availablePackageManagers[project.packageManager],
+          version: availablePackageManagers[project.packageManager]
         }
       : selectedPackageManagerDetails;
 
@@ -206,13 +180,16 @@ export async function create(
             path.relative(root, w.paths.root).split(path.sep)[0] || ""
           ),
           title: path.relative(root, w.paths.root),
-          description: w.description,
+          description: w.description
         };
       })
       .sort((a, b) => a.title.localeCompare(b.title));
 
     let lastGroup: string | undefined;
-    workspacesForDisplay.forEach(({ group, title, description }, idx) => {
+    for (const [
+      idx,
+      { group, title, description }
+    ] of workspacesForDisplay.entries()) {
       if (idx === 0 || group !== lastGroup) {
         logger.log(picocolors.cyan(group));
       }
@@ -220,7 +197,7 @@ export async function create(
         ` - ${picocolors.bold(title)}${description ? `: ${description}` : ""}`
       );
       lastGroup = group;
-    });
+    }
   } else {
     logger.log(picocolors.cyan("apps"));
     logger.log(` - ${picocolors.bold(projectName)}`);
@@ -248,11 +225,10 @@ export async function create(
         project,
         to: projectPackageManager,
         options: {
-          interactive: false,
-        },
+          interactive: false
+        }
       });
 
-      tryGitCommit("feat(create-turbo): install dependencies");
       loader.stop();
     }
   }
@@ -297,26 +273,33 @@ export async function create(
         `${packageManagerMeta.executable} turbo login`
       )}`
     );
-    logger.log("   - Learn more: https://turborepo.com/remote-cache");
+    logger.log("   - Learn more: https://turborepo.dev/remote-cache");
     logger.log();
     logger.log("- Run commands with Turborepo:");
-    availableScripts
-      .filter((script) => SCRIPTS_TO_DISPLAY[script])
-      .forEach((script) => {
-        logger.log(
-          `   - ${picocolors.cyan(
-            `${packageManagerMeta.command} run ${script}`
-          )}: ${SCRIPTS_TO_DISPLAY[script]} all apps and packages`
-        );
-      });
+    const scriptsToDisplay = availableScripts.filter(
+      (script) => SCRIPTS_TO_DISPLAY[script]
+    );
+    for (const script of scriptsToDisplay) {
+      logger.log(
+        `   - ${picocolors.cyan(
+          `${packageManagerMeta.command} run ${script}`
+        )}: ${SCRIPTS_TO_DISPLAY[script]} all apps and packages`
+      );
+    }
     logger.log("- Run a command twice to hit cache");
   }
 
-  // remove .git directory if --no-git flag is used
-  if (noGit) {
-    if (!removeGitDirectory(root)) {
-      logger.warn("Failed to remove '.git' directory");
+  // Initialize git repository with a single commit containing all changes
+  // This is done at the end so all files (including transforms and installed deps) are in one commit
+  // Note: git defaults to true, --no-git sets it to false
+  if (git !== false) {
+    if (tryGitInit(root)) {
+      info("Initialized a git repository.");
     }
+  } else {
+    // User explicitly doesn't want git - remove any .git directory
+    // (e.g., if the example template came with one)
+    removeGitDirectory(root);
   }
 
   opts.telemetry?.trackCommandStatus({ command: "create", status: "end" });

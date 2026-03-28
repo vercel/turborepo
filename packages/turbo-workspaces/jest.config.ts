@@ -13,11 +13,11 @@ const config = {
       branches: 82,
       functions: 85,
       lines: 92,
-      statements: 92,
-    },
+      statements: 92
+    }
   },
   verbose: process.env.RUNNER_DEBUG === "1",
-  silent: process.env.RUNNER_DEBUG !== "1",
+  silent: process.env.RUNNER_DEBUG !== "1"
 } as const satisfies Config;
 
 export default config;

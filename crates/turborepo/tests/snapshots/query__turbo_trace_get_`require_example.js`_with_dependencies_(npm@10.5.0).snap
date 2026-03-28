@@ -1,0 +1,23 @@
+---
+source: crates/turborepo/tests/query.rs
+expression: query_output
+---
+{
+  "data": {
+    "file": {
+      "path": "require_example.js",
+      "dependencies": {
+        "files": {
+          "items": [
+            {
+              "path": "bar.js"
+            },
+            {
+              "path": "foo.js"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

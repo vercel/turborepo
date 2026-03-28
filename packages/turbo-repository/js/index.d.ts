@@ -50,6 +50,12 @@ export class Workspace {
    */
   findPackagesWithGraph(): Promise<Record<string, PackageDetails>>;
   /**
+   * Returns all external packages from the lockfile as `npm/<name>@<version>` strings.
+   * Collects the transitive external dependencies of every workspace package
+   * and formats them using the lockfile's human-readable name.
+   */
+  packagesFromLockfile(): Promise<Array<string>>;
+  /**
    * Given a set of "changed" files, returns a set of packages that are
    * "affected" by the changes. The `files` argument is expected to be a list
    * of strings relative to the monorepo root and use the current system's
@@ -64,10 +70,10 @@ export class Workspace {
    * Given a path (relative to the workspace root), returns the
    * package that contains it.
    *
-   * This is a naive implementation that simply "iterates-up". If this function is
-   * expected to be called many times for files that are deep within the same
-   * package, we could optimize this by caching the containing-package of
-   * every ancestor.
+   * This is a naive implementation that simply "iterates-up". If this
+   * function is expected to be called many times for files that are deep
+   * within the same package, we could optimize this by caching the
+   * containing-package of every ancestor.
    */
   findPackageByPath(path: string): Promise<Package>;
 }

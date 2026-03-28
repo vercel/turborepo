@@ -7,7 +7,7 @@ import {
   type PackageJson,
   logger,
   searchUp,
-  clearConfigCaches,
+  clearConfigCaches
 } from "@turbo/utils";
 import { frameworks } from "@turbo/types";
 import { RULES } from "../constants";
@@ -42,9 +42,8 @@ const meta: Rule.RuleMetaData = {
   docs: {
     description:
       "Do not allow the use of `process.env` without including the env key in any turbo.json",
-    category: "Configuration Issues",
     recommended: true,
-    url: `https://github.com/vercel/turborepo/tree/main/packages/eslint-plugin-turbo/docs/rules/${RULES.noUndeclaredEnvVars}.md`,
+    url: `https://github.com/vercel/turborepo/tree/main/packages/eslint-plugin-turbo/docs/rules/${RULES.noUndeclaredEnvVars}.md`
   },
   schema: [
     {
@@ -55,18 +54,18 @@ const meta: Rule.RuleMetaData = {
         // override cwd, primarily exposed for easier testing
         cwd: {
           require: false,
-          type: "string",
+          type: "string"
         },
         allowList: {
           default: [],
           type: "array",
           items: {
-            type: "string",
-          },
-        },
-      },
-    },
-  ],
+            type: "string"
+          }
+        }
+      }
+    }
+  ]
 };
 
 /**
@@ -125,7 +124,7 @@ const packageJsonDependencies = (filePath: string): Set<string> => {
     [
       "dependencies",
       "devDependencies",
-      "peerDependencies",
+      "peerDependencies"
       // intentionally not including `optionalDependencies` or `bundleDependencies` because at the time of writing they are not used for any of the frameworks we support
     ] as const
   )
@@ -268,7 +267,7 @@ const frameworkEnvMatches = (filePath: string): Set<RegExp> => {
       acc,
       {
         dependencyMatch: { dependencies: searchDependencies, strategy },
-        envWildcards,
+        envWildcards
       }
     ) => {
       const hasMatch =
@@ -279,7 +278,7 @@ const frameworkEnvMatches = (filePath: string): Set<RegExp> => {
       if (hasMatch) {
         return new Set([
           ...acc,
-          ...envWildcards.map((envWildcard) => RegExp(envWildcard)),
+          ...envWildcards.map((envWildcard) => RegExp(envWildcard))
         ]);
       }
       return acc;
@@ -296,14 +295,14 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
 
   const allowList: Array<string> = options[0]?.allowList || [];
   let regexAllowList: Array<RegExp> = [];
-  allowList.forEach((allowed) => {
+  for (const allowed of allowList) {
     try {
       regexAllowList.push(new RegExp(allowed));
     } catch (err) {
       // log the error, but just move on without this allowList entry
       logger.error(`Unable to convert "${allowed}" to regex`);
     }
-  });
+  }
 
   const filename = context.filename;
   debug(`Checking file: ${filename}`);
@@ -331,7 +330,7 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
       projectCache.set(projectKey, {
         project,
         turboConfigHashes: hashes,
-        configPaths,
+        configPaths
       });
       debug(`Cached new project for ${projectKey}`);
     }
@@ -359,7 +358,7 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
         let contentChanged = false;
         for (const [
           filePath,
-          expectedHash,
+          expectedHash
         ] of cachedProject.turboConfigHashes) {
           if (hasConfigChanged(filePath, expectedHash)) {
             contentChanged = true;
@@ -430,7 +429,7 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
     context.report({
       node,
       message,
-      data: { envKey },
+      data: { envKey }
     });
   };
 
@@ -472,11 +471,11 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
           // destructuring from process.env
           if ("id" in node.parent && node.parent.id?.type === "ObjectPattern") {
             const values = node.parent.id.properties.values();
-            Array.from(values).forEach((item) => {
+            for (const item of Array.from(values)) {
               if ("key" in item && "name" in item.key) {
                 checkKey(node.parent, item.key.name);
               }
-            });
+            }
           }
 
           // accessing key on process.env
@@ -495,7 +494,7 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
           checkKey(node.parent, node.parent.property.value);
         }
       }
-    },
+    }
   };
 }
 

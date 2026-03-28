@@ -9,16 +9,21 @@ const supportedPlatforms: Array<Platform> = [
   { os: "linux", arch: "x64" },
   { os: "linux", arch: "arm64" },
   { os: "windows", arch: "x64" },
-  { os: "windows", arch: "arm64" },
+  { os: "windows", arch: "arm64" }
 ];
 
 const turboReleaser = new Command();
+
 turboReleaser
+  .command("turbo", { isDefault: true })
   .requiredOption("--version-path <path>", "Path to the version.txt file")
   .option("--skip-publish", "Skip publishing to NPM")
-  .action(main);
+  .action(releaseTurbo);
 
-async function main(options: { skipPublish: boolean; versionPath: string }) {
+async function releaseTurbo(options: {
+  skipPublish: boolean;
+  versionPath: string;
+}) {
   console.log("Command line options:", options);
   console.log("Supported platforms:", supportedPlatforms);
 
@@ -31,6 +36,7 @@ async function main(options: { skipPublish: boolean; versionPath: string }) {
       version,
       skipPublish: options.skipPublish as boolean,
       npmTag,
+      packagePrefix: "@turbo"
     });
     console.log("Packaging and publishing completed successfully");
   } catch (error) {

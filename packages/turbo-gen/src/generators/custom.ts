@@ -2,22 +2,25 @@ import { logger } from "@turbo/utils";
 import { getCustomGenerators, runCustomGenerator } from "../utils/plop";
 import * as prompts from "../commands/run/prompts";
 import { GeneratorError } from "../utils/error";
-import { setupFromTemplate } from "../utils/setupFromTemplate";
+import { setupFromTemplate } from "../utils/setup-from-template";
 import type { CustomGeneratorArguments } from "./types";
 
 export async function generate({
   generator,
   project,
-  opts,
+  opts
 }: CustomGeneratorArguments) {
   let isOnboarding = false;
-  let generators = getCustomGenerators({ project, configPath: opts.config });
+  let generators = await getCustomGenerators({
+    project,
+    configPath: opts.config
+  });
   if (!generators.length) {
     logger.error(`No generators found.`);
     logger.log();
 
     const { answer } = await prompts.confirm({
-      message: `Would you like to add a config with a sample custom generator to ${project.name}?`,
+      message: `Would you like to add a config with a sample custom generator to ${project.name}?`
     });
 
     if (answer) {
@@ -40,7 +43,10 @@ export async function generate({
       logger.log();
 
       // fetch generators again, and continue to selection prompt
-      generators = getCustomGenerators({ project, configPath: opts.config });
+      generators = await getCustomGenerators({
+        project,
+        configPath: opts.config
+      });
 
       // something went wrong and we weren't able to find our new custom generator
       if (!generators.length) {
@@ -50,14 +56,14 @@ export async function generate({
     } else {
       logger.log();
       logger.dimmed(
-        "Learn more about custom Turborepo generators - https://turborepo.com/docs/guides/generating-code#custom-generators"
+        "Learn more about custom Turborepo generators - https://turborepo.dev/docs/guides/generating-code#custom-generators"
       );
       return;
     }
   }
   const { selectedGenerator } = await prompts.customGenerators({
     generators,
-    generator,
+    generator
   });
 
   try {
@@ -65,7 +71,7 @@ export async function generate({
       project,
       generator: selectedGenerator,
       bypassArgs: opts.args,
-      configPath: opts.config,
+      configPath: opts.config
     });
   } catch (err) {
     // pass any GeneratorErrors through to root
@@ -80,14 +86,14 @@ export async function generate({
     }
 
     throw new GeneratorError(message, {
-      type: "plop_error_running_generator",
+      type: "plop_error_running_generator"
     });
   } finally {
     if (isOnboarding) {
       logger.log();
       logger.info(`Congrats! You just ran your first Turborepo generator`);
       logger.dimmed(
-        "Learn more about custom Turborepo generators - https://turborepo.com/docs/guides/generating-code#custom-generators"
+        "Learn more about custom Turborepo generators - https://turborepo.dev/docs/guides/generating-code#custom-generators"
       );
     }
   }

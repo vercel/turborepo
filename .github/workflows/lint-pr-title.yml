@@ -15,9 +15,9 @@ jobs:
   main:
     name: Validate PR title
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
-        if: github.event.pull_request.user.login != 'dependabot[bot]'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -33,12 +33,8 @@ jobs:
             test
             style
             examples
-          # Configure that a scope must always be provided.
-          requireScope: false
-          # Configure which scopes are disallowed in PR titles (newline-delimited).
-          disallowScopes: |
-            examples
-            example
+          # Scopes are not allowed.
+          scopes: ""
           # Configure additional validation for the subject based on a regex.
           # Ensures that the subject starts with an uppercase character.
           subjectPattern: ^[A-Z].*$
@@ -48,12 +44,3 @@ jobs:
           subjectPatternError: |
             The subject "{subject}" found in the pull request title "{title}" doesn't match the configured pattern.
             Please ensure that the subject starts with an uppercase character.
-
-      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
-        if: github.event.pull_request.user.login == 'dependabot[bot]'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          # Configure which types are allowed (newline-delimited).
-          types: |
-            examples

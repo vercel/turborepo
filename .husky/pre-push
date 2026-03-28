@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Ensure rustup-managed cargo is in PATH (not inherited in hook's sh environment)
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+
+pnpm exec lint-staged
+turbo run format check:toml
+
+export RUSTFLAGS="-D warnings"
+cargo fmt --check
+cargo lint
+cargo check --workspace

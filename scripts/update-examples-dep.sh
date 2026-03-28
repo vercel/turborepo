@@ -30,9 +30,11 @@ for dir in "$examples"/*; do
       pnpm up $package@$latest_version 2>&1 >/dev/null
     elif [ -e ".yarn" ]; then
       echo "• Updating to $package@$latest_version using yarn"
+      yarn install 2>&1 >/dev/null
       yarn add $package@$latest_version 2>&1 >/dev/null
     elif [ -e "yarn.lock" ]; then
       echo "• Updating to $package@$latest_version using yarn"
+      yarn install 2>&1 >/dev/null
       yarn upgrade $package@$latest_version --ignore-workspace-root-check 2>&1 >/dev/null
     elif [ -e "package-lock.json" ]; then
       echo "• Updating to $package@$latest_version using npm"

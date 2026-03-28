@@ -9,8 +9,8 @@ use turborepo_ui::ColorConfig;
 use crate::{
     cli,
     config::{
-        resolve_turbo_config_path, ConfigurationOptions, Error as ConfigError,
-        TurborepoConfigBuilder,
+        resolve_configuration_from_args, resolve_turbo_config_path, ConfigurationOptions,
+        Error as ConfigError,
     },
     opts::Opts,
     Args,
@@ -18,9 +18,10 @@ use crate::{
 
 pub(crate) mod bin;
 pub(crate) mod boundaries;
-pub(crate) mod clone;
 pub(crate) mod config;
 pub(crate) mod daemon;
+pub(crate) mod devtools;
+pub(crate) mod docs;
 pub(crate) mod generate;
 pub(crate) mod get_mfe_port;
 pub(crate) mod info;
@@ -31,7 +32,6 @@ pub(crate) mod ls;
 pub(crate) mod prune;
 pub(crate) mod query;
 pub(crate) mod run;
-pub(crate) mod scan;
 pub(crate) mod telemetry;
 pub(crate) mod unlink;
 
@@ -44,6 +44,7 @@ pub struct CommandBase {
 }
 
 impl CommandBase {
+    #[tracing::instrument(skip_all)]
     pub fn new(
         args: Args,
         repo_root: AbsoluteSystemPathBuf,
@@ -75,61 +76,12 @@ impl CommandBase {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn load_config(
         repo_root: &AbsoluteSystemPath,
         args: &Args,
     ) -> Result<ConfigurationOptions, ConfigError> {
-        TurborepoConfigBuilder::new(repo_root)
-            // The below should be deprecated and removed.
-            .with_api_url(args.api.clone())
-            .with_login_url(args.login.clone())
-            .with_team_slug(args.team.clone())
-            .with_token(args.token.clone())
-            .with_timeout(args.remote_cache_timeout)
-            .with_preflight(args.preflight.then_some(true))
-            .with_ui(args.ui)
-            .with_allow_no_package_manager(
-                args.dangerously_disable_package_manager_check
-                    .then_some(true),
-            )
-            .with_daemon(args.run_args().and_then(|args| args.daemon()))
-            .with_env_mode(
-                args.execution_args()
-                    .and_then(|execution_args| execution_args.env_mode),
-            )
-            .with_cache_dir(
-                args.execution_args()
-                    .and_then(|execution_args| execution_args.cache_dir.clone()),
-            )
-            .with_root_turbo_json_path(
-                args.root_turbo_json
-                    .clone()
-                    .map(AbsoluteSystemPathBuf::from_cwd)
-                    .transpose()?,
-            )
-            .with_force(
-                args.run_args()
-                    .and_then(|args| args.force.map(|value| value.unwrap_or(true))),
-            )
-            .with_log_order(args.execution_args().and_then(|args| args.log_order))
-            .with_remote_only(args.run_args().and_then(|args| args.remote_only()))
-            .with_remote_cache_read_only(
-                args.run_args()
-                    .and_then(|args| args.remote_cache_read_only()),
-            )
-            .with_cache(
-                args.run_args()
-                    .and_then(|args| args.cache.as_deref())
-                    .map(|cache| cache.parse())
-                    .transpose()?,
-            )
-            .with_run_summary(args.run_args().and_then(|args| args.summarize()))
-            .with_allow_no_turbo_json(args.allow_no_turbo_json.then_some(true))
-            .with_concurrency(
-                args.execution_args()
-                    .and_then(|args| args.concurrency.clone()),
-            )
-            .build()
+        resolve_configuration_from_args(repo_root, args)
     }
 
     pub fn opts(&self) -> &Opts {
@@ -162,7 +114,7 @@ impl CommandBase {
 
         Ok(Some(APIAuth {
             team_id: team_id.map(|s| s.to_string()),
-            token: token.to_string(),
+            token: token.clone(),
             team_slug: team_slug.map(|s| s.to_string()),
         }))
     }
@@ -187,6 +139,30 @@ impl CommandBase {
             self.opts.api_client_opts.preflight,
         )
         .map_err(ConfigError::ApiClient)
+    }
+
+    /// Creates an API client using a pre-built HTTP client to avoid
+    /// redundant TLS initialization.
+    pub fn api_client_with_http(&self, http_client: &reqwest::Client) -> APIClient {
+        let timeout = self.opts.api_client_opts.timeout;
+        let upload_timeout = self.opts.api_client_opts.upload_timeout;
+
+        APIClient::new_with_client(
+            http_client.clone(),
+            &self.opts.api_client_opts.api_url,
+            if timeout > 0 {
+                Some(Duration::from_secs(timeout))
+            } else {
+                None
+            },
+            if upload_timeout > 0 {
+                Some(Duration::from_secs(upload_timeout))
+            } else {
+                None
+            },
+            self.version,
+            self.opts.api_client_opts.preflight,
+        )
     }
 
     /// Current working directory for the turbo command

@@ -1,7 +1,6 @@
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_daemon::{proto::PackageManager, DaemonClient};
 use turborepo_repository::discovery::{DiscoveryResponse, Error, PackageDiscovery, WorkspaceData};
-
-use crate::daemon::{proto::PackageManager, DaemonClient};
 
 #[derive(Debug)]
 pub struct DaemonPackageDiscovery<C> {

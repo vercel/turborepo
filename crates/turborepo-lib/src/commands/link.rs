@@ -17,17 +17,14 @@ use dirs_next::home_dir;
 use rand::Rng;
 use thiserror::Error;
 use turborepo_api_client::{CacheClient, Client};
+use turborepo_gitignore::ensure_turbo_is_gitignored;
+use turborepo_json_rewrite::{set_path, unset_path, RewriteError};
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
 use turborepo_ui::{DialoguerTheme, BOLD, GREY};
 use turborepo_vercel_api::{CachingStatus, Team};
 
-use crate::{
-    commands::CommandBase,
-    config,
-    gitignore::ensure_turbo_is_gitignored,
-    rewrite_json::{self, set_path, unset_path},
-};
+use crate::{commands::CommandBase, config};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -63,7 +60,7 @@ pub enum Error {
     #[error("Please re-run `link` after enabling caching.")]
     EnableCaching,
     #[error(transparent)]
-    Rewrite(#[from] rewrite_json::RewriteError),
+    Rewrite(#[from] RewriteError),
 }
 
 #[derive(Clone)]
@@ -76,7 +73,7 @@ pub(crate) const REMOTE_CACHING_INFO: &str =
     "Remote Caching makes your caching multiplayer,\nsharing build outputs and logs between \
      developers and CI/CD systems.\n\nBuild and deploy faster.";
 pub(crate) const REMOTE_CACHING_URL: &str =
-    "https://turborepo.com/docs/core-concepts/remote-caching";
+    "https://turborepo.dev/docs/core-concepts/remote-caching";
 
 /// Verifies that caching status for a team is enabled, or prompts the user to
 /// enable it.
@@ -91,7 +88,7 @@ pub(crate) const REMOTE_CACHING_URL: &str =
 pub(crate) async fn verify_caching_enabled<'a>(
     api_client: &(impl Client + CacheClient),
     team_id: &str,
-    token: &str,
+    token: &turborepo_api_client::SecretString,
     selected_team: Option<SelectedTeam<'a>>,
 ) -> Result<(), Error> {
     let team_slug = selected_team.as_ref().and_then(|team| match team {
@@ -155,22 +152,20 @@ pub async fn link(
     let api_client = base.api_client()?;
 
     // Always try to get a valid token with automatic refresh if expired
-    let token = match turborepo_auth::get_token_with_refresh().await {
-        Ok(Some(refreshed_token)) => {
-            // Store the refreshed token temporarily for this command
-            Box::leak(refreshed_token.into_boxed_str())
-        }
-        Ok(None) | Err(_) => {
-            // Fall back to the token from config/CLI if refresh logic didn't work
-            base.opts()
-                .api_client_opts
-                .token
-                .as_deref()
-                .ok_or_else(|| Error::TokenNotFound {
-                    command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
-                })?
-        }
-    };
+    let token: turborepo_api_client::SecretString =
+        match turborepo_auth::get_token_with_refresh().await {
+            Ok(Some(refreshed_token)) => refreshed_token,
+            Ok(None) | Err(_) => {
+                // Fall back to the token from config/CLI if refresh logic didn't work
+                base.opts()
+                    .api_client_opts
+                    .token
+                    .clone()
+                    .ok_or_else(|| Error::TokenNotFound {
+                        command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
+                    })?
+            }
+        };
 
     println!(
         "\n{}\n\n{}\n\nFor more information, visit: {}\n",
@@ -184,7 +179,7 @@ pub async fn link(
     }
 
     let user_response = api_client
-        .get_user(token)
+        .get_user(&token)
         .await
         .map_err(Error::UserNotFound)?;
 
@@ -195,7 +190,7 @@ pub async fn link(
         .unwrap_or(user_response.user.username.as_str());
 
     let teams_response = api_client
-        .get_teams(token)
+        .get_teams(&token)
         .await
         .map_err(Error::TeamsRequest)?;
 
@@ -216,7 +211,7 @@ pub async fn link(
         SelectedTeam::Team(team) => team.id.as_str(),
     };
 
-    verify_caching_enabled(&api_client, team_id, token, Some(selected_team.clone())).await?;
+    verify_caching_enabled(&api_client, team_id, &token, Some(selected_team.clone())).await?;
 
     let local_config_path = base.local_config_path();
     let before = local_config_path

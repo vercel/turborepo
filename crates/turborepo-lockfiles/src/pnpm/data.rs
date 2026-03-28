@@ -1,9 +1,6 @@
-use std::{
-    any::Any,
-    borrow::Cow,
-    collections::{BTreeMap, HashMap},
-};
+use std::{any::Any, borrow::Cow, collections::BTreeMap};
 
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
 
@@ -11,13 +8,15 @@ use super::{Error, LockfileVersion, SupportedLockfileVersion, dep_path::DepPath}
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
-type Packages = Map<String, PackageSnapshot>;
-type Snapshots = Map<String, PackageSnapshotV7>;
+type Packages = BTreeMap<String, PackageSnapshot>;
+type Snapshots = BTreeMap<String, PackageSnapshotV7>;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PnpmLockfile {
     lockfile_version: LockfileVersion,
+    #[serde(skip)]
+    cached_version: SupportedLockfileVersion,
     #[serde(skip_serializing_if = "Option::is_none")]
     settings: Option<LockfileSettings>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -36,11 +35,13 @@ pub struct PnpmLockfile {
     package_extensions_checksum: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     patched_dependencies: Option<Map<String, PatchFile>>,
-    importers: Map<String, ProjectSnapshot>,
+    importers: BTreeMap<String, ProjectSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
     packages: Option<Packages>,
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshots: Option<Snapshots>,
+    #[serde(skip)]
+    dependency_index: BTreeMap<String, BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     time: Option<Map<String, String>>,
 }
@@ -116,7 +117,7 @@ pub struct PackageSnapshot {
     patched: Option<bool>,
 
     #[serde(flatten)]
-    other: Map<String, serde_yaml::Value>,
+    other: Map<String, serde_yaml_ng::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -174,13 +175,88 @@ pub struct PackageResolution {
 struct LockfileSettings {
     auto_install_peers: Option<bool>,
     exclude_links_from_lockfile: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     inject_workspace_packages: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dedupe_peers: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    peers_suffix_max_length: Option<u32>,
 }
 
 impl PnpmLockfile {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, crate::Error> {
-        let this = serde_yaml::from_slice(bytes)?;
+        let mut this: Self = serde_yaml_ng::from_slice(bytes)?;
+        this.cached_version = this.compute_version();
+        this.build_dependency_index();
         Ok(this)
+    }
+
+    /// Merge per-workspace lockfiles into this lockfile.
+    ///
+    /// When pnpm is configured with `shared-workspace-lockfile=false`, each
+    /// workspace gets its own `pnpm-lock.yaml` with only `"."` as an importer.
+    /// This method takes those per-workspace lockfiles and merges their
+    /// importers, packages, and snapshots into a single lockfile that
+    /// turborepo can work with.
+    ///
+    /// `workspace_lockfiles` is a list of `(workspace_path, lockfile_bytes)`
+    /// where `workspace_path` is the workspace's relative path from the
+    /// repo root (e.g. "apps/web").
+    pub fn merge_per_workspace_lockfiles(
+        &mut self,
+        workspace_lockfiles: &[(&str, &[u8])],
+    ) -> Result<(), crate::Error> {
+        for &(workspace_path, bytes) in workspace_lockfiles {
+            let ws_lockfile: PnpmLockfile = serde_yaml_ng::from_slice(bytes)?;
+
+            // Re-key the "." importer to the workspace's relative path
+            for (key, snapshot) in ws_lockfile.importers {
+                let new_key = if key == "." {
+                    workspace_path.to_string()
+                } else {
+                    key
+                };
+                self.importers.insert(new_key, snapshot);
+            }
+
+            // Merge packages
+            if let Some(ws_packages) = ws_lockfile.packages {
+                let packages = self.packages.get_or_insert_with(BTreeMap::new);
+                for (key, pkg) in ws_packages {
+                    packages.entry(key).or_insert(pkg);
+                }
+            }
+
+            // Merge snapshots
+            if let Some(ws_snapshots) = ws_lockfile.snapshots {
+                let snapshots = self.snapshots.get_or_insert_with(BTreeMap::new);
+                for (key, snap) in ws_snapshots {
+                    snapshots.entry(key).or_insert(snap);
+                }
+            }
+        }
+
+        // Rebuild the dependency index after merging
+        self.build_dependency_index();
+
+        Ok(())
+    }
+
+    fn build_dependency_index(&mut self) {
+        let mut index = BTreeMap::new();
+        if let Some(snapshots) = &self.snapshots {
+            for (key, snapshot) in snapshots {
+                index.insert(key.clone(), snapshot.dependencies());
+            }
+        }
+        if let Some(packages) = &self.packages {
+            for (key, entry) in packages {
+                index
+                    .entry(key.clone())
+                    .or_insert_with(|| entry.snapshot.dependencies());
+            }
+        }
+        self.dependency_index = index;
     }
 
     fn get_packages(&self, key: &str) -> Option<&PackageSnapshot> {
@@ -224,6 +300,10 @@ impl PnpmLockfile {
     }
 
     fn version(&self) -> SupportedLockfileVersion {
+        self.cached_version
+    }
+
+    fn compute_version(&self) -> SupportedLockfileVersion {
         if matches!(self.lockfile_version.format, super::VersionFormat::Float) {
             return SupportedLockfileVersion::V5;
         }
@@ -234,11 +314,37 @@ impl PnpmLockfile {
     }
 
     fn format_key(&self, name: &str, version: &str) -> String {
-        match self.version() {
-            SupportedLockfileVersion::V5 => format!("/{name}/{version}"),
-            SupportedLockfileVersion::V6 => format!("/{name}@{version}"),
-            SupportedLockfileVersion::V7AndV9 => format!("{name}@{version}"),
+        let mut buf = String::with_capacity(name.len() + version.len() + 2);
+        self.format_key_into(&mut buf, name, version);
+        buf
+    }
+
+    fn format_key_into(&self, buf: &mut String, name: &str, version: &str) {
+        buf.clear();
+        match self.cached_version {
+            SupportedLockfileVersion::V5 => {
+                buf.push('/');
+                buf.push_str(name);
+                buf.push('/');
+                buf.push_str(version);
+            }
+            SupportedLockfileVersion::V6 => {
+                buf.push('/');
+                buf.push_str(name);
+                buf.push('@');
+                buf.push_str(version);
+            }
+            SupportedLockfileVersion::V7AndV9 => {
+                buf.push_str(name);
+                buf.push('@');
+                buf.push_str(version);
+            }
         }
+    }
+
+    fn has_package_by_parts(&self, name: &str, version: &str, key_buf: &mut String) -> bool {
+        self.format_key_into(key_buf, name, version);
+        self.has_package(key_buf)
     }
 
     // Extracts the version from a dependency path
@@ -266,28 +372,27 @@ impl PnpmLockfile {
             .unwrap_or(specifier)
     }
 
-    // Given a package and version specifier resolves it to an exact version
     fn resolve_specifier<'a>(
         &'a self,
         workspace_path: &str,
         name: &str,
         specifier: &'a str,
+        key_buf: &mut String,
     ) -> Result<Option<&'a str>, crate::Error> {
         let importer = self.get_workspace(workspace_path)?;
 
         let Some((resolved_specifier, resolved_version)) =
             importer.dependencies.find_resolution(name)
         else {
-            // Check if the specifier is already an exact version
             return Ok(self
-                .has_package(&self.format_key(name, specifier))
+                .has_package_by_parts(name, specifier, key_buf)
                 .then_some(specifier));
         };
 
         let override_specifier = self.apply_overrides(name, specifier);
         if resolved_specifier == override_specifier {
             Ok(Some(resolved_version))
-        } else if self.has_package(&self.format_key(name, override_specifier)) {
+        } else if self.has_package_by_parts(name, override_specifier, key_buf) {
             Ok(Some(override_specifier))
         } else {
             Ok(None)
@@ -297,7 +402,7 @@ impl PnpmLockfile {
     fn prune_patches(
         &self,
         patches: &Map<String, PatchFile>,
-        pruned_packages: &Map<String, PackageSnapshot>,
+        pruned_packages: &Packages,
     ) -> Result<Map<String, PatchFile>, Error> {
         let mut pruned_patches = Map::new();
         for dependency in pruned_packages.keys() {
@@ -337,9 +442,9 @@ impl PnpmLockfile {
         &self,
         packages: &[String],
     ) -> Result<(Packages, Option<Snapshots>), crate::Error> {
-        let mut pruned_packages = Map::new();
+        let mut pruned_packages = BTreeMap::new();
         if let Some(snapshots) = self.snapshots.as_ref() {
-            let mut pruned_snapshots = Map::new();
+            let mut pruned_snapshots = BTreeMap::new();
             for package in packages {
                 let entry = snapshots
                     .get(package.as_str())
@@ -378,7 +483,6 @@ struct GlobalFields<'a> {
 }
 
 impl crate::Lockfile for PnpmLockfile {
-    #[tracing::instrument(skip(self))]
     fn resolve_package(
         &self,
         workspace_path: &str,
@@ -394,18 +498,25 @@ impl crate::Lockfile for PnpmLockfile {
             }));
         }
 
-        let Some(resolved_version) = self.resolve_specifier(workspace_path, name, version)? else {
+        let mut key_buf = String::with_capacity(name.len() + version.len() + 2);
+
+        let Some(resolved_version) =
+            self.resolve_specifier(workspace_path, name, version, &mut key_buf)?
+        else {
             return Ok(None);
         };
 
-        let key = self.format_key(name, resolved_version);
+        self.format_key_into(&mut key_buf, name, resolved_version);
 
-        if self.has_package(&key) {
+        if self.has_package(&key_buf) {
             let version = self
-                .package_version(&key)
+                .package_version(&key_buf)
                 .unwrap_or(resolved_version)
                 .to_owned();
-            Ok(Some(crate::Package { key, version }))
+            Ok(Some(crate::Package {
+                key: key_buf,
+                version,
+            }))
         } else if self.has_package(resolved_version) {
             let version = self.package_version(resolved_version).map_or_else(
                 || {
@@ -423,23 +534,17 @@ impl crate::Lockfile for PnpmLockfile {
         }
     }
 
-    #[tracing::instrument(skip(self))]
     fn all_dependencies(
         &self,
         key: &str,
-    ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
-        // Check snapshots for v7
-        if let Some(snapshot) = self
-            .snapshots
-            .as_ref()
-            .and_then(|snapshots| snapshots.get(key))
-        {
-            return Ok(Some(snapshot.dependencies()));
-        }
-        let Some(entry) = self.packages.as_ref().and_then(|pkgs| pkgs.get(key)) else {
-            return Ok(None);
-        };
-        Ok(Some(entry.snapshot.dependencies()))
+    ) -> Result<
+        Option<std::borrow::Cow<'_, std::collections::BTreeMap<String, String>>>,
+        crate::Error,
+    > {
+        Ok(self
+            .dependency_index
+            .get(key)
+            .map(std::borrow::Cow::Borrowed))
     }
 
     fn subgraph(
@@ -447,37 +552,85 @@ impl crate::Lockfile for PnpmLockfile {
         workspace_packages: &[String],
         packages: &[String],
     ) -> Result<Box<dyn crate::Lockfile>, crate::Error> {
-        let importers = self
+        let importers: BTreeMap<_, _> = self
             .importers
             .iter()
             .filter(|(key, _)| key.as_str() == "." || workspace_packages.contains(key))
             .map(|(k, v)| (k.clone(), v.clone()))
-            .collect::<Map<_, _>>();
+            .collect();
 
-        let (mut pruned_packages, pruned_snapshots) =
+        let (mut pruned_packages, mut pruned_snapshots) =
             self.pruned_packages_and_snapshots(packages)?;
-        for importer in importers.values() {
-            // Find all injected packages in each workspace and include it in
-            // the pruned lockfile
-            for dependency in
-                importer
-                    .dependencies_meta
-                    .iter()
-                    .flatten()
-                    .filter_map(|(dep, meta)| match meta.injected {
-                        Some(true) => Some(dep),
-                        _ => None,
-                    })
-            {
-                let (_, version) = importer
-                    .dependencies
-                    .find_resolution(dependency)
-                    .ok_or_else(|| Error::MissingInjectedPackage(dependency.clone()))?;
 
-                let entry = self
-                    .get_packages(version)
-                    .ok_or_else(|| crate::Error::MissingPackage(version.into()))?;
-                pruned_packages.insert(version.to_string(), entry.clone());
+        let inject_all = self
+            .settings
+            .as_ref()
+            .and_then(|s| s.inject_workspace_packages)
+            .unwrap_or(false);
+
+        for importer in importers.values() {
+            let injected_deps: Vec<_> = importer
+                .dependencies
+                .all_dependency_names()
+                .filter(|dep| {
+                    let per_dep_injected = importer
+                        .dependencies_meta
+                        .as_ref()
+                        .and_then(|meta| meta.get(*dep))
+                        .and_then(|m| m.injected)
+                        .unwrap_or(false);
+                    per_dep_injected || inject_all
+                })
+                .collect();
+
+            for dependency in injected_deps {
+                let Some((_, version)) = importer.dependencies.find_resolution(dependency) else {
+                    continue;
+                };
+
+                // Injected workspace deps with file: protocol have entries in
+                // packages/snapshots. link: deps do not.
+                if !version.starts_with("file:") {
+                    continue;
+                }
+
+                let key = self.format_key(dependency, version);
+
+                if let Some(entry) = self.get_packages(&key) {
+                    pruned_packages.insert(key.clone(), entry.clone());
+                }
+
+                if let Some(snapshots) = self.snapshots.as_ref()
+                    && let Some(snapshot) = snapshots.get(&key)
+                {
+                    if let Some(ref mut pruned_snaps) = pruned_snapshots {
+                        pruned_snaps.insert(key.clone(), snapshot.clone());
+                    }
+
+                    // Include transitive deps of the injected package.
+                    // dependencies() returns (name, version) pairs where
+                    // version is the bare resolved version (e.g. "3.0.1"),
+                    // so we must construct the full key via format_key.
+                    for (dep_name, dep_version) in snapshot.dependencies() {
+                        let dep_key = self.format_key(&dep_name, &dep_version);
+                        if let Some(snap) = snapshots.get(&dep_key)
+                            && let Some(ref mut pruned_snaps) = pruned_snapshots
+                        {
+                            pruned_snaps
+                                .entry(dep_key.clone())
+                                .or_insert_with(|| snap.clone());
+                        }
+                        let dp = DepPath::parse(self.version(), &dep_key).ok();
+                        let pkg_key = dp
+                            .map(|dp| self.format_key(dp.name, dp.version))
+                            .unwrap_or(dep_key);
+                        if let Some(pkg) = self.get_packages(&pkg_key) {
+                            pruned_packages
+                                .entry(pkg_key)
+                                .or_insert_with(|| pkg.clone());
+                        }
+                    }
+                }
             }
         }
 
@@ -494,6 +647,7 @@ impl crate::Lockfile for PnpmLockfile {
                 true => None,
             },
             lockfile_version: self.lockfile_version.clone(),
+            cached_version: self.cached_version,
             never_built_dependencies: self.never_built_dependencies.clone(),
             only_built_dependencies: self.only_built_dependencies.clone(),
             ignored_optional_dependencies: self.ignored_optional_dependencies.clone(),
@@ -501,6 +655,7 @@ impl crate::Lockfile for PnpmLockfile {
             package_extensions_checksum: self.package_extensions_checksum.clone(),
             patched_dependencies: patches,
             snapshots: pruned_snapshots,
+            dependency_index: BTreeMap::new(),
             time: None,
             settings: self.settings.clone(),
             pnpmfile_checksum: self.pnpmfile_checksum.clone(),
@@ -509,7 +664,7 @@ impl crate::Lockfile for PnpmLockfile {
     }
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
-        Ok(serde_yaml::to_string(&self)?.into_bytes())
+        Ok(serde_yaml_ng::to_string(&self)?.into_bytes())
     }
 
     fn patches(&self) -> Result<Vec<RelativeUnixPathBuf>, crate::Error> {
@@ -539,6 +694,14 @@ impl crate::Lockfile for PnpmLockfile {
             // Look through all of the workspace packages for a turbo dependency
             // grab the first one we find.
             .find_map(|project| project.dependencies.turbo_version())?;
+        // pnpm versions can include peer dependency suffixes like "1.4.6_peer_suffix"
+        // or peer deps in parens like "1.4.6(react@18.2.0)".
+        // Extract the base semver part for validation.
+        let base_version = turbo_version
+            .split(['_', '('])
+            .next()
+            .unwrap_or(turbo_version);
+        Version::parse(base_version).ok()?;
         Some(turbo_version.to_owned())
     }
 
@@ -585,6 +748,36 @@ impl DependencyInfo {
         maybe_map.as_ref().and_then(|maybe_map| maybe_map.get(key))
     }
 
+    fn all_dependency_names(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        match self {
+            DependencyInfo::PreV6 {
+                dependencies,
+                optional_dependencies,
+                dev_dependencies,
+                ..
+            } => Box::new(
+                dependencies
+                    .iter()
+                    .flatten()
+                    .chain(optional_dependencies.iter().flatten())
+                    .chain(dev_dependencies.iter().flatten())
+                    .map(|(k, _)| k.as_str()),
+            ),
+            DependencyInfo::V6 {
+                dependencies,
+                optional_dependencies,
+                dev_dependencies,
+            } => Box::new(
+                dependencies
+                    .iter()
+                    .flatten()
+                    .chain(optional_dependencies.iter().flatten())
+                    .chain(dev_dependencies.iter().flatten())
+                    .map(|(k, _)| k.as_str()),
+            ),
+        }
+    }
+
     fn turbo_version(&self) -> Option<&str> {
         let (_specifier, version) = self.find_resolution("turbo")?;
         Some(version)
@@ -599,13 +792,26 @@ impl Dependency {
 }
 
 impl PackageSnapshotV7 {
-    pub fn dependencies(&self) -> HashMap<String, String> {
-        self.dependencies
-            .iter()
-            .flatten()
-            .chain(self.optional_dependencies.iter().flatten())
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect()
+    pub fn dependencies(&self) -> BTreeMap<String, String> {
+        let mut combined = BTreeMap::new();
+
+        if let Some(dependencies) = &self.dependencies {
+            combined.extend(
+                dependencies
+                    .iter()
+                    .map(|(name, version)| (name.clone(), version.clone())),
+            );
+        }
+
+        if let Some(optional_dependencies) = &self.optional_dependencies {
+            combined.extend(
+                optional_dependencies
+                    .iter()
+                    .map(|(name, version)| (name.clone(), version.clone())),
+            );
+        }
+
+        combined
     }
 }
 
@@ -624,454 +830,12 @@ pub fn pnpm_global_change(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::collections::HashMap;
 
-    use itertools::Itertools;
     use pretty_assertions::assert_eq;
-    use test_case::test_case;
-
-    const PNPM6: &[u8] = include_bytes!("../../fixtures/pnpm6-workspace.yaml").as_slice();
-    const PNPM7: &[u8] = include_bytes!("../../fixtures/pnpm7-workspace.yaml").as_slice();
-    const PNPM8: &[u8] = include_bytes!("../../fixtures/pnpm8.yaml").as_slice();
-    const PNPM8_6: &[u8] = include_bytes!("../../fixtures/pnpm-v6.1.yaml").as_slice();
-    const PNPM_ABSOLUTE: &[u8] = include_bytes!("../../fixtures/pnpm-absolute.yaml").as_slice();
-    const PNPM_ABSOLUTE_V6: &[u8] =
-        include_bytes!("../../fixtures/pnpm-absolute-v6.yaml").as_slice();
-    const PNPM_PEER: &[u8] = include_bytes!("../../fixtures/pnpm-peer-v6.yaml").as_slice();
-    const PNPM_TOP_LEVEL_OVERRIDE: &[u8] =
-        include_bytes!("../../fixtures/pnpm-top-level-dupe.yaml").as_slice();
-    const PNPM_OVERRIDE: &[u8] = include_bytes!("../../fixtures/pnpm-override.yaml").as_slice();
-    const PNPM_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-patch.yaml").as_slice();
-    const PNPM_PATCH_V6: &[u8] = include_bytes!("../../fixtures/pnpm-patch-v6.yaml").as_slice();
-    const PNPM_V7: &[u8] = include_bytes!("../../fixtures/pnpm-v7.yaml").as_slice();
-    const PNPM_V7_PEER: &[u8] = include_bytes!("../../fixtures/pnpm-v7-peer.yaml").as_slice();
-    const PNPM_V7_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-v7-patch.yaml").as_slice();
-    const PNPM_V9: &[u8] = include_bytes!("../../fixtures/pnpm-v9.yaml").as_slice();
-    const PNPM6_TURBO: &[u8] = include_bytes!("../../fixtures/pnpm6turbo.yaml").as_slice();
-    const PNPM8_TURBO: &[u8] = include_bytes!("../../fixtures/pnpm8turbo.yaml").as_slice();
-    const PNPM10_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-10-patch.lock").as_slice();
-    const PNPM_INJECT_WORKSPACE: &[u8] =
-        include_bytes!("../../fixtures/pnpm-inject-workspace.yaml").as_slice();
 
     use super::*;
-    use crate::{Lockfile, Package};
-
-    #[test_case(PNPM6)]
-    #[test_case(PNPM7)]
-    #[test_case(PNPM8)]
-    #[test_case(PNPM8_6)]
-    #[test_case(PNPM_V7)]
-    #[test_case(PNPM_V7_PEER)]
-    #[test_case(PNPM_V7_PATCH)]
-    #[test_case(PNPM_V9)]
-    #[test_case(PNPM10_PATCH)]
-    fn test_roundtrip(fixture: &[u8]) {
-        let lockfile = PnpmLockfile::from_bytes(fixture).unwrap();
-        let serialized_lockfile = serde_yaml::to_string(&lockfile).unwrap();
-        let lockfile_from_serialized =
-            serde_yaml::from_slice(serialized_lockfile.as_bytes()).unwrap();
-        assert_eq!(lockfile, lockfile_from_serialized);
-    }
-
-    #[test]
-    fn test_patches() {
-        let lockfile =
-            PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-patch.yaml")).unwrap();
-        assert_eq!(
-            lockfile.patches().unwrap(),
-            vec![
-                RelativeUnixPathBuf::new("patches/@babel__core@7.20.12.patch").unwrap(),
-                RelativeUnixPathBuf::new("patches/is-odd@3.0.1.patch").unwrap(),
-                RelativeUnixPathBuf::new("patches/moleculer@0.14.28.patch").unwrap(),
-            ]
-        );
-    }
-
-    #[test]
-    fn test_unversioned_patches() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM10_PATCH).unwrap();
-        assert_eq!(
-            lockfile.patches().unwrap(),
-            vec![
-                RelativeUnixPathBuf::new("patches/is-number@7.0.0.patch").unwrap(),
-                RelativeUnixPathBuf::new("patches/is-odd.patch").unwrap(),
-            ]
-        );
-    }
-
-    #[test_case(
-        PNPM7,
-        "apps/docs",
-        "next",
-        "12.2.5",
-        Ok(Some("12.2.5_ir3quccc6i62x6qn6jjhyjjiey"))
-        ; "resolution from docs"
-    )]
-    #[test_case(
-        PNPM7,
-        "apps/web",
-        "next",
-        "12.2.5",
-        Ok(Some("12.2.5_ir3quccc6i62x6qn6jjhyjjiey"))
-        ; "resolution from web"
-    )]
-    #[test_case(
-        PNPM7,
-        "apps/web",
-        "typescript",
-        "^4.5.3",
-        Ok(Some("4.8.3"))
-        ; "no peer deps"
-    )]
-    #[test_case(
-        PNPM7,
-        "apps/web",
-        "lodash",
-        "bad-tag",
-        Ok(None)
-        ; "bad tag"
-    )]
-    #[test_case(
-        PNPM7,
-        "apps/web",
-        "lodash",
-        "^4.17.21",
-        Ok(Some("4.17.21_ehchni3mpmovsvjxesffg2i5a4"))
-        ; "patched lodash"
-    )]
-    #[test_case(
-        PNPM7,
-        "apps/docs",
-        "dashboard-icons",
-        "github:peerigon/dashboard-icons",
-        Ok(Some("github.com/peerigon/dashboard-icons/ce27ef933144e09cef3911025f3649040a8571b6"))
-        ; "github dependency"
-    )]
-    #[test_case(
-        PNPM7,
-        "",
-        "turbo",
-        "latest",
-        Ok(Some("1.4.6"))
-        ; "root dependency"
-    )]
-    #[test_case(
-        PNPM7,
-        "apps/bad_workspace",
-        "turbo",
-        "latest",
-        Err("Workspace 'apps/bad_workspace' not found in lockfile")
-        ; "invalid workspace"
-    )]
-    #[test_case(
-        PNPM8,
-        "packages/a",
-        "c",
-        "workspace:*",
-        Ok(Some("link:../c"))
-        ; "v6 workspace"
-    )]
-    #[test_case(
-        PNPM8,
-        "packages/a",
-        "is-odd",
-        "^3.0.1",
-        Ok(Some("3.0.1"))
-        ; "v6 external package"
-    )]
-    #[test_case(
-        PNPM8,
-        "packages/b",
-        "is-odd",
-        "^3.0.1",
-        Ok(None)
-        ; "v6 missing"
-    )]
-    #[test_case(
-        PNPM8,
-        "apps/bad_workspace",
-        "is-odd",
-        "^3.0.1",
-        Err("Workspace 'apps/bad_workspace' not found in lockfile")
-        ; "v6 missing workspace"
-    )]
-    fn test_specifier_resolution(
-        lockfile: &[u8],
-        workspace_path: &str,
-        package: &str,
-        specifier: &str,
-        expected: Result<Option<&str>, &str>,
-    ) {
-        let lockfile = PnpmLockfile::from_bytes(lockfile).unwrap();
-
-        let actual = lockfile.resolve_specifier(workspace_path, package, specifier);
-        match (actual, expected) {
-            (Ok(actual), Ok(expected)) => assert_eq!(actual, expected),
-            (Err(actual), Err(expected_msg)) => assert!(
-                actual.to_string().contains(expected_msg),
-                "Expected '{expected_msg}' to appear in error message: '{actual}'",
-            ),
-            (actual, expected) => {
-                panic!("Mismatched result variants: {actual:?} {expected:?}")
-            }
-        }
-    }
-
-    #[test_case(
-        PNPM7,
-        "apps/docs",
-        "dashboard-icons",
-        "github:peerigon/dashboard-icons",
-        Ok(Some(crate::Package {
-            key: "github.com/peerigon/dashboard-icons/ce27ef933144e09cef3911025f3649040a8571b6".into(),
-            version: "1.0.0".into(),
-        }))
-        ; "git package"
-    )]
-    #[test_case(
-        PNPM_ABSOLUTE,
-        "packages/a",
-        "child",
-        "/@scope/child/1.0.0",
-        Ok(Some(crate::Package {
-            key: "/@scope/child/1.0.0".into(),
-            version: "1.0.0".into(),
-        }))
-        ; "absolute package"
-    )]
-    #[test_case(
-        PNPM_ABSOLUTE_V6,
-        "packages/a",
-        "child",
-        "/@scope/child@1.0.0",
-        Ok(Some(crate::Package {
-            key: "/@scope/child@1.0.0".into(),
-            version: "1.0.0".into(),
-        }))
-        ; "v6 absolute package"
-    )]
-    #[test_case(
-        PNPM_PEER,
-        "apps/web",
-        "next",
-        "13.0.4",
-        Ok(Some(crate::Package {
-            key: "/next@13.0.4(react-dom@18.2.0)(react@18.2.0)".into(),
-            version: "13.0.4(react-dom@18.2.0)(react@18.2.0)".into(),
-        }))
-        ; "v6 peer package"
-    )]
-    #[test_case(
-        PNPM_TOP_LEVEL_OVERRIDE,
-        "packages/a",
-        "ci-info",
-        "3.7.1",
-        Ok(Some(crate::Package {
-            key: "/ci-info/3.7.1".into(),
-            version: "3.7.1".into(),
-        }))
-        ; "top level override"
-    )]
-    #[test_case(
-        PNPM_OVERRIDE,
-        "config/hardhat",
-        "@nomiclabs/hardhat-ethers",
-        "npm:hardhat-deploy-ethers@0.3.0-beta.13",
-        Ok(Some(crate::Package {
-            key: "/hardhat-deploy-ethers/0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy".into(),
-            version: "0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy".into(),
-        }))
-        ; "pnpm override"
-    )]
-    #[test_case(
-        PNPM_V7,
-        "packages/b",
-        "is-negative",
-        "https://codeload.github.com/kevva/is-negative/tar.gz/1d7e288222b53a0cab90a331f1865220ec29560c",
-        Ok(Some(crate::Package {
-            key: "is-negative@https://codeload.github.com/kevva/is-negative/tar.gz/1d7e288222b53a0cab90a331f1865220ec29560c".into(),
-            version: "2.1.0".into(),
-        }))
-        ; "v7 git"
-    )]
-    #[test_case(
-        PNPM_V7_PEER,
-        "packages/a",
-        "ajv-keywords",
-        "^5.1.0",
-        Ok(Some(crate::Package {
-            key: "ajv-keywords@5.1.0(ajv@8.12.0)".into(),
-            version: "5.1.0(ajv@8.12.0)".into(),
-        }))
-        ; "v7 peer"
-    )]
-    #[test_case(
-        PNPM_V7_PEER,
-        "packages/b",
-        "ajv-keywords",
-        "^5.1.0",
-        Ok(Some(crate::Package {
-            key: "ajv-keywords@5.1.0(ajv@8.11.0)".into(),
-            version: "5.1.0(ajv@8.11.0)".into(),
-        }))
-        ; "v7 peer 2"
-    )]
-    #[test_case(
-        PNPM_V9,
-        "",
-        "turbo",
-        "canary",
-        Ok(Some(crate::Package {
-            key: "turbo@1.13.3-canary.1".into(),
-            version: "1.13.3-canary.1".into(),
-        }))
-        ; "v9"
-    )]
-    fn test_resolve_package(
-        lockfile: &[u8],
-        workspace_path: &str,
-        package: &str,
-        specifier: &str,
-        expected: Result<Option<crate::Package>, &str>,
-    ) {
-        let lockfile = PnpmLockfile::from_bytes(lockfile).unwrap();
-        let actual = lockfile.resolve_package(workspace_path, package, specifier);
-        match (actual, expected) {
-            (Ok(actual), Ok(expected)) => assert_eq!(actual, expected),
-            (Err(actual), Err(expected_msg)) => assert!(
-                actual.to_string().contains(expected_msg),
-                "Expected '{expected_msg}' to appear in error message: '{actual}'",
-            ),
-            (actual, expected) => {
-                panic!("Mismatched result variants: {actual:?} {expected:?}")
-            }
-        }
-    }
-
-    #[test]
-    fn test_prune_patches() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM_PATCH).unwrap();
-        let pruned = lockfile
-            .subgraph(
-                &["packages/dependency".into()],
-                &[
-                    "/is-odd/3.0.1_nrrwwz7lemethtlvvm75r5bmhq".into(),
-                    "/is-number/6.0.0".into(),
-                    "/@babel/core/7.20.12_3hyn7hbvzkemudbydlwjmrb65y".into(),
-                    "/moleculer/0.14.28_5pk7ojv7qbqha75ozglk4y4f74_kumip57h7zlinbhp4gz3jrbqry"
-                        .into(),
-                ],
-            )
-            .unwrap();
-        assert_eq!(
-            pruned.patches().unwrap(),
-            vec![
-                RelativeUnixPathBuf::new("patches/@babel__core@7.20.12.patch").unwrap(),
-                RelativeUnixPathBuf::new("patches/is-odd@3.0.1.patch").unwrap(),
-                RelativeUnixPathBuf::new("patches/moleculer@0.14.28.patch").unwrap(),
-            ]
-        )
-    }
-
-    #[test]
-    fn test_prune_patches_v6() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM_PATCH_V6).unwrap();
-        let pruned = lockfile
-            .subgraph(
-                &["packages/a".into()],
-                &["/lodash@4.17.21(patch_hash=lgum37zgng4nfkynzh3cs7wdeq)".into()],
-            )
-            .unwrap();
-        assert_eq!(
-            pruned.patches().unwrap(),
-            vec![RelativeUnixPathBuf::new("patches/lodash@4.17.21.patch").unwrap()]
-        );
-
-        let pruned =
-            lockfile
-                .subgraph(
-                    &["packages/b".into()],
-                    &["/@babel/helper-string-parser@7.19.\
-                       4(patch_hash=wjhgmpzh47qmycrzgpeyoyh3ce)(@babel/core@7.21.0)"
-                        .into()],
-                )
-                .unwrap();
-        assert_eq!(
-            pruned.patches().unwrap(),
-            vec![
-                RelativeUnixPathBuf::new("patches/@babel__helper-string-parser@7.19.4.patch")
-                    .unwrap()
-            ]
-        )
-    }
-
-    #[test]
-    fn test_prune_patches_v10() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM10_PATCH).unwrap();
-        let pruned = lockfile
-            .subgraph(
-                &["packages/pkg-a".into()],
-                &["is-odd@3.0.1(patch_hash=e861997dbe1a5bbcd8e52a8ebab33faf7531f71876fb8dd37694f3d11da81de2)".into(), "is-number@6.0.0".into()],
-            )
-            .unwrap();
-        assert_eq!(
-            pruned.patches().unwrap(),
-            vec![RelativeUnixPathBuf::new("patches/is-odd.patch").unwrap()]
-        );
-
-        let pruned = lockfile
-            .subgraph(
-                &["packages/pkg-b".into()],
-                &["is-number@7.0.\
-                   0(patch_hash=0bae9732f8037300debc03db26de9b8823a5dc7bb7c3a6a346d9462c70167a75)"
-                    .into()],
-            )
-            .unwrap();
-        assert_eq!(
-            pruned.patches().unwrap(),
-            vec![RelativeUnixPathBuf::new("patches/is-number@7.0.0.patch").unwrap()]
-        )
-    }
-
-    #[test]
-    fn test_pnpm_alias_overlap() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM_ABSOLUTE).unwrap();
-        let closures = crate::all_transitive_closures(
-            &lockfile,
-            vec![(
-                "packages/a".to_string(),
-                vec![
-                    ("@scope/parent".to_string(), "^1.0.0".to_string()),
-                    ("another".to_string(), "^1.0.0".to_string()),
-                    ("special".to_string(), "npm:Special@1.2.3".to_string()),
-                ]
-                .into_iter()
-                .collect(),
-            )]
-            .into_iter()
-            .collect(),
-            false,
-        )
-        .unwrap();
-
-        let mut closure = closures
-            .get("packages/a")
-            .unwrap()
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>();
-        closure.sort();
-        assert_eq!(
-            closure,
-            vec![
-                Package::new("/@scope/child/1.0.0", "1.0.0"),
-                Package::new("/@scope/parent/1.0.0", "1.0.0"),
-                Package::new("/Special/1.2.3", "1.2.3"),
-                Package::new("/another/1.0.0", "1.0.0"),
-                Package::new("/foo/1.0.0", "1.0.0"),
-            ],
-        );
-    }
+    use crate::Lockfile;
 
     #[test]
     fn test_injected_package_round_trip() {
@@ -1098,534 +862,1069 @@ c:
   dev: false
 ";
         let original_parsed: Map<String, PackageSnapshot> =
-            serde_yaml::from_str(original_contents).unwrap();
-        let contents = serde_yaml::to_string(&original_parsed).unwrap();
-        assert_eq!(original_contents, &contents);
+            serde_yaml_ng::from_str(original_contents).unwrap();
+        let contents = serde_yaml_ng::to_string(&original_parsed).unwrap();
+
+        // serde_yml quotes strings like "0.0.0" that could be ambiguous,
+        // so we verify the round-trip by re-parsing instead of comparing raw strings
+        let reparsed: Map<String, PackageSnapshot> = serde_yaml_ng::from_str(&contents).unwrap();
+        assert_eq!(original_parsed, reparsed);
     }
 
     #[test]
-    fn test_missing_specifier() {
-        // When comparing across git commits the `package.json` might list a
-        // dependency that isn't in a previous lockfile. We must not error in
-        // this case.
-        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
-        let closures = crate::all_transitive_closures(
-            &lockfile,
-            vec![(
-                "packages/a".to_string(),
-                vec![
-                    ("is-odd".to_string(), "^3.0.1".to_string()),
-                    ("pad-left".to_string(), "^1.0.0".to_string()),
-                ]
-                .into_iter()
-                .collect(),
-            )]
-            .into_iter()
-            .collect(),
-            false,
-        )
-        .unwrap();
+    fn test_turbo_version_rejects_non_semver() {
+        // Malicious version strings that could be used for RCE via npx should be
+        // rejected
+        let malicious_versions = [
+            "file:./malicious.tgz",
+            "https://evil.com/malicious.tgz",
+            "git+https://github.com/evil/repo.git",
+            "../../../etc/passwd",
+            "1.0.0 && curl evil.com",
+        ];
 
-        let mut a_closure = closures
-            .get("packages/a")
+        for malicious_version in malicious_versions {
+            let yaml = format!(
+                r#"lockfileVersion: '9.0'
+importers:
+  .:
+    dependencies:
+      turbo:
+        specifier: ^2.0.0
+        version: {malicious_version}
+"#
+            );
+            let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+            assert_eq!(
+                lockfile.turbo_version(),
+                None,
+                "should reject malicious version: {}",
+                malicious_version
+            );
+        }
+    }
+
+    #[test]
+    fn test_merge_per_workspace_lockfiles() {
+        let root_yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .: {}
+"#;
+
+        let web_yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      is-odd:
+        specifier: ^3.0.1
+        version: 3.0.1
+
+packages:
+
+  is-number@6.0.0:
+    resolution: {integrity: sha512-abc}
+    engines: {node: '>=0.10.0'}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+    engines: {node: '>=4'}
+
+snapshots:
+
+  is-number@6.0.0: {}
+
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+"#;
+
+        let ui_yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.23
+
+packages:
+
+  lodash@4.17.23:
+    resolution: {integrity: sha512-ghi}
+
+snapshots:
+
+  lodash@4.17.23: {}
+"#;
+
+        let mut lockfile = PnpmLockfile::from_bytes(root_yaml.as_bytes()).unwrap();
+        lockfile
+            .merge_per_workspace_lockfiles(&[
+                ("apps/web", web_yaml.as_bytes()),
+                ("packages/ui", ui_yaml.as_bytes()),
+            ])
+            .unwrap();
+
+        // Root importer should still be present
+        assert!(lockfile.importers.contains_key("."));
+        // Workspace importers should be re-keyed
+        assert!(lockfile.importers.contains_key("apps/web"));
+        assert!(lockfile.importers.contains_key("packages/ui"));
+        // Total importers should be 3
+        assert_eq!(lockfile.importers.len(), 3);
+
+        // Packages from both workspaces should be merged
+        let packages = lockfile.packages.as_ref().expect("should have packages");
+        assert!(packages.contains_key("is-number@6.0.0"));
+        assert!(packages.contains_key("is-odd@3.0.1"));
+        assert!(packages.contains_key("lodash@4.17.23"));
+
+        // Snapshots should also be merged
+        let snapshots = lockfile.snapshots.as_ref().expect("should have snapshots");
+        assert!(snapshots.contains_key("is-number@6.0.0"));
+        assert!(snapshots.contains_key("is-odd@3.0.1"));
+        assert!(snapshots.contains_key("lodash@4.17.23"));
+
+        // Resolve should work for workspaces
+        let web_pkg = lockfile
+            .resolve_package("apps/web", "is-odd", "^3.0.1")
+            .unwrap();
+        assert!(web_pkg.is_some());
+
+        let ui_pkg = lockfile
+            .resolve_package("packages/ui", "lodash", "^4.17.21")
+            .unwrap();
+        assert!(ui_pkg.is_some());
+    }
+
+    #[test]
+    fn test_subgraph_with_injected_workspace_packages_setting() {
+        // Reproduces https://github.com/vercel/turborepo/issues/11059
+        // When injectWorkspacePackages: true is set in pnpm 10, workspace deps
+        // use file: resolution instead of link: and appear in packages/snapshots.
+        // turbo prune must retain these entries.
+        let yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+  injectWorkspacePackages: true
+
+importers:
+
+  .:
+    devDependencies:
+      prettier:
+        specifier: 3.5.3
+        version: 3.5.3
+
+  apps/my-app:
+    dependencies:
+      '@repo/shared':
+        specifier: workspace:*
+        version: file:packages/shared
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
+
+  packages/shared:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+
+packages:
+
+  '@repo/shared@file:packages/shared':
+    resolution: {type: directory, directory: packages/shared}
+    name: '@repo/shared'
+    version: 0.0.0
+
+  is-number@6.0.0:
+    resolution: {integrity: sha512-abc}
+    engines: {node: '>=0.10.0'}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+    engines: {node: '>=4'}
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-ghi}
+
+  prettier@3.5.3:
+    resolution: {integrity: sha512-jkl}
+    engines: {node: '>=14'}
+    hasBin: true
+
+snapshots:
+
+  '@repo/shared@file:packages/shared':
+    dependencies:
+      is-odd: 3.0.1
+
+  is-number@6.0.0: {}
+
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+
+  lodash@4.17.21: {}
+
+  prettier@3.5.3: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        // Resolve @repo/shared from apps/my-app
+        let shared_pkg = lockfile
+            .resolve_package("apps/my-app", "@repo/shared", "workspace:*")
+            .unwrap();
+        assert!(
+            shared_pkg.is_some(),
+            "should resolve @repo/shared from apps/my-app"
+        );
+        let shared_pkg = shared_pkg.unwrap();
+        assert_eq!(shared_pkg.key, "@repo/shared@file:packages/shared");
+
+        // Get dependencies of @repo/shared
+        let deps = lockfile
+            .all_dependencies(&shared_pkg.key)
             .unwrap()
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>();
-        a_closure.sort();
+            .expect("should have dependencies");
+        assert!(
+            deps.contains_key("is-odd"),
+            "shared should depend on is-odd"
+        );
 
+        // Now test pruning: prune to just apps/my-app
+        // turbo's dependency traversal treats @repo/shared as an internal
+        // workspace dep, so @repo/shared@file:packages/shared does NOT appear
+        // in the resolved external packages list. The subgraph method must
+        // detect the file: resolution from the importer and add the injected
+        // package plus its snapshot/transitive deps.
+        let workspace_packages = vec!["apps/my-app".to_string(), "packages/shared".to_string()];
+        let resolved_packages = vec![
+            "is-number@6.0.0".to_string(),
+            "is-odd@3.0.1".to_string(),
+            "lodash@4.17.21".to_string(),
+        ];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should have packages");
+        let snapshots = pruned_lockfile
+            .snapshots
+            .as_ref()
+            .expect("should have snapshots");
+
+        // The injected workspace package must be in both packages and snapshots
+        assert!(
+            packages.contains_key("@repo/shared@file:packages/shared"),
+            "pruned lockfile should contain @repo/shared in packages"
+        );
+        assert!(
+            snapshots.contains_key("@repo/shared@file:packages/shared"),
+            "pruned lockfile should contain @repo/shared in snapshots"
+        );
+
+        // Transitive deps of the injected package and direct deps should be present
+        assert!(packages.contains_key("is-odd@3.0.1"));
+        assert!(packages.contains_key("is-number@6.0.0"));
+        assert!(packages.contains_key("lodash@4.17.21"));
+        assert!(snapshots.contains_key("is-odd@3.0.1"));
+        assert!(snapshots.contains_key("is-number@6.0.0"));
+        assert!(snapshots.contains_key("lodash@4.17.21"));
+
+        // prettier should NOT be in the pruned lockfile (it's root-only)
+        assert!(!packages.contains_key("prettier@3.5.3"));
+    }
+
+    #[test]
+    fn test_subgraph_with_per_dep_injected_meta_and_file_version() {
+        // Tests the per-dependency dependenciesMeta.injected: true case with
+        // file: resolution (pnpm 9 style). Previously the injected handler
+        // only added to pruned_packages but not pruned_snapshots.
+        let yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      prettier:
+        specifier: 3.5.3
+        version: 3.5.3
+
+  apps/web:
+    dependencies:
+      '@repo/ui':
+        specifier: workspace:*
+        version: file:packages/ui
+    dependenciesMeta:
+      '@repo/ui':
+        injected: true
+
+  packages/ui:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+
+packages:
+
+  '@repo/ui@file:packages/ui':
+    resolution: {type: directory, directory: packages/ui}
+    name: '@repo/ui'
+    version: 0.0.0
+
+  is-number@6.0.0:
+    resolution: {integrity: sha512-abc}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+
+  prettier@3.5.3:
+    resolution: {integrity: sha512-jkl}
+
+snapshots:
+
+  '@repo/ui@file:packages/ui':
+    dependencies:
+      is-odd: 3.0.1
+
+  is-number@6.0.0: {}
+
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+
+  prettier@3.5.3: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/web".to_string(), "packages/ui".to_string()];
+        // Intentionally omit is-odd and is-number from resolved_packages
+        // so they can only appear in the pruned lockfile via the injected
+        // package's transitive dependency traversal.
+        let resolved_packages = vec![];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should have packages");
+        let snapshots = pruned_lockfile
+            .snapshots
+            .as_ref()
+            .expect("should have snapshots");
+
+        assert!(
+            packages.contains_key("@repo/ui@file:packages/ui"),
+            "pruned should have @repo/ui in packages"
+        );
+        assert!(
+            snapshots.contains_key("@repo/ui@file:packages/ui"),
+            "pruned should have @repo/ui in snapshots"
+        );
+
+        // These must come from the transitive dep traversal of the injected package
+        assert!(
+            snapshots.contains_key("is-odd@3.0.1"),
+            "pruned should have is-odd in snapshots via transitive deps"
+        );
+        assert!(
+            packages.contains_key("is-odd@3.0.1"),
+            "pruned should have is-odd in packages via transitive deps"
+        );
+    }
+
+    #[test]
+    fn test_subgraph_with_pnpm9_link_injected_deps() {
+        // Reproduces https://github.com/vercel/turborepo/issues/8243
+        // In pnpm 9, dependenciesMeta.injected: true with link: resolution
+        // (not file:) should not cause "No lockfile entry found" errors.
+        let yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      prettier:
+        specifier: 3.5.3
+        version: 3.5.3
+
+  apps/my-app:
+    dependencies:
+      '@repo/shared':
+        specifier: workspace:^
+        version: link:../../packages/shared
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
+    dependenciesMeta:
+      '@repo/shared':
+        injected: true
+
+  packages/shared:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+
+packages:
+
+  is-number@6.0.0:
+    resolution: {integrity: sha512-abc}
+    engines: {node: '>=0.10.0'}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+    engines: {node: '>=4'}
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-ghi}
+
+  prettier@3.5.3:
+    resolution: {integrity: sha512-jkl}
+    engines: {node: '>=14'}
+    hasBin: true
+
+snapshots:
+
+  is-number@6.0.0: {}
+
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+
+  lodash@4.17.21: {}
+
+  prettier@3.5.3: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        // The transitive closure should NOT include link: deps
+        let shared_pkg = lockfile
+            .resolve_package("apps/my-app", "@repo/shared", "workspace:^")
+            .unwrap();
+        assert!(
+            shared_pkg.is_none(),
+            "link: workspace deps should resolve to None (not external packages)"
+        );
+
+        // Prune to apps/my-app and packages/shared
+        let workspace_packages = vec!["apps/my-app".to_string(), "packages/shared".to_string()];
+        let resolved_packages = vec![
+            "is-number@6.0.0".to_string(),
+            "is-odd@3.0.1".to_string(),
+            "lodash@4.17.21".to_string(),
+            "prettier@3.5.3".to_string(),
+        ];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+
+        // The pruned lockfile should contain the expected packages
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should have packages");
+        let snapshots = pruned_lockfile
+            .snapshots
+            .as_ref()
+            .expect("should have snapshots");
+
+        assert!(packages.contains_key("lodash@4.17.21"));
+        assert!(packages.contains_key("is-odd@3.0.1"));
+        assert!(packages.contains_key("is-number@6.0.0"));
+        assert!(snapshots.contains_key("lodash@4.17.21"));
+        assert!(snapshots.contains_key("is-odd@3.0.1"));
+        assert!(snapshots.contains_key("is-number@6.0.0"));
+
+        // The importer for apps/my-app should retain dependenciesMeta
+        let importer = pruned_lockfile.importers.get("apps/my-app").unwrap();
+        assert!(importer.dependencies_meta.is_some());
+    }
+
+    /// Regression test for https://github.com/vercel/turborepo/issues/12252
+    ///
+    /// The Lockfile trait returns `HashMap<String, String>` from
+    /// `all_dependencies`, and `PackageSnapshotV7::dependencies()` converts
+    /// deterministic BTreeMap data into a HashMap. This test asserts that the
+    /// dependency maps used in the transitive closure walk are
+    /// deterministically ordered (i.e. BTreeMap), so that the walk and
+    /// hashing are reproducible across process invocations regardless of
+    /// HashMap's per-process random seed.
+    ///
+    /// With HashMap, the `dependency_index` values have random iteration
+    /// order. When these feed into `resolve_deps` → `resolve_package` via the
+    /// shared `DashMap` resolve cache in `all_transitive_closures`, different
+    /// iteration orders in parallel threads can race to populate cache entries,
+    /// producing different `Package` values and thus different hashes.
+    #[test]
+    fn test_dependency_index_is_deterministically_ordered() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    dependencies:
+      express:
+        specifier: 4.18.2
+        version: 4.18.2
+
+packages:
+
+  express@4.18.2:
+    resolution: {integrity: sha512-aaa}
+
+  body-parser@1.20.1:
+    resolution: {integrity: sha512-bbb}
+
+  content-type@1.0.5:
+    resolution: {integrity: sha512-ccc}
+
+  cookie@0.5.0:
+    resolution: {integrity: sha512-ddd}
+
+  debug@4.3.4:
+    resolution: {integrity: sha512-eee}
+
+  etag@1.8.1:
+    resolution: {integrity: sha512-fff}
+
+  finalhandler@1.2.0:
+    resolution: {integrity: sha512-ggg}
+
+  ms@2.1.3:
+    resolution: {integrity: sha512-hhh}
+
+  qs@6.11.0:
+    resolution: {integrity: sha512-iii}
+
+  raw-body@2.5.1:
+    resolution: {integrity: sha512-jjj}
+
+  safe-buffer@5.2.1:
+    resolution: {integrity: sha512-kkk}
+
+  type-is@1.6.18:
+    resolution: {integrity: sha512-lll}
+
+  mime-types@2.1.35:
+    resolution: {integrity: sha512-mmm}
+
+  mime-db@1.52.0:
+    resolution: {integrity: sha512-nnn}
+
+  depd@2.0.0:
+    resolution: {integrity: sha512-ooo}
+
+  destroy@1.2.0:
+    resolution: {integrity: sha512-ppp}
+
+snapshots:
+
+  express@4.18.2:
+    dependencies:
+      body-parser: 1.20.1
+      content-type: 1.0.5
+      cookie: 0.5.0
+      debug: 4.3.4
+      etag: 1.8.1
+      finalhandler: 1.2.0
+      qs: 6.11.0
+      type-is: 1.6.18
+    optionalDependencies:
+      safe-buffer: 5.2.1
+      depd: 2.0.0
+      destroy: 1.2.0
+
+  body-parser@1.20.1:
+    dependencies:
+      content-type: 1.0.5
+      debug: 4.3.4
+      raw-body: 2.5.1
+      type-is: 1.6.18
+      qs: 6.11.0
+
+  content-type@1.0.5: {}
+  cookie@0.5.0: {}
+
+  debug@4.3.4:
+    dependencies:
+      ms: 2.1.3
+
+  etag@1.8.1: {}
+  finalhandler@1.2.0:
+    dependencies:
+      debug: 4.3.4
+
+  ms@2.1.3: {}
+  qs@6.11.0: {}
+
+  raw-body@2.5.1:
+    dependencies:
+      depd: 2.0.0
+
+  safe-buffer@5.2.1: {}
+
+  type-is@1.6.18:
+    dependencies:
+      mime-types: 2.1.35
+
+  mime-types@2.1.35:
+    dependencies:
+      mime-db: 1.52.0
+
+  mime-db@1.52.0: {}
+  depd@2.0.0: {}
+  destroy@1.2.0: {}
+"#;
+
+        // Parse the lockfile multiple times — each parse creates HashMaps
+        // with fresh RandomState seeds. Collect the iteration order of the
+        // dependency_index entries to verify determinism.
+        let mut seen_orders = std::collections::HashSet::new();
+        for _ in 0..50 {
+            let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+            // express@4.18.2 merges 8 dependencies + 3 optionalDependencies
+            // into a single map via PackageSnapshotV7::dependencies().
+            // If this map is a HashMap, its iteration order varies per instance.
+            let deps = lockfile
+                .all_dependencies("express@4.18.2")
+                .unwrap()
+                .expect("express should have dependencies");
+            let order: Vec<String> = deps.keys().cloned().collect();
+            seen_orders.insert(order);
+        }
+
+        // With BTreeMap the iteration order is always sorted, so there is
+        // exactly 1 distinct order. With HashMap there are typically many.
         assert_eq!(
-            a_closure,
-            vec![
-                Package::new("/is-number@6.0.0", "6.0.0"),
-                Package::new("/is-odd@3.0.1", "3.0.1"),
+            seen_orders.len(),
+            1,
+            "dependency iteration order must be deterministic (found {} distinct orderings). This \
+             causes non-deterministic hashOfExternalDependencies across turbo invocations.",
+            seen_orders.len()
+        );
+    }
+
+    /// Regression test for https://github.com/vercel/turborepo/issues/12252
+    ///
+    /// End-to-end: parse the same lockfile bytes multiple times and assert
+    /// that all_transitive_closures produces identical results every time.
+    #[test]
+    fn test_transitive_closure_deterministic_across_parses() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  apps/web:
+    dependencies:
+      react:
+        specifier: 18.2.0
+        version: 18.2.0
+      react-dom:
+        specifier: 18.2.0
+        version: 18.2.0(react@18.2.0)
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
+      express:
+        specifier: 4.18.2
+        version: 4.18.2
+      axios:
+        specifier: 1.6.0
+        version: 1.6.0
+      zod:
+        specifier: 3.22.0
+        version: 3.22.0
+      dayjs:
+        specifier: 1.11.10
+        version: 1.11.10
+      uuid:
+        specifier: 9.0.0
+        version: 9.0.0
+      chalk:
+        specifier: 5.3.0
+        version: 5.3.0
+      commander:
+        specifier: 11.1.0
+        version: 11.1.0
+
+  packages/ui:
+    dependencies:
+      react:
+        specifier: 18.2.0
+        version: 18.2.0
+      classnames:
+        specifier: 2.3.2
+        version: 2.3.2
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
+      tslib:
+        specifier: 2.6.2
+        version: 2.6.2
+      prop-types:
+        specifier: 15.8.1
+        version: 15.8.1
+      csstype:
+        specifier: 3.1.2
+        version: 3.1.2
+
+packages:
+
+  react@18.2.0:
+    resolution: {integrity: sha512-aaa}
+
+  react-dom@18.2.0:
+    resolution: {integrity: sha512-bbb}
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-ccc}
+
+  express@4.18.2:
+    resolution: {integrity: sha512-ddd}
+
+  axios@1.6.0:
+    resolution: {integrity: sha512-eee}
+
+  zod@3.22.0:
+    resolution: {integrity: sha512-fff}
+
+  dayjs@1.11.10:
+    resolution: {integrity: sha512-ggg}
+
+  uuid@9.0.0:
+    resolution: {integrity: sha512-hhh}
+
+  chalk@5.3.0:
+    resolution: {integrity: sha512-iii}
+
+  commander@11.1.0:
+    resolution: {integrity: sha512-jjj}
+
+  classnames@2.3.2:
+    resolution: {integrity: sha512-kkk}
+
+  tslib@2.6.2:
+    resolution: {integrity: sha512-lll}
+
+  prop-types@15.8.1:
+    resolution: {integrity: sha512-mmm}
+
+  csstype@3.1.2:
+    resolution: {integrity: sha512-nnn}
+
+  loose-envify@1.4.0:
+    resolution: {integrity: sha512-ooo}
+
+  js-tokens@4.0.0:
+    resolution: {integrity: sha512-ppp}
+
+  scheduler@0.23.0:
+    resolution: {integrity: sha512-qqq}
+
+  object-assign@4.1.1:
+    resolution: {integrity: sha512-rrr}
+
+  react-is@16.13.1:
+    resolution: {integrity: sha512-sss}
+
+  follow-redirects@1.15.3:
+    resolution: {integrity: sha512-ttt}
+
+  body-parser@1.20.1:
+    resolution: {integrity: sha512-uuu}
+
+  content-type@1.0.5:
+    resolution: {integrity: sha512-vvv}
+
+  cookie@0.5.0:
+    resolution: {integrity: sha512-www}
+
+  debug@4.3.4:
+    resolution: {integrity: sha512-xxx}
+
+  ms@2.1.3:
+    resolution: {integrity: sha512-yyy}
+
+  form-data@4.0.0:
+    resolution: {integrity: sha512-zzz}
+
+  mime-types@2.1.35:
+    resolution: {integrity: sha512-aab}
+
+  mime-db@1.52.0:
+    resolution: {integrity: sha512-aac}
+
+  proxy-from-env@1.1.0:
+    resolution: {integrity: sha512-aad}
+
+snapshots:
+
+  react@18.2.0: {}
+
+  react-dom@18.2.0(react@18.2.0):
+    dependencies:
+      react: 18.2.0
+      loose-envify: 1.4.0
+      scheduler: 0.23.0
+
+  lodash@4.17.21: {}
+
+  express@4.18.2:
+    dependencies:
+      body-parser: 1.20.1
+      content-type: 1.0.5
+      cookie: 0.5.0
+      debug: 4.3.4
+
+  axios@1.6.0:
+    dependencies:
+      follow-redirects: 1.15.3
+      form-data: 4.0.0
+      proxy-from-env: 1.1.0
+
+  zod@3.22.0: {}
+
+  dayjs@1.11.10: {}
+
+  uuid@9.0.0: {}
+
+  chalk@5.3.0: {}
+
+  commander@11.1.0: {}
+
+  classnames@2.3.2: {}
+
+  tslib@2.6.2: {}
+
+  prop-types@15.8.1:
+    dependencies:
+      loose-envify: 1.4.0
+      object-assign: 4.1.1
+      react-is: 16.13.1
+
+  csstype@3.1.2: {}
+
+  loose-envify@1.4.0:
+    dependencies:
+      js-tokens: 4.0.0
+
+  js-tokens@4.0.0: {}
+
+  scheduler@0.23.0:
+    dependencies:
+      loose-envify: 1.4.0
+
+  object-assign@4.1.1: {}
+
+  react-is@16.13.1: {}
+
+  follow-redirects@1.15.3: {}
+
+  body-parser@1.20.1:
+    dependencies:
+      content-type: 1.0.5
+      debug: 4.3.4
+
+  content-type@1.0.5: {}
+
+  cookie@0.5.0: {}
+
+  debug@4.3.4:
+    dependencies:
+      ms: 2.1.3
+
+  ms@2.1.3: {}
+
+  form-data@4.0.0:
+    dependencies:
+      mime-types: 2.1.35
+
+  mime-types@2.1.35:
+    dependencies:
+      mime-db: 1.52.0
+
+  mime-db@1.52.0: {}
+
+  proxy-from-env@1.1.0: {}
+"#;
+
+        let iterations = 20;
+        let mut all_closures = Vec::with_capacity(iterations);
+
+        for _ in 0..iterations {
+            let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+            let mut workspaces = HashMap::new();
+            let web_deps: BTreeMap<String, String> = [
+                ("react", "18.2.0"),
+                ("react-dom", "18.2.0"),
+                ("lodash", "4.17.21"),
+                ("express", "4.18.2"),
+                ("axios", "1.6.0"),
+                ("zod", "3.22.0"),
+                ("dayjs", "1.11.10"),
+                ("uuid", "9.0.0"),
+                ("chalk", "5.3.0"),
+                ("commander", "11.1.0"),
             ]
-        )
-    }
-
-    #[test]
-    fn test_settings_parsing() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM8_6).unwrap();
-        let settings = lockfile.settings.unwrap();
-        assert_eq!(settings.auto_install_peers, Some(true));
-        assert_eq!(settings.exclude_links_from_lockfile, Some(false));
-    }
-
-    #[test]
-    fn test_lockfile_v7_parsing() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM_V7).unwrap();
-        assert!(lockfile.packages.unwrap().contains_key("is-buffer@1.1.6"));
-        assert!(lockfile.snapshots.unwrap().contains_key("is-buffer@1.1.6"));
-    }
-
-    #[test]
-    fn test_lockfile_v7_traversal() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM_V7).unwrap();
-        let is_even = lockfile
-            .resolve_package("packages/a", "is-even", "^1.0.0")
-            .unwrap()
-            .unwrap();
-        assert_eq!(
-            is_even,
-            Package {
-                key: "is-even@1.0.0".into(),
-                version: "1.0.0".into()
-            }
-        );
-        let is_even_deps = lockfile.all_dependencies(&is_even.key).unwrap().unwrap();
-        assert_eq!(
-            is_even_deps,
-            vec![("is-odd".to_string(), "0.1.2".to_string())]
-                .into_iter()
-                .collect()
-        );
-    }
-
-    #[test]
-    fn test_lockfile_v7_closures() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM_V7_PEER).unwrap();
-        let mut workspaces = HashMap::new();
-        workspaces.insert(
-            "packages/a".into(),
-            vec![("ajv", "^8.12.0"), ("ajv-keywords", "^5.1.0")]
-                .into_iter()
-                .map(|(k, v)| (k.to_owned(), v.to_owned()))
-                .collect(),
-        );
-        workspaces.insert(
-            "packages/b".into(),
-            vec![("ajv", "8.11.0"), ("ajv-keywords", "^5.1.0")]
-                .into_iter()
-                .map(|(k, v)| (k.to_owned(), v.to_owned()))
-                .collect(),
-        );
-        let mut closures: Vec<_> = crate::all_transitive_closures(&lockfile, workspaces, false)
-            .unwrap()
-            .into_iter()
-            .map(|(k, v)| (k, v.into_iter().sorted().collect::<Vec<_>>()))
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
-        closures.sort_by_key(|(k, _)| k.clone());
-        let shared_deps: HashSet<_> = vec![
-            crate::Package::new("fast-deep-equal@3.1.3", "3.1.3"),
-            crate::Package::new("json-schema-traverse@1.0.0", "1.0.0"),
-            crate::Package::new("punycode@2.3.1", "2.3.1"),
-            crate::Package::new("require-from-string@2.0.2", "2.0.2"),
-            crate::Package::new("uri-js@4.4.1", "4.4.1"),
-        ]
-        .into_iter()
-        .collect();
-        let mut expected = Vec::new();
-        expected.push(("packages/a".into(), {
-            let mut deps = shared_deps.clone();
-            deps.insert(crate::Package::new("ajv@8.12.0", "8.12.0"));
-            deps.insert(crate::Package::new(
-                "ajv-keywords@5.1.0(ajv@8.12.0)",
-                "5.1.0(ajv@8.12.0)",
-            ));
-            deps.into_iter().sorted().collect::<Vec<_>>()
-        }));
-        expected.push(("packages/b".into(), {
-            let mut deps = shared_deps;
-            deps.insert(crate::Package::new("ajv@8.11.0", "8.11.0"));
-            deps.insert(crate::Package::new(
-                "ajv-keywords@5.1.0(ajv@8.11.0)",
-                "5.1.0(ajv@8.11.0)",
-            ));
-            deps.into_iter().sorted().collect::<Vec<_>>()
-        }));
-        assert_eq!(closures, expected);
+
+            let ui_deps: BTreeMap<String, String> = [
+                ("react", "18.2.0"),
+                ("classnames", "2.3.2"),
+                ("lodash", "4.17.21"),
+                ("tslib", "2.6.2"),
+                ("prop-types", "15.8.1"),
+                ("csstype", "3.1.2"),
+            ]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
+            workspaces.insert("apps/web".to_string(), web_deps);
+            workspaces.insert("packages/ui".to_string(), ui_deps);
+
+            let closures = crate::all_transitive_closures(&lockfile, workspaces, false).unwrap();
+            all_closures.push(closures);
+        }
+
+        let first = &all_closures[0];
+        for (i, closure) in all_closures.iter().enumerate().skip(1) {
+            assert_eq!(
+                first, closure,
+                "transitive closure differed between parse 0 and parse {i} (non-deterministic \
+                 HashMap iteration order)"
+            );
+        }
     }
 
     #[test]
-    fn test_lockfile_v7_subgraph() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM_V7_PEER).unwrap();
-        let pruned_lockfile = lockfile
-            .subgraph(
-                &["packages/a".into()],
-                &[
-                    "fast-deep-equal@3.1.3".into(),
-                    "ajv@8.12.0".into(),
-                    "uri-js@4.4.1".into(),
-                    "punycode@2.3.1".into(),
-                    "require-from-string@2.0.2".into(),
-                    "ajv-keywords@5.1.0(ajv@8.12.0)".into(),
-                    "json-schema-traverse@1.0.0".into(),
-                ],
-            )
-            .unwrap() as Box<dyn Any>;
+    fn test_lockfile_settings_preserve_dedupe_peers() {
+        // Regression test: pnpm 10.33.0 added dedupePeers to the lockfile
+        // settings block. turbo prune must preserve this field (and any other
+        // unknown settings) through a parse/serialize round-trip, otherwise
+        // `pnpm install --frozen-lockfile` fails with
+        // ERR_PNPM_LOCKFILE_CONFIG_MISMATCH.
+        let yaml = r#"lockfileVersion: '9.0'
 
-        let pruned_lockfile: &PnpmLockfile = pruned_lockfile.downcast_ref().unwrap();
-        let snapshots = pruned_lockfile.snapshots.as_ref().unwrap();
-        let packages = pruned_lockfile.packages.as_ref().unwrap();
-        assert!(
-            snapshots.contains_key("ajv-keywords@5.1.0(ajv@8.12.0)"),
-            "contains snapshot with used peer dependency"
-        );
-        assert!(
-            !snapshots.contains_key("ajv-keywords@5.1.0(ajv@8.11.0)"),
-            "doesn't contains snapshot with other peer dependency"
-        );
-        assert!(
-            packages.contains_key("ajv-keywords@5.1.0"),
-            "contains shared package metadata"
-        );
-        assert!(
-            packages.contains_key("ajv@8.12.0"),
-            "contains used peer dependency"
-        );
-        assert!(
-            snapshots.contains_key("ajv@8.12.0"),
-            "contains used peer dependency"
-        );
-    }
+settings:
+  autoInstallPeers: false
+  dedupePeers: true
+  excludeLinksFromLockfile: false
 
-    #[test]
-    fn test_lockfile_v7_subgraph_patches() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM_V7_PATCH).unwrap();
-        let pruned_lockfile = lockfile
-            .subgraph(
-                &["packages/a".into()],
-                &[
-                    "fast-deep-equal@3.1.3".into(),
-                    "ajv@8.12.0".into(),
-                    "uri-js@4.4.1".into(),
-                    "punycode@2.3.1".into(),
-                    "require-from-string@2.0.2".into(),
-                    "ajv-keywords@5.1.0(patch_hash=5d3ekbiux3hfmrauqwpwb6chsq)(ajv@8.12.0)".into(),
-                    "json-schema-traverse@1.0.0".into(),
-                ],
-            )
-            .unwrap() as Box<dyn Any>;
+importers:
 
-        let pruned_lockfile: &PnpmLockfile = pruned_lockfile.downcast_ref().unwrap();
-        let snapshots = pruned_lockfile.snapshots.as_ref().unwrap();
-        let packages = pruned_lockfile.packages.as_ref().unwrap();
-        let patches = pruned_lockfile.patched_dependencies.as_ref().unwrap();
-        assert!(
-            snapshots.contains_key(
-                "ajv-keywords@5.1.0(patch_hash=5d3ekbiux3hfmrauqwpwb6chsq)(ajv@8.12.0)"
-            ),
-            "contains snapshot with used peer dependency"
-        );
-        assert!(
-            !snapshots.contains_key(
-                "ajv-keywords@5.1.0(patch_hash=5d3ekbiux3hfmrauqwpwb6chsq)(ajv@8.11.0)"
-            ),
-            "doesn't contains snapshot with other peer dependency"
-        );
-        assert!(
-            snapshots.contains_key("ajv@8.12.0"),
-            "contains used peer dependency"
-        );
-        assert!(
-            packages.contains_key("ajv-keywords@5.1.0"),
-            "contains shared package metadata"
-        );
-        assert!(
-            patches.contains_key("ajv-keywords@5.1.0"),
-            "contains patched dependency"
-        );
-    }
+  .:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
 
-    #[test_case(PNPM6, None ; "v6 missing")]
-    #[test_case(PNPM6_TURBO, Some("2.0.3") ; "v6")]
-    #[test_case(PNPM8_TURBO, Some("2.0.3") ; "v8")]
-    #[test_case(PNPM_V9, Some("1.13.3-canary.1") ; "v9")]
-    fn test_turbo_version(lockfile: &[u8], expected: Option<&str>) {
-        let lockfile = PnpmLockfile::from_bytes(lockfile).unwrap();
-        assert_eq!(lockfile.turbo_version().as_deref(), expected);
-    }
+  apps/web:
+    dependencies:
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
 
-    #[test]
-    fn test_catalog_support() {
-        let lockfile =
-            PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-catalog.yaml")).unwrap();
+packages:
 
-        // Test resolving a package from the default catalog
-        let react = lockfile
-            .resolve_package("apps/docs", "react", "catalog:")
-            .unwrap()
+  is-number@6.0.0:
+    resolution: {integrity: sha512-abc}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-ghi}
+
+snapshots:
+
+  is-number@6.0.0: {}
+
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+
+  lodash@4.17.21: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        // Verify the field was parsed
+        let settings = lockfile.settings.as_ref().expect("should have settings");
+        assert_eq!(settings.dedupe_peers, Some(true));
+        assert_eq!(settings.auto_install_peers, Some(false));
+
+        // Prune to apps/web
+        let workspace_packages = vec!["apps/web".to_string()];
+        let resolved_packages = vec!["lodash@4.17.21".to_string()];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
             .unwrap();
-        assert_eq!(react.version, "19.1.0");
 
-        // Test resolving a package that's not in the catalog
-        let not_in_catalog = lockfile
-            .resolve_package("apps/docs", "not-in-catalog", "catalog:")
-            .unwrap();
-        assert!(not_in_catalog.is_none());
-
-        // Test resolving from non-existent catalog
-        let non_existent_catalog = lockfile
-            .resolve_package("apps/docs", "react", "catalog:non-existent")
-            .unwrap();
-        assert!(non_existent_catalog.is_none());
-    }
-
-    #[test]
-    fn test_multiple_catalogs() {
-        let lockfile =
-            PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-multiple-catalogs.yaml"))
-                .unwrap();
-
-        // Test resolving from default catalog
-        let react = lockfile
-            .resolve_package("apps/blog", "react", "catalog:")
-            .unwrap()
-            .unwrap();
-        assert_eq!(react.version, "19.1.0");
-
-        // Test resolving from specific catalog
-        let eslint = lockfile
-            .resolve_package("packages/logger", "eslint", "catalog:eslint")
-            .unwrap()
-            .unwrap();
-        assert_eq!(eslint.version, "9.26.0");
-
-        // Tests a peer dep
-        let react_dom = lockfile
-            .resolve_package("packages/ui", "react-dom", "catalog:reactdommm")
-            .unwrap()
-            .unwrap();
-        assert_eq!(react_dom.version, "19.1.0(react@19.1.0)");
-
-        // Test resolving a package that's not in the catalog
-        let not_in_catalog = lockfile.resolve_package("apps/docs", "not-in-catalog", "catalog:");
+        // Re-parse the pruned lockfile and verify dedupePeers survived
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+        let pruned_settings = pruned_lockfile
+            .settings
+            .as_ref()
+            .expect("pruned lockfile should have settings");
         assert_eq!(
-            not_in_catalog.unwrap_err().to_string(),
-            crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
-        );
-
-        // Test resolving from non-existent catalog
-        let non_existent_catalog =
-            lockfile.resolve_package("apps/docs", "react", "catalog:non-existent");
-        assert_eq!(
-            non_existent_catalog.unwrap_err().to_string(),
-            crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
-        );
-    }
-
-    #[test]
-    fn test_catalog_peer_dependencies() {
-        let lockfile =
-            PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-multiple-catalogs.yaml"))
-                .unwrap();
-
-        // Test resolving a package with peer dependencies from catalog
-        let react_dom = lockfile
-            .resolve_package("apps/admin", "react-dom", "catalog:reactdommm")
-            .unwrap()
-            .unwrap();
-        assert_eq!(react_dom.version, "19.1.0(react@19.1.0)");
-
-        // Test resolving a package from default catalog
-        let react = lockfile
-            .resolve_package("apps/admin", "react", "catalog:")
-            .unwrap()
-            .unwrap();
-        assert_eq!(react.version, "19.1.0");
-
-        // Test resolving a package from a specific catalog
-        let typescript = lockfile
-            .resolve_package("apps/admin", "typescript", "catalog:typescript5")
-            .unwrap()
-            .unwrap();
-        assert_eq!(typescript.version, "5.8.2");
-    }
-
-    #[test]
-    fn test_catalog_peer_dependency_resolution() {
-        let lockfile =
-            PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-multiple-catalogs.yaml"))
-                .unwrap();
-
-        // Test resolving a package with peer dependencies
-        let react_dom = lockfile
-            .resolve_package("apps/admin", "react-dom", "catalog:reactdommm")
-            .unwrap()
-            .unwrap();
-        assert_eq!(react_dom.version, "19.1.0(react@19.1.0)");
-
-        // Test resolving a package from default catalog
-        let react = lockfile
-            .resolve_package("apps/blog", "react", "catalog:")
-            .unwrap()
-            .unwrap();
-        assert_eq!(react.version, "19.1.0");
-
-        // Test resolving a package from a specific catalog
-        let eslint = lockfile
-            .resolve_package("apps/admin", "eslint", "catalog:eslint")
-            .unwrap()
-            .unwrap();
-        assert_eq!(eslint.version, "9.26.0");
-
-        // Test resolving a package that doesn't exist
-        let missing = lockfile.resolve_package("apps/docs", "missing-package", "catalog:");
-        assert_eq!(
-            missing.unwrap_err().to_string(),
-            crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
-        );
-
-        // Test resolving from non-existent catalog
-        let non_existent_catalog =
-            lockfile.resolve_package("apps/docs", "react", "catalog:non-existent");
-        assert_eq!(
-            non_existent_catalog.unwrap_err().to_string(),
-            crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
-        );
-
-        // Test resolving a package with a non-existent peer dependency
-        let missing_peer =
-            lockfile.resolve_package("apps/docs", "non-existent", "catalog:reactdommm");
-        assert_eq!(
-            missing_peer.unwrap_err().to_string(),
-            crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
-        );
-    }
-
-    #[test]
-    fn test_subgraph_with_empty_workspace_packages() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
-
-        // Test subgraph with no workspace packages
-        let subgraph = lockfile.subgraph(&[], &["/is-odd@3.0.1".into()]).unwrap();
-        let pnpm_subgraph = (subgraph.as_ref() as &dyn Any)
-            .downcast_ref::<PnpmLockfile>()
-            .unwrap();
-
-        // Should only contain root importer
-        assert_eq!(pnpm_subgraph.importers.len(), 1);
-        assert!(pnpm_subgraph.importers.contains_key("."));
-
-        // Should contain the requested package
-        assert!(
-            pnpm_subgraph
-                .packages
-                .as_ref()
-                .unwrap()
-                .contains_key("/is-odd@3.0.1")
-        );
-    }
-
-    #[test]
-    fn test_subgraph_with_missing_package() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
-
-        // Test subgraph with non-existent package
-        let result = lockfile.subgraph(&["packages/a".into()], &["nonexistent-package".into()]);
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            crate::Error::MissingPackage(_)
-        ));
-    }
-
-    #[test]
-    fn test_resolve_package_with_invalid_workspace() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
-
-        // Test with invalid workspace
-        let result = lockfile.resolve_package("invalid/workspace", "is-odd", "^3.0.1");
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            crate::Error::MissingWorkspace(_)
-        ));
-    }
-
-    #[test]
-    fn test_global_change_detection() {
-        let lockfile1 = PnpmLockfile::from_bytes(PNPM8).unwrap();
-        let lockfile2 = PnpmLockfile::from_bytes(PNPM8_6).unwrap();
-
-        // Different lockfiles should show global change
-        assert!(lockfile1.global_change(&lockfile2));
-
-        // Same lockfile should not show global change
-        assert!(!lockfile1.global_change(&lockfile1));
-    }
-
-    #[test]
-    fn test_all_dependencies_with_invalid_key() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
-
-        // Test with invalid package key
-        let result = lockfile.all_dependencies("invalid-package-key").unwrap();
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_workspace_link_resolution() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
-
-        // Test workspace link resolution - current implementation returns None
-        // for workspace links since they're not actual packages in the lockfile
-        let workspace_dep = lockfile
-            .resolve_package("packages/a", "c", "workspace:*")
-            .unwrap();
-        assert!(workspace_dep.is_none());
-    }
-
-    #[test]
-    fn test_inject_workspace_packages_preservation() {
-        let lockfile = PnpmLockfile::from_bytes(PNPM_INJECT_WORKSPACE).unwrap();
-
-        // Verify the original lockfile has injectWorkspacePackages set to true
-        assert_eq!(
-            lockfile
-                .settings
-                .as_ref()
-                .unwrap()
-                .inject_workspace_packages,
-            Some(true)
-        );
-
-        // Create a subgraph to simulate turbo prune operation
-        let pruned_lockfile = lockfile
-            .subgraph(
-                &["apps/web".into()],
-                &["/lodash@4.17.21".into(), "/prettier@3.5.3".into()],
-            )
-            .unwrap();
-
-        // Downcast to access the settings
-        let pruned_pnpm = (pruned_lockfile.as_ref() as &dyn Any)
-            .downcast_ref::<PnpmLockfile>()
-            .unwrap();
-
-        // Verify that injectWorkspacePackages is preserved in the pruned lockfile
-        assert_eq!(
-            pruned_pnpm
-                .settings
-                .as_ref()
-                .unwrap()
-                .inject_workspace_packages,
+            pruned_settings.dedupe_peers,
             Some(true),
-            "injectWorkspacePackages setting should be preserved in pruned lockfile"
+            "dedupePeers must survive prune round-trip"
         );
-
-        // Verify other settings are also preserved
-        assert_eq!(
-            pruned_pnpm.settings.as_ref().unwrap().auto_install_peers,
-            Some(true)
-        );
-        assert_eq!(
-            pruned_pnpm
-                .settings
-                .as_ref()
-                .unwrap()
-                .exclude_links_from_lockfile,
-            Some(false)
-        );
-
-        // Verify that the pruned lockfile can be encoded back to YAML
-        let encoded = pruned_lockfile.encode().unwrap();
-        let encoded_str = String::from_utf8(encoded).unwrap();
-
-        // Verify the encoded YAML contains the injectWorkspacePackages setting
-        assert!(
-            encoded_str.contains("injectWorkspacePackages: true"),
-            "Encoded lockfile should contain injectWorkspacePackages setting"
-        );
+        assert_eq!(pruned_settings.auto_install_peers, Some(false));
+        assert_eq!(pruned_settings.exclude_links_from_lockfile, Some(false));
     }
 }

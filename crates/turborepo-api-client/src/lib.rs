@@ -4,16 +4,18 @@
 
 #![feature(error_generic_member_access)]
 #![feature(assert_matches)]
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
 #![deny(clippy::all)]
 
-use std::{backtrace::Backtrace, env, future::Future, time::Duration};
+use std::{backtrace::Backtrace, env, future::Future, sync::LazyLock, time::Duration};
 
-use lazy_static::lazy_static;
 use regex::Regex;
 pub use reqwest::Response;
 use reqwest::{Body, Method, RequestBuilder, StatusCode};
 use serde::Deserialize;
 use turborepo_ci::{Vendor, is_ci};
+pub use turborepo_types::SecretString;
 use turborepo_vercel_api::{
     APIError, CachingStatus, CachingStatusResponse, PreflightResponse, Team, TeamsResponse,
     UserResponse, VerificationResponse, VerifiedSsoUser, token::ResponseTokenMetadata,
@@ -25,28 +27,29 @@ pub use crate::error::{Error, Result};
 pub mod analytics;
 mod error;
 mod retry;
+mod shared_http_client;
 pub mod telemetry;
 
 pub use bytes::Bytes;
+pub use shared_http_client::SharedHttpClient;
 pub use tokio_stream::Stream;
 
-lazy_static! {
-    static ref AUTHORIZATION_REGEX: Regex =
-        Regex::new(r"(?i)(?:^|,) *authorization *(?:,|$)").unwrap();
-}
+static AUTHORIZATION_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)(?:^|,) *authorization *(?:,|$)").unwrap());
 
 pub trait Client {
-    fn get_user(&self, token: &str) -> impl Future<Output = Result<UserResponse>> + Send;
-    fn get_teams(&self, token: &str) -> impl Future<Output = Result<TeamsResponse>> + Send;
+    fn get_user(&self, token: &SecretString) -> impl Future<Output = Result<UserResponse>> + Send;
+    fn get_teams(&self, token: &SecretString)
+    -> impl Future<Output = Result<TeamsResponse>> + Send;
     fn get_team(
         &self,
-        token: &str,
+        token: &SecretString,
         team_id: &str,
     ) -> impl Future<Output = Result<Option<Team>>> + Send;
     fn add_ci_header(request_builder: RequestBuilder) -> RequestBuilder;
     fn verify_sso_token(
         &self,
-        token: &str,
+        token: &SecretString,
         token_name: &str,
     ) -> impl Future<Output = Result<VerifiedSsoUser>> + Send;
     fn handle_403(response: Response) -> impl Future<Output = Error> + Send;
@@ -57,7 +60,7 @@ pub trait CacheClient {
     fn get_artifact(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
         method: Method,
@@ -65,7 +68,7 @@ pub trait CacheClient {
     fn fetch_artifact(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> impl Future<Output = Result<Option<Response>>> + Send;
@@ -77,20 +80,22 @@ pub trait CacheClient {
         body_len: usize,
         duration: u64,
         tag: Option<&str>,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
+        sha: Option<&str>,
+        dirty_hash: Option<&str>,
     ) -> impl Future<Output = Result<()>> + Send;
     fn artifact_exists(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> impl Future<Output = Result<Option<Response>>> + Send;
     fn get_caching_status(
         &self,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> impl Future<Output = Result<CachingStatusResponse>> + Send;
@@ -99,24 +104,25 @@ pub trait CacheClient {
 pub trait TokenClient {
     fn get_metadata(
         &self,
-        token: &str,
+        token: &SecretString,
     ) -> impl Future<Output = Result<ResponseTokenMetadata>> + Send;
-    fn delete_token(&self, token: &str) -> impl Future<Output = Result<()>> + Send;
+    fn delete_token(&self, token: &SecretString) -> impl Future<Output = Result<()>> + Send;
 }
 
 #[derive(Clone)]
 pub struct APIClient {
     client: reqwest::Client,
-    cache_client: reqwest::Client,
     base_url: String,
     user_agent: String,
     use_preflight: bool,
+    timeout: Option<Duration>,
+    upload_timeout: Option<Duration>,
 }
 
 #[derive(Clone)]
 pub struct APIAuth {
     pub team_id: Option<String>,
-    pub token: String,
+    pub token: SecretString,
     pub team_slug: Option<String>,
 }
 
@@ -124,7 +130,7 @@ impl std::fmt::Debug for APIAuth {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("APIAuth")
             .field("team_id", &self.team_id)
-            .field("token", &"***")
+            .field("token", &self.token)
             .field("team_slug", &self.team_slug)
             .finish()
     }
@@ -137,13 +143,13 @@ pub fn is_linked(api_auth: &Option<APIAuth>) -> bool {
 }
 
 impl Client for APIClient {
-    async fn get_user(&self, token: &str) -> Result<UserResponse> {
+    #[tracing::instrument(skip_all)]
+    async fn get_user(&self, token: &SecretString) -> Result<UserResponse> {
         let url = self.make_url("/v2/user")?;
         let request_builder = self
-            .client
-            .get(url)
+            .api_request(Method::GET, url)
             .header("User-Agent", self.user_agent.clone())
-            .header("Authorization", format!("Bearer {token}"))
+            .bearer_auth(token.expose())
             .header("Content-Type", "application/json");
         let response =
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
@@ -154,13 +160,13 @@ impl Client for APIClient {
         Ok(response.json().await?)
     }
 
-    async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
+    #[tracing::instrument(skip_all)]
+    async fn get_teams(&self, token: &SecretString) -> Result<TeamsResponse> {
         let request_builder = self
-            .client
-            .get(self.make_url("/v2/teams?limit=100")?)
+            .api_request(Method::GET, self.make_url("/v2/teams?limit=100")?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {token}"));
+            .bearer_auth(token.expose());
 
         let response =
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
@@ -171,14 +177,14 @@ impl Client for APIClient {
         Ok(response.json().await?)
     }
 
-    async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
+    #[tracing::instrument(skip_all)]
+    async fn get_team(&self, token: &SecretString, team_id: &str) -> Result<Option<Team>> {
         let endpoint = format!("/v2/teams/{team_id}");
         let response = self
-            .client
-            .get(self.make_url(&endpoint)?)
+            .api_request(Method::GET, self.make_url(&endpoint)?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {token}"))
+            .bearer_auth(token.expose())
             .send()
             .await?
             .error_for_status()?;
@@ -195,11 +201,15 @@ impl Client for APIClient {
         request_builder
     }
 
-    async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
+    #[tracing::instrument(skip_all)]
+    async fn verify_sso_token(
+        &self,
+        token: &SecretString,
+        token_name: &str,
+    ) -> Result<VerifiedSsoUser> {
         let request_builder = self
-            .client
-            .get(self.make_url("/registration/verify")?)
-            .query(&[("token", token), ("tokenName", token_name)])
+            .api_request(Method::GET, self.make_url("/registration/verify")?)
+            .query(&[("token", token.expose()), ("tokenName", token_name)])
             .header("User-Agent", self.user_agent.clone());
 
         let response =
@@ -270,10 +280,11 @@ impl Client for APIClient {
 }
 
 impl CacheClient for APIClient {
+    #[tracing::instrument(skip_all)]
     async fn get_artifact(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
         method: Method,
@@ -296,12 +307,11 @@ impl CacheClient for APIClient {
         };
 
         let mut request_builder = self
-            .client
-            .request(method, request_url)
+            .api_request(method, request_url)
             .header("User-Agent", self.user_agent.clone());
 
         if allow_auth {
-            request_builder = request_builder.header("Authorization", format!("Bearer {token}"));
+            request_builder = request_builder.bearer_auth(token.expose());
         }
 
         request_builder = Self::add_team_params(request_builder, team_id, team_slug);
@@ -321,7 +331,7 @@ impl CacheClient for APIClient {
     async fn artifact_exists(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<Option<Response>> {
@@ -333,7 +343,7 @@ impl CacheClient for APIClient {
     async fn fetch_artifact(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<Option<Response>> {
@@ -349,9 +359,11 @@ impl CacheClient for APIClient {
         body_length: usize,
         duration: u64,
         tag: Option<&str>,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
+        sha: Option<&str>,
+        dirty_hash: Option<&str>,
     ) -> Result<()> {
         let mut request_url = self.make_url(&format!("/v8/artifacts/{hash}"))?;
         let mut allow_auth = true;
@@ -362,7 +374,8 @@ impl CacheClient for APIClient {
                     token,
                     request_url.clone(),
                     "PUT",
-                    "Authorization, Content-Type, User-Agent, x-artifact-duration, x-artifact-tag",
+                    "Authorization, Content-Type, User-Agent, x-artifact-duration, \
+                     x-artifact-tag, x-artifact-sha, x-artifact-dirty-hash",
                 )
                 .await?;
 
@@ -373,8 +386,7 @@ impl CacheClient for APIClient {
         let stream = Body::wrap_stream(artifact_body);
 
         let mut request_builder = self
-            .cache_client
-            .put(request_url)
+            .upload_request(Method::PUT, request_url)
             .header("Content-Type", "application/octet-stream")
             .header("x-artifact-duration", duration.to_string())
             .header("User-Agent", self.user_agent.clone())
@@ -382,7 +394,7 @@ impl CacheClient for APIClient {
             .body(stream);
 
         if allow_auth {
-            request_builder = request_builder.header("Authorization", format!("Bearer {token}"));
+            request_builder = request_builder.bearer_auth(token.expose());
         }
 
         request_builder = Self::add_team_params(request_builder, team_id, team_slug);
@@ -391,6 +403,14 @@ impl CacheClient for APIClient {
 
         if let Some(tag) = tag {
             request_builder = request_builder.header("x-artifact-tag", tag);
+        }
+
+        if let Some(sha) = sha {
+            request_builder = request_builder.header("x-artifact-sha", sha);
+        }
+
+        if let Some(dirty_hash) = dirty_hash {
+            request_builder = request_builder.header("x-artifact-dirty-hash", dirty_hash);
         }
 
         let response =
@@ -406,18 +426,18 @@ impl CacheClient for APIClient {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     async fn get_caching_status(
         &self,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<CachingStatusResponse> {
         let request_builder = self
-            .client
-            .get(self.make_url("/v8/artifacts/status")?)
+            .api_request(Method::GET, self.make_url("/v8/artifacts/status")?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {token}"));
+            .bearer_auth(token.expose());
 
         let request_builder = Self::add_team_params(request_builder, team_id, team_slug);
 
@@ -432,14 +452,14 @@ impl CacheClient for APIClient {
 }
 
 impl TokenClient for APIClient {
-    async fn get_metadata(&self, token: &str) -> Result<ResponseTokenMetadata> {
+    #[tracing::instrument(skip_all)]
+    async fn get_metadata(&self, token: &SecretString) -> Result<ResponseTokenMetadata> {
         let endpoint = "/v5/user/tokens/current";
         let url = self.make_url(endpoint)?;
         let request_builder = self
-            .client
-            .get(url)
+            .api_request(Method::GET, url)
             .header("User-Agent", self.user_agent.clone())
-            .header("Authorization", format!("Bearer {token}"))
+            .bearer_auth(token.expose())
             .header("Content-Type", "application/json");
 
         #[derive(Deserialize, Debug)]
@@ -491,14 +511,14 @@ impl TokenClient for APIClient {
     }
 
     /// Invalidates the given token on the server.
-    async fn delete_token(&self, token: &str) -> Result<()> {
+    #[tracing::instrument(skip_all)]
+    async fn delete_token(&self, token: &SecretString) -> Result<()> {
         let endpoint = "/v3/user/tokens/current";
         let url = self.make_url(endpoint)?;
         let request_builder = self
-            .client
-            .delete(url)
+            .api_request(Method::DELETE, url)
             .header("User-Agent", self.user_agent.clone())
-            .header("Authorization", format!("Bearer {token}"))
+            .bearer_auth(token.expose())
             .header("Content-Type", "application/json");
 
         #[derive(Deserialize, Debug)]
@@ -564,37 +584,89 @@ impl APIClient {
         version: &str,
         use_preflight: bool,
     ) -> Result<Self> {
-        // for the api client, the timeout applies for the entire duration
-        // of the request, including the connection phase
-        let client = reqwest::Client::builder();
-        let client = if let Some(dur) = timeout {
-            client.timeout(dur)
-        } else {
-            client
-        }
-        .build()
-        .map_err(Error::TlsError)?;
-
-        // for the cache client, the timeout applies only to the request
-        // connection time, while the upload timeout applies to the entire
-        // request
-        let cache_client = reqwest::Client::builder();
-        let cache_client = match (timeout, upload_timeout) {
-            (Some(dur), Some(upload_dur)) => cache_client.connect_timeout(dur).timeout(upload_dur),
-            (Some(dur), None) | (None, Some(dur)) => cache_client.timeout(dur),
-            (None, None) => cache_client,
-        }
-        .build()
-        .map_err(Error::TlsError)?;
-
+        let client = Self::build_http_client(timeout)?;
         let user_agent = build_user_agent(version);
         Ok(APIClient {
             client,
-            cache_client,
             base_url: base_url.as_ref().to_string(),
             user_agent,
             use_preflight,
+            timeout,
+            upload_timeout,
         })
+    }
+
+    /// Creates an APIClient using a pre-built `reqwest::Client`, avoiding
+    /// redundant TLS initialization when a client already exists.
+    pub fn new_with_client(
+        client: reqwest::Client,
+        base_url: impl AsRef<str>,
+        timeout: Option<Duration>,
+        upload_timeout: Option<Duration>,
+        version: &str,
+        use_preflight: bool,
+    ) -> Self {
+        let user_agent = build_user_agent(version);
+        APIClient {
+            client,
+            base_url: base_url.as_ref().to_string(),
+            user_agent,
+            use_preflight,
+            timeout,
+            upload_timeout,
+        }
+    }
+
+    /// Builds a shared HTTP client with optional connect timeout. This is
+    /// the single TLS initialization point — all consumers should share the
+    /// resulting client.
+    #[tracing::instrument(skip_all)]
+    pub fn build_http_client(connect_timeout: Option<Duration>) -> Result<reqwest::Client> {
+        Self::build_http_client_with_native_roots(connect_timeout, true)
+    }
+
+    /// Builds an HTTP client using only the bundled Mozilla CA bundle
+    /// (webpki-roots). This is instant (~0ms) because no system Keychain
+    /// access is needed. Sufficient for all standard HTTPS connections.
+    #[tracing::instrument(skip_all)]
+    pub fn build_http_client_webpki_only(
+        connect_timeout: Option<Duration>,
+    ) -> Result<reqwest::Client> {
+        Self::build_http_client_with_native_roots(connect_timeout, false)
+    }
+
+    fn build_http_client_with_native_roots(
+        connect_timeout: Option<Duration>,
+        #[allow(unused_variables)] native_roots: bool,
+    ) -> Result<reqwest::Client> {
+        let build = |#[allow(unused_variables)] use_native: bool| {
+            let mut builder = reqwest::Client::builder();
+            #[cfg(feature = "rustls-tls")]
+            {
+                builder = builder
+                    .tls_built_in_webpki_certs(true)
+                    .tls_built_in_native_certs(use_native);
+            }
+            if let Some(dur) = connect_timeout {
+                builder = builder.connect_timeout(dur);
+            }
+            builder.build()
+        };
+
+        match build(native_roots) {
+            Ok(client) => Ok(client),
+            Err(e) if native_roots => {
+                // The system certificate store may be inaccessible (e.g.
+                // "Access is denied" on locked-down Windows machines).
+                // Fall back to the bundled Mozilla CA bundle which doesn't
+                // require any OS-level access.
+                tracing::warn!(
+                    "System certificate store is unavailable ({e}), using bundled certificates"
+                );
+                build(false).map_err(Error::TlsError)
+            }
+            Err(e) => Err(Error::TlsError(e)),
+        }
     }
 
     pub fn base_url(&self) -> &str {
@@ -605,20 +677,40 @@ impl APIClient {
         self.base_url = base_url;
     }
 
+    /// Creates a request builder with the standard API timeout applied.
+    fn api_request(&self, method: Method, url: impl reqwest::IntoUrl) -> RequestBuilder {
+        let mut builder = self.client.request(method, url);
+        if let Some(dur) = self.timeout {
+            builder = builder.timeout(dur);
+        }
+        add_ai_agent_header(builder)
+    }
+
+    /// Creates a request builder with upload timeout semantics:
+    /// connect_timeout is set on the shared client, and the total
+    /// request timeout uses upload_timeout (falling back to api timeout).
+    fn upload_request(&self, method: Method, url: impl reqwest::IntoUrl) -> RequestBuilder {
+        let mut builder = self.client.request(method, url);
+        if let Some(dur) = self.upload_timeout.or(self.timeout) {
+            builder = builder.timeout(dur);
+        }
+        add_ai_agent_header(builder)
+    }
+
+    #[tracing::instrument(skip_all)]
     async fn do_preflight(
         &self,
-        token: &str,
+        token: &SecretString,
         request_url: Url,
         request_method: &str,
         request_headers: &str,
     ) -> Result<PreflightResponse> {
         let request_builder = self
-            .client
-            .request(Method::OPTIONS, request_url)
+            .api_request(Method::OPTIONS, request_url)
             .header("User-Agent", self.user_agent.clone())
             .header("Access-Control-Request-Method", request_method)
             .header("Access-Control-Request-Headers", request_headers)
-            .header("Authorization", format!("Bearer {token}"));
+            .bearer_auth(token.expose());
 
         let response =
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
@@ -695,12 +787,11 @@ impl APIClient {
         }
 
         let mut request_builder = self
-            .client
-            .request(method, url)
+            .api_request(method, url)
             .header("Content-Type", "application/json");
 
         if allow_auth {
-            request_builder = request_builder.header("Authorization", format!("Bearer {token}"));
+            request_builder = request_builder.bearer_auth(token.expose());
         }
 
         request_builder =
@@ -768,6 +859,28 @@ impl AnonAPIClient {
             user_agent,
         })
     }
+
+    /// Creates an AnonAPIClient using a pre-built `reqwest::Client`, avoiding
+    /// redundant TLS initialization.
+    pub fn new_with_client(
+        client: reqwest::Client,
+        base_url: impl AsRef<str>,
+        version: &str,
+    ) -> Self {
+        let user_agent = build_user_agent(version);
+        AnonAPIClient {
+            client,
+            base_url: base_url.as_ref().to_string(),
+            user_agent,
+        }
+    }
+}
+
+pub(crate) fn add_ai_agent_header(builder: RequestBuilder) -> RequestBuilder {
+    match turborepo_ai_agents::get_agent() {
+        Some(agent) => builder.header("x-ai-agent", agent),
+        None => builder,
+    }
 }
 
 fn build_user_agent(version: &str) -> String {
@@ -791,7 +904,27 @@ mod test {
     use turborepo_vercel_api_mock::start_test_server;
     use url::Url;
 
-    use crate::{APIClient, AnonAPIClient, CacheClient, Client, telemetry::TelemetryClient};
+    use crate::{
+        APIAuth, APIClient, AnonAPIClient, CacheClient, Client, SecretString,
+        telemetry::TelemetryClient,
+    };
+
+    #[test]
+    fn api_auth_debug_redacts_token() {
+        let auth = APIAuth {
+            team_id: Some("team-123".to_string()),
+            token: SecretString::new("real-secret-token".to_string()),
+            team_slug: Some("my-team".to_string()),
+        };
+        let debug = format!("{:?}", auth);
+        assert!(
+            !debug.contains("real-secret-token"),
+            "Debug output should not contain the raw token"
+        );
+        assert!(debug.contains("***"));
+        assert!(debug.contains("team-123"));
+        assert!(debug.contains("my-team"));
+    }
 
     #[tokio::test]
     async fn test_do_preflight() -> Result<()> {
@@ -814,9 +947,11 @@ mod test {
             true,
         )?;
 
+        let empty_token = SecretString::new(String::new());
+
         let response = client
             .do_preflight(
-                "",
+                &empty_token,
                 Url::parse(&format!("{base_url}/preflight/absolute-location")).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
@@ -827,7 +962,7 @@ mod test {
 
         let response = client
             .do_preflight(
-                "",
+                &empty_token,
                 Url::parse(&format!("{base_url}/preflight/relative-location")).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
@@ -840,7 +975,7 @@ mod test {
 
         let response = client
             .do_preflight(
-                "",
+                &empty_token,
                 Url::parse(&format!("{base_url}/preflight/allow-auth")).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
@@ -851,7 +986,7 @@ mod test {
 
         let response = client
             .do_preflight(
-                "",
+                &empty_token,
                 Url::parse(&format!("{base_url}/preflight/no-allow-auth")).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
@@ -912,6 +1047,7 @@ mod test {
         let body = b"hello world!";
         let artifact_body = tokio_stream::once(Ok(Bytes::copy_from_slice(body)));
 
+        let token = SecretString::new("token".to_string());
         client
             .put_artifact(
                 "eggs",
@@ -919,7 +1055,9 @@ mod test {
                 body.len(),
                 123,
                 None,
-                "token",
+                &token,
+                None,
+                None,
                 None,
                 None,
             )
@@ -1033,6 +1171,260 @@ mod test {
         handle.abort();
         let _ = handle.await;
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_user() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            None,
+            "2.0.0",
+            false,
+        )?;
+        let token = SecretString::new("test-token".to_string());
+
+        let response = client.get_user(&token).await?;
+        assert_eq!(
+            response.user.id,
+            turborepo_vercel_api_mock::EXPECTED_USER_ID
+        );
+        assert_eq!(
+            response.user.username,
+            turborepo_vercel_api_mock::EXPECTED_USERNAME
+        );
+        assert_eq!(
+            response.user.email,
+            turborepo_vercel_api_mock::EXPECTED_EMAIL
+        );
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_teams() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            None,
+            "2.0.0",
+            false,
+        )?;
+        let token = SecretString::new("test-token".to_string());
+
+        let response = client.get_teams(&token).await?;
+        assert_eq!(response.teams.len(), 1);
+        assert_eq!(
+            response.teams[0].id,
+            turborepo_vercel_api_mock::EXPECTED_TEAM_ID
+        );
+        assert_eq!(
+            response.teams[0].slug,
+            turborepo_vercel_api_mock::EXPECTED_TEAM_SLUG
+        );
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_caching_status() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            None,
+            "2.0.0",
+            false,
+        )?;
+        let token = SecretString::new("test-token".to_string());
+
+        let response = client.get_caching_status(&token, None, None).await?;
+        assert!(matches!(
+            response.status,
+            turborepo_vercel_api::CachingStatus::Enabled
+        ));
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_put_and_fetch_artifact() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            Some(Duration::from_secs(10)),
+            "2.0.0",
+            false,
+        )?;
+        let token = SecretString::new("test-token".to_string());
+
+        let body = b"cached artifact data";
+        let artifact_body = tokio_stream::once(Ok(Bytes::copy_from_slice(body)));
+        client
+            .put_artifact(
+                "test-hash-123",
+                artifact_body,
+                body.len(),
+                456,
+                None,
+                &token,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await?;
+
+        let response = client
+            .fetch_artifact("test-hash-123", &token, None, None)
+            .await?;
+        assert!(response.is_some());
+
+        let exists = client
+            .artifact_exists("test-hash-123", &token, None, None)
+            .await?;
+        assert!(exists.is_some());
+
+        let missing = client
+            .artifact_exists("nonexistent-hash", &token, None, None)
+            .await?;
+        assert!(missing.is_none());
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_api_client_with_upload_timeout() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        // Ensure separate timeout and upload_timeout both work
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            Some(Duration::from_secs(30)),
+            "2.0.0",
+            false,
+        )?;
+        let token = SecretString::new("test-token".to_string());
+
+        // Regular API calls should work (uses client with regular timeout)
+        let user = client.get_user(&token).await?;
+        assert_eq!(user.user.id, turborepo_vercel_api_mock::EXPECTED_USER_ID);
+
+        // Cache upload should work (uses cache_client with upload timeout)
+        let body = b"upload timeout test";
+        let artifact_body = tokio_stream::once(Ok(Bytes::copy_from_slice(body)));
+        client
+            .put_artifact(
+                "upload-test",
+                artifact_body,
+                body.len(),
+                789,
+                None,
+                &token,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await?;
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_api_client_no_timeout() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        // No timeout specified — should still work
+        let client = APIClient::new(&base_url, None, None, "2.0.0", false)?;
+        let token = SecretString::new("test-token".to_string());
+
+        let user = client.get_user(&token).await?;
+        assert_eq!(user.user.id, turborepo_vercel_api_mock::EXPECTED_USER_ID);
+
+        let body = b"no timeout test";
+        let artifact_body = tokio_stream::once(Ok(Bytes::copy_from_slice(body)));
+        client
+            .put_artifact(
+                "no-timeout",
+                artifact_body,
+                body.len(),
+                100,
+                None,
+                &token,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await?;
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_anon_client_no_timeout() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        // timeout=0 means no timeout
+        let client = AnonAPIClient::new(&base_url, 0, "2.0.0")?;
+
+        let events = vec![TelemetryEvent::Generic(TelemetryGenericEvent {
+            id: "no-timeout-id".to_string(),
+            key: "key".to_string(),
+            value: "value".to_string(),
+            parent_id: None,
+        })];
+
+        let result = client
+            .record_telemetry(events, "test-id", "test-session")
+            .await;
+        assert!(result.is_ok());
+
+        handle.abort();
         Ok(())
     }
 }

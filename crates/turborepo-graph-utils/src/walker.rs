@@ -9,7 +9,7 @@ use tokio::{
     sync::{broadcast, mpsc, oneshot, watch},
     task::JoinHandle,
 };
-use tracing::log::trace;
+use tracing::trace;
 
 pub struct Walker<N, S> {
     marker: std::marker::PhantomData<S>,
@@ -29,6 +29,12 @@ pub type WalkMessage<N> = (N, oneshot::Sender<bool>);
 impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
     /// Create a new graph walker for a DAG that emits nodes only once all of
     /// their dependencies have been processed.
+    ///
+    /// The graph **must** be a DAG. If the graph contains cycles, the walker
+    /// will deadlock: nodes in a cycle each wait indefinitely for their
+    /// dependency's completion signal. Cycle detection is the caller's
+    /// responsibility — see `validate_graph` in this crate.
+    ///
     /// The graph should not be modified after a walker is created as the nodes
     /// emitted might no longer exist or might miss newly added edges.
     pub fn new<G: IntoNodeIdentifiers<NodeId = N> + IntoNeighborsDirected>(graph: G) -> Self {

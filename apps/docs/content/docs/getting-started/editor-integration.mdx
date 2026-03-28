@@ -1,0 +1,74 @@
+---
+title: Editor integration
+description: Making the most of Turborepo
+product: turborepo
+type: guide
+summary: Set up JSON Schema validation, ESLint integration, and the Turborepo LSP in your editor.
+prerequisites:
+  - /docs/getting-started/installation
+related:
+  - /docs/reference/configuration
+  - /docs/reference/eslint-config-turbo
+---
+
+To get the best experience with `turbo`, Turborepo provides a few utilities for integrating with your editor.
+
+## JSON Schema for `turbo.json`
+
+Turborepo uses [JSON Schema](https://json-schema.org/) to give you auto-complete in your
+`turbo.json` files. By including the `$schema` key in your `turbo.json`, your editor is able to
+provide full documentation and linting for invalid configuration.
+
+### Sourcing from web
+
+Starting with Turborepo 2.5.7, versioned schemas are available via subdomain, following the format `https://v<version>.turborepo.dev/schema.json`. The version uses a dash separator.
+
+```json title="./turbo.json"
+{
+  "$schema": "https://v2-5-7.turborepo.dev/schema.json"
+}
+```
+
+This has the advantage of not needing to run your package manager's install command to see in-editor validation, while also ensuring you're using the schema that matches your installed version of `turbo`.
+
+<Callout type="info" title="Unversioned schema">
+  If you're using a version of Turborepo older than 2.5.7 or prefer an
+  unversioned schema, you can use `https://turborepo.dev/schema.json` instead.
+</Callout>
+
+### Sourcing from `node_modules`
+
+Starting in Turborepo 2.4, `schema.json` is available in `node_modules` once you've run your package manager's install command:
+
+```json title="turbo.json"
+{
+  "$schema": "./node_modules/turbo/schema.json"
+}
+```
+
+<Callout type="info" title="node_modules location">
+  We recommend installing `turbo` at the root of your repository, so the path
+  for the schema should point to `node_modules` at the root of your repository.
+  In [Package Configurations](/docs/reference/package-configurations), you may
+  need to use a path like `../../node_modules/turbo/schema.json`.
+</Callout>
+
+## Linting for environment variables
+
+Handling environment variables is an important part of building applications in a Turborepo.
+
+[The `eslint-config-turbo` package](/docs/reference/eslint-config-turbo) extends your ESLint setup to help you make sure you've taken care of all of your environment variables.
+
+## Turborepo LSP
+
+Enable even more auto-complete and linting than provided by JSON Schema, with in-editor hinting for invalid globs, references to non-existent tasks or packages, and
+extra repository visibility tools.
+
+Visit the [VSCode Extension Marketplace](https://marketplace.visualstudio.com/items?itemName=Vercel.turbo-vsc) to install.
+
+<Callout type="info" title="Not using Visual Studio Code?">
+  The language server can be used on any editors that support the [Language
+  Server Protocol](https://microsoft.github.io/language-server-protocol/). Log a
+  request in our [issue tracker](https://github.com/vercel/turborepo/issues) to
+  express your interest.
+</Callout>

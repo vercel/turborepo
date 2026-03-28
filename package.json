@@ -3,46 +3,42 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "pnpm -- turbo run build",
-    "build:turbo": "pnpm run --filter=cli build",
+    "build": "turbo run build",
+    "build:turbo": "pnpm run --filter=@turbo/cli build",
     "build:ts": "tsc -b tsconfig.project.json",
-    "lint:prettier": "turbo run lint:prettier",
+    "lint": "pnpm exec oxlint --deny-warnings .",
+    "lint:fix": "pnpm exec oxlint --fix .",
+    "format": "oxfmt --check",
+    "format:fix": "oxfmt .",
     "check:toml": "taplo format --check",
-    "docs:dev": "turbo run dev --filter=turborepo-docs",
-    "turbo": "pnpm run build:turbo && pnpm -- turbo",
+    "fix:toml": "taplo format",
+    "docs:dev": "turbo run dev --filter=./apps/docs",
+    "turbo": "pnpm run build:turbo && ./target/debug/turbo",
     "turbo-prebuilt": "pnpm -- turbo",
     "prepare": "husky install",
     "test": "turbo run test",
-    "test:integration": "pnpm --filter turborepo-tests-integration exec prysk",
     "rustdoc": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going || true",
-    "rustdoc:open": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --open"
+    "rustdoc:open": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --open",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
   },
   "devDependencies": {
-    "@taplo/cli": "^0.5.2",
-    "@types/node": "^22.15.1",
-    "eslint": "^8.55.0",
-    "husky": "^8.0.0",
-    "lint-staged": "^13.1.0",
-    "prettier": "^2.8.7",
-    "semver": "^7.3.8",
-    "typescript": "5.5.4"
+    "@taplo/cli": "0.5.2",
+    "@types/node": "22.15.3",
+    "husky": "8.0.3",
+    "lint-staged": "13.1.0",
+    "oxfmt": "^0.34.0",
+    "oxlint": "^1.49.0",
+    "semver": "7.5.2",
+    "typescript": "5.5.4",
+    "ultracite": "7.2.5"
   },
   "lint-staged": {
-    "*.{js,jsx,ts,tsx}": [
-      "prettier --write"
-    ],
-    "*.{md,mdx,mjs,yml,yaml,css}": [
-      "prettier --write"
-    ],
-    "*.toml": [
-      "taplo format"
-    ],
-    "*.rs": [
-      "cargo fmt --"
-    ]
+    "*.{js,jsx,ts,tsx,md,mdx,mjs,yml,yaml,css,json,jsonc}": "oxfmt --no-error-on-unmatched-pattern",
+    "*.toml": "taplo format"
   },
-  "packageManager": "pnpm@8.14.0",
   "engines": {
     "node": "22.x"
-  }
+  },
+  "packageManager": "pnpm@10.28.0"
 }

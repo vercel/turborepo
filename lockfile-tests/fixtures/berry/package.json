@@ -1,0 +1,18 @@
+{
+  "name": "berry-patch",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "dependencies": {
+    "eslint-config-custom": "*",
+    "prettier": "latest",
+    "turbo": "latest"
+  },
+  "resolutions": {
+    "lodash@^4.17.21": "patch:lodash@npm%3A4.17.23#./.yarn/patches/lodash-npm-4.17.23-50bdb1c01a.patch"
+  },
+  "packageManager": "yarn@3.6.0"
+}

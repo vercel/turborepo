@@ -7,7 +7,6 @@ pub mod yarn;
 pub mod yarnrc;
 
 use std::{
-    backtrace,
     fmt::{self, Display},
     fs,
 };
@@ -73,13 +72,17 @@ pub enum PackageManager {
     Bun,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub struct MissingWorkspaceError {
     package_manager: PackageManager,
 }
 
-#[derive(Debug, Error)]
+impl std::error::Error for MissingWorkspaceError {}
+
+#[derive(Debug)]
 pub struct NoPackageManager;
+
+impl std::error::Error for NoPackageManager {}
 
 impl Display for NoPackageManager {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -123,22 +126,22 @@ impl From<PackageManager> for MissingWorkspaceError {
 
 impl From<wax::BuildError> for Error {
     fn from(value: wax::BuildError) -> Self {
-        Self::Wax(Box::new(value), backtrace::Backtrace::capture())
+        Self::Wax(Box::new(value))
     }
 }
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
+    Io(#[from] std::io::Error),
     #[error(transparent)]
     Workspace(#[from] MissingWorkspaceError),
     #[error("YAML parsing error: {0}")]
-    ParsingYaml(#[from] serde_yaml::Error, #[backtrace] backtrace::Backtrace),
+    ParsingYaml(#[from] serde_yaml_ng::Error),
     #[error("JSON parsing error: {0}")]
-    ParsingJson(#[from] serde_json::Error, #[backtrace] backtrace::Backtrace),
+    ParsingJson(#[from] serde_json::Error),
     #[error("Globbing error: {0}")]
-    Wax(Box<wax::BuildError>, #[backtrace] backtrace::Backtrace),
+    Wax(Box<wax::BuildError>),
     #[error(transparent)]
     PackageJson(#[from] package_json::Error),
     #[error(transparent)]
@@ -294,11 +297,16 @@ impl PackageManager {
             }
         };
 
+        // Normalize globs by stripping leading "./" since paths are relative to the
+        // root anyway and other parts of the codebase don't include the "./"
+        // prefix. See https://github.com/vercel/turborepo/issues/8599
         let (inclusions, exclusions) = globs.into_iter().partition_map(|glob| {
             if let Some(exclusion) = glob.strip_prefix('!') {
+                let exclusion = exclusion.strip_prefix("./").unwrap_or(exclusion);
                 Either::Right(exclusion.to_string())
             } else {
-                Either::Left(glob)
+                let glob = glob.strip_prefix("./").unwrap_or(&glob);
+                Either::Left(glob.to_string())
             }
         });
 
@@ -453,18 +461,37 @@ impl PackageManager {
         root_path: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
     ) -> Result<Box<dyn Lockfile>, Error> {
+        // For pnpm, check if per-workspace lockfiles are configured
+        if matches!(
+            self,
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
+        ) && let Some(lockfile) =
+            self.try_read_pnpm_per_workspace_lockfiles(root_path, root_package_json)?
+        {
+            return Ok(lockfile);
+        }
+
         let lockfile_path = self.lockfile_path(root_path);
         let contents = lockfile_path
             .read()
             .map_err(|_| Error::LockfileMissing(lockfile_path.clone()))?;
-        self.parse_lockfile(root_package_json, &contents)
+
+        // Read .yarnrc.yml for Berry to get catalog information
+        let yarnrc = if matches!(self, PackageManager::Berry) {
+            Some(yarnrc::YarnRc::from_file(root_path)?)
+        } else {
+            None
+        };
+
+        self.parse_lockfile(root_package_json, &contents, yarnrc)
     }
 
-    #[tracing::instrument(skip(self, root_package_json, contents))]
+    #[tracing::instrument(skip(self, root_package_json, contents, yarnrc))]
     pub fn parse_lockfile(
         &self,
         root_package_json: &PackageJson,
         contents: &[u8],
+        yarnrc: Option<yarnrc::YarnRc>,
     ) -> Result<Box<dyn Lockfile>, Error> {
         Ok(match self {
             PackageManager::Npm => Box::new(turborepo_lockfiles::NpmLockfile::load(contents)?),
@@ -477,16 +504,26 @@ impl PackageManager {
             PackageManager::Bun => {
                 Box::new(turborepo_lockfiles::BunLockfile::from_bytes(contents)?)
             }
-            PackageManager::Berry => Box::new(turborepo_lockfiles::BerryLockfile::load(
-                contents,
-                Some(turborepo_lockfiles::BerryManifest::with_resolutions(
+            PackageManager::Berry => {
+                // Take ownership of yarnrc fields to avoid cloning
+                let (catalog, catalogs) = yarnrc
+                    .map(|y| (y.catalog, y.catalogs))
+                    .unwrap_or((None, None));
+
+                let manifest = turborepo_lockfiles::BerryManifest::new(
                     root_package_json
                         .resolutions
                         .iter()
                         .flatten()
                         .map(|(k, v)| (k.clone(), v.clone())),
-                )),
-            )?),
+                    catalog,
+                    catalogs,
+                );
+                Box::new(turborepo_lockfiles::BerryLockfile::load(
+                    contents,
+                    Some(manifest),
+                )?)
+            }
         })
     }
 
@@ -506,6 +543,72 @@ impl PackageManager {
                 unreachable!("npm and yarn 1 don't have a concept of patches")
             }
         }
+    }
+
+    /// When pnpm is configured with `shared-workspace-lockfile=false`, each
+    /// workspace gets its own `pnpm-lock.yaml`. This method reads and
+    /// merges them into a single lockfile. Returns `None` if shared
+    /// lockfile mode is active (the default).
+    fn try_read_pnpm_per_workspace_lockfiles(
+        &self,
+        root_path: &AbsoluteSystemPath,
+        _root_package_json: &PackageJson,
+    ) -> Result<Option<Box<dyn Lockfile>>, Error> {
+        let npmrc = npmrc::NpmRc::from_file(root_path)
+            .inspect_err(|e| tracing::debug!("unable to read npmrc: {e}"))
+            .unwrap_or_default();
+
+        // shared-workspace-lockfile defaults to true
+        if npmrc.shared_workspace_lockfile != Some(false) {
+            return Ok(None);
+        }
+
+        tracing::debug!(
+            "shared-workspace-lockfile=false detected, reading per-workspace lockfiles"
+        );
+
+        let lockfile_name = self.lockfile_name();
+        let root_lockfile_path = root_path.join_component(lockfile_name);
+        let root_contents = root_lockfile_path
+            .read()
+            .map_err(|_| Error::LockfileMissing(root_lockfile_path.clone()))?;
+
+        let mut lockfile = turborepo_lockfiles::PnpmLockfile::from_bytes(&root_contents)?;
+
+        // Discover workspace directories by finding all package.json files
+        let globs = self.get_workspace_globs(root_path)?;
+        let workspace_package_jsons: Vec<_> = globs.get_package_jsons(root_path)?.collect();
+
+        let mut workspace_lockfile_data: Vec<(String, Vec<u8>)> = Vec::new();
+        for pkg_json_path in &workspace_package_jsons {
+            let ws_dir = pkg_json_path.parent().expect("package.json has parent dir");
+            let ws_lockfile_path = ws_dir.join_component(lockfile_name);
+            if ws_lockfile_path.exists() {
+                let relative_path = root_path
+                    .anchor(ws_dir)
+                    .expect("workspace is under repo root");
+                let unix_path = relative_path.to_unix();
+                let bytes = ws_lockfile_path.read().map_err(|e| {
+                    tracing::warn!(
+                        "Failed to read per-workspace lockfile at {}: {}",
+                        ws_lockfile_path,
+                        e
+                    );
+                    Error::Io(std::io::Error::other(format!(
+                        "Failed to read {ws_lockfile_path}"
+                    )))
+                })?;
+                workspace_lockfile_data.push((unix_path.to_string(), bytes));
+            }
+        }
+
+        let refs: Vec<(&str, &[u8])> = workspace_lockfile_data
+            .iter()
+            .map(|(path, bytes)| (path.as_str(), bytes.as_slice()))
+            .collect();
+        lockfile.merge_per_workspace_lockfiles(&refs)?;
+
+        Ok(Some(Box::new(lockfile)))
     }
 
     pub fn lockfile_path(&self, turbo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
@@ -545,6 +648,19 @@ impl PackageManager {
                 pnpm::link_workspace_packages(pnpm_version, repo_root)
             }
             PackageManager::Yarn | PackageManager::Bun | PackageManager::Npm => true,
+        }
+    }
+
+    /// Read catalog definitions from the package manager's configuration.
+    /// Currently only pnpm supports catalogs in pnpm-workspace.yaml.
+    pub fn read_catalogs(&self, repo_root: &AbsoluteSystemPath) -> Option<pnpm::PnpmCatalogs> {
+        match self {
+            PackageManager::Pnpm9 | PackageManager::Pnpm | PackageManager::Pnpm6 => {
+                pnpm::read_catalogs(repo_root)
+            }
+            // Berry catalogs are handled during lockfile parsing, not here.
+            // Bun catalogs are handled during lockfile parsing, not here.
+            _ => None,
         }
     }
 }
@@ -824,6 +940,42 @@ mod tests {
         let nested: PackageJsonWorkspaces =
             serde_json::from_str("{ \"workspaces\": {\"packages\": [\"packages/**\"]}}")?;
         assert_eq!(nested.workspaces.as_ref(), vec!["packages/**"]);
+        Ok(())
+    }
+
+    /// Test that workspace globs with leading "./" are normalized
+    /// See https://github.com/vercel/turborepo/issues/8599
+    #[test]
+    fn test_workspace_globs_leading_dot_slash_normalized() -> Result<(), Error> {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        let package_json_path = repo_root.join_component("package.json");
+
+        // Test with leading "./" in workspace globs
+        std::fs::write(
+            package_json_path.as_std_path(),
+            r#"{"workspaces": ["./packages/*", "!./packages/excluded"]}"#,
+        )?;
+
+        let pm = PackageManager::Npm;
+        let globs = pm.get_workspace_globs(repo_root)?;
+
+        // Verify the leading "./" is stripped from inclusions
+        assert_eq!(globs.raw_inclusions, vec!["packages/*"]);
+        // Exclusions include both the configured exclusion (normalized) and default
+        // exclusions
+        assert!(
+            globs
+                .raw_exclusions
+                .contains(&"packages/excluded".to_string())
+        );
+        // Make sure it's normalized (doesn't have leading "./")
+        assert!(
+            !globs
+                .raw_exclusions
+                .contains(&"./packages/excluded".to_string())
+        );
+
         Ok(())
     }
 

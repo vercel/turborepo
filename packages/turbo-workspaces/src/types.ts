@@ -1,5 +1,6 @@
-import type { PackageManager } from "@turbo/utils";
 import type { Logger } from "./logger";
+
+export type PackageManager = "npm" | "yarn" | "pnpm" | "bun";
 
 export interface Manager {
   name: PackageManager;

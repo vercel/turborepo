@@ -374,7 +374,7 @@ pub fn check(tokenized: Tokenized) -> Result<Checked<Tokenized>, RuleError> {
 fn boundary<'t>(tokenized: &Tokenized<'t>) -> Result<(), RuleError<'t>> {
     if let Some((left, right)) = tokenized
         .walk()
-        .group_by(|(position, _)| *position)
+        .chunk_by(|(position, _)| *position)
         .into_iter()
         .flat_map(|(_, group)| {
             group

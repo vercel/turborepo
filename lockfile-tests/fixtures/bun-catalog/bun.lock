@@ -1,0 +1,48 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "bun-catalog",
+    },
+    "apps/docs": {
+      "name": "docs",
+      "version": "1.0.0",
+      "dependencies": {
+        "@repo/ui": "*",
+      },
+    },
+    "apps/web": {
+      "name": "web",
+      "version": "1.0.0",
+      "dependencies": {
+        "@repo/ui": "*",
+        "is-odd": "catalog:",
+      },
+    },
+    "packages/ui": {
+      "name": "@repo/ui",
+      "version": "0.1.0",
+      "dependencies": {
+        "lodash": "catalog:",
+      },
+    },
+  },
+  "catalog": {
+    "is-odd": "^3.0.1",
+    "lodash": "^4.17.21",
+  },
+  "packages": {
+    "@repo/ui": ["@repo/ui@workspace:packages/ui"],
+
+    "docs": ["docs@workspace:apps/docs"],
+
+    "is-number": ["is-number@6.0.0", "", {}, "sha512-Wu1VHeILBK8KAWJUAiSZQX94GmOE45Rg6/538fKwiloUu21KncEkYGPqob2oSZ5mUT73vLGrHQjKw3KMPwfDzg=="],
+
+    "is-odd": ["is-odd@3.0.1", "", { "dependencies": { "is-number": "^6.0.0" } }, "sha512-CQpnWPrDwmP1+SMHXZhtLtJv90yiyVfluGsX5iNCVkrhQtU3TQHsUWPG9wkdk9Lgd5yNpAg9jQEo90CBaXgWMA=="],
+
+    "lodash": ["lodash@4.17.23", "", {}, "sha512-LgVTMpQtIopCi79SJeDiP0TfWi5CNEc/L/aRdTh3yIvmZXTnheWpKjSZhnvMl8iXbC1tFg9gdHHDMLoV7CnG+w=="],
+
+    "web": ["web@workspace:apps/web"],
+  }
+}

@@ -24,6 +24,7 @@
 #![deny(clippy::all)]
 mod configv1;
 mod error;
+mod port;
 mod schema;
 
 use configv1::ConfigV1;
@@ -140,8 +141,6 @@ impl TurborepoMfeConfig {
     ) -> Result<Option<Self>, Error> {
         let absolute_dir = repo_root.resolve(package_dir);
 
-        Config::validate_package_path(repo_root, &absolute_dir)?;
-
         let Some((contents, path)) = Self::load_v1_dir(&absolute_dir)? else {
             return Ok(None);
         };
@@ -196,8 +195,11 @@ impl TurborepoMfeConfig {
         })
     }
 
+    /// Returns the dev server port for the given application.
+    ///
+    /// Looks up `name` first as a config map key, then falls back to
+    /// scanning by `packageName`. See [`ConfigV1::port`] for details.
     pub fn port(&self, name: &str) -> Option<u16> {
-        // Prefer config_v1 for compatibility with lenient parsing
         self.config_v1.port(name)
     }
 
@@ -210,19 +212,24 @@ impl TurborepoMfeConfig {
     }
 
     pub fn local_proxy_port(&self) -> Option<u16> {
-        // Prefer config_v1 for compatibility with lenient parsing
         self.config_v1.local_proxy_port()
     }
 
+    /// Returns the routing configuration for the given application.
+    ///
+    /// Note: delegates to `self.inner` (strict `TurborepoConfig`) because
+    /// `configv1::PathGroup` and `schema::PathGroup` differ (the former has
+    /// a `flag` field). On the lenient parser path (`has_mfe_dependency=true`),
+    /// `self.inner` is empty and this always returns `None`.
     pub fn routing(&self, app_name: &str) -> Option<&[schema::PathGroup]> {
-        // Return empty slice since config_v1::PathGroup is different from
-        // schema::PathGroup This is only used for validation; actual routing
-        // uses config_v1
         self.inner.routing(app_name)
     }
 
+    /// Returns the fallback URL for the given application.
+    ///
+    /// Looks up `name` first as a config map key, then falls back to
+    /// scanning by `packageName`.
     pub fn fallback(&self, app_name: &str) -> Option<&str> {
-        // Prefer config_v1 for compatibility with lenient parsing
         self.config_v1.fallback(app_name)
     }
 
@@ -331,37 +338,6 @@ impl Config {
         Ok(Some(config))
     }
 
-    /// Validates that the resolved path is within the repository root
-    pub fn validate_package_path(
-        repo_root: &AbsoluteSystemPath,
-        resolved_path: &AbsoluteSystemPath,
-    ) -> Result<(), Error> {
-        match resolved_path.to_realpath() {
-            Ok(path) => {
-                let root_real = repo_root
-                    .to_realpath()
-                    .map_err(|_| Error::PathTraversal(repo_root.to_string()))?;
-                if !path.starts_with(&root_real) {
-                    return Err(Error::PathTraversal(resolved_path.to_string()));
-                }
-                Ok(())
-            }
-            Err(_) => {
-                let root_clean = repo_root
-                    .clean()
-                    .map_err(|_| Error::PathTraversal(repo_root.to_string()))?;
-                let path_clean = resolved_path
-                    .clean()
-                    .map_err(|_| Error::PathTraversal(resolved_path.to_string()))?;
-
-                if !path_clean.starts_with(&root_clean) {
-                    return Err(Error::PathTraversal(resolved_path.to_string()));
-                }
-                Ok(())
-            }
-        }
-    }
-
     /// Attempts to load a configuration file from the given directory
     /// Returns `Ok(None)` if no configuration is found in the directory
     pub fn load_from_dir(
@@ -369,8 +345,6 @@ impl Config {
         package_dir: &AnchoredSystemPath,
     ) -> Result<Option<Self>, Error> {
         let absolute_dir = repo_root.resolve(package_dir);
-
-        Self::validate_package_path(repo_root, &absolute_dir)?;
 
         // we want to try different paths and then do `from_str`
         let Some((contents, path)) = Self::load_v1_dir(&absolute_dir)? else {
@@ -411,6 +385,10 @@ impl Config {
         }
     }
 
+    /// Returns the dev server port for the given application.
+    ///
+    /// Looks up `name` first as a config map key, then falls back to
+    /// scanning by `packageName`. See [`ConfigV1::port`] for details.
     pub fn port(&self, name: &str) -> Option<u16> {
         match &self.inner {
             ConfigInner::V1(config_v1) => config_v1.port(name),
@@ -700,27 +678,6 @@ mod test {
         assert_eq!(config.fallback("web"), Some("web.example.com"));
         assert_eq!(config.fallback("docs"), None);
         assert_eq!(config.fallback("nonexistent"), None);
-    }
-
-    #[test]
-    fn test_path_traversal_protection() {
-        let dir = TempDir::new().unwrap();
-        let repo_root = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
-
-        let outside_dir = TempDir::new().unwrap();
-        let outside_path = AbsoluteSystemPath::new(outside_dir.path().to_str().unwrap()).unwrap();
-        add_v1_config(outside_path).unwrap();
-
-        let traversal_path = format!("../{}", outside_path.file_name().unwrap());
-        let pkg_dir = AnchoredSystemPath::new(&traversal_path).unwrap();
-
-        let result = Config::load_from_dir(repo_root, pkg_dir);
-
-        assert!(result.is_err(), "Path traversal should be rejected");
-        if let Err(Error::PathTraversal(_)) = result {
-        } else {
-            panic!("Expected PathTraversal error, got: {result:?}");
-        }
     }
 
     #[test]

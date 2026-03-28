@@ -2,7 +2,7 @@ import path from "node:path";
 import fs from "fs-extra";
 import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
 import { type PackageJson, getAvailablePackageManagers } from "@turbo/utils";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { TransformerResults } from "../runner";
 import type { Transformer, TransformerArgs } from "../types";
 
@@ -13,12 +13,12 @@ const INTRODUCED_IN = "1.1.0";
 
 export async function transformer({
   root,
-  options,
+  options
 }: TransformerArgs): Promise<TransformerResults> {
   const { log, runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
-    options,
+    options
   });
 
   const rootPackageJsonPath = path.join(root, "package.json");
@@ -34,7 +34,7 @@ export async function transformer({
     project = await getWorkspaceDetails({ root });
   } catch (e) {
     return runner.abortTransform({
-      reason: `Unable to determine package manager for ${root}`,
+      reason: `Unable to determine package manager for ${root}`
     });
   }
 
@@ -43,7 +43,7 @@ export async function transformer({
   const version = availablePackageManagers[packageManager];
   if (!version) {
     return runner.abortTransform({
-      reason: `Unable to determine package manager version for ${root}`,
+      reason: `Unable to determine package manager version for ${root}`
     });
   }
 
@@ -54,9 +54,9 @@ export async function transformer({
       path: root,
       packageJson: {
         ...rootPackageJson,
-        packageJsonPath: rootPackageJsonPath,
-      },
-    },
+        packageJsonPath: rootPackageJsonPath
+      }
+    }
   ];
 
   for (const workspace of allWorkspaces) {
@@ -64,7 +64,7 @@ export async function transformer({
     const newJson = { ...pkgJson, packageManager: pkgManagerString };
     runner.modifyFile({
       filePath: packageJsonPath,
-      after: newJson,
+      after: newJson
     });
   }
 
@@ -75,7 +75,7 @@ const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
-  transformer,
+  transformer
 };
 
 // eslint-disable-next-line import/no-default-export -- transforms require default export

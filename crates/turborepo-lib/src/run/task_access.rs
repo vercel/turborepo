@@ -6,22 +6,24 @@ use std::{
 };
 
 use serde::Deserialize;
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPathBuf, PathRelation};
 use turborepo_cache::AsyncCache;
+use turborepo_gitignore::ensure_turbo_is_gitignored;
 use turborepo_scm::SCM;
+use turborepo_task_executor::TaskAccessProvider;
+// Re-export from turborepo-turbo-json
+pub use turborepo_turbo_json::TASK_ACCESS_CONFIG_PATH;
 use turborepo_unescape::UnescapedString;
 
 use super::ConfigCache;
-use crate::{gitignore::ensure_turbo_is_gitignored, turbo_json::RawTurboJson};
+use crate::turbo_json::{RawTurboJson, RawTurboJsonExt};
 
 // Environment variable key that will be used to enable, and set the expected
 // trace location
 const TASK_ACCESS_ENV_KEY: &str = "TURBOREPO_TRACE_FILE";
 /// File name where the task is expected to leave a trace result
 const TASK_ACCESS_TRACE_NAME: &str = "trace.json";
-// Path to the config file that will be used to store the trace results
-pub const TASK_ACCESS_CONFIG_PATH: [&str; 2] = [".turbo", "traced-config.json"];
 /// File name where the task is expected to leave a trace result
 const TURBO_CONFIG_FILE: &str = "turbo.json";
 
@@ -104,10 +106,11 @@ impl TaskAccessTraceFile {
     pub fn can_cache(&self, repo_root: &AbsoluteSystemPathBuf) -> bool {
         // network
         if self.accessed.network {
-            warn!(
-                "skipping automatic task caching - detected network
-        access",
-            );
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::TaskAccess),
+                "skipping automatic task caching - detected network access",
+            )
+            .emit();
             return false;
         }
 
@@ -118,11 +121,14 @@ impl TaskAccessTraceFile {
                     let relation = path.relation_to_path(repo_root);
                     // only paths within the repo can be automatically cached
                     if relation == PathRelation::Parent || relation == PathRelation::Divergent {
-                        warn!(
-                            "skipping automatic task caching - file accessed outside of repo root \
-                             ({})",
-                            unescaped_str
-                        );
+                        turborepo_log::warn(
+                            turborepo_log::Source::turbo(turborepo_log::Subsystem::TaskAccess),
+                            format!(
+                                "skipping automatic task caching - file accessed outside of repo \
+                                 root ({unescaped_str})"
+                            ),
+                        )
+                        .emit();
                         return false;
                     }
                 }
@@ -157,7 +163,13 @@ impl TaskAccess {
             match ensure_turbo_is_gitignored(&repo_root) {
                 Ok(_) => debug!("Automatically added .turbo to .gitignore"),
                 Err(e) => {
-                    error!("Failed to add .turbo to .gitignore. Caching will be disabled - {e}")
+                    turborepo_log::error(
+                        turborepo_log::Source::turbo(turborepo_log::Subsystem::TaskAccess),
+                        format!(
+                            "Failed to add .turbo to .gitignore. Caching will be disabled - {e}"
+                        ),
+                    )
+                    .emit();
                 }
             }
 
@@ -186,6 +198,13 @@ impl TaskAccess {
         self.enabled
     }
 
+    /// Check if task access tracing is enabled without constructing the
+    /// full TaskAccess (which requires a cache). Used early in the build
+    /// pipeline before the HTTP client is available.
+    pub fn check_enabled(repo_root: &AbsoluteSystemPathBuf) -> bool {
+        task_access_trace_enabled(repo_root).unwrap_or(false)
+    }
+
     pub async fn restore_config(&self) {
         match (self.enabled, &self.config_cache) {
             (true, Some(config_cache)) => match config_cache.restore().await {
@@ -211,7 +230,11 @@ impl TaskAccess {
                 trace_by_task.insert(task_id, trace);
             }
             Err(e) => {
-                error!("Failed to save trace result - {e}");
+                turborepo_log::error(
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::TaskAccess),
+                    format!("Failed to save trace result - {e}"),
+                )
+                .emit();
             }
         }
     }
@@ -225,7 +248,11 @@ impl TaskAccess {
         match self.to_file().await {
             Ok(_) => (),
             Err(e) => {
-                error!("Failed to write task access trace file - {e}");
+                turborepo_log::error(
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::TaskAccess),
+                    format!("Failed to write task access trace file - {e}"),
+                )
+                .emit();
             }
         }
     }
@@ -266,5 +293,23 @@ impl TaskAccess {
         }
 
         Ok(())
+    }
+}
+
+impl TaskAccessProvider for TaskAccess {
+    fn is_enabled(&self) -> bool {
+        TaskAccess::is_enabled(self)
+    }
+
+    fn get_env_var(&self, task_hash: &str) -> (String, AbsoluteSystemPathBuf) {
+        TaskAccess::get_env_var(self, task_hash)
+    }
+
+    fn can_cache(&self, task_hash: &str, task_id: &str) -> Option<bool> {
+        TaskAccess::can_cache(self, task_hash, task_id)
+    }
+
+    async fn save(&self) {
+        TaskAccess::save(self).await
     }
 }

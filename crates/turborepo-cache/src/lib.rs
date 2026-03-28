@@ -7,6 +7,8 @@
 #![feature(error_generic_member_access)]
 #![feature(assert_matches)]
 #![feature(box_patterns)]
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
 #![deny(clippy::all)]
 
 /// A wrapper for the cache that uses a worker pool to perform cache operations
@@ -28,7 +30,11 @@ pub mod signature_authentication;
 mod test_cases;
 mod upload_progress;
 
-use std::{backtrace, backtrace::Backtrace};
+use std::{
+    backtrace,
+    backtrace::Backtrace,
+    sync::{Arc, OnceLock},
+};
 
 pub use async_cache::AsyncCache;
 use camino::Utf8PathBuf;
@@ -56,7 +62,7 @@ pub enum CacheError {
     TimeoutError(String),
     #[error("could not connect to the cache")]
     ConnectError,
-    #[error("signing artifact failed: {0}")]
+    #[error("artifact signature error")]
     SignatureError(#[from] SignatureError, #[backtrace] Backtrace),
     #[error("invalid duration")]
     InvalidDuration(#[backtrace] Backtrace),
@@ -88,6 +94,8 @@ pub enum CacheError {
     MetadataWriteFailure(serde_json::Error, #[backtrace] Backtrace),
     #[error("Unable to perform write as cache is shutting down")]
     CacheShuttingDown,
+    #[error("Invalid restore manifest: {0}")]
+    InvalidManifest(String),
     #[error("Unable to determine config cache base")]
     ConfigCacheInvalidBase,
     #[error("Unable to hash config cache inputs")]
@@ -102,16 +110,104 @@ impl From<turborepo_api_client::Error> for CacheError {
     }
 }
 
+/// Git state captured once at the beginning of a `turbo run`.
+/// Stored in each task's `-meta.json` sidecar so that cache entries
+/// can be traced back to the commit (and working-tree state) that
+/// produced them.
+///
+/// Sent to the remote cache as `x-artifact-sha` and
+/// `x-artifact-dirty-hash` headers, and also written to the local
+/// filesystem cache's `-meta.json` sidecar.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CacheScmState {
+    /// The HEAD commit SHA, if available.
+    pub sha: Option<String>,
+    /// A hash summarizing all uncommitted changes (staged, unstaged,
+    /// and untracked files). `None` when the working tree is clean or
+    /// when git is unavailable.
+    pub dirty_hash: Option<String>,
+}
+
+/// SCM state that is computed in the background and resolved lazily.
+///
+/// Git operations (rev-parse, status, diff) are spawned at run start but
+/// the cache does not block on them synchronously. Consumers that need
+/// the SCM state should call [`get_resolved()`](Self::get_resolved) to
+/// await the background computation. This keeps git subprocesses off the
+/// critical startup path while guaranteeing that cache artifacts carry
+/// provenance metadata once the computation finishes.
+#[derive(Debug, Clone)]
+pub struct LazyScmState {
+    state: Arc<OnceLock<Option<CacheScmState>>>,
+    notify: Arc<tokio::sync::Notify>,
+}
+
+impl LazyScmState {
+    pub fn new() -> Self {
+        Self {
+            state: Arc::new(OnceLock::new()),
+            notify: Arc::new(tokio::sync::Notify::new()),
+        }
+    }
+
+    /// Create an already-resolved instance (useful in tests).
+    pub fn resolved(state: Option<CacheScmState>) -> Self {
+        let lock = OnceLock::new();
+        let _ = lock.set(state);
+        Self {
+            state: Arc::new(lock),
+            notify: Arc::new(tokio::sync::Notify::new()),
+        }
+    }
+
+    /// Set the resolved value. No-op if already set.
+    pub fn resolve(&self, state: Option<CacheScmState>) {
+        let _ = self.state.set(state);
+        self.notify.notify_waiters();
+    }
+
+    /// Returns the SCM state without waiting. Returns `None` if the
+    /// background computation hasn't finished or git was unavailable.
+    pub fn get(&self) -> Option<&CacheScmState> {
+        self.state.get().and_then(|s| s.as_ref())
+    }
+
+    /// Waits for the background computation to finish, then returns the
+    /// SCM state (if git was available). Returns immediately if already
+    /// resolved.
+    pub async fn get_resolved(&self) -> Option<&CacheScmState> {
+        if let Some(state) = self.state.get() {
+            return state.as_ref();
+        }
+        // Register the waiter before re-checking to avoid a race where
+        // resolve() fires between our check and the registration.
+        let notified = self.notify.notified();
+        if let Some(state) = self.state.get() {
+            return state.as_ref();
+        }
+        notified.await;
+        self.state.get().and_then(|s| s.as_ref())
+    }
+}
+
+impl Default for LazyScmState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub enum CacheSource {
     Local,
     Remote,
 }
 
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CacheHitMetadata {
     pub source: CacheSource,
     pub time_saved: u64,
+    pub sha: Option<String>,
+    pub dirty_hash: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize)]
@@ -190,13 +286,23 @@ pub struct CacheOpts {
 pub struct RemoteCacheOpts {
     unused_team_id: Option<String>,
     signature: bool,
+    enforce_signature_key_length: bool,
 }
 
 impl RemoteCacheOpts {
-    pub fn new(unused_team_id: Option<String>, signature: bool) -> Self {
+    pub fn new(
+        unused_team_id: Option<String>,
+        signature: bool,
+        enforce_signature_key_length: bool,
+    ) -> Self {
         Self {
             unused_team_id,
             signature,
+            enforce_signature_key_length,
         }
+    }
+
+    pub fn enforce_signature_key_length(&self) -> bool {
+        self.enforce_signature_key_length
     }
 }

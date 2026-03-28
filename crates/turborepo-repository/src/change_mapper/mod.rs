@@ -20,7 +20,7 @@ use crate::package_graph::{
 
 mod package;
 
-const DEFAULT_GLOBAL_DEPS: &[&str] = ["package.json", "turbo.json", "turbo.jsonc"].as_slice();
+const DEFAULT_GLOBAL_DEPS: &[&str] = ["turbo.json", "turbo.jsonc"].as_slice();
 
 // We may not be able to load the lockfile contents, but we
 // still want to be able to express a generic change.
@@ -263,10 +263,13 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         &self,
         lockfile_content: &[u8],
     ) -> Result<Vec<ExternalDependencyChange>, ChangeMapError> {
-        let previous_lockfile = self
-            .pkg_graph
-            .package_manager()
-            .parse_lockfile(self.pkg_graph.root_package_json(), lockfile_content)?;
+        // We pass None for yarnrc since we're only comparing lockfiles for changes,
+        // not resolving package dependencies. Catalog resolution isn't needed here.
+        let previous_lockfile = self.pkg_graph.package_manager().parse_lockfile(
+            self.pkg_graph.root_package_json(),
+            lockfile_content,
+            None,
+        )?;
 
         let additional_packages = self
             .pkg_graph

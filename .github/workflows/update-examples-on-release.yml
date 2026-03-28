@@ -2,13 +2,18 @@ name: Update examples to latest
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   update-examples-pr:
     name: "Update examples PR"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          filter: blob:none
+
       - uses: ./.github/actions/setup-node
 
       - name: Upgrade corepack
@@ -32,9 +37,10 @@ jobs:
         run: bash scripts/update-examples-dep.sh
 
       - name: Commit and push
+        env:
+          HUSKY: "0"
         run: |
           git commit -am "release(turborepo): update examples to latest"
-          git pull origin main
           git push origin ${{ steps.branch.outputs.STAGE_BRANCH }}
 
       - name: Create pull request

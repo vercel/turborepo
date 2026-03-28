@@ -1,4 +1,4 @@
-name: Turborepo Compare Cache Item
+name: Compare Cache Item
 
 on:
   workflow_dispatch:
@@ -14,6 +14,7 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
 
     steps:
       - name: Setup Node
@@ -29,7 +30,7 @@ jobs:
           cd my-turborepo
           turbo run build --filter=docs --filter=web --summarize --skip-infer -vvv
 
-      - name: Grab Turborepo artifacts
+      - name: Grab artifacts
         uses: actions/upload-artifact@v4
         with:
           name: cache-item-${{ matrix.os }}-${{ inputs.version }}
@@ -46,6 +47,7 @@ jobs:
         os: [macos-latest, ubuntu-latest, windows-latest]
         cache_os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
 
     steps:
       - name: Setup Node

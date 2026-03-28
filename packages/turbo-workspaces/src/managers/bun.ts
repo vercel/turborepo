@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "fs-extra";
 import { ConvertError } from "../errors";
-import { updateDependencies } from "../updateDependencies";
+import { updateDependencies } from "../update-dependencies";
 import type {
   DetectArgs,
   ReadArgs,
@@ -11,7 +11,7 @@ import type {
   CleanArgs,
   Project,
   ManagerHandler,
-  Manager,
+  Manager
 } from "../types";
 import {
   getMainStep,
@@ -22,12 +22,12 @@ import {
   getWorkspacePackageManager,
   parseWorkspacePackages,
   isCompatibleWithBunWorkspaces,
-  removeLockFile,
+  removeLockFile
 } from "../utils";
 
 const PACKAGE_MANAGER_DETAILS: Manager = {
   name: "bun",
-  lock: "bun.lockb",
+  lock: "bun.lockb"
 };
 
 /**
@@ -40,7 +40,7 @@ const PACKAGE_MANAGER_DETAILS: Manager = {
 async function detect(args: DetectArgs): Promise<boolean> {
   const lockFile = path.join(args.workspaceRoot, PACKAGE_MANAGER_DETAILS.lock);
   const packageManager = getWorkspacePackageManager({
-    workspaceRoot: args.workspaceRoot,
+    workspaceRoot: args.workspaceRoot
   });
   return (
     fs.existsSync(lockFile) || packageManager === PACKAGE_MANAGER_DETAILS.name
@@ -54,14 +54,14 @@ async function read(args: ReadArgs): Promise<Project> {
   const isBun = await detect(args);
   if (!isBun) {
     throw new ConvertError("Not a bun project", {
-      type: "package_manager-unexpected",
+      type: "package_manager-unexpected"
     });
   }
 
   const packageJson = getPackageJson(args);
   const { name, description } = getWorkspaceInfo(args);
   const workspaceGlobs = parseWorkspacePackages({
-    workspaces: packageJson.workspaces,
+    workspaces: packageJson.workspaces
   });
   return {
     name,
@@ -69,15 +69,15 @@ async function read(args: ReadArgs): Promise<Project> {
     packageManager: PACKAGE_MANAGER_DETAILS.name,
     paths: expandPaths({
       root: args.workspaceRoot,
-      lockFile: PACKAGE_MANAGER_DETAILS.lock,
+      lockFile: PACKAGE_MANAGER_DETAILS.lock
     }),
     workspaceData: {
       globs: workspaceGlobs,
       workspaces: expandWorkspaces({
         workspaceGlobs,
-        ...args,
-      }),
-    },
+        ...args
+      })
+    }
   };
 }
 
@@ -99,7 +99,7 @@ async function create(args: CreateArgs): Promise<void> {
     throw new ConvertError(
       "Unable to convert project to bun - workspace globs unsupported",
       {
-        type: "bun-workspace_glob_error",
+        type: "bun-workspace_glob_error"
       }
     );
   }
@@ -108,7 +108,7 @@ async function create(args: CreateArgs): Promise<void> {
     getMainStep({
       packageManager: PACKAGE_MANAGER_DETAILS.name,
       action: "create",
-      project,
+      project
     })
   );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
@@ -144,14 +144,14 @@ async function create(args: CreateArgs): Promise<void> {
       project,
       to,
       logger,
-      options,
+      options
     });
 
     // workspace dependencies
     logger.workspaceHeader();
-    project.workspaceData.workspaces.forEach((workspace) => {
+    for (const workspace of project.workspaceData.workspaces) {
       updateDependencies({ workspace, project, to, logger, options });
-    });
+    }
   } else if (!options?.dry) {
     fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
   }
@@ -172,7 +172,7 @@ async function remove(args: RemoveArgs): Promise<void> {
     getMainStep({
       packageManager: PACKAGE_MANAGER_DETAILS.name,
       action: "remove",
-      project,
+      project
     })
   );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
@@ -195,7 +195,7 @@ async function remove(args: RemoveArgs): Promise<void> {
     // collect all workspace node_modules directories
     const allModulesDirs = [
       project.paths.nodeModules,
-      ...project.workspaceData.workspaces.map((w) => w.paths.nodeModules),
+      ...project.workspaceData.workspaces.map((w) => w.paths.nodeModules)
     ];
     try {
       logger.subStep(`removing "node_modules"`);
@@ -206,7 +206,7 @@ async function remove(args: RemoveArgs): Promise<void> {
       );
     } catch (err) {
       throw new ConvertError("Failed to remove node_modules", {
-        type: "error_removing_node_modules",
+        type: "error_removing_node_modules"
       });
     }
   }
@@ -240,21 +240,25 @@ async function convertLock(args: ConvertArgs): Promise<void> {
 
   // handle moving lockfile from `packageManager` to npm
   switch (project.packageManager) {
-    case "pnpm":
+    case "pnpm": {
       // can't convert from pnpm to bun - just remove the lock
       removeLockFile({ project, options });
       break;
-    case "bun":
+    }
+    case "bun": {
       // we're already using bun, so we don't need to convert
       break;
-    case "npm":
+    }
+    case "npm": {
       // can't convert from npm to bun - just remove the lock
       removeLockFile({ project, options });
       break;
-    case "yarn":
+    }
+    case "yarn": {
       // can't convert from yarn to bun - just remove the lock
       removeLockFile({ project, options });
       break;
+    }
   }
 }
 
@@ -264,5 +268,5 @@ export const bun: ManagerHandler = {
   create,
   remove,
   clean,
-  convertLock,
+  convertLock
 };

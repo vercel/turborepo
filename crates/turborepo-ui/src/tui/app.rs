@@ -65,6 +65,8 @@ pub struct App<W> {
     preferences: PreferenceLoader,
     scrollback_len: u64,
     scroll_momentum: ScrollMomentum,
+    log_events: Vec<turborepo_log::LogEvent>,
+    showing_log_panel: bool,
 }
 
 impl<W> App<W> {
@@ -121,6 +123,8 @@ impl<W> App<W> {
             preferences,
             scrollback_len,
             scroll_momentum: ScrollMomentum::new(),
+            log_events: Vec::new(),
+            showing_log_panel: false,
         }
     }
 
@@ -144,12 +148,19 @@ impl<W> App<W> {
             focus: &self.section_focus,
             has_selection,
             is_help_popup_open: self.showing_help_popup,
+            is_log_panel_open: self.showing_log_panel,
         })
     }
 
     fn update_sidebar_toggle(&mut self) {
         let value = !self.preferences.is_task_list_visible();
         self.preferences.set_is_task_list_visible(Some(value));
+        // Resize terminal outputs to match new pane width
+        let pane_rows = self.size.pane_rows();
+        let pane_cols = self.size.pane_cols_with_sidebar(value);
+        self.tasks.values_mut().for_each(|term| {
+            term.resize(pane_rows, pane_cols);
+        });
     }
 
     fn update_task_selection_pinned_state(&mut self) -> Result<(), Error> {
@@ -429,7 +440,34 @@ impl<W> App<W> {
         }
 
         if !found_task {
-            return Err(Error::TaskNotFound { name: task.into() });
+            // Task might already be running or finished (e.g., from a concurrent
+            // watch run that hasn't fully stopped yet, or from in-flight events
+            // of a prior run). Handle gracefully instead of crashing the TUI.
+            let in_running = self
+                .tasks_by_status
+                .running
+                .iter()
+                .any(|t| t.name() == task);
+            let in_finished = self
+                .tasks_by_status
+                .finished
+                .iter()
+                .any(|t| t.name() == task);
+            if !in_running && !in_finished {
+                return Err(Error::TaskNotFound { name: task.into() });
+            }
+            if in_finished
+                && let Some(idx) = self
+                    .tasks_by_status
+                    .finished
+                    .iter()
+                    .position(|t| t.name() == task)
+            {
+                let finished = self.tasks_by_status.finished.remove(idx);
+                self.tasks_by_status
+                    .running
+                    .push(finished.restart().start());
+            }
         }
         self.tasks
             .get_mut(task)
@@ -502,14 +540,12 @@ impl<W> App<W> {
         debug!("updating task list: {tasks:?}");
         let highlighted_task = self.active_task()?.to_owned();
         // Make sure all tasks have a terminal output
+        let pane_cols = self
+            .size
+            .pane_cols_with_sidebar(self.preferences.is_task_list_visible());
         for task in &tasks {
             self.tasks.entry(task.clone()).or_insert_with(|| {
-                TerminalOutput::new(
-                    self.size.pane_rows(),
-                    self.size.pane_cols(),
-                    None,
-                    self.scrollback_len,
-                )
+                TerminalOutput::new(self.size.pane_rows(), pane_cols, None, self.scrollback_len)
             });
         }
         // Trim the terminal output to only tasks that exist in new list
@@ -547,14 +583,12 @@ impl<W> App<W> {
         debug!("tasks to reset: {tasks:?}");
         let highlighted_task = self.active_task()?.to_owned();
         // Make sure all tasks have a terminal output
+        let pane_cols = self
+            .size
+            .pane_cols_with_sidebar(self.preferences.is_task_list_visible());
         for task in &tasks {
             self.tasks.entry(task.clone()).or_insert_with(|| {
-                TerminalOutput::new(
-                    self.size.pane_rows(),
-                    self.size.pane_cols(),
-                    None,
-                    self.scrollback_len,
-                )
+                TerminalOutput::new(self.size.pane_rows(), pane_cols, None, self.scrollback_len)
             });
         }
 
@@ -606,7 +640,12 @@ impl<W> App<W> {
     }
 
     pub fn handle_mouse(&mut self, mut event: crossterm::event::MouseEvent) -> Result<(), Error> {
-        let table_width = self.size.task_list_width();
+        // Only offset by table width if the sidebar is visible
+        let table_width = if self.preferences.is_task_list_visible() {
+            self.size.task_list_width()
+        } else {
+            0
+        };
         debug!("original mouse event: {event:?}, table_width: {table_width}");
         // Only handle mouse event if it happens inside of pane
         // We give a 1 cell buffer to make it easier to select the first column of a row
@@ -663,7 +702,9 @@ impl<W> App<W> {
     pub fn resize(&mut self, rows: u16, cols: u16) {
         self.size.resize(rows, cols);
         let pane_rows = self.size.pane_rows();
-        let pane_cols = self.size.pane_cols();
+        let pane_cols = self
+            .size
+            .pane_cols_with_sidebar(self.preferences.is_task_list_visible());
         self.tasks.values_mut().for_each(|term| {
             term.resize(pane_rows, pane_cols);
         })
@@ -742,44 +783,89 @@ pub async fn run_app(
     repo_root: &AbsoluteSystemPathBuf,
     scrollback_len: u64,
 ) -> Result<(), Error> {
-    let mut terminal = startup(color_config)?;
-    let size = terminal.size()?;
+    // Get terminal size before potentially entering alternate screen
+    let size = crossterm::terminal::size()?;
     let preferences = PreferenceLoader::new(repo_root);
 
     let mut app: App<Box<dyn io::Write + Send>> =
-        App::new(size.height, size.width, tasks, preferences, scrollback_len);
+        App::new(size.1, size.0, tasks, preferences, scrollback_len);
     let (crossterm_tx, crossterm_rx) = mpsc::channel(1024);
     input::start_crossterm_stream(crossterm_tx);
 
-    let (result, callback) =
-        match run_app_inner(&mut terminal, &mut app, receiver, crossterm_rx).await {
-            Ok(callback) => (Ok(()), callback),
-            Err(err) => {
-                debug!("tui shutting down: {err}");
-                (Err(err), None)
-            }
-        };
+    // Terminal is lazily initialized - only started when a non-cached task runs
+    let mut terminal: Option<Terminal<CrosstermBackend<Stdout>>> = None;
 
-    cleanup(terminal, app, callback)?;
+    let (result, callback) = match run_app_inner(
+        &mut terminal,
+        &mut app,
+        receiver,
+        crossterm_rx,
+        color_config,
+    )
+    .await
+    {
+        Ok(callback) => (Ok(()), callback),
+        Err(err) => {
+            debug!("tui shutting down: {err}");
+            (Err(err), None)
+        }
+    };
+
+    // Only cleanup terminal if we actually started it
+    if let Some(terminal) = terminal {
+        cleanup(terminal, app, callback)?;
+    } else {
+        // Even if TUI never started, still persist task output and flush preferences
+        let tasks_started = app.tasks_by_status.tasks_started();
+        app.persist_tasks(tasks_started)?;
+        app.preferences.flush_to_disk().ok();
+        if let Some(callback) = callback {
+            // Signal completion even if we never started the terminal
+            callback.send(()).ok();
+        }
+    }
 
     result
 }
 
+/// Check if an event indicates we need to start rendering the TUI.
+/// We start rendering when we receive a cache miss (meaning a task will
+/// actually run) or when tasks are updated (which only happens in watch mode,
+/// where the TUI must always render so the user can see status and interact).
+fn should_start_terminal(event: &Event) -> bool {
+    matches!(
+        event,
+        Event::Status {
+            result: CacheResult::Miss,
+            ..
+        } | Event::UpdateTasks { .. }
+    )
+}
+
 // Break out inner loop so we can use `?` without worrying about cleaning up the
 // terminal.
-async fn run_app_inner<B: Backend + std::io::Write>(
-    terminal: &mut Terminal<B>,
+async fn run_app_inner(
+    terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>,
     app: &mut App<Box<dyn io::Write + Send>>,
     mut receiver: AppReceiver,
     mut crossterm_rx: mpsc::Receiver<crossterm::event::Event>,
+    color_config: ColorConfig,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
-    // Render initial state to paint the screen
-    terminal.draw(|f| view(app, f))?;
     let mut last_render = Instant::now();
     let mut resize_debouncer = Debouncer::new(RESIZE_DEBOUNCE_DELAY);
     let mut callback = None;
     let mut needs_rerender = true;
+
     while let Some(event) = poll(app.input_options()?, &mut receiver, &mut crossterm_rx).await {
+        // Check if we need to start the terminal (on first cache miss)
+        if terminal.is_none() && should_start_terminal(&event) {
+            let term = startup(color_config)?;
+            *terminal = Some(term);
+            // Render initial state to paint the screen
+            terminal.as_mut().unwrap().draw(|f| view(app, f))?;
+            last_render = Instant::now();
+        }
+
         // If we only receive ticks, then there's been no state change so no update
         // needed
         if !matches!(event, Event::Tick) {
@@ -797,7 +883,9 @@ async fn run_app_inner<B: Backend + std::io::Write>(
         }
         if let Some(resize) = resize_event.take().or_else(|| resize_debouncer.query()) {
             // If we got a resize event, make sure to update ratatui backend.
-            terminal.autoresize()?;
+            if let Some(term) = terminal.as_mut() {
+                term.autoresize()?;
+            }
             update(app, resize)?;
         }
         if let Some(event) = event {
@@ -805,8 +893,12 @@ async fn run_app_inner<B: Backend + std::io::Write>(
             if app.done {
                 break;
             }
-            if FRAMERATE <= last_render.elapsed() && needs_rerender {
-                terminal.draw(|f| view(app, f))?;
+            // Only render if the terminal has been started
+            if let Some(term) = terminal.as_mut()
+                && FRAMERATE <= last_render.elapsed()
+                && needs_rerender
+            {
+                term.draw(|f| view(app, f))?;
                 last_render = Instant::now();
                 needs_rerender = false;
             }
@@ -866,11 +958,18 @@ fn startup(color_config: ColorConfig) -> io::Result<Terminal<CrosstermBackend<St
     let mut stdout = io::stdout();
     // Ensure all pending writes are flushed before we switch to alternative screen
     stdout.flush()?;
+
     crossterm::execute!(
         stdout,
         crossterm::event::EnableMouseCapture,
         crossterm::terminal::EnterAlternateScreen
     )?;
+    // Track that mouse capture was enabled (important for Windows cleanup)
+    super::panic_handler::set_mouse_capture_enabled();
+
+    // Mark TUI as active so panic handler knows to restore terminal state
+    super::panic_handler::set_tui_active();
+
     let backend = CrosstermBackend::new(stdout);
 
     let mut terminal = Terminal::with_options(
@@ -886,22 +985,58 @@ fn startup(color_config: ColorConfig) -> io::Result<Terminal<CrosstermBackend<St
 
 /// Restores terminal to expected state
 #[tracing::instrument(skip_all)]
-fn cleanup<B: Backend + io::Write>(
+fn cleanup<B: Backend<Error = io::Error> + io::Write>(
     mut terminal: Terminal<B>,
     mut app: App<Box<dyn io::Write + Send>>,
     callback: Option<oneshot::Sender<()>>,
 ) -> io::Result<()> {
     terminal.clear()?;
-    crossterm::execute!(
-        terminal.backend_mut(),
-        crossterm::event::DisableMouseCapture,
-        crossterm::terminal::LeaveAlternateScreen,
-    )?;
+
+    // On Windows, we must only call DisableMouseCapture if EnableMouseCapture
+    // was called first, because crossterm requires the original console mode
+    // to be saved before it can be restored. Calling DisableMouseCapture without
+    // first calling EnableMouseCapture causes "Initial console modes not set"
+    // error.
+    //
+    // On Unix, we can safely always disable mouse capture as it uses escape
+    // sequences that are idempotent.
+    #[cfg(windows)]
+    {
+        if super::panic_handler::is_mouse_capture_enabled() {
+            crossterm::execute!(
+                terminal.backend_mut(),
+                crossterm::event::DisableMouseCapture,
+                crossterm::terminal::LeaveAlternateScreen,
+            )?;
+            super::panic_handler::set_mouse_capture_disabled();
+        } else {
+            crossterm::execute!(
+                terminal.backend_mut(),
+                crossterm::terminal::LeaveAlternateScreen,
+            )?;
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        // On Unix, always disable mouse capture - it's safe and handles child
+        // processes that may have enabled mouse capture (especially in VSCode).
+        crossterm::execute!(
+            terminal.backend_mut(),
+            crossterm::event::DisableMouseCapture,
+            crossterm::terminal::LeaveAlternateScreen,
+        )?;
+        super::panic_handler::set_mouse_capture_disabled();
+    }
+
     let tasks_started = app.tasks_by_status.tasks_started();
     app.persist_tasks(tasks_started)?;
     app.preferences.flush_to_disk().ok();
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
+
+    // Mark TUI as inactive - cleanup is complete
+    super::panic_handler::set_tui_inactive();
+
     // We can close the channel now that terminal is back restored to a normal state
     drop(callback);
     Ok(())
@@ -912,6 +1047,9 @@ fn update(
     event: Event,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
     match event {
+        Event::LogEvent(log_event) => {
+            app.log_events.push(log_event);
+        }
         Event::StartTask { task, output_logs } => {
             app.start_task(&task, output_logs)?;
         }
@@ -1000,6 +1138,9 @@ fn update(
         Event::ToggleHelpPopup => {
             app.showing_help_popup = !app.showing_help_popup;
         }
+        Event::ToggleLogPanel => {
+            app.showing_log_panel = !app.showing_log_panel;
+        }
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
         }
@@ -1044,7 +1185,9 @@ fn update(
             callback
                 .send(PaneSize {
                     rows: app.size.pane_rows(),
-                    cols: app.size.pane_cols(),
+                    cols: app
+                        .size
+                        .pane_cols_with_sidebar(app.preferences.is_task_list_visible()),
                 })
                 .ok();
         }
@@ -1057,9 +1200,10 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
     let horizontal = if app.preferences.is_task_list_visible() {
         Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)])
     } else {
-        Layout::horizontal([Constraint::Max(0), Constraint::Length(cols)])
+        // When sidebar is hidden, let the pane fill the entire width
+        Layout::horizontal([Constraint::Max(0), Constraint::Fill(1)])
     };
-    let [table, pane] = horizontal.areas(f.size());
+    let [table, pane] = horizontal.areas(f.area());
 
     let active_task = app.active_task().unwrap().to_string();
 
@@ -1079,8 +1223,12 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
     if app.showing_help_popup {
         let area = popup_area(*f.buffer_mut().area());
         let area = area.intersection(*f.buffer_mut().area());
-        f.render_widget(Clear, area); // Clears background underneath popup
+        f.render_widget(Clear, area);
         f.render_widget(popup(area), area);
+    }
+
+    if app.showing_log_panel {
+        super::log_panel::render_log_panel(f, &app.log_events);
     }
 }
 
@@ -2069,6 +2217,383 @@ mod test {
             app.preferences.is_task_list_visible(),
             "task list should be visible after entering search"
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_should_start_terminal_on_cache_miss() {
+        // Cache miss should trigger terminal start
+        let miss_event = Event::Status {
+            task: "task-a".to_string(),
+            status: "building".to_string(),
+            // This includes cache bypasses via `--force`
+            result: CacheResult::Miss,
+        };
+        assert!(
+            super::should_start_terminal(&miss_event),
+            "terminal should start on cache miss"
+        );
+    }
+
+    #[test]
+    fn test_should_not_start_terminal_on_cache_hit() {
+        // Cache hit should NOT trigger terminal start
+        let hit_event = Event::Status {
+            task: "task-a".to_string(),
+            status: "cached".to_string(),
+            result: CacheResult::Hit,
+        };
+        assert!(
+            !super::should_start_terminal(&hit_event),
+            "terminal should NOT start on cache hit"
+        );
+    }
+
+    #[test]
+    fn test_should_start_terminal_on_update_tasks() {
+        // UpdateTasks should trigger terminal start (this event is only sent
+        // in watch mode, where the TUI must always render)
+        let update_event = Event::UpdateTasks {
+            tasks: vec!["task-a".to_string()],
+        };
+        assert!(
+            super::should_start_terminal(&update_event),
+            "terminal should start on UpdateTasks event (watch mode)"
+        );
+    }
+
+    #[test]
+    fn test_should_not_start_terminal_on_other_events() {
+        // Other events should NOT trigger terminal start
+        let start_event = Event::StartTask {
+            task: "task-a".to_string(),
+            output_logs: OutputLogs::Full,
+        };
+        assert!(
+            !super::should_start_terminal(&start_event),
+            "terminal should NOT start on StartTask event"
+        );
+
+        let end_event = Event::EndTask {
+            task: "task-a".to_string(),
+            result: TaskResult::Success,
+        };
+        assert!(
+            !super::should_start_terminal(&end_event),
+            "terminal should NOT start on EndTask event"
+        );
+
+        let tick_event = Event::Tick;
+        assert!(
+            !super::should_start_terminal(&tick_event),
+            "terminal should NOT start on Tick event"
+        );
+    }
+
+    #[test]
+    fn test_persist_tasks_called_on_cache_hit_only() -> Result<(), Error> {
+        // This test verifies that persist_tasks works correctly for cached tasks.
+        // When all tasks are cache hits, the TUI terminal is never started,
+        // but persist_tasks should still output the task logs.
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Simulate a full cache hit scenario:
+        // 1. Set status as cache hit (this doesn't start the task in running state)
+        app.set_status("a".to_string(), "cached".to_string(), CacheResult::Hit)?;
+        app.set_status("b".to_string(), "cached".to_string(), CacheResult::Hit)?;
+
+        // 2. Start and finish tasks with CacheHit result
+        app.start_task("a", OutputLogs::Full)?;
+        app.start_task("b", OutputLogs::Full)?;
+        app.finish_task("a", TaskResult::CacheHit)?;
+        app.finish_task("b", TaskResult::CacheHit)?;
+
+        // 3. Get the list of started tasks - this should include both tasks
+        let tasks_started = app.tasks_by_status.tasks_started();
+        assert_eq!(
+            tasks_started.len(),
+            2,
+            "both tasks should be in started list"
+        );
+        assert!(tasks_started.contains(&"a".to_string()));
+        assert!(tasks_started.contains(&"b".to_string()));
+
+        // 4. Verify persist_tasks doesn't error (it writes to the task's output)
+        app.persist_tasks(tasks_started)?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_mouse_with_hidden_sidebar() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["app-a".to_string(), "app-b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Start a task so we have something to interact with
+        app.start_task("app-a", OutputLogs::Full)?;
+
+        // Get the task list width when visible
+        let table_width_visible = app.size.task_list_width();
+        assert!(
+            table_width_visible > 0,
+            "task list should have non-zero width"
+        );
+
+        // Test with sidebar visible - mouse at column 0 should be ignored
+        // because it's within the task list area
+        let mouse_event_col_0 = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 1,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        // This should not error, and should not crash
+        app.handle_mouse(mouse_event_col_0)?;
+
+        // Test with sidebar visible - mouse at column >= table_width should work
+        let mouse_event_in_pane = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: table_width_visible,
+            row: 1,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        app.handle_mouse(mouse_event_in_pane)?;
+
+        // Now hide the sidebar using the toggle function (which also resizes terminals)
+        app.update_sidebar_toggle();
+        assert!(!app.preferences.is_task_list_visible());
+
+        // Verify terminal outputs were resized to full width
+        let full_pane_cols = app.size.pane_cols_with_sidebar(false);
+        assert!(
+            full_pane_cols > table_width_visible as u16,
+            "pane should be wider when sidebar is hidden"
+        );
+        for (name, task) in app.tasks.iter() {
+            let (_, cols) = task.size();
+            assert_eq!(
+                cols, full_pane_cols,
+                "terminal output {name} should be resized to full width"
+            );
+        }
+
+        // With sidebar hidden, mouse at column 0 should now be processed
+        // (it's in the pane area, not the task list)
+        let mouse_event_col_0_hidden = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 1,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        // This should work without error - previously this would have been
+        // incorrectly ignored because the column check would fail
+        app.handle_mouse(mouse_event_col_0_hidden)?;
+
+        // Test dragging at column 5 with sidebar hidden
+        let mouse_event_drag_hidden = MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 5,
+            row: 2,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        app.handle_mouse(mouse_event_drag_hidden)?;
+
+        // Toggle sidebar back to visible
+        app.update_sidebar_toggle();
+        assert!(app.preferences.is_task_list_visible());
+
+        // Verify terminal outputs were resized back
+        let sidebar_pane_cols = app.size.pane_cols_with_sidebar(true);
+        for (name, task) in app.tasks.iter() {
+            let (_, cols) = task.size();
+            assert_eq!(
+                cols, sidebar_pane_cols,
+                "terminal output {name} should be resized back when sidebar is shown"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_start_task_idempotent_when_already_running() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<bool> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Start task a normally (planned -> running)
+        app.start_task("a", OutputLogs::Full)?;
+        assert_eq!(app.tasks_by_status.running.len(), 1);
+        assert_eq!(app.tasks_by_status.planned.len(), 1);
+
+        // Call start_task again while a is already running. This can happen
+        // when a concurrent watch run sends StartTask for a task that hasn't
+        // been fully stopped yet. Should not error.
+        app.start_task("a", OutputLogs::Full)?;
+        assert_eq!(
+            app.tasks_by_status.running.len(),
+            1,
+            "task should still be in running exactly once"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_start_task_restarts_finished_task() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<bool> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Run task a to completion
+        app.start_task("a", OutputLogs::Full)?;
+        app.finish_task("a", TaskResult::Success)?;
+        assert_eq!(app.tasks_by_status.finished.len(), 1);
+        assert_eq!(app.tasks_by_status.running.len(), 0);
+
+        // Call start_task on the finished task. This happens when a watch
+        // rebuild starts a task that completed in a prior run but wasn't
+        // moved back to planned via restart_tasks. Should move it to running.
+        app.start_task("a", OutputLogs::Full)?;
+        assert_eq!(
+            app.tasks_by_status.running.len(),
+            1,
+            "finished task should move to running"
+        );
+        assert_eq!(
+            app.tasks_by_status.finished.len(),
+            0,
+            "task should no longer be in finished"
+        );
+
+        Ok(())
+    }
+
+    /// Regression test for watch mode hanging when all tasks hit cache.
+    ///
+    /// Before the fix, `should_start_terminal` only matched
+    /// `CacheResult::Miss`. In watch mode the TUI is never stopped between
+    /// runs, so when every task was a cache hit the terminal was never
+    /// initialized and the user saw a blank screen with a cursor (appearing
+    /// to hang). The fix makes `should_start_terminal` also match
+    /// `UpdateTasks` (only sent in watch mode) so the TUI always renders.
+    ///
+    /// This test replays the exact event sequence that watch mode produces when
+    /// all tasks hit cache, verifying:
+    /// 1. `should_start_terminal` fires on the `UpdateTasks` event
+    /// 2. The app correctly processes all subsequent cache-hit events
+    /// 3. The app is NOT marked done (watch mode keeps running)
+    #[test]
+    fn test_watch_mode_all_cache_hits_does_not_hang() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let tasks = vec!["build#app-a".to_string(), "build#app-b".to_string()];
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            tasks.clone(),
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Simulate the watch mode event sequence for an all-cache-hit run.
+        // In watch mode, execute_run sends UpdateTasks before spawning the run.
+        let update_event = Event::UpdateTasks {
+            tasks: tasks.clone(),
+        };
+        assert!(
+            super::should_start_terminal(&update_event),
+            "UpdateTasks must trigger terminal initialization in watch mode"
+        );
+
+        // The run proceeds: each task gets StartTask, Status(Hit), EndTask(CacheHit).
+        for task in &tasks {
+            app.start_task(task, OutputLogs::Full)?;
+            app.set_status(task.clone(), "cached".to_string(), CacheResult::Hit)?;
+            app.finish_task(task, TaskResult::CacheHit)?;
+        }
+
+        // All tasks finished with cache hits
+        assert_eq!(app.tasks_by_status.finished.len(), 2);
+        assert_eq!(app.tasks_by_status.running.len(), 0);
+
+        // In watch mode, the TUI must NOT be marked done after a run completes
+        // (the visitor skips sending Event::Stop when is_watch=true).
+        assert!(
+            !app.done,
+            "app must not be done after a watch run completes — it waits for file changes"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_log_event_reaches_app() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Box<dyn io::Write + Send>> = App::new(
+            100,
+            100,
+            vec!["a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        assert!(app.log_events.is_empty());
+
+        let event = turborepo_log::LogEvent::new(
+            turborepo_log::Level::Warn,
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
+            "something went wrong",
+        );
+        update(&mut app, Event::LogEvent(event))?;
+
+        assert_eq!(app.log_events.len(), 1);
+        assert_eq!(app.log_events[0].message(), "something went wrong");
+        assert_eq!(app.log_events[0].level(), turborepo_log::Level::Warn);
 
         Ok(())
     }

@@ -9,19 +9,24 @@ test-case = { workspace = true }
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 
 [dependencies]
-atty = { workspace = true }
 console = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 libc = "0.2.140"
-nix = "0.26.2"
-portable-pty = "0.8.1"
+nix = { workspace = true }
+portable-pty = "0.9.0"
 tokio = { workspace = true, features = ["full", "time"] }
 tracing.workspace = true
 turbopath = { workspace = true }
+turborepo-task-id = { workspace = true }
 
 [lints]
 workspace = true
 
-[target.'cfg(target_os = "windows")'.dev-dependencies]
-windows-sys = { version = "0.59", features = ["Win32_System_Threading"] }
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_JobObjects",
+  "Win32_System_Threading",
+] }

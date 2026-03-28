@@ -10,8 +10,10 @@ license = "MIT"
 biome_deserialize = { workspace = true }
 biome_diagnostics = { workspace = true }
 miette = { workspace = true }
+schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
+ts-rs = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

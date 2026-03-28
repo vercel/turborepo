@@ -1,29 +1,30 @@
 // utils
-export { getTurboRoot } from "./getTurboRoot";
+export { getTurboRoot, clearTurboRootCache } from "./get-turbo-root";
 export {
   getTurboConfigs,
   getWorkspaceConfigs,
   forEachTaskDef,
-  clearConfigCaches,
-} from "./getTurboConfigs";
-export { searchUp } from "./searchUp";
+  clearConfigCaches
+} from "./get-turbo-configs";
+export { searchUp } from "./search-up";
 export {
   getAvailablePackageManagers,
-  getPackageManagersBinPaths,
+  getPackageManagersBinPaths
 } from "./managers";
-export { isFolderEmpty } from "./isFolderEmpty";
-export { validateDirectory } from "./validateDirectory";
+export { isFolderEmpty } from "./is-folder-empty";
+export { validateDirectory } from "./validate-directory";
 export {
   isUrlOk,
   getRepoInfo,
   hasRepo,
   existsInRepo,
   downloadAndExtractRepo,
-  downloadAndExtractExample,
+  downloadAndExtractExample
 } from "./examples";
-export { isWriteable } from "./isWriteable";
-export { createProject, DownloadError } from "./createProject";
-export { convertCase } from "./convertCase";
+export { isWriteable } from "./is-writeable";
+export { createProject, DownloadError } from "./create-project";
+export { convertCase } from "./convert-case";
+export { createNotifyUpdate } from "./notify-update";
 
 export * as logger from "./logger";
 
@@ -32,6 +33,13 @@ export type { RepoInfo } from "./examples";
 export type {
   TurboConfig,
   TurboConfigs,
-  WorkspaceConfig,
-} from "./getTurboConfigs";
-export * from "./types";
+  WorkspaceConfig
+} from "./get-turbo-configs";
+export type {
+  PackageManager,
+  ExitCode,
+  DependencyList,
+  DependencyGroups,
+  PackageJson,
+  PNPMWorkspaceConfig
+} from "./types";

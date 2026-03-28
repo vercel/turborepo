@@ -27,21 +27,73 @@ stage-release:
 	# Stop if versions are not updated.
 	@test "" != "`git diff -- $(CLI_DIR)/../version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
 
+	# Fail if git tag already exists (this version was already successfully released)
+	@if git ls-remote --tags origin "refs/tags/v$(TURBO_VERSION)" | grep -q .; then \
+		echo "Error: Tag v$(TURBO_VERSION) already exists. This version was already released." && \
+		exit 1; \
+	fi
+
+	# Fail if staging branch already exists (a release is in progress or a previous release failed)
+	@if git ls-remote --exit-code --heads origin "staging-$(TURBO_VERSION)" >/dev/null 2>&1; then \
+		echo "Error: Staging branch staging-$(TURBO_VERSION) already exists." && \
+		echo "" && \
+		echo "This means either:" && \
+		echo "  1. A release is currently in progress (check the Actions tab)" && \
+		echo "  2. A previous release failed and left the staging branch behind" && \
+		echo "" && \
+		echo "If a previous release failed, re-run the workflow with 'clear-staging-branch' enabled." && \
+		exit 1; \
+	fi
+
 	# Prepare the packages.
-	cd $(CLI_DIR)/../packages/turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/create-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/turbo-workspaces && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/turbo-gen && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/eslint-plugin-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/eslint-config-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/turbo-types && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+	cd $(CLI_DIR)/../packages/create-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+	cd $(CLI_DIR)/../packages/turbo-workspaces && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+	cd $(CLI_DIR)/../packages/turbo-gen && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+	cd $(CLI_DIR)/../packages/eslint-plugin-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+	cd $(CLI_DIR)/../packages/eslint-config-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+	cd $(CLI_DIR)/../packages/turbo-types && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+
+	# Update turborepo skill version (in YAML frontmatter metadata block only)
+	node -e "const fs=require('fs'),p='$(CLI_DIR)/../skills/turborepo/SKILL.md',c=fs.readFileSync(p,'utf-8');fs.writeFileSync(p,c.replace(/^(---\n[\s\S]*?metadata:\n\s*version:\s*).+?(\n[\s\S]*?---)/,'\$$1$(TURBO_VERSION)\$$2'))"
+
+	# Update $schema URLs in turborepo skill files to use versioned subdomain
+	node -e "\
+	  const fs=require('fs'),path=require('path');\
+	  const sub='v'+'$(TURBO_VERSION)'.replace(/[\.\+]/g,'-');\
+	  const url='https://'+sub+'.turborepo.dev/schema.json';\
+	  const re=/https:\/\/(?:v[\w-]+\.)?turborepo\.(?:dev|com)\/schema(?:\.v2)?\.json|https:\/\/turbo\.build\/schema(?:\.v2)?\.json/g;\
+	  function walk(dir){for(const e of fs.readdirSync(dir,{withFileTypes:true})){const p=path.join(dir,e.name);if(e.isDirectory())walk(p);else if(e.name.endsWith('.md')){const c=fs.readFileSync(p,'utf-8');if(re.test(c)){re.lastIndex=0;fs.writeFileSync(p,c.replace(re,url))}}}}\
+	  walk('$(CLI_DIR)/../skills/turborepo');\
+	"
 
 	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"
-	git tag "v$(TURBO_VERSION)"
-	git push origin staging-$(TURBO_VERSION) --tags --force
+	HUSKY=0 git push origin staging-$(TURBO_VERSION) --force
+
+.PHONY: create-release-tag
+create-release-tag:
+	@echo "Creating release tag v$(TURBO_VERSION)..."
+	@REMOTE_TAG_SHA=$$(git ls-remote --tags origin "refs/tags/v$(TURBO_VERSION)" | awk '{print $$1}'); \
+	LOCAL_SHA=$$(git rev-parse HEAD); \
+	if [ -n "$$REMOTE_TAG_SHA" ]; then \
+		if [ "$$REMOTE_TAG_SHA" = "$$LOCAL_SHA" ]; then \
+			echo "Tag v$(TURBO_VERSION) already exists on remote at the correct commit. Skipping."; \
+		else \
+			echo "Warning: Tag v$(TURBO_VERSION) exists on remote but points to $$REMOTE_TAG_SHA, expected $$LOCAL_SHA." && \
+			echo "Replacing incorrect tag..." && \
+			git push origin ":refs/tags/v$(TURBO_VERSION)" && \
+			git tag -f "v$(TURBO_VERSION)" && \
+			git push origin "v$(TURBO_VERSION)" && \
+			echo "Release tag v$(TURBO_VERSION) replaced and pushed."; \
+		fi; \
+	else \
+		git tag "v$(TURBO_VERSION)" && \
+		git push origin "v$(TURBO_VERSION)" && \
+		echo "Release tag v$(TURBO_VERSION) created and pushed."; \
+	fi
 
 .PHONY: publish-turbo
 publish-turbo: build
@@ -51,10 +103,8 @@ publish-turbo: build
 	# Include the patch in the log.
 	git format-patch HEAD~1 --stdout | cat
 
-	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
-
 	# Publishes the native npm modules.
-	turbo release-native -- $(SKIP_PUBLISH)
+	turbo release-native --env-mode=loose -- $(SKIP_PUBLISH)
 
 	# Split packing from the publish step so that npm locates the correct .npmrc file.
 	cd $(CLI_DIR)/../packages/turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
@@ -68,8 +118,15 @@ publish-turbo: build
 	cd $(CLI_DIR)/../packages/turbo-types && pnpm pack --pack-destination=$(CLI_DIR)/../
 
 ifneq ($(SKIP_PUBLISH),--skip-publish)
+	# Fail if turbo package version already exists on npm (prevents race condition)
+	@if npm view "turbo@$(TURBO_VERSION)" version >/dev/null 2>&1; then \
+		echo "Error: turbo@$(TURBO_VERSION) already exists on npm. A previous release may still be merging." && \
+		exit 1; \
+	fi
+
 	# Publish the remaining JS packages in order to avoid race conditions.
 	cd $(CLI_DIR)/../
+	npm --version
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz

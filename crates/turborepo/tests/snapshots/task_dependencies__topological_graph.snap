@@ -1,0 +1,13 @@
+---
+source: crates/turborepo/tests/task_dependencies.rs
+expression: stdout.to_string()
+---
+digraph {
+	compound = "true"
+	newrank = "true"
+	subgraph "root" {
+		"[root] //#build" -> "[root] ___ROOT___"
+		"[root] my-app#build" -> "[root] util#build"
+		"[root] util#build" -> "[root] ___ROOT___"
+	}
+}

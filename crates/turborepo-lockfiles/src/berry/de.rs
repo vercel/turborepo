@@ -7,9 +7,9 @@ use super::{BerryPackage, DependencyMeta, LockfileData, Metadata};
 const METADATA_KEY: &str = "__metadata";
 
 /// Union type of yarn.lock metadata entry and package entries.
-/// Only as a workaround for serde_yaml behavior around parsing numbers as
+/// Only as a workaround for serde_yml behavior around parsing numbers as
 /// strings.
-// In the ideal world this would be an enum, but serde_yaml currently has behavior
+// In the ideal world this would be an enum, but serde_yml currently has behavior
 // where using `#[serde(untagged)]` or `#[serde(flatten)]` affects how it handles
 // YAML numbers being parsed as Strings.
 // If these macros are present, then it will refuse to parse 1 or 1.0 as a String
