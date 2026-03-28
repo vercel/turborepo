@@ -142,6 +142,9 @@ impl RepositoryQuery {
                 from_ref,
                 to_ref,
             }) => PackageChangeReason::GitRefNotFound(GitRefNotFound { from_ref, to_ref }),
+            PackageInclusionReason::All(AllPackageChangeReason::ScmError { error }) => {
+                PackageChangeReason::ScmError(ScmError { error })
+            }
             PackageInclusionReason::RootTask { task } => PackageChangeReason::RootTask(RootTask {
                 task_name: task.to_string(),
             }),
@@ -466,6 +469,11 @@ struct GitRefNotFound {
 }
 
 #[derive(SimpleObject)]
+struct ScmError {
+    error: String,
+}
+
+#[derive(SimpleObject)]
 struct IncludedByFilter {
     filters: Vec<String>,
 }
@@ -518,6 +526,7 @@ enum PackageChangeReason {
     RootInternalDepChanged(RootInternalDepChanged),
     NonPackageFileChanged(NonPackageFileChanged),
     GitRefNotFound(GitRefNotFound),
+    ScmError(ScmError),
     IncludedByFilter(IncludedByFilter),
     RootTask(RootTask),
     ConservativeRootLockfileChanged(ConservativeRootLockfileChanged),

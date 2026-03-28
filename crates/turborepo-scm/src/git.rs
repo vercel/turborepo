@@ -311,10 +311,10 @@ impl GitRepo {
          *
          * So environment variable is empty in a regular commit
          */
-        if let Ok(pr) = base_ref_env.github_base_ref {
-            if !pr.is_empty() {
-                return Some(pr);
-            }
+        if let Ok(pr) = base_ref_env.github_base_ref
+            && !pr.is_empty()
+        {
+            return Some(pr);
         }
 
         // we must be in a push event
@@ -414,7 +414,7 @@ impl GitRepo {
         }
 
         let output = self.execute_git_command(&args, pathspec)?;
-        self.add_files_from_stdout(&mut files, turbo_root, output);
+        self.add_files_from_stdout(&mut files, turbo_root, output)?;
 
         // We only care about non-tracked files if we haven't specified both ends up the
         // comparison
@@ -431,11 +431,11 @@ impl GitRepo {
                 ],
                 pathspec,
             )?;
-            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output);
+            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output)?;
             // Include any files that have been staged, but not committed
             let diff_output =
                 self.execute_git_command(&["diff", "--name-only", "--cached", "-z"], pathspec)?;
-            self.add_files_from_stdout(&mut files, turbo_root, diff_output);
+            self.add_files_from_stdout(&mut files, turbo_root, diff_output)?;
         }
 
         Ok(files)
@@ -467,18 +467,18 @@ impl GitRepo {
         files: &mut HashSet<AnchoredSystemPathBuf>,
         turbo_root: &AbsoluteSystemPath,
         stdout: Vec<u8>,
-    ) {
+    ) -> Result<(), Error> {
         let stdout = String::from_utf8_lossy(&stdout);
         for line in stdout.split('\0') {
             if line.is_empty() {
                 continue;
             }
-            let path = RelativeUnixPath::new(line).unwrap();
-            let anchored_to_turbo_root_file_path = self
-                .reanchor_path_from_git_root_to_turbo_root(turbo_root, path)
-                .unwrap();
+            let path = RelativeUnixPath::new(line)?;
+            let anchored_to_turbo_root_file_path =
+                self.reanchor_path_from_git_root_to_turbo_root(turbo_root, path)?;
             files.insert(anchored_to_turbo_root_file_path);
         }
+        Ok(())
     }
 
     fn reanchor_path_from_git_root_to_turbo_root(
@@ -548,10 +548,10 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
     use which::which;
 
-    use super::{previous_content, CIEnv, InvalidRange};
+    use super::{CIEnv, InvalidRange, previous_content};
     use crate::{
-        git::{GitHubCommit, GitHubEvent},
         Error, GitRepo, SCM,
+        git::{GitHubCommit, GitHubEvent},
     };
 
     fn run_git(repo_root: &Path, args: &[&str]) -> String {
@@ -659,23 +659,27 @@ mod tests {
             .output()?;
         assert!(output.status.success());
 
-        assert!(changed_files(
-            tmp_dir.path().to_owned(),
-            tmp_dir.path().to_owned(),
-            Some("HEAD~1"),
-            Some("HEAD"),
-            false,
-        )
-        .is_ok());
+        assert!(
+            changed_files(
+                tmp_dir.path().to_owned(),
+                tmp_dir.path().to_owned(),
+                Some("HEAD~1"),
+                Some("HEAD"),
+                false,
+            )
+            .is_ok()
+        );
 
-        assert!(changed_files(
-            tmp_dir.path().to_owned(),
-            tmp_dir.path().to_owned(),
-            Some("HEAD"),
-            None,
-            true,
-        )
-        .is_ok());
+        assert!(
+            changed_files(
+                tmp_dir.path().to_owned(),
+                tmp_dir.path().to_owned(),
+                Some("HEAD"),
+                None,
+                true,
+            )
+            .is_ok()
+        );
 
         Ok(())
     }

@@ -87,6 +87,9 @@ pub enum AllPackageChangeReason {
         from_ref: Option<String>,
         to_ref: Option<String>,
     },
+    ScmError {
+        error: String,
+    },
 }
 
 pub fn merge_changed_packages<T: Hash + Eq>(

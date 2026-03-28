@@ -109,6 +109,9 @@ pub fn calculate_affected_tasks(
                 format!("root internal dependency changed: {root_internal_dep}")
             }
             AllPackageChangeReason::GitRefNotFound { .. } => "git ref not found".to_string(),
+            AllPackageChangeReason::ScmError { ref error } => {
+                format!("SCM error: {error}")
+            }
         };
 
         return Ok(engine

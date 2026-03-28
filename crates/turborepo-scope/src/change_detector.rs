@@ -3,12 +3,9 @@
 //! This module contains logic for detecting which packages have changed
 //! based on git diffs.
 
-use std::{
-    collections::{HashMap, HashSet},
-    process,
-};
+use std::collections::{HashMap, HashSet};
 
-use tracing::debug;
+use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{
@@ -17,7 +14,7 @@ use turborepo_repository::{
     },
     package_graph::{PackageGraph, PackageName},
 };
-use turborepo_scm::{git::InvalidRange, Error as ScmError, SCM};
+use turborepo_scm::{SCM, git::InvalidRange};
 
 use crate::ResolutionError;
 
@@ -136,21 +133,23 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                     })
                     .collect());
             }
-            Err(ScmError::Path(err, _)) => {
-                eprintln!(
-                    "error: failed to process file paths from SCM: {}.\nThis repository has file \
-                     paths that could not be anchored to the turbo root.\nPlease remove/rename \
-                     the problematic file(s) or fix repository layout and try again.",
-                    err
-                );
-                process::exit(1);
-            }
             Err(err) => {
-                eprintln!(
-                    "error: unexpected SCM error while detecting changed files: {}.",
-                    err
+                warn!(
+                    "SCM error while detecting changed files: {err}. Defaulting to all packages \
+                     changed."
                 );
-                process::exit(1);
+                return Ok(self
+                    .pkg_graph
+                    .packages()
+                    .map(|(name, _)| {
+                        (
+                            name.to_owned(),
+                            PackageInclusionReason::All(AllPackageChangeReason::ScmError {
+                                error: err.to_string(),
+                            }),
+                        )
+                    })
+                    .collect());
             }
         };
 
