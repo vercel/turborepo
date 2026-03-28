@@ -1727,6 +1727,11 @@ expression: query_output
             },
             {
               "kind": "OBJECT",
+              "name": "ScmError",
+              "ofType": null
+            },
+            {
+              "kind": "OBJECT",
               "name": "IncludedByFilter",
               "ofType": null
             },
@@ -2576,6 +2581,33 @@ expression: query_output
           "fields": [
             {
               "name": "taskName",
+              "description": null,
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "String",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "inputFields": null,
+          "interfaces": [],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "OBJECT",
+          "name": "ScmError",
+          "description": null,
+          "fields": [
+            {
+              "name": "error",
               "description": null,
               "args": [],
               "type": {
