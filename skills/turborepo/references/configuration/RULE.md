@@ -73,7 +73,7 @@ When you run `turbo run lint`, Turborepo finds all packages with a `lint` script
 
 ```json
 {
-  "$schema": "https://v2-8-22-canary-5.turborepo.dev/schema.json",
+  "$schema": "https://v2-8-22-canary-6.turborepo.dev/schema.json",
   "globalEnv": ["CI"],
   "globalDependencies": ["tsconfig.json"],
   "tasks": {
@@ -97,7 +97,7 @@ When the `globalConfiguration` future flag is enabled, global options move under
 
 ```json
 {
-  "$schema": "https://v2-8-22-canary-5.turborepo.dev/schema.json",
+  "$schema": "https://v2-8-22-canary-6.turborepo.dev/schema.json",
   "futureFlags": { "globalConfiguration": true },
   "global": {
     "inputs": ["tsconfig.json"],

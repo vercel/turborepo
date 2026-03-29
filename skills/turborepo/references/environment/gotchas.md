@@ -112,7 +112,7 @@ If you use `.env.development` and `.env.production`, both should be in inputs.
 
 ```json
 {
-  "$schema": "https://v2-8-22-canary-5.turborepo.dev/schema.json",
+  "$schema": "https://v2-8-22-canary-6.turborepo.dev/schema.json",
   "globalEnv": ["CI", "NODE_ENV", "VERCEL"],
   "globalPassThroughEnv": ["GITHUB_TOKEN", "VERCEL_URL"],
   "tasks": {
@@ -146,7 +146,7 @@ The same config using the `global` key. The `.env` files move to `global.inputs`
 
 ```json
 {
-  "$schema": "https://v2-8-22-canary-5.turborepo.dev/schema.json",
+  "$schema": "https://v2-8-22-canary-6.turborepo.dev/schema.json",
   "futureFlags": { "globalConfiguration": true },
   "global": {
     "env": ["CI", "NODE_ENV", "VERCEL"],

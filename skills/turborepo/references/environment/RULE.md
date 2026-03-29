@@ -107,7 +107,7 @@ When the `globalConfiguration` future flag is enabled, global environment keys m
 
 ```json
 {
-  "$schema": "https://v2-8-22-canary-5.turborepo.dev/schema.json",
+  "$schema": "https://v2-8-22-canary-6.turborepo.dev/schema.json",
   "globalEnv": ["CI", "NODE_ENV"],
   "globalPassThroughEnv": ["GITHUB_TOKEN", "NPM_TOKEN"],
   "tasks": {
