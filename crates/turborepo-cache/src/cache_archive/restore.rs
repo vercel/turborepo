@@ -1981,4 +1981,491 @@ mod tests {
             Ok(())
         }
     }
+
+    // Cross-platform regression test for #8476. Uses turbopath's
+    // symlink_to_dir which works on both Unix and Windows.
+    #[test]
+    fn test_pre_existing_symlink_replaced_cross_platform() -> Result<()> {
+        let input_dir = tempdir()?;
+        let archive_path = generate_tar(
+            &input_dir,
+            &[
+                TarFile::Directory {
+                    path: AnchoredSystemPathBuf::from_raw("dist").unwrap(),
+                },
+                TarFile::File {
+                    path: AnchoredSystemPathBuf::from_raw("dist/index.js").unwrap(),
+                    body: b"console.log('hello')".to_vec(),
+                },
+            ],
+        )?;
+
+        let output_dir = tempdir()?;
+        let output_dir_path = output_dir.path().to_string_lossy();
+        let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+        let output_src = anchor.join_component("src");
+        output_src.create_dir_all()?;
+        let output_dist = anchor.join_component("dist");
+        output_dist.symlink_to_dir("src")?;
+
+        let mut cache_reader = CacheReader::open(&archive_path)?;
+        cache_reader.restore(anchor, None)?;
+
+        let dist_meta = output_dist.symlink_metadata()?;
+        assert!(
+            !dist_meta.is_symlink(),
+            "dist should be a real directory, not a symlink"
+        );
+        assert!(dist_meta.is_dir());
+
+        let content = fs::read(output_dist.join_component("index.js").as_path())?;
+        assert_eq!(content, b"console.log('hello')");
+
+        assert!(
+            !output_src.join_component("index.js").try_exists()?,
+            "file must not leak through symlink into src/"
+        );
+
+        Ok(())
+    }
+
+    // Regression tests for https://github.com/vercel/turborepo/issues/8476
+    //
+    // When a symlink exists on disk at a path where the tar expects a real
+    // directory, the restore must replace the symlink with a directory so
+    // files land at their literal paths instead of leaking through the
+    // symlink to the wrong location.
+    #[cfg(unix)]
+    mod pre_existing_symlink_tests {
+        use super::*;
+
+        #[test]
+        fn test_pre_existing_symlink_does_not_overwrite_target() -> Result<()> {
+            let input_dir = tempdir()?;
+            let archive_path = generate_tar(
+                &input_dir,
+                &[
+                    TarFile::Directory {
+                        path: AnchoredSystemPathBuf::from_raw("dist").unwrap(),
+                    },
+                    TarFile::File {
+                        path: AnchoredSystemPathBuf::from_raw("dist/index.js").unwrap(),
+                        body: b"console.log('hello')".to_vec(),
+                    },
+                ],
+            )?;
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let output_src = anchor.join_component("src");
+            output_src.create_dir_all()?;
+            let output_dist = anchor.join_component("dist");
+            std::os::unix::fs::symlink("src", output_dist.as_path())?;
+
+            assert!(
+                !output_src.join_component("index.js").try_exists()?,
+                "src is empty before restore"
+            );
+
+            let mut cache_reader = CacheReader::open(&archive_path)?;
+            let (restored, _) = cache_reader.restore(anchor, None)?;
+
+            assert_eq!(
+                restored,
+                into_anchored_system_path_vec(vec!["dist", "dist/index.js"])
+            );
+
+            let dist_meta = output_dist.symlink_metadata()?;
+            assert!(
+                !dist_meta.is_symlink(),
+                "dist should be a real directory, not a symlink"
+            );
+            assert!(dist_meta.is_dir());
+
+            let content = fs::read(output_dist.join_component("index.js").as_path())?;
+            assert_eq!(content, b"console.log('hello')");
+
+            assert!(
+                !output_src.join_component("index.js").try_exists()?,
+                "file must not leak through symlink into src/"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_pre_existing_nested_symlink_replaced() -> Result<()> {
+            let input_dir = tempdir()?;
+            let archive_path = generate_tar(
+                &input_dir,
+                &[
+                    TarFile::Directory {
+                        path: AnchoredSystemPathBuf::from_raw("dist/").unwrap(),
+                    },
+                    TarFile::Directory {
+                        path: AnchoredSystemPathBuf::from_raw("dist/runtime/").unwrap(),
+                    },
+                    TarFile::File {
+                        path: AnchoredSystemPathBuf::from_raw("dist/runtime/plugin.js").unwrap(),
+                        body: b"plugin".to_vec(),
+                    },
+                ],
+            )?;
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let src_runtime = anchor.join_component("src").join_component("runtime");
+            src_runtime.create_dir_all()?;
+            let dist = anchor.join_component("dist");
+            dist.create_dir_all()?;
+            std::os::unix::fs::symlink("../src/runtime", dist.join_component("runtime").as_path())?;
+
+            let mut cache_reader = CacheReader::open(&archive_path)?;
+            let (restored, _) = cache_reader.restore(anchor, None)?;
+
+            assert_eq!(
+                restored,
+                into_anchored_system_path_vec(vec![
+                    "dist",
+                    "dist/runtime",
+                    "dist/runtime/plugin.js"
+                ])
+            );
+
+            let runtime_meta = dist.join_component("runtime").symlink_metadata()?;
+            assert!(
+                !runtime_meta.is_symlink(),
+                "dist/runtime should be a real directory"
+            );
+            assert!(runtime_meta.is_dir());
+
+            let content = fs::read(
+                dist.join_component("runtime")
+                    .join_component("plugin.js")
+                    .as_path(),
+            )?;
+            assert_eq!(content, b"plugin");
+
+            assert!(
+                !src_runtime
+                    .join_component("plugin.js")
+                    .try_exists()
+                    .unwrap_or(false),
+                "file must not leak through symlink into src/runtime/"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_pre_existing_absolute_symlink_replaced() -> Result<()> {
+            let input_dir = tempdir()?;
+            let archive_path = generate_tar(
+                &input_dir,
+                &[
+                    TarFile::Directory {
+                        path: AnchoredSystemPathBuf::from_raw("dist/").unwrap(),
+                    },
+                    TarFile::Directory {
+                        path: AnchoredSystemPathBuf::from_raw("dist/runtime/").unwrap(),
+                    },
+                    TarFile::File {
+                        path: AnchoredSystemPathBuf::from_raw("dist/runtime/plugin.js").unwrap(),
+                        body: b"plugin".to_vec(),
+                    },
+                ],
+            )?;
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let src_runtime = anchor.join_component("src").join_component("runtime");
+            src_runtime.create_dir_all()?;
+            let dist = anchor.join_component("dist");
+            dist.create_dir_all()?;
+            // Use an absolute symlink target (matches the actual bug report)
+            std::os::unix::fs::symlink(
+                src_runtime.as_path(),
+                dist.join_component("runtime").as_path(),
+            )?;
+
+            let mut cache_reader = CacheReader::open(&archive_path)?;
+            cache_reader.restore(anchor, None)?;
+
+            let runtime_meta = dist.join_component("runtime").symlink_metadata()?;
+            assert!(
+                !runtime_meta.is_symlink(),
+                "absolute symlink should be replaced"
+            );
+
+            let content = fs::read(
+                dist.join_component("runtime")
+                    .join_component("plugin.js")
+                    .as_path(),
+            )?;
+            assert_eq!(content, b"plugin");
+
+            assert!(
+                !src_runtime
+                    .join_component("plugin.js")
+                    .try_exists()
+                    .unwrap_or(false),
+                "file must not leak through absolute symlink"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_pre_existing_intermediate_symlink_replaced() -> Result<()> {
+            let input_dir = tempdir()?;
+            // No explicit directory entries — only the file. This exercises
+            // the safe_mkdir_file -> safe_mkdir_all path.
+            let archive_path = generate_tar(
+                &input_dir,
+                &[TarFile::File {
+                    path: AnchoredSystemPathBuf::from_raw("a/b/c/file.txt").unwrap(),
+                    body: b"content".to_vec(),
+                }],
+            )?;
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let real_b = anchor.join_component("real_b");
+            real_b.create_dir_all()?;
+            let a = anchor.join_component("a");
+            a.create_dir_all()?;
+            // Intermediate component "b" is a symlink
+            std::os::unix::fs::symlink("../real_b", a.join_component("b").as_path())?;
+
+            let mut cache_reader = CacheReader::open(&archive_path)?;
+            cache_reader.restore(anchor, None)?;
+
+            let b_meta = a.join_component("b").symlink_metadata()?;
+            assert!(
+                !b_meta.is_symlink(),
+                "intermediate symlink a/b should be replaced"
+            );
+            assert!(b_meta.is_dir());
+
+            let content = fs::read(
+                a.join_component("b")
+                    .join_component("c")
+                    .join_component("file.txt")
+                    .as_path(),
+            )?;
+            assert_eq!(content, b"content");
+
+            assert!(
+                !real_b
+                    .join_component("c")
+                    .join_component("file.txt")
+                    .try_exists()
+                    .unwrap_or(false),
+                "file must not leak through intermediate symlink"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_sequential_restores_symlink_then_directory() -> Result<()> {
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            // The symlink target must exist for the first restore
+            let src_runtime = anchor.join_component("src").join_component("runtime");
+            src_runtime.create_dir_all()?;
+
+            // First tar: simulates dev:prepare creating a symlink
+            let tar1_dir = tempdir()?;
+            let tar1_path = generate_tar(
+                &tar1_dir,
+                &[
+                    TarFile::Directory {
+                        path: AnchoredSystemPathBuf::from_raw("dist/").unwrap(),
+                    },
+                    TarFile::Symlink {
+                        link_path: AnchoredSystemPathBuf::from_raw("dist/runtime").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("../src/runtime").unwrap(),
+                    },
+                ],
+            )?;
+
+            let mut reader1 = CacheReader::open(&tar1_path)?;
+            reader1.restore(anchor, None)?;
+
+            let runtime_after_first = anchor
+                .join_component("dist")
+                .join_component("runtime")
+                .symlink_metadata()?;
+            assert!(
+                runtime_after_first.is_symlink(),
+                "dist/runtime should be a symlink after first restore"
+            );
+
+            // Second tar: simulates build overriding with real files
+            let tar2_dir = tempdir()?;
+            let tar2_path = generate_tar(
+                &tar2_dir,
+                &[
+                    TarFile::Directory {
+                        path: AnchoredSystemPathBuf::from_raw("dist/").unwrap(),
+                    },
+                    TarFile::Directory {
+                        path: AnchoredSystemPathBuf::from_raw("dist/runtime/").unwrap(),
+                    },
+                    TarFile::File {
+                        path: AnchoredSystemPathBuf::from_raw("dist/runtime/plugin.js").unwrap(),
+                        body: b"built output".to_vec(),
+                    },
+                ],
+            )?;
+
+            let mut reader2 = CacheReader::open(&tar2_path)?;
+            reader2.restore(anchor, None)?;
+
+            let runtime_after_second = anchor
+                .join_component("dist")
+                .join_component("runtime")
+                .symlink_metadata()?;
+            assert!(
+                !runtime_after_second.is_symlink(),
+                "dist/runtime should be a real directory after second restore"
+            );
+            assert!(runtime_after_second.is_dir());
+
+            let content = fs::read(
+                anchor
+                    .join_component("dist")
+                    .join_component("runtime")
+                    .join_component("plugin.js")
+                    .as_path(),
+            )?;
+            assert_eq!(content, b"built output");
+
+            assert!(
+                !src_runtime
+                    .join_component("plugin.js")
+                    .try_exists()
+                    .unwrap_or(false),
+                "file must not leak through symlink from first restore"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_pre_existing_symlink_outside_anchor_does_not_escape() -> Result<()> {
+            let input_dir = tempdir()?;
+            let archive_path = generate_tar(
+                &input_dir,
+                &[
+                    TarFile::Directory {
+                        path: AnchoredSystemPathBuf::from_raw("dist").unwrap(),
+                    },
+                    TarFile::Directory {
+                        path: AnchoredSystemPathBuf::from_raw("dist/sub").unwrap(),
+                    },
+                    TarFile::File {
+                        path: AnchoredSystemPathBuf::from_raw("dist/sub/file.txt").unwrap(),
+                        body: b"safe content".to_vec(),
+                    },
+                ],
+            )?;
+
+            let outside_dir = tempdir()?;
+            let outside_dir_path = outside_dir.path().to_string_lossy();
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            // Pre-existing symlink pointing OUTSIDE the anchor
+            std::os::unix::fs::symlink(
+                &*outside_dir_path,
+                anchor.join_component("dist").as_path(),
+            )?;
+
+            let mut cache_reader = CacheReader::open(&archive_path)?;
+            cache_reader.restore(anchor, None)?;
+
+            let dist_meta = anchor.join_component("dist").symlink_metadata()?;
+            assert!(
+                !dist_meta.is_symlink(),
+                "dist should be a real directory, not a symlink"
+            );
+            assert!(dist_meta.is_dir());
+
+            let content = fs::read(
+                anchor
+                    .join_component("dist")
+                    .join_component("sub")
+                    .join_component("file.txt")
+                    .as_path(),
+            )?;
+            assert_eq!(content, b"safe content");
+
+            assert!(
+                !outside_dir.path().join("sub").exists(),
+                "files must not leak outside the anchor"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_tar_symlink_not_replaced_by_same_restore() -> Result<()> {
+            let input_dir = tempdir()?;
+            let archive_path = generate_tar(
+                &input_dir,
+                &[
+                    TarFile::Directory {
+                        path: AnchoredSystemPathBuf::from_raw("target/").unwrap(),
+                    },
+                    TarFile::Symlink {
+                        link_path: AnchoredSystemPathBuf::from_raw("link").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("target").unwrap(),
+                    },
+                ],
+            )?;
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            // Pre-existing symlink at the same path (should be clobbered by
+            // the tar's own symlink, not converted to a directory)
+            let target = anchor.join_component("target");
+            target.create_dir_all()?;
+            let link = anchor.join_component("link");
+            std::os::unix::fs::symlink("target", link.as_path())?;
+
+            let mut cache_reader = CacheReader::open(&archive_path)?;
+            cache_reader.restore(anchor, None)?;
+
+            let link_meta = link.symlink_metadata()?;
+            assert!(
+                link_meta.is_symlink(),
+                "symlink from the tar itself should be preserved"
+            );
+            let actual_target = fs::read_link(link.as_path())?;
+            assert_eq!(
+                actual_target.to_str().unwrap(),
+                "target",
+                "symlink target should match tar entry"
+            );
+
+            Ok(())
+        }
+    }
 }
