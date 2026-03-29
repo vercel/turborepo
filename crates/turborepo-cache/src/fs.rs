@@ -100,9 +100,11 @@ impl FSCache {
             .cache_directory
             .join_component(&format!("{hash}-manifest.json"));
 
+        let previous_manifest = crate::cache_archive::RestoreManifest::read(&manifest_path);
+
         // Fast path: if a manifest exists and ALL files on disk still match,
         // skip opening/decompressing the tar entirely.
-        if let Some(manifest) = crate::cache_archive::RestoreManifest::read(&manifest_path)
+        if let Some(ref manifest) = previous_manifest
             && let Some(file_list) = manifest.validate_all(anchor)
         {
             let meta = CacheMetadata::read(
@@ -122,7 +124,9 @@ impl FSCache {
             )));
         }
 
-        // Slow path: decompress and extract the archive.
+        // Slow path: decompress and extract the archive. Pass any existing
+        // manifest so that individual files still matching on disk can be
+        // skipped, avoiding unnecessary writes and filesystem notifications.
         let mut cache_reader = match CacheReader::open(&cache_path) {
             Ok(reader) => reader,
             Err(CacheError::IO(ref e, _)) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -132,7 +136,8 @@ impl FSCache {
             Err(e) => return Err(e),
         };
 
-        let (restored_files, new_manifest) = cache_reader.restore(anchor, None)?;
+        let (restored_files, new_manifest) =
+            cache_reader.restore(anchor, previous_manifest.as_ref())?;
 
         let manifest_path_owned = manifest_path.to_owned();
         std::thread::spawn(move || {
@@ -719,5 +724,62 @@ mod test {
         assert_eq!(deserialized.dirty_hash, Some("cafebabe".to_string()));
         assert_eq!(deserialized.hash, "abc");
         assert_eq!(deserialized.duration, 99);
+    }
+
+    /// When the manifest fast path fails because one file changed, the slow
+    /// path should still skip writing files that haven't changed. This
+    /// prevents unnecessary filesystem notifications (inotify/fsevents) for
+    /// unchanged outputs. See https://github.com/vercel/turborepo/issues/10875
+    #[tokio::test]
+    async fn test_slow_path_skips_unchanged_files() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+
+        let stable_file = repo_root_path.join_component("stable.txt");
+        stable_file.create_with_contents("unchanged content")?;
+
+        let changing_file = repo_root_path.join_component("changing.txt");
+        changing_file.create_with_contents("original")?;
+
+        let files = vec![
+            AnchoredSystemPathBuf::from_raw("stable.txt")?,
+            AnchoredSystemPathBuf::from_raw("changing.txt")?,
+        ];
+        let hash = "partial_change_test";
+
+        let cache = FSCache::new(
+            Utf8Path::new("cache"),
+            repo_root_path,
+            None,
+            LazyScmState::resolved(None),
+        )?;
+        cache.put(repo_root_path, hash, &files, 50)?;
+
+        let stable_mtime_before = stable_file.symlink_metadata()?.modified()?;
+
+        // Ensure a measurable mtime gap so the overwrite (if any) is detectable.
+        std::thread::sleep(Duration::from_millis(50));
+
+        // Modify the changing file so the manifest fast-path fails.
+        changing_file.create_with_contents("modified")?;
+
+        // Fetch should hit the slow path (manifest validation fails because
+        // changing.txt has a different mtime) but pass the manifest through
+        // so stable.txt is skipped.
+        let result = cache.fetch(repo_root_path, hash)?;
+        assert!(result.is_some(), "Cache should still hit");
+
+        // stable.txt should NOT have been rewritten — its mtime must be
+        // identical to what it was before the fetch.
+        let stable_mtime_after = stable_file.symlink_metadata()?.modified()?;
+        assert_eq!(
+            stable_mtime_before, stable_mtime_after,
+            "Unchanged file should not be rewritten during slow-path restore"
+        );
+
+        // changing.txt should be restored to its original cached content.
+        assert_eq!(changing_file.read_to_string()?, "original");
+
+        Ok(())
     }
 }

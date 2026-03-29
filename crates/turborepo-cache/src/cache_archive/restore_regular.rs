@@ -5,12 +5,14 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 
 use crate::{CacheError, cache_archive::restore_directory::CachedDirTree};
 
+/// Returns `(path, true)` when the file was skipped (matched manifest),
+/// or `(path, false)` when it was written to disk.
 pub fn restore_regular(
     dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     entry: &mut Entry<impl Read>,
     manifest: Option<&super::restore_manifest::RestoreManifest>,
-) -> Result<AnchoredSystemPathBuf, CacheError> {
+) -> Result<(AnchoredSystemPathBuf, bool), CacheError> {
     let processed_name = AnchoredSystemPathBuf::from_system_path(&entry.path()?)?;
     let resolved_path = anchor.resolve(&processed_name);
 
@@ -20,7 +22,7 @@ pub fn restore_regular(
         && manifest.file_matches(processed_name.as_str(), &resolved_path)
     {
         io::copy(entry, &mut io::sink())?;
-        return Ok(processed_name);
+        return Ok((processed_name, true));
     }
 
     dir_cache.safe_mkdir_file(anchor, &processed_name)?;
@@ -38,7 +40,7 @@ pub fn restore_regular(
     let mut file = open_options.open(resolved_path.as_path())?;
     io::copy(entry, &mut file)?;
 
-    Ok(processed_name)
+    Ok((processed_name, false))
 }
 
 impl CachedDirTree {
