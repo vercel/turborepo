@@ -102,11 +102,20 @@ impl<'a> CacheReader<'a> {
                     symlinks.push(entry);
                 }
                 Err(e) => return Err(e),
-                Ok(restored_path) => {
+                Ok((restored_path, skipped)) => {
                     if entry_type == tar::EntryType::Regular {
-                        let resolved = anchor.resolve(&restored_path);
-                        let _ =
-                            new_manifest.record_file(restored_path.as_str().to_owned(), &resolved);
+                        let key = restored_path.as_str().to_owned();
+                        if skipped {
+                            if let Some(existing) =
+                                previous_manifest.and_then(|m| m.files.get(&key))
+                            {
+                                new_manifest.order.push(key.clone());
+                                new_manifest.files.insert(key, *existing);
+                            }
+                        } else {
+                            let resolved = anchor.resolve(&restored_path);
+                            let _ = new_manifest.record_file(key, &resolved);
+                        }
                     }
                     restored.push(restored_path);
                 }
@@ -167,18 +176,22 @@ impl<'a> CacheReader<'a> {
     }
 }
 
+/// Returns `(path, skipped)` where `skipped` is true only for regular
+/// files that matched the manifest and were not rewritten.
 fn restore_entry<T: Read>(
     dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     entry: &mut Entry<T>,
     manifest: Option<&RestoreManifest>,
-) -> Result<AnchoredSystemPathBuf, CacheError> {
+) -> Result<(AnchoredSystemPathBuf, bool), CacheError> {
     let header = entry.header();
 
     match header.entry_type() {
-        tar::EntryType::Directory => restore_directory(dir_cache, anchor, entry),
+        tar::EntryType::Directory => {
+            restore_directory(dir_cache, anchor, entry).map(|p| (p, false))
+        }
         tar::EntryType::Regular => restore_regular(dir_cache, anchor, entry, manifest),
-        tar::EntryType::Symlink => restore_symlink(dir_cache, anchor, entry),
+        tar::EntryType::Symlink => restore_symlink(dir_cache, anchor, entry).map(|p| (p, false)),
         ty => Err(CacheError::RestoreUnsupportedFileType(
             ty,
             Backtrace::capture(),
