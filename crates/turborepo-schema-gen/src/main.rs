@@ -640,6 +640,28 @@ fn generate_root_schema_interface() -> String {
   cacheDir?: RelativeUnixPath;
 
   /**
+   * Maximum age of local cache entries before automatic eviction.
+   *
+   * Accepts a human-readable duration string (e.g. `"7d"`, `"24h"`, `"2w"`).
+   * Set to `"0"` to disable eviction (the default).
+   * Entries older than this value are removed at the start of each run.
+   *
+   * @defaultValue `"0"`
+   */
+  cacheMaxAge?: string;
+
+  /**
+   * Maximum total size of the local filesystem cache.
+   *
+   * Accepts a human-readable size string (e.g. `"10GB"`, `"500MB"`).
+   * When exceeded, the oldest entries are evicted until the cache is
+   * under the limit. Set to `"0"` to disable (the default).
+   *
+   * @defaultValue `"0"`
+   */
+  cacheMaxSize?: string;
+
+  /**
    * Deprecated: The daemon is no longer used for `turbo run` and this option will be removed in version 3.0.
    *
    * Documentation: https://turborepo.dev/docs/reference/configuration#daemon
@@ -848,6 +870,28 @@ fn generate_global_config_interface() -> String {
    * @defaultValue `".turbo/cache"`
    */
   cacheDir?: RelativeUnixPath;
+
+  /**
+   * Maximum age of local cache entries before automatic eviction.
+   *
+   * Accepts a human-readable duration string (e.g. `"7d"`, `"24h"`, `"2w"`).
+   * Set to `"0"` to disable eviction (the default).
+   * Entries older than this value are removed at the start of each run.
+   *
+   * @defaultValue `"0"`
+   */
+  cacheMaxAge?: string;
+
+  /**
+   * Maximum total size of the local filesystem cache.
+   *
+   * Accepts a human-readable size string (e.g. `"10GB"`, `"500MB"`).
+   * When exceeded, the oldest entries are evicted until the cache is
+   * under the limit. Set to `"0"` to disable (the default).
+   *
+   * @defaultValue `"0"`
+   */
+  cacheMaxSize?: string;
 
   /**
    * Deprecated: The daemon is no longer used for `turbo run`.

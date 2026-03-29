@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
@@ -67,6 +67,22 @@ impl CacheMultiplexer {
                 )
             })
             .transpose()?;
+
+        if (opts.cache_max_age.is_some() || opts.cache_max_size.is_some())
+            && let Some(fs) = &fs_cache
+        {
+            let cache_dir = fs.cache_directory().to_owned();
+            let max_age = opts.cache_max_age;
+            let max_size = opts.cache_max_size;
+            info!(
+                ?max_age,
+                ?max_size,
+                "cache eviction enabled, running in background"
+            );
+            std::thread::spawn(move || {
+                crate::fs::evict_cache_dir(&cache_dir, max_age, max_size);
+            });
+        }
 
         let http_cache = if use_http_cache {
             match (api_client, api_auth) {

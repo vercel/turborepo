@@ -16,6 +16,8 @@ mod async_cache;
 /// The core cache creation and restoration logic.
 pub mod cache_archive;
 pub mod config;
+/// Human-readable duration parsing (e.g. "7d", "24h")
+pub mod duration;
 /// File system cache
 pub mod fs;
 /// Remote cache
@@ -26,6 +28,8 @@ mod multiplexer;
 /// Cache signature authentication lets users provide a private key to sign
 /// their cache payloads.
 pub mod signature_authentication;
+/// Human-readable byte size parsing (e.g. "10GB", "500MB")
+pub mod size;
 #[cfg(test)]
 mod test_cases;
 mod upload_progress;
@@ -34,6 +38,7 @@ use std::{
     backtrace,
     backtrace::Backtrace,
     sync::{Arc, OnceLock},
+    time::Duration,
 };
 
 pub use async_cache::AsyncCache;
@@ -280,6 +285,15 @@ pub struct CacheOpts {
     pub cache: CacheConfig,
     pub workers: u32,
     pub remote_cache_opts: Option<RemoteCacheOpts>,
+    /// Maximum age of cache entries. Entries older than this are evicted
+    /// at the start of a run. `None` or `Duration::ZERO` means no eviction.
+    #[serde(skip)]
+    pub cache_max_age: Option<Duration>,
+    /// Maximum total size of cache entries in bytes. When exceeded, the
+    /// oldest entries are evicted until the cache is under the limit.
+    /// `None` or `0` means no size limit.
+    #[serde(skip)]
+    pub cache_max_size: Option<u64>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]

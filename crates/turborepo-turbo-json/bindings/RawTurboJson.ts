@@ -106,6 +106,22 @@ envMode?: EnvMode,
  */
 cacheDir?: string, 
 /**
+ * Maximum age of local cache entries before automatic eviction.
+ *
+ * Accepts a human-readable duration string (e.g. `"7d"`, `"24h"`,
+ * `"2w"`). Set to `"0"` to disable eviction (the default).
+ * Entries older than this value are removed at the start of each run.
+ */
+cacheMaxAge?: string, 
+/**
+ * Maximum total size of the local filesystem cache.
+ *
+ * Accepts a human-readable size string (e.g. `"10GB"`, `"500MB"`).
+ * When exceeded, the oldest entries are evicted until the cache is
+ * under the limit. Set to `"0"` to disable (the default).
+ */
+cacheMaxSize?: string, 
+/**
  * When set to `true`, disables the update notification that appears when
  * a new version of `turbo` is available.
  *

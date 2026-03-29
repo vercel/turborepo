@@ -1,8 +1,8 @@
-use std::backtrace::Backtrace;
+use std::{backtrace::Backtrace, time::Duration};
 
 use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
-use tracing::debug;
+use tracing::{debug, info};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{analytics, analytics::AnalyticsEvent};
@@ -63,6 +63,10 @@ impl FSCache {
             analytics_recorder,
             scm_state,
         })
+    }
+
+    pub(crate) fn cache_directory(&self) -> &AbsoluteSystemPath {
+        &self.cache_directory
     }
 
     fn log_fetch(&self, event: analytics::CacheEvent, hash: &str, duration: u64) {
@@ -258,6 +262,166 @@ impl FSCache {
 
         Ok(())
     }
+
+    pub fn evict(&self, max_age: Option<Duration>, max_size: Option<u64>) -> (u64, u64) {
+        evict_cache_dir(&self.cache_directory, max_age, max_size)
+    }
+}
+
+/// Evicts cache entries from the given directory based on age and/or
+/// total size constraints.
+///
+/// Phase 1 (TTL): If `max_age` is `Some`, removes entries whose
+/// `.tar.zst` archive mtime is older than the cutoff. Orphaned `.tmp`
+/// files from crashed writes are cleaned up if older than 1 hour.
+///
+/// Phase 2 (LRU): If `max_size` is `Some` and the remaining cache
+/// exceeds the limit, deletes the oldest entries first until the
+/// total size is under the cap. Size includes sidecar files
+/// (`-meta.json`, `-manifest.json`).
+///
+/// Returns the number of entries removed and bytes reclaimed.
+/// Eviction is best-effort: individual file removal failures are
+/// silently skipped.
+pub(crate) fn evict_cache_dir(
+    cache_directory: &AbsoluteSystemPath,
+    max_age: Option<Duration>,
+    max_size: Option<u64>,
+) -> (u64, u64) {
+    let now = std::time::SystemTime::now();
+
+    let entries = match std::fs::read_dir(cache_directory.as_std_path()) {
+        Ok(entries) => entries,
+        Err(_) => return (0, 0),
+    };
+
+    let mut removed_count: u64 = 0;
+    let mut reclaimed_bytes: u64 = 0;
+
+    struct ArchiveEntry {
+        hash: String,
+        size: u64,
+        mtime: std::time::SystemTime,
+    }
+    let mut remaining: Vec<ArchiveEntry> = Vec::new();
+
+    for entry in entries.filter_map(|e| e.ok()) {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+
+        if name_str.ends_with(".tmp") {
+            // Only clean up orphaned .tmp files older than 1 hour to avoid
+            // racing with in-progress writes from concurrent processes.
+            if let Ok(meta) = entry.metadata() {
+                let is_stale = meta
+                    .modified()
+                    .ok()
+                    .and_then(|mtime| now.duration_since(mtime).ok())
+                    .is_some_and(|age| age >= Duration::from_secs(3600));
+
+                if is_stale {
+                    reclaimed_bytes += meta.len();
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+            continue;
+        }
+
+        if !name_str.ends_with(".tar.zst") {
+            continue;
+        }
+
+        let metadata = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+
+        let mtime = match metadata.modified() {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+
+        let hash = name_str.trim_end_matches(".tar.zst").to_owned();
+        let mut entry_size = metadata.len();
+
+        // Include sidecar sizes for accurate budget tracking
+        let meta_path = cache_directory.join_component(&format!("{hash}-meta.json"));
+        if let Ok(m) = std::fs::symlink_metadata(meta_path.as_std_path()) {
+            entry_size += m.len();
+        }
+        let manifest_path = cache_directory.join_component(&format!("{hash}-manifest.json"));
+        if let Ok(m) = std::fs::symlink_metadata(manifest_path.as_std_path()) {
+            entry_size += m.len();
+        }
+
+        // Phase 1: TTL eviction
+        if let Some(max_age) = max_age {
+            let cutoff = now.checked_sub(max_age).unwrap_or(std::time::UNIX_EPOCH);
+            if mtime < cutoff {
+                remove_cache_entry(cache_directory, &hash, entry_size, &mut reclaimed_bytes);
+                removed_count += 1;
+                continue;
+            }
+        }
+
+        remaining.push(ArchiveEntry {
+            hash,
+            size: entry_size,
+            mtime,
+        });
+    }
+
+    // Phase 2: LRU eviction by size
+    if let Some(max_size) = max_size {
+        let mut total_size: u64 = remaining.iter().map(|e| e.size).sum();
+
+        if total_size > max_size {
+            remaining.sort_by(|a, b| a.mtime.cmp(&b.mtime));
+
+            for entry in &remaining {
+                if total_size <= max_size {
+                    break;
+                }
+                remove_cache_entry(
+                    cache_directory,
+                    &entry.hash,
+                    entry.size,
+                    &mut reclaimed_bytes,
+                );
+                removed_count += 1;
+                total_size = total_size.saturating_sub(entry.size);
+            }
+        }
+    }
+
+    if removed_count > 0 {
+        info!(
+            "cache eviction: removed {} entries, reclaimed {} bytes",
+            removed_count, reclaimed_bytes
+        );
+    } else {
+        debug!("cache eviction: no entries removed");
+    }
+
+    (removed_count, reclaimed_bytes)
+}
+
+fn remove_cache_entry(
+    cache_directory: &AbsoluteSystemPath,
+    hash: &str,
+    entry_size: u64,
+    reclaimed_bytes: &mut u64,
+) {
+    let archive_path = cache_directory.join_component(&format!("{hash}.tar.zst"));
+    let _ = std::fs::remove_file(archive_path.as_std_path());
+
+    let meta_path = cache_directory.join_component(&format!("{hash}-meta.json"));
+    let _ = std::fs::remove_file(meta_path.as_std_path());
+
+    let manifest_path = cache_directory.join_component(&format!("{hash}-manifest.json"));
+    let _ = std::fs::remove_file(manifest_path.as_std_path());
+
+    *reclaimed_bytes += entry_size;
 }
 
 #[cfg(test)]
@@ -719,5 +883,225 @@ mod test {
         assert_eq!(deserialized.dirty_hash, Some("cafebabe".to_string()));
         assert_eq!(deserialized.hash, "abc");
         assert_eq!(deserialized.duration, 99);
+    }
+
+    #[test]
+    fn test_evict_removes_stale_entries() {
+        let repo_root = tempdir().unwrap();
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path()).unwrap();
+        let cache_dir = repo_root_path.join_component("cache");
+        cache_dir.create_dir_all().unwrap();
+
+        // Create "stale" entries: we backdate their mtime to 10 days ago
+        let stale_hash = "stale_abc123";
+        let stale_tar = cache_dir.join_component(&format!("{stale_hash}.tar.zst"));
+        let stale_meta = cache_dir.join_component(&format!("{stale_hash}-meta.json"));
+        let stale_manifest = cache_dir.join_component(&format!("{stale_hash}-manifest.json"));
+
+        stale_tar
+            .create_with_contents("stale archive data")
+            .unwrap();
+        stale_meta
+            .create_with_contents(r#"{"hash":"stale_abc123","duration":100}"#)
+            .unwrap();
+        stale_manifest
+            .create_with_contents(r#"{"files":{},"order":[]}"#)
+            .unwrap();
+
+        // Backdate mtime to 10 days ago
+        let ten_days_ago = filetime::FileTime::from_system_time(
+            std::time::SystemTime::now() - Duration::from_secs(86400 * 10),
+        );
+        filetime::set_file_mtime(stale_tar.as_std_path(), ten_days_ago).unwrap();
+        filetime::set_file_mtime(stale_meta.as_std_path(), ten_days_ago).unwrap();
+        filetime::set_file_mtime(stale_manifest.as_std_path(), ten_days_ago).unwrap();
+
+        // Create "fresh" entry
+        let fresh_hash = "fresh_def456";
+        let fresh_tar = cache_dir.join_component(&format!("{fresh_hash}.tar.zst"));
+        let fresh_meta = cache_dir.join_component(&format!("{fresh_hash}-meta.json"));
+        fresh_tar
+            .create_with_contents("fresh archive data")
+            .unwrap();
+        fresh_meta
+            .create_with_contents(r#"{"hash":"fresh_def456","duration":50}"#)
+            .unwrap();
+
+        // Create an orphaned temp file and backdate it past the 1-hour threshold
+        let tmp_file = cache_dir.join_component(".some_hash.tar.zst.12345.0.tmp");
+        tmp_file.create_with_contents("orphaned temp").unwrap();
+        let two_hours_ago = filetime::FileTime::from_system_time(
+            std::time::SystemTime::now() - Duration::from_secs(7200),
+        );
+        filetime::set_file_mtime(tmp_file.as_std_path(), two_hours_ago).unwrap();
+
+        let cache = FSCache::new(
+            camino::Utf8Path::new("cache"),
+            repo_root_path,
+            None,
+            LazyScmState::resolved(None),
+        )
+        .unwrap();
+
+        // Evict entries older than 7 days
+        let (removed, reclaimed) = cache.evict(Some(Duration::from_secs(86400 * 7)), None);
+
+        assert_eq!(removed, 1, "should remove exactly one stale entry");
+        assert!(reclaimed > 0, "should reclaim some bytes");
+
+        // Stale files should be gone
+        assert!(!stale_tar.exists(), "stale archive should be removed");
+        assert!(!stale_meta.exists(), "stale meta should be removed");
+        assert!(!stale_manifest.exists(), "stale manifest should be removed");
+
+        // Fresh files should remain
+        assert!(fresh_tar.exists(), "fresh archive should remain");
+        assert!(fresh_meta.exists(), "fresh meta should remain");
+
+        // Temp file should be cleaned up
+        assert!(!tmp_file.exists(), "orphaned temp file should be removed");
+    }
+
+    #[test]
+    fn test_evict_keeps_everything_when_all_fresh() {
+        let repo_root = tempdir().unwrap();
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path()).unwrap();
+        let cache_dir = repo_root_path.join_component("cache");
+        cache_dir.create_dir_all().unwrap();
+
+        let hash = "all_fresh";
+        let tar = cache_dir.join_component(&format!("{hash}.tar.zst"));
+        let meta = cache_dir.join_component(&format!("{hash}-meta.json"));
+        tar.create_with_contents("data").unwrap();
+        meta.create_with_contents(r#"{"hash":"all_fresh","duration":10}"#)
+            .unwrap();
+
+        let cache = FSCache::new(
+            camino::Utf8Path::new("cache"),
+            repo_root_path,
+            None,
+            LazyScmState::resolved(None),
+        )
+        .unwrap();
+
+        let (removed, _) = cache.evict(Some(Duration::from_secs(86400 * 7)), None);
+        assert_eq!(removed, 0);
+        assert!(tar.exists());
+        assert!(meta.exists());
+    }
+
+    #[test]
+    fn test_evict_empty_cache() {
+        let repo_root = tempdir().unwrap();
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path()).unwrap();
+
+        let cache = FSCache::new(
+            camino::Utf8Path::new("cache"),
+            repo_root_path,
+            None,
+            LazyScmState::resolved(None),
+        )
+        .unwrap();
+
+        let (removed, reclaimed) = cache.evict(Some(Duration::from_secs(86400)), None);
+        assert_eq!(removed, 0);
+        assert_eq!(reclaimed, 0);
+    }
+
+    #[test]
+    fn test_evict_by_size_removes_oldest_first() {
+        let repo_root = tempdir().unwrap();
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path()).unwrap();
+        let cache_dir = repo_root_path.join_component("cache");
+        cache_dir.create_dir_all().unwrap();
+
+        // Create 3 entries with known sizes and different mtimes.
+        // Each archive is ~1000 bytes of content.
+        let data = "x".repeat(1000);
+
+        let old_hash = "oldest_entry";
+        let old_tar = cache_dir.join_component(&format!("{old_hash}.tar.zst"));
+        old_tar.create_with_contents(&data).unwrap();
+        cache_dir
+            .join_component(&format!("{old_hash}-meta.json"))
+            .create_with_contents(r#"{"hash":"oldest_entry","duration":1}"#)
+            .unwrap();
+
+        let mid_hash = "middle_entry";
+        let mid_tar = cache_dir.join_component(&format!("{mid_hash}.tar.zst"));
+        mid_tar.create_with_contents(&data).unwrap();
+        cache_dir
+            .join_component(&format!("{mid_hash}-meta.json"))
+            .create_with_contents(r#"{"hash":"middle_entry","duration":2}"#)
+            .unwrap();
+
+        let new_hash = "newest_entry";
+        let new_tar = cache_dir.join_component(&format!("{new_hash}.tar.zst"));
+        new_tar.create_with_contents(&data).unwrap();
+        cache_dir
+            .join_component(&format!("{new_hash}-meta.json"))
+            .create_with_contents(r#"{"hash":"newest_entry","duration":3}"#)
+            .unwrap();
+
+        // Backdate mtimes to create a clear ordering
+        let one_day = std::time::Duration::from_secs(86400);
+        let now = std::time::SystemTime::now();
+        filetime::set_file_mtime(
+            old_tar.as_std_path(),
+            filetime::FileTime::from_system_time(now - one_day * 3),
+        )
+        .unwrap();
+        filetime::set_file_mtime(
+            mid_tar.as_std_path(),
+            filetime::FileTime::from_system_time(now - one_day * 2),
+        )
+        .unwrap();
+        filetime::set_file_mtime(
+            new_tar.as_std_path(),
+            filetime::FileTime::from_system_time(now - one_day),
+        )
+        .unwrap();
+
+        let cache = FSCache::new(
+            camino::Utf8Path::new("cache"),
+            repo_root_path,
+            None,
+            LazyScmState::resolved(None),
+        )
+        .unwrap();
+
+        // Set max size to ~1500 bytes — enough for 1 entry but not 2.
+        // Total is ~3000 bytes, so we need to evict the 2 oldest.
+        let (removed, _) = cache.evict(None, Some(1500));
+
+        assert_eq!(removed, 2, "should evict the 2 oldest entries");
+        assert!(!old_tar.exists(), "oldest should be removed");
+        assert!(!mid_tar.exists(), "middle should be removed");
+        assert!(new_tar.exists(), "newest should survive");
+    }
+
+    #[test]
+    fn test_evict_size_noop_when_under_limit() {
+        let repo_root = tempdir().unwrap();
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path()).unwrap();
+        let cache_dir = repo_root_path.join_component("cache");
+        cache_dir.create_dir_all().unwrap();
+
+        let hash = "small_entry";
+        let tar = cache_dir.join_component(&format!("{hash}.tar.zst"));
+        tar.create_with_contents("tiny").unwrap();
+
+        let cache = FSCache::new(
+            camino::Utf8Path::new("cache"),
+            repo_root_path,
+            None,
+            LazyScmState::resolved(None),
+        )
+        .unwrap();
+
+        // 10GB limit — way more than our tiny entry
+        let (removed, _) = cache.evict(None, Some(10 * 1024 * 1024 * 1024));
+        assert_eq!(removed, 0);
+        assert!(tar.exists());
     }
 }

@@ -301,6 +301,8 @@ impl WithMetadata for RawGlobalConfig {
         self.daemon.add_text(text.clone());
         self.env_mode.add_text(text.clone());
         self.cache_dir.add_text(text.clone());
+        self.cache_max_age.add_text(text.clone());
+        self.cache_max_size.add_text(text.clone());
         self.no_update_notifier.add_text(text.clone());
         self.concurrency.add_text(text.clone());
         self.remote_cache.add_text(text.clone());
@@ -316,6 +318,8 @@ impl WithMetadata for RawGlobalConfig {
         self.daemon.add_path(path.clone());
         self.env_mode.add_path(path.clone());
         self.cache_dir.add_path(path.clone());
+        self.cache_max_age.add_path(path.clone());
+        self.cache_max_size.add_path(path.clone());
         self.no_update_notifier.add_path(path.clone());
         self.concurrency.add_path(path.clone());
         self.remote_cache.add_path(path.clone());
@@ -340,6 +344,8 @@ impl WithMetadata for RawRootTurboJson {
 
         self.tasks.add_text(text.clone());
         self.cache_dir.add_text(text.clone());
+        self.cache_max_age.add_text(text.clone());
+        self.cache_max_size.add_text(text.clone());
         self.pipeline.add_text(text.clone());
         self.remote_cache.add_text(text.clone());
         self.ui.add_text(text.clone());
@@ -370,6 +376,8 @@ impl WithMetadata for RawRootTurboJson {
         }
         self.tasks.add_path(path.clone());
         self.cache_dir.add_path(path.clone());
+        self.cache_max_age.add_path(path.clone());
+        self.cache_max_size.add_path(path.clone());
         self.pipeline.add_path(path.clone());
         self.remote_cache.add_path(path.clone());
         self.ui.add_path(path.clone());

@@ -348,6 +348,24 @@ pub struct RawGlobalConfig {
     #[ts(optional)]
     pub remote_cache: Option<RawRemoteCacheOptions>,
 
+    /// Maximum age of local cache entries before automatic eviction.
+    ///
+    /// Accepts a human-readable duration string (e.g. `"7d"`, `"24h"`,
+    /// `"2w"`). Set to `"0"` to disable eviction (the default).
+    /// Entries older than this value are removed at the start of each run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cache_max_age: Option<Spanned<UnescapedString>>,
+
+    /// Maximum total size of the local filesystem cache.
+    ///
+    /// Accepts a human-readable size string (e.g. `"10GB"`, `"500MB"`).
+    /// When exceeded, the oldest entries are evicted until the cache is
+    /// under the limit. Set to `"0"` to disable (the default).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cache_max_size: Option<Spanned<UnescapedString>>,
+
     /// Experimental observability configuration for OpenTelemetry export.
     /// Excluded from JSON Schema and TypeScript types (`#[ts(skip)]`)
     /// because this is gated behind a separate `experimentalObservability`
@@ -384,6 +402,8 @@ pub struct RawRootTurboJson {
     pub env_mode: Option<Spanned<EnvMode>>,
     pub no_update_notifier: Option<Spanned<bool>>,
     pub cache_dir: Option<Spanned<UnescapedString>>,
+    pub cache_max_age: Option<Spanned<UnescapedString>>,
+    pub cache_max_size: Option<Spanned<UnescapedString>>,
     pub concurrency: Option<Spanned<String>>,
     pub tags: Option<Spanned<Vec<Spanned<String>>>>,
     pub boundaries: Option<Spanned<BoundariesConfig>>,
@@ -545,6 +565,24 @@ pub struct RawTurboJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub cache_dir: Option<Spanned<UnescapedString>>,
+
+    /// Maximum age of local cache entries before automatic eviction.
+    ///
+    /// Accepts a human-readable duration string (e.g. `"7d"`, `"24h"`,
+    /// `"2w"`). Set to `"0"` to disable eviction (the default).
+    /// Entries older than this value are removed at the start of each run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cache_max_age: Option<Spanned<UnescapedString>>,
+
+    /// Maximum total size of the local filesystem cache.
+    ///
+    /// Accepts a human-readable size string (e.g. `"10GB"`, `"500MB"`).
+    /// When exceeded, the oldest entries are evicted until the cache is
+    /// under the limit. Set to `"0"` to disable (the default).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cache_max_size: Option<Spanned<UnescapedString>>,
 
     /// When set to `true`, disables the update notification that appears when
     /// a new version of `turbo` is available.
@@ -818,6 +856,8 @@ impl TryFrom<RawRootTurboJson> for RawTurboJson {
                 daemon: None,
                 env_mode: None,
                 cache_dir: None,
+                cache_max_age: None,
+                cache_max_size: None,
                 no_update_notifier: None,
                 concurrency: None,
                 experimental_observability: None,
@@ -842,6 +882,8 @@ impl TryFrom<RawRootTurboJson> for RawTurboJson {
                 daemon: root.daemon,
                 env_mode: root.env_mode,
                 cache_dir: root.cache_dir,
+                cache_max_age: root.cache_max_age,
+                cache_max_size: root.cache_max_size,
                 no_update_notifier: root.no_update_notifier,
                 tags: root.tags,
                 boundaries: root.boundaries,
@@ -909,6 +951,8 @@ fn validate_no_top_level_global_keys(root: &RawRootTurboJson) -> Result<(), Erro
     check_spanned!(root.daemon, "daemon", "");
     check_spanned!(root.env_mode, "envMode", "");
     check_spanned!(root.cache_dir, "cacheDir", "");
+    check_spanned!(root.cache_max_age, "cacheMaxAge", "");
+    check_spanned!(root.cache_max_size, "cacheMaxSize", "");
     check_spanned!(root.no_update_notifier, "noUpdateNotifier", "");
     check_spanned!(root.concurrency, "concurrency", "");
     check_present!(root.remote_cache, "remoteCache", "");
@@ -959,6 +1003,8 @@ impl RawTurboJson {
             self.daemon = g.daemon;
             self.env_mode = g.env_mode;
             self.cache_dir = g.cache_dir;
+            self.cache_max_age = g.cache_max_age;
+            self.cache_max_size = g.cache_max_size;
             self.no_update_notifier = g.no_update_notifier;
             self.concurrency = g.concurrency;
             self.remote_cache = g.remote_cache;

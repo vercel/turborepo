@@ -91,6 +91,12 @@ impl<'a> TurboJsonReader<'a> {
             .no_update_notifier
             .map(|no_update_notifier| *no_update_notifier.as_inner());
         opts.cache_dir = cache_dir;
+        opts.cache_max_age = turbo_json
+            .cache_max_age
+            .map(|age| age.into_inner().to_string());
+        opts.cache_max_size = turbo_json
+            .cache_max_size
+            .map(|size| size.into_inner().to_string());
         opts.concurrency = turbo_json.concurrency.map(|c| c.as_inner().clone());
 
         opts.future_flags = turbo_json.future_flags.map(|f| *f.as_inner());
@@ -542,5 +548,92 @@ mod test {
             otel.endpoint.as_deref(),
             Some("https://example.com/v1/metrics")
         );
+    }
+
+    #[test]
+    fn test_cache_max_age_from_turbo_json() {
+        let turbo_json = RawRootTurboJson::parse(
+            &serde_json::to_string_pretty(&json!({
+                "cacheMaxAge": "7d"
+            }))
+            .unwrap(),
+            "turbo.json",
+        )
+        .unwrap()
+        .try_into()
+        .unwrap();
+        let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
+        assert_eq!(config.cache_max_age(), Some("7d"));
+    }
+
+    #[test]
+    fn test_cache_max_age_from_global_config() {
+        let turbo_json = RawRootTurboJson::parse(
+            &serde_json::to_string_pretty(&json!({
+                "futureFlags": {
+                    "globalConfiguration": true
+                },
+                "global": {
+                    "cacheMaxAge": "24h"
+                }
+            }))
+            .unwrap(),
+            "turbo.json",
+        )
+        .unwrap()
+        .try_into()
+        .unwrap();
+        let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
+        assert_eq!(config.cache_max_age(), Some("24h"));
+    }
+
+    #[test]
+    fn test_cache_max_age_not_set() {
+        let turbo_json = RawRootTurboJson::parse(
+            &serde_json::to_string_pretty(&json!({})).unwrap(),
+            "turbo.json",
+        )
+        .unwrap()
+        .try_into()
+        .unwrap();
+        let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
+        assert_eq!(config.cache_max_age(), None);
+    }
+
+    #[test]
+    fn test_cache_max_size_from_turbo_json() {
+        let turbo_json = RawRootTurboJson::parse(
+            &serde_json::to_string_pretty(&json!({
+                "cacheMaxSize": "10GB"
+            }))
+            .unwrap(),
+            "turbo.json",
+        )
+        .unwrap()
+        .try_into()
+        .unwrap();
+        let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
+        assert_eq!(config.cache_max_size(), Some("10GB"));
+    }
+
+    #[test]
+    fn test_cache_max_size_from_global_config() {
+        let turbo_json = RawRootTurboJson::parse(
+            &serde_json::to_string_pretty(&json!({
+                "futureFlags": {
+                    "globalConfiguration": true
+                },
+                "global": {
+                    "cacheMaxSize": "5GB"
+                }
+            }))
+            .unwrap(),
+            "turbo.json",
+        )
+        .unwrap()
+        .try_into()
+        .unwrap();
+        let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
+        assert_eq!(config.cache_max_size(), Some("5GB"));
     }
 }

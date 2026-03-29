@@ -50,9 +50,10 @@ export class Workspace {
    */
   findPackagesWithGraph(): Promise<Record<string, PackageDetails>>;
   /**
-   * Returns all external packages from the lockfile as `npm/<name>@<version>` strings.
-   * Collects the transitive external dependencies of every workspace package
-   * and formats them using the lockfile's human-readable name.
+   * Returns all external packages from the lockfile as
+   * `npm/<name>@<version>` strings. Collects the transitive external
+   * dependencies of every workspace package and formats them using the
+   * lockfile's human-readable name.
    */
   packagesFromLockfile(): Promise<Array<string>>;
   /**

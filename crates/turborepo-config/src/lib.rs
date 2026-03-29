@@ -290,6 +290,10 @@ pub struct ConfigurationOptions {
     pub scm_head: Option<String>,
     #[serde(rename = "cacheDir")]
     pub cache_dir: Option<Utf8PathBuf>,
+    #[serde(rename = "cacheMaxAge")]
+    pub cache_max_age: Option<String>,
+    #[serde(rename = "cacheMaxSize")]
+    pub cache_max_size: Option<String>,
     // This is skipped as we never want this to be stored in a file
     #[serde(skip)]
     pub root_turbo_json_path: Option<AbsoluteSystemPathBuf>,
@@ -428,6 +432,14 @@ impl ConfigurationOptions {
         self.cache_dir
             .as_deref()
             .unwrap_or_else(|| Utf8Path::new(Self::DEFAULT_CACHE_DIR))
+    }
+
+    pub fn cache_max_age(&self) -> Option<&str> {
+        self.cache_max_age.as_deref()
+    }
+
+    pub fn cache_max_size(&self) -> Option<&str> {
+        self.cache_max_size.as_deref()
     }
 
     /// Resolves the cache directory, taking Git worktrees into account.

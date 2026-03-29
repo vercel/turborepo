@@ -293,6 +293,8 @@ mod tests {
                 signature: false,
                 enforce_signature_key_length: false,
             }),
+            cache_max_age: None,
+            cache_max_size: None,
         };
 
         let api_client = APIClient::new(
@@ -392,6 +394,8 @@ mod tests {
                 signature: false,
                 enforce_signature_key_length: false,
             }),
+            cache_max_age: None,
+            cache_max_size: None,
         };
 
         let api_auth = Some(APIAuth {
@@ -493,6 +497,8 @@ mod tests {
                 signature: false,
                 enforce_signature_key_length: false,
             }),
+            cache_max_age: None,
+            cache_max_size: None,
         };
 
         let api_auth = Some(APIAuth {
@@ -566,6 +572,8 @@ mod tests {
                 signature: false,
                 enforce_signature_key_length: false,
             }),
+            cache_max_age: None,
+            cache_max_size: None,
         };
 
         let api_client = APIClient::new(

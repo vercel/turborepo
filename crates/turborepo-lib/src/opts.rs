@@ -63,6 +63,10 @@ pub enum Error {
          `remoteCacheReadOnly`) at the same time."
     )]
     OverlappingCacheOptions,
+    #[error("Invalid cacheMaxAge: {0}")]
+    CacheMaxAge(String),
+    #[error("Invalid cacheMaxSize: {0}")]
+    CacheMaxSize(String),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
@@ -646,12 +650,30 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
             enforce_signature_key_length,
         ));
 
+        let cache_max_age = inputs
+            .config
+            .cache_max_age()
+            .map(turborepo_cache::duration::parse_human_duration)
+            .transpose()
+            .map_err(|e| Error::CacheMaxAge(e.to_string()))?
+            .filter(|d| !d.is_zero());
+
+        let cache_max_size = inputs
+            .config
+            .cache_max_size()
+            .map(turborepo_cache::size::parse_human_size)
+            .transpose()
+            .map_err(|e| Error::CacheMaxSize(e.to_string()))?
+            .filter(|&s| s > 0);
+
         let cache_opts = CacheOpts {
             // Use pre-computed cache directory to avoid duplicate git process spawning
             cache_dir: inputs.cache_dir_result.path.clone(),
             cache,
             workers: inputs.run_args.cache_workers,
             remote_cache_opts,
+            cache_max_age,
+            cache_max_size,
         };
         debug!("CacheOpts created with cache_dir={}", cache_opts.cache_dir);
         Ok(cache_opts)
@@ -870,6 +892,8 @@ mod test {
             cache: Default::default(),
             workers: 0,
             remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
         };
         let runcache_opts = RunCacheOpts::default();
         let scope_opts = ScopeOpts {

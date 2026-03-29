@@ -12,6 +12,7 @@ rustls-tls = ["turborepo-api-client/rustls-tls"]
 
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
+filetime = "0.2"
 futures = { workspace = true }
 insta = { workspace = true }
 libc = "0.2.146"

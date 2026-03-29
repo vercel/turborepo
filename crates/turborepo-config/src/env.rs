@@ -31,6 +31,8 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_daemon", "daemon"),
     ("turbo_env_mode", "env_mode"),
     ("turbo_cache_dir", "cache_dir"),
+    ("turbo_cache_max_age", "cache_max_age"),
+    ("turbo_cache_max_size", "cache_max_size"),
     ("turbo_preflight", "preflight"),
     ("turbo_scm_base", "scm_base"),
     ("turbo_scm_head", "scm_head"),
@@ -241,6 +243,8 @@ impl ResolvedConfigurationOptions for EnvVars {
             });
 
         let cache_dir = self.output_map.get("cache_dir").map(|s| s.clone().into());
+        let cache_max_age = self.output_map.get("cache_max_age").cloned();
+        let cache_max_size = self.output_map.get("cache_max_size").cloned();
 
         let root_turbo_json_path = self
             .output_map
@@ -327,6 +331,8 @@ impl ResolvedConfigurationOptions for EnvVars {
 
             env_mode,
             cache_dir,
+            cache_max_age,
+            cache_max_size,
             root_turbo_json_path,
             log_order,
             sso_login_callback_port,

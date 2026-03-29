@@ -485,6 +485,8 @@ mod test {
             cache: Default::default(),
             workers: 0,
             remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
         };
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
@@ -566,6 +568,8 @@ mod test {
             cache: Default::default(),
             workers: 0,
             remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
         };
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
@@ -642,6 +646,8 @@ mod test {
             cache: Default::default(),
             workers: 0,
             remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
         };
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
@@ -742,6 +748,8 @@ mod test {
             cache: Default::default(),
             workers: 0,
             remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
         };
 
         let api_auth = APIAuth {
@@ -790,6 +798,8 @@ mod test {
             cache: Default::default(),
             workers: 0,
             remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
         };
 
         let initial_api_auth = APIAuth {
@@ -851,6 +861,8 @@ mod test {
             cache: Default::default(),
             workers: 0,
             remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
         };
 
         let api_auth = APIAuth {
@@ -915,6 +927,8 @@ mod test {
                 None, true, // signature enabled
                 true, // enforce key length
             )),
+            cache_max_age: None,
+            cache_max_size: None,
         };
 
         let api_auth = APIAuth {
@@ -972,6 +986,8 @@ mod test {
                 None, true,  // signature enabled
                 false, // enforcement OFF (no future flag)
             )),
+            cache_max_age: None,
+            cache_max_size: None,
         };
 
         let api_auth = APIAuth {
@@ -1021,6 +1037,8 @@ mod test {
                 None, true, // signature enabled
                 true, // enforce key length
             )),
+            cache_max_age: None,
+            cache_max_size: None,
         };
 
         let api_auth = APIAuth {
