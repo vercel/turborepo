@@ -168,10 +168,15 @@ jobs:
         env:
           INCREMENT: ${{ github.event_name == 'schedule' && 'prerelease' || inputs.increment }}
         run: |
-          # For stable releases, compare against the previous stable tag so
-          # release notes include everything since the last stable release.
+          # For minor/major releases, compare against the previous minor/major
+          # release (vX.Y.0) so notes include all patches since then.
+          # For patch releases, compare against the latest stable tag.
           # For canary releases, compare against the latest canary tag.
-          if [[ "$INCREMENT" == "patch" || "$INCREMENT" == "minor" || "$INCREMENT" == "major" ]]; then
+          if [[ "$INCREMENT" == "minor" || "$INCREMENT" == "major" ]]; then
+            PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
+              | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+              | grep -v canary | grep -E 'v[0-9]+\.[0-9]+\.0$' | sort -V | tail -n 1)
+          elif [[ "$INCREMENT" == "patch" ]]; then
             PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
               | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
               | grep -v canary | sort -V | tail -n 1)
