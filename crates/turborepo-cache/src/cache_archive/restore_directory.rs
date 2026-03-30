@@ -1,4 +1,4 @@
-use std::{backtrace::Backtrace, ffi::OsString, io};
+use std::{backtrace::Backtrace, collections::HashSet, ffi::OsString, io};
 
 use camino::Utf8Component;
 use tar::Entry;
@@ -24,6 +24,7 @@ pub fn restore_directory(
 pub struct CachedDirTree {
     anchor_at_depth: Vec<AbsoluteSystemPathBuf>,
     prefix: Vec<OsString>,
+    restored_symlinks: HashSet<AnchoredSystemPathBuf>,
 }
 
 impl CachedDirTree {
@@ -31,7 +32,26 @@ impl CachedDirTree {
         CachedDirTree {
             anchor_at_depth: vec![initial_anchor],
             prefix: vec![],
+            restored_symlinks: HashSet::new(),
         }
+    }
+
+    pub fn record_symlink(&mut self, path: AnchoredSystemPathBuf) {
+        self.restored_symlinks.insert(path);
+    }
+
+    // On Windows, directory symlinks require remove_dir rather than
+    // remove_file. Try remove_file first; fall back to remove_dir.
+    fn remove_symlink(path: &AbsoluteSystemPath) -> Result<(), CacheError> {
+        #[cfg(not(windows))]
+        {
+            path.remove_file()?;
+        }
+        #[cfg(windows)]
+        {
+            path.remove_file().or_else(|_| path.remove_dir())?;
+        }
+        Ok(())
     }
 
     // Given a path, checks the dir cache to determine where we actually need
@@ -74,7 +94,41 @@ impl CachedDirTree {
         // current_path. Check to see if that path segment is a symlink
         // with a target outside of anchor.
         let (mut calculated_anchor, start_idx) = self.get_starting_point(processed_name);
-        for component in processed_name.components().skip(start_idx) {
+
+        // Build the anchored path incrementally so we can check each component
+        // against restored_symlinks.
+        let components: Vec<_> = processed_name.components().collect();
+        let mut current_anchored: Option<AnchoredSystemPathBuf> = None;
+
+        for (idx, component) in components.iter().enumerate() {
+            current_anchored = Some(match &current_anchored {
+                None => AnchoredSystemPathBuf::from_raw(component.as_str())?,
+                Some(p) => AnchoredSystemPath::new(p.as_str())?.join_component(component.as_str()),
+            });
+
+            if idx < start_idx {
+                continue;
+            }
+
+            // Check if this component is a pre-existing symlink that should be
+            // replaced with a real directory. Symlinks restored during the
+            // current operation are preserved (they were intentionally placed
+            // by the same tar archive).
+            let current = current_anchored.as_ref().unwrap();
+            let literal_path = anchor.resolve(AnchoredSystemPath::new(current.as_str())?);
+            if let Ok(metadata) = literal_path.symlink_metadata()
+                && metadata.is_symlink()
+                && !self.restored_symlinks.contains(current)
+            {
+                debug!(
+                    "replacing pre-existing symlink at {:?} with directory",
+                    literal_path
+                );
+                Self::remove_symlink(&literal_path)?;
+                // Fall through to check_path: the symlink is gone, so
+                // check_path will see a non-existent path and accept it.
+            }
+
             calculated_anchor = check_path(
                 anchor,
                 &calculated_anchor,

@@ -557,9 +557,9 @@ mod test {
         let timeout = Duration::from_secs(2);
         let (repo_root, _tmp_dir) = temp_dir();
         setup(&repo_root);
-        let cookie_dir = repo_root.join_component(".git");
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let cookie_dir = watcher.cookie_dir().to_owned();
         let recv = watcher.watch();
         let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
         let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
@@ -640,9 +640,9 @@ mod test {
         let timeout = Duration::from_secs(2);
         let (repo_root, _tmp_dir) = temp_dir();
         setup(&repo_root);
-        let cookie_dir = repo_root.join_component(".git");
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let cookie_dir = watcher.cookie_dir().to_owned();
         let recv = watcher.watch();
         let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
 
@@ -735,9 +735,9 @@ mod test {
         let timeout = Duration::from_secs(2);
         let (repo_root, _tmp_dir) = temp_dir();
         setup(&repo_root);
-        let cookie_dir = repo_root.join_component(".git");
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let cookie_dir = watcher.cookie_dir().to_owned();
         let recv = watcher.watch();
         let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
 
@@ -805,9 +805,9 @@ mod test {
         let timeout = Duration::from_secs(2);
         let (repo_root, _tmp_dir) = temp_dir();
         setup(&repo_root);
-        let cookie_dir = repo_root.join_component(".git");
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let cookie_dir = watcher.cookie_dir().to_owned();
         let recv = watcher.watch();
         let cookie_writer = CookieWriter::new(&cookie_dir, timeout, recv.clone());
         let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
@@ -845,9 +845,9 @@ mod test {
         let timeout = Duration::from_secs(2);
         let (repo_root, _tmp_dir) = temp_dir();
         setup(&repo_root);
-        let cookie_dir = repo_root.join_component(".git");
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let cookie_dir = watcher.cookie_dir().to_owned();
         let recv = watcher.watch();
         let cookie_writer = CookieWriter::new(&cookie_dir, timeout, recv.clone());
         let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
@@ -887,9 +887,9 @@ mod test {
         let timeout = Duration::from_secs(2);
         let (repo_root, _tmp_dir) = temp_dir();
         setup(&repo_root);
-        let cookie_dir = repo_root.join_component(".git");
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let cookie_dir = watcher.cookie_dir().to_owned();
         let recv = watcher.watch();
         let cookie_writer = CookieWriter::new(&cookie_dir, timeout, recv.clone());
         let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);

@@ -71,6 +71,8 @@ fn actually_restore_symlink<'a>(
         symlink_from.symlink_to_file(symlink_to)?;
     }
 
+    dir_cache.record_symlink(processed_name.to_owned());
+
     #[cfg(target_os = "macos")]
     {
         use std::os::unix::fs::PermissionsExt;

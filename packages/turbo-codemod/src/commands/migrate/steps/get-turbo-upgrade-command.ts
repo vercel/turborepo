@@ -10,6 +10,7 @@ import {
 } from "@turbo/utils";
 import type { Project } from "@turbo/workspaces";
 import { exec } from "../utils";
+import type { CatalogInfo } from "./update-catalog";
 
 type InstallType = "dependencies" | "devDependencies";
 
@@ -109,6 +110,27 @@ function getLocalUpgradeCommand({
   }
 }
 
+function getInstallCommand({
+  packageManager
+}: {
+  packageManager: PackageManager;
+}): string {
+  switch (packageManager) {
+    case "yarn": {
+      return "yarn install";
+    }
+    case "npm": {
+      return "npm install";
+    }
+    case "pnpm": {
+      return "pnpm install";
+    }
+    case "bun": {
+      return "bun install";
+    }
+  }
+}
+
 function getInstallType({ root }: { root: string }): InstallType | undefined {
   // read package.json to make sure we have a reference to turbo
   const packageJsonPath = path.join(root, "package.json");
@@ -136,14 +158,29 @@ function getInstallType({ root }: { root: string }): InstallType | undefined {
   2. The install method (local or global)
 
   We try global first to let turbo handle the inference, then we try local.
+
+  When turbo uses a catalog reference (e.g. `"turbo": "catalog:"`), the version
+  lives in a catalog file (pnpm-workspace.yaml or .yarnrc.yml) rather than
+  package.json. In that case the caller is responsible for updating the catalog
+  file first, and we return a plain install command to sync the lockfile.
 **/
 export async function getTurboUpgradeCommand({
   project,
-  to
+  to,
+  catalogInfo
 }: {
   project: Project;
   to?: string;
+  catalogInfo?: CatalogInfo;
 }) {
+  // When the catalog file has already been updated, all we need is an install
+  // to sync the lockfile.
+  if (catalogInfo) {
+    return getInstallCommand({
+      packageManager: project.packageManager
+    });
+  }
+
   const availablePackageManagers = await getAvailablePackageManagers();
 
   const turboBinaryPathFromGlobal = exec("turbo bin", {

@@ -23,7 +23,7 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
 use wax::{
     BuildError, Glob, Program,
-    walk::{FileIterator, FilterAny},
+    walk::{FileIterator, FilterAny, LinkBehavior, WalkBehavior},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -304,11 +304,20 @@ pub struct Settings {
     /// setting if you are globbing in an individual package at not at the
     /// workspace root.
     ignore_nested_packages: bool,
+    /// Follow symbolic links when walking directories. When enabled, symlinked
+    /// directories are traversed into (their targets are read). Cycles are
+    /// detected and handled gracefully by the underlying walkdir layer.
+    follow_links: bool,
 }
 
 impl Settings {
     pub fn ignore_nested_packages(mut self) -> Self {
         self.ignore_nested_packages = true;
+        self
+    }
+
+    pub fn follow_links(mut self) -> Self {
+        self.follow_links = true;
         self
     }
 }
@@ -745,7 +754,17 @@ fn walk_glob(
     glob: &Glob<'static>,
     settings: Settings,
 ) -> Vec<Result<AbsoluteSystemPathBuf, WalkError>> {
-    let iter = glob.walk(base_path_new).not_any(ex_filter);
+    let behavior = if settings.follow_links {
+        WalkBehavior {
+            link: LinkBehavior::ReadTarget,
+            ..Default::default()
+        }
+    } else {
+        WalkBehavior::default()
+    };
+    let iter = glob
+        .walk_with_behavior(base_path_new, behavior)
+        .not_any(ex_filter);
 
     if settings.ignore_nested_packages {
         iter.filter_entry(|entry| {
@@ -2004,5 +2023,254 @@ mod test {
         add_doublestar_to_dir(base, &mut glob);
 
         assert_eq!(glob, expected);
+    }
+
+    // Regression tests for https://github.com/vercel/turborepo/issues/2517
+    // Workspace packages behind symlinked directories must be discoverable.
+    #[cfg(unix)]
+    mod symlink_discovery {
+        use std::{collections::HashSet, str::FromStr};
+
+        use turbopath::AbsoluteSystemPathBuf;
+
+        use crate::{Settings, ValidatedGlob, WalkType, globwalk, globwalk_with_settings};
+
+        fn setup_symlinked_workspace() -> tempfile::TempDir {
+            let tmp = tempfile::TempDir::with_prefix("symlink-discovery").unwrap();
+            let root = tmp.path();
+
+            // Real packages (not behind symlinks)
+            std::fs::create_dir_all(root.join("apps/web")).unwrap();
+            std::fs::File::create(root.join("apps/web/package.json")).unwrap();
+
+            // Package in an external location, symlinked into the workspace
+            std::fs::create_dir_all(root.join("external/widget-a")).unwrap();
+            std::fs::File::create(root.join("external/widget-a/package.json")).unwrap();
+
+            // Nested package behind symlink (for ** pattern testing)
+            std::fs::create_dir_all(root.join("external/nested/deep-pkg")).unwrap();
+            std::fs::File::create(root.join("external/nested/deep-pkg/package.json")).unwrap();
+
+            std::fs::create_dir_all(root.join("widgets")).unwrap();
+            std::os::unix::fs::symlink("../external/widget-a", root.join("widgets/widget-a"))
+                .unwrap();
+
+            std::fs::create_dir_all(root.join("packages")).unwrap();
+            std::os::unix::fs::symlink("../external/nested", root.join("packages/nested")).unwrap();
+
+            tmp
+        }
+
+        #[test]
+        fn shallow_wildcard_finds_symlinked_package() {
+            // Pattern: widgets/*/package.json (shallow wildcard optimization path)
+            let tmp = setup_symlinked_workspace();
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+            let include = ["widgets/*/package.json"]
+                .into_iter()
+                .map(ValidatedGlob::from_str)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            let exclude: &[ValidatedGlob] = &[];
+
+            let results = globwalk_with_settings(
+                &root,
+                &include,
+                exclude,
+                WalkType::Files,
+                Settings::default().follow_links(),
+            )
+            .unwrap();
+
+            let paths: HashSet<String> = results
+                .into_iter()
+                .map(|p| root.anchor(p).unwrap().to_string())
+                .collect();
+
+            let expected: HashSet<String> = HashSet::from_iter([
+                "widgets/widget-a/package.json".replace('/', std::path::MAIN_SEPARATOR_STR)
+            ]);
+            assert_eq!(paths, expected);
+        }
+
+        #[test]
+        fn doublestar_finds_symlinked_package() {
+            // Pattern: packages/**/package.json (general walk path with follow_links)
+            let tmp = setup_symlinked_workspace();
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+            let include = ["packages/**/package.json"]
+                .into_iter()
+                .map(ValidatedGlob::from_str)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            let exclude: &[ValidatedGlob] = &[];
+
+            let results = globwalk_with_settings(
+                &root,
+                &include,
+                exclude,
+                WalkType::Files,
+                Settings::default().follow_links(),
+            )
+            .unwrap();
+
+            let paths: HashSet<String> = results
+                .into_iter()
+                .map(|p| root.anchor(p).unwrap().to_string())
+                .collect();
+
+            assert!(
+                paths.contains(
+                    &"packages/nested/deep-pkg/package.json"
+                        .replace('/', std::path::MAIN_SEPARATOR_STR)
+                ),
+                "expected to find package.json behind symlinked dir via **, got: {paths:?}"
+            );
+        }
+
+        #[test]
+        fn doublestar_without_follow_links_misses_symlinked_package() {
+            // Confirms the default behavior: ** does NOT follow symlinks.
+            // This documents the pre-fix behavior for regression awareness.
+            let tmp = setup_symlinked_workspace();
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+            let include = ["packages/**/package.json"]
+                .into_iter()
+                .map(ValidatedGlob::from_str)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            let exclude: &[ValidatedGlob] = &[];
+
+            let results = globwalk(&root, &include, exclude, WalkType::Files).unwrap();
+
+            let paths: HashSet<String> = results
+                .into_iter()
+                .map(|p| root.anchor(p).unwrap().to_string())
+                .collect();
+
+            assert!(
+                !paths.contains(
+                    &"packages/nested/deep-pkg/package.json"
+                        .replace('/', std::path::MAIN_SEPARATOR_STR)
+                ),
+                "default globwalk should NOT follow symlinks into dirs, got: {paths:?}"
+            );
+        }
+
+        #[test]
+        fn mixed_real_and_symlinked_packages() {
+            // Both real and symlinked packages should be found together.
+            let tmp = setup_symlinked_workspace();
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+            let include = ["apps/*/package.json", "widgets/*/package.json"]
+                .into_iter()
+                .map(ValidatedGlob::from_str)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            let exclude: &[ValidatedGlob] = &[];
+
+            let results = globwalk_with_settings(
+                &root,
+                &include,
+                exclude,
+                WalkType::Files,
+                Settings::default().follow_links(),
+            )
+            .unwrap();
+
+            let paths: HashSet<String> = results
+                .into_iter()
+                .map(|p| root.anchor(p).unwrap().to_string())
+                .collect();
+
+            let expected: HashSet<String> = HashSet::from_iter([
+                "apps/web/package.json".replace('/', std::path::MAIN_SEPARATOR_STR),
+                "widgets/widget-a/package.json".replace('/', std::path::MAIN_SEPARATOR_STR),
+            ]);
+            assert_eq!(paths, expected);
+        }
+
+        #[test]
+        fn broken_dir_symlink_does_not_crash() {
+            let tmp = tempfile::TempDir::with_prefix("broken-symlink").unwrap();
+            let root = tmp.path();
+
+            std::fs::create_dir_all(root.join("packages")).unwrap();
+            std::os::unix::fs::symlink("../nonexistent-dir", root.join("packages/broken-pkg"))
+                .unwrap();
+
+            let root = AbsoluteSystemPathBuf::try_from(root).unwrap();
+            let include = ["packages/*/package.json"]
+                .into_iter()
+                .map(ValidatedGlob::from_str)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            let exclude: &[ValidatedGlob] = &[];
+
+            let results = globwalk_with_settings(
+                &root,
+                &include,
+                exclude,
+                WalkType::Files,
+                Settings::default().follow_links(),
+            )
+            .unwrap();
+
+            assert!(results.is_empty(), "broken symlink should yield no results");
+        }
+
+        #[test]
+        fn symlink_cycle_handled_gracefully() {
+            let tmp = tempfile::TempDir::with_prefix("cycle-symlink").unwrap();
+            let root = tmp.path();
+
+            std::fs::create_dir_all(root.join("packages/real-pkg")).unwrap();
+            std::fs::File::create(root.join("packages/real-pkg/package.json")).unwrap();
+
+            // Create a cycle: packages/loop -> packages
+            std::os::unix::fs::symlink("..", root.join("packages/loop")).unwrap();
+
+            let root = AbsoluteSystemPathBuf::try_from(root).unwrap();
+            let include = ["packages/**/package.json"]
+                .into_iter()
+                .map(ValidatedGlob::from_str)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            let exclude: &[ValidatedGlob] = &[];
+
+            // Should not hang or panic. walkdir detects cycles.
+            let result = globwalk_with_settings(
+                &root,
+                &include,
+                exclude,
+                WalkType::Files,
+                Settings::default().follow_links(),
+            );
+
+            // Either succeeds with the real package or returns an error — neither
+            // is a hang or panic, which is the important part.
+            match result {
+                Ok(paths) => {
+                    let found: Vec<String> = paths
+                        .into_iter()
+                        .map(|p: AbsoluteSystemPathBuf| root.anchor(p).unwrap().to_string())
+                        .collect();
+                    assert!(
+                        found.contains(
+                            &"packages/real-pkg/package.json"
+                                .replace('/', std::path::MAIN_SEPARATOR_STR)
+                        ),
+                        "should still find the real package despite cycle, got: {found:?}"
+                    );
+                }
+                Err(_) => {
+                    // An error from the cycle is also acceptable behavior
+                }
+            }
+        }
     }
 }

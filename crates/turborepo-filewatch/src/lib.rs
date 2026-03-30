@@ -387,7 +387,17 @@ fn manually_add_recursive_watches(
     sender: Option<&broadcast::Sender<Result<Event, NotifyError>>>,
 ) -> Result<(), WatchError> {
     // Note that WalkDir yields the root as well as doing the walk.
-    for dir in WalkDir::new(root).follow_links(false).into_iter() {
+    // filter_entry prunes entire subtrees so we never descend into
+    // node_modules or .git, which avoids exhausting inotify watches
+    // on Linux in large monorepos.
+    for dir in WalkDir::new(root)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|e| {
+            let name = e.file_name();
+            name != ".git" && name != "node_modules"
+        })
+    {
         let dir = dir?;
         if dir.file_type().is_dir() {
             trace!("manually watching {}", dir.path().display());
@@ -588,8 +598,6 @@ mod test {
             .create_with_contents("test contents")
             .unwrap();
         expect_filesystem_event!(recv, test_file_path, EventKind::Create(_));
-
-        // TODO: implement default filtering (.git, node_modules)
     }
 
     #[tokio::test]
@@ -920,6 +928,72 @@ mod test {
             repo_root,
             EventKind::Modify(ModifyKind::Name(_)) | EventKind::Remove(_)
         );
+    }
+
+    // Verify that node_modules and .git are excluded from inotify watch
+    // registration on Linux to avoid exhausting the OS watch limit in large
+    // monorepos. No .gitignore is needed — these are hardcoded exclusions.
+    #[cfg(feature = "manual_recursive_watch")]
+    #[tokio::test]
+    async fn test_file_watching_hardcoded_exclusions() {
+        let (repo_root, _tmp_repo_root) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+
+        let node_modules = repo_root.join_component("node_modules");
+        node_modules
+            .join_components(&["some-dep", "lib"])
+            .create_dir_all()
+            .unwrap();
+
+        let git_dir = repo_root.join_component(".git");
+        git_dir.create_dir_all().unwrap();
+
+        let src_dir = repo_root.join_component("src");
+        src_dir.create_dir_all().unwrap();
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let mut recv = watcher.subscribe().await.unwrap();
+
+        expect_watching(&mut recv, &[&repo_root, &src_dir]).await;
+
+        // Write to node_modules and .git — should NOT generate watch events
+        // because these subtrees are never registered with inotify.
+        node_modules
+            .join_components(&["some-dep", "lib", "index.js"])
+            .create_with_contents("module.exports = {}")
+            .unwrap();
+        git_dir
+            .join_component("COMMIT_EDITMSG")
+            .create_with_contents("initial commit")
+            .unwrap();
+
+        // Write a sentinel to a watched directory so we can drain
+        // the event stream and confirm no node_modules/.git events arrived.
+        let sentinel = src_dir.join_component("sentinel.js");
+        sentinel.create_with_contents("export {}").unwrap();
+
+        let ignored_dirs = [&node_modules, &git_dir];
+        loop {
+            let event = tokio::time::timeout(Duration::from_millis(3000), recv.recv())
+                .await
+                .expect("timed out waiting for sentinel event")
+                .expect("sender was dropped")
+                .expect("filewatching error");
+            for path in &event.paths {
+                for ignored in &ignored_dirs {
+                    assert!(
+                        !path.starts_with(ignored.as_std_path()),
+                        "received unexpected event from excluded dir {ignored}: {path:?}"
+                    );
+                }
+            }
+            if event.paths.iter().any(|p| {
+                let p: &std::path::Path = p;
+                p == (&sentinel as &AbsoluteSystemPath)
+            }) {
+                break;
+            }
+        }
     }
 
     #[tokio::test]

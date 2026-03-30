@@ -1,8 +1,10 @@
+import path from "node:path";
 import * as turboWorkspaces from "@turbo/workspaces";
 import * as turboUtils from "@turbo/utils";
 import { setupTestFixtures } from "@turbo/test-utils";
 import { describe, it, expect, jest, afterEach } from "@jest/globals";
 import { getTurboUpgradeCommand } from "../src/commands/migrate/steps/get-turbo-upgrade-command";
+import type { CatalogInfo } from "../src/commands/migrate/steps/update-catalog";
 import * as utils from "../src/commands/migrate/utils";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
@@ -617,6 +619,74 @@ describe("get-turbo-upgrade-command", () => {
       mockGetWorkspaceDetails.mockRestore();
     }
   );
+
+  describe("catalog installs", () => {
+    it("returns pnpm install when catalog is used with pnpm workspaces", async () => {
+      const { root } = useFixture({ fixture: "pnpm-catalog-default" });
+
+      const project = getWorkspaceDetailsMockReturnValue({
+        root,
+        packageManager: "pnpm"
+      });
+
+      const catalogInfo: CatalogInfo = {
+        catalogName: null,
+        catalogFile: path.join(root, "pnpm-workspace.yaml"),
+        installType: "devDependencies"
+      };
+
+      const upgradeCommand = await getTurboUpgradeCommand({
+        project,
+        catalogInfo
+      });
+
+      expect(upgradeCommand).toEqual("pnpm install");
+    });
+
+    it("returns yarn install when catalog is used with yarn", async () => {
+      const { root } = useFixture({ fixture: "yarn-catalog-default" });
+
+      const project = getWorkspaceDetailsMockReturnValue({
+        root,
+        packageManager: "yarn"
+      });
+
+      const catalogInfo: CatalogInfo = {
+        catalogName: null,
+        catalogFile: path.join(root, ".yarnrc.yml"),
+        installType: "devDependencies"
+      };
+
+      const upgradeCommand = await getTurboUpgradeCommand({
+        project,
+        catalogInfo
+      });
+
+      expect(upgradeCommand).toEqual("yarn install");
+    });
+
+    it("returns npm install when catalog is used with npm", async () => {
+      const { root } = useFixture({ fixture: "pnpm-catalog-default" });
+
+      const project = getWorkspaceDetailsMockReturnValue({
+        root,
+        packageManager: "npm"
+      });
+
+      const catalogInfo: CatalogInfo = {
+        catalogName: null,
+        catalogFile: path.join(root, "pnpm-workspace.yaml"),
+        installType: "devDependencies"
+      };
+
+      const upgradeCommand = await getTurboUpgradeCommand({
+        project,
+        catalogInfo
+      });
+
+      expect(upgradeCommand).toEqual("npm install");
+    });
+  });
 
   describe("errors", () => {
     it("fails gracefully if no package.json exists", async () => {

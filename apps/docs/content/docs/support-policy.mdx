@@ -116,7 +116,13 @@ Deprecated APIs are in the process of being removed. Any feature we intend to re
 
 **APIs that are currently deprecated:**
 
-- `TURBO_REMOTE_ONLY` and `--remote-only`: Use [`TURBO_CACHE`](/docs/reference/system-environment-variables) or [--cache](/docs/reference/run#--cache-options)
-- `--scope` for [`turbo prune`](/docs/reference/prune): Use positional arguments instead (e.g. `turbo prune web`)
-- `--graph` with `.png`, `.jpg`, `.pdf`, or `.json` output: These formats require an external Graphviz installation and will be removed in version 3.0. Use `.svg`, `.html`, `.mermaid`, or `.dot` instead. For programmatic access to the task graph, use [`turbo query`](/docs/reference/query).
+- [`turbo-ignore`](/docs/reference/turbo-ignore): Use [`turbo query affected`](/docs/reference/query#affected) instead.
 - [`turbo scan`](/docs/reference/scan): This command has been removed and will be fully deleted in a future major version.
+- `--parallel`: Use [`persistent`](/docs/reference/configuration#persistent) and [`with`](/docs/reference/configuration#with) in `turbo.json` instead.
+- `--no-cache`: Use [`--cache=local:r,remote:r`](/docs/reference/run#--cache-options) instead.
+- `TURBO_REMOTE_ONLY` and `--remote-only`: Use [`TURBO_CACHE`](/docs/reference/system-environment-variables) or [`--cache=remote:rw`](/docs/reference/run#--cache-options) instead.
+- `--remote-cache-read-only`: Use [`--cache=local:rw,remote:r`](/docs/reference/run#--cache-options) instead.
+- `--daemon` / `--no-daemon` / `daemon` key in `turbo.json`: The daemon is no longer used and these options will be removed in a future major version.
+- `--graph` with `.png`, `.jpg`, `.pdf`, or `.json` output: These formats require an external Graphviz installation and will be removed in version 3.0. Use `.svg`, `.html`, `.mermaid`, or `.dot` instead. For programmatic access to the task graph, use [`turbo query`](/docs/reference/query).
+- `--scope` for [`turbo prune`](/docs/reference/prune): Use positional arguments instead (e.g. `turbo prune web`).
+- `globalDependencies`, `globalEnv`, and `globalPassThroughEnv` at the root level: Use the [`globalConfiguration` Future Flag](/docs/reference/configuration#globalconfiguration) to migrate to the new [`global` key](/docs/reference/configuration#global).

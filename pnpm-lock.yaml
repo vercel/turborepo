@@ -532,6 +532,9 @@ importers:
       update-check:
         specifier: 1.5.4
         version: 1.5.4
+      yaml:
+        specifier: 2.7.1
+        version: 2.7.1
     devDependencies:
       '@jest/globals':
         specifier: 30.2.0
@@ -8408,6 +8411,11 @@ packages:
     resolution: {integrity: sha512-YgvUTfwqyc7UXVMrB+SImsVYSmTS8X/tSrtdNZMImM+n7+QTriRXyXim0mBrTXNeqzVF0KWGgHPeiyViFFrNDw==}
     engines: {node: '>=18'}
 
+  yaml@2.7.1:
+    resolution: {integrity: sha512-10ULxpnOCQXxJvBgxsn9ptjq6uviG/htZKk9veJGhlqn3w/DxQ631zFF+nlQXLwmImeS5amR2dl2U8sg6U9jsQ==}
+    engines: {node: '>= 14'}
+    hasBin: true
+
   yaml@2.8.2:
     resolution: {integrity: sha512-mplynKqc1C2hTVYxd0PU2xQAc22TI1vShAYGksCCfxbn/dFwnHTNi1bvYsBTkhdUNtGIf5xNOg938rrSSYvS9A==}
     engines: {node: '>= 14.6'}
@@ -14080,7 +14088,7 @@ snapshots:
       object-inspect: 1.13.4
       pidtree: 0.6.0
       string-argv: 0.3.2
-      yaml: 2.8.2
+      yaml: 2.7.1
     transitivePeerDependencies:
       - enquirer
       - supports-color
@@ -16507,6 +16515,8 @@ snapshots:
   yallist@4.0.0: {}
 
   yallist@5.0.0: {}
+
+  yaml@2.7.1: {}
 
   yaml@2.8.2: {}
 
