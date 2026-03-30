@@ -197,10 +197,6 @@ Accepts a human-readable duration string with the following units:
 
 Set to `"0"` to disable age-based eviction.
 
-<Callout type="info">
-  Eviction runs in a background thread at the start of `turbo run` and does not
-  block task execution. Individual file removal failures are silently skipped.
-</Callout>
 
 <Callout type="info">
   You may also set this option via the
