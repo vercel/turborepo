@@ -173,6 +173,75 @@ Specify the filesystem cache directory.
   `cacheDir` disables this behavior.
 </Callout>
 
+### `cacheMaxAge`
+
+Default: `"0"` (disabled)
+
+Maximum age of local cache entries before automatic eviction. Entries older than this value are removed at the start of each `turbo run`.
+
+```jsonc title="./turbo.json"
+{
+  "cacheMaxAge": "7d",
+}
+```
+
+Accepts a human-readable duration string with the following units:
+
+| Unit | Example |
+| ---- | ------- |
+| `s`  | `30s`   |
+| `m`  | `5m`    |
+| `h`  | `24h`   |
+| `d`  | `7d`    |
+| `w`  | `2w`    |
+
+Set to `"0"` to disable age-based eviction.
+
+<Callout type="info">
+  Eviction runs in a background thread at the start of `turbo run` and does not
+  block task execution. Individual file removal failures are silently skipped.
+</Callout>
+
+<Callout type="info">
+  You may also set this option via the
+  [`TURBO_CACHE_MAX_AGE`](/docs/reference/system-environment-variables#turbo_cache_max_age)
+  environment variable.
+</Callout>
+
+### `cacheMaxSize`
+
+Default: `"0"` (disabled)
+
+Maximum total size of the local filesystem cache. When the cache exceeds this limit, the oldest entries are evicted until the cache is within the limit.
+
+```jsonc title="./turbo.json"
+{
+  "cacheMaxSize": "10GB",
+}
+```
+
+Accepts a human-readable size string with the following units (case-insensitive):
+
+| Unit | Example |
+| ---- | ------- |
+| `MB` | `500MB` |
+| `GB` | `10GB`  |
+| `TB` | `1TB`   |
+
+Fractional values like `1.5GB` are supported. Set to `"0"` to disable size-based eviction.
+
+<Callout type="info">
+  Size-based eviction runs after age-based eviction. If both `cacheMaxAge` and
+  `cacheMaxSize` are set, stale entries are removed first by age, then the
+  remaining entries are checked against the size limit.
+</Callout>
+
+<Callout type="info">
+  You may also set this option via the
+  [`TURBO_CACHE_MAX_SIZE`](/docs/reference/system-environment-variables#turbo_cache_max_size)
+  environment variable.
+</Callout>
+
 ### `daemon`
 
 **Deprecated**: The daemon is no longer used for `turbo run` and this option will be removed in version 3.0. The `--daemon` and `--no-daemon` flags are also deprecated.
@@ -386,6 +455,8 @@ Move global configuration keys under a top-level [`global`](#global) key for cla
 | `ui`                                    | `global.ui`                                    |
 | `envMode`                               | `global.envMode`                               |
 | `cacheDir`                              | `global.cacheDir`                              |
+| `cacheMaxAge`                           | `global.cacheMaxAge`                           |
+| `cacheMaxSize`                          | `global.cacheMaxSize`                          |
 | `concurrency`                           | `global.concurrency`                           |
 | `daemon`                                | `global.daemon`                                |
 | `noUpdateNotifier`                      | `global.noUpdateNotifier`                      |
@@ -463,6 +534,8 @@ When enabled, existing top-level keys are moved under `global` with these rename
 | `ui`                                    | `global.ui`                                    |
 | `envMode`                               | `global.envMode`                               |
 | `cacheDir`                              | `global.cacheDir`                              |
+| `cacheMaxAge`                           | `global.cacheMaxAge`                           |
+| `cacheMaxSize`                          | `global.cacheMaxSize`                          |
 | `concurrency`                           | `global.concurrency`                           |
 | `daemon`                                | `global.daemon`                                |
 | `noUpdateNotifier`                      | `global.noUpdateNotifier`                      |

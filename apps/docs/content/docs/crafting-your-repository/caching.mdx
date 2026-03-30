@@ -180,6 +180,26 @@ Git worktree cache sharing works alongside [Remote Caching](/docs/core-concepts/
 
 This means a task built in one worktree can be restored from the shared local cache in another worktree instantly, without a network request. If the local cache doesn't have the artifact, Turborepo will fall back to the Remote Cache as usual.
 
+## Local cache eviction
+
+By default, Turborepo's local filesystem cache grows unbounded. You can configure automatic eviction to keep cache size under control using [`cacheMaxAge`](/docs/reference/configuration#cachemaxage) and [`cacheMaxSize`](/docs/reference/configuration#cachemaxsize).
+
+```json title="./turbo.json"
+{
+  "cacheMaxAge": "7d",
+  "cacheMaxSize": "10GB"
+}
+```
+
+Eviction runs in a background thread at the start of each `turbo run` and does not block task execution. The two-phase algorithm:
+
+1. **Age-based (TTL)**: Removes entries older than `cacheMaxAge`
+2. **Size-based (LRU)**: If the remaining cache exceeds `cacheMaxSize`, evicts oldest entries first
+
+Both options are opt-in. When set to `"0"` (the default), eviction is disabled for that dimension. You can use one or both together.
+
+These options can also be set via the [`TURBO_CACHE_MAX_AGE`](/docs/reference/system-environment-variables#turbo_cache_max_age) and [`TURBO_CACHE_MAX_SIZE`](/docs/reference/system-environment-variables#turbo_cache_max_size) environment variables.
+
 ## What gets cached?
 
 Turborepo caches two types of outputs: Task outputs and Logs.

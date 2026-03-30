@@ -65,6 +65,28 @@ System environment variables are always overridden by flag values provided direc
         <span> flag.</span>
       </td>
     </tr>
+    <tr id="turbo_cache_max_age">
+      <td>
+        <code>TURBO_CACHE_MAX_AGE</code>
+      </td>
+      <td>
+        Maximum age of local cache entries before automatic eviction.
+        Accepts a human-readable duration string (e.g. <code>7d</code>,{" "}
+        <code>24h</code>, <code>2w</code>). See{" "}
+        <a href="/docs/reference/configuration#cachemaxage"><code>cacheMaxAge</code></a>.
+      </td>
+    </tr>
+    <tr id="turbo_cache_max_size">
+      <td>
+        <code>TURBO_CACHE_MAX_SIZE</code>
+      </td>
+      <td>
+        Maximum total size of the local filesystem cache. When exceeded, the
+        oldest entries are evicted. Accepts a human-readable size string (e.g.{" "}
+        <code>10GB</code>, <code>500MB</code>). See{" "}
+        <a href="/docs/reference/configuration#cachemaxsize"><code>cacheMaxSize</code></a>.
+      </td>
+    </tr>
     <tr id="turbo_ci_vendor_env_key">
       <td>
         <code>TURBO_CI_VENDOR_ENV_KEY</code>
