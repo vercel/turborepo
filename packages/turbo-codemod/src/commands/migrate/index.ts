@@ -13,6 +13,11 @@ import { getCurrentVersion } from "./steps/get-current-version";
 import { getLatestVersion } from "./steps/get-latest-version";
 import { getTransformsForMigration } from "./steps/get-transforms-for-migration";
 import { getTurboUpgradeCommand } from "./steps/get-turbo-upgrade-command";
+import {
+  detectCatalog,
+  updateCatalogVersion,
+  type CatalogInfo
+} from "./steps/update-catalog";
 import type { MigrateCommandArgument, MigrateCommandOptions } from "./types";
 import { shutdownDaemon } from "./steps/shutdown-daemon";
 
@@ -206,10 +211,46 @@ export async function migrate(
 
   // step 5
 
+  // Check if turbo uses a catalog reference (e.g. "turbo": "catalog:" in package.json).
+  // If so, update the version in the catalog file instead of letting the package
+  // manager overwrite the catalog reference with a literal version.
+  let catalogInfo: CatalogInfo | undefined;
+  if (project) {
+    catalogInfo = detectCatalog({
+      root: project.paths.root,
+      packageManager: project.packageManager
+    });
+  }
+
+  if (catalogInfo) {
+    if (options.dryRun) {
+      logger.log(
+        `Would update turbo version in catalog file ${picocolors.dim(
+          catalogInfo.catalogFile
+        )} ${picocolors.dim("(dry run)")}`,
+        os.EOL
+      );
+    } else {
+      const updated = updateCatalogVersion({
+        catalogInfo,
+        version: toVersion
+      });
+      if (updated) {
+        logger.log(
+          `Updated turbo version to ${picocolors.bold(
+            toVersion
+          )} in ${picocolors.dim(catalogInfo.catalogFile)}`,
+          os.EOL
+        );
+      }
+    }
+  }
+
   // find the upgrade command, and run it
   const upgradeCommand = await getTurboUpgradeCommand({
     project,
-    to: options.to
+    to: options.to,
+    catalogInfo
   });
 
   if (!upgradeCommand) {

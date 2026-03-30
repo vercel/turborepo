@@ -32,7 +32,11 @@ export async function getLatestVersion({
   const { "dist-tags": tags, versions } = packageDetails;
 
   if (to) {
-    if (tags[to] || to in versions) {
+    // If 'to' is a dist-tag (e.g. "latest", "canary"), resolve to the concrete version
+    if (tags[to]) {
+      return tags[to];
+    }
+    if (to in versions) {
       return to;
     }
     throw new Error(`turbo@${to} does not exist`);
