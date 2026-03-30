@@ -147,7 +147,7 @@ bunx skills update vercel/turborepo
 
 Turborepo's most important job is to schedule your monorepo's tasks to be as fast as possible. Whenever you use `turbo run`, our first step is to analyze your monorepo's structure and scripts to create a graph of your tasks. The [Task Graph](/docs/core-concepts/package-and-task-graph#task-graph) describes what tasks depend on each other, so we know how to run and cache the work in your repository.
 
-Once we're done creating your Task Graph, we begin executing your tasks. "Time to First Task" is our name for the time between when you invoke `turbo run` and when the first script in your monorepo begins executing. In general, Time to First Task represents Turborepo's overhead in your monorepo, and we've made it dramatically faster in this release.
+Once we're done creating your Task Graph, we begin executing your tasks. "Time to First Task" is our name for the time between when you invoke `turbo run` and when the first script in your monorepo begins executing. In general, Time to First Task represents Turborepo's overhead in your monorepo, and we've made it faster in this release.
 
 <div
   className="not-prose my-8 rounded-lg border border-[var(--ds-gray-400)] overflow-hidden"
