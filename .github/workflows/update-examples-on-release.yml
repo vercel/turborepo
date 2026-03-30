@@ -41,7 +41,13 @@ jobs:
           HUSKY: "0"
         run: |
           git commit -am "release(turborepo): update examples to latest"
-          git push origin ${{ steps.branch.outputs.STAGE_BRANCH }}
+
+          for attempt in 1 2 3; do
+            git pull --rebase origin ${{ steps.branch.outputs.STAGE_BRANCH }} || true
+            git push origin ${{ steps.branch.outputs.STAGE_BRANCH }} && break
+            echo "Push attempt $attempt failed, retrying..."
+            sleep 5
+          done
 
       - name: Create pull request
         id: pr
