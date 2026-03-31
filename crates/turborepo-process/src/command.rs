@@ -106,29 +106,6 @@ impl Command {
     pub fn program(&self) -> &OsStr {
         &self.program
     }
-
-    /// Convert to a `std::process::Command` with program, args, env, and cwd
-    /// configured but stdio left unconfigured.
-    /// Used by the PTY spawn path which sets stdio to slave PTY fds.
-    pub(crate) fn into_std_command(self) -> std::process::Command {
-        let Command {
-            program,
-            args,
-            cwd,
-            env,
-            open_stdin: _,
-            env_clear,
-        } = self;
-        let mut cmd = std::process::Command::new(program);
-        if env_clear {
-            cmd.env_clear();
-        }
-        cmd.args(args).envs(env);
-        if let Some(cwd) = cwd {
-            cmd.current_dir(cwd.as_std_path());
-        }
-        cmd
-    }
 }
 
 impl From<Command> for tokio::process::Command {
