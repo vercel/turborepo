@@ -748,8 +748,7 @@ impl APIClient {
             .get("Access-Control-Allow-Headers")
             .map_or("", |h| h.to_str().unwrap_or(""));
 
-        let allow_auth =
-            allowed_headers == "*" || AUTHORIZATION_REGEX.is_match(allowed_headers);
+        let allow_auth = allowed_headers == "*" || AUTHORIZATION_REGEX.is_match(allowed_headers);
 
         Ok(PreflightResponse {
             location,
