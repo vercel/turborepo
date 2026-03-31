@@ -318,6 +318,42 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
 }
 ```
 
+### Turborepo variables
+
+When running actions, Turborepo automatically injects a `turbo` object into the answers data. This gives your templates and custom actions access to useful information about the repository without needing to discover it yourself.
+
+#### Using in templates
+
+In [Handlebars templates](https://plopjs.com/documentation/#built-in-actions), access the variables using double curly braces:
+
+```hbs title="turbo/generators/templates/component.hbs"
+// Generated at {{ turbo.paths.root }}/src/components
+```
+
+#### Using in custom actions
+
+In [custom action functions](https://plopjs.com/documentation/#functionsignature-custom-action), the `turbo` object is available on the `answers` parameter:
+
+```ts title="turbo/generators/config.ts"
+import type { PlopTypes } from "@turbo/gen";
+
+export default function generator(plop: PlopTypes.NodePlopAPI): void {
+  plop.setGenerator("example", {
+    description: "An example using turbo variables",
+    prompts: [],
+    actions: [
+      async (answers) => {
+        const { turbo } = answers;
+        console.log(`Monorepo root: ${turbo.paths.root}`);
+        return "Done!";
+      },
+    ],
+  });
+}
+```
+
+The available variables are documented in the [`@turbo/gen` reference](/docs/reference/turbo-gen#turborepo-variables).
+
 ### Running generators
 
 Once you have created your generator configuration file, you can skip the selection prompt and directly run a specified generator with:
