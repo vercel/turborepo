@@ -236,10 +236,17 @@ impl<T: TaskDefinitionInfo + Default + Clone> Default for Engine<Building, T> {
 }
 
 impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
-    /// Creates an instance of `Engine` that only contains tasks that depend on
-    /// tasks from a given package. This is useful for watch mode, where we
-    /// need to re-run only a portion of the task graph.
-    pub fn create_engine_for_subgraph(&self, changed_packages: &HashSet<PackageName>) -> Self {
+    /// Creates an engine containing only tasks reachable from the given
+    /// packages: their direct tasks, transitive dependents, and all
+    /// transitive dependencies needed for execution. Persistent
+    /// non-interruptible tasks are excluded (they can't be restarted in
+    /// watch mode). Used by watch mode to scope rebuilds to the changed
+    /// portion of the task graph.
+    ///
+    /// Transitive dependencies are included because the executor needs them
+    /// to produce outputs that downstream tasks consume — on a cold cache
+    /// or first run, those outputs won't already be on disk.
+    pub fn create_engine_for_subgraph(self, changed_packages: &HashSet<PackageName>) -> Self {
         let entrypoint_indices: Vec<_> = changed_packages
             .iter()
             .filter_map(|pkg| self.package_tasks.get(pkg))
@@ -247,82 +254,53 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
             .copied()
             .collect();
 
-        // Compute all nodes reachable from the entrypoint tasks by traversing
-        // dependents (incoming direction on the original graph = outgoing on
-        // reversed). Uses a multi-source DFS which is O(V+E), replacing the
-        // previous O(V^3) Floyd-Warshall approach.
-        let mut reachable = HashSet::new();
-        depth_first_search(Reversed(&self.task_graph), entrypoint_indices, |event| {
-            if let DfsEvent::Discover(n, _) = event {
-                reachable.insert(n);
-            }
-        });
-
-        let new_graph = self.task_graph.filter_map(
-            |node_idx, node| {
-                if !reachable.contains(&node_idx) {
-                    return None;
-                }
-
-                if let TaskNode::Task(task) = &self.task_graph[node_idx] {
-                    // We only want to include tasks that are not persistent
-                    let def = self
-                        .task_definitions
-                        .get(task)
-                        .expect("task should have definition");
-
-                    if def.persistent() && !def.interruptible() {
-                        return None;
-                    }
-                }
-                Some(node.clone())
-            },
-            |_, _| Some(()),
-        );
-
-        let task_lookup: HashMap<_, _> = new_graph
-            .node_indices()
-            .filter_map(|index| {
-                let task = new_graph
-                    .node_weight(index)
-                    .expect("node index should be present");
-                match task {
-                    TaskNode::Root => None,
-                    TaskNode::Task(task) => Some((task.clone(), index)),
-                }
-            })
-            .collect();
-
-        Engine {
-            marker: std::marker::PhantomData,
-            root_index: self.root_index,
-            task_graph: new_graph,
-            task_lookup,
-            task_definitions: self.task_definitions.clone(),
-            task_locations: self.task_locations.clone(),
-            package_tasks: self.package_tasks.clone(),
-            // We've filtered out persistent tasks
-            has_non_interruptible_tasks: false,
-        }
+        let reachable = self.reachable_closure(entrypoint_indices);
+        self.prune_to_reachable(&reachable, true)
     }
 
-    /// Returns a new engine containing only the given directly affected tasks
-    /// and their transitive dependents. Used for task-level `--affected`
-    /// detection: the caller determines which tasks' `inputs` match the changed
-    /// files, then this method expands that set to include downstream tasks and
-    /// prunes everything else.
+    /// Returns a new engine containing only the given directly affected tasks,
+    /// their transitive dependents, and all transitive dependencies required
+    /// for execution. Used for task-level `--affected` detection: the caller
+    /// determines which tasks' `inputs` match the changed files, then this
+    /// method expands that set to include downstream tasks and their full
+    /// dependency chains, pruning everything else.
+    ///
+    /// Dependencies of affected tasks are included because the executor
+    /// needs them in the graph to restore cached outputs before running
+    /// the affected tasks that consume them.
     ///
     /// This consumes and returns a new engine rather than mutating in place,
-    /// consistent with `create_engine_for_subgraph` and the sealed typestate
-    /// contract. Must be called during build, before the engine is shared
-    /// via `Arc` or handed to the executor.
-    pub fn retain_affected_tasks(mut self, affected_tasks: &HashSet<TaskId>) -> Self {
+    /// following the sealed typestate contract. Must be called during build,
+    /// before the engine is shared via `Arc` or handed to the executor.
+    pub fn retain_affected_tasks(self, affected_tasks: &HashSet<TaskId>) -> Self {
         let entrypoint_indices: Vec<_> = affected_tasks
             .iter()
             .filter_map(|task_id| self.task_lookup.get(task_id))
             .copied()
             .collect();
 
+        let original_task_count = self.task_graph.node_count().saturating_sub(1);
+        let reachable = self.reachable_closure(entrypoint_indices);
+        let retained_task_count = reachable.len().saturating_sub(1);
+
+        tracing::info!(
+            directly_affected = affected_tasks.len(),
+            retained = retained_task_count,
+            pruned = original_task_count.saturating_sub(retained_task_count),
+            "task graph pruned for --affected"
+        );
+
+        self.prune_to_reachable(&reachable, false)
+    }
+
+    /// Computes the full reachable set from seed nodes: reverse DFS for
+    /// transitive dependents, then forward DFS for transitive dependencies.
+    /// Root is always included so `prune_to_reachable` can recover it.
+    fn reachable_closure(
+        &self,
+        entrypoint_indices: Vec<petgraph::graph::NodeIndex>,
+    ) -> HashSet<petgraph::graph::NodeIndex> {
+        // Reverse DFS: find transitive dependents (downstream consumers).
         let mut reachable = HashSet::new();
         reachable.insert(self.root_index);
         depth_first_search(Reversed(&self.task_graph), entrypoint_indices, |event| {
@@ -331,13 +309,50 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
             }
         });
 
+        // Forward DFS: find transitive dependencies (upstream tasks needed as
+        // cache hits). Root is excluded as a seed since it has no outgoing
+        // edges in the forward direction.
+        let forward_seeds: Vec<_> = reachable
+            .iter()
+            .copied()
+            .filter(|&n| n != self.root_index)
+            .collect();
+        depth_first_search(&self.task_graph, forward_seeds, |event| {
+            if let DfsEvent::Discover(n, _) = event {
+                reachable.insert(n);
+            }
+        });
+
+        reachable
+    }
+
+    /// Prunes the engine graph to only nodes in `reachable` and rebuilds all
+    /// metadata (`task_lookup`, `root_index`, `task_definitions`,
+    /// `task_locations`, `package_tasks`, `has_non_interruptible_tasks`).
+    ///
+    /// When `exclude_non_interruptible_persistent` is true, persistent
+    /// non-interruptible tasks are also filtered out even if reachable (used
+    /// by watch mode).
+    fn prune_to_reachable(
+        mut self,
+        reachable: &HashSet<petgraph::graph::NodeIndex>,
+        exclude_non_interruptible_persistent: bool,
+    ) -> Self {
         self.task_graph = self.task_graph.filter_map(
             |node_idx, node| {
-                if reachable.contains(&node_idx) {
-                    Some(node.clone())
-                } else {
-                    None
+                if !reachable.contains(&node_idx) {
+                    return None;
                 }
+                if exclude_non_interruptible_persistent && let TaskNode::Task(task) = node {
+                    let def = self
+                        .task_definitions
+                        .get(task)
+                        .expect("task should have definition");
+                    if def.persistent() && !def.interruptible() {
+                        return None;
+                    }
+                }
+                Some(node.clone())
             },
             |_, _| Some(()),
         );
@@ -771,37 +786,71 @@ mod affected_tasks_tests {
     }
 
     #[test]
-    fn affected_terminal_includes_only_itself() {
+    fn affected_terminal_includes_dependency_chain() {
         let engine = build_linear_engine();
         let affected: HashSet<_> = [TaskId::new("c", "build")].into_iter().collect();
         let engine = engine.retain_affected_tasks(&affected);
 
+        // c is affected, but c depends on b which depends on a.
+        // All three must survive so the executor can run the full
+        // dependency chain (a and b will be cache hits).
         let ids = task_ids_set(&engine);
-        assert_eq!(ids.len(), 1);
+        assert_eq!(
+            ids.len(),
+            3,
+            "full dependency chain should survive: {ids:?}"
+        );
+        assert!(ids.contains(&TaskId::new("a", "build")));
+        assert!(ids.contains(&TaskId::new("b", "build")));
         assert!(ids.contains(&TaskId::new("c", "build")));
     }
 
     #[test]
-    fn affected_middle_includes_downstream() {
+    fn affected_middle_includes_deps_and_dependents() {
         let engine = build_linear_engine();
         let affected: HashSet<_> = [TaskId::new("b", "build")].into_iter().collect();
         let engine = engine.retain_affected_tasks(&affected);
 
+        // b is affected. c depends on b (dependent, needs re-run).
+        // b depends on a (dependency, needed for execution as a cache hit).
         let ids = task_ids_set(&engine);
-        assert_eq!(ids.len(), 2);
+        assert_eq!(ids.len(), 3, "deps + dependents should survive: {ids:?}");
+        assert!(ids.contains(&TaskId::new("a", "build")));
         assert!(ids.contains(&TaskId::new("b", "build")));
         assert!(ids.contains(&TaskId::new("c", "build")));
     }
 
     #[test]
     fn metadata_pruned_to_surviving_tasks() {
-        let engine = build_linear_engine();
-        let affected: HashSet<_> = [TaskId::new("c", "build")].into_iter().collect();
+        let mut engine: Engine<Building> = Engine::new();
+
+        let a = TaskId::new("a", "build");
+        let b = TaskId::new("b", "build");
+        let x = TaskId::new("x", "build");
+
+        let a_idx = engine.get_index(&a);
+        let b_idx = engine.get_index(&b);
+        engine.get_index(&x);
+
+        engine.add_definition(a.clone(), TaskInfo::default());
+        engine.add_definition(b.clone(), TaskInfo::default());
+        engine.add_definition(x.clone(), TaskInfo::default());
+
+        engine.task_graph_mut().add_edge(b_idx, a_idx, ());
+        engine.connect_to_root(&a);
+        engine.connect_to_root(&x);
+
+        let engine = engine.seal();
+        let affected: HashSet<_> = [TaskId::new("a", "build")].into_iter().collect();
         let engine = engine.retain_affected_tasks(&affected);
 
-        assert!(engine.task_definition(&TaskId::new("c", "build")).is_some());
-        assert!(engine.task_definition(&TaskId::new("a", "build")).is_none());
-        assert!(engine.task_definition(&TaskId::new("b", "build")).is_none());
+        // a and b survive (a affected, b depends on a). x is unrelated and pruned.
+        assert!(engine.task_definition(&TaskId::new("a", "build")).is_some());
+        assert!(engine.task_definition(&TaskId::new("b", "build")).is_some());
+        assert!(
+            engine.task_definition(&TaskId::new("x", "build")).is_none(),
+            "unrelated task metadata should be pruned"
+        );
     }
 
     #[test]
@@ -915,6 +964,10 @@ mod affected_tasks_tests {
 
         let ids = task_ids_set(&engine);
         assert_eq!(ids.len(), 4, "all diamond tasks should survive: {ids:?}");
+        assert!(ids.contains(&TaskId::new("a", "build")));
+        assert!(ids.contains(&TaskId::new("b", "build")));
+        assert!(ids.contains(&TaskId::new("c", "build")));
+        assert!(ids.contains(&TaskId::new("d", "build")));
     }
 
     #[test]
@@ -943,13 +996,17 @@ mod affected_tasks_tests {
         engine.connect_to_root(&a);
 
         let engine = engine.seal();
-        // Only b is affected — d depends on b, so d is included. a and c are not.
+        // b is affected. d depends on b (dependent). b depends on a (dependency).
+        // d also depends on c which depends on a. All four must survive so d's
+        // full dependency diamond can execute.
         let affected: HashSet<_> = [TaskId::new("b", "build")].into_iter().collect();
         let engine = engine.retain_affected_tasks(&affected);
 
         let ids = task_ids_set(&engine);
-        assert_eq!(ids.len(), 2, "b and d should survive: {ids:?}");
+        assert_eq!(ids.len(), 4, "full diamond should survive: {ids:?}");
+        assert!(ids.contains(&TaskId::new("a", "build")));
         assert!(ids.contains(&TaskId::new("b", "build")));
+        assert!(ids.contains(&TaskId::new("c", "build")));
         assert!(ids.contains(&TaskId::new("d", "build")));
     }
 
@@ -965,6 +1022,46 @@ mod affected_tasks_tests {
         let ids_second = task_ids_set(&engine);
 
         assert_eq!(ids_first, ids_second, "retain should be idempotent");
+    }
+
+    /// Regression test for https://github.com/vercel/turborepo/issues/12512
+    ///
+    /// When an app's source changes and it has a ^build dependency on a lib,
+    /// the lib's build task must remain in the graph even though the lib's
+    /// inputs didn't change. Without it, the executor can't restore the
+    /// lib's cached output before the app tries to consume it.
+    #[test]
+    fn affected_app_retains_lib_dependency() {
+        let mut engine: Engine<Building> = Engine::new();
+
+        let lib_build = TaskId::new("common", "build");
+        let app_build = TaskId::new("web", "build");
+
+        let lib_idx = engine.get_index(&lib_build);
+        let app_idx = engine.get_index(&app_build);
+
+        engine.add_definition(lib_build.clone(), TaskInfo::default());
+        engine.add_definition(app_build.clone(), TaskInfo::default());
+
+        // web#build depends on common#build (^build)
+        engine.task_graph_mut().add_edge(app_idx, lib_idx, ());
+        engine.connect_to_root(&lib_build);
+
+        let engine = engine.seal();
+
+        // Only web's source changed — common is not directly affected.
+        let affected: HashSet<_> = [TaskId::new("web", "build")].into_iter().collect();
+        let engine = engine.retain_affected_tasks(&affected);
+
+        let ids = task_ids_set(&engine);
+        assert!(
+            ids.contains(&TaskId::new("web", "build")),
+            "affected app task should survive"
+        );
+        assert!(
+            ids.contains(&TaskId::new("common", "build")),
+            "^build dependency must survive for the app to execute"
+        );
     }
 }
 

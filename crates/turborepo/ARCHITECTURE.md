@@ -55,7 +55,9 @@ construction:
 3. **Task change detection** (`turborepo-lib/src/task_change_detector.rs`):
    Determines directly affected tasks, handling global deps and per-task inputs
 4. **Engine pruning** (`Engine::retain_affected_tasks`): Returns a new engine
-   containing only directly affected tasks plus their transitive dependents
+   containing directly affected tasks, their transitive dependents, and all
+   transitive dependencies required for execution (upstream tasks needed as
+   cache hits)
 
 This differs from the default `--affected` behavior which operates at the
 package level (all tasks in changed packages run).

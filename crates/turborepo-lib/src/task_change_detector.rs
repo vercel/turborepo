@@ -24,8 +24,9 @@ use crate::engine::Engine;
 const DEFAULT_GLOBAL_DEPS: &[&str] = &["turbo.json", "turbo.jsonc"];
 
 /// Determines which tasks are directly affected by the given set of changed
-/// files. Does NOT include transitive dependents — use
-/// `Engine::retain_affected_tasks` afterward for that.
+/// files. Does NOT expand to transitive dependents or dependencies — use
+/// `Engine::retain_affected_tasks` afterward to include downstream
+/// dependents and upstream dependencies needed for execution.
 ///
 /// Checks all tasks against all changed files regardless of package boundaries.
 /// This is what makes cross-package inputs (`$TURBO_ROOT$/schema/api.json`)

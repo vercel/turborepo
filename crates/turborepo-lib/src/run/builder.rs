@@ -965,12 +965,11 @@ impl RunBuilder {
         // In watch mode with the future flag, filter the engine to only tasks
         // whose declared inputs match the changed files.
         //
-        // When active, this REPLACES create_engine_for_subgraph because:
-        // 1. retain_affected_tasks already selects the correct tasks + dependents
-        // 2. The entrypoint packages (from file watcher events) may not overlap with
-        //    the affected tasks (e.g. a $TURBO_ROOT$ input in another package)
-        // 3. retain_affected_tasks requires the Root sentinel node, which
-        //    create_engine_for_subgraph removes
+        // When active, this REPLACES create_engine_for_subgraph because
+        // the entrypoint packages (from file watcher events) may not overlap
+        // with the affected tasks (e.g. a $TURBO_ROOT$ input in another
+        // package changes but the watcher only reports the package containing
+        // the file).
         let watch_task_filtered = if let Some(ref changed_files) = self.changed_files_for_watch {
             if self.opts.future_flags.watch_using_task_inputs && !changed_files.is_empty() {
                 // Only consider files that still exist on disk. Editor temp

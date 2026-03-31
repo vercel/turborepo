@@ -30,8 +30,9 @@ use crate::engine::Engine;
 ///
 /// Each include selector contributes a set of tasks (unioned together).
 /// Exclude selectors remove tasks from the result. After all selectors
-/// are processed, the engine is pruned to the surviving tasks plus their
-/// transitive dependents (so downstream tasks still run).
+/// are processed, the engine is pruned to the surviving tasks, their
+/// transitive dependents, and all transitive dependencies needed for
+/// execution.
 pub fn filter_engine_to_tasks(
     engine: Engine,
     selectors: &[TargetSelector],
@@ -77,9 +78,8 @@ pub fn filter_engine_to_tasks(
         return Ok(engine.retain_affected_tasks(&included_tasks));
     }
 
-    // retain_affected_tasks expands to transitive dependents and prunes the
-    // rest, which is exactly what we want — downstream tasks of matched tasks
-    // still need to run.
+    // retain_affected_tasks expands to transitive dependents, includes
+    // transitive dependencies for execution, and prunes the rest.
     Ok(engine.retain_affected_tasks(&included_tasks))
 }
 

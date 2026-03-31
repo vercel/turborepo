@@ -228,7 +228,7 @@ fn validate_interactive(engine: &Engine<Built>, ui_mode: UIMode) -> Vec<Validate
 #[cfg(test)]
 mod test {
 
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashSet};
 
     use tempfile::TempDir;
     use turbopath::AbsoluteSystemPath;
@@ -469,13 +469,52 @@ mod test {
         let subgraph =
             engine.create_engine_for_subgraph(&[PackageName::from("a")].into_iter().collect());
 
-        // Verify that the subgraph only contains tasks from package `a` and the `build`
-        // task from package `b`
+        // a's tasks are entrypoints, b#build is a transitive dependent, and
+        // Root is preserved for graph integrity. b#dev has no dependency on
+        // any of a's tasks so it's pruned.
         let tasks: Vec<_> = subgraph.tasks().collect();
-        assert_eq!(tasks.len(), 3);
+        assert_eq!(tasks.len(), 4);
+        assert!(tasks.contains(&&TaskNode::Root));
         assert!(tasks.contains(&&TaskNode::Task(a_build_task_id)));
         assert!(tasks.contains(&&TaskNode::Task(a_dev_task_id)));
         assert!(tasks.contains(&&TaskNode::Task(b_build_task_id)));
+    }
+
+    /// When a downstream package changes in watch mode, the subgraph must
+    /// include its upstream dependency tasks so the executor can produce
+    /// their outputs (cold cache, first run, or cleared cache).
+    #[test]
+    fn test_subgraph_retains_upstream_dependency() {
+        let mut engine: Engine<Building> = Engine::new();
+
+        let lib_build = TaskId::new("lib", "build");
+        let app_build = TaskId::new("app", "build");
+
+        let lib_idx = engine.get_index(&lib_build);
+        let app_idx = engine.get_index(&app_build);
+
+        engine.add_definition(lib_build.clone(), TaskDefinition::default());
+        engine.add_definition(app_build.clone(), TaskDefinition::default());
+
+        // app#build depends on lib#build (^build)
+        engine.task_graph_mut().add_edge(app_idx, lib_idx, ());
+        engine.connect_to_root(&lib_build);
+
+        let engine = engine.seal();
+
+        // Only app's files changed — lib is untouched.
+        let subgraph =
+            engine.create_engine_for_subgraph(&[PackageName::from("app")].into_iter().collect());
+
+        let task_ids: HashSet<_> = subgraph.task_ids().cloned().collect();
+        assert!(
+            task_ids.contains(&app_build),
+            "changed package's task should survive"
+        );
+        assert!(
+            task_ids.contains(&lib_build),
+            "upstream dependency must survive — executor needs it to produce outputs on cold cache"
+        );
     }
 
     #[tokio::test]

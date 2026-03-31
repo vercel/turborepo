@@ -848,6 +848,55 @@ fn test_task_level_affected_source_file_change() {
     );
 }
 
+/// Regression test for https://github.com/vercel/turborepo/issues/12512
+///
+/// When only an app's source changes and it has a `^build` dependency on a
+/// lib, the lib's build task must appear in the dry-run output even though
+/// the lib's inputs didn't change. The executor needs it to restore cached
+/// outputs before running the app's build.
+#[test]
+fn test_task_level_affected_app_change_retains_lib_dependency() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_task_level_affected(tempdir.path());
+
+    // Change only app-a's source — lib-a is untouched.
+    fs::write(
+        tempdir.path().join("packages/app-a/index.ts"),
+        "export const changed = true;",
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--affected", "--dry=json"],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("failed to parse dry run JSON: {e}\nstdout: {stdout}"));
+
+    let tasks = json["tasks"].as_array().expect("tasks array");
+    let task_ids: Vec<&str> = tasks
+        .iter()
+        .map(|t| t["taskId"].as_str().unwrap())
+        .collect();
+
+    assert!(
+        task_ids.contains(&"app-a#build"),
+        "app-a#build should be directly affected: {task_ids:?}"
+    );
+    assert!(
+        task_ids.contains(&"lib-a#build"),
+        "lib-a#build must survive as a ^build dependency for the executor: {task_ids:?}"
+    );
+    // lib-a's other tasks should NOT be included — only build is a
+    // dependency of app-a via ^build.
+    assert!(
+        !task_ids.contains(&"lib-a#test"),
+        "lib-a#test is not a dependency of app-a#build: {task_ids:?}"
+    );
+}
+
 #[test]
 fn test_task_level_affected_md_excludes_test_and_typecheck() {
     let tempdir = tempfile::tempdir().unwrap();
