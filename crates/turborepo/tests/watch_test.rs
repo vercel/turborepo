@@ -832,3 +832,64 @@ fn watch_mixed_persistent_tasks_all_start() {
         "app-b dev (non-interruptible) should have started, but ran {dev_b} times"
     );
 }
+
+/// Regression test for https://github.com/vercel/turborepo/issues/12505
+///
+/// When `turbo watch` is running an interruptible persistent task, editing
+/// a file in that package should kill and restart the task. This verifies
+/// the full file-change → stop → re-execute cycle works.
+#[test]
+#[cfg_attr(windows, ignore)]
+fn watch_interruptible_persistent_task_restarts_on_file_change() {
+    let (_tempdir, test_dir) = setup_watch_mixed_persistent_test();
+    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks(&test_dir, &["dev"]));
+
+    // Wait for both tasks to start
+    wait_for_prefixed_markers(&test_dir, "app-a", "dev-", 1, Duration::from_secs(60));
+    wait_for_prefixed_markers(&test_dir, "app-b", "dev-", 1, Duration::from_secs(60));
+
+    // Let the watcher fully settle after the initial run.
+    std::thread::sleep(Duration::from_secs(2));
+
+    let a_before = prefixed_marker_count(&test_dir, "app-a", "dev-");
+
+    // Modify a file in app-a and commit. The hash watcher uses git-based
+    // hashing, so the change must be committed.
+    let src_file = test_dir.join("packages/app-a/src.js");
+    for attempt in 0..3 {
+        let value = 42 + attempt;
+        fs::write(&src_file, format!("module.exports = {{ a: {value} }};\n")).unwrap();
+
+        common::git(&test_dir, &["add", "."]);
+        common::git(
+            &test_dir,
+            &[
+                "commit",
+                "-m",
+                &format!("modify app-a (attempt {attempt})"),
+                "--quiet",
+            ],
+        );
+
+        let count = wait_for_prefixed_markers(
+            &test_dir,
+            "app-a",
+            "dev-",
+            a_before + 1,
+            Duration::from_secs(15),
+        );
+        if count > a_before {
+            break;
+        }
+    }
+
+    let a_after = prefixed_marker_count(&test_dir, "app-a", "dev-");
+
+    drop(guard);
+
+    assert!(
+        a_after > a_before,
+        "app-a dev (interruptible) should have restarted after file change. before: {a_before}, \
+         after: {a_after}"
+    );
+}

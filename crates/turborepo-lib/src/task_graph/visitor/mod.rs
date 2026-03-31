@@ -21,7 +21,7 @@ use turborepo_errors::TURBO_SITE;
 use turborepo_log::grouping::{GroupingLayer, GroupingMode};
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
-use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker};
+use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker, TaskTracker};
 use turborepo_scm::SCM;
 // Re-export output types and shared functions from turborepo-task-executor
 pub use turborepo_task_executor::{turbo_regex, TaskOutput};
@@ -477,7 +477,6 @@ impl<'a> Visitor<'a> {
                     self.grouping_layer
                         .logger()
                         .register_task(&task_id_str, &task_prefix);
-                    let tracker = self.run_tracker.track_task(info.into_owned());
                     let parent_span = Span::current();
 
                     if self.is_watch && task_definition.persistent {
@@ -487,12 +486,20 @@ impl<'a> Visitor<'a> {
                         // background task. The child process stays tracked by
                         // the ProcessManager for later stop_tasks() calls.
                         let _ = callback.send(Ok(()));
+                        // Use a no-op tracker for the detached task. The real
+                        // tracker (from run_tracker.track_task) must NOT be
+                        // passed to the spawn — its sender clone would keep
+                        // ExecutionTracker::finish() blocked forever since
+                        // the persistent process never exits. This caused
+                        // Run::run() to never return, preventing the watch
+                        // loop from processing file-change events.
+                        let bg_tracker = TaskTracker::noop(info.into_owned());
                         let (bg_callback, _) = tokio::sync::oneshot::channel();
                         tokio::spawn(async move {
                             exec_context
                                 .execute(
                                     parent_span.id(),
-                                    tracker,
+                                    bg_tracker,
                                     task_output,
                                     task_handle,
                                     bg_callback,
@@ -501,6 +508,7 @@ impl<'a> Visitor<'a> {
                                 .await
                         });
                     } else {
+                        let tracker = self.run_tracker.track_task(info.into_owned());
                         tasks.push(tokio::spawn(async move {
                             exec_context
                                 .execute(

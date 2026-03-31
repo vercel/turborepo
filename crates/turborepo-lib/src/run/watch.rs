@@ -13,7 +13,7 @@ use tokio::{
     sync::{broadcast, Notify},
     task::JoinHandle,
 };
-use tracing::{instrument, trace};
+use tracing::{debug, instrument, trace};
 use turbopath::AnchoredSystemPathBuf;
 use turborepo_daemon::{PackageChangeEvent, PackageChangesWatcher as PackageChangesWatcherTrait};
 use turborepo_filewatch::{
@@ -385,8 +385,9 @@ impl WatchClient {
         let event_fut = async {
             loop {
                 match events.recv().await {
-                    Ok(event) => {
-                        Self::handle_change_event(&pending_changes, event);
+                    Ok(ref event) => {
+                        debug!(?event, "received package change event");
+                        Self::handle_change_event(&pending_changes, event.clone());
                         notify_event.notify_one();
                     }
                     Err(broadcast::error::RecvError::Closed) => {
@@ -410,11 +411,9 @@ impl WatchClient {
 
                 if let Some(mut changed_packages) = some_changed_packages {
                     // Stop impacted tasks and wait for prior runs to finish
-                    // before starting new ones. This prevents:
-                    // - Concurrent builds of the same package (Next.js lock conflicts, duplicated
-                    //   output)
-                    // - A cache-hit run incorrectly signaling persistent task readiness when the
-                    //   real build failed
+                    // before starting new ones. This prevents concurrent
+                    // builds of the same package and stale cache-hit signals.
+                    debug!(?changed_packages, "processing changed packages");
                     match changed_packages {
                         ChangedPackages::Some { ref packages, .. } => {
                             let impacted = self.stop_impacted_tasks(packages).await;
@@ -445,9 +444,14 @@ impl WatchClient {
                     // In watch mode the visitor treats persistent tasks as
                     // fire-and-forget, so this only blocks on non-persistent
                     // tasks (builds).
+                    debug!(
+                        active_runs = self.active_runs.len(),
+                        "waiting for runs to complete"
+                    );
                     for handle in &mut self.active_runs {
                         let _ = (&mut handle.run_task).await;
                     }
+                    debug!("all runs completed, ready for next event");
                     // Save stoppers before retain drops them — their PMs may
                     // still track background persistent processes.
                     for handle in &self.active_runs {
@@ -530,6 +534,13 @@ impl WatchClient {
             .map(|task_id| PackageName::from(task_id.package()))
             .collect();
 
+        debug!(
+            ?pkgs,
+            ?impacted_packages,
+            impacted_tasks = ?task_ids,
+            "identified impacted tasks for changed packages"
+        );
+
         // Only stop tasks that are allowed to be restarted. Non-interruptible
         // persistent tasks survive file changes — they are only killed on a
         // full rebuild (ChangedPackages::All) or shutdown.
@@ -542,6 +553,7 @@ impl WatchClient {
             })
             .collect();
 
+        debug!(?stoppable_ids, "stopping interruptible tasks");
         for handle in &self.active_runs {
             handle.stopper.stop_tasks(&stoppable_ids).await;
         }

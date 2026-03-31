@@ -316,6 +316,19 @@ impl ExecutionTracker {
 }
 
 impl TaskTracker<()> {
+    /// Create a tracker whose events are silently discarded.
+    /// Used for fire-and-forget persistent tasks in watch mode where the
+    /// real tracker must be dropped to unblock `ExecutionTracker::finish()`.
+    pub fn noop(task_id: TaskId<'static>) -> Self {
+        // The receiver is dropped immediately; sends will silently fail.
+        let (sender, _) = mpsc::channel(1);
+        Self {
+            sender,
+            task_id,
+            started_at: (),
+        }
+    }
+
     // Start the tracker
     pub async fn start(self) -> TaskTracker<DateTime<Local>> {
         let TaskTracker {
