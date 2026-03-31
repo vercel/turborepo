@@ -614,8 +614,30 @@ impl Lockfile for BunLockfile {
         };
 
         for (dependency, version) in info.all_dependencies() {
-            let nested_key = format!("{entry_key}/{dependency}");
-            let nested_entry = self.data.packages.get(&nested_key);
+            // Bun resolves nested dependencies by walking up the parent chain
+            // from the current package. Check the direct child first, then
+            // each ancestor level until we find a nested entry whose version
+            // matches the declared dependency version.
+            let nested_entry = {
+                let direct_key = format!("{entry_key}/{dependency}");
+                if let Some(e) = self.data.packages.get(&direct_key) {
+                    Some(e)
+                } else {
+                    let mut found = None;
+                    let mut search_key = entry_key.as_str();
+                    while let Some(slash_pos) = search_key.rfind('/') {
+                        search_key = &search_key[..slash_pos];
+                        let ancestor_key = format!("{search_key}/{dependency}");
+                        if let Some(e) = self.data.packages.get(&ancestor_key) {
+                            if e.version() == version {
+                                found = Some(e);
+                            }
+                            break;
+                        }
+                    }
+                    found
+                }
+            };
 
             let is_optional = info.optional_dependencies.contains_key(dependency)
                 || info.optional_peers.contains(dependency);
