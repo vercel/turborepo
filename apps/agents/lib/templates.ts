@@ -13,5 +13,5 @@ Without a reproduction, we may not be able to investigate this issue.
 
 Thank you!
 
-_This is an AI-generated response._
+_This is an AI-generated response, posted by a human._
 `;
