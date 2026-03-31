@@ -65,6 +65,29 @@ pub struct ProjectSnapshot {
     publish_directory: Option<String>,
 }
 
+impl ProjectSnapshot {
+    fn empty(is_v6: bool) -> Self {
+        Self {
+            dependencies: if is_v6 {
+                DependencyInfo::V6 {
+                    dependencies: None,
+                    optional_dependencies: None,
+                    dev_dependencies: None,
+                }
+            } else {
+                DependencyInfo::PreV6 {
+                    specifiers: None,
+                    dependencies: None,
+                    optional_dependencies: None,
+                    dev_dependencies: None,
+                }
+            },
+            dependencies_meta: None,
+            publish_directory: None,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum DependencyInfo {
@@ -559,12 +582,23 @@ impl crate::Lockfile for PnpmLockfile {
         workspace_packages: &[String],
         packages: &[String],
     ) -> Result<Box<dyn crate::Lockfile>, crate::Error> {
-        let importers: BTreeMap<_, _> = self
+        let mut importers: BTreeMap<_, _> = self
             .importers
             .iter()
             .filter(|(key, _)| key.as_str() == "." || workspace_packages.contains(key))
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
+
+        // Workspace packages with no dependencies may be absent from the
+        // original lockfile's importers. pnpm requires every workspace package
+        // to have an importer entry (even if empty) for --frozen-lockfile to
+        // succeed, so we backfill any that are missing.
+        let empty_snapshot = ProjectSnapshot::empty(self.is_v6());
+        for pkg in workspace_packages {
+            importers
+                .entry(pkg.clone())
+                .or_insert_with(|| empty_snapshot.clone());
+        }
 
         let (mut pruned_packages, mut pruned_snapshots) =
             self.pruned_packages_and_snapshots(packages)?;
@@ -1933,5 +1967,80 @@ snapshots:
         );
         assert_eq!(pruned_settings.auto_install_peers, Some(false));
         assert_eq!(pruned_settings.exclude_links_from_lockfile, Some(false));
+    }
+
+    #[test]
+    fn test_subgraph_backfills_missing_workspace_importers() {
+        // Workspace packages with no dependencies may be absent from the
+        // lockfile's importers section. The pruned lockfile must still include
+        // them so that pnpm --frozen-lockfile doesn't consider the lockfile
+        // out of date.
+        let yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      '@repo/config':
+        specifier: workspace:*
+        version: link:packages/config
+      is-odd:
+        specifier: ^3.0.1
+        version: 3.0.1
+
+packages:
+
+  is-number@6.0.0:
+    resolution: {integrity: sha512-abc}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+
+snapshots:
+
+  is-number@6.0.0: {}
+
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        // packages/config is NOT in the importers section
+        assert!(
+            !lockfile.importers.contains_key("packages/config"),
+            "fixture must not have packages/config in importers"
+        );
+
+        let workspace_packages = vec!["packages/config".to_string()];
+        let resolved_packages = vec!["is-number@6.0.0".to_string(), "is-odd@3.0.1".to_string()];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+
+        // The pruned lockfile must contain an importer entry for
+        // packages/config even though the original didn't have one.
+        assert!(
+            pruned_lockfile.importers.contains_key("packages/config"),
+            "pruned lockfile must backfill missing workspace importer"
+        );
+
+        // The backfilled entry should be empty (no deps).
+        let importer = pruned_lockfile.importers.get("packages/config").unwrap();
+        assert_eq!(
+            importer.dependencies.all_dependency_names().count(),
+            0,
+            "backfilled importer should have no dependencies"
+        );
+
+        // Root importer should still be present.
+        assert!(pruned_lockfile.importers.contains_key("."));
     }
 }
