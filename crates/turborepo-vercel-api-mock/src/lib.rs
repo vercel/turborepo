@@ -284,6 +284,15 @@ pub async fn start_test_server(
             }),
         )
         .route(
+            "/preflight/wildcard-allow-auth",
+            options(|| async {
+                let mut headers = HeaderMap::new();
+                headers.insert("Access-Control-Allow-Headers", "*".parse().unwrap());
+
+                headers
+            }),
+        )
+        .route(
             "/api/turborepo/v1/events",
             post(
                 |Json(telemetry_events): Json<Vec<TelemetryEvent>>| async move {

@@ -748,7 +748,8 @@ impl APIClient {
             .get("Access-Control-Allow-Headers")
             .map_or("", |h| h.to_str().unwrap_or(""));
 
-        let allow_auth = AUTHORIZATION_REGEX.is_match(allowed_headers);
+        let allow_auth =
+            allowed_headers == "*" || AUTHORIZATION_REGEX.is_match(allowed_headers);
 
         Ok(PreflightResponse {
             location,
@@ -994,6 +995,17 @@ mod test {
             .await?;
 
         assert!(!response.allow_authorization_header);
+
+        let response = client
+            .do_preflight(
+                &empty_token,
+                Url::parse(&format!("{base_url}/preflight/wildcard-allow-auth")).unwrap(),
+                "GET",
+                "Authorization, User-Agent",
+            )
+            .await?;
+
+        assert!(response.allow_authorization_header);
 
         handle.abort();
         Ok(())
