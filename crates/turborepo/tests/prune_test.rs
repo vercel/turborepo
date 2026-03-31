@@ -539,10 +539,32 @@ fn test_prune_yarn_pnp() {
 
 // --- pnpm per-workspace lockfile ---
 
+/// Initialize a git repo without overwriting the fixture's .npmrc.
+/// The standard `setup_git` replaces .npmrc with npm boilerplate, which would
+/// destroy the `shared-workspace-lockfile=false` setting the fixture needs.
+fn init_git_preserving_npmrc(dir: &Path) {
+    let npmrc = fs::read_to_string(dir.join(".npmrc")).ok();
+    setup::setup_git(dir).unwrap();
+    if let Some(contents) = npmrc {
+        fs::write(dir.join(".npmrc"), contents).unwrap();
+        std::process::Command::new("git")
+            .args(["add", ".npmrc"])
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "--amend", "--no-edit", "--quiet"])
+            .current_dir(dir)
+            .output()
+            .unwrap();
+    }
+}
+
 #[test]
 fn test_prune_pnpm_per_workspace_lockfile() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::copy_fixture("pnpm_per_workspace_lockfile", tempdir.path()).unwrap();
+    init_git_preserving_npmrc(tempdir.path());
 
     let output = run_turbo(tempdir.path(), &["prune", "web"]);
     assert!(
@@ -596,6 +618,7 @@ fn test_prune_pnpm_per_workspace_lockfile() {
 fn test_prune_pnpm_per_workspace_lockfile_docker() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::copy_fixture("pnpm_per_workspace_lockfile", tempdir.path()).unwrap();
+    init_git_preserving_npmrc(tempdir.path());
 
     let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
     assert!(
