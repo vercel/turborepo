@@ -15,6 +15,7 @@ use turbopath::{
 use turborepo_repository::{
     package_graph::{self, PackageGraph, PackageName, PackageNode},
     package_json::PackageJson,
+    package_manager::npmrc::NpmRc,
 };
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::BOLD;
@@ -184,44 +185,36 @@ pub async fn prune(
         .expect("Lockfile presence already checked")
         .subgraph(&workspace_paths, &lockfile_keys)?;
 
-    let lockfile_contents = lockfile.encode()?;
     let lockfile_name = prune.package_graph.package_manager().lockfile_name();
-    let lockfile_path = prune.out_directory.join_component(lockfile_name);
-    lockfile_path.create_with_contents(&lockfile_contents)?;
-    if prune.docker {
-        prune
-            .docker_directory()
-            .join_component(lockfile_name)
-            .create_with_contents(&lockfile_contents)?;
-    }
 
-    // When the source repo uses per-workspace lockfiles, the workspace
-    // directories were copied with their own pnpm-lock.yaml files. Since the
-    // pruned output uses a single shared lockfile, remove these stale copies.
-    if matches!(
-        prune.package_graph.package_manager(),
-        turborepo_repository::package_manager::PackageManager::Pnpm
-            | turborepo_repository::package_manager::PackageManager::Pnpm6
-            | turborepo_repository::package_manager::PackageManager::Pnpm9
-    ) {
-        prune.remove_per_workspace_lockfiles(&workspace_paths, lockfile_name)?;
+    if prune.uses_per_workspace_lockfiles {
+        // Per-workspace lockfiles are already in the pruned output from
+        // recursive_copy in copy_workspace. Copy the original root lockfile
+        // as-is (it only contains root-level dependencies).
+        let original_root_lockfile = prune.root.join_component(lockfile_name);
+        let out_lockfile = prune.out_directory.join_component(lockfile_name);
+        turborepo_fs::copy_file(&original_root_lockfile, &out_lockfile)?;
+        if prune.docker {
+            turborepo_fs::copy_file(
+                &original_root_lockfile,
+                prune.docker_directory().join_component(lockfile_name),
+            )?;
+        }
+    } else {
+        let lockfile_contents = lockfile.encode()?;
+        let lockfile_path = prune.out_directory.join_component(lockfile_name);
+        lockfile_path.create_with_contents(&lockfile_contents)?;
+        if prune.docker {
+            prune
+                .docker_directory()
+                .join_component(lockfile_name)
+                .create_with_contents(&lockfile_contents)?;
+        }
     }
 
     for (relative_path, required_for_install) in ADDITIONAL_FILES.as_slice() {
         let path = relative_path.to_anchored_system_path_buf();
         prune.copy_file(&path, *required_for_install)?;
-    }
-
-    // The pruned output always uses a shared (root-level) lockfile, so if the
-    // source repo had shared-workspace-lockfile=false, we need to override it
-    // in the copied .npmrc so that pnpm install works correctly.
-    if matches!(
-        prune.package_graph.package_manager(),
-        turborepo_repository::package_manager::PackageManager::Pnpm
-            | turborepo_repository::package_manager::PackageManager::Pnpm6
-            | turborepo_repository::package_manager::PackageManager::Pnpm9
-    ) {
-        prune.ensure_shared_lockfile_in_npmrc()?;
     }
 
     for (relative_path, required_for_install) in ADDITIONAL_DIRECTORIES.as_slice() {
@@ -329,6 +322,7 @@ struct Prune<'a> {
     docker: bool,
     scope: &'a [String],
     use_gitignore: bool,
+    uses_per_workspace_lockfiles: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -402,6 +396,16 @@ impl<'a> Prune<'a> {
             return Err(Error::MissingLockfile);
         }
 
+        let uses_per_workspace_lockfiles = matches!(
+            package_graph.package_manager(),
+            turborepo_repository::package_manager::PackageManager::Pnpm
+                | turborepo_repository::package_manager::PackageManager::Pnpm6
+                | turborepo_repository::package_manager::PackageManager::Pnpm9
+        ) && NpmRc::from_file(&base.repo_root)
+            .unwrap_or_default()
+            .shared_workspace_lockfile
+            == Some(false);
+
         full_directory.resolve(package_json()).ensure_dir()?;
         if docker {
             out_directory
@@ -418,6 +422,7 @@ impl<'a> Prune<'a> {
             docker,
             scope,
             use_gitignore,
+            uses_per_workspace_lockfiles,
         })
     }
 
@@ -497,9 +502,20 @@ impl<'a> Prune<'a> {
             let docker_workspace_dir = self.docker_directory().resolve(&relative_workspace_dir);
             docker_workspace_dir.ensure_dir()?;
             turborepo_fs::copy_file(
-                package_json_path,
+                &package_json_path,
                 docker_workspace_dir.resolve(package_json()),
             )?;
+
+            if self.uses_per_workspace_lockfiles {
+                let lockfile_name = self.package_graph.package_manager().lockfile_name();
+                let ws_lockfile = original_dir.join_component(lockfile_name);
+                if ws_lockfile.try_exists()? {
+                    turborepo_fs::copy_file(
+                        &ws_lockfile,
+                        docker_workspace_dir.join_component(lockfile_name),
+                    )?;
+                }
+            }
         }
 
         Ok(())
@@ -555,72 +571,6 @@ impl<'a> Prune<'a> {
                 );
 
                 self.copy_directory(&anchored, Some(CopyDestination::Docker))?;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Remove per-workspace lockfiles from workspace directories in the pruned
-    /// output. These are stale copies from the source repo that would conflict
-    /// with the merged root-level lockfile.
-    fn remove_per_workspace_lockfiles(
-        &self,
-        workspace_paths: &[String],
-        lockfile_name: &str,
-    ) -> Result<(), Error> {
-        for ws_path in workspace_paths {
-            let ws_dir = AnchoredSystemPathBuf::from_raw(ws_path)?;
-            let ws_lockfile_path = ws_dir.join_component(lockfile_name);
-            let full_path = self.full_directory.resolve(&ws_lockfile_path);
-            if full_path.try_exists()? {
-                trace!("Removing per-workspace lockfile: {}", full_path);
-                std::fs::remove_file(full_path.as_path())?;
-            }
-        }
-        Ok(())
-    }
-
-    /// When the source repo uses `shared-workspace-lockfile=false`, the pruned
-    /// output contains a single merged lockfile. We need to ensure the .npmrc
-    /// in the output uses the shared lockfile so `pnpm install` works
-    /// correctly.
-    fn ensure_shared_lockfile_in_npmrc(&self) -> Result<(), Error> {
-        let npmrc_path = AnchoredSystemPathBuf::from_raw(".npmrc")?;
-        let full_npmrc = self.full_directory.resolve(&npmrc_path);
-        if !full_npmrc.try_exists()? {
-            return Ok(());
-        }
-
-        let contents = full_npmrc.read_to_string()?;
-        if !contents.contains("shared-workspace-lockfile") {
-            return Ok(());
-        }
-
-        let rewritten: String = contents
-            .lines()
-            .map(|line| {
-                let trimmed = line.trim();
-                if trimmed.starts_with("shared-workspace-lockfile") {
-                    "shared-workspace-lockfile=true"
-                } else {
-                    line
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        let rewritten = if contents.ends_with('\n') && !rewritten.ends_with('\n') {
-            format!("{rewritten}\n")
-        } else {
-            rewritten
-        };
-
-        full_npmrc.create_with_contents(&rewritten)?;
-
-        if self.docker {
-            let docker_npmrc = self.docker_directory().resolve(&npmrc_path);
-            if docker_npmrc.try_exists()? {
-                docker_npmrc.create_with_contents(&rewritten)?;
             }
         }
 
