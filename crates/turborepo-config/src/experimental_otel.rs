@@ -36,8 +36,10 @@ pub struct ExperimentalOtelMetricsOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_details: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = crate::merge_option_deep)]
     pub run_attributes: Option<ExperimentalOtelRunAttributesOptions>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = crate::merge_option_deep)]
     pub task_attributes: Option<ExperimentalOtelTaskAttributesOptions>,
 }
 
@@ -60,6 +62,7 @@ pub struct ExperimentalOtelOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resource: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = crate::merge_option_deep)]
     pub metrics: Option<ExperimentalOtelMetricsOptions>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_remote_cache_token: Option<bool>,

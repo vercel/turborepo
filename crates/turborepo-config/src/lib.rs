@@ -53,11 +53,37 @@ pub use experimental_otel::{
     ExperimentalOtelRunAttributesOptions, ExperimentalOtelTaskAttributesOptions,
 };
 
+/// Merge strategy for `Option<T: Merge>` that performs a field-level deep
+/// merge when both sides are `Some`, rather than treating the option value as
+/// an atomic unit.
+///
+/// The standard `merge::option::overwrite_none` strategy keeps the existing
+/// value untouched when it is already `Some`. This is correct for scalar
+/// fields (e.g. `TURBO_TOKEN` overrides `token` in turbo.json and nothing
+/// more), but wrong for nested config objects: setting a single env-var like
+/// `TURBO_EXPERIMENTAL_OTEL_HEADERS` creates a partial
+/// `ExperimentalOtelOptions` with only `headers` populated, which then
+/// silently shadows the `endpoint`, `protocol`, and other fields that were
+/// configured in `turbo.json`.
+///
+/// With this strategy each `Some/Some` pair is resolved by recursively merging
+/// the inner value (calling its own `Merge` impl), so that higher-priority
+/// sources override individual fields while lower-priority sources fill in
+/// whatever was left unset.
+pub(crate) fn merge_option_deep<T: Merge>(left: &mut Option<T>, right: Option<T>) {
+    match (left.as_mut(), right) {
+        (None, Some(r)) => *left = Some(r),
+        (Some(l), Some(r)) => l.merge(r),
+        _ => {}
+    }
+}
+
 #[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
 #[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalObservabilityOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = crate::merge_option_deep)]
     pub otel: Option<ExperimentalOtelOptions>,
 }
 
@@ -312,6 +338,7 @@ pub struct ConfigurationOptions {
     #[serde(skip)]
     pub future_flags: Option<FutureFlags>,
     #[serde(rename = "experimentalObservability")]
+    #[merge(strategy = merge_option_deep)]
     pub experimental_observability: Option<ExperimentalObservabilityOptions>,
     /// Structured log file destination, configured via `logFile` in
     /// turbo.json or `TURBO_LOG_FILE` env var.
@@ -925,7 +952,7 @@ mod test {
             .and_then(|obs| obs.otel.as_ref())
             .expect("expected experimental observability otel config");
 
-        // Builder override wins over env/turbo.json.
+        // Builder override wins for fields it explicitly sets.
         assert_eq!(
             otel.endpoint.as_deref(),
             Some("https://override.example/otel")
@@ -936,14 +963,24 @@ mod test {
             otel.metrics.as_ref().and_then(|m| m.run_summary),
             Some(false)
         );
+        // Override's task_details=false wins over env's task_details=true.
         assert_eq!(
             otel.metrics.as_ref().and_then(|m| m.task_details),
             Some(false)
         );
 
-        // Since CLI/override is modeled as an Option at the `otel` object level,
-        // lower-precedence env/turbo.json values do not merge into it.
-        assert_eq!(otel.enabled, None);
+        // Fields not set by higher-priority sources are filled in by lower-priority
+        // sources via deep merge.  Override did not set `enabled`, so turbo.json's
+        // `enabled: true` is used.
+        assert_eq!(otel.enabled, Some(true));
+        // Override did not set `task_attributes`; env var set it, so it is used.
+        assert_eq!(
+            otel.metrics
+                .as_ref()
+                .and_then(|m| m.task_attributes.as_ref())
+                .and_then(|ta| ta.id),
+            Some(true)
+        );
     }
 
     #[test]
