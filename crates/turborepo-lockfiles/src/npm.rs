@@ -205,7 +205,7 @@ impl Lockfile for NpmLockfile {
             workspace_packages.iter().map(|s| s.as_str()).collect();
         let requested: std::collections::HashSet<&str> =
             packages.iter().map(|s| s.as_str()).collect();
-        Self::rehoist_packages(&mut pruned_packages, &ws_set, &requested);
+        Self::rehoist_packages(&mut pruned_packages, &ws_set, &requested, &self.packages);
 
         Ok(Box::new(Self {
             lockfile_version: self.lockfile_version,
@@ -271,10 +271,17 @@ impl NpmLockfile {
     /// Promotes workspace-nested packages to the hoisted position when the
     /// hoisted slot is either empty or occupied by a version that no
     /// workspace's transitive closure actually requested.
+    ///
+    /// Only rehoists when the original (unpruned) lockfile had an entry at
+    /// the hoisted position. This preserves the install strategy: lockfiles
+    /// produced with `install-strategy=shallow` never have hoisted entries
+    /// for workspace dependencies, so we won't create them during pruning.
+    /// See https://github.com/vercel/turborepo/issues/12493
     fn rehoist_packages(
         pruned: &mut HashMap<String, NpmPackage>,
         workspace_packages: &std::collections::HashSet<&str>,
         requested: &std::collections::HashSet<&str>,
+        original_packages: &HashMap<String, NpmPackage>,
     ) {
         // Group workspace-nested entries by their target hoisted key. When
         // multiple workspaces each have their own nested copy of the same
@@ -301,6 +308,14 @@ impl NpmLockfile {
             // transitive closure, another workspace genuinely needs that
             // version — don't replace it.
             if requested.contains(hoisted_key.as_str()) {
+                continue;
+            }
+
+            // Only rehoist if the original lockfile had an entry at this
+            // hoisted position. If the original never hoisted this package
+            // (e.g. install-strategy=shallow), creating a hoisted entry
+            // would break the lockfile structure.
+            if !original_packages.contains_key(&hoisted_key) {
                 continue;
             }
 
@@ -536,6 +551,11 @@ mod test {
     // must not double-process them. The parent entry's sub-dep relocation
     // already handles moving children; individually rehoisting a child would
     // delete the entry that was just relocated.
+    //
+    // The original lockfile includes a hoisted `node_modules/parent@1.0.0`
+    // (used by a now-pruned workspace) alongside the nested v2 under pkg1.
+    // After pruning, the hoisted v1 is no longer requested, so the nested v2
+    // should be promoted to `node_modules/parent`.
     #[test]
     fn test_subgraph_preserves_deeply_nested_workspace_deps() {
         let json = r#"{
@@ -549,6 +569,9 @@ mod test {
                 "node_modules/pkg1": {
                     "resolved": "packages/pkg1",
                     "link": true
+                },
+                "node_modules/parent": {
+                    "version": "1.0.0"
                 },
                 "packages/pkg1": {
                     "version": "1.0.0",
@@ -695,6 +718,108 @@ mod test {
         assert!(
             !reparsed.packages.contains_key("node_modules/chai"),
             "a spurious hoisted node_modules/chai was created"
+        );
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/12493
+    //
+    // With install-strategy=shallow, all of a workspace's dependencies live
+    // under its own node_modules/ — there are no hoisted copies at the root.
+    // When pruning down to a single workspace, rehoist_packages() must NOT
+    // promote those nested entries to node_modules/ because that would create
+    // entries that never existed in the original lockfile, breaking npm ci.
+    #[test]
+    fn test_subgraph_shallow_single_workspace_no_rehoist() {
+        let json = r#"{
+            "lockfileVersion": 3,
+            "requires": true,
+            "packages": {
+                "": {
+                    "name": "monorepo",
+                    "workspaces": ["apps/*", "packages/*"],
+                    "devDependencies": {
+                        "eslint": "9.0.0"
+                    }
+                },
+                "node_modules/app-a": {
+                    "resolved": "apps/app-a",
+                    "link": true
+                },
+                "node_modules/eslint": {
+                    "version": "9.0.0"
+                },
+                "apps/app-a": {
+                    "version": "1.0.0",
+                    "dependencies": {
+                        "serverless": "^3.0.0"
+                    }
+                },
+                "apps/app-a/node_modules/serverless": {
+                    "version": "3.40.0",
+                    "hasInstallScript": true,
+                    "dependencies": {
+                        "chalk": "^4.0.0"
+                    }
+                },
+                "apps/app-a/node_modules/chalk": {
+                    "version": "4.1.2"
+                },
+                "apps/app-a/node_modules/serverless/node_modules/json-colorizer": {
+                    "version": "2.6.0"
+                }
+            }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/app-a".to_string()];
+        let packages = vec![
+            "apps/app-a/node_modules/serverless".to_string(),
+            "apps/app-a/node_modules/chalk".to_string(),
+            "apps/app-a/node_modules/serverless/node_modules/json-colorizer".to_string(),
+            // Root devDep (from the root workspace's transitive closure)
+            "node_modules/eslint".to_string(),
+        ];
+
+        let pruned = lockfile.subgraph(&workspace_packages, &packages).unwrap();
+        let encoded = pruned.encode().unwrap();
+        let reparsed: NpmLockfile = NpmLockfile::load(&encoded).unwrap();
+
+        // Workspace-nested entries must stay nested
+        assert!(
+            reparsed
+                .packages
+                .contains_key("apps/app-a/node_modules/serverless"),
+            "serverless should remain under apps/app-a/node_modules/"
+        );
+        assert!(
+            reparsed
+                .packages
+                .contains_key("apps/app-a/node_modules/chalk"),
+            "chalk should remain under apps/app-a/node_modules/"
+        );
+        assert!(
+            reparsed
+                .packages
+                .contains_key("apps/app-a/node_modules/serverless/node_modules/json-colorizer"),
+            "nested sub-dep should remain in place"
+        );
+
+        // No hoisted copies should be created — these never existed in the
+        // original lockfile (install-strategy=shallow).
+        assert!(
+            !reparsed.packages.contains_key("node_modules/serverless"),
+            "serverless was wrongly hoisted to root"
+        );
+        assert!(
+            !reparsed.packages.contains_key("node_modules/chalk"),
+            "chalk was wrongly hoisted to root"
+        );
+
+        // Root devDependencies should still be present
+        assert!(
+            reparsed.packages.contains_key("node_modules/eslint"),
+            "root devDep eslint should be preserved"
         );
     }
 
