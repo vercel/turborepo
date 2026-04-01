@@ -2,9 +2,6 @@
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
   "noUpdateNotifier": true,
-  "futureFlags": {
-    "incrementalTasks": true
-  },
   // The following are used by tools such as pnpm, gh actions to setup pnpm, etc.
   "globalPassThroughEnv": [
     "Path",
@@ -55,9 +52,6 @@
       "dependsOn": ["//#lint:fix", "//#format:fix", "//#fix:toml"]
     },
     "check-types": {
-      "incremental": [
-        { "outputs": [".next/types/**", "tsconfig.tsbuildinfo"] }
-      ],
       "dependsOn": ["^build"]
     },
     "check-openapi": {},
