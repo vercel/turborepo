@@ -99,8 +99,6 @@ pub struct User {
     pub username: String,
     pub email: String,
     pub name: Option<String>,
-    #[serde(rename = "createdAt")]
-    pub created_at: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

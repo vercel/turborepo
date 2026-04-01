@@ -29,8 +29,8 @@ pub const VERCEL_TOKEN_FILE: &str = "auth.json";
 pub const TURBO_TOKEN_DIR: &str = "turborepo";
 pub const TURBO_TOKEN_FILE: &str = "config.json";
 
-const VERCEL_OAUTH_CLIENT_ID: &str = "cl_HYyOPBNtFMfHhaUn9L4QPfTZz6TP47bp";
 const VERCEL_OAUTH_TOKEN_URL: &str = "https://vercel.com/api/login/oauth/token";
+const VERCEL_OAUTH_INTROSPECT_URL: &str = "https://vercel.com/api/login/oauth/token/introspect";
 
 #[derive(Debug, Clone)]
 pub struct AuthTokens {
@@ -378,7 +378,8 @@ impl AuthTokens {
         }
     }
 
-    /// Attempts to refresh the access token using the refresh token
+    /// Attempts to refresh the access token using the refresh token.
+    /// Introspects the refresh token first to discover the correct client_id.
     pub async fn refresh_token(&self) -> Result<AuthTokens, Error> {
         let refresh_token = self
             .refresh_token
@@ -386,10 +387,14 @@ impl AuthTokens {
             .ok_or_else(|| Error::TokenNotFound)?;
 
         let client = reqwest::Client::new();
+
+        // Introspect the refresh token to discover its client_id
+        let client_id = Self::introspect_client_id(&client, refresh_token).await?;
+
         let params = [
             ("refresh_token", refresh_token.expose()),
             ("grant_type", "refresh_token"),
-            ("client_id", VERCEL_OAUTH_CLIENT_ID),
+            ("client_id", client_id.as_str()),
         ];
 
         let mut request = client.post(VERCEL_OAUTH_TOKEN_URL).form(&params);
@@ -413,6 +418,31 @@ impl AuthTokens {
             refresh_token: Some(oauth_response.refresh_token),
             expires_at: Some(current_unix_time_secs() + 8 * 60 * 60),
         })
+    }
+
+    /// Introspects a token to discover its client_id.
+    async fn introspect_client_id(
+        client: &reqwest::Client,
+        token: &SecretString,
+    ) -> Result<String, Error> {
+        #[derive(Deserialize)]
+        struct IntrospectionResponse {
+            #[serde(default)]
+            client_id: Option<String>,
+        }
+
+        let response = client
+            .post(VERCEL_OAUTH_INTROSPECT_URL)
+            .form(&[("token", token.expose())])
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(Error::FailedToGetToken);
+        }
+
+        let resp: IntrospectionResponse = response.json().await?;
+        resp.client_id.ok_or(Error::FailedToGetToken)
     }
 
     /// Writes the auth tokens to the auth.json file
@@ -488,7 +518,6 @@ mod tests {
                     username: "test_user".to_string(),
                     email: "test@example.com".to_string(),
                     name: Some("Test User".to_string()),
-                    created_at: Some(123456789),
                 },
             })
         }
@@ -535,7 +564,8 @@ mod tests {
             scope_type: "".to_string(),
             team_id: None,
         };
-        let mock_response = |active_at, scopes| ResponseTokenMetadata { active_at, scopes };
+        let mock_response =
+            |active_at, scopes| ResponseTokenMetadata { active_at, scopes, client_id: None };
 
         let cases = vec![
             // Case: Token active, no scopes (implicitly infinite)
@@ -1012,6 +1042,7 @@ mod tests {
                 Ok(ResponseTokenMetadata {
                     scopes: vec![],
                     active_at: current_unix_time() - 100,
+                    client_id: None,
                 })
             }
         }
@@ -1057,6 +1088,7 @@ mod tests {
             metadata_response: Some(ResponseTokenMetadata {
                 scopes: vec![],
                 active_at: current_time - 100,
+                client_id: None,
             }),
             should_fail: false,
         };
@@ -1067,6 +1099,7 @@ mod tests {
             metadata_response: Some(ResponseTokenMetadata {
                 active_at: current_time + 1000,
                 scopes: vec![],
+                client_id: None,
             }),
             should_fail: false,
         };
@@ -1122,6 +1155,7 @@ mod tests {
                 Ok(ResponseTokenMetadata {
                     scopes: vec![],
                     active_at: current_unix_time() - 100,
+                    client_id: None,
                 })
             }
         }
@@ -1138,6 +1172,7 @@ mod tests {
             metadata_response: Some(ResponseTokenMetadata {
                 scopes: vec![],
                 active_at: current_unix_time() - 100,
+                client_id: None,
             }),
         };
 

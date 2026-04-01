@@ -17,7 +17,7 @@ use serde::Deserialize;
 use turborepo_ci::{Vendor, is_ci};
 pub use turborepo_types::SecretString;
 use turborepo_vercel_api::{
-    APIError, CachingStatus, CachingStatusResponse, PreflightResponse, Team, TeamsResponse,
+    APIError, CachingStatus, CachingStatusResponse, PreflightResponse, Team, TeamsResponse, User,
     UserResponse, VerificationResponse, VerifiedSsoUser,
     token::{ResponseTokenMetadata, Scope},
 };
@@ -146,6 +146,10 @@ pub fn is_linked(api_auth: &Option<APIAuth>) -> bool {
 impl Client for APIClient {
     #[tracing::instrument(skip_all)]
     async fn get_user(&self, token: &SecretString) -> Result<UserResponse> {
+        if token.expose().starts_with("vca_") {
+            return self.get_vercel_app_user(token).await;
+        }
+
         let url = self.make_url("/v2/user")?;
         let request_builder = self
             .api_request(Method::GET, url)
@@ -452,8 +456,6 @@ impl CacheClient for APIClient {
     }
 }
 
-const TURBOREPO_CLIENT_ID: &str = "cl_HYyOPBNtFMfHhaUn9L4QPfTZz6TP47bp";
-
 #[derive(Deserialize, Debug)]
 struct VercelAppTokenIntrospectionResponse {
     active: bool,
@@ -463,6 +465,18 @@ struct VercelAppTokenIntrospectionResponse {
     exp: Option<u64>,
     #[serde(default)]
     iat: Option<u64>,
+    #[serde(default)]
+    client_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct UserinfoResponse {
+    sub: String,
+    email: String,
+    #[serde(default)]
+    preferred_username: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
 }
 
 impl TokenClient for APIClient {
@@ -851,13 +865,9 @@ impl APIClient {
     ) -> Result<ResponseTokenMetadata> {
         let url = self.make_url("/login/oauth/token/introspect")?;
         let request_builder = self
-            .client
-            .post(url)
+            .api_request(Method::POST, url)
             .header("User-Agent", self.user_agent.clone())
-            .form(&[
-                ("token", token.expose()),
-                ("client_id", TURBOREPO_CLIENT_ID),
-            ]);
+            .form(&[("token", token.expose())]);
 
         let response =
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
@@ -871,7 +881,7 @@ impl APIClient {
             return Err(Error::InvalidToken {
                 status: 200,
                 url: self.make_url("/login/oauth/token/introspect")?.to_string(),
-                message: "OAuth token is not active".to_string(),
+                message: "token is not active".to_string(),
             });
         }
 
@@ -889,21 +899,50 @@ impl APIClient {
                 })
                 .unwrap_or_default(),
             active_at: resp.iat.unwrap_or(0) as u128 * 1000,
+            client_id: resp.client_id,
+        })
+    }
+
+    /// Fetches user info for a Vercel App token (prefixed "vca_") using the
+    /// OpenID Connect userinfo endpoint.
+    async fn get_vercel_app_user(&self, token: &SecretString) -> Result<UserResponse> {
+        let url = self.make_url("/login/oauth/userinfo")?;
+        let request_builder = self
+            .api_request(Method::GET, url)
+            .header("User-Agent", self.user_agent.clone())
+            .bearer_auth(token.expose());
+
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
+
+        let userinfo: UserinfoResponse = response.json().await?;
+        let username = userinfo.preferred_username.unwrap_or_default();
+
+        Ok(UserResponse {
+            user: User {
+                id: userinfo.sub,
+                name: userinfo
+                    .name
+                    .or((!username.is_empty()).then(|| username.clone())),
+                username,
+                email: userinfo.email,
+            },
         })
     }
 
     /// Revokes a Vercel App token (prefixed "vca_") using the RFC 7009
-    /// endpoint.
+    /// endpoint. Introspects the token first to discover the correct client_id.
     async fn delete_vercel_app_token(&self, token: &SecretString) -> Result<()> {
+        let client_id = self.introspect_client_id(token).await?;
+
         let url = self.make_url("/login/oauth/token/revoke")?;
         let request_builder = self
-            .client
-            .post(url)
+            .api_request(Method::POST, url)
             .header("User-Agent", self.user_agent.clone())
-            .form(&[
-                ("token", token.expose()),
-                ("client_id", TURBOREPO_CLIENT_ID),
-            ]);
+            .form(&[("token", token.expose()), ("client_id", &client_id)]);
 
         retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
             .await?
@@ -911,6 +950,31 @@ impl APIClient {
             .error_for_status()?;
 
         Ok(())
+    }
+
+    /// Introspects a token to discover its client_id.
+    async fn introspect_client_id(&self, token: &SecretString) -> Result<String> {
+        let url = self.make_url("/login/oauth/token/introspect")?;
+        let request_builder = self
+            .api_request(Method::POST, url)
+            .header("User-Agent", self.user_agent.clone())
+            .form(&[("token", token.expose())]);
+
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
+
+        let resp: VercelAppTokenIntrospectionResponse = response.json().await?;
+        resp.client_id.ok_or_else(|| Error::InvalidToken {
+            status: 200,
+            url: self
+                .make_url("/login/oauth/token/introspect")
+                .map(|u| u.to_string())
+                .unwrap_or_default(),
+            message: "token is not active".to_string(),
+        })
     }
 }
 
@@ -997,7 +1061,7 @@ mod test {
     use url::Url;
 
     use crate::{
-        APIAuth, APIClient, AnonAPIClient, CacheClient, Client, SecretString,
+        APIAuth, APIClient, AnonAPIClient, CacheClient, Client, SecretString, TokenClient,
         telemetry::TelemetryClient,
     };
 
@@ -1525,6 +1589,87 @@ mod test {
         let result = client
             .record_telemetry(events, "test-id", "test-session")
             .await;
+        assert!(result.is_ok());
+
+        handle.abort();
+        Ok(())
+    }
+
+    /// Starts a mock server and returns an APIClient pointed at it, along with
+    /// the server handle for cleanup.
+    async fn start_vca_test_client() -> Result<(APIClient, tokio::task::JoinHandle<Result<()>>)> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            None,
+            "2.0.0",
+            false,
+        )?;
+        Ok((client, handle))
+    }
+
+    #[tokio::test]
+    async fn test_get_user_vca_token() -> Result<()> {
+        let (client, handle) = start_vca_test_client().await?;
+        let token = SecretString::new("vca_test_token".to_string());
+
+        let response = client.get_user(&token).await?;
+        assert_eq!(
+            response.user.id,
+            turborepo_vercel_api_mock::EXPECTED_USER_ID
+        );
+        assert_eq!(
+            response.user.email,
+            turborepo_vercel_api_mock::EXPECTED_EMAIL
+        );
+        assert_eq!(
+            response.user.username,
+            turborepo_vercel_api_mock::EXPECTED_USERNAME
+        );
+        // The mock doesn't return a name, so it should default to the username
+        assert_eq!(
+            response.user.name,
+            Some(turborepo_vercel_api_mock::EXPECTED_USERNAME.to_string())
+        );
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_metadata_vca_token() -> Result<()> {
+        let (client, handle) = start_vca_test_client().await?;
+        let token = SecretString::new("vca_test_token".to_string());
+
+        let metadata = client.get_metadata(&token).await?;
+        assert_eq!(metadata.scopes.len(), 1);
+        assert_eq!(metadata.scopes[0].scope_type, "openid");
+        assert_eq!(
+            metadata.scopes[0].expires_at,
+            Some(1700000000u128 * 1000)
+        );
+        assert_eq!(metadata.active_at, 1690000000u128 * 1000);
+        assert_eq!(
+            metadata.client_id.as_deref(),
+            Some(turborepo_vercel_api_mock::EXPECTED_CLIENT_ID)
+        );
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_delete_token_vca_token() -> Result<()> {
+        let (client, handle) = start_vca_test_client().await?;
+        let token = SecretString::new("vca_test_token".to_string());
+
+        let result = client.delete_token(&token).await;
         assert!(result.is_ok());
 
         handle.abort();

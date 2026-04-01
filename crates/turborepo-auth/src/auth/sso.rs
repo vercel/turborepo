@@ -213,7 +213,6 @@ mod tests {
                     username: "username".to_string(),
                     email: "email".to_string(),
                     name: None,
-                    created_at: None,
                 },
             })
         }
@@ -284,6 +283,7 @@ mod tests {
                     expires_at: None,
                 }],
                 active_at: current_unix_time() - 100,
+                client_id: None,
             })
         }
         async fn delete_token(
