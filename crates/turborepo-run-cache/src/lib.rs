@@ -51,6 +51,8 @@ pub enum Error {
     Glob(#[from] globwalk::GlobError),
     #[error("Error with output watcher: {0}")]
     OutputWatcher(#[from] OutputWatcherError),
+    #[error("Task spawn failed: {0}")]
+    SpawnBlocking(String),
     #[error(transparent)]
     Scm(#[from] turborepo_scm::Error),
     #[error(transparent)]
@@ -135,7 +137,8 @@ impl RunCache {
         } else {
             run_cache_opts.task_output_logs_override
         };
-        let remote_only = !cache_opts.cache.local.read && !cache_opts.cache.local.write;
+        let remote_only = cache_opts.cache == turborepo_cache::CacheConfig::remote_only()
+            || cache_opts.cache == turborepo_cache::CacheConfig::remote_read_only();
         RunCache {
             task_output_logs,
             cache,
@@ -620,37 +623,65 @@ impl TaskCache {
     }
 
     /// Returns true if this task has incremental cache partitions configured
-    /// AND incremental operations are not disabled by flags.
+    /// AND caching is not fully disabled. Read/write flag checks are handled
+    /// independently by `fetch_incremental` and `upload_incremental`.
     pub fn has_incremental(&self) -> bool {
-        self.incremental_cache.is_some()
-            && !self.caching_disabled
-            && !self.run_cache.reads_disabled
-            && !self.run_cache.writes_disabled
+        self.incremental_cache.is_some() && !self.caching_disabled
     }
 
     /// Fetch incremental artifacts for all partitions. Must complete before
     /// task execution begins. Returns the restore status for summary output.
-    /// Respects --force and --no-cache flags.
+    /// Respects --force (reads disabled) and --no-cache flags. Times out
+    /// after 30 seconds to prevent blocking task execution on slow remote
+    /// cache.
     pub async fn fetch_incremental(&self) -> incremental::IncrementalRestoreStatus {
         if self.caching_disabled || self.run_cache.reads_disabled {
             return incremental::IncrementalRestoreStatus::default();
         }
-        if let Some(incremental) = &self.incremental_cache {
-            incremental.fetch_all().await
-        } else {
-            incremental::IncrementalRestoreStatus::default()
+        let Some(incremental) = &self.incremental_cache else {
+            return incremental::IncrementalRestoreStatus::default();
+        };
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            incremental.fetch_all(),
+        )
+        .await
+        {
+            Ok(status) => status,
+            Err(_) => {
+                warn!(
+                    "incremental fetch timed out after 30s, proceeding without incremental state"
+                );
+                incremental::IncrementalRestoreStatus::default()
+            }
         }
     }
 
     /// Upload incremental artifacts for all partitions after successful
     /// task execution. Failures are logged as warnings but do not affect
-    /// the task result. Respects --force and --no-cache flags.
-    pub async fn upload_incremental(&self) {
+    /// the task result. Respects --no-cache flag (skips when writes are
+    /// disabled). Not affected by --force (which only disables reads).
+    /// Times out after 60 seconds to prevent hanging process exit on slow
+    /// remote cache. Returns the number of partition upload failures
+    /// (0 = all succeeded or none configured).
+    pub async fn upload_incremental(&self) -> usize {
         if self.caching_disabled || self.run_cache.writes_disabled {
-            return;
+            return 0;
         }
-        if let Some(incremental) = &self.incremental_cache {
-            incremental.upload_all().await;
+        let Some(incremental) = &self.incremental_cache else {
+            return 0;
+        };
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(60),
+            incremental.upload_all(),
+        )
+        .await
+        {
+            Ok(failures) => failures,
+            Err(_) => {
+                warn!("incremental upload timed out after 60s, skipping remaining uploads");
+                1
+            }
         }
     }
 }

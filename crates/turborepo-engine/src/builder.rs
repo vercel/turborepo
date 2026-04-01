@@ -50,6 +50,7 @@ pub struct EngineBuilder<'a, L: TurboJsonLoader> {
     add_all_tasks: bool,
     should_validate_engine: bool,
     validator: Validator,
+    future_flags: FutureFlags,
     /// When `futureFlags.globalConfiguration` is enabled, these globs are
     /// prepended to every task's inputs instead of being included in the
     /// global hash.
@@ -75,12 +76,14 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             add_all_tasks: false,
             should_validate_engine: true,
             validator: Validator::new(),
+            future_flags: FutureFlags::default(),
             global_deps: Vec::new(),
         }
     }
 
     pub fn with_future_flags(mut self, future_flags: FutureFlags) -> Self {
         self.validator = self.validator.with_future_flags(future_flags);
+        self.future_flags = future_flags;
         self
     }
 
@@ -619,6 +622,10 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let path_to_root = self.path_to_root(task_id.as_inner())?;
         let mut task_def =
             TaskDefinition::from_processed(processed_task_definition, &path_to_root)?;
+
+        if !self.future_flags.incremental_tasks {
+            task_def.incremental = None;
+        }
 
         // Only prepend global inputs to tasks whose package actually has a
         // script for this task. Phantom/transit tasks (packages without a

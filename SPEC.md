@@ -56,23 +56,14 @@ The `incremental` field is defined per-task in the root `turbo.json` under `task
 
 Each incremental partition has its own cache key:
 
-- **With `inputs`**: `(package, task, branch, hash(partition_inputs))`
-- **Without `inputs`**: `(package, task, branch)`
+- **With `inputs`**: `(package, task, partition_index, hash(partition_inputs))`
+- **Without `inputs`**: `(package, task, partition_index)`
 
-These components are serialized into a deterministic composite and hashed. The resulting artifact is stored with the key `incremental/<hash-composite>` in the remote cache, using the existing artifact storage API (`/v8/artifacts/{key}`). No server-side changes are required.
+These components are serialized into a deterministic composite and hashed with a versioned prefix (`incremental:v1:`). The resulting artifact is stored with the key `incremental-<sha256>` in the remote cache, using the existing artifact storage API (`/v8/artifacts/{key}`). No server-side changes are required.
 
-### Branch Detection
+Branch is intentionally excluded from the cache key. Incremental artifacts are tool-managed caches that the tool validates against current source files. Receiving state from another branch is never wrong, only potentially suboptimal — the tool reconciles the delta. This means all branches within the same team scope share incremental cache entries.
 
-Branch detection uses the same SCM resolution as `--affected`. Specifically:
-
-- **Current branch**: `git branch --show-current`. In detached HEAD (common in CI), this returns empty — the current branch is unknown.
-- **Default branch**: Resolved using the same `resolve_base` logic as `--affected`: check `TURBO_SCM_BASE` override, then GitHub Actions environment variables (`GITHUB_BASE_REF`, `GITHUB_EVENT_PATH`), then fall back to checking for `main`/`master` locally.
-
-If the current branch cannot be determined (detached HEAD, non-git repo):
-
-- **Uploads are skipped.** We don't know where to store the artifact.
-- **Fetches still attempt the default branch fallback.** The default branch resolution can succeed even in detached HEAD since it uses CI environment variables and local ref checks, not the current branch.
-- **Local on-disk state is still used.** No branch needed for local files.
+The partition index (0-based position in the `incremental` array) ensures that multiple partitions on the same task get separate cache entries. **Reordering partitions in the `incremental` array invalidates their caches.**
 
 ## Lifecycle
 
@@ -85,7 +76,7 @@ If the current branch cannot be determined (detached HEAD, non-git repo):
       → If yes: skip remote fetch for this partition (local state is fresh enough)
       → If no: continue to remote fetch
    b. Compute partition cache key
-   c. Fetch from remote: same branch first, then default branch
+   c. Fetch from remote cache
       → Success: extract files to package directory
       → Failure: log warning, proceed without incremental state
 3. Execute the task (incremental fetch MUST complete before execution begins)
@@ -103,13 +94,10 @@ No incremental behavior. A full cache hit means the task doesn't execute, so inc
 
 ## Fallback Chain
 
-When fetching incremental artifacts from remote, turbo uses this priority order:
+When fetching incremental artifacts, turbo uses this priority order:
 
 1. **Local on-disk files** — If any files matching the partition's output globs exist, skip remote entirely.
-2. **Same branch in remote cache** — Fetch from `(package, task, current_branch, partition_input_hash)`.
-3. **Default branch in remote cache** — Fetch from `(package, task, default_branch, partition_input_hash)`.
-
-The default branch is inferred from git.
+2. **Remote cache** — Fetch from the partition's cache key.
 
 ## Upload Behavior
 
@@ -121,7 +109,7 @@ The default branch is inferred from git.
 ## Remote Cache Integration
 
 - Uses the existing `/v8/artifacts/{key}` HTTP API. No server-side changes required.
-- Artifact keys are prefixed with `incremental/` to namespace them away from regular output cache entries.
+- Artifact keys are prefixed with `incremental-` to namespace them away from regular output cache entries.
 - The remote cache server enforces its own size limits. Turbo does not enforce upload size limits.
 - Stale or orphaned remote artifacts (e.g., from deleted branches or removed config) are handled by the server's eviction policies.
 
@@ -129,7 +117,7 @@ The default branch is inferred from git.
 
 | Flag / Feature | Behavior |
 |----------------|----------|
-| `--force` | Skips incremental entirely. No fetch, no upload. Full clean slate. |
+| `--force` | Skips incremental fetch (reads disabled). Uploads still occur on success. Existing on-disk incremental files are not removed. |
 | `--no-cache` | Disables incremental entirely, same as regular cache. |
 | `--remote-only` | Skips the local file existence check and always fetches from remote. |
 | `--dry` | Shows incremental cache status alongside existing cache info, following the same patterns. |
@@ -144,7 +132,7 @@ Incremental artifacts stored locally are subject to the same eviction configurat
 
 ## Concurrency
 
-Incremental fetches for different packages happen in parallel, following the existing task concurrency model. No special throttling is applied to incremental fetches.
+Incremental fetches are sequential within a single task's partitions but happen concurrently across different tasks, following the existing task concurrency model. No special throttling is applied to incremental fetches.
 
 ## Error Handling
 
@@ -153,7 +141,7 @@ Incremental fetches for different packages happen in parallel, following the exi
 | Remote fetch fails (network, timeout, 500) | Warning log. Proceed without incremental state. |
 | Remote upload fails | Warning log. Task result is unaffected. |
 | Incremental files on disk are corrupt | Tool's responsibility to handle. See User-Facing Contract. |
-| Branch cannot be determined | Skip uploads. Attempt default branch fetch. Use local files if available. |
+| Input glob is invalid | Warning log. Partition is skipped entirely (no fetch, no upload). Falling back to a less-specific key would risk cross-config cache collisions. |
 
 ## Security
 
@@ -163,15 +151,17 @@ Incremental artifacts use the same security model as regular cache artifacts:
 - Same authentication and authorization via bearer tokens and team scoping
 - Same transport security (HTTPS)
 
+Because incremental cache keys are not content-addressed (unlike regular task cache), any successful execution within the same team scope overwrites the incremental entry. This means artifacts from any branch may be consumed by any other branch. This is by design — the user contract asserts the tool can handle arbitrary prior state.
+
 ## Visibility
 
 - Incremental restore status is logged per-task as part of the existing cache status line. On a cache miss where incremental state was restored, the message indicates that incremental state was restored (e.g., alongside the existing "cache miss, executing" message).
 - Incremental cache status is included in `--dry` output.
-- Incremental cache details are included in `--summarize` output.
+- Incremental partition configuration (outputs/inputs) is included in `--summarize` output. Per-partition restore status is a future enhancement.
 
-## Open Questions
+## Design Decisions
 
-- **Branch as a key dimension**: Branch is a useful but imperfect proxy for "closeness" of incremental state. A commit-distance or content-similarity metric could be more precise, but is significantly more complex. Branch is the pragmatic starting point — revisit if it proves insufficient.
+- **Branch excluded from cache key**: Branch was considered as a key dimension but excluded. Incremental state is tool-validated — receiving state from another branch is suboptimal but never incorrect. This avoids O(branches) cache pollution and simplifies the implementation. Revisit if cross-branch interference causes frequent full rebuilds.
 - **Upload minimization**: The current design uploads incremental artifacts on every successful run, even if they haven't changed. Future optimization could diff against the prior upload and skip when unchanged, reducing bandwidth costs — particularly important for large artifacts like Rust incremental state and for high-frequency execution patterns like `turbo watch` if it gains cache support.
 
 ## Out of Scope for v1

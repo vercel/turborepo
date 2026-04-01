@@ -302,10 +302,14 @@ where
                 );
             }
 
-            self.task_cache
+            let incremental_upload_failures = self
+                .task_cache
                 .upload_incremental()
                 .instrument(tracing::info_span!("incremental_upload", task = %self.task_id))
                 .await;
+            if incremental_upload_failures > 0 {
+                telemetry.track_error(TrackedErrors::IncrementalUploadFailed);
+            }
         }
 
         // Tracker bookkeeping happens after the callback so dependents
@@ -395,6 +399,9 @@ where
                 .fetch_incremental()
                 .instrument(tracing::info_span!("incremental_fetch", task = %self.task_id))
                 .await;
+            if status.skipped_partitions > 0 {
+                telemetry.track_error(TrackedErrors::IncrementalFetchFailed);
+            }
             if status.any_restored() {
                 task_handle.emit(turborepo_log::LogEvent::new(
                     turborepo_log::Level::Info,

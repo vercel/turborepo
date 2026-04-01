@@ -661,6 +661,7 @@ pub struct RawTurboJson {
 pub struct RawIncrementalPartition {
     /// Glob patterns of incremental artifact files to cache. Paths are
     /// relative to the package directory. Supports exclusion patterns.
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub outputs: Option<Vec<Spanned<UnescapedString>>>,
 

@@ -358,17 +358,46 @@ impl ProcessedTaskDefinition {
             .map(|partitions| {
                 partitions
                     .into_iter()
-                    .map(|partition| {
-                        let outputs = partition
+                    .filter_map(|partition| {
+                        let outputs = match partition
                             .outputs
                             .map(|o| ProcessedOutputs::new(o, future_flags))
-                            .transpose()?
-                            .unwrap_or_default();
-                        let inputs = partition
+                            .transpose()
+                        {
+                            Ok(o) => o.unwrap_or_default(),
+                            Err(e) => return Some(Err(e)),
+                        };
+                        // Skip partitions with no output globs — they'd never
+                        // match any files and are almost certainly a config error.
+                        if outputs.globs.is_empty() {
+                            return None;
+                        }
+                        // Reject $TURBO_DEFAULT$ and $TURBO_EXTENDS$ in
+                        // incremental inputs — these DSL tokens only apply to
+                        // regular task inputs and have no meaning here.
+                        if let Some(ref raw_inputs) = partition.inputs {
+                            for input in raw_inputs {
+                                if input.as_str() == TURBO_DEFAULT
+                                    || input.as_str() == TURBO_EXTENDS
+                                {
+                                    let (span, text) = input.span_and_text("turbo.json");
+                                    return Some(Err(Error::InvalidIncrementalInput {
+                                        value: input.as_str().to_string(),
+                                        span,
+                                        text,
+                                    }));
+                                }
+                            }
+                        }
+                        let inputs = match partition
                             .inputs
                             .map(|i| ProcessedInputs::new(i, future_flags))
-                            .transpose()?;
-                        Ok(ProcessedIncrementalPartition { outputs, inputs })
+                            .transpose()
+                        {
+                            Ok(i) => i,
+                            Err(e) => return Some(Err(e)),
+                        };
+                        Some(Ok(ProcessedIncrementalPartition { outputs, inputs }))
                     })
                     .collect::<Result<Vec<_>, Error>>()
             })

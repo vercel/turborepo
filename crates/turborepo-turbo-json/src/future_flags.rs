@@ -82,6 +82,12 @@ pub struct FutureFlags {
     /// `globalPassThroughEnv` becomes `global.passThroughEnv`.
     #[serde(default)]
     pub global_configuration: bool,
+    /// Enable incremental task caching. When enabled, Turborepo persists
+    /// tool-managed incremental build artifacts (e.g. `.tsbuildinfo`) across
+    /// runs via the remote cache, restoring them before execution on cache
+    /// misses to speed up rebuilds.
+    #[serde(default)]
+    pub incremental_tasks: bool,
 }
 
 // Manual TS impl because #[derive(TS)] conflicts with the Iterable and
@@ -99,7 +105,7 @@ impl TS for FutureFlags {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
          boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
          pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
-         boolean }"
+         boolean, incrementalTasks?: boolean }"
             .to_string()
     }
 
@@ -107,7 +113,7 @@ impl TS for FutureFlags {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
          boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
          pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
-         boolean }"
+         boolean, incrementalTasks?: boolean }"
             .to_string()
     }
 
@@ -115,7 +121,7 @@ impl TS for FutureFlags {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
          boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         globalConfiguration?: boolean };"
+         globalConfiguration?: boolean, incrementalTasks?: boolean };"
             .to_string()
     }
 
@@ -123,7 +129,7 @@ impl TS for FutureFlags {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
          boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         globalConfiguration?: boolean };"
+         globalConfiguration?: boolean, incrementalTasks?: boolean };"
             .to_string()
     }
 
