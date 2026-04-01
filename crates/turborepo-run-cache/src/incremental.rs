@@ -105,7 +105,12 @@ impl IncrementalTaskCache {
                         async move {
                             match tokio::task::spawn_blocking(move || {
                                 compute_partition_key(
-                                    &package_dir, &pkg, &task, idx, &inputs, &outputs,
+                                    &package_dir,
+                                    &pkg,
+                                    &task,
+                                    idx,
+                                    &inputs,
+                                    &outputs,
                                 )
                             })
                             .await
@@ -113,8 +118,8 @@ impl IncrementalTaskCache {
                                 Ok(key) => key,
                                 Err(e) => {
                                     warn!(
-                                        "incremental: spawn_blocking panicked computing \
-                                         cache key for partition {idx}: {e}"
+                                        "incremental: spawn_blocking panicked computing cache key \
+                                         for partition {idx}: {e}"
                                     );
                                     None
                                 }
@@ -205,8 +210,8 @@ impl IncrementalTaskCache {
                 Ok(val) => val,
                 Err(e) => {
                     warn!(
-                        "incremental: spawn_blocking panicked checking local files \
-                         for partition {idx}: {e}"
+                        "incremental: spawn_blocking panicked checking local files for partition \
+                         {idx}: {e}"
                     );
                     false
                 }
@@ -482,12 +487,7 @@ fn collect_partition_files(
     let inclusions = repo_relative_globs.validated_inclusions()?;
     let exclusions = repo_relative_globs.validated_exclusions()?;
 
-    let files = globwalk::globwalk(
-        repo_root,
-        &inclusions,
-        &exclusions,
-        globwalk::WalkType::All,
-    )?;
+    let files = globwalk::globwalk(repo_root, &inclusions, &exclusions, globwalk::WalkType::All)?;
 
     let mut relative_paths: Vec<_> = files
         .into_iter()
@@ -530,8 +530,9 @@ fn repo_relative_outputs(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use turborepo_types::TaskOutputs;
+
+    use super::*;
 
     #[test]
     fn compute_input_hash_empty_inputs_returns_empty() {
@@ -599,7 +600,10 @@ mod tests {
 
         let key_a = compute_partition_key(&dir, "pkg", "task", 0, &[], &outputs_a);
         let key_b = compute_partition_key(&dir, "pkg", "task", 0, &[], &outputs_b);
-        assert_ne!(key_a, key_b, "different output globs must produce different keys");
+        assert_ne!(
+            key_a, key_b,
+            "different output globs must produce different keys"
+        );
     }
 
     #[test]
@@ -627,7 +631,10 @@ mod tests {
             exclusions: vec![],
         };
         let result = compute_partition_key(&dir, "pkg", "task", 0, &["[invalid".into()], &outputs);
-        assert!(result.is_none(), "invalid input glob should produce None, not a fallback key");
+        assert!(
+            result.is_none(),
+            "invalid input glob should produce None, not a fallback key"
+        );
     }
 
     #[test]
@@ -639,7 +646,10 @@ mod tests {
             exclusions: vec![],
         };
         let key = compute_partition_key(&dir, "pkg", "task", 0, &[], &outputs).unwrap();
-        assert!(key.starts_with("incremental-"), "key must start with 'incremental-'");
+        assert!(
+            key.starts_with("incremental-"),
+            "key must start with 'incremental-'"
+        );
         // 'incremental-' (12 chars) + 64 hex chars (sha256)
         assert_eq!(key.len(), 12 + 64);
     }
@@ -845,6 +855,9 @@ mod tests {
         std::fs::write(tmp.path().join("abc"), b"d").unwrap();
         let h2 = compute_input_hash(&dir, &["abc".into()], "pkg", "task").unwrap();
 
-        assert_ne!(h1, h2, "different path/content boundaries must produce different hashes");
+        assert_ne!(
+            h1, h2,
+            "different path/content boundaries must produce different hashes"
+        );
     }
 }

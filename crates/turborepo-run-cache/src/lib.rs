@@ -641,11 +641,8 @@ impl TaskCache {
         let Some(incremental) = &self.incremental_cache else {
             return incremental::IncrementalRestoreStatus::default();
         };
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(30),
-            incremental.fetch_all(),
-        )
-        .await
+        match tokio::time::timeout(std::time::Duration::from_secs(30), incremental.fetch_all())
+            .await
         {
             Ok(status) => status,
             Err(_) => {
@@ -671,11 +668,8 @@ impl TaskCache {
         let Some(incremental) = &self.incremental_cache else {
             return 0;
         };
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(60),
-            incremental.upload_all(),
-        )
-        .await
+        match tokio::time::timeout(std::time::Duration::from_secs(60), incremental.upload_all())
+            .await
         {
             Ok(failures) => failures,
             Err(_) => {

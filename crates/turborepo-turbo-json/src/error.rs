@@ -360,8 +360,9 @@ mod tests {
             span: None,
             env_pipeline_delimiter: "$",
         };
-        assert!(err
-            .to_string()
-            .contains("Environment variables should not be prefixed"));
+        assert!(
+            err.to_string()
+                .contains("Environment variables should not be prefixed")
+        );
     }
 }

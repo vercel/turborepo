@@ -7,8 +7,8 @@ use turbopath::RelativeUnixPath;
 use turborepo_errors::Spanned;
 use turborepo_task_id::TaskName;
 use turborepo_turbo_json::{
-    incremental_partitions_from_processed, task_outputs_from_processed, ProcessedTaskDefinition,
-    TaskInputsFromProcessed, TOPOLOGICAL_PIPELINE_DELIMITER,
+    ProcessedTaskDefinition, TOPOLOGICAL_PIPELINE_DELIMITER, TaskInputsFromProcessed,
+    incremental_partitions_from_processed, task_outputs_from_processed,
 };
 use turborepo_types::{TaskDefinition, TaskInputs};
 

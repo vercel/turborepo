@@ -48,8 +48,8 @@ pub use processed::{
 };
 pub use raw::{
     HasConfigBeyondExtends, Pipeline, RawExperimentalObservability, RawIncrementalPartition,
-    RawObservabilityOtel, RawObservabilityOtelMetrics, RawPackageTurboJson,
-    RawRemoteCacheOptions, RawRootTurboJson, RawTaskDefinition, RawTurboJson,
+    RawObservabilityOtel, RawObservabilityOtelMetrics, RawPackageTurboJson, RawRemoteCacheOptions,
+    RawRootTurboJson, RawTaskDefinition, RawTurboJson,
 };
 pub use validator::{TOPOLOGICAL_PIPELINE_DELIMITER, Validator};
 
@@ -395,9 +395,7 @@ pub fn incremental_partitions_from_processed(
             let outputs = task_outputs_from_processed(p.outputs, turbo_root_path)?;
             let inputs = p
                 .inputs
-                .map(|i| {
-                    turborepo_types::TaskInputs::from_processed(i, turbo_root_path)
-                })
+                .map(|i| turborepo_types::TaskInputs::from_processed(i, turbo_root_path))
                 .map(|ti| ti.globs)
                 .unwrap_or_default();
             Ok(turborepo_types::IncrementalPartition { outputs, inputs })

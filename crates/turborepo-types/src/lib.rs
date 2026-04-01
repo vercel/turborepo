@@ -653,9 +653,11 @@ mod tests {
         let result = task_def.hashable_outputs("build");
 
         // Log file should be included and outputs should be sorted
-        assert!(result
-            .inclusions
-            .contains(&".turbo/turbo-build.log".to_string()));
+        assert!(
+            result
+                .inclusions
+                .contains(&".turbo/turbo-build.log".to_string())
+        );
         assert!(result.inclusions.contains(&"dist/**".to_string()));
         assert_eq!(result.exclusions, vec!["dist/temp".to_string()]);
     }
@@ -692,9 +694,11 @@ mod tests {
         let task_def = TaskDefinition::default();
         let result = task_def.hashable_outputs("build:prod");
 
-        assert!(result
-            .inclusions
-            .contains(&".turbo/turbo-build$colon$prod.log".to_string()));
+        assert!(
+            result
+                .inclusions
+                .contains(&".turbo/turbo-build$colon$prod.log".to_string())
+        );
     }
 
     #[test]
