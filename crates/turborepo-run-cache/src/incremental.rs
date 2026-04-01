@@ -728,22 +728,40 @@ mod tests {
 
     #[test]
     fn repo_relative_outputs_with_prefix() {
-        let repo = AbsoluteSystemPathBuf::try_from("/repo").unwrap();
-        let pkg = AbsoluteSystemPathBuf::try_from("/repo/packages/foo").unwrap();
+        let repo =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            r"C:\repo\packages\foo"
+        } else {
+            "/repo/packages/foo"
+        })
+        .unwrap();
         let outputs = TaskOutputs {
             inclusions: vec!["dist/**".into()],
             exclusions: vec!["dist/tmp".into()],
         };
 
         let result = repo_relative_outputs(&repo, &pkg, &outputs);
-        assert_eq!(result.inclusions, vec!["packages/foo/dist/**"]);
-        assert_eq!(result.exclusions, vec!["packages/foo/dist/tmp"]);
+        let expected_inclusion = if cfg!(windows) {
+            r"packages\foo/dist/**"
+        } else {
+            "packages/foo/dist/**"
+        };
+        let expected_exclusion = if cfg!(windows) {
+            r"packages\foo/dist/tmp"
+        } else {
+            "packages/foo/dist/tmp"
+        };
+        assert_eq!(result.inclusions, vec![expected_inclusion]);
+        assert_eq!(result.exclusions, vec![expected_exclusion]);
     }
 
     #[test]
     fn repo_relative_outputs_root_package() {
-        let repo = AbsoluteSystemPathBuf::try_from("/repo").unwrap();
-        let pkg = AbsoluteSystemPathBuf::try_from("/repo").unwrap();
+        let repo =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let outputs = TaskOutputs {
             inclusions: vec!["dist/**".into()],
             exclusions: vec![],
