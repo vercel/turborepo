@@ -18,9 +18,7 @@ The `incremental` field is defined per-task in the root `turbo.json` under `task
 {
   "tasks": {
     "check": {
-      "incremental": [
-        { "outputs": ["tsconfig.tsbuildinfo"] }
-      ]
+      "incremental": [{ "outputs": ["tsconfig.tsbuildinfo"] }]
     },
     "build": {
       "incremental": [
@@ -40,10 +38,10 @@ The `incremental` field is defined per-task in the root `turbo.json` under `task
 
 ### Partition Fields
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `outputs` | Yes | Glob patterns of incremental artifact files to cache. Supports exclusion patterns (e.g., `["target/**", "!target/tmp"]`). Paths are relative to the package directory, same as regular `outputs`. |
-| `inputs` | No | Glob patterns of files that, when changed, invalidate this partition's incremental cache. When omitted, the partition key does not include an input hash. |
+| Field     | Required | Description                                                                                                                                                                                       |
+| --------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `outputs` | Yes      | Glob patterns of incremental artifact files to cache. Supports exclusion patterns (e.g., `["target/**", "!target/tmp"]`). Paths are relative to the package directory, same as regular `outputs`. |
+| `inputs`  | No       | Glob patterns of files that, when changed, invalidate this partition's incremental cache. When omitted, the partition key does not include an input hash.                                         |
 
 ### Constraints
 
@@ -115,16 +113,16 @@ When fetching incremental artifacts, turbo uses this priority order:
 
 ## Interaction with Existing Flags and Features
 
-| Flag / Feature | Behavior |
-|----------------|----------|
-| `--force` | Skips incremental fetch (reads disabled). Uploads still occur on success. Existing on-disk incremental files are not removed. |
-| `--no-cache` | Disables incremental entirely, same as regular cache. |
-| `--remote-only` | Skips the local file existence check and always fetches from remote. |
-| `--dry` | Shows incremental cache status alongside existing cache info, following the same patterns. |
-| `--summarize` | Includes incremental restore details per task in the summary output. |
-| `turbo watch` | No incremental behavior. `turbo watch` does not create caches today. |
-| `turbo prune` | Out of scope. `turbo prune` does not handle incremental configuration in v1. |
-| `turbo query` | Incremental configuration is visible alongside other task configuration, not as a separate query surface. |
+| Flag / Feature  | Behavior                                                                                                                      |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `--force`       | Skips incremental fetch (reads disabled). Uploads still occur on success. Existing on-disk incremental files are not removed. |
+| `--no-cache`    | Disables incremental entirely, same as regular cache.                                                                         |
+| `--remote-only` | Skips the local file existence check and always fetches from remote.                                                          |
+| `--dry`         | Shows incremental cache status alongside existing cache info, following the same patterns.                                    |
+| `--summarize`   | Includes incremental restore details per task in the summary output.                                                          |
+| `turbo watch`   | No incremental behavior. `turbo watch` does not create caches today.                                                          |
+| `turbo prune`   | Out of scope. `turbo prune` does not handle incremental configuration in v1.                                                  |
+| `turbo query`   | Incremental configuration is visible alongside other task configuration, not as a separate query surface.                     |
 
 ## Local Cache Eviction
 
@@ -136,12 +134,12 @@ Incremental fetches are sequential within a single task's partitions but happen 
 
 ## Error Handling
 
-| Failure | Behavior |
-|---------|----------|
-| Remote fetch fails (network, timeout, 500) | Warning log. Proceed without incremental state. |
-| Remote upload fails | Warning log. Task result is unaffected. |
-| Incremental files on disk are corrupt | Tool's responsibility to handle. See User-Facing Contract. |
-| Input glob is invalid | Warning log. Partition is skipped entirely (no fetch, no upload). Falling back to a less-specific key would risk cross-config cache collisions. |
+| Failure                                    | Behavior                                                                                                                                        |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remote fetch fails (network, timeout, 500) | Warning log. Proceed without incremental state.                                                                                                 |
+| Remote upload fails                        | Warning log. Task result is unaffected.                                                                                                         |
+| Incremental files on disk are corrupt      | Tool's responsibility to handle. See User-Facing Contract.                                                                                      |
+| Input glob is invalid                      | Warning log. Partition is skipped entirely (no fetch, no upload). Falling back to a less-specific key would risk cross-config cache collisions. |
 
 ## Security
 
