@@ -317,25 +317,25 @@ fn compute_partition_key(
     hasher.update(b"incremental:v1:");
 
     // Length-prefixed encoding prevents separator collisions
-    hasher.update(&(package_name.len() as u32).to_le_bytes());
+    hasher.update((package_name.len() as u32).to_le_bytes());
     hasher.update(package_name.as_bytes());
-    hasher.update(&(task_name.len() as u32).to_le_bytes());
+    hasher.update((task_name.len() as u32).to_le_bytes());
     hasher.update(task_name.as_bytes());
-    hasher.update(&(idx as u32).to_le_bytes());
+    hasher.update((idx as u32).to_le_bytes());
 
     // Include output globs so config changes invalidate the cache
     let mut sorted_inclusions = outputs.inclusions.clone();
     sorted_inclusions.sort();
-    hasher.update(&(sorted_inclusions.len() as u32).to_le_bytes());
+    hasher.update((sorted_inclusions.len() as u32).to_le_bytes());
     for glob in &sorted_inclusions {
-        hasher.update(&(glob.len() as u32).to_le_bytes());
+        hasher.update((glob.len() as u32).to_le_bytes());
         hasher.update(glob.as_bytes());
     }
     let mut sorted_exclusions = outputs.exclusions.clone();
     sorted_exclusions.sort();
-    hasher.update(&(sorted_exclusions.len() as u32).to_le_bytes());
+    hasher.update((sorted_exclusions.len() as u32).to_le_bytes());
     for glob in &sorted_exclusions {
-        hasher.update(&(glob.len() as u32).to_le_bytes());
+        hasher.update((glob.len() as u32).to_le_bytes());
         hasher.update(glob.as_bytes());
     }
 
@@ -419,7 +419,7 @@ fn compute_input_hash(
     for file in &sorted_files {
         let relative = AnchoredSystemPathBuf::relative_path_between(package_dir, file);
         let path_bytes = relative.as_str().as_bytes();
-        hasher.update(&(path_bytes.len() as u64).to_le_bytes());
+        hasher.update((path_bytes.len() as u64).to_le_bytes());
         hasher.update(path_bytes);
 
         let metadata = std::fs::metadata(file.as_std_path()).map_err(|e| {
@@ -428,7 +428,7 @@ fn compute_input_hash(
                 relative.as_str()
             )
         })?;
-        hasher.update(&metadata.len().to_le_bytes());
+        hasher.update(metadata.len().to_le_bytes());
 
         let f = std::fs::File::open(file.as_std_path()).map_err(|e| {
             format!(
