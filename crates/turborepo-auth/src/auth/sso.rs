@@ -278,17 +278,12 @@ mod tests {
             _token: &turborepo_api_client::SecretString,
         ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
             Ok(ResponseTokenMetadata {
-                id: "test".to_string(),
-                name: "test".to_string(),
-                token_type: "test".to_string(),
                 scopes: vec![Scope {
                     scope_type: "team".to_string(),
                     team_id: Some("my-team".to_string()),
-                    created_at: 0,
                     expires_at: None,
                 }],
                 active_at: current_unix_time() - 100,
-                created_at: 0,
             })
         }
         async fn delete_token(

@@ -6,14 +6,14 @@ use std::{collections::HashMap, fs::OpenOptions, io::Write, net::SocketAddr, syn
 
 use anyhow::Result;
 use axum::{
-    Json, Router,
+    Form, Json, Router,
     body::Body,
     extract::Path,
     http::{HeaderMap, HeaderValue, StatusCode, header::CONTENT_LENGTH},
     routing::{get, head, options, post, put},
 };
 use futures_util::StreamExt;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::{net::TcpListener, sync::Mutex};
 use turborepo_vercel_api::{
     AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse,
@@ -33,6 +33,13 @@ pub const EXPECTED_TEAM_CREATED_AT: u64 = 0;
 
 pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
 pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
+
+#[derive(Deserialize)]
+struct VercelAppTokenRequest {
+    token: String,
+    #[allow(dead_code)]
+    client_id: String,
+}
 
 /// Per-artifact SCM metadata: (sha, dirty_hash).
 type ArtifactScmMetadata = HashMap<String, (Option<String>, Option<String>)>;
@@ -291,6 +298,25 @@ pub async fn start_test_server(
 
                 headers
             }),
+        )
+        .route(
+            "/login/oauth/token/introspect",
+            post(|Form(form): Form<VercelAppTokenRequest>| async move {
+                if form.token.starts_with("vca_") {
+                    Json(serde_json::json!({
+                        "active": true,
+                        "scope": "openid",
+                        "exp": 1700000000u64,
+                        "iat": 1690000000u64,
+                    }))
+                } else {
+                    Json(serde_json::json!({ "active": false }))
+                }
+            }),
+        )
+        .route(
+            "/login/oauth/token/revoke",
+            post(|Form(_form): Form<VercelAppTokenRequest>| async move { StatusCode::OK }),
         )
         .route(
             "/api/turborepo/v1/events",

@@ -177,20 +177,20 @@ impl Token {
         error: reqwest::Error,
     ) -> Result<bool, Error> {
         if error.status() == Some(reqwest::StatusCode::FORBIDDEN) {
-            let metadata = self.fetch_metadata(client).await?;
-            if !metadata.token_type.is_empty() {
-                return Err(Error::APIError(turborepo_api_client::Error::InvalidToken {
-                    status: error
-                        .status()
-                        .unwrap_or(reqwest::StatusCode::FORBIDDEN)
-                        .as_u16(),
-                    url: error
-                        .url()
-                        .map(|u| u.to_string())
-                        .unwrap_or("Unknown url".to_string()),
-                    message: error.to_string(),
-                }));
-            }
+            // If we can successfully fetch metadata, the token is valid but
+            // lacks permission for this operation.
+            let _metadata = self.fetch_metadata(client).await?;
+            return Err(Error::APIError(turborepo_api_client::Error::InvalidToken {
+                status: error
+                    .status()
+                    .unwrap_or(reqwest::StatusCode::FORBIDDEN)
+                    .as_u16(),
+                url: error
+                    .url()
+                    .map(|u| u.to_string())
+                    .unwrap_or("Unknown url".to_string()),
+                message: error.to_string(),
+            }));
         }
 
         Err(Error::APIError(turborepo_api_client::Error::ReqwestError(
@@ -533,18 +533,9 @@ mod tests {
         let quick_scope = |expiry| Scope {
             expires_at: expiry,
             scope_type: "".to_string(),
-            created_at: 0,
             team_id: None,
         };
-        let mock_response = |active_at, scopes| ResponseTokenMetadata {
-            active_at,
-            scopes,
-            // These fields don't matter in the test
-            id: "".to_string(),
-            name: "".to_string(),
-            token_type: "".to_string(),
-            created_at: 0,
-        };
+        let mock_response = |active_at, scopes| ResponseTokenMetadata { active_at, scopes };
 
         let cases = vec![
             // Case: Token active, no scopes (implicitly infinite)
@@ -1019,12 +1010,8 @@ mod tests {
                 Ok(metadata.clone())
             } else {
                 Ok(ResponseTokenMetadata {
-                    id: "test".to_string(),
-                    name: "test".to_string(),
-                    token_type: "test".to_string(),
                     scopes: vec![],
                     active_at: current_unix_time() - 100,
-                    created_at: 0,
                 })
             }
         }
@@ -1068,12 +1055,8 @@ mod tests {
         // Test active token
         let client = MockTokenClient {
             metadata_response: Some(ResponseTokenMetadata {
-                id: "test".to_string(),
-                name: "test".to_string(),
-                token_type: "test".to_string(),
                 scopes: vec![],
                 active_at: current_time - 100,
-                created_at: 0,
             }),
             should_fail: false,
         };
@@ -1083,14 +1066,7 @@ mod tests {
         let client = MockTokenClient {
             metadata_response: Some(ResponseTokenMetadata {
                 active_at: current_time + 1000,
-                ..ResponseTokenMetadata {
-                    id: "test".to_string(),
-                    name: "test".to_string(),
-                    token_type: "test".to_string(),
-                    scopes: vec![],
-                    created_at: 0,
-                    active_at: 0,
-                }
+                scopes: vec![],
             }),
             should_fail: false,
         };
@@ -1144,12 +1120,8 @@ mod tests {
                 Ok(metadata.clone())
             } else {
                 Ok(ResponseTokenMetadata {
-                    id: "test".to_string(),
-                    name: "test".to_string(),
-                    token_type: "".to_string(),
                     scopes: vec![],
                     active_at: current_unix_time() - 100,
-                    created_at: 0,
                 })
             }
         }
@@ -1164,12 +1136,8 @@ mod tests {
         let token = Token::new("test-token".to_string());
         let client = MockSSOTokenClient {
             metadata_response: Some(ResponseTokenMetadata {
-                id: "test".to_string(),
-                name: "test".to_string(),
-                token_type: "sso".to_string(),
                 scopes: vec![],
                 active_at: current_unix_time() - 100,
-                created_at: 0,
             }),
         };
 
@@ -1188,38 +1156,6 @@ mod tests {
             Err(Error::APIError(
                 turborepo_api_client::Error::InvalidToken { .. }
             ))
-        ));
-    }
-
-    #[tokio::test]
-    async fn test_handle_sso_token_error_forbidden_without_token_type() {
-        let token = Token::new("test-token".to_string());
-        let client = MockSSOTokenClient {
-            metadata_response: Some(ResponseTokenMetadata {
-                id: "test".to_string(),
-                name: "test".to_string(),
-                token_type: "".to_string(),
-                scopes: vec![],
-                active_at: current_unix_time() - 100,
-                created_at: 0,
-            }),
-        };
-
-        let errorful_response = reqwest::Response::from(
-            http::Response::builder()
-                .status(reqwest::StatusCode::FORBIDDEN)
-                .body("")
-                .unwrap(),
-        );
-
-        let result = token
-            .handle_sso_token_error(&client, errorful_response.error_for_status().unwrap_err())
-            .await;
-        assert!(matches!(
-            result,
-            Err(Error::APIError(turborepo_api_client::Error::ReqwestError(
-                _
-            )))
         ));
     }
 

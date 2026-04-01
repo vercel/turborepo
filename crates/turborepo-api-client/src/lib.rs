@@ -18,7 +18,8 @@ use turborepo_ci::{Vendor, is_ci};
 pub use turborepo_types::SecretString;
 use turborepo_vercel_api::{
     APIError, CachingStatus, CachingStatusResponse, PreflightResponse, Team, TeamsResponse,
-    UserResponse, VerificationResponse, VerifiedSsoUser, token::ResponseTokenMetadata,
+    UserResponse, VerificationResponse, VerifiedSsoUser,
+    token::{ResponseTokenMetadata, Scope},
 };
 use url::Url;
 
@@ -451,9 +452,26 @@ impl CacheClient for APIClient {
     }
 }
 
+const TURBOREPO_CLIENT_ID: &str = "cl_HYyOPBNtFMfHhaUn9L4QPfTZz6TP47bp";
+
+#[derive(Deserialize, Debug)]
+struct VercelAppTokenIntrospectionResponse {
+    active: bool,
+    #[serde(default)]
+    scope: Option<String>,
+    #[serde(default)]
+    exp: Option<u64>,
+    #[serde(default)]
+    iat: Option<u64>,
+}
+
 impl TokenClient for APIClient {
     #[tracing::instrument(skip_all)]
     async fn get_metadata(&self, token: &SecretString) -> Result<ResponseTokenMetadata> {
+        if token.expose().starts_with("vca_") {
+            return self.get_vercel_app_token_metadata(token).await;
+        }
+
         let endpoint = "/v5/user/tokens/current";
         let url = self.make_url(endpoint)?;
         let request_builder = self
@@ -513,6 +531,10 @@ impl TokenClient for APIClient {
     /// Invalidates the given token on the server.
     #[tracing::instrument(skip_all)]
     async fn delete_token(&self, token: &SecretString) -> Result<()> {
+        if token.expose().starts_with("vca_") {
+            return self.delete_vercel_app_token(token).await;
+        }
+
         let endpoint = "/v3/user/tokens/current";
         let url = self.make_url(endpoint)?;
         let request_builder = self
@@ -819,6 +841,76 @@ impl APIClient {
             request_builder = request_builder.query(&[("slug", slug)]);
         }
         request_builder
+    }
+
+    /// Introspects a Vercel App token (prefixed "vca_") using the RFC 7662
+    /// endpoint.
+    async fn get_vercel_app_token_metadata(
+        &self,
+        token: &SecretString,
+    ) -> Result<ResponseTokenMetadata> {
+        let url = self.make_url("/login/oauth/token/introspect")?;
+        let request_builder = self
+            .client
+            .post(url)
+            .header("User-Agent", self.user_agent.clone())
+            .form(&[
+                ("token", token.expose()),
+                ("client_id", TURBOREPO_CLIENT_ID),
+            ]);
+
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
+
+        let resp: VercelAppTokenIntrospectionResponse = response.json().await?;
+
+        if !resp.active {
+            return Err(Error::InvalidToken {
+                status: 200,
+                url: self.make_url("/login/oauth/token/introspect")?.to_string(),
+                message: "OAuth token is not active".to_string(),
+            });
+        }
+
+        Ok(ResponseTokenMetadata {
+            scopes: resp
+                .scope
+                .map(|s| {
+                    s.split_whitespace()
+                        .map(|scope_str| Scope {
+                            scope_type: scope_str.to_string(),
+                            expires_at: resp.exp.map(|e| e as u128 * 1000),
+                            team_id: None,
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+            active_at: resp.iat.unwrap_or(0) as u128 * 1000,
+        })
+    }
+
+    /// Revokes a Vercel App token (prefixed "vca_") using the RFC 7009
+    /// endpoint.
+    async fn delete_vercel_app_token(&self, token: &SecretString) -> Result<()> {
+        let url = self.make_url("/login/oauth/token/revoke")?;
+        let request_builder = self
+            .client
+            .post(url)
+            .header("User-Agent", self.user_agent.clone())
+            .form(&[
+                ("token", token.expose()),
+                ("client_id", TURBOREPO_CLIENT_ID),
+            ]);
+
+        retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+            .await?
+            .into_response()
+            .error_for_status()?;
+
+        Ok(())
     }
 }
 

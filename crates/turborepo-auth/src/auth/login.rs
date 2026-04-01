@@ -287,17 +287,12 @@ mod tests {
             }
 
             Ok(turborepo_vercel_api::token::ResponseTokenMetadata {
-                id: "id".to_string(),
-                name: "name".to_string(),
-                token_type: "token".to_string(),
                 scopes: vec![turborepo_vercel_api::token::Scope {
                     scope_type: "user".to_string(),
                     team_id: None,
                     expires_at: None,
-                    created_at: 1111111111111,
                 }],
                 active_at: 0,
-                created_at: 123456,
             })
         }
         async fn delete_token(
