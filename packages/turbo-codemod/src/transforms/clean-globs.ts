@@ -1,6 +1,5 @@
-import path from "node:path";
 import type { SchemaV1 } from "@turbo/types";
-import { getTurboConfigs } from "@turbo/utils";
+import { getTurboConfigs, resolveTurboConfigPath } from "@turbo/utils";
 import type { TransformerArgs, Transformer } from "../types";
 import type { TransformerResults } from "../runner";
 import { getTransformerHelpers } from "../utils/get-transformer-helpers";
@@ -23,7 +22,16 @@ export function transformer({
     options
   });
 
-  const turboConfigPath = path.join(root, "turbo.json");
+  const { configPath: turboConfigPath, error: resolveError } =
+    resolveTurboConfigPath(root);
+  if (resolveError) {
+    return runner.abortTransform({ reason: resolveError });
+  }
+  if (!turboConfigPath) {
+    return runner.abortTransform({
+      reason: `No turbo.json or turbo.jsonc found at ${root}. Is the path correct?`
+    });
+  }
 
   const turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
   runner.modifyFile({

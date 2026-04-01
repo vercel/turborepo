@@ -37,7 +37,7 @@
 import path from "node:path";
 import fs from "fs-extra";
 import { gte, coerce } from "semver";
-import { getTurboConfigs } from "@turbo/utils";
+import { getTurboConfigs, resolveTurboConfigPath } from "@turbo/utils";
 import type { TransformerResults } from "../runner";
 import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { Transformer, TransformerArgs } from "../types";
@@ -156,10 +156,14 @@ export function transformer({
     'Updating "$schema" property in turbo.json files to versioned format...'
   );
 
-  const rootTurboConfigPath = path.join(root, "turbo.json");
-  if (!fs.existsSync(rootTurboConfigPath)) {
+  const { configPath: rootTurboConfigPath, error: resolveError } =
+    resolveTurboConfigPath(root);
+  if (resolveError) {
+    return runner.abortTransform({ reason: resolveError });
+  }
+  if (!rootTurboConfigPath) {
     return runner.abortTransform({
-      reason: `No turbo.json found at ${root}. Is the path correct?`
+      reason: `No turbo.json or turbo.jsonc found at ${root}. Is the path correct?`
     });
   }
 

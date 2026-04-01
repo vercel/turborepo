@@ -2,6 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { logger } from "@turbo/utils";
 import picocolors from "picocolors";
+import JSON5 from "json5";
 import type { Change } from "diff";
 import { diffLines, diffJson } from "diff";
 import {
@@ -29,7 +30,11 @@ export class FileTransform {
     // load original file for comparison
     if (args.before === undefined) {
       try {
-        if (path.extname(args.filePath) === ".json") {
+        const ext = path.extname(args.filePath);
+        if (ext === ".jsonc") {
+          const raw = readFileSync(args.filePath, "utf8");
+          this.before = JSON5.parse(raw) as object;
+        } else if (ext === ".json") {
           this.before = readJsonSync(args.filePath) as object;
         } else {
           this.before = readFileSync(args.filePath);

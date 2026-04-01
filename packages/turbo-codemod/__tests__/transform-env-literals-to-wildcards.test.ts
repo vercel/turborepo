@@ -255,7 +255,7 @@ describe("transform-env-literals-to-wildcards", () => {
     expect(read("turbo.json")).toBeUndefined();
     expect(result.fatalError).toBeDefined();
     expect(result.fatalError?.message).toMatch(
-      /No turbo\.json found at .*?\. Is the path correct\?/
+      /No turbo\.json or turbo\.jsonc found at .*?\. Is the path correct\?/
     );
   });
 
@@ -274,6 +274,21 @@ describe("transform-env-literals-to-wildcards", () => {
     expect(result.fatalError).toBeDefined();
     expect(result.fatalError?.message).toMatch(
       'turbo" key detected in package.json. Run `npx @turbo/codemod transform create-turbo-config` first'
+    );
+  });
+
+  it("errors if both turbo.json and turbo.jsonc exist", () => {
+    const { root, write } = useFixture({ fixture: "needs-rewriting" });
+    write("turbo.jsonc", '{ "pipeline": {} }');
+
+    const result = transformer({
+      root,
+      options: { force: false, dryRun: false, print: false }
+    });
+
+    expect(result.fatalError).toBeDefined();
+    expect(result.fatalError?.message).toContain(
+      "Found both turbo.json and turbo.jsonc"
     );
   });
 });

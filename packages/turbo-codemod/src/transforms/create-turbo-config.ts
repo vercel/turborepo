@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "fs-extra";
-import { type PackageJson } from "@turbo/utils";
+import { type PackageJson, resolveTurboConfigPath } from "@turbo/utils";
 import type { Schema } from "@turbo/types";
 import type { TransformerResults } from "../runner";
 import { getTransformerHelpers } from "../utils/get-transformer-helpers";
@@ -23,7 +23,13 @@ export function transformer({
   });
 
   log.info(`Migrating "package.json" "turbo" key to "turbo.json" file...`);
-  const turboConfigPath = path.join(root, "turbo.json");
+  const { configPath: existingConfigPath, error: resolveError } =
+    resolveTurboConfigPath(root);
+  if (resolveError) {
+    return runner.abortTransform({ reason: resolveError });
+  }
+  // If no config exists yet, default to creating turbo.json
+  const turboConfigPath = existingConfigPath ?? path.join(root, "turbo.json");
   const rootPackageJsonPath = path.join(root, "package.json");
   if (!fs.existsSync(rootPackageJsonPath)) {
     return runner.abortTransform({
@@ -34,10 +40,12 @@ export function transformer({
   // read files
   const rootPackageJson = fs.readJsonSync(rootPackageJsonPath) as PackageJson;
   let rootTurboJson = null;
-  try {
-    rootTurboJson = fs.readJsonSync(turboConfigPath) as Schema;
-  } catch (err) {
-    rootTurboJson = null;
+  if (existingConfigPath) {
+    try {
+      rootTurboJson = fs.readJsonSync(turboConfigPath) as Schema;
+    } catch (err) {
+      rootTurboJson = null;
+    }
   }
 
   // modify files

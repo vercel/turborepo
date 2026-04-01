@@ -4,7 +4,8 @@ export {
   getTurboConfigs,
   getWorkspaceConfigs,
   forEachTaskDef,
-  clearConfigCaches
+  clearConfigCaches,
+  resolveTurboConfigPath
 } from "./get-turbo-configs";
 export { searchUp } from "./search-up";
 export {

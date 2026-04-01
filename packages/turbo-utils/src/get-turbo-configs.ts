@@ -22,7 +22,7 @@ const ROOT_WORKSPACE_GLOB = "package.json";
  * Returns error information if both turbo.json and turbo.jsonc exist in the same directory.
  * Returns the path to the config file to use, or null if neither exists.
  */
-function resolveTurboConfigPath(dirPath: string): {
+export function resolveTurboConfigPath(dirPath: string): {
   configPath: string | null;
   configExists: boolean;
   error?: string;

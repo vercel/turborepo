@@ -1,6 +1,10 @@
 import path from "node:path";
 import fs from "fs-extra";
-import { type PackageJson, getTurboConfigs } from "@turbo/utils";
+import {
+  type PackageJson,
+  getTurboConfigs,
+  resolveTurboConfigPath
+} from "@turbo/utils";
 import type { Pipeline, SchemaV1 } from "@turbo/types";
 import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { TransformerResults } from "../runner";
@@ -148,10 +152,14 @@ export function transformer({
   }
 
   // validate we have a root config
-  const turboConfigPath = path.join(root, "turbo.json");
-  if (!fs.existsSync(turboConfigPath)) {
+  const { configPath: turboConfigPath, error: resolveError } =
+    resolveTurboConfigPath(root);
+  if (resolveError) {
+    return runner.abortTransform({ reason: resolveError });
+  }
+  if (!turboConfigPath) {
     return runner.abortTransform({
-      reason: `No turbo.json found at ${root}. Is the path correct?`
+      reason: `No turbo.json or turbo.jsonc found at ${root}. Is the path correct?`
     });
   }
 
