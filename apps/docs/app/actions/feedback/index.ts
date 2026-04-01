@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import type { Feedback } from "@/components/geistdocs/feedback";
+import { siteId } from "@/geistdocs";
 import { emotions } from "./emotions";
 
 const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
@@ -26,7 +27,7 @@ export const sendFeedback = async (
       emotion: emoji,
       ua: headersList.get("user-agent") ?? undefined,
       ip: headersList.get("x-real-ip") || headersList.get("x-forwarded-for"),
-      label: "turbo-site"
+      label: siteId
     })
   });
 
