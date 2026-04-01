@@ -1,3 +1,4 @@
+import { generateNotFoundMarkdown, isAIAgent } from "@vercel/agent-readability";
 import { createI18nMiddleware } from "fumadocs-core/i18n/middleware";
 import { isMarkdownPreferred, rewritePath } from "fumadocs-core/negotiation";
 import {
@@ -6,7 +7,6 @@ import {
   NextResponse
 } from "next/server";
 import { i18n } from "@/lib/geistdocs/i18n";
-import { isAIAgent } from "@/lib/ai-agent-detection";
 import { trackMdRequest } from "@/lib/md-tracking";
 
 const { rewrite: rewriteLLM } = rewritePath(
@@ -42,8 +42,7 @@ const proxy = (request: NextRequest, context: NextFetchEvent) => {
     return NextResponse.rewrite(new URL("/en/llms.md", request.nextUrl));
   }
   if (pathname.startsWith("/docs/") && pathname.endsWith(".md")) {
-    // Strip the .md extension and rewrite to llms.md route
-    const pathWithoutMd = pathname.slice(0, -3); // Remove .md
+    const pathWithoutMd = pathname.slice(0, -3);
     const docPath = pathWithoutMd.replace(/^\/docs\//, "");
     trackMd(request, context, `/llms.md/${docPath}`);
     return NextResponse.rewrite(
@@ -55,7 +54,6 @@ const proxy = (request: NextRequest, context: NextFetchEvent) => {
   if (isMarkdownPreferred(request)) {
     const result = rewriteLLM(pathname);
     if (result) {
-      // Track with path without lang prefix (e.g., /llms.md/getting-started)
       const trackingPath = result.replace(/^\/[a-z]{2}\//, "/");
       trackMd(request, context, trackingPath, "header-negotiated");
       return NextResponse.rewrite(new URL(result, request.nextUrl));
@@ -72,6 +70,9 @@ const proxy = (request: NextRequest, context: NextFetchEvent) => {
         trackMd(request, context, trackingPath, "agent-rewrite");
         return NextResponse.rewrite(new URL(result, request.nextUrl));
       }
+      return new NextResponse(generateNotFoundMarkdown(pathname), {
+        headers: { "Content-Type": "text/markdown; charset=utf-8" },
+      });
     }
   }
 
@@ -80,7 +81,6 @@ const proxy = (request: NextRequest, context: NextFetchEvent) => {
 };
 
 export const config = {
-  // Matcher ignoring `/_next/`, `/api/`, static assets, favicon, feed.xml, sitemap.xml, sitemap.md, robots.txt, schema JSON files, etc.
   matcher: [
     "/((?!api|_next/static|_next/image|favicon.ico|feed.xml|sitemap.xml|sitemap.md|robots.txt|schema\\.json|schema\\.v\\d+\\.json|microfrontends/schema\\.json).*)"
   ]
