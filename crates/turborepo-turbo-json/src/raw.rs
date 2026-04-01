@@ -838,7 +838,8 @@ pub struct RawTaskDefinition {
     /// The user asserts that the underlying tool is resilient to bad,
     /// partial, stale, or corrupted incremental state.
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
+    #[schemars(skip)]
+    #[ts(skip)]
     pub incremental: Option<Vec<RawIncrementalPartition>>,
 }
 

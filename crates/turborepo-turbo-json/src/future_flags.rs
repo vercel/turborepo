@@ -87,6 +87,7 @@ pub struct FutureFlags {
     /// runs via the remote cache, restoring them before execution on cache
     /// misses to speed up rebuilds.
     #[serde(default)]
+    #[schemars(skip)]
     pub incremental_tasks: bool,
 }
 
@@ -105,7 +106,7 @@ impl TS for FutureFlags {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
          boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
          pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
-         boolean, incrementalTasks?: boolean }"
+         boolean }"
             .to_string()
     }
 
@@ -113,7 +114,7 @@ impl TS for FutureFlags {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
          boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
          pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
-         boolean, incrementalTasks?: boolean }"
+         boolean }"
             .to_string()
     }
 
@@ -121,7 +122,7 @@ impl TS for FutureFlags {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
          boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         globalConfiguration?: boolean, incrementalTasks?: boolean };"
+         globalConfiguration?: boolean };"
             .to_string()
     }
 
@@ -129,7 +130,7 @@ impl TS for FutureFlags {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
          boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         globalConfiguration?: boolean, incrementalTasks?: boolean };"
+         globalConfiguration?: boolean };"
             .to_string()
     }
 
