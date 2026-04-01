@@ -259,7 +259,7 @@ fn extract_env_vars(
 }
 
 /// Processed outputs field with DSL detection
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct ProcessedOutputs {
     pub globs: Vec<ProcessedGlob>,
     pub extends: bool,
@@ -319,6 +319,14 @@ impl ProcessedWith {
     }
 }
 
+/// A processed incremental cache partition with validated output and input
+/// globs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProcessedIncrementalPartition {
+    pub outputs: ProcessedOutputs,
+    pub inputs: Option<ProcessedInputs>,
+}
+
 /// Intermediate representation for task definitions with DSL processing
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ProcessedTaskDefinition {
@@ -336,6 +344,7 @@ pub struct ProcessedTaskDefinition {
     pub interactive: Option<Spanned<bool>>,
     pub env_mode: Option<Spanned<EnvMode>>,
     pub with: Option<ProcessedWith>,
+    pub incremental: Option<Vec<ProcessedIncrementalPartition>>,
 }
 
 impl ProcessedTaskDefinition {
@@ -344,6 +353,27 @@ impl ProcessedTaskDefinition {
         raw_task: RawTaskDefinition,
         future_flags: &FutureFlags,
     ) -> Result<Self, Error> {
+        let incremental = raw_task
+            .incremental
+            .map(|partitions| {
+                partitions
+                    .into_iter()
+                    .map(|partition| {
+                        let outputs = partition
+                            .outputs
+                            .map(|o| ProcessedOutputs::new(o, future_flags))
+                            .transpose()?
+                            .unwrap_or_default();
+                        let inputs = partition
+                            .inputs
+                            .map(|i| ProcessedInputs::new(i, future_flags))
+                            .transpose()?;
+                        Ok(ProcessedIncrementalPartition { outputs, inputs })
+                    })
+                    .collect::<Result<Vec<_>, Error>>()
+            })
+            .transpose()?;
+
         Ok(ProcessedTaskDefinition {
             extends: raw_task.extends,
             description: raw_task.description,
@@ -377,6 +407,7 @@ impl ProcessedTaskDefinition {
                 .with
                 .map(|with| ProcessedWith::new(with, future_flags))
                 .transpose()?,
+            incremental,
         })
     }
 
@@ -394,6 +425,7 @@ impl ProcessedTaskDefinition {
             || self.output_logs.is_some()
             || self.interactive.is_some()
             || self.with.is_some()
+            || self.incremental.is_some()
     }
 }
 

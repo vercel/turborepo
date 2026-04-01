@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "check-types": "tsc --noEmit"
+    "check-types": "echo \"Sleeping for 5 seconds so you can see the tsconfig.tsbuildinfo file before the task actually runs \" && sleep 5 && tsc --noEmit",
+    "check-types1": "tsc --noEmit"
   },
   "dependencies": {
     "@octokit/rest": "^22.0.0",

@@ -135,6 +135,7 @@ mod tests {
             env_mode: None,
             with: None,
             experimental_ci: None,
+            incremental: None,
         },
         TaskDefinition {
           env: vec!["OS".to_string()],
@@ -153,6 +154,7 @@ mod tests {
           interruptible: true,
           env_mode: None,
           with: None,
+          incremental: None,
         }
       ; "full"
     )]
@@ -184,6 +186,7 @@ mod tests {
             env_mode: None,
             with: None,
             experimental_ci: None,
+            incremental: None,
         },
         TaskDefinition {
             env: vec!["OS".to_string()],
@@ -202,6 +205,7 @@ mod tests {
             interactive: false,
             env_mode: None,
             with: None,
+            incremental: None,
         }
       ; "full (windows)"
     )]

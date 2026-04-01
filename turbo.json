@@ -52,6 +52,9 @@
       "dependsOn": ["//#lint:fix", "//#format:fix", "//#fix:toml"]
     },
     "check-types": {
+      "incremental": [
+        { "outputs": [".next/types/**", "tsconfig.tsbuildinfo"] }
+      ],
       "dependsOn": ["^build"]
     },
     "check-openapi": {},

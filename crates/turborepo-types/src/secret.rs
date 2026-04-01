@@ -1,6 +1,6 @@
 use std::fmt;
 
-use secrecy::{ExposeSecret, SecretBox, zeroize::Zeroize};
+use secrecy::{zeroize::Zeroize, ExposeSecret, SecretBox};
 use serde::Deserialize;
 
 /// A wrapper around a secret string that prevents accidental exposure through
