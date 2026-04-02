@@ -647,15 +647,9 @@ mod tests {
             ..Default::default()
         };
 
-        let result = super::filter_engine_to_tasks(
-            engine,
-            &[selector],
-            &pkg_graph,
-            &scm,
-            root,
-            &[],
-        )
-        .unwrap();
+        let result =
+            super::filter_engine_to_tasks(engine, &[selector], &pkg_graph, &scm, root, &[])
+                .unwrap();
 
         let remaining: HashSet<_> = result.task_ids().cloned().collect();
         assert!(
