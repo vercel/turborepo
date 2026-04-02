@@ -59,18 +59,16 @@ impl HTTPCache {
                 secret_key_override: None,
             };
 
-            if let Err(e) = authenticator.validate_key_length() {
+            if let Err(e) = authenticator.validate_key_length()
+                && matches!(e, SignatureError::SignatureKeyTooShort { .. })
+            {
                 if enforce_key_length {
                     return Err(e.into());
                 }
-
-                if matches!(e, SignatureError::SignatureKeyTooShort { .. }) {
-                    warn!(
-                        "{e} This will become a fatal error in the next major version of \
-                         Turborepo. Enable `futureFlags.longerSignatureKey` in turbo.json to \
-                         enforce this now."
-                    );
-                }
+                warn!(
+                    "{e} This will become a fatal error in the next major version of Turborepo. \
+                     Enable `futureFlags.longerSignatureKey` in turbo.json to enforce this now."
+                );
             }
 
             Some(authenticator)
@@ -1066,6 +1064,56 @@ mod test {
             std::env::remove_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY");
         }
 
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_missing_signature_key_not_rejected_when_enforced() {
+        let repo_root = tempfile::tempdir().unwrap();
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let api_client = APIClient::new(
+            "http://localhost:8000",
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            false,
+        )
+        .unwrap();
+
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: Some(crate::RemoteCacheOpts::new(
+                None, true, // signature enabled
+                true, // enforce key length
+            )),
+            cache_max_age: None,
+            cache_max_size: None,
+        };
+
+        let api_auth = APIAuth {
+            team_id: Some("my-team".to_string()),
+            token: SecretString::new("my-token".to_string()),
+            team_slug: None,
+        };
+
+        // SAFETY: test-only, ensure env var is NOT set
+        unsafe {
+            std::env::remove_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY");
+        }
+        let result = HTTPCache::new(
+            api_client,
+            &opts,
+            repo_root_path,
+            api_auth,
+            None,
+            LazyScmState::resolved(None),
+        );
+
+        // The flag should not force an error when no key exists at all.
+        // It only enforces minimum length on keys that ARE set.
         assert!(result.is_ok());
     }
 }
