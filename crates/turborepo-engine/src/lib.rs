@@ -293,6 +293,41 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         self.prune_to_reachable(&reachable, false)
     }
 
+    /// Prunes the engine to only the given tasks and their transitive
+    /// dependencies (upstream tasks needed for execution).
+    ///
+    /// Unlike `retain_affected_tasks`, this does NOT expand to dependents.
+    /// Use this for `--filter` where the user explicitly scoped the task set
+    /// and dependent expansion has already been handled by selector resolution.
+    pub fn retain_filtered_tasks(self, filtered_tasks: &HashSet<TaskId>) -> Self {
+        let entrypoint_indices: Vec<_> = filtered_tasks
+            .iter()
+            .filter_map(|task_id| self.task_lookup.get(task_id))
+            .copied()
+            .collect();
+
+        let original_task_count = self.task_graph.node_count().saturating_sub(1);
+
+        // Forward DFS only: find the filtered tasks + transitive dependencies.
+        let mut reachable = HashSet::new();
+        reachable.insert(self.root_index);
+        depth_first_search(&self.task_graph, entrypoint_indices, |event| {
+            if let DfsEvent::Discover(n, _) = event {
+                reachable.insert(n);
+            }
+        });
+
+        let retained_task_count = reachable.len().saturating_sub(1);
+        tracing::info!(
+            directly_filtered = filtered_tasks.len(),
+            retained = retained_task_count,
+            pruned = original_task_count.saturating_sub(retained_task_count),
+            "task graph pruned for --filter"
+        );
+
+        self.prune_to_reachable(&reachable, false)
+    }
+
     /// Computes the full reachable set from seed nodes: reverse DFS for
     /// transitive dependents, then forward DFS for transitive dependencies.
     /// Root is always included so `prune_to_reachable` can recover it.

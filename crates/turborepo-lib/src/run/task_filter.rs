@@ -75,12 +75,13 @@ pub fn filter_engine_to_tasks(
     }
 
     if included_tasks.is_empty() {
-        return Ok(engine.retain_affected_tasks(&included_tasks));
+        return Ok(engine.retain_filtered_tasks(&included_tasks));
     }
 
-    // retain_affected_tasks expands to transitive dependents, includes
-    // transitive dependencies for execution, and prunes the rest.
-    Ok(engine.retain_affected_tasks(&included_tasks))
+    // retain_filtered_tasks includes transitive dependencies for
+    // execution and prunes the rest. Dependent expansion was already
+    // handled during selector resolution via `include_dependents`.
+    Ok(engine.retain_filtered_tasks(&included_tasks))
 }
 
 /// Resolves a single selector to the set of matching task IDs.
@@ -615,6 +616,55 @@ mod tests {
         assert!(
             tasks.contains(&web_build),
             "web#build should be included as a task-level dependent: {tasks:?}"
+        );
+    }
+
+    /// Regression: filtering to a specific package must NOT pull in
+    /// dependent tasks after selector resolution. The engine pruning
+    /// should only expand to transitive dependencies (upstream), not
+    /// dependents (downstream).
+    #[tokio::test]
+    async fn filter_does_not_include_dependents() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["ui", "app"]).await;
+        let scm = turborepo_scm::SCM::new(root);
+
+        let ui_build = TaskId::new("ui", "build");
+        let app_build = TaskId::new("app", "build");
+
+        // app#build depends on ui#build
+        let engine = make_engine(
+            &[
+                (ui_build.clone(), TaskDefinition::default()),
+                (app_build.clone(), TaskDefinition::default()),
+            ],
+            &[(app_build.clone(), ui_build.clone())],
+        );
+
+        let selector = turborepo_scope::TargetSelector {
+            name_pattern: "ui".to_string(),
+            ..Default::default()
+        };
+
+        let result = super::filter_engine_to_tasks(
+            engine,
+            &[selector],
+            &pkg_graph,
+            &scm,
+            root,
+            &[],
+        )
+        .unwrap();
+
+        let remaining: HashSet<_> = result.task_ids().cloned().collect();
+        assert!(
+            remaining.contains(&ui_build),
+            "ui#build should be retained: {remaining:?}"
+        );
+        assert!(
+            !remaining.contains(&app_build),
+            "app#build should NOT be pulled in as a dependent: {remaining:?}"
         );
     }
 
