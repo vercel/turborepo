@@ -3,7 +3,8 @@ import fs from "fs-extra";
 import {
   type PackageJson,
   getTurboConfigs,
-  forEachTaskDef
+  forEachTaskDef,
+  resolveTurboConfigPath
 } from "@turbo/utils";
 import type { SchemaV1 } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
@@ -71,10 +72,14 @@ export function transformer({
   }
 
   log.info("Moving entries in `dotEnv` key in task config to `inputs`");
-  const turboConfigPath = path.join(root, "turbo.json");
-  if (!fs.existsSync(turboConfigPath)) {
+  const { configPath: turboConfigPath, error: resolveError } =
+    resolveTurboConfigPath(root);
+  if (resolveError) {
+    return runner.abortTransform({ reason: resolveError });
+  }
+  if (!turboConfigPath) {
     return runner.abortTransform({
-      reason: `No turbo.json found at ${root}. Is the path correct?`
+      reason: `No turbo.json or turbo.jsonc found at ${root}. Is the path correct?`
     });
   }
 

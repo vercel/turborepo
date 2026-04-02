@@ -147,6 +147,7 @@ impl ProcessedTaskDefinition {
         set_field!(self, other, interruptible);
         set_field!(self, other, interactive);
         set_field!(self, other, env_mode);
+        set_field!(self, other, incremental);
     }
 }
 
@@ -197,6 +198,7 @@ mod test {
             interactive: None,
             env_mode: None,
             with: None,
+            incremental: None,
         }
     }
 
@@ -234,6 +236,7 @@ mod test {
             interactive: None,
             env_mode: None,
             with: None,
+            incremental: None,
         }
     }
 
@@ -253,6 +256,7 @@ mod test {
             interactive: None,
             env_mode: None,
             with: None,
+            incremental: None,
         }
     }
 

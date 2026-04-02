@@ -1,6 +1,4 @@
-import path from "node:path";
-import fs from "fs-extra";
-import { getTurboConfigs } from "@turbo/utils";
+import { getTurboConfigs, resolveTurboConfigPath } from "@turbo/utils";
 import type { SchemaV2, SchemaV1 } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/get-transformer-helpers";
@@ -34,10 +32,14 @@ export function transformer({
   });
 
   log.info("Renaming `pipeline` key in turbo.json to `tasks`");
-  const turboConfigPath = path.join(root, "turbo.json");
-  if (!fs.existsSync(turboConfigPath)) {
+  const { configPath: turboConfigPath, error: resolveError } =
+    resolveTurboConfigPath(root);
+  if (resolveError) {
+    return runner.abortTransform({ reason: resolveError });
+  }
+  if (!turboConfigPath) {
     return runner.abortTransform({
-      reason: `No turbo.json found at ${root}. Is the path correct?`
+      reason: `No turbo.json or turbo.jsonc found at ${root}. Is the path correct?`
     });
   }
 

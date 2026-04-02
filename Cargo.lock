@@ -8006,9 +8006,13 @@ dependencies = [
 name = "turborepo-run-cache"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "globwalk",
+ "hex",
  "itertools 0.14.0",
  "serde",
+ "sha2",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tracing",

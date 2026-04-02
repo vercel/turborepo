@@ -42,13 +42,14 @@ pub use loader::{
 };
 pub use parser::{BiomeParseError, parse_turbo_json};
 pub use processed::{
-    ProcessedDependsOn, ProcessedEnv, ProcessedGlob, ProcessedInputs, ProcessedOutputs,
-    ProcessedPassThroughEnv, ProcessedTaskDefinition, ProcessedWith,
+    ProcessedDependsOn, ProcessedEnv, ProcessedGlob, ProcessedIncrementalPartition,
+    ProcessedInputs, ProcessedOutputs, ProcessedPassThroughEnv, ProcessedTaskDefinition,
+    ProcessedWith,
 };
 pub use raw::{
-    HasConfigBeyondExtends, Pipeline, RawExperimentalObservability, RawObservabilityOtel,
-    RawObservabilityOtelMetrics, RawPackageTurboJson, RawRemoteCacheOptions, RawRootTurboJson,
-    RawTaskDefinition, RawTurboJson,
+    HasConfigBeyondExtends, Pipeline, RawExperimentalObservability, RawIncrementalPartition,
+    RawObservabilityOtel, RawObservabilityOtelMetrics, RawPackageTurboJson, RawRemoteCacheOptions,
+    RawRootTurboJson, RawTaskDefinition, RawTurboJson,
 };
 pub use validator::{TOPOLOGICAL_PIPELINE_DELIMITER, Validator};
 
@@ -380,6 +381,26 @@ impl TaskInputsFromProcessed for turborepo_types::TaskInputs {
             default: inputs.default,
         }
     }
+}
+
+/// Creates IncrementalPartitions from ProcessedIncrementalPartitions with
+/// resolved paths.
+pub fn incremental_partitions_from_processed(
+    partitions: Vec<ProcessedIncrementalPartition>,
+    turbo_root_path: &RelativeUnixPath,
+) -> Result<Vec<turborepo_types::IncrementalPartition>, Error> {
+    partitions
+        .into_iter()
+        .map(|p| {
+            let outputs = task_outputs_from_processed(p.outputs, turbo_root_path)?;
+            let inputs = p
+                .inputs
+                .map(|i| turborepo_types::TaskInputs::from_processed(i, turbo_root_path))
+                .map(|ti| ti.globs)
+                .unwrap_or_default();
+            Ok(turborepo_types::IncrementalPartition { outputs, inputs })
+        })
+        .collect()
 }
 
 /// Creates TaskOutputs from ProcessedOutputs with resolved paths

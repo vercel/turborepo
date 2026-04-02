@@ -65,4 +65,19 @@ describe("update-schema-url", () => {
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toStrictEqual({});
   });
+
+  it("errors if both turbo.json and turbo.jsonc exist", () => {
+    const { root, write } = useFixture({ fixture: "v1-schema" });
+    write("turbo.jsonc", '{ "tasks": {} }');
+
+    const result = transformer({
+      root,
+      options: { force: false, dryRun: false, print: false }
+    });
+
+    expect(result.fatalError).toBeDefined();
+    expect(result.fatalError?.message).toContain(
+      "Found both turbo.json and turbo.jsonc"
+    );
+  });
 });

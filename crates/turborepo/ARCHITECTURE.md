@@ -378,6 +378,30 @@ TaskCache.save_outputs()
   └── Upload to Remote Cache (async)
 ```
 
+#### Incremental Cache (`crates/turborepo-run-cache/src/incremental.rs`)
+
+Handles tool-managed incremental artifacts (e.g., `.tsbuildinfo`) that persist
+across runs via remote cache, speeding up cache misses by restoring prior
+incremental state before execution.
+
+- Gated behind the `incrementalTasks` future flag
+- Operates per-partition with independent cache keys
+- Fetch completes before task execution begins (strict ordering)
+- Upload happens after successful execution, in parallel with regular cache save
+- All blocking filesystem operations run on `spawn_blocking` threads
+- See `SPEC.md` for full specification
+
+```
+On Cache Miss:
+  Visitor.visit()
+    ├── Calculate Hash → Cache Miss
+    ├── Fetch Incremental Artifacts (sequential per-partition, must complete before exec)
+    ├── Execute Task
+    ├── Save to Cache
+    ├── Upload Incremental Artifacts (concurrent per-partition, parallel with cache save)
+    └── Track Results
+```
+
 ### 5. Data Collection and Summary
 
 ```

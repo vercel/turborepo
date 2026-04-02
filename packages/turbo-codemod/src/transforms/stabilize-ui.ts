@@ -1,5 +1,4 @@
-import path from "node:path";
-import fs from "fs-extra";
+import { resolveTurboConfigPath } from "@turbo/utils";
 import type { RootSchema } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/get-transformer-helpers";
@@ -36,10 +35,14 @@ export function transformer({
   });
 
   log.info(`Renaming \`experimentalUI\` key in turbo.json to \`ui\``);
-  const turboConfigPath = path.join(root, "turbo.json");
-  if (!fs.existsSync(turboConfigPath)) {
+  const { configPath: turboConfigPath, error: resolveError } =
+    resolveTurboConfigPath(root);
+  if (resolveError) {
+    return runner.abortTransform({ reason: resolveError });
+  }
+  if (!turboConfigPath) {
     return runner.abortTransform({
-      reason: `No turbo.json found at ${root}. Is the path correct?`
+      reason: `No turbo.json or turbo.jsonc found at ${root}. Is the path correct?`
     });
   }
 

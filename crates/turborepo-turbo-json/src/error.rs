@@ -264,6 +264,21 @@ pub enum Error {
     },
 
     // ============================================================
+    // Incremental configuration errors
+    // ============================================================
+    #[error(
+        "`{value}` is not supported in incremental partition inputs. Incremental inputs are \
+         independent of the task's regular input configuration."
+    )]
+    InvalidIncrementalInput {
+        value: String,
+        #[label("unsupported token in incremental inputs")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    // ============================================================
     // Root-only field errors
     // ============================================================
     #[error(

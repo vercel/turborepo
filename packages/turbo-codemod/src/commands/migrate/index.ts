@@ -9,6 +9,7 @@ import { directoryInfo } from "../../utils/directory-info";
 import { Runner } from "../../runner/runner";
 import { looksLikeRepo } from "../../utils/looks-like-repo";
 import type { TransformerResults } from "../../runner";
+import { transformer as updateVersionedSchema } from "../../transforms/update-versioned-schema-json";
 import { getCurrentVersion } from "./steps/get-current-version";
 import { getLatestVersion } from "./steps/get-latest-version";
 import { getTransformsForMigration } from "./steps/get-transforms-for-migration";
@@ -193,6 +194,20 @@ export async function migrate(
     });
     Runner.logResults(result);
     results.push(result);
+  }
+
+  // Always update the $schema URL to match the target version.
+  // The versioned schema transform may not be selected by getTransformsForMigration
+  // during same-major migrations (e.g., 2.8.0 -> 2.9.3) since its introducedIn
+  // version has already passed. Running it here ensures the schema URL stays in sync.
+  const VERSIONED_SCHEMA_TRANSFORM = "update-versioned-schema-json";
+  if (!codemods.some((c) => c.name === VERSIONED_SCHEMA_TRANSFORM)) {
+    const schemaResult = updateVersionedSchema({
+      root: project.paths.root,
+      options: { ...options, toVersion }
+    });
+    Runner.logResults(schemaResult);
+    results.push(schemaResult);
   }
 
   const hasTransformError = results.some(

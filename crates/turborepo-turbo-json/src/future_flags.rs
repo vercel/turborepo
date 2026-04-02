@@ -82,6 +82,13 @@ pub struct FutureFlags {
     /// `globalPassThroughEnv` becomes `global.passThroughEnv`.
     #[serde(default)]
     pub global_configuration: bool,
+    /// Enable incremental task caching. When enabled, Turborepo persists
+    /// tool-managed incremental build artifacts (e.g. `.tsbuildinfo`) across
+    /// runs via the remote cache, restoring them before execution on cache
+    /// misses to speed up rebuilds.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub incremental_tasks: bool,
 }
 
 // Manual TS impl because #[derive(TS)] conflicts with the Iterable and

@@ -648,6 +648,30 @@ pub struct RawTurboJson {
     pub _comment: Option<String>,
 }
 
+/// A single incremental cache partition.
+///
+/// Each partition represents a distinct set of tool-managed incremental
+/// artifacts (e.g. `.tsbuildinfo`, Rust `target/debug/incremental/`) that
+/// turbo will persist across runs via remote cache to speed up cache misses.
+#[derive(Serialize, Default, Debug, PartialEq, Clone, Deserializable, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[schemars(rename = "IncrementalPartition", rename_all = "camelCase")]
+#[ts(export, rename = "IncrementalPartition")]
+#[deserializable(unknown_fields = "deny")]
+pub struct RawIncrementalPartition {
+    /// Glob patterns of incremental artifact files to cache. Paths are
+    /// relative to the package directory. Supports exclusion patterns.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub outputs: Option<Vec<Spanned<UnescapedString>>>,
+
+    /// Glob patterns of files that invalidate this partition's incremental
+    /// cache. When omitted, the partition key does not include an input hash.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub inputs: Option<Vec<Spanned<UnescapedString>>>,
+}
+
 /// Configuration for a pipeline task.
 ///
 /// The name of a task that can be executed by turbo. If turbo finds a
@@ -804,6 +828,19 @@ pub struct RawTaskDefinition {
     #[schemars(skip)]
     #[ts(skip)]
     pub experimental_ci: Option<Spanned<bool>>,
+
+    /// Incremental cache partitions for tool-specific incremental artifacts.
+    ///
+    /// Each partition specifies a set of files to persist across runs via
+    /// remote cache, enabling faster re-execution on cache misses by
+    /// restoring prior incremental state before the tool runs.
+    ///
+    /// The user asserts that the underlying tool is resilient to bad,
+    /// partial, stale, or corrupted incremental state.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    #[ts(skip)]
+    pub incremental: Option<Vec<RawIncrementalPartition>>,
 }
 
 impl HasConfigBeyondExtends for RawTaskDefinition {
@@ -819,6 +856,7 @@ impl HasConfigBeyondExtends for RawTaskDefinition {
             || self.output_logs.is_some()
             || self.interactive.is_some()
             || self.with.is_some()
+            || self.incremental.is_some()
     }
 }
 

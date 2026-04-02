@@ -416,6 +416,28 @@ describe("update-versioned-schema-json", () => {
     expect(result.changes["turbo.json"].action).toBe("modified");
   });
 
+  it("updates schema URL in turbo.jsonc files", () => {
+    const { root, read } = useFixture({
+      fixture: "jsonc-config"
+    });
+
+    const result = transformer({
+      root,
+      options: { force: false, dryRun: false, print: false, toVersion: "2.7.5" }
+    });
+
+    const content = read("turbo.jsonc") as string;
+
+    // Schema URL should be updated
+    expect(content).toContain("https://v2-7-5.turborepo.dev/schema.json");
+    expect(content).not.toContain("https://turborepo.dev/schema.json");
+    // Comments should be preserved
+    expect(content).toContain("// Schema for IDE support");
+
+    expect(result.fatalError).toBeUndefined();
+    expect(result.changes["turbo.jsonc"].action).toBe("modified");
+  });
+
   it("aborts with error when getTurboConfigs throws (e.g., both turbo.json and turbo.jsonc exist)", () => {
     const { root } = useFixture({
       fixture: "conflicting-configs"
@@ -427,6 +449,8 @@ describe("update-versioned-schema-json", () => {
     });
 
     expect(result.fatalError).toBeDefined();
-    expect(result.fatalError?.message).toContain("Error updating schema URL");
+    expect(result.fatalError?.message).toContain(
+      "Found both turbo.json and turbo.jsonc"
+    );
   });
 });

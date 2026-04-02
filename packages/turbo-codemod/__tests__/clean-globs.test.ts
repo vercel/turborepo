@@ -159,4 +159,19 @@ describe("clean-globs", () => {
     expect(fixGlobPattern("src/🌎**/*.json")).toBe("src/🌎*/**/*.json");
     expect(fixGlobPattern("src/🚀**/*.ts")).toBe("src/🚀*/**/*.ts");
   });
+
+  it("errors if both turbo.json and turbo.jsonc exist", () => {
+    const { root, write } = useFixture({ fixture: "clean-globs" });
+    write("turbo.jsonc", '{ "pipeline": {} }');
+
+    const result = transformer({
+      root,
+      options: { force: false, dryRun: false, print: false }
+    });
+
+    expect(result.fatalError).toBeDefined();
+    expect(result.fatalError?.message).toContain(
+      "Found both turbo.json and turbo.jsonc"
+    );
+  });
 });

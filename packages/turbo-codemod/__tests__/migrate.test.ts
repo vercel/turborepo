@@ -943,7 +943,7 @@ describe("migrate", () => {
       .mockReturnValue("1.99.99");
     const mockedGetLatestVersion = jest
       .spyOn(getLatestVersion, "getLatestVersion")
-      .mockResolvedValue("2.0.0");
+      .mockResolvedValue("2.9.3");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "getTurboUpgradeCommand")
       .mockResolvedValue("pnpm install -g turbo@latest");
@@ -981,7 +981,7 @@ describe("migrate", () => {
       version: "1.0.0"
     });
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turborepo.dev/schema.json",
+      $schema: "https://v2-9-3.turborepo.dev/schema.json",
       tasks: {
         build: {
           outputs: [".next/**", "!.next/cache/**"]
@@ -1015,4 +1015,68 @@ describe("migrate", () => {
     mockedGetAvailablePackageManagers.mockRestore();
     mockedGetWorkspaceDetails.mockRestore();
   }, 10000);
+
+  it("updates $schema URL during same-major migration", async () => {
+    const { root, readJson } = useFixture({
+      fixture: "turbo-2"
+    });
+
+    const packageManager = "pnpm";
+
+    // setup mocks
+    const mockedCheckGitStatus = jest
+      .spyOn(checkGitStatus, "checkGitStatus")
+      .mockReturnValue(undefined);
+    const mockedGetCurrentVersion = jest
+      .spyOn(getCurrentVersion, "getCurrentVersion")
+      .mockReturnValue("2.8.0");
+    const mockedGetLatestVersion = jest
+      .spyOn(getLatestVersion, "getLatestVersion")
+      .mockResolvedValue("2.9.3");
+    const mockedGetTurboUpgradeCommand = jest
+      .spyOn(getTurboUpgradeCommand, "getTurboUpgradeCommand")
+      .mockResolvedValue("pnpm install turbo@2.9.3");
+    const mockedGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager
+        })
+      );
+
+    await migrate(root, {
+      force: false,
+      dryRun: false,
+      print: false,
+      install: false
+    });
+
+    expect(readJson("turbo.json")).toStrictEqual({
+      $schema: "https://v2-9-3.turborepo.dev/schema.json",
+      tasks: {
+        build: {
+          outputs: ["dist/**"]
+        },
+        lint: {},
+        test: {
+          outputs: []
+        }
+      }
+    });
+
+    // verify mocks were called
+    expect(mockedCheckGitStatus).toHaveBeenCalled();
+    expect(mockedGetCurrentVersion).toHaveBeenCalled();
+    expect(mockedGetLatestVersion).toHaveBeenCalled();
+    expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
+    expect(mockedGetWorkspaceDetails).toHaveBeenCalled();
+
+    // restore mocks
+    mockedCheckGitStatus.mockRestore();
+    mockedGetCurrentVersion.mockRestore();
+    mockedGetLatestVersion.mockRestore();
+    mockedGetTurboUpgradeCommand.mockRestore();
+    mockedGetWorkspaceDetails.mockRestore();
+  });
 });

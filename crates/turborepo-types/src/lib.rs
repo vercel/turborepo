@@ -514,6 +514,17 @@ pub struct TaskOutputs {
     pub exclusions: Vec<String>,
 }
 
+/// A single incremental cache partition. Each partition represents a distinct
+/// set of incremental artifacts with its own cache key.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IncrementalPartition {
+    /// Glob patterns of incremental artifact files to cache.
+    pub outputs: TaskOutputs,
+    /// Glob patterns of files that invalidate this partition's incremental
+    /// cache. When empty, the partition key does not include an input hash.
+    pub inputs: Vec<String>,
+}
+
 /// TaskInputs represents the input file patterns for a task.
 ///
 /// Contains glob patterns for files that the task depends on, and a flag
@@ -796,6 +807,11 @@ pub struct TaskDefinition {
     // It will also not affect the task's hash aside from the definition getting folded into the
     // hash.
     pub with: Option<Vec<Spanned<TaskName<'static>>>>,
+
+    // Incremental cache partitions. Each partition specifies a set of
+    // tool-managed incremental artifacts to persist across runs via remote
+    // cache, enabling faster re-execution on cache misses.
+    pub incremental: Option<Vec<IncrementalPartition>>,
 }
 
 impl Default for TaskDefinition {
@@ -814,6 +830,7 @@ impl Default for TaskDefinition {
             interactive: Default::default(),
             env_mode: Default::default(),
             with: Default::default(),
+            incremental: Default::default(),
         }
     }
 }

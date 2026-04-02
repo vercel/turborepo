@@ -259,7 +259,7 @@ fn extract_env_vars(
 }
 
 /// Processed outputs field with DSL detection
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct ProcessedOutputs {
     pub globs: Vec<ProcessedGlob>,
     pub extends: bool,
@@ -319,6 +319,14 @@ impl ProcessedWith {
     }
 }
 
+/// A processed incremental cache partition with validated output and input
+/// globs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProcessedIncrementalPartition {
+    pub outputs: ProcessedOutputs,
+    pub inputs: Option<ProcessedInputs>,
+}
+
 /// Intermediate representation for task definitions with DSL processing
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ProcessedTaskDefinition {
@@ -336,6 +344,7 @@ pub struct ProcessedTaskDefinition {
     pub interactive: Option<Spanned<bool>>,
     pub env_mode: Option<Spanned<EnvMode>>,
     pub with: Option<ProcessedWith>,
+    pub incremental: Option<Vec<ProcessedIncrementalPartition>>,
 }
 
 impl ProcessedTaskDefinition {
@@ -344,6 +353,56 @@ impl ProcessedTaskDefinition {
         raw_task: RawTaskDefinition,
         future_flags: &FutureFlags,
     ) -> Result<Self, Error> {
+        let incremental = raw_task
+            .incremental
+            .map(|partitions| {
+                partitions
+                    .into_iter()
+                    .filter_map(|partition| {
+                        let outputs = match partition
+                            .outputs
+                            .map(|o| ProcessedOutputs::new(o, future_flags))
+                            .transpose()
+                        {
+                            Ok(o) => o.unwrap_or_default(),
+                            Err(e) => return Some(Err(e)),
+                        };
+                        // Skip partitions with no output globs — they'd never
+                        // match any files and are almost certainly a config error.
+                        if outputs.globs.is_empty() {
+                            return None;
+                        }
+                        // Reject $TURBO_DEFAULT$ and $TURBO_EXTENDS$ in
+                        // incremental inputs — these DSL tokens only apply to
+                        // regular task inputs and have no meaning here.
+                        if let Some(ref raw_inputs) = partition.inputs {
+                            for input in raw_inputs {
+                                if input.as_str() == TURBO_DEFAULT
+                                    || input.as_str() == TURBO_EXTENDS
+                                {
+                                    let (span, text) = input.span_and_text("turbo.json");
+                                    return Some(Err(Error::InvalidIncrementalInput {
+                                        value: input.as_str().to_string(),
+                                        span,
+                                        text,
+                                    }));
+                                }
+                            }
+                        }
+                        let inputs = match partition
+                            .inputs
+                            .map(|i| ProcessedInputs::new(i, future_flags))
+                            .transpose()
+                        {
+                            Ok(i) => i,
+                            Err(e) => return Some(Err(e)),
+                        };
+                        Some(Ok(ProcessedIncrementalPartition { outputs, inputs }))
+                    })
+                    .collect::<Result<Vec<_>, Error>>()
+            })
+            .transpose()?;
+
         Ok(ProcessedTaskDefinition {
             extends: raw_task.extends,
             description: raw_task.description,
@@ -377,6 +436,7 @@ impl ProcessedTaskDefinition {
                 .with
                 .map(|with| ProcessedWith::new(with, future_flags))
                 .transpose()?,
+            incremental,
         })
     }
 
@@ -394,6 +454,7 @@ impl ProcessedTaskDefinition {
             || self.output_logs.is_some()
             || self.interactive.is_some()
             || self.with.is_some()
+            || self.incremental.is_some()
     }
 }
 
