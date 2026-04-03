@@ -4,6 +4,8 @@
 
 Task-aware caching layer that wraps `turborepo-cache` with task-specific semantics. Handles log files, output modes, and task output tracking.
 
+Also hanadles incremental artifacts.
+
 ## Architecture
 
 ```
