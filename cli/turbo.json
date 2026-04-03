@@ -41,17 +41,10 @@
             "$TURBO_ROOT$/rust-toolchain.toml"
           ],
           "outputs": [
-            "$TURBO_ROOT$/target/**/*.d",
-            "$TURBO_ROOT$/target/**/*.rlib",
-            "$TURBO_ROOT$/target/**/*.rmeta",
-            "$TURBO_ROOT$/target/**/*.dylib",
-            "$TURBO_ROOT$/target/**/*.so",
-            "$TURBO_ROOT$/target/**/*.a",
-            "$TURBO_ROOT$/target/**/*.dll",
-            "$TURBO_ROOT$/target/**/*.lib",
-            "$TURBO_ROOT$/target/**/*.exe",
-            "$TURBO_ROOT$/target/**/build_*",
-            "$TURBO_ROOT$/target/**/.fingerprint/**"
+            "$TURBO_ROOT$/target/**/deps/**",
+            "!$TURBO_ROOT$/target/**/deps/*.rlib",
+            "$TURBO_ROOT$/target/**/.fingerprint/**",
+            "$TURBO_ROOT$/target/**/build/**"
           ]
         }
       ]

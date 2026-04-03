@@ -7,8 +7,6 @@ use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_cache::AsyncCache;
 use turborepo_types::{IncrementalPartition, TaskOutputs, TaskOutputsExt};
 
-// Testing 6
-
 /// Per-partition result of an incremental fetch attempt.
 #[derive(Debug, Clone)]
 pub enum IncrementalFetchResult {
