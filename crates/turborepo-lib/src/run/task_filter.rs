@@ -915,6 +915,114 @@ mod tests {
         );
     }
 
+    /// A task with $TURBO_ROOT$ inputs should survive filtering when
+    /// the affected constraint includes it (simulating a root-level file
+    /// change detected by git-range resolution).
+    ///
+    /// This tests the integration path: affected_constraint intersection
+    /// with name selector → retain_filtered_tasks preserves the task +
+    /// its transitive dependencies.
+    #[tokio::test]
+    async fn turbo_root_task_survives_filter_with_affected_constraint() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a", "lib-b"]).await;
+        let scm = turborepo_scm::SCM::new(root);
+
+        let a_build = TaskId::new("lib-a", "build");
+        let b_build = TaskId::new("lib-b", "build");
+
+        // lib-a has $TURBO_ROOT$ inputs (expanded to ../../config.txt).
+        // lib-b has default inputs.
+        let engine = make_engine(
+            &[
+                (a_build.clone(), def_with_inputs(&["../../config.txt"], true)),
+                (b_build.clone(), TaskDefinition::default()),
+            ],
+            &[],
+        );
+
+        // Simulate git-range resolution finding that only lib-a#build
+        // is affected (its $TURBO_ROOT$ input matched a changed root file).
+        let affected: HashSet<TaskId<'static>> = [a_build.clone()].into_iter().collect();
+
+        // Filter to lib-a + affected constraint.
+        let selector = turborepo_scope::TargetSelector {
+            name_pattern: "lib-a".to_string(),
+            ..Default::default()
+        };
+
+        let result = super::filter_engine_to_tasks(
+            engine,
+            &[selector],
+            Some(&affected),
+            &pkg_graph,
+            &scm,
+            root,
+            &[],
+        )
+        .unwrap();
+
+        let remaining: HashSet<_> = result.task_ids().cloned().collect();
+        assert!(
+            remaining.contains(&a_build),
+            "lib-a#build should survive: matched by name AND affected via $TURBO_ROOT$ input: {remaining:?}"
+        );
+        assert!(
+            !remaining.contains(&b_build),
+            "lib-b#build should be excluded: not in filter scope: {remaining:?}"
+        );
+    }
+
+    /// When affected_constraint excludes a task whose $TURBO_ROOT$ input
+    /// didn't match, the filter should respect that even if the name
+    /// selector would include it.
+    #[tokio::test]
+    async fn turbo_root_task_excluded_when_not_affected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a", "lib-b"]).await;
+        let scm = turborepo_scm::SCM::new(root);
+
+        let a_build = TaskId::new("lib-a", "build");
+        let b_build = TaskId::new("lib-b", "build");
+
+        let engine = make_engine(
+            &[
+                (a_build.clone(), def_with_inputs(&["../../config.txt"], true)),
+                (b_build.clone(), TaskDefinition::default()),
+            ],
+            &[],
+        );
+
+        // Simulate: only lib-b is affected (a source file in lib-b changed).
+        // lib-a's $TURBO_ROOT$ input did NOT match.
+        let affected: HashSet<TaskId<'static>> = [b_build.clone()].into_iter().collect();
+
+        // Filter to lib-a, but affected says lib-a isn't affected.
+        let selector = turborepo_scope::TargetSelector {
+            name_pattern: "lib-a".to_string(),
+            ..Default::default()
+        };
+
+        let result = super::filter_engine_to_tasks(
+            engine,
+            &[selector],
+            Some(&affected),
+            &pkg_graph,
+            &scm,
+            root,
+            &[],
+        )
+        .unwrap();
+
+        let remaining: HashSet<_> = result.task_ids().cloned().collect();
+        assert!(
+            remaining.is_empty(),
+            "no tasks should survive: lib-a matches name but not affected: {remaining:?}"
+        );
+    }
+
     /// exclude_self with include_dependencies should include deps but
     /// not the matched package's own tasks.
     #[tokio::test]
