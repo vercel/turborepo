@@ -778,6 +778,19 @@ impl RunBuilder {
             )?;
         }
 
+        // Validate after all filtering so the persistent task count reflects
+        // the actual tasks that will execute, not the full pre-filter engine.
+        if !self.opts.run_opts.parallel && self.should_validate_engine {
+            engine
+                .validate(
+                    &pkg_dep_graph,
+                    self.opts.run_opts.concurrency,
+                    self.opts.run_opts.ui_mode,
+                    self.will_execute_tasks(),
+                )
+                .map_err(Error::EngineValidation)?;
+        }
+
         let remote_cache_status = self.resolve_remote_cache_status(preflight_handle).await;
 
         let run_cache = Arc::new(RunCache::new(
@@ -1010,17 +1023,6 @@ impl RunBuilder {
             if let Some(entrypoint_packages) = &self.entrypoint_packages {
                 engine = engine.create_engine_for_subgraph(entrypoint_packages);
             }
-        }
-
-        if !self.opts.run_opts.parallel && self.should_validate_engine {
-            engine
-                .validate(
-                    pkg_dep_graph,
-                    self.opts.run_opts.concurrency,
-                    self.opts.run_opts.ui_mode,
-                    self.will_execute_tasks(),
-                )
-                .map_err(Error::EngineValidation)?;
         }
 
         Ok(engine)
