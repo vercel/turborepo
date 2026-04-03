@@ -114,6 +114,12 @@ pub fn filter_engine_to_tasks(
         return Ok(engine.retain_filtered_tasks(&included_tasks));
     }
 
+    // `with` relationships (used by microfrontends to co-schedule proxy
+    // tasks alongside dev tasks) create no graph edges, so
+    // retain_filtered_tasks' forward DFS would miss them. Expand the
+    // included set to cover `with` siblings before pruning.
+    let included_tasks = expand_with_siblings(&engine, included_tasks);
+
     // retain_filtered_tasks includes transitive dependencies for
     // execution and prunes the rest. Dependent expansion was already
     // handled during selector resolution via `include_dependents`.
@@ -365,6 +371,51 @@ fn get_changed_files(
         git_range.allow_unknown_objects,
     )?;
     Ok(result)
+}
+
+/// Expands a task set to include all `with` siblings, transitively.
+///
+/// The `with` field on a task definition means "co-schedule these sibling
+/// tasks alongside me." Unlike `dependsOn`, `with` creates no graph edges
+/// in the task graph — siblings are simply pushed into the engine builder's
+/// traversal queue during construction.
+///
+/// When `retain_filtered_tasks` prunes the engine via forward DFS, edge-less
+/// `with` siblings are unreachable and get dropped. This function closes that
+/// gap by expanding the retained set before pruning.
+fn expand_with_siblings(engine: &Engine, tasks: HashSet<TaskId<'static>>) -> HashSet<TaskId<'static>> {
+    let mut result = tasks;
+    let mut frontier: Vec<TaskId<'static>> = result.iter().cloned().collect();
+
+    while let Some(task_id) = frontier.pop() {
+        let Some(definition) = engine.task_definition(&task_id) else {
+            continue;
+        };
+        let Some(with) = &definition.with else {
+            continue;
+        };
+        for spanned_name in with {
+            let name = spanned_name.as_inner();
+            let sibling_id = name
+                .task_id()
+                .map(|id| id.into_owned())
+                .unwrap_or_else(|| TaskId::new(task_id.package(), name.task()).into_owned());
+
+            if result.insert(sibling_id.clone()) {
+                frontier.push(sibling_id);
+            }
+        }
+    }
+
+    let added = result.len().saturating_sub(frontier.capacity());
+    if added > 0 {
+        tracing::debug!(
+            expanded = result.len(),
+            "expanded task filter set with `with` siblings"
+        );
+    }
+
+    result
 }
 
 #[cfg(test)]
@@ -947,6 +998,206 @@ mod tests {
         assert!(
             !tasks.contains(&app_build),
             "app#build should not match lib-* glob: {tasks:?}"
+        );
+    }
+
+    fn def_with_siblings(siblings: &[&str]) -> TaskDefinition {
+        use turborepo_errors::Spanned;
+        use turborepo_task_id::TaskName;
+
+        TaskDefinition {
+            with: Some(
+                siblings
+                    .iter()
+                    .map(|s| Spanned::new(TaskName::from(*s).into_owned()))
+                    .collect(),
+            ),
+            ..Default::default()
+        }
+    }
+
+    /// expand_with_siblings should include cross-package `with` siblings.
+    ///
+    /// This is the core microfrontends scenario: docs#dev has
+    /// `with: ["web#proxy"]` but no graph edge to web#proxy.
+    #[test]
+    fn expand_with_siblings_cross_package() {
+        let docs_dev = TaskId::new("docs", "dev");
+        let web_proxy = TaskId::new("web", "proxy");
+
+        let engine = make_engine(
+            &[
+                (docs_dev.clone(), def_with_siblings(&["web#proxy"])),
+                (web_proxy.clone(), TaskDefinition::default()),
+            ],
+            &[],
+        );
+
+        let initial: HashSet<_> = [docs_dev.clone()].into_iter().collect();
+        let expanded = super::expand_with_siblings(&engine, initial);
+
+        assert!(
+            expanded.contains(&docs_dev),
+            "original task should survive: {expanded:?}"
+        );
+        assert!(
+            expanded.contains(&web_proxy),
+            "with sibling web#proxy should be included: {expanded:?}"
+        );
+    }
+
+    /// expand_with_siblings should handle same-package siblings
+    /// (no package prefix in the `with` value).
+    #[test]
+    fn expand_with_siblings_same_package() {
+        let web_dev = TaskId::new("web", "dev");
+        let web_proxy = TaskId::new("web", "proxy");
+
+        let engine = make_engine(
+            &[
+                (web_dev.clone(), def_with_siblings(&["proxy"])),
+                (web_proxy.clone(), TaskDefinition::default()),
+            ],
+            &[],
+        );
+
+        let initial: HashSet<_> = [web_dev.clone()].into_iter().collect();
+        let expanded = super::expand_with_siblings(&engine, initial);
+
+        assert!(expanded.contains(&web_dev));
+        assert!(
+            expanded.contains(&web_proxy),
+            "same-package with sibling should be included: {expanded:?}"
+        );
+    }
+
+    /// expand_with_siblings should follow chains transitively.
+    /// a has with:[b], b has with:[c] → filtering to a includes b and c.
+    #[test]
+    fn expand_with_siblings_transitive() {
+        let a = TaskId::new("a", "dev");
+        let b = TaskId::new("b", "dev");
+        let c = TaskId::new("c", "dev");
+
+        let engine = make_engine(
+            &[
+                (a.clone(), def_with_siblings(&["b#dev"])),
+                (b.clone(), def_with_siblings(&["c#dev"])),
+                (c.clone(), TaskDefinition::default()),
+            ],
+            &[],
+        );
+
+        let initial: HashSet<_> = [a.clone()].into_iter().collect();
+        let expanded = super::expand_with_siblings(&engine, initial);
+
+        assert_eq!(expanded.len(), 3, "all three should be included: {expanded:?}");
+        assert!(expanded.contains(&a));
+        assert!(expanded.contains(&b));
+        assert!(expanded.contains(&c));
+    }
+
+    /// Full microfrontends scenario: filtering to a child MFE package
+    /// should retain the proxy task from the parent package.
+    ///
+    /// Setup:
+    /// - web owns microfrontends.json, has web#dev (with: web#proxy)
+    /// - docs is a child MFE app, has docs#dev (with: web#proxy)
+    /// - web#proxy has a dependency on mfe-pkg#build
+    /// - --filter=docs should produce: docs#dev, web#proxy, mfe-pkg#build
+    #[tokio::test]
+    async fn filter_retains_mfe_proxy_for_child_package() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["web", "docs", "mfe-pkg"]).await;
+        let scm = turborepo_scm::SCM::new(root);
+
+        let web_dev = TaskId::new("web", "dev");
+        let docs_dev = TaskId::new("docs", "dev");
+        let web_proxy = TaskId::new("web", "proxy");
+        let mfe_build = TaskId::new("mfe-pkg", "build");
+
+        let engine = make_engine(
+            &[
+                (web_dev.clone(), def_with_siblings(&["web#proxy"])),
+                (docs_dev.clone(), def_with_siblings(&["web#proxy"])),
+                (web_proxy.clone(), TaskDefinition::default()),
+                (mfe_build.clone(), TaskDefinition::default()),
+            ],
+            // web#proxy depends on mfe-pkg#build (like @vercel/microfrontends#build)
+            &[(web_proxy.clone(), mfe_build.clone())],
+        );
+
+        let selector = turborepo_scope::TargetSelector {
+            name_pattern: "docs".to_string(),
+            ..Default::default()
+        };
+
+        let result =
+            super::filter_engine_to_tasks(engine, &[selector], None, &pkg_graph, &scm, root, &[])
+                .unwrap();
+
+        let remaining: HashSet<_> = result.task_ids().cloned().collect();
+        assert!(
+            remaining.contains(&docs_dev),
+            "docs#dev should be retained: {remaining:?}"
+        );
+        assert!(
+            remaining.contains(&web_proxy),
+            "web#proxy should be retained via `with` expansion: {remaining:?}"
+        );
+        assert!(
+            remaining.contains(&mfe_build),
+            "mfe-pkg#build should be retained as a dependency of web#proxy: {remaining:?}"
+        );
+        assert!(
+            !remaining.contains(&web_dev),
+            "web#dev should NOT be retained (not in filter): {remaining:?}"
+        );
+    }
+
+    /// Filtering to the parent MFE package should also retain the proxy.
+    #[tokio::test]
+    async fn filter_retains_mfe_proxy_for_parent_package() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["web", "docs"]).await;
+        let scm = turborepo_scm::SCM::new(root);
+
+        let web_dev = TaskId::new("web", "dev");
+        let docs_dev = TaskId::new("docs", "dev");
+        let web_proxy = TaskId::new("web", "proxy");
+
+        let engine = make_engine(
+            &[
+                (web_dev.clone(), def_with_siblings(&["web#proxy"])),
+                (docs_dev.clone(), def_with_siblings(&["web#proxy"])),
+                (web_proxy.clone(), TaskDefinition::default()),
+            ],
+            &[],
+        );
+
+        let selector = turborepo_scope::TargetSelector {
+            name_pattern: "web".to_string(),
+            ..Default::default()
+        };
+
+        let result =
+            super::filter_engine_to_tasks(engine, &[selector], None, &pkg_graph, &scm, root, &[])
+                .unwrap();
+
+        let remaining: HashSet<_> = result.task_ids().cloned().collect();
+        assert!(
+            remaining.contains(&web_dev),
+            "web#dev should be retained: {remaining:?}"
+        );
+        assert!(
+            remaining.contains(&web_proxy),
+            "web#proxy should be retained via `with` expansion: {remaining:?}"
+        );
+        assert!(
+            !remaining.contains(&docs_dev),
+            "docs#dev should NOT be retained (not in filter): {remaining:?}"
         );
     }
 }
