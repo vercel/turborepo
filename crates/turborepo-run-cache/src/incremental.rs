@@ -7,6 +7,8 @@ use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_cache::AsyncCache;
 use turborepo_types::{IncrementalPartition, TaskOutputs, TaskOutputsExt};
 
+// Testing 6
+
 /// Per-partition result of an incremental fetch attempt.
 #[derive(Debug, Clone)]
 pub enum IncrementalFetchResult {
@@ -344,7 +346,7 @@ fn compute_partition_key(
     }
 
     let hash = hex::encode(hasher.finalize());
-    Some(format!("incremental-{hash}"))
+    Some(format!("{hash}incremental"))
 }
 
 /// Compute a hash of the partition's input files.
@@ -647,11 +649,11 @@ mod tests {
         };
         let key = compute_partition_key(&dir, "pkg", "task", 0, &[], &outputs).unwrap();
         assert!(
-            key.starts_with("incremental-"),
-            "key must start with 'incremental-'"
+            key.ends_with("incremental"),
+            "key must end with 'incremental'"
         );
-        // 'incremental-' (12 chars) + 64 hex chars (sha256)
-        assert_eq!(key.len(), 12 + 64);
+        // 64 hex chars (sha256) + 'incremental' (11 chars)
+        assert_eq!(key.len(), 64 + 11);
     }
 
     #[test]
