@@ -4,16 +4,16 @@
  * Migrates turbo.json $schema URLs from legacy formats to versioned subdomains.
  *
  * ## Migration Path
- * Legacy URLs:
- * - `https://turborepo.dev/schema.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
- * - `https://turborepo.dev/schema.v2.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
- * - `https://turborepo.com/schema.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
- * - `https://turborepo.com/schema.v2.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
- * - `https://turbo.build/schema.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
- * - `https://turbo.build/schema.v2.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
+ * Legacy URLs (stable: v{X}-{Y}-{Z}, canary: v{X}-{Y}-{Z}-canary-{N}):
+ * - `https://turborepo.dev/schema.json` -> `https://v{...}.turborepo.dev/schema.json`
+ * - `https://turborepo.dev/schema.v2.json` -> `https://v{...}.turborepo.dev/schema.json`
+ * - `https://turborepo.com/schema.json` -> `https://v{...}.turborepo.dev/schema.json`
+ * - `https://turborepo.com/schema.v2.json` -> `https://v{...}.turborepo.dev/schema.json`
+ * - `https://turbo.build/schema.json` -> `https://v{...}.turborepo.dev/schema.json`
+ * - `https://turbo.build/schema.v2.json` -> `https://v{...}.turborepo.dev/schema.json`
  *
- * Outdated versioned URLs:
- * - `https://v{A}-{B}-{C}.turborepo.dev/schema.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
+ * Outdated versioned URLs (including canary subdomains):
+ * - `https://v{old}.turborepo.dev/schema.json` -> `https://v{new}.turborepo.dev/schema.json`
  *
  * ## Relationship to update-schema-json-url
  * - `update-schema-json-url` (introduced 2.0.0): Handles schema.v1.json -> schema.v2.json
@@ -36,7 +36,7 @@
 
 import path from "node:path";
 import fs from "fs-extra";
-import { gte, coerce } from "semver";
+import { gte, coerce, parse } from "semver";
 import { getTurboConfigs, resolveTurboConfigPath } from "@turbo/utils";
 import type { TransformerResults } from "../runner";
 import { getTransformerHelpers } from "../utils/get-transformer-helpers";
@@ -66,8 +66,10 @@ const OLD_SCHEMA_URLS = [
 ];
 
 // Regex to match existing versioned schema URLs (e.g., https://v2-7-4.turborepo.dev/schema.json)
+// The [a-zA-Z0-9-]* after the patch digits handles prerelease info in the subdomain
+// (e.g., v2-9-3-canary-1.turborepo.dev) which older codemod versions may have produced.
 const VERSIONED_SCHEMA_URL_REGEX =
-  /https:\/\/v\d+-\d+-\d+\.turborepo\.dev\/schema\.json/g;
+  /https:\/\/v\d+-\d+-\d+[a-zA-Z0-9-]*\.turborepo\.dev\/schema\.json/g;
 
 /**
  * Extracts the base version (major.minor.patch) from a semver string,
@@ -80,22 +82,28 @@ function getBaseVersion(version: string): string | null {
 }
 
 /**
- * Converts a semver version to the subdomain format (e.g., "2.7.5" -> "v2-7-5")
+ * Converts a semver version to the subdomain format.
+ * Replaces dots with hyphens to create a valid DNS subdomain.
+ * e.g., "2.7.5" -> "v2-7-5", "2.9.4-canary.5" -> "v2-9-4-canary-5"
  */
 function versionToSubdomain(version: string): string {
-  const [major, minor, patch] = version.split(".");
-  return `v${major}-${minor}-${patch}`;
+  return `v${version.replaceAll(".", "-")}`;
 }
 
 /**
- * Generates the new versioned schema URL
+ * Generates the new versioned schema URL.
+ * Uses semver.parse to preserve prerelease identifiers (e.g., canary.5),
+ * falling back to semver.coerce for non-standard version strings.
  */
 function getVersionedSchemaUrl(version: string): string {
-  const baseVersion = getBaseVersion(version);
-  if (!baseVersion) {
+  // parse preserves prerelease: "2.9.4-canary.5" -> "2.9.4-canary.5"
+  // coerce strips it: "2.9.4-canary.5" -> "2.9.4"
+  const parsed = parse(version);
+  const resolved = parsed ? parsed.version : coerce(version)?.version;
+  if (!resolved) {
     throw new Error(`Invalid version: ${version}`);
   }
-  const subdomain = versionToSubdomain(baseVersion);
+  const subdomain = versionToSubdomain(resolved);
   return `https://${subdomain}.turborepo.dev/schema.json`;
 }
 
@@ -168,7 +176,7 @@ export function transformer({
   }
 
   try {
-    const newSchemaUrl = getVersionedSchemaUrl(baseVersion);
+    const newSchemaUrl = getVersionedSchemaUrl(toVersion!);
 
     // Get all turbo.json files (root + workspaces)
     const allTurboJsons = getTurboConfigs(root);
