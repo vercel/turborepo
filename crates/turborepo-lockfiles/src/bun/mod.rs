@@ -132,6 +132,10 @@ pub(crate) fn is_git_or_github_package(ident: &str) -> bool {
     ident.contains("@git+") || ident.contains("@github:")
 }
 
+pub(crate) fn is_tarball_or_url_package(ident: &str) -> bool {
+    ident.contains("@https://") || ident.contains("@http://")
+}
+
 /// Represents a platform constraint that can be either inclusive or exclusive.
 /// This matches Bun's Negatable type for os/cpu/libc fields.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -455,11 +459,18 @@ impl BunLockfile {
         override_version: &str,
         resolved_version: &str,
     ) -> Result<Option<crate::Package>, crate::Error> {
+        // When an override is active, the overridden version is authoritative
+        // and should always be accepted regardless of the original version spec.
+        // For example, if a package declares `"lightningcss": "1.30.2"` but the
+        // root package.json overrides it to `"1.30.1"`, the resolved version
+        // 1.30.1 must be accepted even though it doesn't satisfy `^1.30.2`.
+        let has_override = override_version != resolved_version;
+
         // Try workspace-scoped first
         if let Some(entry) = self.index.get_workspace_scoped(workspace_name, name)
             && let Some(pkg) =
                 self.process_package_entry(entry, name, override_version, resolved_version)?
-            && self.version_satisfies_spec(&pkg.version, version_spec)
+            && (has_override || self.version_satisfies_spec(&pkg.version, version_spec))
         {
             return Ok(Some(pkg));
         }
@@ -468,7 +479,7 @@ impl BunLockfile {
         if let Some((_key, entry)) = self.index.find_package(Some(workspace_name), name)
             && let Some(pkg) =
                 self.process_package_entry(entry, name, override_version, resolved_version)?
-            && self.version_satisfies_spec(&pkg.version, version_spec)
+            && (has_override || self.version_satisfies_spec(&pkg.version, version_spec))
         {
             return Ok(Some(pkg));
         }
@@ -504,10 +515,9 @@ impl BunLockfile {
                 continue;
             }
 
-            // Check if this version satisfies the spec
             if let Some(pkg) =
                 self.process_package_entry(entry, name, override_version, resolved_version)?
-                && self.version_satisfies_spec(&pkg.version, version_spec)
+                && (has_override || self.version_satisfies_spec(&pkg.version, version_spec))
             {
                 tracing::debug!(
                     "Found matching version {} for {} (spec: {}) in nested entry {}",
@@ -930,15 +940,27 @@ impl BunLockfile {
                 } else {
                     output.push_str(&format!("    \"{key}\": [{ident_json}],"));
                 }
-            } else if ident.is_local_package() {
-                // file:, link:, and tarball entries: [ident, info] — 2 elements
+            } else if ident.is_local_package() || is_tarball_or_url_package(&entry.ident) {
                 let ident_json = serde_json::to_string(&entry.ident)?;
                 let info_json =
                     serde_json::to_string(&entry.info.as_ref().unwrap_or(&PackageInfo::default()))?;
                 let info_json_spaced = self.format_info_json(&info_json);
-                output.push_str(&format!(
-                    "    \"{key}\": [{ident_json}, {info_json_spaced}],",
-                ));
+                if let Some(checksum) = &entry.checksum {
+                    if !checksum.is_empty() {
+                        let checksum_json = serde_json::to_string(checksum)?;
+                        output.push_str(&format!(
+                            "    \"{key}\": [{ident_json}, {info_json_spaced}, {checksum_json}],",
+                        ));
+                    } else {
+                        output.push_str(&format!(
+                            "    \"{key}\": [{ident_json}, {info_json_spaced}],",
+                        ));
+                    }
+                } else {
+                    output.push_str(&format!(
+                        "    \"{key}\": [{ident_json}, {info_json_spaced}],",
+                    ));
+                }
             } else {
                 let ident_json = serde_json::to_string(&entry.ident)?;
                 let info_json =
@@ -1231,7 +1253,7 @@ impl BunLockfile {
             lockfile_version: self.data.lockfile_version,
             config_version: self.data.config_version,
             workspaces: Map::new(),
-            trusted_dependencies: self.data.trusted_dependencies.clone(),
+            trusted_dependencies: Vec::new(),
             overrides: Map::new(),
             catalog: self.data.catalog.clone(),
             catalogs: self.data.catalogs.clone(),
@@ -1671,27 +1693,35 @@ impl BunLockfile {
                     })
                     .collect();
 
-                // Remove unreachable packages
                 pruned_data.packages.retain(|key, entry| {
-                    // Keep if the ident is reachable
-                    if reachable_idents.contains(&entry.ident)
-                        || entry.ident.contains("@workspace:")
-                    {
+                    if entry.ident.contains("@workspace:") {
                         return true;
                     }
 
-                    // Keep nested packages if their parent is reachable
-                    // E.g., keep "@hatchet-dev/typescript-sdk/zod" if "@hatchet-dev/typescript-sdk"
-                    // is reachable
-                    if let Some(slash_pos) = key.rfind('/') {
-                        let parent_key = &key[..slash_pos];
-                        if reachable_lockfile_keys.contains(parent_key) {
-                            return true;
-                        }
+                    let parsed = PackageKey::parse(key);
+                    if let Some(parent) = parsed.parent() {
+                        reachable_idents.contains(&entry.ident)
+                            && reachable_lockfile_keys.contains(&parent)
+                    } else {
+                        reachable_idents.contains(&entry.ident)
                     }
-
-                    false
                 });
+
+                loop {
+                    let current_keys: HashSet<String> =
+                        pruned_data.packages.keys().cloned().collect();
+                    let before = current_keys.len();
+                    pruned_data.packages.retain(|key, _entry| {
+                        let parsed = PackageKey::parse(key);
+                        match parsed.parent() {
+                            Some(parent) => current_keys.contains(&parent),
+                            None => true,
+                        }
+                    });
+                    if pruned_data.packages.len() == before {
+                        break;
+                    }
+                }
             }
             Err(_e) => {}
         }
@@ -1789,6 +1819,92 @@ impl BunLockfile {
                     info.optional_peers.insert(peer_name);
                 }
             }
+        }
+
+        // SUFFIXED KEY RENAME: Bun appends suffixes like `--for-generate-function-map`
+        // to distinguish multiple versions of the same package. When the primary
+        // (unsuffixed) entry is pruned and only the suffixed one remains, rename
+        // the key to the base package name so bun can resolve it.
+        {
+            let top_level_pkg_names: HashSet<String> = pruned_data
+                .packages
+                .iter()
+                .filter(|(key, _)| !key.contains("--") && PackageKey::parse(key).parent().is_none())
+                .map(|(_, entry)| PackageIdent::parse(&entry.ident).name().to_string())
+                .collect();
+
+            let mut renames: Vec<(String, String)> = Vec::new();
+            for (key, entry) in &pruned_data.packages {
+                if !key.contains("--") {
+                    continue;
+                }
+                let parsed = PackageKey::parse(key);
+                if parsed.parent().is_some() {
+                    continue;
+                }
+                let ident = PackageIdent::parse(&entry.ident);
+                let pkg_name = ident.name();
+                if key != pkg_name && !top_level_pkg_names.contains(pkg_name) {
+                    renames.push((key.clone(), pkg_name.to_string()));
+                }
+            }
+            for (old_key, new_key) in renames {
+                if let Some(entry) = pruned_data.packages.remove(&old_key) {
+                    pruned_data.packages.insert(new_key, entry);
+                }
+            }
+        }
+
+        // NESTED ENTRY DEDUPLICATION: In bun lockfiles, nested entries like
+        // `@babel/core/@babel/traverse` only need to exist when they resolve to
+        // a DIFFERENT version than the hoisted top-level `@babel/traverse`.
+        // After pruning removes some versions, nested entries that now match
+        // the hoisted entry are redundant and must be removed — bun's
+        // --frozen-lockfile rejects them.
+        {
+            let hoisted_idents: HashMap<String, String> = pruned_data
+                .packages
+                .iter()
+                .filter(|(key, entry)| {
+                    let parsed = PackageKey::parse(key);
+                    if parsed.parent().is_some() {
+                        return false;
+                    }
+                    let ident = PackageIdent::parse(&entry.ident);
+                    let pkg_name = ident.name();
+                    *key == pkg_name
+                })
+                .map(|(_, entry)| {
+                    let ident = PackageIdent::parse(&entry.ident);
+                    (ident.name().to_string(), entry.ident.clone())
+                })
+                .collect();
+
+            pruned_data.packages.retain(|key, entry| {
+                if PackageKey::parse(key).parent().is_none() {
+                    return true;
+                }
+                let ident = PackageIdent::parse(&entry.ident);
+                if ident.is_workspace() {
+                    return true;
+                }
+                match hoisted_idents.get(ident.name()) {
+                    Some(hoisted_ident) => {
+                        if &entry.ident == hoisted_ident {
+                            return false;
+                        }
+                        let hoisted_ver = hoisted_ident.rsplit_once('@').map(|(_, v)| v).unwrap_or("");
+                        let nested_ver = entry.version();
+                        let Ok(hv) = semver::Version::parse(hoisted_ver) else { return true };
+                        let Ok(nv) = semver::Version::parse(nested_ver) else { return true };
+                        if hv.major != nv.major || hv.minor != nv.minor {
+                            return true;
+                        }
+                        hv < nv
+                    }
+                    None => true,
+                }
+            });
         }
 
         // Rebuild key_to_entry HashMap for the pruned lockfile
@@ -2119,6 +2235,92 @@ mod test {
         // Should resolve to original version (no override)
         assert_eq!(result.key, "bar@1.0.0");
         assert_eq!(result.version, "1.0.0");
+    }
+
+    #[test]
+    fn test_override_resolves_lower_version() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 0,
+            "workspaces": {
+                "": {
+                    "name": "test",
+                    "dependencies": {
+                        "parent": "^1.0.0"
+                    }
+                }
+            },
+            "packages": {
+                "parent": ["parent@1.0.0", "", {
+                    "dependencies": {
+                        "dep": "1.5.0"
+                    }
+                }, "sha512-parent"],
+                "dep": ["dep@1.4.0", "", {}, "sha512-dep"]
+            },
+            "overrides": {
+                "dep": "1.4.0"
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+        let result = lockfile
+            .resolve_package("", "dep", "1.5.0")
+            .unwrap();
+
+        assert!(
+            result.is_some(),
+            "Override to lower version (1.4.0) must still resolve even though \
+             1.4.0 does not satisfy ^1.5.0"
+        );
+        let pkg = result.unwrap();
+        assert_eq!(pkg.key, "dep@1.4.0");
+        assert_eq!(pkg.version, "1.4.0");
+    }
+
+    #[test]
+    fn test_override_lower_version_in_transitive_closure() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 0,
+            "workspaces": {
+                "": {
+                    "name": "test",
+                    "dependencies": {
+                        "parent": "^1.0.0"
+                    }
+                }
+            },
+            "packages": {
+                "parent": ["parent@1.0.0", "", {
+                    "dependencies": {
+                        "dep": "1.5.0"
+                    }
+                }, "sha512-parent"],
+                "dep": ["dep@1.4.0", "", {}, "sha512-dep"]
+            },
+            "overrides": {
+                "dep": "1.4.0"
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+        let unresolved_deps: std::collections::BTreeMap<String, String> =
+            [("parent".to_string(), "^1.0.0".to_string())]
+                .into_iter()
+                .collect();
+        let closure =
+            crate::transitive_closure(&lockfile, "", unresolved_deps, false).unwrap();
+
+        let dep_keys: Vec<String> = closure.iter().map(|p| p.key.clone()).collect();
+        assert!(
+            dep_keys.contains(&"dep@1.4.0".to_string()),
+            "Overridden dep@1.4.0 must be in transitive closure even though \
+             parent declares dep@1.5.0. Got: {:?}",
+            dep_keys
+        );
     }
 
     #[test]

@@ -1,6 +1,6 @@
-use serde::{Serialize, ser::SerializeTuple};
+use serde::{ser::SerializeTuple, Serialize};
 
-use super::{PackageEntry, is_git_or_github_package};
+use super::{is_git_or_github_package, is_tarball_or_url_package, PackageEntry};
 
 // Comment explaining entry schemas taken from bun.lock.zig
 // first index is resolution for each type of package
@@ -20,34 +20,46 @@ use super::{PackageEntry, is_git_or_github_package};
 // this) ]
 impl Serialize for PackageEntry {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut tuple = serializer.serialize_tuple(4)?;
+        let is_git = is_git_or_github_package(&self.ident);
+        let is_url = is_tarball_or_url_package(&self.ident);
 
-        // First value is always the package key
+        let mut len = 1;
+        if self.root.is_some() {
+            len += 1;
+        } else {
+            if self.registry.is_some() && !is_git && !is_url {
+                len += 1;
+            }
+            if self.info.is_some() {
+                len += 1;
+            }
+            if self.checksum.is_some() && !is_url {
+                len += 1;
+            }
+        }
+
+        let mut tuple = serializer.serialize_tuple(len)?;
         tuple.serialize_element(&self.ident)?;
 
-        // For root packages, only thing left to serialize is the root info
         if let Some(root) = &self.root {
             tuple.serialize_element(root)?;
             return tuple.end();
         }
 
-        // npm packages have a registry (but not git/github packages)
         if let Some(registry) = &self.registry {
-            // Skip registry for git/github packages even if incorrectly
-            // set
-            if !is_git_or_github_package(&self.ident) {
+            if !is_git && !is_url {
                 tuple.serialize_element(registry)?;
             }
         }
 
-        // All packages have info in the next slot
         if let Some(info) = &self.info {
             tuple.serialize_element(info)?;
         };
 
-        // npm packages, git, and github have a checksum/integrity
         if let Some(checksum) = &self.checksum {
-            tuple.serialize_element(checksum)?;
+            if !is_url {
+                tuple.serialize_element(checksum)?;
+            }
         }
 
         tuple.end()
