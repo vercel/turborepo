@@ -7,8 +7,15 @@
 //! - Environment variables
 //! - CLI arguments
 //!
-//! Configuration is merged with a priority order where later sources
-//! override earlier ones.
+//! Configuration is merged with a priority order where higher-priority sources
+//! override lower-priority ones on a per-field basis. Scalar fields use
+//! first-writer-wins (`overwrite_none`). Nested config objects like OTEL
+//! options are deep-merged so that a higher-priority source overriding a
+//! single field does not shadow unrelated fields from lower-priority sources.
+//!
+//! Security-sensitive fields (`headers`, `use_remote_cache_token`) are coupled
+//! to `endpoint`: once an endpoint is set by a source, credentials from
+//! lower-priority sources are discarded. See `ExperimentalOtelOptions::merge`.
 
 // Match the lint settings from turborepo-lib
 #![allow(clippy::needless_lifetimes)]
@@ -53,37 +60,15 @@ pub use experimental_otel::{
     ExperimentalOtelRunAttributesOptions, ExperimentalOtelTaskAttributesOptions,
 };
 
-/// Merge strategy for `Option<T: Merge>` that performs a field-level deep
-/// merge when both sides are `Some`, rather than treating the option value as
-/// an atomic unit.
-///
-/// The standard `merge::option::overwrite_none` strategy keeps the existing
-/// value untouched when it is already `Some`. This is correct for scalar
-/// fields (e.g. `TURBO_TOKEN` overrides `token` in turbo.json and nothing
-/// more), but wrong for nested config objects: setting a single env-var like
-/// `TURBO_EXPERIMENTAL_OTEL_HEADERS` creates a partial
-/// `ExperimentalOtelOptions` with only `headers` populated, which then
-/// silently shadows the `endpoint`, `protocol`, and other fields that were
-/// configured in `turbo.json`.
-///
-/// With this strategy each `Some/Some` pair is resolved by recursively merging
-/// the inner value (calling its own `Merge` impl), so that higher-priority
-/// sources override individual fields while lower-priority sources fill in
-/// whatever was left unset.
-pub(crate) fn merge_option_deep<T: Merge>(left: &mut Option<T>, right: Option<T>) {
-    match (left.as_mut(), right) {
-        (None, Some(r)) => *left = Some(r),
-        (Some(l), Some(r)) => l.merge(r),
-        _ => {}
-    }
-}
-
+/// Wrapper for observability-related config. Uses `recurse` on `otel` so that
+/// a partial `ExperimentalOtelOptions` from one source (e.g. a single env var)
+/// does not shadow the entire block from a lower-priority source.
 #[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
 #[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalObservabilityOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = crate::merge_option_deep)]
+    #[merge(strategy = merge::option::recurse)]
     pub otel: Option<ExperimentalOtelOptions>,
 }
 
@@ -337,8 +322,11 @@ pub struct ConfigurationOptions {
     pub sso_login_callback_port: Option<u16>,
     #[serde(skip)]
     pub future_flags: Option<FutureFlags>,
+    /// Deep-merged so that setting a single OTEL env var does not shadow the
+    /// entire observability block from turbo.json. See
+    /// `ExperimentalOtelOptions::merge` for credential-locking semantics.
     #[serde(rename = "experimentalObservability")]
-    #[merge(strategy = merge_option_deep)]
+    #[merge(strategy = merge::option::recurse)]
     pub experimental_observability: Option<ExperimentalObservabilityOptions>,
     /// Structured log file destination, configured via `logFile` in
     /// turbo.json or `TURBO_LOG_FILE` env var.
@@ -676,13 +664,19 @@ impl TurborepoConfigBuilder {
     }
 
     pub fn build(&self) -> Result<ConfigurationOptions, Error> {
-        // Priority, from least significant to most significant:
-        // - shared configuration (turbo.json)
-        // - global configuration (~/.turbo/config.json)
-        // - local configuration (<REPO_ROOT>/.turbo/config.json)
-        // - environment variables
-        // - CLI arguments
-        // - builder pattern overrides.
+        // Sources are listed highest-to-lowest priority. The fold merges each
+        // source into the accumulator; `overwrite_none` keeps the first `Some`
+        // it sees, so processing highest-priority first gives it precedence.
+        //
+        // Priority order:
+        //   1. builder pattern overrides (CLI arguments)
+        //   2. environment variables (TURBO_*)
+        //   3. override env vars (VERCEL_ARTIFACTS_*)
+        //   4. local configuration (<REPO_ROOT>/.turbo/config.json)
+        //   5. global auth (~/.turbo/auth.json)
+        //   6. global configuration (~/.turbo/config.json)
+        //   7. shared configuration (turbo.json)
+        //
         // See `test_experimental_observability_otel_precedence` for coverage.
 
         let turbo_json = TurboJsonReader::new(&self.repo_root);
@@ -693,7 +687,6 @@ impl TurborepoConfigBuilder {
         let env_var_config = EnvVars::new(&env_vars)?;
         let override_env_var_config = OverrideEnvVars::new(&env_vars)?;
 
-        // These are ordered from highest to lowest priority
         let sources: [Box<dyn ResolvedConfigurationOptions>; 7] = [
             Box::new(&self.override_config),
             Box::new(env_var_config),

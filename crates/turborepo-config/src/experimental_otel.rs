@@ -36,15 +36,14 @@ pub struct ExperimentalOtelMetricsOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_details: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = crate::merge_option_deep)]
+    #[merge(strategy = merge::option::recurse)]
     pub run_attributes: Option<ExperimentalOtelRunAttributesOptions>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = crate::merge_option_deep)]
+    #[merge(strategy = merge::option::recurse)]
     pub task_attributes: Option<ExperimentalOtelTaskAttributesOptions>,
 }
 
-#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
-#[merge(strategy = merge::option::overwrite_none)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalOtelOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -62,10 +61,43 @@ pub struct ExperimentalOtelOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resource: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = crate::merge_option_deep)]
     pub metrics: Option<ExperimentalOtelMetricsOptions>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_remote_cache_token: Option<bool>,
+}
+
+/// Credential locking: `headers` and `use_remote_cache_token` are security-
+/// coupled to `endpoint`. Changing the endpoint resets credentials — you must
+/// re-provide them alongside the new endpoint.
+///
+/// Config sources are merged highest-priority first. Once a source provides
+/// an endpoint, all subsequent (lower-priority) sources' credential fields
+/// are ignored, even if the higher-priority source left them unset. This
+/// prevents auth headers configured for one endpoint from leaking to a
+/// different endpoint set by a higher-priority source.
+///
+/// Non-credential fields (`enabled`, `protocol`, `timeout_ms`, `interval_ms`,
+/// `resource`, `metrics`) always merge independently across all sources.
+impl Merge for ExperimentalOtelOptions {
+    fn merge(&mut self, other: Self) {
+        let endpoint_locked = self.endpoint.is_some();
+        merge::option::overwrite_none(&mut self.endpoint, other.endpoint);
+
+        if !endpoint_locked {
+            merge::option::overwrite_none(&mut self.headers, other.headers);
+            merge::option::overwrite_none(
+                &mut self.use_remote_cache_token,
+                other.use_remote_cache_token,
+            );
+        }
+
+        merge::option::overwrite_none(&mut self.enabled, other.enabled);
+        merge::option::overwrite_none(&mut self.protocol, other.protocol);
+        merge::option::overwrite_none(&mut self.timeout_ms, other.timeout_ms);
+        merge::option::overwrite_none(&mut self.interval_ms, other.interval_ms);
+        merge::option::overwrite_none(&mut self.resource, other.resource);
+        merge::option::recurse(&mut self.metrics, other.metrics);
+    }
 }
 
 impl ExperimentalOtelOptions {
@@ -821,5 +853,272 @@ mod tests {
     fn test_parse_key_value_pairs_empty_string() {
         let result = parse_key_value_pairs("", "TEST").unwrap();
         assert!(result.is_empty());
+    }
+
+    // -- Credential-locking merge tests --
+    //
+    // Config sources are merged highest-priority first. The custom Merge impl
+    // on ExperimentalOtelOptions ensures that once a higher-priority source
+    // provides an endpoint, credentials (headers, use_remote_cache_token) from
+    // lower-priority sources are discarded.
+
+    fn make_headers(pairs: &[(&str, &str)]) -> Option<BTreeMap<String, String>> {
+        Some(
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn merge_endpoint_override_blocks_lower_priority_headers() {
+        // Higher-priority source sets endpoint only.
+        let mut high = ExperimentalOtelOptions {
+            endpoint: Some("https://staging.example/otel".into()),
+            ..Default::default()
+        };
+        // Lower-priority source sets endpoint + auth headers.
+        let low = ExperimentalOtelOptions {
+            endpoint: Some("https://internal.corp/otel".into()),
+            headers: make_headers(&[("Authorization", "Bearer secret")]),
+            use_remote_cache_token: Some(true),
+            ..Default::default()
+        };
+
+        high.merge(low);
+
+        assert_eq!(
+            high.endpoint.as_deref(),
+            Some("https://staging.example/otel")
+        );
+        assert_eq!(
+            high.headers, None,
+            "headers from lower-priority source must not leak to overridden endpoint"
+        );
+        assert_eq!(
+            high.use_remote_cache_token, None,
+            "use_remote_cache_token must not leak"
+        );
+    }
+
+    #[test]
+    fn merge_endpoint_override_still_merges_non_credential_fields() {
+        let mut high = ExperimentalOtelOptions {
+            endpoint: Some("https://staging.example/otel".into()),
+            ..Default::default()
+        };
+        let low = ExperimentalOtelOptions {
+            endpoint: Some("https://internal.corp/otel".into()),
+            enabled: Some(true),
+            protocol: Some(ExperimentalOtelProtocol::Grpc),
+            timeout_ms: Some(5000),
+            interval_ms: Some(30000),
+            resource: Some([("service.name".into(), "turbo".into())].into()),
+            metrics: Some(ExperimentalOtelMetricsOptions {
+                run_summary: Some(true),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        high.merge(low);
+
+        assert_eq!(
+            high.enabled,
+            Some(true),
+            "non-credential fields merge independently"
+        );
+        assert_eq!(high.protocol, Some(ExperimentalOtelProtocol::Grpc));
+        assert_eq!(high.timeout_ms, Some(5000));
+        assert_eq!(high.interval_ms, Some(30000));
+        assert!(high.resource.is_some());
+        assert_eq!(
+            high.metrics.as_ref().and_then(|m| m.run_summary),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn merge_headers_without_endpoint_are_inherited() {
+        // Higher-priority source sets only headers (no endpoint).
+        let mut high = ExperimentalOtelOptions {
+            headers: make_headers(&[("X-Custom", "value")]),
+            ..Default::default()
+        };
+        // Lower-priority source provides the endpoint.
+        let low = ExperimentalOtelOptions {
+            endpoint: Some("https://internal.corp/otel".into()),
+            headers: make_headers(&[("Authorization", "Bearer secret")]),
+            ..Default::default()
+        };
+
+        high.merge(low);
+
+        assert_eq!(high.endpoint.as_deref(), Some("https://internal.corp/otel"));
+        assert_eq!(
+            high.headers
+                .as_ref()
+                .and_then(|h| h.get("X-Custom"))
+                .map(|s| s.as_str()),
+            Some("value"),
+            "higher-priority headers win"
+        );
+        assert_eq!(
+            high.headers.as_ref().and_then(|h| h.get("Authorization")),
+            None,
+            "headers use atomic overwrite_none, not key-level merge"
+        );
+    }
+
+    #[test]
+    fn merge_same_source_endpoint_and_headers() {
+        let mut high = ExperimentalOtelOptions {
+            endpoint: Some("https://prod.example/otel".into()),
+            headers: make_headers(&[("Authorization", "Bearer prod")]),
+            use_remote_cache_token: Some(true),
+            ..Default::default()
+        };
+        let low = ExperimentalOtelOptions {
+            endpoint: Some("https://fallback.example/otel".into()),
+            headers: make_headers(&[("Authorization", "Bearer fallback")]),
+            ..Default::default()
+        };
+
+        high.merge(low);
+
+        assert_eq!(high.endpoint.as_deref(), Some("https://prod.example/otel"));
+        assert_eq!(
+            high.headers
+                .as_ref()
+                .and_then(|h| h.get("Authorization"))
+                .map(|s| s.as_str()),
+            Some("Bearer prod"),
+        );
+        assert_eq!(high.use_remote_cache_token, Some(true));
+    }
+
+    #[test]
+    fn merge_three_layers_credential_locking() {
+        // Simulates: override → env → turbo.json (highest to lowest priority)
+        let mut acc = ExperimentalOtelOptions::default();
+
+        // Highest priority: override sets endpoint + protocol
+        let override_source = ExperimentalOtelOptions {
+            endpoint: Some("https://override.example/otel".into()),
+            protocol: Some(ExperimentalOtelProtocol::HttpProtobuf),
+            ..Default::default()
+        };
+        acc.merge(override_source);
+
+        // Mid priority: env sets headers + timeout
+        let env_source = ExperimentalOtelOptions {
+            headers: make_headers(&[("X-Env", "from-env")]),
+            timeout_ms: Some(9999),
+            ..Default::default()
+        };
+        acc.merge(env_source);
+
+        // Lowest priority: turbo.json sets everything
+        let turbo_json = ExperimentalOtelOptions {
+            endpoint: Some("https://turbo-json.example/otel".into()),
+            headers: make_headers(&[("Authorization", "Bearer turbo-json-secret")]),
+            use_remote_cache_token: Some(true),
+            enabled: Some(true),
+            interval_ms: Some(60000),
+            metrics: Some(ExperimentalOtelMetricsOptions {
+                run_summary: Some(true),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        acc.merge(turbo_json);
+
+        // Override's endpoint wins.
+        assert_eq!(
+            acc.endpoint.as_deref(),
+            Some("https://override.example/otel")
+        );
+        assert_eq!(acc.protocol, Some(ExperimentalOtelProtocol::HttpProtobuf));
+
+        // Endpoint was locked after the override merge, so BOTH env and
+        // turbo.json credentials are blocked.
+        assert_eq!(
+            acc.headers, None,
+            "env headers blocked — endpoint already locked"
+        );
+        assert_eq!(acc.use_remote_cache_token, None, "turbo.json token blocked");
+
+        // Non-credential fields still fill in from lower-priority sources.
+        assert_eq!(acc.timeout_ms, Some(9999), "env timeout fills in");
+        assert_eq!(acc.enabled, Some(true), "turbo.json enabled fills in");
+        assert_eq!(acc.interval_ms, Some(60000), "turbo.json interval fills in");
+        assert_eq!(acc.metrics.as_ref().and_then(|m| m.run_summary), Some(true));
+    }
+
+    #[test]
+    fn merge_no_endpoint_anywhere_credentials_merge_normally() {
+        let mut high = ExperimentalOtelOptions {
+            headers: make_headers(&[("X-High", "1")]),
+            ..Default::default()
+        };
+        let low = ExperimentalOtelOptions {
+            use_remote_cache_token: Some(true),
+            enabled: Some(true),
+            ..Default::default()
+        };
+
+        high.merge(low);
+
+        assert!(high.headers.is_some(), "headers preserved");
+        assert_eq!(
+            high.use_remote_cache_token,
+            Some(true),
+            "token fills in when no endpoint set"
+        );
+        assert_eq!(high.enabled, Some(true));
+    }
+
+    #[test]
+    fn merge_metrics_deep_merge_unaffected_by_credential_locking() {
+        let mut high = ExperimentalOtelOptions {
+            endpoint: Some("https://high.example/otel".into()),
+            metrics: Some(ExperimentalOtelMetricsOptions {
+                run_summary: Some(false),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let low = ExperimentalOtelOptions {
+            endpoint: Some("https://low.example/otel".into()),
+            metrics: Some(ExperimentalOtelMetricsOptions {
+                task_details: Some(true),
+                task_attributes: Some(ExperimentalOtelTaskAttributesOptions {
+                    id: Some(true),
+                    hashes: None,
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        high.merge(low);
+
+        let metrics = high.metrics.as_ref().unwrap();
+        assert_eq!(
+            metrics.run_summary,
+            Some(false),
+            "high's run_summary preserved"
+        );
+        assert_eq!(
+            metrics.task_details,
+            Some(true),
+            "low's task_details fills in"
+        );
+        assert_eq!(
+            metrics.task_attributes.as_ref().and_then(|ta| ta.id),
+            Some(true),
+            "low's nested task_attributes fills in via recurse"
+        );
     }
 }

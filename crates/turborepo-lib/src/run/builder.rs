@@ -807,13 +807,22 @@ impl RunBuilder {
             .experimental_observability
             .as_ref()
             .and_then(|opts| {
-                let token = opts
-                    .otel
-                    .as_ref()
-                    .and_then(|otel| otel.use_remote_cache_token)
-                    .unwrap_or(false)
-                    .then(|| self.api_auth.as_ref().map(|auth| auth.token.expose()))
-                    .flatten();
+                let token = opts.otel.as_ref().and_then(|otel| {
+                    if !otel.use_remote_cache_token.unwrap_or(false) {
+                        return None;
+                    }
+                    let endpoint = otel.endpoint.as_deref().unwrap_or("");
+                    let api_url = &self.opts.api_client_opts.api_url;
+                    if !hosts_match(endpoint, api_url) {
+                        tracing::warn!(
+                            "use_remote_cache_token is enabled but the OTEL endpoint ({endpoint}) \
+                             does not match the API URL ({api_url}). Skipping cache token \
+                             injection to prevent sending credentials to an unrelated endpoint."
+                        );
+                        return None;
+                    }
+                    self.api_auth.as_ref().map(|auth| auth.token.expose())
+                });
                 observability::Handle::try_init(opts, token)
             });
         let repo_index = Arc::new(match repo_index_task {
@@ -1025,5 +1034,75 @@ impl RunBuilder {
         }
 
         Ok(engine)
+    }
+}
+
+fn extract_host(url: &str) -> Option<&str> {
+    let after_scheme = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))?;
+    let host_and_port = after_scheme.split('/').next()?;
+    Some(host_and_port.split(':').next().unwrap_or(host_and_port))
+}
+
+fn hosts_match(url1: &str, url2: &str) -> bool {
+    match (extract_host(url1), extract_host(url2)) {
+        (Some(h1), Some(h2)) => h1.eq_ignore_ascii_case(h2),
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod hosts_match_tests {
+    use super::*;
+
+    #[test]
+    fn same_host_different_paths() {
+        assert!(hosts_match(
+            "https://vercel.com/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn different_hosts() {
+        assert!(!hosts_match(
+            "https://third-party.com/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn case_insensitive() {
+        assert!(hosts_match(
+            "https://Vercel.COM/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn with_port() {
+        assert!(hosts_match(
+            "https://vercel.com:443/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn different_subdomains_do_not_match() {
+        assert!(!hosts_match(
+            "https://otel.vercel.com/v1",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn missing_scheme_returns_false() {
+        assert!(!hosts_match("vercel.com/otel", "https://vercel.com/api"));
+    }
+
+    #[test]
+    fn empty_url_returns_false() {
+        assert!(!hosts_match("", "https://vercel.com/api"));
     }
 }

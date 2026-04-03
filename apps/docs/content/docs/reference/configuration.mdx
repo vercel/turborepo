@@ -1246,6 +1246,16 @@ Optional HTTP headers to include with export requests. Useful for authentication
   manager for sensitive header values.
 </Callout>
 
+<Callout type="warn">
+  `headers` is tied to `endpoint` for security. If you override the endpoint
+  from a higher-priority source (e.g., setting `TURBO_EXPERIMENTAL_OTEL_ENDPOINT`
+  in your environment), headers from lower-priority sources like `turbo.json` are
+  **not inherited**. You must re-provide headers alongside the new endpoint.
+
+  This prevents authentication credentials configured for one collector from
+  being sent to a different collector.
+</Callout>
+
 #### `experimentalObservability.otel.timeoutMs`
 
 Default: `10000` (10 seconds)
@@ -1349,6 +1359,13 @@ When enabled, automatically adds an `Authorization: Bearer <token>` header to OT
 
 This is useful when your OTLP collector uses the same authentication as your remote cache.
 
+<Callout type="warn">
+  Like `headers`, `useRemoteCacheToken` is tied to `endpoint`. If the endpoint
+  is overridden from a higher-priority source, this flag is not inherited from
+  lower-priority sources. Set it alongside the endpoint to ensure the token is
+  sent to the intended collector.
+</Callout>
+
 <Callout type="info">
   Exporter failures are logged but do not cause the run to fail. If the
   collector is unavailable or misconfigured, Turborepo will continue executing
@@ -1362,6 +1379,26 @@ This is useful when your OTLP collector uses the same authentication as your rem
   protocol) results in metrics being disabled rather than causing runs to fail.
   Turborepo will continue executing tasks normally even if the exporter cannot
   be initialized.
+</Callout>
+
+### Multi-source configuration
+
+When OTEL settings come from multiple sources (e.g., `turbo.json` and environment variables), Turborepo deep-merges them per-field. Higher-priority sources win for each field they set, and unset fields fall through from lower-priority sources.
+
+Priority order (highest to lowest):
+
+1. CLI flags
+2. Environment variables
+3. `turbo.json`
+
+For example, if `turbo.json` configures `endpoint`, `enabled`, and `metrics`, and an environment variable overrides just `endpoint`, the `enabled` and `metrics` values from `turbo.json` are preserved.
+
+<Callout type="warn">
+  **Changing the endpoint resets credentials.** `headers` and
+  `useRemoteCacheToken` are security-sensitive and tied to `endpoint`. If a
+  higher-priority source sets the endpoint, credentials from lower-priority
+  sources are discarded to prevent authentication tokens from being sent to
+  unintended collectors. Re-provide credentials alongside the new endpoint.
 </Callout>
 
 ### Environment variables
