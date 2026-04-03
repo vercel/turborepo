@@ -181,6 +181,7 @@ impl RunCache {
                 partitions.clone(),
                 task_id.package().to_string(),
                 task_id.task().to_string(),
+                hash.to_owned(),
                 self.cache.clone(),
                 self.repo_root.clone(),
                 package_dir,

@@ -59,6 +59,7 @@ pub struct IncrementalTaskCache {
     partitions: Vec<IncrementalPartition>,
     package_name: String,
     task_name: String,
+    task_hash: String,
     cache: AsyncCache,
     repo_root: AbsoluteSystemPathBuf,
     package_dir: AbsoluteSystemPathBuf,
@@ -71,6 +72,7 @@ impl IncrementalTaskCache {
         partitions: Vec<IncrementalPartition>,
         package_name: String,
         task_name: String,
+        task_hash: String,
         cache: AsyncCache,
         repo_root: AbsoluteSystemPathBuf,
         package_dir: AbsoluteSystemPathBuf,
@@ -80,6 +82,7 @@ impl IncrementalTaskCache {
             partitions,
             package_name,
             task_name,
+            task_hash,
             cache,
             repo_root,
             package_dir,
@@ -102,6 +105,7 @@ impl IncrementalTaskCache {
                         let package_dir = self.package_dir.clone();
                         let pkg = self.package_name.clone();
                         let task = self.task_name.clone();
+                        let task_hash = self.task_hash.clone();
                         let inputs = partition.inputs.clone();
                         let outputs = partition.outputs.clone();
                         async move {
@@ -110,6 +114,7 @@ impl IncrementalTaskCache {
                                     &package_dir,
                                     &pkg,
                                     &task,
+                                    &task_hash,
                                     idx,
                                     &inputs,
                                     &outputs,
@@ -303,6 +308,7 @@ fn compute_partition_key(
     package_dir: &AbsoluteSystemPathBuf,
     package_name: &str,
     task_name: &str,
+    task_hash: &str,
     idx: usize,
     inputs: &[String],
     outputs: &TaskOutputs,
@@ -317,6 +323,12 @@ fn compute_partition_key(
 
     let mut hasher = Sha256::new();
     hasher.update(b"incremental:v1:");
+
+    // The task hash already incorporates globalEnv, env, passThroughEnv, and
+    // other task-level configuration. Including it here ensures the
+    // incremental partition is segmented by everything the task cares about
+    // (e.g. OS, RUNNER_OS) without hardcoding platform logic.
+    hasher.update(task_hash.as_bytes());
 
     // Length-prefixed encoding prevents separator collisions
     hasher.update((package_name.len() as u32).to_le_bytes());
@@ -600,8 +612,8 @@ mod tests {
             exclusions: vec![],
         };
 
-        let key_a = compute_partition_key(&dir, "pkg", "task", 0, &[], &outputs_a);
-        let key_b = compute_partition_key(&dir, "pkg", "task", 0, &[], &outputs_b);
+        let key_a = compute_partition_key(&dir, "pkg", "task", "hash123", 0, &[], &outputs_a);
+        let key_b = compute_partition_key(&dir, "pkg", "task", "hash123", 0, &[], &outputs_b);
         assert_ne!(
             key_a, key_b,
             "different output globs must produce different keys"
@@ -617,8 +629,8 @@ mod tests {
             exclusions: vec![],
         };
 
-        let key_ab_c = compute_partition_key(&dir, "a:b", "c", 0, &[], &outputs);
-        let key_a_bc = compute_partition_key(&dir, "a", "b:c", 0, &[], &outputs);
+        let key_ab_c = compute_partition_key(&dir, "a:b", "c", "hash123", 0, &[], &outputs);
+        let key_a_bc = compute_partition_key(&dir, "a", "b:c", "hash123", 0, &[], &outputs);
         assert_ne!(
             key_ab_c, key_a_bc,
             "length-prefixed encoding must prevent separator collisions"
@@ -632,7 +644,8 @@ mod tests {
             inclusions: vec!["dist/**".into()],
             exclusions: vec![],
         };
-        let result = compute_partition_key(&dir, "pkg", "task", 0, &["[invalid".into()], &outputs);
+        let result =
+            compute_partition_key(&dir, "pkg", "task", "hash123", 0, &["[invalid".into()], &outputs);
         assert!(
             result.is_none(),
             "invalid input glob should produce None, not a fallback key"
@@ -647,7 +660,7 @@ mod tests {
             inclusions: vec!["dist/**".into()],
             exclusions: vec![],
         };
-        let key = compute_partition_key(&dir, "pkg", "task", 0, &[], &outputs).unwrap();
+        let key = compute_partition_key(&dir, "pkg", "task", "hash123", 0, &[], &outputs).unwrap();
         assert!(
             key.ends_with("incremental"),
             "key must end with 'incremental'"
@@ -856,8 +869,10 @@ mod tests {
             exclusions: vec![],
         };
 
-        let k1 = compute_partition_key(&dir, "pkg", "build", 0, &["input.txt".into()], &outputs);
-        let k2 = compute_partition_key(&dir, "pkg", "build", 0, &["input.txt".into()], &outputs);
+        let k1 =
+            compute_partition_key(&dir, "pkg", "build", "hash123", 0, &["input.txt".into()], &outputs);
+        let k2 =
+            compute_partition_key(&dir, "pkg", "build", "hash123", 0, &["input.txt".into()], &outputs);
         assert_eq!(k1, k2);
     }
 
