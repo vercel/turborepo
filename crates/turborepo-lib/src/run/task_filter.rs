@@ -383,7 +383,10 @@ fn get_changed_files(
 /// When `retain_filtered_tasks` prunes the engine via forward DFS, edge-less
 /// `with` siblings are unreachable and get dropped. This function closes that
 /// gap by expanding the retained set before pruning.
-fn expand_with_siblings(engine: &Engine, tasks: HashSet<TaskId<'static>>) -> HashSet<TaskId<'static>> {
+fn expand_with_siblings(
+    engine: &Engine,
+    tasks: HashSet<TaskId<'static>>,
+) -> HashSet<TaskId<'static>> {
     let mut result = tasks;
     let mut frontier: Vec<TaskId<'static>> = result.iter().cloned().collect();
 
@@ -936,7 +939,10 @@ mod tests {
         // lib-b has default inputs.
         let engine = make_engine(
             &[
-                (a_build.clone(), def_with_inputs(&["../../config.txt"], true)),
+                (
+                    a_build.clone(),
+                    def_with_inputs(&["../../config.txt"], true),
+                ),
                 (b_build.clone(), TaskDefinition::default()),
             ],
             &[],
@@ -966,7 +972,8 @@ mod tests {
         let remaining: HashSet<_> = result.task_ids().cloned().collect();
         assert!(
             remaining.contains(&a_build),
-            "lib-a#build should survive: matched by name AND affected via $TURBO_ROOT$ input: {remaining:?}"
+            "lib-a#build should survive: matched by name AND affected via $TURBO_ROOT$ input: \
+             {remaining:?}"
         );
         assert!(
             !remaining.contains(&b_build),
@@ -989,7 +996,10 @@ mod tests {
 
         let engine = make_engine(
             &[
-                (a_build.clone(), def_with_inputs(&["../../config.txt"], true)),
+                (
+                    a_build.clone(),
+                    def_with_inputs(&["../../config.txt"], true),
+                ),
                 (b_build.clone(), TaskDefinition::default()),
             ],
             &[],
@@ -1199,7 +1209,11 @@ mod tests {
         let initial: HashSet<_> = [a.clone()].into_iter().collect();
         let expanded = super::expand_with_siblings(&engine, initial);
 
-        assert_eq!(expanded.len(), 3, "all three should be included: {expanded:?}");
+        assert_eq!(
+            expanded.len(),
+            3,
+            "all three should be included: {expanded:?}"
+        );
         assert!(expanded.contains(&a));
         assert!(expanded.contains(&b));
         assert!(expanded.contains(&c));
