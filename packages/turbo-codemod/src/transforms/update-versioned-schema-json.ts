@@ -95,7 +95,7 @@ function versionToSubdomain(version: string): string {
  * Uses semver.parse to preserve prerelease identifiers (e.g., canary.5),
  * falling back to semver.coerce for non-standard version strings.
  */
-function getVersionedSchemaUrl(version: string): string {
+export function getVersionedSchemaUrl(version: string): string {
   // parse preserves prerelease: "2.9.4-canary.5" -> "2.9.4-canary.5"
   // coerce strips it: "2.9.4-canary.5" -> "2.9.4"
   const parsed = parse(version);

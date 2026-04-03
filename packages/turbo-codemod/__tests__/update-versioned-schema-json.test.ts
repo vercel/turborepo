@@ -1,6 +1,9 @@
 import { setupTestFixtures } from "@turbo/test-utils";
 import { describe, it, expect } from "@jest/globals";
-import { transformer } from "../src/transforms/update-versioned-schema-json";
+import {
+  transformer,
+  getVersionedSchemaUrl
+} from "../src/transforms/update-versioned-schema-json";
 
 describe("update-versioned-schema-json", () => {
   const { useFixture } = setupTestFixtures({
@@ -479,6 +482,44 @@ describe("update-versioned-schema-json", () => {
     expect(result.fatalError).toBeDefined();
     expect(result.fatalError?.message).toContain(
       "Found both turbo.json and turbo.jsonc"
+    );
+  });
+
+  it("aborts when no turbo config exists at root", () => {
+    const { root } = useFixture({
+      fixture: "no-turbo-config"
+    });
+
+    const result = transformer({
+      root,
+      options: { force: false, dryRun: false, print: false, toVersion: "2.7.5" }
+    });
+
+    expect(result.fatalError).toBeDefined();
+    expect(result.fatalError?.message).toContain(
+      "No turbo.json or turbo.jsonc found"
+    );
+  });
+
+  it("aborts with error when a workspace has conflicting turbo configs", () => {
+    const { root } = useFixture({
+      fixture: "workspace-conflicting-configs"
+    });
+
+    const result = transformer({
+      root,
+      options: { force: false, dryRun: false, print: false, toVersion: "2.7.5" }
+    });
+
+    expect(result.fatalError).toBeDefined();
+    expect(result.fatalError?.message).toContain("Error updating schema URL");
+  });
+});
+
+describe("getVersionedSchemaUrl", () => {
+  it("throws for an unparseable version string", () => {
+    expect(() => getVersionedSchemaUrl("not-a-version")).toThrow(
+      "Invalid version: not-a-version"
     );
   });
 });
