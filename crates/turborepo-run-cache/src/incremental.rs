@@ -642,8 +642,15 @@ mod tests {
             inclusions: vec!["dist/**".into()],
             exclusions: vec![],
         };
-        let result =
-            compute_partition_key(&dir, "pkg", "task", "hash123", 0, &["[invalid".into()], &outputs);
+        let result = compute_partition_key(
+            &dir,
+            "pkg",
+            "task",
+            "hash123",
+            0,
+            &["[invalid".into()],
+            &outputs,
+        );
         assert!(
             result.is_none(),
             "invalid input glob should produce None, not a fallback key"
@@ -867,10 +874,24 @@ mod tests {
             exclusions: vec![],
         };
 
-        let k1 =
-            compute_partition_key(&dir, "pkg", "build", "hash123", 0, &["input.txt".into()], &outputs);
-        let k2 =
-            compute_partition_key(&dir, "pkg", "build", "hash123", 0, &["input.txt".into()], &outputs);
+        let k1 = compute_partition_key(
+            &dir,
+            "pkg",
+            "build",
+            "hash123",
+            0,
+            &["input.txt".into()],
+            &outputs,
+        );
+        let k2 = compute_partition_key(
+            &dir,
+            "pkg",
+            "build",
+            "hash123",
+            0,
+            &["input.txt".into()],
+            &outputs,
+        );
         assert_eq!(k1, k2);
     }
 
