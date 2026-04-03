@@ -26,16 +26,48 @@ use wax::Program;
 
 use crate::engine::Engine;
 
+/// Resolves an `--affected` range to the set of task IDs that are affected
+/// (changed + dependents). Used by the builder to compute an intersection
+/// constraint when both `--affected` and `--filter` are active.
+pub fn resolve_affected_tasks(
+    engine: &Engine,
+    affected_range: &(Option<String>, Option<String>),
+    pkg_dep_graph: &PackageGraph,
+    scm: &SCM,
+    repo_root: &AbsoluteSystemPath,
+    global_deps: &[String],
+) -> Result<HashSet<TaskId<'static>>, crate::run::error::Error> {
+    let selector = TargetSelector {
+        git_range: Some(GitRange {
+            from_ref: affected_range.0.clone(),
+            to_ref: affected_range.1.clone(),
+            include_uncommitted: true,
+            allow_unknown_objects: true,
+            merge_base: true,
+        }),
+        include_dependents: true,
+        ..Default::default()
+    };
+    resolve_selector_to_tasks(
+        engine,
+        &selector,
+        pkg_dep_graph,
+        scm,
+        repo_root,
+        global_deps,
+    )
+}
+
 /// Filters an engine down to only the tasks matching the given selectors.
 ///
 /// Each include selector contributes a set of tasks (unioned together).
-/// Exclude selectors remove tasks from the result. After all selectors
-/// are processed, the engine is pruned to the surviving tasks, their
-/// transitive dependents, and all transitive dependencies needed for
-/// execution.
+/// Exclude selectors remove tasks from the result. When
+/// `affected_constraint` is provided, the included tasks are intersected
+/// with it before excludes are applied.
 pub fn filter_engine_to_tasks(
     engine: Engine,
     selectors: &[TargetSelector],
+    affected_constraint: Option<&HashSet<TaskId<'static>>>,
     pkg_dep_graph: &PackageGraph,
     scm: &SCM,
     repo_root: &AbsoluteSystemPath,
@@ -60,6 +92,10 @@ pub fn filter_engine_to_tasks(
     // If there were no include selectors (only excludes), start with all tasks.
     if include.is_empty() {
         included_tasks = engine.task_ids().cloned().collect();
+    }
+
+    if let Some(affected) = affected_constraint {
+        included_tasks.retain(|t| affected.contains(t));
     }
 
     for selector in &exclude {
@@ -648,7 +684,7 @@ mod tests {
         };
 
         let result =
-            super::filter_engine_to_tasks(engine, &[selector], &pkg_graph, &scm, root, &[])
+            super::filter_engine_to_tasks(engine, &[selector], None, &pkg_graph, &scm, root, &[])
                 .unwrap();
 
         let remaining: HashSet<_> = result.task_ids().cloned().collect();
@@ -659,6 +695,172 @@ mod tests {
         assert!(
             !remaining.contains(&app_build),
             "app#build should NOT be pulled in as a dependent: {remaining:?}"
+        );
+    }
+
+    /// Include selector + affected constraint → only tasks matching both.
+    ///
+    /// Engine: ui#build, app#build (app depends on ui).
+    /// Selector: name=ui (selects ui#build, engine retains ui#build).
+    /// Affected: {app#build} (only app is affected).
+    /// Result: empty — ui#build is selected by filter but not affected.
+    #[tokio::test]
+    async fn affected_constraint_intersects_with_include() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["ui", "app"]).await;
+        let scm = turborepo_scm::SCM::new(root);
+
+        let ui_build = TaskId::new("ui", "build");
+        let app_build = TaskId::new("app", "build");
+
+        let engine = make_engine(
+            &[
+                (ui_build.clone(), TaskDefinition::default()),
+                (app_build.clone(), TaskDefinition::default()),
+            ],
+            &[(app_build.clone(), ui_build.clone())],
+        );
+
+        let selector = turborepo_scope::TargetSelector {
+            name_pattern: "ui".to_string(),
+            ..Default::default()
+        };
+
+        let affected: HashSet<TaskId<'static>> = [app_build.clone()].into_iter().collect();
+
+        let result = super::filter_engine_to_tasks(
+            engine,
+            &[selector],
+            Some(&affected),
+            &pkg_graph,
+            &scm,
+            root,
+            &[],
+        )
+        .unwrap();
+
+        let remaining: HashSet<_> = result.task_ids().cloned().collect();
+        assert!(
+            !remaining.contains(&ui_build),
+            "ui#build is not affected and should be excluded: {remaining:?}"
+        );
+    }
+
+    /// Exclude selector + affected constraint → affected minus excluded.
+    ///
+    /// Engine: ui#build, app#build, lib#build (no edges between them).
+    /// Selector: exclude ui.
+    /// Affected: {ui#build, app#build}.
+    /// Result: {app#build} — ui is excluded, lib is not affected.
+    #[tokio::test]
+    async fn affected_constraint_with_exclude_selector() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["ui", "app", "lib"]).await;
+        let scm = turborepo_scm::SCM::new(root);
+
+        let ui_build = TaskId::new("ui", "build");
+        let app_build = TaskId::new("app", "build");
+        let lib_build = TaskId::new("lib", "build");
+
+        // No dependency edges — tasks are independent
+        let engine = make_engine(
+            &[
+                (ui_build.clone(), TaskDefinition::default()),
+                (app_build.clone(), TaskDefinition::default()),
+                (lib_build.clone(), TaskDefinition::default()),
+            ],
+            &[],
+        );
+
+        let exclude_selector = turborepo_scope::TargetSelector {
+            name_pattern: "ui".to_string(),
+            exclude: true,
+            ..Default::default()
+        };
+
+        let affected: HashSet<TaskId<'static>> =
+            [ui_build.clone(), app_build.clone()].into_iter().collect();
+
+        let result = super::filter_engine_to_tasks(
+            engine,
+            &[exclude_selector],
+            Some(&affected),
+            &pkg_graph,
+            &scm,
+            root,
+            &[],
+        )
+        .unwrap();
+
+        let remaining: HashSet<_> = result.task_ids().cloned().collect();
+        assert!(
+            remaining.contains(&app_build),
+            "app#build is affected and not excluded: {remaining:?}"
+        );
+        assert!(
+            !remaining.contains(&ui_build),
+            "ui#build should be excluded: {remaining:?}"
+        );
+        assert!(
+            !remaining.contains(&lib_build),
+            "lib#build is not affected: {remaining:?}"
+        );
+    }
+
+    /// Empty selectors + affected constraint → only affected tasks survive.
+    ///
+    /// Engine: ui#build, app#build, lib#build.
+    /// Selectors: none.
+    /// Affected: {app#build}.
+    /// Result: {app#build} (plus ui#build as a transitive dep for execution).
+    #[tokio::test]
+    async fn affected_constraint_with_empty_selectors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["ui", "app", "lib"]).await;
+        let scm = turborepo_scm::SCM::new(root);
+
+        let ui_build = TaskId::new("ui", "build");
+        let app_build = TaskId::new("app", "build");
+        let lib_build = TaskId::new("lib", "build");
+
+        // app depends on ui
+        let engine = make_engine(
+            &[
+                (ui_build.clone(), TaskDefinition::default()),
+                (app_build.clone(), TaskDefinition::default()),
+                (lib_build.clone(), TaskDefinition::default()),
+            ],
+            &[(app_build.clone(), ui_build.clone())],
+        );
+
+        let affected: HashSet<TaskId<'static>> = [app_build.clone()].into_iter().collect();
+
+        let result = super::filter_engine_to_tasks(
+            engine,
+            &[],
+            Some(&affected),
+            &pkg_graph,
+            &scm,
+            root,
+            &[],
+        )
+        .unwrap();
+
+        let remaining: HashSet<_> = result.task_ids().cloned().collect();
+        assert!(
+            remaining.contains(&app_build),
+            "app#build is affected: {remaining:?}"
+        );
+        assert!(
+            remaining.contains(&ui_build),
+            "ui#build should be retained as a transitive dependency of app#build: {remaining:?}"
+        );
+        assert!(
+            !remaining.contains(&lib_build),
+            "lib#build is not affected and not a dependency: {remaining:?}"
         );
     }
 

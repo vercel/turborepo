@@ -92,10 +92,13 @@ turbo query ls -F my-app...
 
 #### `--affected`
 
-Show only packages affected by changes between the current branch and `main`. Cannot be combined with `--filter`.
+Show only packages affected by changes between the current branch and `main`.
+
+When combined with `--filter`, returns the intersection: only packages that are both affected **and** match the filter.
 
 ```bash title="Terminal"
 turbo query ls --affected
+turbo query ls --affected --filter=web
 ```
 
 #### `--output`

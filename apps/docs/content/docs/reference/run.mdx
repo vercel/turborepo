@@ -52,6 +52,16 @@ Filter to only packages that are affected by changes on the current branch.
 turbo run build lint test --affected
 ```
 
+When combined with `--filter`, only packages matching **both** constraints are selected. This is useful for narrowing a CI run to affected packages within a specific scope:
+
+```bash title="Terminal"
+# Only run build for "web" if it's affected by changes
+turbo run build --affected --filter=web
+
+# Run affected packages, excluding "docs"
+turbo run build --affected --filter=!docs
+```
+
 By default, the flag is equivalent to `--filter=...[main...HEAD]`. This considers changes between `main` and `HEAD` from Git's perspective.
 
 <Callout type="warn">

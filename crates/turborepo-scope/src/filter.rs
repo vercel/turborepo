@@ -235,25 +235,75 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         }
 
         // Parse selectors once — reused for both mode classification and resolution.
-        let mut selectors: Vec<TargetSelector> = patterns
+        let selectors: Vec<TargetSelector> = patterns
             .iter()
             .map(|pattern| TargetSelector::from_str(pattern))
             .collect::<Result<Vec<_>, _>>()?;
 
         let mode = self.classify_filter_mode(&selectors, affected);
 
-        if let Some((from_ref, to_ref)) = affected {
-            selectors.push(TargetSelector {
-                git_range: Some(GitRange {
-                    from_ref: from_ref.clone(),
-                    to_ref: to_ref.clone(),
-                    include_uncommitted: true,
-                    allow_unknown_objects: true,
-                    merge_base: true,
-                }),
-                include_dependents: true,
-                ..Default::default()
-            });
+        let affected_selector = affected.as_ref().map(|(from_ref, to_ref)| TargetSelector {
+            git_range: Some(GitRange {
+                from_ref: from_ref.clone(),
+                to_ref: to_ref.clone(),
+                include_uncommitted: true,
+                allow_unknown_objects: true,
+                merge_base: true,
+            }),
+            include_dependents: true,
+            ..Default::default()
+        });
+
+        if let Some(affected_sel) = affected_selector {
+            if selectors.is_empty() {
+                let packages = self.get_filtered_packages(vec![affected_sel])?;
+                return Ok((packages, mode));
+            }
+
+            let affected_pkgs = self.get_filtered_packages(vec![affected_sel])?;
+
+            // Explicit include/exclude ordering that mirrors task_filter.rs:
+            //   (filter_includes ∩ affected) - filter_excludes
+            let (include_sels, exclude_sels): (Vec<_>, Vec<_>) =
+                selectors.into_iter().partition(|s| !s.exclude);
+
+            let included = if include_sels.is_empty() {
+                // No include selectors → start from full affected set
+                affected_pkgs
+            } else {
+                let filter_pkgs = self.get_filtered_packages(include_sels)?;
+                filter_pkgs
+                    .into_iter()
+                    .filter(|(name, _)| affected_pkgs.contains_key(name))
+                    .collect()
+            };
+
+            if exclude_sels.is_empty() {
+                return Ok((included, mode));
+            }
+
+            // Resolve exclude selectors to the set of package names to subtract.
+            // Flip the exclude flag so filter_graph resolves them as normal
+            // includes — we just need the matching package names.
+            let exclude_names: HashSet<PackageName> = {
+                let as_includes: Vec<_> = exclude_sels
+                    .into_iter()
+                    .map(|mut s| {
+                        s.exclude = false;
+                        s
+                    })
+                    .collect();
+                self.get_filtered_packages(as_includes)?
+                    .into_keys()
+                    .collect()
+            };
+
+            let packages = included
+                .into_iter()
+                .filter(|(name, _)| !exclude_names.contains(name))
+                .collect();
+
+            return Ok((packages, mode));
         }
 
         let packages = self.get_filtered_packages(selectors)?;
@@ -1970,6 +2020,149 @@ mod test {
             FilterMode::ExcludeOnly {
                 root_excluded: true
             }
+        );
+    }
+
+    /// Helper that resolves with both affected and filter patterns and returns
+    /// the selected package names.
+    fn resolve_affected_with_filter(
+        patterns: &[&str],
+        changed: &[(&str, Option<&str>, &[&str])],
+    ) -> HashSet<PackageName> {
+        let (_tempdir, resolver) = make_project(
+            &[
+                ("packages/project-0", "packages/project-1"),
+                ("packages/project-0", "project-5"),
+            ],
+            &["project-3"],
+            None,
+            TestChangeDetector::new(changed),
+        );
+        let affected = Some((Some("main".to_string()), None));
+        let patterns: Vec<String> = patterns.iter().map(|s| s.to_string()).collect();
+        let (pkgs, _) = resolver.resolve(&affected, &patterns).unwrap();
+        pkgs.into_keys().collect()
+    }
+
+    #[test]
+    fn affected_with_include_filter_intersects() {
+        // project-5 changed → affected = {project-5, project-0}
+        // filter = project-0 → result = {project-0}
+        let pkgs = resolve_affected_with_filter(&["project-0"], &[("main", None, &["project-5"])]);
+        assert_eq!(pkgs, HashSet::from([PackageName::from("project-0")]));
+    }
+
+    #[test]
+    fn affected_with_exclude_filter_subtracts() {
+        // project-5 changed → affected = {project-5, project-0}
+        // filter = !project-0 → result = {project-5}
+        let pkgs = resolve_affected_with_filter(&["!project-0"], &[("main", None, &["project-5"])]);
+        assert_eq!(pkgs, HashSet::from([PackageName::from("project-5")]));
+    }
+
+    #[test]
+    fn affected_with_filter_no_overlap_is_empty() {
+        // project-5 changed → affected = {project-5, project-0}
+        // filter = project-3 → result = {} (project-3 not affected)
+        let pkgs = resolve_affected_with_filter(&["project-3"], &[("main", None, &["project-5"])]);
+        assert!(pkgs.is_empty(), "expected empty, got {pkgs:?}");
+    }
+
+    #[test]
+    fn affected_with_include_and_exclude_filter() {
+        // project-1 changed → affected = {project-1, project-0}
+        // filter = project-0, !project-1 → filter_result = {project-0}
+        // intersection = {project-0}
+        let pkgs = resolve_affected_with_filter(
+            &["project-0", "!project-1"],
+            &[("main", None, &["project-1"])],
+        );
+        assert_eq!(pkgs, HashSet::from([PackageName::from("project-0")]));
+    }
+
+    #[test]
+    fn affected_with_git_range_filter_different_ref() {
+        // affected("main") → project-5 changed → {project-5, project-0}
+        // filter `...[develop]` → project-1 changed + dependents → {project-1,
+        // project-0} intersection = {project-0}
+        let pkgs = resolve_affected_with_filter(
+            &["...[develop]"],
+            &[
+                ("main", None, &["project-5"]),
+                ("develop", None, &["project-1"]),
+            ],
+        );
+        assert_eq!(pkgs, HashSet::from([PackageName::from("project-0")]));
+    }
+
+    #[test]
+    fn affected_with_git_range_filter_same_ref() {
+        // Both affected and filter resolve against "main" with the same
+        // changed packages. Intersection should equal the full affected set.
+        let pkgs = resolve_affected_with_filter(&["...[main]"], &[("main", None, &["project-5"])]);
+        assert_eq!(
+            pkgs,
+            HashSet::from([
+                PackageName::from("project-5"),
+                PackageName::from("project-0"),
+            ])
+        );
+    }
+
+    #[test]
+    fn affected_with_dependents_filter() {
+        // project-5 changed → affected = {project-5, project-0}
+        // filter `...project-1` → {project-1, project-0} (project-1 + dependent
+        // project-0) intersection = {project-0}
+        let pkgs =
+            resolve_affected_with_filter(&["...project-1"], &[("main", None, &["project-5"])]);
+        assert_eq!(pkgs, HashSet::from([PackageName::from("project-0")]));
+    }
+
+    #[test]
+    fn affected_with_multiple_include_filters() {
+        // project-5 changed → affected = {project-5, project-0}
+        // filter = project-0 ∪ project-3 = {project-0, project-3}
+        // intersection = {project-0}
+        let pkgs = resolve_affected_with_filter(
+            &["project-0", "project-3"],
+            &[("main", None, &["project-5"])],
+        );
+        assert_eq!(pkgs, HashSet::from([PackageName::from("project-0")]));
+    }
+
+    #[test]
+    fn affected_with_multiple_exclude_filters() {
+        // project-5 changed → affected = {project-5, project-0}
+        // no includes → start from affected, exclude both → empty
+        let pkgs = resolve_affected_with_filter(
+            &["!project-0", "!project-5"],
+            &[("main", None, &["project-5"])],
+        );
+        assert!(pkgs.is_empty(), "expected empty, got {pkgs:?}");
+    }
+
+    #[test]
+    fn affected_alone_unchanged() {
+        // Verify that --affected without --filter still works as before.
+        let (_tempdir, resolver) = make_project(
+            &[
+                ("packages/project-0", "packages/project-1"),
+                ("packages/project-0", "project-5"),
+            ],
+            &["project-3"],
+            None,
+            TestChangeDetector::new(&[("main", None, &["project-5"])]),
+        );
+        let affected = Some((Some("main".to_string()), None));
+        let (pkgs, _) = resolver.resolve(&affected, &[]).unwrap();
+        let names: HashSet<PackageName> = pkgs.into_keys().collect();
+        assert_eq!(
+            names,
+            HashSet::from([
+                PackageName::from("project-5"),
+                PackageName::from("project-0"),
+            ])
         );
     }
 }

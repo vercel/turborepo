@@ -34,6 +34,13 @@ turbo ls web @repo/ui [package(s)]
 
 Automatically filter to only packages that are affected by changes on the current branch.
 
+When combined with `--filter`, returns the intersection: only packages that are both affected **and** match the filter.
+
+```bash title="Terminal"
+turbo ls --affected
+turbo ls --affected --filter=web
+```
+
 By default the changes considered are those between `main` and `HEAD`.
 
 - You can override `main` as the default base by setting `TURBO_SCM_BASE`.

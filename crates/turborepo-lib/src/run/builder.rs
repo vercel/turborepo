@@ -732,7 +732,7 @@ impl RunBuilder {
 
         // Task-level filter: resolve --filter and/or --affected against the task graph.
         if use_task_level_filter {
-            let mut selectors: Vec<turborepo_scope::TargetSelector> = self
+            let selectors: Vec<turborepo_scope::TargetSelector> = self
                 .opts
                 .scope_opts
                 .filter_patterns
@@ -741,26 +741,24 @@ impl RunBuilder {
                 .collect::<Result<_, _>>()
                 .map_err(turborepo_scope::ResolutionError::from)?;
 
-            // When --affected is used alongside filterUsingTasks, synthesize a
-            // selector equivalent to `...[base...HEAD]` so it flows through
-            // the same task-level filter instead of a separate codepath.
-            if let Some((from_ref, to_ref)) = &self.opts.scope_opts.affected_range {
-                selectors.push(turborepo_scope::TargetSelector {
-                    git_range: Some(turborepo_scope::GitRange {
-                        from_ref: from_ref.clone(),
-                        to_ref: to_ref.clone(),
-                        include_uncommitted: true,
-                        allow_unknown_objects: true,
-                        merge_base: true,
-                    }),
-                    include_dependents: true,
-                    ..Default::default()
-                });
-            }
+            let affected_constraint =
+                if let Some(affected_range) = &self.opts.scope_opts.affected_range {
+                    Some(super::task_filter::resolve_affected_tasks(
+                        &engine,
+                        affected_range,
+                        &pkg_dep_graph,
+                        &scm,
+                        &self.repo_root,
+                        &root_turbo_json.global_deps,
+                    )?)
+                } else {
+                    None
+                };
 
             engine = super::task_filter::filter_engine_to_tasks(
                 engine,
                 &selectors,
+                affected_constraint.as_ref(),
                 &pkg_dep_graph,
                 &scm,
                 &self.repo_root,

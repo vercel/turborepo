@@ -706,13 +706,13 @@ pub enum Command {
     Ls {
         /// Show only packages that are affected by changes between
         /// the current branch and `main`
-        #[clap(long, group = "scope-filter-group")]
+        #[clap(long)]
         affected: bool,
         /// Use the given selector to specify package(s) to act as
         /// entry points. The syntax mirrors pnpm's syntax, and
         /// additional documentation and examples can be found in
         /// turbo's documentation https://turborepo.dev/docs/reference/command-line-reference/run#--filter
-        #[clap(short = 'F', long, group = "scope-filter-group")]
+        #[clap(short = 'F', long)]
         filter: Vec<String>,
         /// Get insight into a specific package, such as
         /// its dependencies and tasks
@@ -900,13 +900,13 @@ pub enum QuerySubcommand {
 pub struct LsArgs {
     /// Show only packages that are affected by changes between
     /// the current branch and `main`
-    #[clap(long, group = "scope-filter-group")]
+    #[clap(long)]
     pub affected: bool,
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
     /// additional documentation and examples can be found in
     /// turbo's documentation https://turborepo.dev/docs/reference/command-line-reference/run#--filter
-    #[clap(short = 'F', long, group = "scope-filter-group")]
+    #[clap(short = 'F', long)]
     pub filter: Vec<String>,
     /// Get insight into a specific package, such as
     /// its dependencies and tasks
@@ -1010,7 +1010,7 @@ pub struct ExecutionArgs {
 
     /// Filter to only packages that are affected by changes between
     /// the current branch and `main`
-    #[clap(long, group = "scope-filter-group", conflicts_with = "filter")]
+    #[clap(long, group = "scope-filter-group")]
     pub affected: bool,
 
     /// Set type of process output logging. Use "full" to show
@@ -3533,14 +3533,14 @@ mod test {
     }
 
     #[test]
-    fn test_prevent_affected_and_filter() {
+    fn test_affected_and_filter_can_be_combined() {
         assert!(
             Args::try_parse_from(["turbo", "run", "build", "--affected", "--filter", "foo"])
-                .is_err(),
+                .is_ok(),
         );
-        assert!(Args::try_parse_from(["turbo", "build", "--affected", "--filter", "foo"]).is_err(),);
-        assert!(Args::try_parse_from(["turbo", "build", "--filter", "foo", "--affected"]).is_err(),);
-        assert!(Args::try_parse_from(["turbo", "ls", "--filter", "foo", "--affected"]).is_err(),);
+        assert!(Args::try_parse_from(["turbo", "build", "--affected", "--filter", "foo"]).is_ok(),);
+        assert!(Args::try_parse_from(["turbo", "build", "--filter", "foo", "--affected"]).is_ok(),);
+        assert!(Args::try_parse_from(["turbo", "ls", "--filter", "foo", "--affected"]).is_ok(),);
     }
 
     struct SinglePackageTestCase {

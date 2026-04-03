@@ -1477,3 +1477,258 @@ fn test_query_affected_exit_code_error_returns_2() {
         "--exit-code should exit 2 on query errors, not 1"
     );
 }
+
+#[test]
+fn test_affected_with_filter_intersects() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    // Change util → affected = {util, my-app} (my-app depends on util)
+    fs::write(tempdir.path().join("packages/util/new.js"), "hello").unwrap();
+
+    // --affected --filter=my-app should only run my-app (not util)
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--affected",
+            "--filter=my-app",
+            "--log-order",
+            "grouped",
+        ],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Packages in scope: my-app"),
+        "only my-app should be in scope: {stdout}"
+    );
+    assert!(stdout.contains("1 successful, 1 total"));
+}
+
+#[test]
+fn test_affected_with_exclude_filter() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    // Change util → affected = {util, my-app}
+    fs::write(tempdir.path().join("packages/util/new.js"), "hello").unwrap();
+
+    // --affected --filter=!my-app should run util but not my-app
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--affected",
+            "--filter=!my-app",
+            "--log-order",
+            "grouped",
+        ],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Packages in scope: util"),
+        "only util should be in scope: {stdout}"
+    );
+    assert!(stdout.contains("1 successful, 1 total"));
+}
+
+#[test]
+fn test_affected_with_filter_no_overlap() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    // Change my-app only → affected = {my-app}
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "hello").unwrap();
+
+    // --affected --filter=another → empty intersection (another not affected)
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--affected",
+            "--filter=another",
+            "--log-order",
+            "grouped",
+        ],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("0 successful, 0 total"),
+        "no packages should run: {stdout}"
+    );
+}
+
+#[test]
+fn test_affected_with_filter_ls() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    // Change util → affected = {util, my-app}
+    fs::write(tempdir.path().join("packages/util/new.js"), "hello").unwrap();
+
+    // turbo ls --affected --filter=my-app should list only my-app
+    let output = run_turbo(tempdir.path(), &["ls", "--affected", "--filter=my-app"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("1 package"), "expected 1 package: {stdout}");
+    assert!(
+        stdout.contains("my-app"),
+        "my-app should be listed: {stdout}"
+    );
+}
+
+#[test]
+fn test_affected_with_dependents_filter() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    // Change my-app only → affected = {my-app}
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "hello").unwrap();
+
+    // --affected --filter='...util' → filter selects util + dependents = {util,
+    // my-app} intersection with affected {my-app} = {my-app}
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--affected",
+            "--filter=...util",
+            "--log-order",
+            "grouped",
+        ],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Packages in scope: my-app"),
+        "only my-app should be in scope (affected ∩ dependents of util): {stdout}"
+    );
+    assert!(stdout.contains("1 successful, 1 total"));
+}
+
+#[test]
+fn test_affected_with_multiple_include_filters() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    // Change util → affected = {util, my-app}
+    fs::write(tempdir.path().join("packages/util/new.js"), "hello").unwrap();
+
+    // --filter=my-app --filter=util → union = {my-app, util}
+    // intersection with affected {util, my-app} = {util, my-app}
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--affected",
+            "--filter=my-app",
+            "--filter=util",
+            "--log-order",
+            "grouped",
+        ],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("2 successful, 2 total"),
+        "both my-app and util should run: {stdout}"
+    );
+}
+
+#[test]
+fn test_affected_with_multiple_include_filters_partial_overlap() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    // Change my-app only → affected = {my-app}
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "hello").unwrap();
+
+    // --filter=my-app --filter=util → union = {my-app, util}
+    // intersection with affected {my-app} = {my-app} (util not affected)
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--affected",
+            "--filter=my-app",
+            "--filter=util",
+            "--log-order",
+            "grouped",
+        ],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Packages in scope: my-app"),
+        "only my-app should run (util not affected): {stdout}"
+    );
+    assert!(stdout.contains("1 successful, 1 total"));
+}
+
+#[test]
+fn test_affected_with_git_range_filter() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    // Change util → affected = {util, my-app}
+    fs::write(tempdir.path().join("packages/util/new.js"), "hello").unwrap();
+
+    // --filter='[main]' is a git-range filter that resolves changed packages
+    // since main — same as --affected's default. The intersection should be
+    // the same as --affected alone.
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--affected",
+            "--filter=...[main]",
+            "--log-order",
+            "grouped",
+        ],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("2 successful, 2 total"),
+        "both util and my-app should run (both filters agree): {stdout}"
+    );
+}
+
+#[test]
+fn test_affected_with_multiple_excludes() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    // Change util → affected = {util, my-app}
+    fs::write(tempdir.path().join("packages/util/new.js"), "hello").unwrap();
+
+    // --filter=!my-app --filter=!util → exclude both → empty
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--affected",
+            "--filter=!my-app",
+            "--filter=!util",
+            "--log-order",
+            "grouped",
+        ],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("0 successful, 0 total"),
+        "no packages should run (all excluded): {stdout}"
+    );
+}
