@@ -497,6 +497,54 @@ fn test_nested_gitignore_respected() {
     assert!(hashes.contains_key(&path(".gitignore")));
 }
 
+// Regression: vercel/turborepo#12554
+// When .gitignore is modified but not committed, its patterns must still be
+// respected. A dirty .gitignore ends up in status_entries (not ls_tree_hashes),
+// so the gitignore matcher construction must check both.
+#[test]
+fn test_dirty_gitignore_still_excludes_ignored_files() {
+    let repo = TestRepo::new();
+
+    repo.create_gitignore(".gitignore", "node_modules/\n");
+    repo.create_file("my-pkg/src/index.ts", "code");
+    repo.create_file("my-pkg/package.json", "{}");
+    repo.commit_all();
+
+    // Create an ignored file and then dirty the .gitignore without committing
+    repo.create_file("my-pkg/node_modules/.bin/foo", "stub");
+    repo.create_gitignore(".gitignore", "node_modules/\n# added comment\n");
+
+    let hashes = repo.get_hashes("my-pkg");
+    assert!(
+        !hashes.contains_key(&path("node_modules/.bin/foo")),
+        "dirty .gitignore must still exclude node_modules"
+    );
+    assert!(hashes.contains_key(&path("src/index.ts")));
+}
+
+// Regression: vercel/turborepo#12554 (nested variant)
+// Same as above but with a nested .gitignore inside a package directory.
+#[test]
+fn test_dirty_nested_gitignore_still_excludes_ignored_files() {
+    let repo = TestRepo::new();
+
+    repo.create_gitignore("my-pkg/.gitignore", "dist/\n");
+    repo.create_file("my-pkg/src/index.ts", "code");
+    repo.create_file("my-pkg/package.json", "{}");
+    repo.commit_all();
+
+    repo.create_file("my-pkg/dist/bundle.js", "compiled");
+    repo.create_gitignore("my-pkg/.gitignore", "dist/\n# added comment\n");
+
+    let hashes = repo.get_hashes("my-pkg");
+    assert!(
+        !hashes.contains_key(&path("dist/bundle.js")),
+        "dirty nested .gitignore must still exclude dist/"
+    );
+    assert!(hashes.contains_key(&path("src/index.ts")));
+    assert!(hashes.contains_key(&path(".gitignore")));
+}
+
 #[test]
 fn test_empty_package_returns_empty_hashes() {
     let repo = TestRepo::new();

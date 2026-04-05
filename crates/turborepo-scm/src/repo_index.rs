@@ -709,28 +709,41 @@ fn find_untracked_files(
             has_root_rules = true;
         }
 
-        for (path, _) in ls_tree_hashes.iter() {
-            let s = path.as_str();
-            if s.ends_with(".gitignore") {
-                let abs_path = root.join(s);
-                if !abs_path.exists() {
-                    continue;
-                }
-                let gi_dir = abs_path.parent().unwrap_or(root.as_path());
-                if gi_dir == root.as_path() {
-                    // Root .gitignore goes into the root builder alongside
-                    // global and info/exclude rules
-                    let _ = root_builder.add(&abs_path);
-                    has_root_rules = true;
-                } else {
-                    // Nested .gitignore gets its own matcher scoped to its dir
-                    let mut builder = ignore::gitignore::GitignoreBuilder::new(gi_dir);
-                    let _ = builder.add(&abs_path);
-                    if let Ok(gi) = builder.build()
-                        && !gi.is_empty()
-                    {
-                        matchers.push(gi);
-                    }
+        // Collect .gitignore paths from both clean tracked files and
+        // dirty (modified-but-tracked) files. A modified .gitignore
+        // lands in status_entries instead of ls_tree_hashes, but its
+        // on-disk patterns must still be respected.
+        let gitignore_paths: Vec<&str> = ls_tree_hashes
+            .iter()
+            .map(|(p, _)| p.as_str())
+            .chain(
+                status_entries
+                    .iter()
+                    .filter(|e| !e.is_delete)
+                    .map(|e| e.path.as_str()),
+            )
+            .filter(|s| s.ends_with(".gitignore"))
+            .collect();
+
+        for s in gitignore_paths {
+            let abs_path = root.join(s);
+            if !abs_path.exists() {
+                continue;
+            }
+            let gi_dir = abs_path.parent().unwrap_or(root.as_path());
+            if gi_dir == root.as_path() {
+                // Root .gitignore goes into the root builder alongside
+                // global and info/exclude rules
+                let _ = root_builder.add(&abs_path);
+                has_root_rules = true;
+            } else {
+                // Nested .gitignore gets its own matcher scoped to its dir
+                let mut builder = ignore::gitignore::GitignoreBuilder::new(gi_dir);
+                let _ = builder.add(&abs_path);
+                if let Ok(gi) = builder.build()
+                    && !gi.is_empty()
+                {
+                    matchers.push(gi);
                 }
             }
         }
