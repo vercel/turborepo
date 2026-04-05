@@ -1253,6 +1253,9 @@ impl BunLockfile {
             lockfile_version: self.data.lockfile_version,
             config_version: self.data.config_version,
             workspaces: Map::new(),
+            // trustedDependencies are intentionally left empty. turbo prune
+            // copies the root package.json which is the source of truth for
+            // trusted scripts; bun re-derives the set at install time.
             trusted_dependencies: Vec::new(),
             overrides: Map::new(),
             catalog: self.data.catalog.clone(),
@@ -1723,7 +1726,9 @@ impl BunLockfile {
                     }
                 }
             }
-            Err(_e) => {}
+            Err(e) => {
+                tracing::warn!("Failed to recompute transitive closures for orphan removal: {e}");
+            }
         }
 
         // NESTED KEY PROMOTION: In bun lockfiles, nested entries like
@@ -1889,19 +1894,7 @@ impl BunLockfile {
                     return true;
                 }
                 match hoisted_idents.get(ident.name()) {
-                    Some(hoisted_ident) => {
-                        if &entry.ident == hoisted_ident {
-                            return false;
-                        }
-                        let hoisted_ver = hoisted_ident.rsplit_once('@').map(|(_, v)| v).unwrap_or("");
-                        let nested_ver = entry.version();
-                        let Ok(hv) = semver::Version::parse(hoisted_ver) else { return true };
-                        let Ok(nv) = semver::Version::parse(nested_ver) else { return true };
-                        if hv.major != nv.major || hv.minor != nv.minor {
-                            return true;
-                        }
-                        hv < nv
-                    }
+                    Some(hoisted_ident) => &entry.ident != hoisted_ident,
                     None => true,
                 }
             });
@@ -2265,14 +2258,12 @@ mod test {
 
         let lockfile = BunLockfile::from_str(&contents).unwrap();
 
-        let result = lockfile
-            .resolve_package("", "dep", "1.5.0")
-            .unwrap();
+        let result = lockfile.resolve_package("", "dep", "1.5.0").unwrap();
 
         assert!(
             result.is_some(),
-            "Override to lower version (1.4.0) must still resolve even though \
-             1.4.0 does not satisfy ^1.5.0"
+            "Override to lower version (1.4.0) must still resolve even though 1.4.0 does not \
+             satisfy ^1.5.0"
         );
         let pkg = result.unwrap();
         assert_eq!(pkg.key, "dep@1.4.0");
@@ -2311,14 +2302,13 @@ mod test {
             [("parent".to_string(), "^1.0.0".to_string())]
                 .into_iter()
                 .collect();
-        let closure =
-            crate::transitive_closure(&lockfile, "", unresolved_deps, false).unwrap();
+        let closure = crate::transitive_closure(&lockfile, "", unresolved_deps, false).unwrap();
 
         let dep_keys: Vec<String> = closure.iter().map(|p| p.key.clone()).collect();
         assert!(
             dep_keys.contains(&"dep@1.4.0".to_string()),
-            "Overridden dep@1.4.0 must be in transitive closure even though \
-             parent declares dep@1.5.0. Got: {:?}",
+            "Overridden dep@1.4.0 must be in transitive closure even though parent declares \
+             dep@1.5.0. Got: {:?}",
             dep_keys
         );
     }

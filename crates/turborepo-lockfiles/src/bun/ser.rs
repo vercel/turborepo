@@ -1,6 +1,6 @@
-use serde::{ser::SerializeTuple, Serialize};
+use serde::{Serialize, ser::SerializeTuple};
 
-use super::{is_git_or_github_package, is_tarball_or_url_package, PackageEntry};
+use super::{PackageEntry, is_git_or_github_package, is_tarball_or_url_package};
 
 // Comment explaining entry schemas taken from bun.lock.zig
 // first index is resolution for each type of package
@@ -33,7 +33,9 @@ impl Serialize for PackageEntry {
             if self.info.is_some() {
                 len += 1;
             }
-            if self.checksum.is_some() && !is_url {
+            if let Some(checksum) = &self.checksum
+                && (!is_url || !checksum.is_empty())
+            {
                 len += 1;
             }
         }
@@ -46,20 +48,21 @@ impl Serialize for PackageEntry {
             return tuple.end();
         }
 
-        if let Some(registry) = &self.registry {
-            if !is_git && !is_url {
-                tuple.serialize_element(registry)?;
-            }
+        if let Some(registry) = &self.registry
+            && !is_git
+            && !is_url
+        {
+            tuple.serialize_element(registry)?;
         }
 
         if let Some(info) = &self.info {
             tuple.serialize_element(info)?;
         };
 
-        if let Some(checksum) = &self.checksum {
-            if !is_url {
-                tuple.serialize_element(checksum)?;
-            }
+        if let Some(checksum) = &self.checksum
+            && (!is_url || !checksum.is_empty())
+        {
+            tuple.serialize_element(checksum)?;
         }
 
         tuple.end()
