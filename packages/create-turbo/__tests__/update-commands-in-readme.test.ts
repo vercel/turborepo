@@ -23,7 +23,7 @@ function makeTransformInput(
         lockfile: "/tmp/test/package-lock.json",
         nodeModules: "/tmp/test/node_modules"
       },
-      workspaceData: { globs: [], workspaces: new Map() }
+      workspaceData: { globs: [], workspaces: [] }
     },
     prompts: {
       projectName: "test-project",
