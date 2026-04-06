@@ -1,11 +1,10 @@
 use std::{
     backtrace::Backtrace,
     collections::HashMap,
-    io::{Cursor, Write},
+    io::Write,
     sync::{Arc, Mutex},
 };
 
-use tokio_stream::StreamExt;
 use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
@@ -146,6 +145,11 @@ impl HTTPCache {
         }
     }
 
+    /// 256 KB upload chunk size. Larger chunks reduce per-chunk overhead
+    /// (mutex locks in UploadProgress, hyper body framing) which improves
+    /// throughput for large artifacts compared to the previous 8 KB default.
+    const UPLOAD_CHUNK_BYTES: usize = 256 * 1024;
+
     #[tracing::instrument(skip_all)]
     pub async fn put(
         &self,
@@ -156,7 +160,7 @@ impl HTTPCache {
     ) -> Result<(), CacheError> {
         let mut artifact_body = Vec::new();
         self.write(&mut artifact_body, anchor, files).await?;
-        let bytes = artifact_body.len();
+        let body_len = artifact_body.len();
 
         let tag = self
             .signer_verifier
@@ -164,14 +168,16 @@ impl HTTPCache {
             .map(|signer| signer.generate_tag(hash.as_bytes(), &artifact_body))
             .transpose()?;
 
+        // Convert to Bytes once so retries are a cheap Arc bump instead of
+        // a full deep-copy of the artifact.
+        let artifact_bytes = bytes::Bytes::from(artifact_body);
+
         let resolved_scm = self.scm_state.get_resolved().await;
         let sha = resolved_scm.and_then(|s| s.sha.clone());
         let dirty_hash = resolved_scm.and_then(|s| s.dirty_hash.clone());
 
         tracing::debug!("uploading {}", hash);
 
-        // Use the helper method to handle token refresh on 403 errors
-        let artifact_body_clone = artifact_body.clone(); // Store the artifact body for retry
         let tag_clone = tag.clone();
         let uploads_clone = self.uploads.clone();
         let sha_clone = sha.clone();
@@ -180,23 +186,15 @@ impl HTTPCache {
         self.execute_with_token_refresh(hash, |api_auth| {
             let client = &self.client;
             let tag_ref = tag_clone.as_deref();
-            let artifact_body_ref = artifact_body_clone.clone();
+            let artifact_bytes_ref = artifact_bytes.clone(); // Arc bump, not a deep copy
             let uploads_ref = uploads_clone.clone();
             let sha_ref = sha_clone.clone();
             let dirty_hash_ref = dirty_hash_clone.clone();
 
             async move {
-                // Create the stream inside the closure so it can be used for retry
-                let stream = tokio_util::codec::FramedRead::new(
-                    Cursor::new(artifact_body_ref),
-                    tokio_util::codec::BytesCodec::new(),
-                )
-                .map(|res| {
-                    res.map(|bytes| bytes.freeze())
-                        .map_err(turborepo_api_client::Error::from)
-                });
+                let stream = chunked_byte_stream(artifact_bytes_ref, Self::UPLOAD_CHUNK_BYTES);
 
-                let (progress, query) = UploadProgress::<10, 100, _>::new(stream, Some(bytes));
+                let (progress, query) = UploadProgress::<10, 100, _>::new(stream, Some(body_len));
 
                 {
                     let mut uploads = uploads_ref.lock().unwrap();
@@ -207,7 +205,7 @@ impl HTTPCache {
                     .put_artifact(
                         hash,
                         progress,
-                        bytes,
+                        body_len,
                         duration,
                         tag_ref,
                         &api_auth.token,
@@ -416,6 +414,24 @@ impl HTTPCache {
             e => e.into(),
         }
     }
+}
+
+/// Yields zero-copy `Bytes` slices of `chunk_size` from an already-in-memory
+/// buffer. Each `.slice()` call is O(1) -- it bumps the `Bytes` refcount
+/// rather than copying data.
+fn chunked_byte_stream(
+    buf: bytes::Bytes,
+    chunk_size: usize,
+) -> impl futures::Stream<Item = Result<bytes::Bytes, turborepo_api_client::Error>> {
+    let len = buf.len();
+    futures::stream::unfold((buf, 0usize), move |(buf, offset)| async move {
+        if offset >= len {
+            return None;
+        }
+        let end = (offset + chunk_size).min(len);
+        let chunk = buf.slice(offset..end);
+        Some((Ok(chunk), (buf, end)))
+    })
 }
 
 #[cfg(test)]
