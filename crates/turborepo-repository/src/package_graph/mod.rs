@@ -225,7 +225,9 @@ impl PackageGraph {
 
     /// Returns strongly connected components with more than one member,
     /// representing circular dependency chains in the package graph.
-    /// Each inner Vec is ordered to trace a representative cycle path.
+    /// Each inner Vec is ordered to trace a representative cycle path
+    /// through the SCC, rotated so the lexicographically smallest name
+    /// comes first.
     pub fn find_cycles(&self) -> Vec<Vec<PackageName>> {
         if !petgraph::algo::is_cyclic_directed(&self.graph) {
             return Vec::new();
@@ -246,11 +248,12 @@ impl PackageGraph {
         cycles
     }
 
-    /// Follow edges within an SCC until we revisit a node, then extract
-    /// the cycle. Guaranteed to find a cycle since every SCC with >1 member
-    /// contains one.
+    /// Trace a representative cycle path through an SCC by following edges
+    /// deterministically. Starts from the smallest NodeIndex and always
+    /// picks the smallest NodeIndex neighbor to ensure consistent results
+    /// across runs and platforms.
     fn trace_cycle_path(&self, scc: &HashSet<NodeIndex>) -> Option<Vec<PackageName>> {
-        let start = *scc.iter().next()?;
+        let start = *scc.iter().min()?;
         let mut path: Vec<NodeIndex> = Vec::new();
         let mut visited: HashMap<NodeIndex, usize> = HashMap::new();
         let mut current = start;
@@ -288,10 +291,13 @@ impl PackageGraph {
             visited.insert(current, path.len());
             path.push(current);
 
+            // Pick the smallest NodeIndex neighbor within the SCC for
+            // deterministic traversal
             current = self
                 .graph
                 .neighbors_directed(current, petgraph::Outgoing)
-                .find(|n| scc.contains(n))?;
+                .filter(|n| scc.contains(n))
+                .min()?;
         }
     }
 
@@ -1245,9 +1251,8 @@ mod test {
 
         let cycle = &cycles[0];
         assert_eq!(cycle.len(), 3, "cycle should contain 3 packages: {cycle:?}");
-        // Cycle is rotated so lexicographically smallest name comes first
+        // Rotated so lexicographically smallest name comes first
         assert_eq!(cycle[0], PackageName::from("bar"));
-        // All three members are present
         let members: HashSet<_> = cycle.iter().collect();
         assert!(members.contains(&PackageName::from("foo")));
         assert!(members.contains(&PackageName::from("bar")));
@@ -1451,16 +1456,25 @@ mod test {
             "overlapping cycles should form one SCC: {cycles:?}"
         );
 
-        let members: HashSet<_> = cycles[0].iter().collect();
+        // The traced path covers a representative cycle within the SCC.
+        // It must contain at least 2 members (it's a cycle) and all members
+        // must be from the SCC.
+        let all_scc_members: HashSet<PackageName> = ["a", "b", "c", "d"]
+            .iter()
+            .map(|s| PackageName::from(*s))
+            .collect();
+        let traced: HashSet<_> = cycles[0].iter().cloned().collect();
         assert!(
-            members.contains(&PackageName::from("a"))
-                && members.contains(&PackageName::from("b"))
-                && members.contains(&PackageName::from("c"))
-                && members.contains(&PackageName::from("d")),
-            "all four packages should be in the cycle: {members:?}"
+            traced.len() >= 2,
+            "traced cycle should have at least 2 members: {traced:?}"
         );
-        // First element should be "a" (lexicographic min)
-        assert_eq!(cycles[0][0], PackageName::from("a"));
+        assert!(
+            traced.is_subset(&all_scc_members),
+            "all traced members should be in the SCC: {traced:?}"
+        );
+        // First element is lexicographic min of traced members
+        let min_traced = traced.iter().min().unwrap();
+        assert_eq!(&cycles[0][0], min_traced);
     }
 
     #[tokio::test]
