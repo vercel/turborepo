@@ -160,6 +160,14 @@ pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
         }
     }
 
+    // .gitattributes drives CRLF→LF normalization which affects file hashes.
+    // Including it in the global hash ensures cache invalidation when
+    // normalization rules change.
+    let gitattributes_path = root_path.join_component(".gitattributes");
+    if gitattributes_path.exists() {
+        global_deps.insert(gitattributes_path);
+    }
+
     let global_deps_paths = global_deps
         .iter()
         .map(|p| root_path.anchor(p).expect("path should be from root"))

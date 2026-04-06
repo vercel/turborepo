@@ -186,6 +186,11 @@ jobs:
           echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
 
       - name: Set git to use LF line endings
+        # Ensures the turborepo source code is checked out with LF endings
+        # so the Rust build and test fixtures work correctly. Turbo's CRLF
+        # normalization is driven by .gitattributes (not core.autocrlf).
+        # Tests create CRLF content directly and configure repos per-test —
+        # see turborepo-scm's crlf.rs and package_deps.rs CRLF tests.
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
@@ -332,6 +337,11 @@ jobs:
     name: Rust testing on windows (partition ${{ matrix.partition }}/10)
     steps:
       - name: Set git to use LF line endings
+        # Ensures the turborepo source code is checked out with LF endings
+        # so the Rust build and test fixtures work correctly. Turbo's CRLF
+        # normalization is driven by .gitattributes (not core.autocrlf).
+        # Tests create CRLF content directly and configure repos per-test —
+        # see turborepo-scm's crlf.rs and package_deps.rs CRLF tests.
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf

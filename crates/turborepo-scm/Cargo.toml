@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 bstr = "1.4.0"
+gix-attributes = { workspace = true, default-features = false }
 gix-index = { workspace = true, default-features = false }
 gix-object = { workspace = true, default-features = false }
 globwalk = { path = "../turborepo-globwalk" }

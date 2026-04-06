@@ -41,6 +41,8 @@ impl SCM {
                     package_path,
                     inputs,
                     include_default_files,
+                    None,
+                    None,
                 )
             }
             SCM::Git(git) => {
@@ -82,6 +84,8 @@ impl SCM {
                             package_path,
                             inputs,
                             include_default_files,
+                            Some(&git.root),
+                            git.git_attrs(),
                         )
                     }
                 }
@@ -95,7 +99,7 @@ impl SCM {
         files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     ) -> Result<GitHashes, Error> {
         match self {
-            SCM::Manual => crate::manual::hash_files(turbo_root, files, false),
+            SCM::Manual => crate::manual::hash_files(turbo_root, files, false, None, None),
             SCM::Git(git) => git.hash_files(turbo_root, files),
         }
     }
@@ -108,7 +112,11 @@ impl SCM {
         turbo_root: &AbsoluteSystemPath,
         files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     ) -> Result<GitHashes, Error> {
-        crate::manual::hash_files(turbo_root, files, true)
+        let (attrs_root, cached_attrs) = match self {
+            SCM::Git(git) => (Some(git.root.as_ref()), git.git_attrs()),
+            SCM::Manual => (None, None),
+        };
+        crate::manual::hash_files(turbo_root, files, true, attrs_root, cached_attrs)
     }
 }
 
@@ -163,7 +171,13 @@ impl GitRepo {
         };
 
         // Note: to_hash is *git repo relative*
-        hash_objects(&self.root, &full_pkg_path, to_hash, &mut hashes)?;
+        hash_objects(
+            &self.root,
+            &full_pkg_path,
+            to_hash,
+            &mut hashes,
+            self.git_attrs(),
+        )?;
         Ok(hashes)
     }
 
@@ -182,7 +196,13 @@ impl GitRepo {
             })
             .collect::<Result<Vec<_>, PathError>>()?;
         // Note: to_hash is *git repo relative*
-        hash_objects(&self.root, process_relative_to, to_hash, &mut hashes)?;
+        hash_objects(
+            &self.root,
+            process_relative_to,
+            to_hash,
+            &mut hashes,
+            self.git_attrs(),
+        )?;
         Ok(hashes)
     }
 
@@ -229,7 +249,13 @@ impl GitRepo {
 
         if !to_hash.is_empty() {
             let mut new_hashes = GitHashes::with_capacity(to_hash.len());
-            hash_objects(&self.root, full_pkg_path, to_hash, &mut new_hashes)?;
+            hash_objects(
+                &self.root,
+                full_pkg_path,
+                to_hash,
+                &mut new_hashes,
+                self.git_attrs(),
+            )?;
             hashes.extend(new_hashes);
         }
 
@@ -513,12 +539,13 @@ mod tests {
         let mut hashes = GitHashes::new();
         // FIXME: This test verifies a bug: we don't hash symlinks.
         // TODO: update this test to point at get_package_file_hashes
-        hash_objects(&git_root, &git_root, to_hash, &mut hashes).unwrap();
+        hash_objects(&git_root, &git_root, to_hash, &mut hashes, None).unwrap();
         assert!(hashes.is_empty());
 
         let pkg_path = git_root.anchor(&git_root).unwrap();
         let manual_hashes =
-            get_package_file_hashes_without_git(&git_root, &pkg_path, &["l*"], false).unwrap();
+            get_package_file_hashes_without_git(&git_root, &pkg_path, &["l*"], false, None, None)
+                .unwrap();
         assert!(manual_hashes.is_empty());
     }
 
@@ -924,5 +951,576 @@ mod tests {
                 OidHash::from_hex_str(hash),
             )
         }))
+    }
+
+    /// Regression test: for LF-only files, the git path and manual path must
+    /// produce identical hashes. With `text=auto` in `.gitattributes`, the
+    /// normalization scan runs but should produce the same result as raw
+    /// hashing since there are no CRLF pairs.
+    #[test]
+    fn test_git_and_manual_paths_agree_for_lf_files() {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        let pkg_dir = repo_root.join_component("my-pkg");
+        pkg_dir.create_dir_all().unwrap();
+
+        // Add .gitattributes to exercise the normalization decision path
+        std::fs::write(
+            repo_root.as_std_path().join(".gitattributes"),
+            "* text=auto\n",
+        )
+        .unwrap();
+
+        let files: &[(&str, &[u8])] = &[
+            ("my-pkg/package.json", b"{\"name\": \"my-pkg\"}\n"),
+            ("my-pkg/index.ts", b"export const x = 1;\n"),
+            ("my-pkg/data.json", b"{\"key\": \"value\"}\n"),
+            (
+                "my-pkg/binary.bin",
+                &[0x89, 0x50, 0x4E, 0x47, 0x00, 0x01, 0x02],
+            ),
+        ];
+
+        for (path, content) in files {
+            let file_path =
+                repo_root.join_unix_path(turbopath::RelativeUnixPath::new(path).unwrap());
+            file_path.ensure_dir().unwrap();
+            std::fs::write(file_path.as_std_path(), content).unwrap();
+        }
+
+        setup_repository(&repo_root);
+        require_git_cmd(&repo_root, &["config", "--local", "core.autocrlf", "false"]);
+        commit_all(&repo_root);
+
+        let pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+
+        // Hash via git path
+        let git = SCM::new(&repo_root);
+        let git_hashes = git
+            .get_package_file_hashes::<&str>(&repo_root, &pkg_path, &[], false, None, None)
+            .unwrap();
+
+        // Hash via manual path
+        let manual_hashes = get_package_file_hashes_without_git::<&str>(
+            &repo_root,
+            &pkg_path,
+            &[],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        // Filter to the same set of keys (manual path may pick up .gitignore etc.)
+        for (path, git_hash) in &git_hashes {
+            let manual_hash = manual_hashes.get(path);
+            assert_eq!(
+                Some(git_hash),
+                manual_hash,
+                "hash mismatch for {path}: git={git_hash}, manual={manual_hash:?}"
+            );
+        }
+    }
+
+    /// Regression test: binary files must never be normalized, even when
+    /// .gitattributes says `text=auto`. The NUL-byte heuristic must detect
+    /// them and hash raw bytes.
+    #[test]
+    fn test_binary_files_hash_raw_with_text_auto() {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        let pkg_dir = repo_root.join_component("my-pkg");
+        pkg_dir.create_dir_all().unwrap();
+
+        // .gitattributes with text=auto
+        std::fs::write(
+            repo_root.as_std_path().join(".gitattributes"),
+            "* text=auto\n",
+        )
+        .unwrap();
+
+        // Binary files with CRLF bytes that must NOT be normalized
+        let binary_cases: &[(&str, &[u8])] = &[
+            // PNG-like header with NUL byte + CRLF
+            (
+                "my-pkg/image.png",
+                &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00],
+            ),
+            // Arbitrary binary with NUL + CRLF in the middle
+            ("my-pkg/data.bin", &[0xFF, 0x00, 0x0D, 0x0A, 0xFE, 0xFD]),
+        ];
+
+        std::fs::write(
+            pkg_dir.as_std_path().join("package.json"),
+            "{\"name\": \"my-pkg\"}\n",
+        )
+        .unwrap();
+        for (path, content) in binary_cases {
+            let full_path = repo_root.as_std_path().join(path);
+            std::fs::create_dir_all(full_path.parent().unwrap()).unwrap();
+            std::fs::write(&full_path, content).unwrap();
+        }
+
+        setup_repository(&repo_root);
+        // Disable autocrlf to ensure git stores raw bytes
+        require_git_cmd(&repo_root, &["config", "--local", "core.autocrlf", "false"]);
+        commit_all(&repo_root);
+
+        let pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+
+        // Hash via git path
+        let git = SCM::new(&repo_root);
+        let git_hashes = git
+            .get_package_file_hashes::<&str>(&repo_root, &pkg_path, &[], false, None, None)
+            .unwrap();
+
+        // Hash via manual path (no .git/) to verify both paths agree
+        let (_prune_tmp, prune_root) = tmp_dir();
+        let prune_pkg = prune_root.join_component("my-pkg");
+        prune_pkg.create_dir_all().unwrap();
+        std::fs::copy(
+            repo_root.as_std_path().join(".gitattributes"),
+            prune_root.as_std_path().join(".gitattributes"),
+        )
+        .unwrap();
+        std::fs::copy(
+            pkg_dir.as_std_path().join("package.json"),
+            prune_pkg.as_std_path().join("package.json"),
+        )
+        .unwrap();
+        for (rel_path, content) in binary_cases {
+            let pkg_relative = rel_path.strip_prefix("my-pkg/").unwrap();
+            std::fs::write(prune_pkg.as_std_path().join(pkg_relative), content).unwrap();
+        }
+
+        let prune_pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+        let manual_hashes = get_package_file_hashes_without_git::<&str>(
+            &prune_root,
+            &prune_pkg_path,
+            &[],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        // Verify git and manual paths agree, and both match `git hash-object`
+        for (rel_path, _content) in binary_cases {
+            let pkg_relative = rel_path.strip_prefix("my-pkg/").unwrap();
+            let full_path = repo_root.as_std_path().join(rel_path);
+
+            let output = Command::new("git")
+                .args(["hash-object", "--no-filters", full_path.to_str().unwrap()])
+                .current_dir(repo_root.as_std_path())
+                .output()
+                .unwrap();
+            let expected_hash = String::from_utf8(output.stdout).unwrap();
+            let expected_hash = expected_hash.trim();
+
+            let key = RelativeUnixPathBuf::new(pkg_relative).unwrap();
+            let git_actual = git_hashes
+                .get(&key)
+                .expect("binary file should be in git hashes");
+            assert_eq!(
+                &**git_actual, expected_hash,
+                "binary file {rel_path} should be hashed raw (no normalization) via git path"
+            );
+
+            let manual_actual = manual_hashes
+                .get(&key)
+                .expect("binary file should be in manual hashes");
+            assert_eq!(
+                &**manual_actual, expected_hash,
+                "binary file {rel_path} should be hashed raw (no normalization) via manual path"
+            );
+        }
+    }
+
+    /// Bug reproduction for https://github.com/vercel/turborepo/issues/9616
+    ///
+    /// When .gitattributes has `text=auto`, git normalizes CRLF→LF in blobs.
+    /// After `turbo prune`, the pruned output has no .git/ directory, so turbo
+    /// falls back to manual hashing which hashes raw bytes (with CRLF). This
+    /// produces a different hash than the git path.
+    #[test]
+    fn test_crlf_hash_matches_after_simulated_prune() {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        let pkg_dir = repo_root.join_component("my-pkg");
+        pkg_dir.create_dir_all().unwrap();
+
+        // .gitattributes with text=auto (the common setup)
+        std::fs::write(
+            repo_root.as_std_path().join(".gitattributes"),
+            "* text=auto\n",
+        )
+        .unwrap();
+
+        let test_files: &[(&str, &[u8])] = &[
+            // Text file with CRLF (the primary case)
+            ("readme.md", b"Hello\r\nWorld\r\n"),
+            // LF-only text file (should match trivially)
+            ("lf-only.txt", b"line1\nline2\n"),
+            // Binary file with CRLF bytes + NUL (must NOT be normalized)
+            ("image.bin", &[0x89, 0x50, 0x0D, 0x0A, 0x00, 0x01]),
+            // Mixed CRLF/LF
+            ("mixed.txt", b"first\nsecond\r\nthird\n"),
+        ];
+
+        std::fs::write(
+            pkg_dir.as_std_path().join("package.json"),
+            "{\"name\": \"my-pkg\"}\n",
+        )
+        .unwrap();
+        for (name, content) in test_files {
+            std::fs::write(pkg_dir.as_std_path().join(name), content).unwrap();
+        }
+
+        setup_repository(&repo_root);
+        require_git_cmd(&repo_root, &["config", "--local", "core.autocrlf", "false"]);
+        commit_all(&repo_root);
+
+        let pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+
+        // Hash via git path (uses git ls-tree OIDs which are LF-normalized)
+        let git = SCM::new(&repo_root);
+        let git_hashes = git
+            .get_package_file_hashes::<&str>(&repo_root, &pkg_path, &[], false, None, None)
+            .unwrap();
+
+        // Simulate turbo prune: copy files to a non-git directory
+        let (_prune_tmp, prune_root) = tmp_dir();
+        let prune_pkg = prune_root.join_component("my-pkg");
+        prune_pkg.create_dir_all().unwrap();
+
+        // Copy .gitattributes (our fix adds this to ADDITIONAL_FILES)
+        std::fs::copy(
+            repo_root.as_std_path().join(".gitattributes"),
+            prune_root.as_std_path().join(".gitattributes"),
+        )
+        .unwrap();
+        // Copy all package files byte-for-byte (like turbo prune does)
+        std::fs::copy(
+            pkg_dir.as_std_path().join("package.json"),
+            prune_pkg.as_std_path().join("package.json"),
+        )
+        .unwrap();
+        for (name, _) in test_files {
+            std::fs::copy(
+                pkg_dir.as_std_path().join(name),
+                prune_pkg.as_std_path().join(name),
+            )
+            .unwrap();
+        }
+
+        let prune_pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+
+        // Hash via manual path (no .git/ in pruned output)
+        let manual_hashes = get_package_file_hashes_without_git::<&str>(
+            &prune_root,
+            &prune_pkg_path,
+            &[],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        for (name, _) in test_files {
+            let key = RelativeUnixPathBuf::new(*name).unwrap();
+            let git_hash = git_hashes
+                .get(&key)
+                .unwrap_or_else(|| panic!("{name} in git hashes"));
+            let manual_hash = manual_hashes
+                .get(&key)
+                .unwrap_or_else(|| panic!("{name} in manual hashes"));
+
+            assert_eq!(
+                git_hash, manual_hash,
+                "{name}: hash should match between git path and manual path (simulating turbo \
+                 prune). git={git_hash}, manual={manual_hash}"
+            );
+        }
+    }
+
+    /// Bug reproduction for https://github.com/vercel/turborepo/issues/5081
+    ///
+    /// When a file with `text=auto` in .gitattributes is committed (git
+    /// normalizes CRLF→LF in the blob), then touched (making it dirty but
+    /// content-identical), the dirty-file hash should match the committed
+    /// blob hash. Currently it doesn't because hash_objects() hashes raw
+    /// bytes without applying .gitattributes filters.
+    #[test]
+    fn test_dirty_crlf_file_matches_committed_hash() {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        let pkg_dir = repo_root.join_component("my-pkg");
+        pkg_dir.create_dir_all().unwrap();
+
+        std::fs::write(
+            repo_root.as_std_path().join(".gitattributes"),
+            "* text=auto\n",
+        )
+        .unwrap();
+
+        std::fs::write(
+            pkg_dir.as_std_path().join("readme.md"),
+            b"Hello\r\nWorld\r\n",
+        )
+        .unwrap();
+        std::fs::write(
+            pkg_dir.as_std_path().join("package.json"),
+            "{\"name\": \"my-pkg\"}\n",
+        )
+        .unwrap();
+
+        setup_repository(&repo_root);
+        require_git_cmd(&repo_root, &["config", "--local", "core.autocrlf", "false"]);
+        commit_all(&repo_root);
+
+        let pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+
+        // Get committed hash (from git ls-tree — uses normalized blob OID)
+        let git = SCM::new(&repo_root);
+        let committed_hashes = git
+            .get_package_file_hashes::<&str>(&repo_root, &pkg_path, &[], false, None, None)
+            .unwrap();
+
+        // Touch the file to make it dirty (content unchanged, mtime updated)
+        let readme_path = pkg_dir.join_component("readme.md");
+        let content = std::fs::read(readme_path.as_std_path()).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        std::fs::write(readme_path.as_std_path(), &content).unwrap();
+
+        // Re-hash — now readme.md is dirty, goes through hash_objects()
+        let dirty_hashes = git
+            .get_package_file_hashes::<&str>(&repo_root, &pkg_path, &[], false, None, None)
+            .unwrap();
+
+        let key = RelativeUnixPathBuf::new("readme.md").unwrap();
+        let committed = committed_hashes.get(&key).expect("readme.md committed");
+        let dirty = dirty_hashes.get(&key).expect("readme.md dirty");
+
+        assert_eq!(
+            committed, dirty,
+            "dirty CRLF file hash should match committed hash when content is identical. \
+             committed={committed}, dirty={dirty}"
+        );
+    }
+
+    /// Verify that package-scoped .gitattributes patterns resolve correctly
+    /// through both git and manual hashing paths.
+    ///
+    /// Regression test for path relativity mismatch: hash_objects() uses
+    /// git-root-relative paths while the manual path previously used
+    /// package-relative paths for attribute resolution. A pattern like
+    /// `my-pkg/*.md text` must match in both paths.
+    #[test]
+    fn test_package_scoped_gitattributes_pattern() {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        let pkg_dir = repo_root.join_component("my-pkg");
+        pkg_dir.create_dir_all().unwrap();
+
+        // Pattern that references the package directory explicitly.
+        // If the manual path passes only "readme.md" (package-relative) instead
+        // of "my-pkg/readme.md" (root-relative), this pattern won't match.
+        std::fs::write(
+            repo_root.as_std_path().join(".gitattributes"),
+            "my-pkg/*.md text\n",
+        )
+        .unwrap();
+
+        std::fs::write(
+            pkg_dir.as_std_path().join("readme.md"),
+            b"Hello\r\nWorld\r\n",
+        )
+        .unwrap();
+        std::fs::write(
+            pkg_dir.as_std_path().join("package.json"),
+            "{\"name\": \"my-pkg\"}\n",
+        )
+        .unwrap();
+
+        setup_repository(&repo_root);
+        require_git_cmd(&repo_root, &["config", "--local", "core.autocrlf", "false"]);
+        commit_all(&repo_root);
+
+        let pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+
+        // Hash via git path
+        let git = SCM::new(&repo_root);
+        let git_hashes = git
+            .get_package_file_hashes::<&str>(&repo_root, &pkg_path, &[], false, None, None)
+            .unwrap();
+
+        // Simulate prune: copy to a non-git directory
+        let (_prune_tmp, prune_root) = tmp_dir();
+        let prune_pkg = prune_root.join_component("my-pkg");
+        prune_pkg.create_dir_all().unwrap();
+        std::fs::copy(
+            repo_root.as_std_path().join(".gitattributes"),
+            prune_root.as_std_path().join(".gitattributes"),
+        )
+        .unwrap();
+        std::fs::copy(
+            pkg_dir.as_std_path().join("package.json"),
+            prune_pkg.as_std_path().join("package.json"),
+        )
+        .unwrap();
+        std::fs::copy(
+            pkg_dir.as_std_path().join("readme.md"),
+            prune_pkg.as_std_path().join("readme.md"),
+        )
+        .unwrap();
+
+        let manual_hashes = get_package_file_hashes_without_git::<&str>(
+            &prune_root,
+            &pkg_path,
+            &[],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let key = RelativeUnixPathBuf::new("readme.md").unwrap();
+        let git_hash = git_hashes.get(&key).expect("readme.md in git hashes");
+        let manual_hash = manual_hashes.get(&key).expect("readme.md in manual hashes");
+
+        assert_eq!(
+            git_hash, manual_hash,
+            "package-scoped .gitattributes pattern must produce matching hashes. git={git_hash}, \
+             manual={manual_hash}"
+        );
+    }
+
+    /// Verify that hash_files (used for global dependencies) respects
+    /// .gitattributes CRLF normalization.
+    #[test]
+    fn test_hash_files_respects_gitattributes() {
+        let (_tmp, root) = tmp_dir();
+
+        std::fs::write(root.as_std_path().join(".gitattributes"), "* text=auto\n").unwrap();
+
+        let crlf_file = root.join_component("global-dep.env");
+        std::fs::write(crlf_file.as_std_path(), b"KEY=value\r\nOTHER=val\r\n").unwrap();
+
+        let lf_file = root.join_component("lockfile.lock");
+        std::fs::write(lf_file.as_std_path(), b"dep=1.0\n").unwrap();
+
+        // Initialize a git repo to get the expected normalized hashes
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(root.as_std_path())
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["config", "--local", "core.autocrlf", "false"])
+            .current_dir(root.as_std_path())
+            .output()
+            .unwrap();
+
+        // git hash-object --path applies .gitattributes filters (normalizes CRLF)
+        for name in &["global-dep.env", "lockfile.lock"] {
+            let git_output = Command::new("git")
+                .args(["hash-object", "--path", name, "--stdin"])
+                .stdin(std::process::Stdio::from(
+                    std::fs::File::open(root.as_std_path().join(name)).unwrap(),
+                ))
+                .current_dir(root.as_std_path())
+                .output()
+                .unwrap();
+            assert!(git_output.status.success());
+            let expected = String::from_utf8(git_output.stdout).unwrap();
+            let expected = expected.trim();
+
+            let files = [AnchoredSystemPathBuf::from_raw(name).unwrap()];
+            let hashes = crate::manual::hash_files(&root, files.iter(), false, None, None).unwrap();
+            let key = RelativeUnixPathBuf::new(*name).unwrap();
+            let actual = hashes.get(&key).expect("file should be in hashes");
+
+            assert_eq!(
+                &**actual, expected,
+                "hash_files for {name} must match git hash-object --path (with filters)"
+            );
+        }
+    }
+
+    /// Verify CRLF normalization works correctly when core.autocrlf=true,
+    /// which is the default Windows configuration. Git normalizes CRLF→LF
+    /// in blobs when autocrlf is enabled, even without .gitattributes. Our
+    /// normalization relies on .gitattributes, so this test validates the
+    /// combined scenario (autocrlf=true + text=auto).
+    #[test]
+    fn test_crlf_hash_with_autocrlf_true() {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        let pkg_dir = repo_root.join_component("my-pkg");
+        pkg_dir.create_dir_all().unwrap();
+
+        std::fs::write(
+            repo_root.as_std_path().join(".gitattributes"),
+            "* text=auto\n",
+        )
+        .unwrap();
+
+        std::fs::write(
+            pkg_dir.as_std_path().join("readme.md"),
+            b"Hello\r\nWorld\r\n",
+        )
+        .unwrap();
+        std::fs::write(
+            pkg_dir.as_std_path().join("package.json"),
+            "{\"name\": \"my-pkg\"}\n",
+        )
+        .unwrap();
+
+        setup_repository(&repo_root);
+        // Enable autocrlf — the real Windows scenario
+        require_git_cmd(&repo_root, &["config", "--local", "core.autocrlf", "true"]);
+        commit_all(&repo_root);
+
+        let pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+
+        // Hash via git path (with autocrlf=true)
+        let git = SCM::new(&repo_root);
+        let git_hashes = git
+            .get_package_file_hashes::<&str>(&repo_root, &pkg_path, &[], false, None, None)
+            .unwrap();
+
+        // Hash via manual path
+        let (_prune_tmp, prune_root) = tmp_dir();
+        let prune_pkg = prune_root.join_component("my-pkg");
+        prune_pkg.create_dir_all().unwrap();
+        std::fs::copy(
+            repo_root.as_std_path().join(".gitattributes"),
+            prune_root.as_std_path().join(".gitattributes"),
+        )
+        .unwrap();
+        std::fs::copy(
+            pkg_dir.as_std_path().join("package.json"),
+            prune_pkg.as_std_path().join("package.json"),
+        )
+        .unwrap();
+        std::fs::copy(
+            pkg_dir.as_std_path().join("readme.md"),
+            prune_pkg.as_std_path().join("readme.md"),
+        )
+        .unwrap();
+
+        let manual_hashes = get_package_file_hashes_without_git::<&str>(
+            &prune_root,
+            &pkg_path,
+            &[],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let key = RelativeUnixPathBuf::new("readme.md").unwrap();
+        let git_hash = git_hashes.get(&key).expect("readme.md in git");
+        let manual_hash = manual_hashes.get(&key).expect("readme.md in manual");
+
+        assert_eq!(
+            git_hash, manual_hash,
+            "hashes must match with core.autocrlf=true + text=auto. git={git_hash}, \
+             manual={manual_hash}"
+        );
     }
 }

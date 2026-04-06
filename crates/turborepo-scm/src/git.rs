@@ -1644,6 +1644,7 @@ mod tests {
         GitRepo {
             root: root.to_owned(),
             bin,
+            attrs: std::sync::OnceLock::new(),
         }
     }
 

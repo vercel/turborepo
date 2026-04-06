@@ -1,5 +1,3 @@
-use std::io::{BufReader, Read};
-
 use rayon::prelude::*;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
@@ -10,67 +8,23 @@ const MAX_RETRIES: u32 = 10;
 const BASE_DELAY_MS: u64 = 10;
 const MAX_DELAY_MS: u64 = 1000;
 
-fn hash_file_with_retry(
-    path: &AbsoluteSystemPath,
-) -> Result<gix_index::hash::ObjectId, std::io::Error> {
+fn with_emfile_retry<T>(f: impl Fn() -> Result<T, std::io::Error>) -> Result<T, std::io::Error> {
     for attempt in 0..MAX_RETRIES {
-        match hash_file(path) {
-            Ok(oid) => return Ok(oid),
+        match f() {
+            Ok(v) => return Ok(v),
             Err(e) if is_too_many_open_files(&e) => {
                 let delay = std::cmp::min(BASE_DELAY_MS * 2u64.pow(attempt), MAX_DELAY_MS);
                 debug!(
                     attempt = attempt + 1,
                     delay_ms = delay,
-                    "too many open files, retrying hash_file"
+                    "too many open files, retrying"
                 );
                 std::thread::sleep(std::time::Duration::from_millis(delay));
             }
             Err(e) => return Err(e),
         }
     }
-    hash_file(path)
-}
-
-/// Hash a file as a git blob object using streaming I/O.
-///
-/// Instead of reading the entire file into memory, we stat the file for its
-/// size, write the git blob header ("blob {size}\0") into the hasher, then
-/// stream the file contents through in fixed-size chunks. Peak memory per
-/// call is bounded by `BUF_SIZE` (~64KB) regardless of file size.
-fn hash_file(path: &AbsoluteSystemPath) -> Result<gix_index::hash::ObjectId, std::io::Error> {
-    let file = std::fs::File::open(path)?;
-    let metadata = file.metadata()?;
-    // Reject exotic file types (sockets, FIFOs, device nodes) that cause
-    // EOPNOTSUPP on read(). Directories pass through to fail naturally
-    // with a descriptive IsADirectory error.
-    if !metadata.is_file() && !metadata.is_dir() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            format!("{path}: not a regular file"),
-        ));
-    }
-    let file_len = metadata.len();
-
-    // Build the hasher with the blob loose header pre-written, exactly as
-    // gix_object::compute_hash does internally.
-    let mut hasher = gix_index::hash::hasher(gix_index::hash::Kind::Sha1);
-    hasher.update(&gix_object::encode::loose_header(
-        gix_object::Kind::Blob,
-        file_len,
-    ));
-
-    const BUF_SIZE: usize = 64 * 1024;
-    let mut reader = BufReader::with_capacity(BUF_SIZE, file);
-    let mut buf = [0u8; BUF_SIZE];
-    loop {
-        let n = reader.read(&mut buf)?;
-        if n == 0 {
-            break;
-        }
-        hasher.update(&buf[..n]);
-    }
-
-    hasher.try_finalize().map_err(std::io::Error::other)
+    f()
 }
 
 fn is_too_many_open_files(e: &std::io::Error) -> bool {
@@ -78,55 +32,84 @@ fn is_too_many_open_files(e: &std::io::Error) -> bool {
         || e.to_string().contains("Too many open files")
 }
 
-#[tracing::instrument(skip(git_root, hashes, to_hash))]
+/// Hash a batch of files as git blob objects, applying CRLF→LF
+/// normalization when `.gitattributes` requires it.
+///
+/// `cached_attrs` reuses a pre-loaded [`crate::crlf::GitAttrs`] when
+/// available (e.g. from the `GitRepo`'s `OnceLock`). When `None`, attrs
+/// are loaded per-batch from `git_root`.
+#[tracing::instrument(skip(git_root, hashes, to_hash, cached_attrs))]
 pub(crate) fn hash_objects(
     git_root: &AbsoluteSystemPath,
     pkg_path: &AbsoluteSystemPath,
     to_hash: Vec<RelativeUnixPathBuf>,
     hashes: &mut GitHashes,
+    cached_attrs: Option<&crate::crlf::GitAttrs>,
 ) -> Result<(), Error> {
     let pkg_prefix = git_root.anchor(pkg_path).ok().map(|a| a.to_unix());
+
+    let mut owned_attrs = None;
+    let attrs = crate::crlf::resolve_or_load(cached_attrs, git_root, &mut owned_attrs);
 
     hashes.reserve(to_hash.len());
     let results: Vec<Result<Option<(RelativeUnixPathBuf, OidHash)>, Error>> = to_hash
         .into_par_iter()
-        .map(|filename| {
-            let full_file_path = git_root.join_unix_path(&filename);
-            match hash_file_with_retry(&full_file_path) {
-                Ok(hash) => {
-                    let package_relative_path = pkg_prefix
-                        .as_ref()
-                        .and_then(|prefix| {
-                            RelativeUnixPath::strip_prefix(&filename, prefix)
-                                .ok()
-                                .map(|stripped| stripped.to_owned())
-                        })
-                        .unwrap_or_else(|| {
-                            AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path)
+        // `map_init` creates one Outcome per rayon thread, reused across all
+        // files in that thread's partition. This avoids a per-file allocation
+        // inside `resolve_text_attr`.
+        .map_init(
+            || attrs.map(|a| a.new_outcome()),
+            |outcome, filename| {
+                let full_file_path = git_root.join_unix_path(&filename);
+
+                let text_attr = match (attrs, outcome.as_mut()) {
+                    (Some(a), Some(o)) => a.resolve_text_attr_with(filename.as_str(), o),
+                    _ => crate::crlf::TextAttr::Unspecified,
+                };
+
+                let hash_result = with_emfile_retry(|| {
+                    crate::crlf::hash_file_maybe_normalized(&full_file_path, text_attr)
+                });
+
+                match hash_result {
+                    Ok(hash) => {
+                        let package_relative_path = pkg_prefix
+                            .as_ref()
+                            .and_then(|prefix| {
+                                RelativeUnixPath::strip_prefix(&filename, prefix)
+                                    .ok()
+                                    .map(|stripped| stripped.to_owned())
+                            })
+                            .unwrap_or_else(|| {
+                                AnchoredSystemPathBuf::relative_path_between(
+                                    pkg_path,
+                                    &full_file_path,
+                                )
                                 .to_unix()
-                        });
-                    let mut hex_buf = [0u8; 40];
-                    hex::encode_to_slice(hash.as_bytes(), &mut hex_buf).unwrap();
-                    Ok(Some((
-                        package_relative_path,
-                        OidHash::from_hex_buf(hex_buf),
-                    )))
-                }
-                Err(e) => {
-                    // Gracefully skip non-regular files (symlinks, sockets,
-                    // FIFOs, device nodes) that can't be read as normal files.
-                    if full_file_path
-                        .symlink_metadata()
-                        .map(|md| !md.is_file())
-                        .unwrap_or(false)
-                    {
-                        Ok(None)
-                    } else {
-                        Err(Error::git_error(format!("{}: {}", full_file_path, e)))
+                            });
+                        let mut hex_buf = [0u8; 40];
+                        hex::encode_to_slice(hash.as_bytes(), &mut hex_buf).unwrap();
+                        Ok(Some((
+                            package_relative_path,
+                            OidHash::from_hex_buf(hex_buf),
+                        )))
+                    }
+                    Err(e) => {
+                        // Gracefully skip non-regular files (symlinks, sockets,
+                        // FIFOs, device nodes) that can't be read as normal files.
+                        if full_file_path
+                            .symlink_metadata()
+                            .map(|md| !md.is_file())
+                            .unwrap_or(false)
+                        {
+                            Ok(None)
+                        } else {
+                            Err(Error::git_error(format!("{}: {}", full_file_path, e)))
+                        }
                     }
                 }
-            }
-        })
+            },
+        )
         .collect();
 
     for result in results {
@@ -194,7 +177,7 @@ mod test {
             let expected_hashes = GitHashes::from_iter(file_hashes);
             let mut hashes = GitHashes::new();
             let to_hash = expected_hashes.keys().map(|k| pkg_prefix.join(k)).collect();
-            hash_objects(&git_root, pkg_path, to_hash, &mut hashes).unwrap();
+            hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None).unwrap();
             assert_eq!(hashes, expected_hashes);
         }
 
@@ -214,7 +197,7 @@ mod test {
                 .collect();
 
             let mut hashes = GitHashes::new();
-            let result = hash_objects(&git_root, pkg_path, to_hash, &mut hashes);
+            let result = hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None);
             assert!(result.is_err());
         }
     }
@@ -248,6 +231,14 @@ mod test {
             ("large.txt", vec![b'x'; 10_000]),
             ("multi_buf.bin", multi_buf_content),
             ("exact_buf.bin", exact_buf_content),
+            // CRLF edge cases: without --filters, git hash-object hashes raw
+            // bytes. These must remain stable after CRLF normalization is added
+            // to ensure we only normalize when .gitattributes says to.
+            ("lone-cr.txt", b"hello\rworld\n".to_vec()),
+            ("mixed-eol.txt", b"line1\nline2\r\nline3\n".to_vec()),
+            ("trailing-cr.bin", b"data\r".to_vec()),
+            ("crlf-in-binary.bin", vec![0x00, b'\r', b'\n', 0xFF, 0xFE]),
+            ("pure-crlf.txt", b"a\r\nb\r\nc\r\n".to_vec()),
         ];
 
         for (name, content) in &cases {
@@ -277,7 +268,7 @@ mod test {
             .map(|(name, _)| RelativeUnixPathBuf::new(*name).unwrap())
             .collect();
         let mut actual = GitHashes::new();
-        hash_objects(&tmp_path, &tmp_path, to_hash, &mut actual).unwrap();
+        hash_objects(&tmp_path, &tmp_path, to_hash, &mut actual, None).unwrap();
 
         assert_eq!(actual, expected, "blob hashes must match git hash-object");
     }

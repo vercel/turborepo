@@ -69,6 +69,7 @@ pub enum Error {
 static ADDITIONAL_FILES: LazyLock<Vec<(&'static RelativeUnixPath, Option<CopyDestination>)>> =
     LazyLock::new(|| {
         vec![
+            (RelativeUnixPath::new(".gitattributes").unwrap(), None),
             (RelativeUnixPath::new(".gitignore").unwrap(), None),
             (
                 RelativeUnixPath::new(".npmrc").unwrap(),
@@ -724,7 +725,7 @@ fn merge_preserving_key_order(
 mod tests {
     use serde_json::json;
 
-    use super::merge_preserving_key_order;
+    use super::{merge_preserving_key_order, ADDITIONAL_FILES};
 
     #[test]
     fn merge_preserves_key_order() {
@@ -762,5 +763,26 @@ mod tests {
         let merged = merge_preserving_key_order(&original, &pruned);
         let keys: Vec<_> = merged.as_object().unwrap().keys().collect();
         assert_eq!(keys, vec!["existing", "new_key"]);
+    }
+
+    #[test]
+    fn additional_files_snapshot() {
+        let file_names: Vec<&str> = ADDITIONAL_FILES
+            .iter()
+            .map(|(path, _)| path.as_str())
+            .collect();
+        // Update this list when adding new entries to ADDITIONAL_FILES.
+        assert_eq!(
+            file_names,
+            vec![
+                ".gitattributes",
+                ".gitignore",
+                ".npmrc",
+                ".yarnrc.yml",
+                "bunfig.toml"
+            ],
+            "ADDITIONAL_FILES changed — update this snapshot and the prune integration tests \
+             (prune_test.rs) accordingly"
+        );
     }
 }

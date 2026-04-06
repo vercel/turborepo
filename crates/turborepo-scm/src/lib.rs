@@ -11,8 +11,10 @@
 use std::{
     backtrace::{self, Backtrace},
     collections::HashMap,
+    fmt,
     io::Read,
     process::{Child, Command},
+    sync::OnceLock,
 };
 
 use bstr::io::BufReadExt;
@@ -20,6 +22,7 @@ use thiserror::Error;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
 
+pub(crate) mod crlf;
 pub mod git;
 mod hash_object;
 mod ls_tree;
@@ -205,10 +208,37 @@ pub(crate) fn wait_for_success<R: Read, T>(
     Err(Error::Git(err_text, Backtrace::capture()))
 }
 
-#[derive(Debug, Clone)]
 pub struct GitRepo {
     root: AbsoluteSystemPathBuf,
     bin: AbsoluteSystemPathBuf,
+    attrs: OnceLock<Option<crlf::GitAttrs>>,
+}
+
+impl GitRepo {
+    pub(crate) fn git_attrs(&self) -> Option<&crlf::GitAttrs> {
+        self.attrs
+            .get_or_init(|| crlf::GitAttrs::load(&self.root))
+            .as_ref()
+    }
+}
+
+impl Clone for GitRepo {
+    fn clone(&self) -> Self {
+        Self {
+            root: self.root.clone(),
+            bin: self.bin.clone(),
+            attrs: OnceLock::new(),
+        }
+    }
+}
+
+impl fmt::Debug for GitRepo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GitRepo")
+            .field("root", &self.root)
+            .field("bin", &self.bin)
+            .finish()
+    }
 }
 
 #[derive(Debug, Error)]
@@ -227,7 +257,11 @@ impl GitRepo {
         let bin = Self::find_bin()?;
         let root =
             find_git_root(path_in_repo).map_err(|e| GitError::Root(path_in_repo.to_owned(), e))?;
-        Ok(Self { root, bin })
+        Ok(Self {
+            root,
+            bin,
+            attrs: OnceLock::new(),
+        })
     }
 
     pub fn find_bin() -> Result<AbsoluteSystemPathBuf, which::Error> {
@@ -296,6 +330,7 @@ impl SCM {
             Ok(bin) => SCM::Git(GitRepo {
                 root: git_root,
                 bin,
+                attrs: OnceLock::new(),
             }),
             Err(e) => {
                 debug!(

@@ -1,65 +1,13 @@
-use std::{
-    borrow::Cow,
-    collections::HashSet,
-    io::{BufReader, ErrorKind, Read},
-    str::FromStr,
-};
+use std::{borrow::Cow, collections::HashSet, io::ErrorKind, str::FromStr};
 
 use globwalk::{ValidatedGlob, fix_glob_pattern, is_glob_pattern};
 use ignore::WalkBuilder;
-use sha1::{Digest, Sha1};
 use turbopath::{
     AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, IntoUnix, RelativeUnixPath,
 };
 use wax::{Glob, Program, any};
 
 use crate::{Error, GitHashes, OidHash};
-
-/// Hash a file as a git blob object using streaming I/O.
-///
-/// Writes the git blob header ("blob {size}\0") into the hasher using the
-/// file size from metadata, then streams the file contents in fixed-size
-/// chunks. Peak memory per call is bounded by `BUF_SIZE` (~64KB) regardless
-/// of file size.
-///
-/// Note: for symlinks, `open()` follows the link and reads the target. This
-/// is intentional for dotEnv file hashing.
-fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<OidHash, Error> {
-    let mut hasher = Sha1::new();
-    let f = path.open()?;
-    let metadata = f.metadata()?;
-    // Reject exotic file types (sockets, FIFOs, device nodes) that cause
-    // EOPNOTSUPP on read(). Directories pass through to fail naturally
-    // with a descriptive IsADirectory error.
-    if !metadata.is_file() && !metadata.is_dir() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            format!("{path}: not a regular file"),
-        )
-        .into());
-    }
-    let file_len = metadata.len();
-
-    hasher.update(b"blob ");
-    hasher.update(file_len.to_string().as_bytes());
-    hasher.update([b'\0']);
-
-    const BUF_SIZE: usize = 64 * 1024;
-    let mut reader = BufReader::with_capacity(BUF_SIZE, f);
-    let mut buf = [0u8; BUF_SIZE];
-    loop {
-        let n = reader.read(&mut buf)?;
-        if n == 0 {
-            break;
-        }
-        hasher.update(&buf[..n]);
-    }
-
-    let result = hasher.finalize();
-    let mut hex_buf = [0u8; 40];
-    hex::encode_to_slice(result, &mut hex_buf).unwrap();
-    Ok(OidHash::from_hex_buf(hex_buf))
-}
 
 fn expand_dir_pattern<'a>(base: &AbsoluteSystemPath, pattern: &'a str) -> Cow<'a, str> {
     if is_glob_pattern(pattern) {
@@ -87,16 +35,33 @@ fn to_glob(input: &str) -> Result<Glob<'static>, Error> {
     Ok(g)
 }
 
+/// Hash a set of files as git blob objects, applying CRLF→LF normalization
+/// when `.gitattributes` requires it.
+///
+/// `attrs_root` overrides where `.gitattributes` is loaded from (e.g. the
+/// git root when falling back from the git path). When `None`, uses
+/// `root_path`.
+///
+/// `cached_attrs` reuses a pre-loaded `GitAttrs` (e.g. from `GitRepo`'s
+/// `OnceLock`). When `None`, attrs are loaded from `attrs_root`.
 pub(crate) fn hash_files(
     root_path: &AbsoluteSystemPath,
     files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     allow_missing: bool,
+    attrs_root: Option<&AbsoluteSystemPath>,
+    cached_attrs: Option<&crate::crlf::GitAttrs>,
 ) -> Result<GitHashes, Error> {
+    let effective_attrs_root = attrs_root.unwrap_or(root_path);
+    let mut owned_attrs = None;
+    let attrs = crate::crlf::resolve_or_load(cached_attrs, effective_attrs_root, &mut owned_attrs);
     let mut hashes = GitHashes::new();
     for file in files.into_iter() {
-        let path = root_path.resolve(file.as_ref());
-        match git_like_hash_file(&path) {
-            Ok(hash) => hashes.insert(file.as_ref().to_unix(), hash),
+        let anchored = file.as_ref();
+        let path = root_path.resolve(anchored);
+        let root_relative = anchored.to_unix();
+        let attr_path = effective_attrs_root.anchor(&path)?.to_unix();
+        match hash_file_with_attrs(&path, attr_path.as_str(), attrs) {
+            Ok(hash) => hashes.insert(root_relative, hash),
             Err(Error::Io(ref io_error, _))
                 if allow_missing && io_error.kind() == ErrorKind::NotFound =>
             {
@@ -108,15 +73,40 @@ pub(crate) fn hash_files(
     Ok(hashes)
 }
 
+/// Hash a file as a git blob, applying CRLF→LF normalization when
+/// `.gitattributes` requires it.
+///
+/// `attr_path` must be relative to the root where `GitAttrs` was loaded
+/// (typically turbo_root or git_root). This is NOT necessarily the same as
+/// the package-relative path used for hash map insertion — callers must
+/// compute the correct root-relative path.
+fn hash_file_with_attrs(
+    path: &AbsoluteSystemPath,
+    attr_path: &str,
+    attrs: Option<&crate::crlf::GitAttrs>,
+) -> Result<OidHash, Error> {
+    let text_attr = attrs
+        .map(|a| a.resolve_text_attr(attr_path))
+        .unwrap_or(crate::crlf::TextAttr::Unspecified);
+
+    crate::crlf::manual_hash_file_maybe_normalized(path, text_attr)
+}
+
 pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     turbo_root: &AbsoluteSystemPath,
     package_path: &AnchoredSystemPath,
     inputs: &[S],
     include_default_files: bool,
+    attrs_root: Option<&AbsoluteSystemPath>,
+    cached_attrs: Option<&crate::crlf::GitAttrs>,
 ) -> Result<GitHashes, Error> {
     let full_package_path = turbo_root.resolve(package_path);
     let package_unix_path = package_path.to_unix();
     let mut hashes = GitHashes::new();
+
+    let effective_attrs_root = attrs_root.unwrap_or(turbo_root);
+    let mut owned_attrs = None;
+    let attrs = crate::crlf::resolve_or_load(cached_attrs, effective_attrs_root, &mut owned_attrs);
     let mut default_file_hashes = GitHashes::new();
     let mut excluded_file_paths = HashSet::new();
 
@@ -159,7 +149,9 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             let relative_path =
                 AnchoredSystemPathBuf::relative_path_between(&full_package_path, file_path)
                     .to_unix();
-            let hash = git_like_hash_file(file_path)?;
+            // Use attrs-root-relative path for .gitattributes pattern matching.
+            let attr_path = effective_attrs_root.anchor(file_path)?.to_unix();
+            let hash = hash_file_with_attrs(file_path, attr_path.as_str(), attrs)?;
             hashes.insert(relative_path, hash);
         }
     }
@@ -244,7 +236,8 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             continue;
         }
 
-        let hash = git_like_hash_file(path)?;
+        let attr_path = effective_attrs_root.anchor(path)?.to_unix();
+        let hash = hash_file_with_attrs(path, attr_path.as_str(), attrs)?;
         hashes.insert(relative_path, hash);
     }
 
@@ -286,7 +279,8 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
                 continue;
             }
 
-            let hash = git_like_hash_file(path)?;
+            let attr_path = effective_attrs_root.anchor(path)?.to_unix();
+            let hash = hash_file_with_attrs(path, attr_path.as_str(), attrs)?;
             default_file_hashes.insert(relative_path, hash);
         }
     }
@@ -346,7 +340,7 @@ mod tests {
         let files = files
             .iter()
             .map(|s| AnchoredSystemPathBuf::from_raw(s).unwrap());
-        match hash_files(&turbo_root, files, allow_missing) {
+        match hash_files(&turbo_root, files, allow_missing, None, None) {
             Err(e) => assert!(want_err, "unexpected error {e}"),
             Ok(hashes) => assert_eq!(hashes, expected),
         }
@@ -374,6 +368,8 @@ mod tests {
             &turbo_root,
             [AnchoredSystemPathBuf::from_raw("symlink-from-to-file").unwrap()].iter(),
             true,
+            None,
+            None,
         )
         .unwrap();
         let from_to_file_hash = out
@@ -391,6 +387,8 @@ mod tests {
                 &turbo_root,
                 [AnchoredSystemPathBuf::from_raw("symlink-from-to-dir").unwrap()].iter(),
                 true,
+                None,
+                None,
             );
             match out.err().unwrap() {
                 Error::Io(io_error, _) => assert_eq!(io_error.kind(), ErrorKind::IsADirectory),
@@ -403,6 +401,8 @@ mod tests {
             &turbo_root,
             [AnchoredSystemPathBuf::from_raw("symlink-from-to-dir").unwrap()].iter(),
             false,
+            None,
+            None,
         );
         #[cfg(windows)]
         let expected_err_kind = ErrorKind::PermissionDenied;
@@ -415,6 +415,8 @@ mod tests {
             &turbo_root,
             [AnchoredSystemPathBuf::from_raw("symlink-broken").unwrap()].iter(),
             true,
+            None,
+            None,
         )
         .unwrap();
         let broken_hash = out.get(&RelativeUnixPathBuf::new("symlink-broken").unwrap());
@@ -425,6 +427,8 @@ mod tests {
             &turbo_root,
             [AnchoredSystemPathBuf::from_raw("symlink-broken").unwrap()].iter(),
             false,
+            None,
+            None,
         );
         match out.err().unwrap() {
             Error::Io(io_error, _) => assert_eq!(io_error.kind(), ErrorKind::NotFound),
@@ -512,9 +516,15 @@ mod tests {
             OidHash::from_hex_str("3237694bc3312ded18386964a855074af7b066af"),
         );
 
-        let hashes =
-            get_package_file_hashes_without_git::<&str>(&turbo_root, &pkg_path, &[], false)
-                .unwrap();
+        let hashes = get_package_file_hashes_without_git::<&str>(
+            &turbo_root,
+            &pkg_path,
+            &[],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(hashes, expected);
 
         // set a hash for an ignored file
@@ -548,6 +558,8 @@ mod tests {
             &pkg_path,
             &["**/*file", "!some-dir/excluded-file"],
             false,
+            None,
+            None,
         )
         .unwrap();
 
@@ -584,8 +596,15 @@ mod tests {
         // "*.ts" matches both shared.ts and default-only.ts in the first walk
         // (since git_ignore=false for explicit inputs). The second walk with
         // git_ignore=true should not re-hash files already found.
-        let hashes =
-            get_package_file_hashes_without_git(&turbo_root, &pkg_path, &["*.ts"], true).unwrap();
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["*.ts"],
+            true,
+            None,
+            None,
+        )
+        .unwrap();
 
         // All four files should appear exactly once
         assert!(
@@ -606,8 +625,15 @@ mod tests {
         );
 
         // Verify the hash values are deterministic (same content = same hash)
-        let hashes2 =
-            get_package_file_hashes_without_git(&turbo_root, &pkg_path, &["*.ts"], true).unwrap();
+        let hashes2 = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["*.ts"],
+            true,
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(hashes, hashes2, "hashes should be deterministic");
     }
 
@@ -631,6 +657,8 @@ mod tests {
             &pkg_path,
             &["*.ts", "!excluded.ts"],
             true,
+            None,
+            None,
         )
         .unwrap();
 
@@ -672,8 +700,15 @@ mod tests {
             .create_with_contents("readme")
             .unwrap();
 
-        let hashes =
-            get_package_file_hashes_without_git(&turbo_root, &pkg_path, &["src"], false).unwrap();
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["src"],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
 
         assert!(
             hashes.contains_key(&RelativeUnixPathBuf::new("src/index.ts").unwrap()),
@@ -716,7 +751,8 @@ mod tests {
             .unwrap();
 
         let hashes =
-            get_package_file_hashes_without_git(&turbo_root, &pkg_path, &["src"], true).unwrap();
+            get_package_file_hashes_without_git(&turbo_root, &pkg_path, &["src"], true, None, None)
+                .unwrap();
 
         assert!(
             hashes.contains_key(&RelativeUnixPathBuf::new("src/index.ts").unwrap()),
@@ -752,6 +788,14 @@ mod tests {
             ("small.txt", vec![b'x'; 10_000]),
             ("multi_buf.bin", multi_buf_content),
             ("exact_buf.bin", exact_buf_content),
+            // CRLF edge cases: without --filters, git hash-object hashes raw
+            // bytes. These must remain stable after CRLF normalization is added
+            // to ensure we only normalize when .gitattributes says to.
+            ("lone-cr.txt", b"hello\rworld\n".to_vec()),
+            ("mixed-eol.txt", b"line1\nline2\r\nline3\n".to_vec()),
+            ("trailing-cr.bin", b"data\r".to_vec()),
+            ("crlf-in-binary.bin", vec![0x00, b'\r', b'\n', 0xFF, 0xFE]),
+            ("pure-crlf.txt", b"a\r\nb\r\nc\r\n".to_vec()),
         ];
 
         for (name, content) in &cases {
@@ -776,7 +820,11 @@ mod tests {
             let expected_hash = expected_hash.trim();
 
             let path = turbo_root.join_component(name);
-            let actual = git_like_hash_file(&path).unwrap();
+            let actual = crate::crlf::manual_hash_file_maybe_normalized(
+                &path,
+                crate::crlf::TextAttr::Unspecified,
+            )
+            .unwrap();
             assert_eq!(
                 &*actual, expected_hash,
                 "manual hash for {name} must match git hash-object"
@@ -814,6 +862,8 @@ mod tests {
             &pkg_path,
             &["../../root-file"],
             false,
+            None,
+            None,
         )
         .unwrap();
 
@@ -848,9 +898,15 @@ mod tests {
         let pkg_json = full_pkg_path.join_component("package.json");
         pkg_json.create_with_contents("{}").unwrap();
 
-        let hashes =
-            get_package_file_hashes_without_git(&turbo_root, &pkg_path, &["../../*-file"], false)
-                .unwrap();
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["../../*-file"],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
 
         assert!(
             hashes.contains_key(&RelativeUnixPathBuf::new("../../root-file").unwrap()),

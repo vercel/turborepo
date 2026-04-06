@@ -232,6 +232,13 @@ Creates a "content identifier" for a specific task depending on current state of
 - **Explicit Inputs**: When tasks use custom `inputs`, glob matches still walk the
   filesystem, but clean tracked matches reuse blob OIDs from the repo index
   instead of re-hashing file contents
+- **CRLF Normalization**: When `.gitattributes` marks files as `text` or
+  `text=auto`, git normalizes CRLF line endings to LF in blob objects. The
+  `crlf` module in `turborepo-scm` replicates this so turbo's file hashes
+  match git's regardless of the code path (git or manual/no-git after
+  `turbo prune`). `.gitattributes` is included in the global hash inputs
+  and preserved by `turbo prune`. Known limitations: only root-level
+  `.gitattributes` is loaded; `eol=` is not handled.
 
 #### `globalConfiguration` and `global.inputs`
 
