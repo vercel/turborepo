@@ -223,6 +223,78 @@ impl PackageGraph {
         Ok(())
     }
 
+    /// Returns strongly connected components with more than one member,
+    /// representing circular dependency chains in the package graph.
+    /// Each inner Vec is ordered to trace a representative cycle path.
+    pub fn find_cycles(&self) -> Vec<Vec<PackageName>> {
+        if !petgraph::algo::is_cyclic_directed(&self.graph) {
+            return Vec::new();
+        }
+
+        let sccs = petgraph::algo::tarjan_scc(&self.graph);
+        let mut cycles: Vec<Vec<PackageName>> = sccs
+            .into_iter()
+            .filter(|scc| scc.len() > 1)
+            .filter_map(|scc| {
+                let scc_set: HashSet<NodeIndex> = scc.into_iter().collect();
+                self.trace_cycle_path(&scc_set)
+            })
+            .collect();
+
+        // Sort for deterministic output
+        cycles.sort();
+        cycles
+    }
+
+    /// Follow edges within an SCC until we revisit a node, then extract
+    /// the cycle. Guaranteed to find a cycle since every SCC with >1 member
+    /// contains one.
+    fn trace_cycle_path(&self, scc: &HashSet<NodeIndex>) -> Option<Vec<PackageName>> {
+        let start = *scc.iter().next()?;
+        let mut path: Vec<NodeIndex> = Vec::new();
+        let mut visited: HashMap<NodeIndex, usize> = HashMap::new();
+        let mut current = start;
+
+        loop {
+            if let Some(&cycle_start_idx) = visited.get(&current) {
+                let cycle_indices = &path[cycle_start_idx..];
+                let mut names: Vec<PackageName> = cycle_indices
+                    .iter()
+                    .filter_map(|idx| match self.graph.node_weight(*idx)? {
+                        PackageNode::Workspace(name) if !matches!(name, PackageName::Root) => {
+                            Some(name.clone())
+                        }
+                        _ => None,
+                    })
+                    .collect();
+
+                if names.is_empty() {
+                    return None;
+                }
+
+                // Rotate so the lexicographically smallest name comes first
+                if let Some(min_pos) = names
+                    .iter()
+                    .enumerate()
+                    .min_by_key(|(_, name)| (*name).clone())
+                    .map(|(i, _)| i)
+                {
+                    names.rotate_left(min_pos);
+                }
+
+                return Some(names);
+            }
+
+            visited.insert(current, path.len());
+            path.push(current);
+
+            current = self
+                .graph
+                .neighbors_directed(current, petgraph::Outgoing)
+                .find(|n| scc.contains(n))?;
+        }
+    }
+
     pub fn remove_package_dependencies(&mut self) {
         let root_index = self
             .node_lookup
@@ -1124,6 +1196,271 @@ mod test {
             !anc.contains(&foo_node),
             "ancestors() excludes the node itself: {anc:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn test_find_cycles_simple() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut map = HashMap::new();
+            map.insert(
+                root.join_component("package_a"),
+                PackageJson::from_value(json!({
+                    "name": "foo",
+                    "dependencies": { "bar": "*" }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_component("package_b"),
+                PackageJson::from_value(json!({
+                    "name": "bar",
+                    "dependencies": { "baz": "*" }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_component("package_c"),
+                PackageJson::from_value(json!({
+                    "name": "baz",
+                    "dependencies": { "foo": "*" }
+                }))
+                .unwrap(),
+            );
+            map
+        }))
+        .with_lockfile(Some(Box::new(MockLockfile {})))
+        .build()
+        .await
+        .unwrap();
+
+        let cycles = pkg_graph.find_cycles();
+        assert_eq!(cycles.len(), 1, "expected exactly one cycle: {cycles:?}");
+
+        let cycle = &cycles[0];
+        assert_eq!(cycle.len(), 3, "cycle should contain 3 packages: {cycle:?}");
+        // Cycle is rotated so lexicographically smallest name comes first
+        assert_eq!(cycle[0], PackageName::from("bar"));
+        // All three members are present
+        let members: HashSet<_> = cycle.iter().collect();
+        assert!(members.contains(&PackageName::from("foo")));
+        assert!(members.contains(&PackageName::from("bar")));
+        assert!(members.contains(&PackageName::from("baz")));
+    }
+
+    #[tokio::test]
+    async fn test_find_cycles_two_independent() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut map = HashMap::new();
+            // Cycle 1: a -> b -> a
+            map.insert(
+                root.join_component("package_a"),
+                PackageJson::from_value(json!({
+                    "name": "a",
+                    "dependencies": { "b": "*" }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_component("package_b"),
+                PackageJson::from_value(json!({
+                    "name": "b",
+                    "dependencies": { "a": "*" }
+                }))
+                .unwrap(),
+            );
+            // Cycle 2: x -> y -> x
+            map.insert(
+                root.join_component("package_x"),
+                PackageJson::from_value(json!({
+                    "name": "x",
+                    "dependencies": { "y": "*" }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_component("package_y"),
+                PackageJson::from_value(json!({
+                    "name": "y",
+                    "dependencies": { "x": "*" }
+                }))
+                .unwrap(),
+            );
+            map
+        }))
+        .with_lockfile(Some(Box::new(MockLockfile {})))
+        .build()
+        .await
+        .unwrap();
+
+        let cycles = pkg_graph.find_cycles();
+        assert_eq!(
+            cycles.len(),
+            2,
+            "expected two independent cycles: {cycles:?}"
+        );
+
+        // Sorted by first element: "a" < "x"
+        let first_members: HashSet<_> = cycles[0].iter().collect();
+        assert!(first_members.contains(&PackageName::from("a")));
+        assert!(first_members.contains(&PackageName::from("b")));
+
+        let second_members: HashSet<_> = cycles[1].iter().collect();
+        assert!(second_members.contains(&PackageName::from("x")));
+        assert!(second_members.contains(&PackageName::from("y")));
+    }
+
+    #[tokio::test]
+    async fn test_find_cycles_self_dep_excluded() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut map = HashMap::new();
+            map.insert(
+                root.join_component("package_a"),
+                PackageJson::from_value(json!({
+                    "name": "foo",
+                    "dependencies": { "foo": "*" }
+                }))
+                .unwrap(),
+            );
+            map
+        }))
+        .with_lockfile(Some(Box::new(MockLockfile {})))
+        .build()
+        .await
+        .unwrap();
+
+        let cycles = pkg_graph.find_cycles();
+        assert!(
+            cycles.is_empty(),
+            "self-dependency should not produce a cycle: {cycles:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_find_cycles_no_cycles() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut map = HashMap::new();
+            map.insert(
+                root.join_component("package_a"),
+                PackageJson::from_value(json!({
+                    "name": "a",
+                    "dependencies": { "b": "*" }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_component("package_b"),
+                PackageJson::from_value(json!({ "name": "b" })).unwrap(),
+            );
+            map
+        }))
+        .with_lockfile(Some(Box::new(MockLockfile {})))
+        .build()
+        .await
+        .unwrap();
+
+        let cycles = pkg_graph.find_cycles();
+        assert!(
+            cycles.is_empty(),
+            "acyclic graph should produce no cycles: {cycles:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_find_cycles_complex_scc() {
+        // a -> b -> c -> a and b -> d -> c creates one large SCC {a, b, c, d}
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut map = HashMap::new();
+            map.insert(
+                root.join_component("package_a"),
+                PackageJson::from_value(json!({
+                    "name": "a",
+                    "dependencies": { "b": "*" }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_component("package_b"),
+                PackageJson::from_value(json!({
+                    "name": "b",
+                    "dependencies": { "c": "*", "d": "*" }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_component("package_c"),
+                PackageJson::from_value(json!({
+                    "name": "c",
+                    "dependencies": { "a": "*" }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_component("package_d"),
+                PackageJson::from_value(json!({
+                    "name": "d",
+                    "dependencies": { "c": "*" }
+                }))
+                .unwrap(),
+            );
+            map
+        }))
+        .with_lockfile(Some(Box::new(MockLockfile {})))
+        .build()
+        .await
+        .unwrap();
+
+        let cycles = pkg_graph.find_cycles();
+        assert_eq!(
+            cycles.len(),
+            1,
+            "overlapping cycles should form one SCC: {cycles:?}"
+        );
+
+        let members: HashSet<_> = cycles[0].iter().collect();
+        assert!(
+            members.contains(&PackageName::from("a"))
+                && members.contains(&PackageName::from("b"))
+                && members.contains(&PackageName::from("c"))
+                && members.contains(&PackageName::from("d")),
+            "all four packages should be in the cycle: {members:?}"
+        );
+        // First element should be "a" (lexicographic min)
+        assert_eq!(cycles[0][0], PackageName::from("a"));
     }
 
     #[tokio::test]

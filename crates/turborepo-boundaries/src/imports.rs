@@ -342,6 +342,15 @@ fn is_bun_builtin(import: &str) -> bool {
     import == "bun" || import.starts_with("bun:")
 }
 
+/// Returns true if the import specifier refers to the VS Code extension host
+/// module. The `vscode` module is injected by the VS Code runtime and doesn't
+/// exist on npm — extensions only have `@types/vscode` in devDependencies for
+/// type-checking. Without this check, `import { window } from "vscode"` would
+/// be incorrectly flagged as needing a type-only import.
+fn is_vscode_module(import: &str) -> bool {
+    import == "vscode"
+}
+
 /// Extracts the npm package name from an import specifier.
 ///
 /// For scoped packages (`@scope/name/path`), returns `@scope/name`.
@@ -385,6 +394,7 @@ pub(crate) fn check_package_import(
 
     if !is_valid_dependency
         && !is_bun_builtin(import)
+        && !is_vscode_module(import)
         && !matches!(
             resolver.resolve(folder, import),
             Err(ResolveError::Builtin { .. })
@@ -438,6 +448,13 @@ mod test {
     #[test_case("react", false ; "unrelated package")]
     fn test_is_bun_builtin(import: &str, expected: bool) {
         assert_eq!(is_bun_builtin(import), expected);
+    }
+
+    #[test_case("vscode", true ; "vscode module")]
+    #[test_case("vscode-languageclient", false ; "vscode prefixed package")]
+    #[test_case("@types/vscode", false ; "types for vscode")]
+    fn test_is_vscode_module(import: &str, expected: bool) {
+        assert_eq!(is_vscode_module(import), expected);
     }
 
     #[test_case("", ""; "empty")]
@@ -576,6 +593,54 @@ mod test {
         assert!(
             result.is_none(),
             "import from 'bun' should not be flagged even when @types/bun is a devDependency"
+        );
+    }
+
+    #[test]
+    fn vscode_import_not_flagged_as_type_only_when_types_vscode_is_dependency() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let file_path = root.join_component("extension.ts");
+        let file_content = "import { window, commands } from \"vscode\";";
+        std::fs::write(file_path.as_std_path(), file_content).unwrap();
+
+        let resolver = Tracer::create_resolver(None);
+        let package_name = PackageName::from("my-vscode-ext");
+
+        let mut dev_deps = BTreeMap::new();
+        dev_deps.insert("@types/vscode".to_string(), "1.85.0".to_string());
+        let package_json = PackageJson {
+            dev_dependencies: Some(dev_deps),
+            ..Default::default()
+        };
+
+        let internal_deps = HashSet::new();
+        let implicit_deps = HashMap::new();
+        let global_implicit_deps = HashMap::new();
+
+        let dependency_locations = DependencyLocations {
+            package: &package_name,
+            internal_dependencies: &internal_deps,
+            package_json: &package_json,
+            unresolved_external_dependencies: None,
+            implicit_dependencies: &implicit_deps,
+            global_implicit_dependencies: &global_implicit_deps,
+        };
+
+        let span = SourceSpan::new(0.into(), file_content.len());
+        let result = check_package_import(
+            "vscode",
+            ImportType::Value,
+            span,
+            &file_path,
+            file_content,
+            dependency_locations,
+            &resolver,
+        );
+
+        assert!(
+            result.is_none(),
+            "import from 'vscode' should not be flagged even when @types/vscode is a devDependency"
         );
     }
 

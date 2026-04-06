@@ -36,6 +36,10 @@ pub trait PackageGraphProvider {
     fn immediate_dependencies(&self, node: &PackageNode) -> Option<HashSet<&PackageNode>>;
     fn dependencies(&self, node: &PackageNode) -> Box<dyn Iterator<Item = &PackageNode> + '_>;
     fn ancestors(&self, node: &PackageNode) -> Box<dyn Iterator<Item = &PackageNode> + '_>;
+    /// Returns strongly connected components with more than one member,
+    /// representing circular dependency chains in the package graph.
+    /// Each inner Vec is ordered to form a cycle path.
+    fn find_cycles(&self) -> Vec<Vec<PackageName>>;
 }
 
 impl PackageGraphProvider for PackageGraph {
@@ -53,6 +57,10 @@ impl PackageGraphProvider for PackageGraph {
 
     fn ancestors(&self, node: &PackageNode) -> Box<dyn Iterator<Item = &PackageNode> + '_> {
         Box::new(self.ancestors(node).into_iter())
+    }
+
+    fn find_cycles(&self) -> Vec<Vec<PackageName>> {
+        self.find_cycles()
     }
 }
 
@@ -191,6 +199,8 @@ pub enum BoundariesDiagnostic {
     },
     #[error("failed to parse file {0}: {1}")]
     ParseError(AbsoluteSystemPathBuf, String),
+    #[error("Circular package dependency detected: {cycle_path}")]
+    CircularDependency { cycle_path: String },
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -215,6 +225,7 @@ impl BoundariesDiagnostic {
             Self::ImportLeavesPackage { path, span, .. } => Some((path, *span)),
             Self::PackageNotFound { path, span, .. } => Some((path, *span)),
             Self::NotTypeOnlyImport { path, span, .. } => Some((path, *span)),
+            Self::CircularDependency { .. } => None,
             _ => None,
         }
     }
@@ -411,24 +422,37 @@ impl BoundariesChecker {
         let packages: Vec<_> = ctx.pkg_dep_graph.packages().collect();
         let repo: Option<()> = None;
         let mut result = BoundariesResult::default();
+
+        for cycle in ctx.pkg_dep_graph.find_cycles() {
+            let cycle_path = cycle
+                .iter()
+                .map(|name| name.to_string())
+                .chain(std::iter::once(cycle[0].to_string()))
+                .collect::<Vec<_>>()
+                .join(" -> ");
+            result
+                .diagnostics
+                .push(BoundariesDiagnostic::CircularDependency { cycle_path });
+        }
         let global_implicit_dependencies = ctx
             .turbo_json_provider
             .implicit_dependencies(&PackageName::Root);
 
+        let packages_to_check = packages
+            .into_iter()
+            .filter(|(name, _)| {
+                ctx.filtered_pkgs.contains(name) && !matches!(name, PackageName::Root)
+            })
+            .collect::<Vec<_>>();
+
         let progress = if show_progress {
             println!("Checking packages...");
-            ProgressBar::new(packages.len() as u64)
+            ProgressBar::new(packages_to_check.len() as u64)
         } else {
             ProgressBar::hidden()
         };
 
-        for (package_name, package_info) in packages.into_iter().progress_with(progress) {
-            if !ctx.filtered_pkgs.contains(package_name)
-                || matches!(package_name, PackageName::Root)
-            {
-                continue;
-            }
-
+        for (package_name, package_info) in packages_to_check.into_iter().progress_with(progress) {
             Self::check_package(
                 ctx,
                 &repo,

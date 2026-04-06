@@ -108,6 +108,14 @@ impl From<BoundariesDiagnostic> for Diagnostic {
                 import: None,
                 reason: None,
             },
+            BoundariesDiagnostic::CircularDependency { .. } => Diagnostic {
+                message,
+                path: None,
+                start: None,
+                end: None,
+                import: None,
+                reason: None,
+            },
         }
     }
 }
