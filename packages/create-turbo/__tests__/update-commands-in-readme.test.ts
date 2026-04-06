@@ -13,18 +13,6 @@ function makeTransformInput(
   overrides: Partial<TransformInput["prompts"]>
 ): TransformInput {
   return {
-    example: { repo: undefined, name: "test-example" },
-    project: {
-      name: "test-project",
-      packageManager: "npm",
-      paths: {
-        root: overrides.root ?? "/tmp/test",
-        packageJson: "/tmp/test/package.json",
-        lockfile: "/tmp/test/package-lock.json",
-        nodeModules: "/tmp/test/node_modules"
-      },
-      workspaceData: { globs: [], workspaces: [] }
-    },
     prompts: {
       projectName: "test-project",
       root: overrides.root ?? "/tmp/test",
@@ -32,12 +20,8 @@ function makeTransformInput(
         name: "npm",
         version: "8.0.0"
       }
-    },
-    opts: {
-      skipInstall: true,
-      example: "default"
     }
-  } as TransformInput;
+  } as unknown as TransformInput;
 }
 
 describe("replacePackageManagerReferences", () => {
