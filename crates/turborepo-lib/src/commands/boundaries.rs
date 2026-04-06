@@ -23,7 +23,7 @@ pub async fn run(
         .build(&handler, telemetry)
         .await?;
 
-    let result = run.check_boundaries(true).await?;
+    let result = run.check_boundaries(true)?;
 
     if let Some(ignore) = ignore {
         let mut patches: HashMap<&AbsoluteSystemPath, Vec<(SourceSpan, String)>> = HashMap::new();

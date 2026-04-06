@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use camino::Utf8Path;
-use itertools::Itertools;
 use miette::{NamedSource, SourceSpan};
 use oxc_ast::ast::Comment;
 use oxc_span::Span;
@@ -15,7 +14,7 @@ use turborepo_repository::{
 };
 use unrs_resolver::{ResolveError, Resolver};
 
-use crate::{BoundariesChecker, BoundariesDiagnostic, BoundariesResult, Error};
+use crate::{BoundariesChecker, BoundariesDiagnostic, Error};
 
 /// All the places a dependency can be declared
 #[derive(Clone, Copy)]
@@ -90,13 +89,13 @@ impl<'a> DependencyLocations<'a> {
 /// non-package-name patterns like `!` or `@/foo` — to be recognised as local
 /// imports instead of being incorrectly flagged as undeclared dependencies.
 ///
-/// Returns `Ok(true)` if the import was resolved as a tsconfig path alias
-/// (local or cross-package — the latter produces an `ImportLeavesPackage`
-/// diagnostic via [`check_file_import`]).
+/// Returns `Ok((true, diag))` if the import was resolved as a tsconfig path
+/// alias (local or cross-package — the latter produces an
+/// `ImportLeavesPackage` diagnostic via [`check_file_import`]).
 ///
-/// Returns `Ok(false)` if the resolved path goes through `node_modules` (a
-/// real npm package) or if the resolver could not resolve the import. The
-/// caller should then fall through to `check_package_import`.
+/// Returns `Ok((false, None))` if the resolved path goes through
+/// `node_modules` (a real npm package) or if the resolver could not resolve
+/// the import. The caller should then fall through to `check_package_import`.
 #[allow(clippy::too_many_arguments)]
 fn check_import_as_tsconfig_path_alias(
     resolver: &Resolver,
@@ -106,11 +105,10 @@ fn check_import_as_tsconfig_path_alias(
     file_path: &AbsoluteSystemPath,
     file_content: &str,
     import: &str,
-    result: &mut BoundariesResult,
-) -> Result<bool, Error> {
+) -> Result<(bool, Option<BoundariesDiagnostic>), Error> {
     // Safety guard — relative imports are resolved as file imports elsewhere.
     if import.starts_with('.') {
-        return Ok(false);
+        return Ok((false, None));
     }
 
     let dir = file_path.parent().expect("file_path must have a parent");
@@ -123,7 +121,7 @@ fn check_import_as_tsconfig_path_alias(
             // through to `check_package_import`.
             let path = resolution.path();
             if path.components().any(|c| c.as_os_str() == "node_modules") {
-                return Ok(false);
+                return Ok((false, None));
             }
             // Workspace packages are symlinked in node_modules, so the
             // resolved path won't contain `node_modules` after symlink
@@ -133,19 +131,21 @@ fn check_import_as_tsconfig_path_alias(
             if BoundariesChecker::is_potential_package_name(import) {
                 let import_pkg_name = get_package_name(import);
                 if let Some(pkg_json) = resolution.package_json()
-                    && pkg_json.name() == Some(import_pkg_name.as_str())
+                    && pkg_json.name() == Some(import_pkg_name)
                 {
-                    return Ok(false);
+                    return Ok((false, None));
                 }
             }
             let Some(utf8_path) = Utf8Path::from_path(path) else {
-                result.diagnostics.push(BoundariesDiagnostic::InvalidPath {
-                    path: path.to_string_lossy().to_string(),
-                });
-                return Ok(true);
+                return Ok((
+                    true,
+                    Some(BoundariesDiagnostic::InvalidPath {
+                        path: path.to_string_lossy().to_string(),
+                    }),
+                ));
             };
             let resolved_import_path = AbsoluteSystemPath::new(utf8_path)?;
-            result.diagnostics.extend(check_file_import(
+            let diag = check_file_import(
                 file_path,
                 package_root,
                 package_name,
@@ -153,8 +153,8 @@ fn check_import_as_tsconfig_path_alias(
                 resolved_import_path,
                 span,
                 file_content,
-            )?);
-            Ok(true)
+            )?;
+            Ok((true, diag))
         }
         // Expected resolution failures — the import isn't a tsconfig alias.
         Err(
@@ -163,7 +163,7 @@ fn check_import_as_tsconfig_path_alias(
             | ResolveError::Builtin { .. }
             | ResolveError::Ignored(_)
             | ResolveError::Specifier(_),
-        ) => Ok(false),
+        ) => Ok((false, None)),
         // Unexpected errors (I/O, broken tsconfig, etc.) — log for debugging
         // but still fall through to check_package_import.
         Err(e) => {
@@ -173,7 +173,7 @@ fn check_import_as_tsconfig_path_alias(
                 "tsconfig path alias resolution failed unexpectedly, \
                  falling through to package import check"
             );
-            Ok(false)
+            Ok((false, None))
         }
     }
 }
@@ -195,7 +195,8 @@ fn check_import_as_tsconfig_path_alias(
 pub(crate) fn check_import(
     comments: &[Comment],
     source_text: &str,
-    result: &mut BoundariesResult,
+    diagnostics: &mut Vec<BoundariesDiagnostic>,
+    warnings: &mut Vec<String>,
     package_name: &PackageName,
     package_root: &AbsoluteSystemPath,
     import: &str,
@@ -211,7 +212,7 @@ pub(crate) fn check_import(
     // a warning
     match BoundariesChecker::get_ignored_comment(comments, source_text, *statement_span) {
         Some(reason) if reason.is_empty() => {
-            result.warnings.push(
+            warnings.push(
                 "@boundaries-ignore requires a reason, e.g. `// @boundaries-ignore implicit \
                  dependency`"
                     .to_string(),
@@ -222,9 +223,7 @@ pub(crate) fn check_import(
                 .chars()
                 .filter(|&c| c == '\n')
                 .count();
-            result
-                .warnings
-                .push(format!("ignoring import on line {line} in {file_path}"));
+            warnings.push(format!("ignoring import on line {line} in {file_path}"));
 
             return Ok(());
         }
@@ -257,7 +256,7 @@ pub(crate) fn check_import(
         // handles both package-name-shaped imports (where the alias may
         // shadow a package name) and non-package-name imports (like `!` or
         // `@/foo`) that can only be tsconfig aliases.
-        if check_import_as_tsconfig_path_alias(
+        let (resolved, diag) = check_import_as_tsconfig_path_alias(
             resolver,
             package_name,
             package_root,
@@ -265,8 +264,9 @@ pub(crate) fn check_import(
             file_path,
             file_content,
             import,
-            result,
-        )? {
+        )?;
+        if resolved {
+            diagnostics.extend(diag);
             return Ok(());
         }
         if BoundariesChecker::is_potential_package_name(import) {
@@ -284,7 +284,7 @@ pub(crate) fn check_import(
         }
     };
 
-    result.diagnostics.extend(check_result);
+    diagnostics.extend(check_result);
 
     Ok(())
 }
@@ -356,15 +356,21 @@ fn is_vscode_module(import: &str) -> bool {
 /// For scoped packages (`@scope/name/path`), returns `@scope/name`.
 /// For unscoped packages (`name/path`), returns `name`.
 /// For bare imports without subpaths, returns the import as-is.
-pub(crate) fn get_package_name(import: &str) -> String {
+pub(crate) fn get_package_name(import: &str) -> &str {
     if import.starts_with("@") {
-        import.split('/').take(2).join("/")
+        // Find the second '/' for scoped packages: @scope/name/path -> @scope/name
+        match import.find('/') {
+            Some(first_slash) => match import[first_slash + 1..].find('/') {
+                Some(second_slash) => &import[..first_slash + 1 + second_slash],
+                None => import,
+            },
+            None => import,
+        }
     } else {
         import
             .split_once("/")
-            .map(|(import, _)| import)
+            .map(|(name, _)| name)
             .unwrap_or(import)
-            .to_string()
     }
 }
 
@@ -388,9 +394,9 @@ pub(crate) fn check_package_import(
             text: NamedSource::new(file_path.as_str(), file_content.to_string()),
         });
     }
-    let package_name = PackageNode::Workspace(PackageName::Other(package_name));
+    let package_node = PackageNode::Workspace(PackageName::Other(package_name.to_string()));
     let folder = file_path.parent().expect("file_path should have a parent");
-    let is_valid_dependency = dependency_locations.is_dependency(&package_name);
+    let is_valid_dependency = dependency_locations.is_dependency(&package_node);
 
     if !is_valid_dependency
         && !is_bun_builtin(import)
@@ -401,11 +407,9 @@ pub(crate) fn check_package_import(
         )
     {
         // Check the @types package
-        let types_package_name = PackageNode::Workspace(PackageName::Other(format!(
-            "@types/{}",
-            package_name.as_package_name().as_str()
-        )));
-        let is_types_dependency = dependency_locations.is_dependency(&types_package_name);
+        let types_package_node =
+            PackageNode::Workspace(PackageName::Other(format!("@types/{}", package_name)));
+        let is_types_dependency = dependency_locations.is_dependency(&types_package_node);
 
         if is_types_dependency {
             return match import_type {
@@ -421,7 +425,7 @@ pub(crate) fn check_package_import(
 
         return Some(BoundariesDiagnostic::PackageNotFound {
             path: file_path.to_owned(),
-            name: package_name.to_string(),
+            name: package_node.to_string(),
             span,
             text: NamedSource::new(file_path.as_str(), file_content.to_string()),
         });
@@ -436,6 +440,7 @@ mod test {
     use turbo_trace::Tracer;
 
     use super::*;
+    use crate::BoundariesResult;
 
     #[test_case("bun", true ; "bun bare import")]
     #[test_case("bun:test", true ; "bun test module")]
@@ -491,14 +496,14 @@ mod test {
     #[test_case("@scope/package/sub" ; "scoped subpath import")]
     #[test_case("@scope/package/deeply/nested" ; "scoped deeply nested subpath import")]
     fn tsconfig_alias_check_returns_false_for_unresolvable_package_imports(import: &str) {
-        let (resolver, package_name, span, file_content, mut result) =
+        let (resolver, package_name, span, file_content, _result) =
             make_tsconfig_alias_test_args(import);
         let tmp = tempfile::tempdir().unwrap();
         let package_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
         let file_path = package_root.join_component("index.ts");
         std::fs::write(file_path.as_std_path(), &file_content).unwrap();
 
-        let resolved = check_import_as_tsconfig_path_alias(
+        let (resolved, diag) = check_import_as_tsconfig_path_alias(
             &resolver,
             &package_name,
             package_root,
@@ -506,7 +511,6 @@ mod test {
             &file_path,
             &file_content,
             import,
-            &mut result,
         )
         .unwrap();
 
@@ -514,21 +518,21 @@ mod test {
             !resolved,
             "package import {import:?} with no tsconfig alias should not be resolved"
         );
-        assert!(result.diagnostics.is_empty());
+        assert!(diag.is_none());
     }
 
     #[test_case("./foo" ; "relative current dir")]
     #[test_case("../bar" ; "relative parent dir")]
     #[test_case("./deeply/nested/module" ; "relative deeply nested")]
     fn tsconfig_alias_check_skips_relative_imports(import: &str) {
-        let (resolver, package_name, span, file_content, mut result) =
+        let (resolver, package_name, span, file_content, _result) =
             make_tsconfig_alias_test_args(import);
         let tmp = tempfile::tempdir().unwrap();
         let package_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
         let file_path = package_root.join_component("index.ts");
         std::fs::write(file_path.as_std_path(), &file_content).unwrap();
 
-        let resolved = check_import_as_tsconfig_path_alias(
+        let (resolved, diag) = check_import_as_tsconfig_path_alias(
             &resolver,
             &package_name,
             package_root,
@@ -536,7 +540,6 @@ mod test {
             &file_path,
             &file_content,
             import,
-            &mut result,
         )
         .unwrap();
 
@@ -544,7 +547,7 @@ mod test {
             !resolved,
             "relative import {import:?} should not be resolved as tsconfig alias"
         );
-        assert!(result.diagnostics.is_empty());
+        assert!(diag.is_none());
     }
 
     #[test]
@@ -723,11 +726,10 @@ mod test {
         let file_path = package_root.join_component("index.ts");
         let package_name = PackageName::from("test-pkg");
         let span = SourceSpan::new(0.into(), 0);
-        let mut result = BoundariesResult::default();
 
         let resolver = Tracer::create_resolver(Some(tsconfig_path));
 
-        let resolved = check_import_as_tsconfig_path_alias(
+        let (resolved, _diag) = check_import_as_tsconfig_path_alias(
             &resolver,
             &package_name,
             package_root,
@@ -735,7 +737,6 @@ mod test {
             &file_path,
             file_content,
             "@/utils/helper",
-            &mut result,
         )
         .unwrap();
 
@@ -786,11 +787,10 @@ mod test {
         let file_path = package_root.join_component("index.ts");
         let package_name = PackageName::from("test-pkg");
         let span = SourceSpan::new(0.into(), 0);
-        let mut result = BoundariesResult::default();
 
         let resolver = Tracer::create_resolver(Some(tsconfig_path));
 
-        let resolved = check_import_as_tsconfig_path_alias(
+        let (resolved, diag) = check_import_as_tsconfig_path_alias(
             &resolver,
             &package_name,
             package_root,
@@ -798,7 +798,6 @@ mod test {
             &file_path,
             file_content,
             "features/feature-a",
-            &mut result,
         )
         .unwrap();
 
@@ -807,10 +806,9 @@ mod test {
             "features/feature-a with a tsconfig `*` alias should be resolved as a local import"
         );
         assert!(
-            result.diagnostics.is_empty(),
+            diag.is_none(),
             "expected no boundary violations for a locally-aliased import"
         );
-        assert!(result.warnings.is_empty(), "expected no warnings");
     }
 
     /// Regression test: a tsconfig path alias must still be resolved as a local
@@ -852,11 +850,10 @@ mod test {
         let file_path = package_root.join_component("index.ts");
         let package_name = PackageName::from("test-pkg");
         let span = SourceSpan::new(0.into(), 0);
-        let mut result = BoundariesResult::default();
 
         let resolver = Tracer::create_resolver(Some(tsconfig_path));
 
-        let resolved = check_import_as_tsconfig_path_alias(
+        let (resolved, diag) = check_import_as_tsconfig_path_alias(
             &resolver,
             &package_name,
             package_root,
@@ -864,7 +861,6 @@ mod test {
             &file_path,
             file_content,
             "@/utils/helper",
-            &mut result,
         )
         .unwrap();
 
@@ -874,10 +870,9 @@ mod test {
              present"
         );
         assert!(
-            result.diagnostics.is_empty(),
+            diag.is_none(),
             "expected no boundary violations for a locally-aliased import"
         );
-        assert!(result.warnings.is_empty(), "expected no warnings");
     }
 
     /// When the resolver resolves an import to a path inside `node_modules`,
@@ -919,11 +914,10 @@ mod test {
         let file_path = package_root.join_component("index.ts");
         let package_name = PackageName::from("test-pkg");
         let span = SourceSpan::new(0.into(), 0);
-        let mut result = BoundariesResult::default();
 
         let resolver = Tracer::create_resolver(Some(tsconfig_path));
 
-        let resolved = check_import_as_tsconfig_path_alias(
+        let (resolved, diag) = check_import_as_tsconfig_path_alias(
             &resolver,
             &package_name,
             package_root,
@@ -931,7 +925,6 @@ mod test {
             &file_path,
             file_content,
             "some-pkg",
-            &mut result,
         )
         .unwrap();
 
@@ -939,7 +932,7 @@ mod test {
             !resolved,
             "import resolving to node_modules must not be treated as a tsconfig alias"
         );
-        assert!(result.diagnostics.is_empty());
+        assert!(diag.is_none());
     }
 
     /// A tsconfig alias that resolves to a file outside the package root should
@@ -974,11 +967,10 @@ mod test {
         let file_path = package_root.join_component("index.ts");
         let package_name = PackageName::from("my-app");
         let span = SourceSpan::new(0.into(), 0);
-        let mut result = BoundariesResult::default();
 
         let resolver = Tracer::create_resolver(Some(tsconfig_path));
 
-        let resolved = check_import_as_tsconfig_path_alias(
+        let (resolved, diag) = check_import_as_tsconfig_path_alias(
             &resolver,
             &package_name,
             package_root,
@@ -986,7 +978,6 @@ mod test {
             &file_path,
             file_content,
             "@shared/utils",
-            &mut result,
         )
         .unwrap();
 
@@ -995,7 +986,7 @@ mod test {
             "@shared/utils should be resolved as a tsconfig path alias"
         );
         assert!(
-            !result.diagnostics.is_empty(),
+            diag.is_some(),
             "expected an ImportLeavesPackage diagnostic for an out-of-package alias"
         );
     }

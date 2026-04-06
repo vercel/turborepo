@@ -62,7 +62,7 @@ impl<'a> TurboJsonProvider for RunTurboJsonProvider<'a> {
 
 impl Run {
     /// Check package boundaries for all filtered packages
-    pub async fn check_boundaries(&self, show_progress: bool) -> Result<BoundariesResult, Error> {
+    pub fn check_boundaries(&self, show_progress: bool) -> Result<BoundariesResult, Error> {
         let turbo_json_provider = RunTurboJsonProvider::new(self);
         let root_boundaries_config = self
             .root_turbo_json()
@@ -77,7 +77,7 @@ impl Run {
             filtered_pkgs: self.filtered_pkgs(),
         };
 
-        BoundariesChecker::check_boundaries(&ctx, show_progress).await
+        BoundariesChecker::check_boundaries(&ctx, show_progress)
     }
 
     /// Patch a file with @boundaries-ignore comments

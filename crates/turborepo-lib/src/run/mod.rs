@@ -1022,7 +1022,7 @@ impl turborepo_query_api::QueryRun for Run {
                 + '_,
         >,
     > {
-        Box::pin(self.check_boundaries(show_progress))
+        Box::pin(std::future::ready(self.check_boundaries(show_progress)))
     }
 }
 
