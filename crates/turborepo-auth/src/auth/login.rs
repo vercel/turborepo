@@ -42,6 +42,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
         color_config,
         login_url: login_url_configuration,
         existing_token,
+        force,
         sso_team: _,
         sso_login_callback_port,
     } = *options;
@@ -56,37 +57,42 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
     };
 
     // Check if passed in token exists first.
-    if let Some(token) = existing_token {
-        let token = Token::existing(token.into());
-        if token
-            .is_valid(
-                api_client,
-                Some(valid_token_callback("Existing token found!", color_config)),
-            )
-            .await?
-        {
-            return Ok((token, None));
-        }
-    } else if is_vercel(login_url_configuration) {
-        match crate::auth::get_token_with_refresh().await {
-            Ok(Some(token_secret)) => {
-                let token = Token::existing_secret(token_secret);
-                if token
-                    .is_valid(
-                        api_client,
-                        Some(valid_token_callback(
-                            "Existing Vercel token found!",
-                            color_config,
-                        )),
-                    )
-                    .await?
-                {
-                    return Ok((token, None));
-                }
+    // For Vercel logins, --force is silently ignored.
+    if !force || is_vercel(login_url_configuration) {
+        if let Some(token) = existing_token {
+            let token = Token::existing(token.into());
+            if token
+                .is_valid(
+                    api_client,
+                    Some(valid_token_callback("Existing token found!", color_config)),
+                )
+                .await?
+            {
+                return Ok((token, None));
             }
-            Ok(None) => {}
-            Err(e) => {
-                warn!("Failed to load existing Vercel token, proceeding with new login: {e}");
+        } else if is_vercel(login_url_configuration) {
+            match crate::auth::get_token_with_refresh().await {
+                Ok(Some(token_secret)) => {
+                    let token = Token::existing_secret(token_secret);
+                    if token
+                        .is_valid(
+                            api_client,
+                            Some(valid_token_callback(
+                                "Existing Vercel token found!",
+                                color_config,
+                            )),
+                        )
+                        .await?
+                    {
+                        return Ok((token, None));
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    warn!(
+                        "Failed to load existing Vercel token, proceeding with new login: {e}"
+                    );
+                }
             }
         }
     }

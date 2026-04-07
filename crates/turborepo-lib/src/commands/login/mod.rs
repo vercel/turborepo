@@ -32,27 +32,28 @@ pub async fn login(
     base: &mut CommandBase,
     telemetry: CommandEventBuilder,
     sso_team: Option<&str>,
+    force: bool,
     manual: bool,
 ) -> Result<(), Error> {
     match sso_team {
         Some(sso_team) => {
             telemetry.track_login_method(LoginMethod::SSO);
-            sso_login(base, sso_team).await
+            sso_login(base, sso_team, force).await
         }
         None if manual => {
             telemetry.track_login_method(LoginMethod::Manual);
-            login_manual(base).await
+            login_manual(base, force).await
         }
         None => {
             let mut login_telemetry = LoginTelemetry::new(&telemetry, LoginMethod::Standard);
-            login_no_sso(base).await?;
+            login_no_sso(base, force).await?;
             login_telemetry.set_success(true);
             Ok(())
         }
     }
 }
 
-async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Error> {
+async fn sso_login(base: &mut CommandBase, sso_team: &str, force: bool) -> Result<(), Error> {
     let api_client: APIClient = base.api_client()?;
     let color_config = base.color_config;
     let login_url_config = base.opts.api_client_opts.login_url.to_string();
@@ -60,6 +61,7 @@ async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Error> 
     let options = LoginOptions {
         existing_token: base.opts.api_client_opts.token.as_ref().map(|t| t.expose()),
         sso_team: Some(sso_team),
+        force,
         sso_login_callback_port,
         ..LoginOptions::new(&color_config, &login_url_config, &api_client)
     };
@@ -73,7 +75,7 @@ async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Error> 
     write_token(base, token, token_set.as_ref())
 }
 
-async fn login_no_sso(base: &mut CommandBase) -> Result<(), Error> {
+async fn login_no_sso(base: &mut CommandBase, force: bool) -> Result<(), Error> {
     let api_client: APIClient = base.api_client()?;
     let color_config = base.color_config;
     let login_url_config = base.opts.api_client_opts.login_url.to_string();
@@ -81,6 +83,7 @@ async fn login_no_sso(base: &mut CommandBase) -> Result<(), Error> {
 
     let options = LoginOptions {
         existing_token,
+        force,
         ..LoginOptions::new(&color_config, &login_url_config, &api_client)
     };
 
