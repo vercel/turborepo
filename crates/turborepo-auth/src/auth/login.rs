@@ -89,9 +89,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
                 }
                 Ok(None) => {}
                 Err(e) => {
-                    warn!(
-                        "Failed to load existing Vercel token, proceeding with new login: {e}"
-                    );
+                    warn!("Failed to load existing Vercel token, proceeding with new login: {e}");
                 }
             }
         }
