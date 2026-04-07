@@ -740,10 +740,6 @@ pub enum Command {
     Login {
         #[clap(long = "sso-team")]
         sso_team: Option<String>,
-        /// Force a login to receive a new token. Will overwrite any existing
-        /// tokens for the given login url.
-        #[clap(long = "force", short = 'f')]
-        force: bool,
         /// Manually enter token instead of requesting one from the login
         /// service.
         #[clap(long, conflicts_with = "sso_team")]
@@ -1718,11 +1714,7 @@ async fn run_main(
 
             Ok(0)
         }
-        Command::Login {
-            sso_team,
-            force,
-            manual,
-        } => {
+        Command::Login { sso_team, manual } => {
             let event = CommandEventBuilder::new("login").with_parent(&root_telemetry);
             event.track_call();
             if cli_args.test_run {
@@ -1731,14 +1723,13 @@ async fn run_main(
             }
 
             let sso_team = sso_team.clone();
-            let force = *force;
             let manual = *manual;
 
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
 
-            login::login(&mut base, event_child, sso_team.as_deref(), force, manual).await?;
+            login::login(&mut base, event_child, sso_team.as_deref(), manual).await?;
 
             Ok(0)
         }
@@ -2990,7 +2981,6 @@ mod test {
             Args {
                 command: Some(Command::Login {
                     sso_team: None,
-                    force: false,
                     manual: false,
                 }),
                 ..Args::default()
@@ -3004,7 +2994,6 @@ mod test {
             expected_output: Args {
                 command: Some(Command::Login {
                     sso_team: None,
-                    force: false,
                     manual: false,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
@@ -3020,7 +3009,6 @@ mod test {
             expected_output: Args {
                 command: Some(Command::Login {
                     sso_team: Some("my-team".to_string()),
-                    force: false,
                     manual: false,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),

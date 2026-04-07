@@ -27,10 +27,8 @@ enum TeamIdentifier<T> {
 }
 
 /// Manually write a turborepo token, API url, teamid
-pub async fn login_manual(base: &mut CommandBase, force: bool) -> Result<(), Error> {
-    let manual_login_opts = force
-        .then(ManualLoginOptions::default)
-        .unwrap_or_else(|| ManualLoginOptions::from(&base.opts().api_client_opts));
+pub async fn login_manual(base: &mut CommandBase) -> Result<(), Error> {
+    let manual_login_opts = ManualLoginOptions::from(&base.opts().api_client_opts);
     let mut api_client = base.api_client()?;
     // fill in the missing information via prompts
     let ResolvedManualLoginOptions {

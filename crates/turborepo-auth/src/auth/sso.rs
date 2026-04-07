@@ -56,7 +56,6 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
         login_url: login_url_configuration,
         sso_team,
         existing_token,
-        force,
         sso_login_callback_port,
     } = *options;
 
@@ -73,41 +72,39 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
 
     // Check if token exists first. Must be there for the user and contain the
     // sso_team passed into this function.
-    if !force {
-        if let Some(token) = existing_token {
-            let token = Token::existing(token.into());
-            if token
-                .is_valid_sso(
-                    api_client,
-                    sso_team,
-                    Some(valid_token_callback("Existing token found!", color_config)),
-                )
-                .await?
-            {
-                return Ok((token, None));
+    if let Some(token) = existing_token {
+        let token = Token::existing(token.into());
+        if token
+            .is_valid_sso(
+                api_client,
+                sso_team,
+                Some(valid_token_callback("Existing token found!", color_config)),
+            )
+            .await?
+        {
+            return Ok((token, None));
+        }
+    } else if is_vercel(login_url_configuration) {
+        match crate::auth::get_token_with_refresh().await {
+            Ok(Some(token_secret)) => {
+                let token = Token::existing_secret(token_secret);
+                if token
+                    .is_valid_sso(
+                        api_client,
+                        sso_team,
+                        Some(valid_token_callback(
+                            &format!("Existing Vercel token for {sso_team} found!"),
+                            color_config,
+                        )),
+                    )
+                    .await?
+                {
+                    return Ok((token, None));
+                }
             }
-        } else if is_vercel(login_url_configuration) {
-            match crate::auth::get_token_with_refresh().await {
-                Ok(Some(token_secret)) => {
-                    let token = Token::existing_secret(token_secret);
-                    if token
-                        .is_valid_sso(
-                            api_client,
-                            sso_team,
-                            Some(valid_token_callback(
-                                &format!("Existing Vercel token for {sso_team} found!"),
-                                color_config,
-                            )),
-                        )
-                        .await?
-                    {
-                        return Ok((token, None));
-                    }
-                }
-                Ok(None) => {}
-                Err(e) => {
-                    warn!("Failed to load existing Vercel token for SSO, proceeding: {e}");
-                }
+            Ok(None) => {}
+            Err(e) => {
+                warn!("Failed to load existing Vercel token for SSO, proceeding: {e}");
             }
         }
     }
@@ -599,7 +596,6 @@ mod tests {
             api_client: &api_client,
             existing_token: None,
             sso_team: None,
-            force: false,
             sso_login_callback_port: None,
         };
 
@@ -618,7 +614,6 @@ mod tests {
             api_client: &api_client,
             existing_token: Some("existing-token"),
             sso_team: Some("my-team"),
-            force: false,
             sso_login_callback_port: None,
         };
 
