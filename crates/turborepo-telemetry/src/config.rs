@@ -135,7 +135,11 @@ impl TelemetryConfig {
     }
 
     pub fn show_alert(&mut self, color_config: ColorConfig) {
-        if !self.has_seen_alert() && self.is_enabled() && Self::is_telemetry_warning_enabled() {
+        if !self.has_seen_alert()
+            && self.is_enabled()
+            && Self::is_telemetry_warning_enabled()
+            && turborepo_ci::Vendor::get_constant() != Some("VERCEL")
+        {
             eprintln!(
                 "\n{}\n{}\n{}\n{}\n{}\n",
                 color!(color_config, BOLD, "{}", "Attention:"),

@@ -154,7 +154,8 @@ export class TelemetryConfig {
     if (
       !this.hasSeenAlert() &&
       this.isEnabled() &&
-      this.isTelemetryWarningEnabled()
+      this.isTelemetryWarningEnabled() &&
+      !process.env.VERCEL
     ) {
       logger.log();
       logger.bold("Attention:");
