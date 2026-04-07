@@ -7,13 +7,13 @@
 //! Handles logging into Vercel, verifying SSO, and storing the token.
 
 mod auth;
+pub(crate) mod device_flow;
 mod error;
-mod login_server;
 mod ui;
 
 pub use auth::*;
+pub use device_flow::TokenSet;
 pub use error::Error;
-pub use login_server::*;
 use serde::Deserialize;
 use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::{CacheClient, Client, SecretString, TokenClient};
@@ -31,6 +31,7 @@ pub const TURBO_TOKEN_FILE: &str = "config.json";
 
 const VERCEL_OAUTH_TOKEN_URL: &str = "https://vercel.com/api/login/oauth/token";
 const VERCEL_OAUTH_INTROSPECT_URL: &str = "https://vercel.com/api/login/oauth/token/introspect";
+const DEFAULT_TOKEN_EXPIRY_SECS: u64 = 8 * 60 * 60; // 8 hours
 
 #[derive(Debug, Clone)]
 pub struct AuthTokens {
@@ -43,6 +44,7 @@ pub struct AuthTokens {
 struct OAuthTokenResponse {
     access_token: SecretString,
     refresh_token: SecretString,
+    expires_in: Option<u64>,
 }
 
 /// Token.
@@ -340,7 +342,7 @@ fn current_unix_time() -> u128 {
         .as_millis()
 }
 
-fn current_unix_time_secs() -> u64 {
+pub(crate) fn current_unix_time_secs() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -406,7 +408,9 @@ impl AuthTokens {
         let status = response.status();
 
         if !status.is_success() {
-            return Err(Error::FailedToGetToken);
+            return Err(Error::TokenRefreshFailed {
+                status: status.as_u16(),
+            });
         }
 
         let response_text = response.text().await?;
@@ -416,7 +420,12 @@ impl AuthTokens {
         Ok(AuthTokens {
             token: Some(oauth_response.access_token),
             refresh_token: Some(oauth_response.refresh_token),
-            expires_at: Some(current_unix_time_secs() + 8 * 60 * 60),
+            expires_at: Some(
+                current_unix_time_secs()
+                    + oauth_response
+                        .expires_in
+                        .unwrap_or(DEFAULT_TOKEN_EXPIRY_SECS),
+            ),
         })
     }
 
@@ -438,11 +447,15 @@ impl AuthTokens {
             .await?;
 
         if !response.status().is_success() {
-            return Err(Error::FailedToGetToken);
+            return Err(Error::IntrospectionFailed {
+                message: format!("HTTP {}", response.status()),
+            });
         }
 
         let resp: IntrospectionResponse = response.json().await?;
-        resp.client_id.ok_or(Error::FailedToGetToken)
+        resp.client_id.ok_or(Error::IntrospectionFailed {
+            message: "missing client_id in introspection response".to_string(),
+        })
     }
 
     /// Writes the auth tokens to the auth.json file
@@ -564,8 +577,11 @@ mod tests {
             scope_type: "".to_string(),
             team_id: None,
         };
-        let mock_response =
-            |active_at, scopes| ResponseTokenMetadata { active_at, scopes, client_id: None };
+        let mock_response = |active_at, scopes| ResponseTokenMetadata {
+            active_at,
+            scopes,
+            client_id: None,
+        };
 
         let cases = vec![
             // Case: Token active, no scopes (implicitly infinite)

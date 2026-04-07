@@ -326,19 +326,21 @@ pub async fn start_test_server(
         )
         .route(
             "/login/oauth/token/introspect",
-            post(|Form(form): Form<VercelAppTokenIntrospectRequest>| async move {
-                if form.token.starts_with("vca_") {
-                    Json(serde_json::json!({
-                        "active": true,
-                        "scope": "openid",
-                        "exp": 1700000000u64,
-                        "iat": 1690000000u64,
-                        "client_id": EXPECTED_CLIENT_ID,
-                    }))
-                } else {
-                    Json(serde_json::json!({ "active": false }))
-                }
-            }),
+            post(
+                |Form(form): Form<VercelAppTokenIntrospectRequest>| async move {
+                    if form.token.starts_with("vca_") {
+                        Json(serde_json::json!({
+                            "active": true,
+                            "scope": "openid",
+                            "exp": 1700000000u64,
+                            "iat": 1690000000u64,
+                            "client_id": EXPECTED_CLIENT_ID,
+                        }))
+                    } else {
+                        Json(serde_json::json!({ "active": false }))
+                    }
+                },
+            ),
         )
         .route(
             "/login/oauth/token/revoke",

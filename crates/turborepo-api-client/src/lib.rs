@@ -1650,10 +1650,7 @@ mod test {
         let metadata = client.get_metadata(&token).await?;
         assert_eq!(metadata.scopes.len(), 1);
         assert_eq!(metadata.scopes[0].scope_type, "openid");
-        assert_eq!(
-            metadata.scopes[0].expires_at,
-            Some(1700000000u128 * 1000)
-        );
+        assert_eq!(metadata.scopes[0].expires_at, Some(1700000000u128 * 1000));
         assert_eq!(metadata.active_at, 1690000000u128 * 1000);
         assert_eq!(
             metadata.client_id.as_deref(),

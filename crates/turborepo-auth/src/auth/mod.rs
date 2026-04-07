@@ -10,7 +10,9 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_ui::ColorConfig;
 
-use crate::LoginServer;
+pub(crate) fn is_vercel(login_url: &str) -> bool {
+    login_url.contains("vercel.com")
+}
 
 const VERCEL_TOKEN_DIR: &str = "com.vercel.cli";
 const VERCEL_TOKEN_FILE: &str = "auth.json";
@@ -19,7 +21,6 @@ pub struct LoginOptions<'a, T: Client + TokenClient + CacheClient> {
     pub color_config: &'a ColorConfig,
     pub login_url: &'a str,
     pub api_client: &'a T,
-    pub login_server: &'a dyn LoginServer,
 
     pub sso_team: Option<&'a str>,
     pub existing_token: Option<&'a str>,
@@ -27,17 +28,11 @@ pub struct LoginOptions<'a, T: Client + TokenClient + CacheClient> {
     pub sso_login_callback_port: Option<u16>,
 }
 impl<'a, T: Client + TokenClient + CacheClient> LoginOptions<'a, T> {
-    pub fn new(
-        color_config: &'a ColorConfig,
-        login_url: &'a str,
-        api_client: &'a T,
-        login_server: &'a dyn LoginServer,
-    ) -> Self {
+    pub fn new(color_config: &'a ColorConfig, login_url: &'a str, api_client: &'a T) -> Self {
         Self {
             color_config,
             login_url,
             api_client,
-            login_server,
             sso_team: None,
             existing_token: None,
             force: false,
@@ -78,7 +73,9 @@ pub async fn get_token_with_refresh() -> Result<Option<turborepo_api_client::Sec
                 && auth_tokens.refresh_token.is_some()
                 && let Ok(new_tokens) = auth_tokens.refresh_token().await
             {
-                let _ = new_tokens.write_to_auth_file(&auth_path);
+                if let Err(e) = new_tokens.write_to_auth_file(&auth_path) {
+                    tracing::warn!("Failed to write refreshed tokens to {auth_path}: {e}");
+                }
                 return Ok(new_tokens.token);
             }
 
@@ -114,6 +111,7 @@ mod tests {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
 
+    use super::is_vercel;
     use crate::{AuthTokens, Token, current_unix_time_secs};
 
     // Mock the turborepo_dirs functions for testing
@@ -368,5 +366,14 @@ mod tests {
                 "Token '{token}' prefix check failed"
             );
         }
+    }
+
+    #[test]
+    fn test_is_vercel() {
+        assert!(is_vercel("https://vercel.com"));
+        assert!(is_vercel("https://api.vercel.com"));
+        assert!(is_vercel("https://vercel.com/api"));
+        assert!(!is_vercel("https://my-cache.example.com"));
+        assert!(!is_vercel("http://localhost:3000"));
     }
 }
