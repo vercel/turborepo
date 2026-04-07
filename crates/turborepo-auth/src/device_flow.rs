@@ -17,11 +17,8 @@ use url::Url;
 use crate::Error;
 
 const DEFAULT_VERCEL_ISSUER: &str = "https://vercel.com";
-pub const VERCEL_CLI_CLIENT_ID: &str = "cl_HYyOPBNtFMfHhaUn9L4QPfTZz6TP47bp";
-// Only request `offline_access` (refresh token). We intentionally do not
-// request `openid` because we don't use or validate the id_token — user
-// identity is verified independently via the `get_user` API call.
-const DEVICE_FLOW_SCOPE: &str = "offline_access";
+pub const TURBOREPO_CLIENT_ID: &str = "cl_kyUx2zVvA4MGptBohkmtYHJly2XltXzD";
+const DEVICE_FLOW_SCOPE: &str = "openid profile email offline_access";
 // Per-request timeout for token polling. If the server doesn't respond
 // within this window, we back off (doubling the interval).
 const DEVICE_TOKEN_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -243,7 +240,7 @@ pub async fn device_authorization_request(
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(header::USER_AGENT, USER_AGENT.as_str())
         .form(&[
-            ("client_id", VERCEL_CLI_CLIENT_ID),
+            ("client_id", TURBOREPO_CLIENT_ID),
             ("scope", DEVICE_FLOW_SCOPE),
         ])
         .send()
@@ -295,7 +292,7 @@ pub async fn poll_for_token(
             .header(header::USER_AGENT, USER_AGENT.as_str())
             .timeout(DEVICE_TOKEN_REQUEST_TIMEOUT)
             .form(&[
-                ("client_id", VERCEL_CLI_CLIENT_ID),
+                ("client_id", TURBOREPO_CLIENT_ID),
                 ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
                 ("device_code", device_code),
             ])
@@ -366,7 +363,7 @@ pub async fn introspect_token(
         .post(&metadata.introspection_endpoint)
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(header::USER_AGENT, USER_AGENT.as_str())
-        .form(&[("token", token), ("client_id", VERCEL_CLI_CLIENT_ID)])
+        .form(&[("token", token), ("client_id", TURBOREPO_CLIENT_ID)])
         .send()
         .await
         .map_err(|e| Error::IntrospectionFailed {

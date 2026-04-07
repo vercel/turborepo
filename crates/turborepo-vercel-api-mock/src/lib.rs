@@ -34,7 +34,7 @@ pub const EXPECTED_TEAM_CREATED_AT: u64 = 0;
 pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
 pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
 
-pub const EXPECTED_CLIENT_ID: &str = "cl_HYyOPBNtFMfHhaUn9L4QPfTZz6TP47bp";
+pub const EXPECTED_CLIENT_ID: &str = "cl_kyUx2zVvA4MGptBohkmtYHJly2XltXzD";
 
 #[derive(Deserialize)]
 struct VercelAppTokenIntrospectRequest {
