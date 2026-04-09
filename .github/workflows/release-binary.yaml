@@ -1,0 +1,68 @@
+name: Release Binary
+
+on:
+  push:
+    tags: ["*"]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            short: linux-amd64
+            setup: sudo apt-get update && sudo apt-get install -y build-essential clang lldb llvm libclang-dev musl-tools protobuf-compiler capnproto lld
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            short: linux-arm64
+            setup: sudo apt-get update && sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu protobuf-compiler capnproto lld
+            rust-build-env: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            short: darwin-amd64
+            setup: brew install capnp protobuf
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            short: darwin-arm64
+            setup: brew install capnp protobuf
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-01-16
+          targets: ${{ matrix.target }}
+      - name: Install dependencies
+        if: matrix.setup
+        run: ${{ matrix.setup }}
+      - name: Build
+        run: ${{ matrix.rust-build-env }} cargo build --profile release-turborepo -p turbo --target ${{ matrix.target }}
+      - name: Prepare artifact
+        run: |
+          cp target/${{ matrix.target }}/release-turborepo/turbo turbo-${{ matrix.short }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: turbo-${{ matrix.short }}
+          path: turbo-${{ matrix.short }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          sha256sum turbo-* > checksums-sha256.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/turbo-*
+            artifacts/checksums-sha256.txt
