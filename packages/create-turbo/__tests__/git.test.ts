@@ -171,7 +171,7 @@ describe("git", () => {
 
     it("cleans up .git directory on failure after init", async () => {
       const { root } = useFixture({ fixture: `git` });
-      const mockRmSync = jest.spyOn(fs, "rmSync").mockImplementation(() => {});
+      const mockRmSync = jest.spyOn(fs, "rmSync").mockReturnValue(undefined);
       const mockSpawnSync = jest
         .spyOn(childProcess, "spawnSync")
         .mockReturnValueOnce(FAILURE) // not in git repo
@@ -192,7 +192,7 @@ describe("git", () => {
 
     it("cleans up .git directory when user has no git config (commit fails)", async () => {
       const { root } = useFixture({ fixture: `git` });
-      const mockRmSync = jest.spyOn(fs, "rmSync").mockImplementation(() => {});
+      const mockRmSync = jest.spyOn(fs, "rmSync").mockReturnValue(undefined);
       const mockSpawnSync = jest
         .spyOn(childProcess, "spawnSync")
         .mockReturnValueOnce(FAILURE) // not in git repo
@@ -264,7 +264,7 @@ describe("git", () => {
 
     it("attempts to remove .git directory", async () => {
       const { root } = useFixture({ fixture: `remove-git` });
-      const mockRmSync = jest.spyOn(fs, "rmSync").mockImplementation(() => {});
+      const mockRmSync = jest.spyOn(fs, "rmSync").mockReturnValue(undefined);
 
       const result = removeGitDirectory(root);
       expect(result).toBe(true);
