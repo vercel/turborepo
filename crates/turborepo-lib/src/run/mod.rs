@@ -429,6 +429,25 @@ impl Run {
             "",
         )
         .emit();
+
+        // Config-level info for dependsOn output/input overlaps.
+        // Deduplicated by task name (package stripped) — informs the config
+        // author that turbo.json task definitions have patterns where a
+        // task's inputs match a dependency's outputs.
+        let overlaps =
+            turborepo_engine::dep_output_overlap::detect_dep_output_overlaps(&self.engine);
+        let config_overlaps =
+            turborepo_engine::dep_output_overlap::config_level_overlaps(&overlaps);
+        for co in &config_overlaps {
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                format!(
+                    "{pad}Task \"{}\" inputs match \"{}\" outputs: {:?}",
+                    co.task_name, co.dep_task_name, co.overlapping_patterns
+                ),
+            )
+            .emit();
+        }
     }
 
     pub fn turbo_json_loader(&self) -> &UnifiedTurboJsonLoader {

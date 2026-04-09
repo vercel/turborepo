@@ -12,6 +12,7 @@ pub mod affected;
 mod builder;
 mod builder_error;
 mod builder_errors;
+pub mod dep_output_overlap;
 mod dot;
 mod execute;
 mod graph_visualizer;
