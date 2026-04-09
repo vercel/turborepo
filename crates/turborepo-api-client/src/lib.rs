@@ -9,10 +9,14 @@
 #![deny(clippy::all)]
 
 use std::{backtrace::Backtrace, env, future::Future, sync::LazyLock, time::Duration};
+#[cfg(feature = "rustls-tls")]
+use std::{io::Cursor, path::Path};
 
 use regex::Regex;
 pub use reqwest::Response;
 use reqwest::{Body, Method, RequestBuilder, StatusCode};
+#[cfg(feature = "rustls-tls")]
+use rustls_pemfile::{self, Item};
 use serde::Deserialize;
 use turborepo_ci::{Vendor, is_ci};
 pub use turborepo_types::SecretString;
@@ -646,6 +650,14 @@ impl APIClient {
                 builder = builder
                     .tls_built_in_webpki_certs(true)
                     .tls_built_in_native_certs(use_native);
+                // When native certs are disabled (webpki-only fast path),
+                // manually load certificates from SSL_CERT_FILE / SSL_CERT_DIR
+                // so that custom CAs (e.g. corporate proxies, self-hosted
+                // caches) work even before the full native client is ready.
+                // This is pure file I/O — no macOS Keychain — so it stays fast.
+                if !use_native {
+                    builder = Self::add_env_certificates(builder);
+                }
             }
             if let Some(dur) = connect_timeout {
                 builder = builder.connect_timeout(dur);
@@ -667,6 +679,96 @@ impl APIClient {
             }
             Err(e) => Err(Error::TlsError(e)),
         }
+    }
+
+    /// Loads root certificates from `SSL_CERT_FILE` and `SSL_CERT_DIR`
+    /// environment variables into the given client builder.
+    #[cfg(feature = "rustls-tls")]
+    fn add_env_certificates(mut builder: reqwest::ClientBuilder) -> reqwest::ClientBuilder {
+        if let Ok(cert_file) = env::var("SSL_CERT_FILE") {
+            match std::fs::read(&cert_file) {
+                Ok(pem) if !pem.is_empty() => {
+                    builder =
+                        Self::append_certificates_from_bytes(builder, &pem, Path::new(&cert_file));
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::debug!("Failed to read SSL_CERT_FILE ({cert_file}): {e}");
+                }
+            }
+        }
+
+        if let Ok(cert_dir) = env::var("SSL_CERT_DIR")
+            && let Ok(entries) = std::fs::read_dir(&cert_dir)
+        {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file()
+                    && let Ok(pem) = std::fs::read(&path)
+                    && !pem.is_empty()
+                {
+                    builder = Self::append_certificates_from_bytes(builder, &pem, path.as_path());
+                }
+            }
+        }
+
+        builder
+    }
+
+    #[cfg(feature = "rustls-tls")]
+    fn append_certificates_from_bytes(
+        mut builder: reqwest::ClientBuilder,
+        bytes: &[u8],
+        source: &Path,
+    ) -> reqwest::ClientBuilder {
+        let mut cursor = Cursor::new(bytes);
+        let mut added_any = false;
+        let mut saw_item = false;
+        for item in rustls_pemfile::read_all(&mut cursor) {
+            saw_item = true;
+            match item {
+                Ok(Item::X509Certificate(cert_der)) => {
+                    match reqwest::Certificate::from_der(&cert_der) {
+                        Ok(cert) => {
+                            builder = builder.add_root_certificate(cert);
+                            added_any = true;
+                        }
+                        Err(e) => {
+                            tracing::debug!(
+                                "Failed to parse DER certificate from {}: {e}",
+                                source.display()
+                            );
+                        }
+                    }
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::debug!(
+                        "Failed to parse certificates from {}: {e}",
+                        source.display()
+                    );
+                }
+            }
+        }
+
+        if added_any {
+            return builder;
+        }
+
+        if let Ok(cert) = reqwest::Certificate::from_pem(bytes) {
+            return builder.add_root_certificate(cert);
+        }
+
+        if let Ok(cert) = reqwest::Certificate::from_der(bytes) {
+            return builder.add_root_certificate(cert);
+        }
+
+        if saw_item {
+            tracing::debug!("No X509 certificates found in {}", source.display());
+        } else {
+            tracing::debug!("No certificates found in {}", source.display());
+        }
+        builder
     }
 
     pub fn base_url(&self) -> &str {
