@@ -23,7 +23,6 @@ import {
 } from "./code-block-tabs";
 import { ExamplesTable } from "./examples-table";
 import { ExperimentalBadge } from "./experimental-badge";
-import { PrereleaseBadge } from "./prerelease-badge";
 import { File, Files, Folder } from "./files";
 import { InVersion } from "./in-version";
 import { LinkToDocumentation } from "./link-to-documentation";
@@ -36,8 +35,7 @@ const BADGE_COMPONENTS: Record<
   string,
   React.ComponentType<{ children?: string }>
 > = {
-  ExperimentalBadge,
-  PrereleaseBadge
+  ExperimentalBadge
 };
 
 function HeadingWithBadges({
@@ -157,7 +155,6 @@ export const getMDXComponents = (
     Accordions,
     ThemeAwareImage,
     InVersion,
-    ExperimentalBadge,
-    PrereleaseBadge
+    ExperimentalBadge
   };
 };

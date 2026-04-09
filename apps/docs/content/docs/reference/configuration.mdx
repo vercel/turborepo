@@ -328,7 +328,7 @@ When this flag is enabled and the key is too short, Turborepo will fail immediat
 }
 ```
 
-#### `affectedUsingTaskInputs` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+#### `affectedUsingTaskInputs`
 
 Default: `false`
 
@@ -358,7 +358,7 @@ In this example, if only `README.md` changed in a package, `build` would not run
   selected, regardless of individual task `inputs`.
 </Callout>
 
-#### `watchUsingTaskInputs` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+#### `watchUsingTaskInputs`
 
 Default: `false`
 
@@ -388,7 +388,7 @@ In this example, editing `README.md` in a package would not trigger a `build` re
   re-run, regardless of individual task `inputs`.
 </Callout>
 
-#### `pruneIncludesGlobalFiles` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+#### `pruneIncludesGlobalFiles`
 
 Default: `false`
 
@@ -407,7 +407,7 @@ Without this flag, the `globalDependencies` entries are preserved in the pruned 
 
 With this configuration, running `turbo prune frontend` will include `tsconfig.json` in the output alongside the pruned workspaces and lockfile. Both inclusion and `!` exclusion globs are supported.
 
-#### `filterUsingTasks` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+#### `filterUsingTasks`
 
 Default: `false`
 
@@ -437,7 +437,7 @@ In this example, `--filter=[main]` would not select `build` for a package if onl
   selected, regardless of individual task `inputs`.
 </Callout>
 
-#### `globalConfiguration` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+#### `globalConfiguration`
 
 Default: `false`
 
