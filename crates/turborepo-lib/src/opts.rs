@@ -40,6 +40,9 @@ pub enum RemoteCacheDisabledReason {
     /// CLI flags (e.g. `--cache=local:rw`, or `--no-cache` + `--force`)
     /// disabled both remote read and write.
     ByFlags,
+    /// The cache config (via `TURBO_CACHE` or `--cache`) explicitly requests
+    /// remote caching, but no credentials are configured.
+    RequestedWithoutCredentials,
 }
 
 #[derive(Debug, Error)]
@@ -233,8 +236,14 @@ impl Opts {
                     .ok()
                     .filter(|s| !s.is_empty())
                     .is_some();
+                let user_requested_remote = config
+                    .cache()
+                    .map(|c| c.remote.should_use())
+                    .unwrap_or(false);
                 if has_token_env {
                     Some(RemoteCacheDisabledReason::TokenWithoutTeam)
+                } else if user_requested_remote {
+                    Some(RemoteCacheDisabledReason::RequestedWithoutCredentials)
                 } else {
                     Some(RemoteCacheDisabledReason::NotLinked)
                 }

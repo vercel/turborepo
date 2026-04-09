@@ -228,6 +228,24 @@ fn test_remote_caching_enable() {
     assert!(stdout.contains("Remote caching disabled (in configuration)"));
 }
 
+#[test]
+fn test_remote_cache_requested_without_credentials() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+
+    // TURBO_CACHE=remote:rw without TURBO_TOKEN or TURBO_TEAM
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &["run", "build", "--output-logs=none"],
+        &[("TURBO_CACHE", "remote:rw")],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Remote caching disabled (remote cache requested"),
+        "Expected 'remote cache requested' message, got:\n{stdout}"
+    );
+}
+
 // --- cache-state.t ---
 
 #[test]

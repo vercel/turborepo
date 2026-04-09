@@ -163,6 +163,11 @@ impl Run {
                     RemoteCacheDisabledReason::ByFlags => {
                         "Remote caching disabled (by flags)".to_string()
                     }
+                    RemoteCacheDisabledReason::RequestedWithoutCredentials => {
+                        "Remote caching disabled (remote cache requested \u{2014} set TURBO_TOKEN \
+                         and TURBO_TEAM, or run \"turbo login\" and \"turbo link\")"
+                            .to_string()
+                    }
                 };
                 (msg, false)
             }
