@@ -1,6 +1,5 @@
-import { generateNotFoundMarkdown, isAIAgent } from "@vercel/agent-readability";
+import { acceptsMarkdown, isAIAgent } from "@vercel/agent-readability";
 import { createI18nMiddleware } from "fumadocs-core/i18n/middleware";
-import { isMarkdownPreferred, rewritePath } from "fumadocs-core/negotiation";
 import {
   type NextFetchEvent,
   type NextRequest,
@@ -9,12 +8,35 @@ import {
 import { i18n } from "@/lib/geistdocs/i18n";
 import { trackMdRequest } from "@/lib/md-tracking";
 
-const { rewrite: rewriteLLM } = rewritePath(
-  "/docs{/*path}",
-  "/en/llms.md{/*path}"
-);
-
 const internationalizer = createI18nMiddleware(i18n);
+
+function getTrackedDocsPath(pathname: string): string | null {
+  if (pathname === "/docs" || pathname === "/docs.md") {
+    return "/docs/index";
+  }
+
+  if (!pathname.startsWith("/docs/")) {
+    return null;
+  }
+
+  const docPath = pathname.replace("/docs/", "").replace(/\.md$/, "") || "index";
+
+  return `/docs/${docPath}`;
+}
+
+function getMarkdownRewritePath(pathname: string): string | null {
+  if (pathname === "/docs" || pathname === "/docs.md") {
+    return "/en/docs/md";
+  }
+
+  if (!pathname.startsWith("/docs/")) {
+    return null;
+  }
+
+  const docPath = pathname.replace("/docs/", "").replace(/\.md$/, "");
+
+  return docPath ? `/en/docs/md/${docPath}` : "/en/docs/md";
+}
 
 function trackMd(
   request: NextRequest,
@@ -38,41 +60,57 @@ const proxy = (request: NextRequest, context: NextFetchEvent) => {
 
   // Handle .md extension in URL path (e.g., /docs/getting-started.md or /docs.md)
   if (pathname === "/docs.md") {
-    trackMd(request, context, "/llms.md");
-    return NextResponse.rewrite(new URL("/en/llms.md", request.nextUrl));
+    const trackingPath = getTrackedDocsPath(pathname);
+    const rewritePath = getMarkdownRewritePath(pathname);
+
+    if (trackingPath && rewritePath) {
+      trackMd(request, context, trackingPath);
+      return NextResponse.rewrite(new URL(rewritePath, request.nextUrl));
+    }
   }
+
   if (pathname.startsWith("/docs/") && pathname.endsWith(".md")) {
-    const pathWithoutMd = pathname.slice(0, -3);
-    const docPath = pathWithoutMd.replace(/^\/docs\//, "");
-    trackMd(request, context, `/llms.md/${docPath}`);
-    return NextResponse.rewrite(
-      new URL(`/en/llms.md/${docPath}`, request.nextUrl)
-    );
+    const trackingPath = getTrackedDocsPath(pathname);
+    const rewritePath = getMarkdownRewritePath(pathname);
+
+    if (trackingPath && rewritePath) {
+      trackMd(request, context, trackingPath);
+      return NextResponse.rewrite(new URL(rewritePath, request.nextUrl));
+    }
   }
 
   // Handle Markdown preference via Accept header
-  if (isMarkdownPreferred(request)) {
-    const result = rewriteLLM(pathname);
-    if (result) {
-      const trackingPath = result.replace(/^\/[a-z]{2}\//, "/");
+  if (
+    acceptsMarkdown(request) &&
+    (pathname === "/docs" || pathname.startsWith("/docs/")) &&
+    pathname !== "/docs/md" &&
+    !pathname.startsWith("/docs/md/")
+  ) {
+    const trackingPath = getTrackedDocsPath(pathname);
+    const rewritePath = getMarkdownRewritePath(pathname);
+
+    if (trackingPath && rewritePath) {
       trackMd(request, context, trackingPath, "header-negotiated");
-      return NextResponse.rewrite(new URL(result, request.nextUrl));
+      return NextResponse.rewrite(new URL(rewritePath, request.nextUrl));
     }
   }
 
   // Handle AI agent detection — serve markdown automatically
-  if (pathname === "/docs" || pathname.startsWith("/docs/")) {
+  if (
+    (pathname === "/docs" || pathname.startsWith("/docs/")) &&
+    pathname !== "/docs/md" &&
+    !pathname.startsWith("/docs/md/")
+  ) {
     const { detected } = isAIAgent(request);
+
     if (detected) {
-      const result = rewriteLLM(pathname);
-      if (result) {
-        const trackingPath = result.replace(/^\/[a-z]{2}\//, "/");
+      const trackingPath = getTrackedDocsPath(pathname);
+      const rewritePath = getMarkdownRewritePath(pathname);
+
+      if (trackingPath && rewritePath) {
         trackMd(request, context, trackingPath, "agent-rewrite");
-        return NextResponse.rewrite(new URL(result, request.nextUrl));
+        return NextResponse.rewrite(new URL(rewritePath, request.nextUrl));
       }
-      return new NextResponse(generateNotFoundMarkdown(pathname), {
-        headers: { "Content-Type": "text/markdown; charset=utf-8" },
-      });
     }
   }
 

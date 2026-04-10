@@ -14,16 +14,6 @@ const config: NextConfig = {
     ignoreBuildErrors: true
   },
 
-  // biome-ignore lint/suspicious/useAwait: rewrite is async
-  async rewrites() {
-    return [
-      {
-        source: "/docs/:path*.md",
-        destination: "/en/llms.md/:path*"
-      }
-    ];
-  },
-
   // biome-ignore lint/suspicious/useAwait: redirect is async
   async redirects() {
     return [

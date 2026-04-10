@@ -5,7 +5,7 @@ export const revalidate = false;
 
 export async function GET(
   _req: Request,
-  { params }: RouteContext<"/[lang]/llms.md/[[...slug]]">
+  { params }: RouteContext<"/[lang]/docs/md/[[...slug]]">
 ) {
   const { slug, lang } = await params;
   const page = source.getPage(slug, lang);
@@ -16,7 +16,7 @@ export async function GET(
 
   return new Response(await getLLMText(page), {
     headers: {
-      "Content-Type": "text/markdown",
+      "Content-Type": "text/markdown; charset=utf-8",
       Vary: "Accept"
     }
   });
@@ -24,7 +24,7 @@ export async function GET(
 
 export const generateStaticParams = async ({
   params
-}: RouteContext<"/[lang]/llms.md/[[...slug]]">) => {
+}: RouteContext<"/[lang]/docs/md/[[...slug]]">) => {
   const { lang } = await params;
 
   return source.generateParams(lang);
