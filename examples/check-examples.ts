@@ -226,14 +226,14 @@ async function convertToPackageManager(
 ): Promise<void> {
   console.log(`[${label}] Converting to ${packageManager}...`);
   // Run with PATH including corepack binaries so yarn/pnpm are available
-  const result = await sandbox.runCommand(
-    "sh",
-    [
+  const result = await sandbox.runCommand({
+    cmd: "sh",
+    args: [
       "-c",
       `export PATH="${COREPACK_BIN}:$PATH" && npx @turbo/workspaces convert . ${packageManager} --skip-install --ignore-unchanged-package-manager`
     ],
-    { cwd: SANDBOX_CWD }
-  );
+    cwd: SANDBOX_CWD
+  });
   if (result.exitCode !== 0) {
     const stderr = await result.stderr();
     const stdout = await result.stdout();
@@ -260,11 +260,11 @@ async function installDependencies(
 ): Promise<void> {
   console.log(`[${label}] Installing dependencies (${packageManager})...`);
   // Run with PATH including corepack binaries so yarn/pnpm are available
-  const result = await sandbox.runCommand(
-    "sh",
-    ["-c", `export PATH="${COREPACK_BIN}:$PATH" && ${packageManager} install`],
-    { cwd: SANDBOX_CWD }
-  );
+  const result = await sandbox.runCommand({
+    cmd: "sh",
+    args: ["-c", `export PATH="${COREPACK_BIN}:$PATH" && ${packageManager} install`],
+    cwd: SANDBOX_CWD
+  });
   if (result.exitCode !== 0) {
     const stderr = await result.stderr();
     throw new Error(`Failed to install dependencies: ${stderr}`);
@@ -281,11 +281,11 @@ async function runTasks(
 
   for (const task of tasks) {
     console.log(`[${label}] Running: ${task}...`);
-    const taskResult = await sandbox.runCommand(
-      "sh",
-      ["-c", `export PATH="${COREPACK_BIN}:$PATH" && turbo run ${task}`],
-      { cwd: SANDBOX_CWD }
-    );
+    const taskResult = await sandbox.runCommand({
+      cmd: "sh",
+      args: ["-c", `export PATH="${COREPACK_BIN}:$PATH" && turbo run ${task}`],
+      cwd: SANDBOX_CWD
+    });
 
     if (taskResult.exitCode !== 0) {
       const stderr = await taskResult.stderr();
@@ -318,11 +318,11 @@ async function verifyCacheHits(
 
   for (const task of tasks) {
     console.log(`[${label}] Cache check: ${task}...`);
-    const taskResult = await sandbox.runCommand(
-      "sh",
-      ["-c", `export PATH="${COREPACK_BIN}:$PATH" && turbo run ${task}`],
-      { cwd: SANDBOX_CWD }
-    );
+    const taskResult = await sandbox.runCommand({
+      cmd: "sh",
+      args: ["-c", `export PATH="${COREPACK_BIN}:$PATH" && turbo run ${task}`],
+      cwd: SANDBOX_CWD
+    });
 
     const stdout = await taskResult.stdout();
     const stderr = await taskResult.stderr();
@@ -375,9 +375,10 @@ async function runExample(
     sandbox = await Sandbox.create({
       runtime: "node24",
       timeout: 10 * 60 * 1000,
-      resources: { vcpus: 4 }
+      resources: { vcpus: 4 },
+      persistent: false
     });
-    console.log(`[${exampleName}] Sandbox created: ${sandbox.sandboxId}`);
+    console.log(`[${exampleName}] Sandbox created: ${sandbox.name}`);
 
     await installTurbo(sandbox, exampleName);
     await enableCorepack(sandbox, exampleName);
