@@ -190,6 +190,19 @@ impl FromStr for TargetSelector {
                     allow_unknown_objects: false,
                     merge_base: true,
                 }
+            } else if let Some((a, b)) = commits_str.split_once("..") {
+                if a.is_empty() || b.is_empty() {
+                    return Err(InvalidSelectorError::InvalidGitRange(
+                        commits_str.to_string(),
+                    ));
+                }
+                GitRange {
+                    from_ref: Some(a.to_string()),
+                    to_ref: Some(b.to_string()),
+                    include_uncommitted: false,
+                    allow_unknown_objects: false,
+                    merge_base: false,
+                }
             } else {
                 // If only the start of the range is specified, we assume that
                 // we want to include uncommitted changes
@@ -285,7 +298,9 @@ mod test {
     #[test_case(".", TargetSelector { raw: ".".to_string(), parent_dir: Some(AnchoredSystemPathBuf::try_from(".").unwrap()), ..Default::default() }; "parent dir dot")]
     #[test_case("..", TargetSelector { raw: "..".to_string(), parent_dir: Some(AnchoredSystemPathBuf::try_from("..").unwrap()), ..Default::default() }; "parent dir dot dot")]
     #[test_case("[master]", TargetSelector { raw: "[master]".to_string(), git_range: Some(GitRange { from_ref: Some("master".to_string()), to_ref: None, include_uncommitted: true, ..Default::default() }), ..Default::default() }; "square brackets master")]
-    #[test_case("[from...to]", TargetSelector { raw: "[from...to]".to_string(), git_range: Some(GitRange { from_ref: Some("from".to_string()), to_ref: Some("to".to_string()), merge_base: true, ..Default::default() }), ..Default::default() }; "[from...to]")]
+    #[test_case("[from..to]", TargetSelector { raw: "[from..to]".to_string(), git_range: Some(GitRange { from_ref: Some("from".to_string()), to_ref: Some("to".to_string()), ..Default::default() }), ..Default::default() }; "from two dot to")]
+    #[test_case("[from...to]", TargetSelector { raw: "[from...to]".to_string(), git_range: Some(GitRange { from_ref: Some("from".to_string()), to_ref: Some("to".to_string()), merge_base: true, ..Default::default() }), ..Default::default() }; "from three dot to")]
+    #[test_case("[origin/main..HEAD]", TargetSelector { raw: "[origin/main..HEAD]".to_string(), git_range: Some(GitRange { from_ref: Some("origin/main".to_string()), to_ref: Some("HEAD".to_string()), ..Default::default() }), ..Default::default() }; "[origin/main..HEAD]")]
     #[test_case("{foo}[master]", TargetSelector { raw: "{foo}[master]".to_string(), git_range: Some(GitRange { from_ref: Some("master".to_string()), to_ref: None, include_uncommitted: true, ..Default::default() }), parent_dir: Some(AnchoredSystemPathBuf::try_from("foo").unwrap()), ..Default::default() }; "{foo}[master]")]
     #[test_case("pattern{foo}[master]", TargetSelector { raw: "pattern{foo}[master]".to_string(), git_range: Some(GitRange { from_ref: Some("master".to_string()), to_ref: None, include_uncommitted: true, ..Default::default() }), parent_dir: Some(AnchoredSystemPathBuf::try_from("foo").unwrap()), name_pattern: "pattern".to_string(), ..Default::default() }; "pattern{foo}[master]")]
     #[test_case("[master]...", TargetSelector { raw: "[master]...".to_string(), git_range: Some(GitRange { from_ref: Some("master".to_string()), to_ref: None, include_uncommitted: true, ..Default::default() }), include_dependencies: true, ..Default::default() }; "square brackets master dot dot dot")]
@@ -316,7 +331,10 @@ mod test {
     #[test_case("{}" ; "curly brackets")]
     #[test_case("......[master]" ; "......[master]")]
     #[test_case("[]" ; "empty git range")]
+    #[test_case("[..some-ref]" ; "missing two-dot git range start")]
+    #[test_case("[some-ref..]" ; "missing two-dot git range end")]
     #[test_case("[...some-ref]" ; "missing git range start")]
+    #[test_case("[..]" ; "missing entire two-dot git range")]
     #[test_case("[some-ref...]" ; "missing git range end")]
     #[test_case("[...]" ; "missing entire git range")]
     fn parse_target_selector_invalid(raw_selector: &str) {
