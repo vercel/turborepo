@@ -1413,10 +1413,8 @@ mod test {
                 String::from_utf8_lossy(&buffer).contains("ready")
             };
 
-            if saw_ready {
-                if let Some(ready_tx) = self.ready_tx.take() {
-                    ready_tx.send(()).ok();
-                }
+            if saw_ready && let Some(ready_tx) = self.ready_tx.take() {
+                ready_tx.send(()).ok();
             }
 
             Ok(buf.len())
@@ -1740,11 +1738,10 @@ mod test {
         let mut output_child = child.clone();
         let (mut observer, output, ready_rx) = ObservedOutput::new();
         let output_task = tokio::spawn(async move {
-            let exit = output_child
+            output_child
                 .wait_with_piped_outputs(&mut observer)
                 .await
-                .unwrap();
-            exit
+                .unwrap()
         });
 
         tokio::time::timeout(Duration::from_secs(2), ready_rx)
