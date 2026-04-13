@@ -11,7 +11,8 @@ use turbopath::{AbsoluteSystemPathBuf, PathRelation};
 use turborepo_cache::AsyncCache;
 use turborepo_gitignore::ensure_turbo_is_gitignored;
 use turborepo_scm::SCM;
-use turborepo_task_executor::TaskAccessProvider;
+use turborepo_task_executor::{TaskAccessCachePolicy, TaskAccessProvider};
+use turborepo_types::TaskOutputs;
 // Re-export from turborepo-turbo-json
 pub use turborepo_turbo_json::TASK_ACCESS_CONFIG_PATH;
 use turborepo_unescape::UnescapedString;
@@ -140,6 +141,138 @@ impl TaskAccessTraceFile {
 
         true
     }
+
+    fn to_detected_outputs(&self) -> Option<TaskOutputs> {
+        if self.outputs.is_empty() {
+            return None;
+        }
+
+        let mut inclusions = Vec::new();
+        let mut exclusions = Vec::new();
+        let mut seen_inclusions = std::collections::HashSet::new();
+        let mut seen_exclusions = std::collections::HashSet::new();
+
+        for output in &self.outputs {
+            let output = output.to_string();
+            if output.is_empty() {
+                continue;
+            }
+
+            if let Some(stripped) = output.strip_prefix('!') {
+                if !stripped.is_empty() && seen_exclusions.insert(stripped.to_string()) {
+                    exclusions.push(stripped.to_string());
+                }
+            } else if seen_inclusions.insert(output.clone()) {
+                inclusions.push(output);
+            }
+        }
+
+        if inclusions.is_empty() {
+            return None;
+        }
+
+        Some(TaskOutputs {
+            inclusions,
+            exclusions,
+        })
+    }
+
+    fn suspicious_writes(&self, repo_root: &AbsoluteSystemPathBuf) -> Vec<String> {
+        let mut warnings = Vec::new();
+        let mut outside_repo = Vec::new();
+        let mut relative_paths = Vec::new();
+
+        for output in &self.outputs {
+            let output = output.to_string();
+            let output_path = output.strip_prefix('!').unwrap_or(&output);
+            if output_path.is_empty() {
+                continue;
+            }
+
+            if !std::path::Path::new(output_path).is_absolute() {
+                relative_paths.push(output_path.to_string());
+                continue;
+            }
+
+            match AbsoluteSystemPathBuf::new(output_path.to_string()) {
+                Ok(path) => {
+                    let relation = path.relation_to_path(repo_root);
+                    if relation == PathRelation::Parent || relation == PathRelation::Divergent {
+                        outside_repo.push(output_path.to_string());
+                    }
+                }
+                Err(_) => relative_paths.push(output_path.to_string()),
+            }
+        }
+
+        if !outside_repo.is_empty() {
+            warnings.push(format!(
+                "detected output writes outside repo root: {}",
+                outside_repo.join(", ")
+            ));
+        }
+
+        if !relative_paths.is_empty() {
+            warnings.push(format!(
+                "detected output writes with non-absolute paths in trace: {}",
+                relative_paths.join(", ")
+            ));
+        }
+
+        warnings
+    }
+
+    fn emit_suspicious_write_warnings(&self, repo_root: &AbsoluteSystemPathBuf, task_id: &str) {
+        for warning in self.suspicious_writes(repo_root) {
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::TaskAccess),
+                format!("{task_id}: {warning}"),
+            )
+            .emit();
+        }
+    }
+
+    fn to_repo_relative_outputs(
+        &self,
+        repo_root: &AbsoluteSystemPathBuf,
+    ) -> Option<TaskOutputs> {
+        let detected_outputs = self.to_detected_outputs()?;
+        let mut inclusions = Vec::new();
+        let mut exclusions = Vec::new();
+
+        for inclusion in detected_outputs.inclusions {
+            if let Some(repo_relative) = Self::to_repo_relative_glob(repo_root, &inclusion) {
+                inclusions.push(repo_relative);
+            }
+        }
+
+        for exclusion in detected_outputs.exclusions {
+            if let Some(repo_relative) = Self::to_repo_relative_glob(repo_root, &exclusion) {
+                exclusions.push(repo_relative);
+            }
+        }
+
+        inclusions.sort();
+        inclusions.dedup();
+        exclusions.sort();
+        exclusions.dedup();
+
+        Some(TaskOutputs {
+            inclusions,
+            exclusions,
+        })
+    }
+
+    fn to_repo_relative_glob(repo_root: &AbsoluteSystemPathBuf, glob: &str) -> Option<String> {
+        let path = AbsoluteSystemPathBuf::new(glob.to_string()).ok()?;
+        let relation = path.relation_to_path(repo_root);
+        if relation == PathRelation::Parent || relation == PathRelation::Divergent {
+            return None;
+        }
+
+        let relative = repo_root.anchor(&path).ok()?;
+        Some(relative.to_string())
+    }
 }
 
 #[derive(Clone)]
@@ -257,18 +390,25 @@ impl TaskAccess {
         }
     }
 
-    // Whether we can cache the given task, returning None if task access isn't
-    // enabled or the trace can't be found
-    pub fn can_cache(&self, task_hash: &str, task_id: &str) -> Option<bool> {
+    // Returns cache policy for the given task, returning None if task access
+    // isn't enabled or the trace can't be found.
+    pub fn cache_policy(&self, task_hash: &str, task_id: &str) -> Option<TaskAccessCachePolicy> {
         if !self.is_enabled() {
             return None;
         }
         let trace = TaskAccessTraceFile::read(&self.repo_root, task_hash)?;
-        if trace.can_cache(&self.repo_root) {
+        trace.emit_suspicious_write_warnings(&self.repo_root, task_id);
+        let can_cache = trace.can_cache(&self.repo_root);
+        let detected_outputs = trace.to_repo_relative_outputs(&self.repo_root);
+        if can_cache {
             self.save_trace(task_id.to_string(), trace);
-            Some(true)
+            if let Some(detected_outputs) = detected_outputs {
+                Some(TaskAccessCachePolicy::allow_with_outputs(detected_outputs))
+            } else {
+                Some(TaskAccessCachePolicy::allow())
+            }
         } else {
-            Some(false)
+            Some(TaskAccessCachePolicy::deny())
         }
     }
 
@@ -305,11 +445,70 @@ impl TaskAccessProvider for TaskAccess {
         TaskAccess::get_env_var(self, task_hash)
     }
 
-    fn can_cache(&self, task_hash: &str, task_id: &str) -> Option<bool> {
-        TaskAccess::can_cache(self, task_hash, task_id)
+    fn cache_policy(&self, task_hash: &str, task_id: &str) -> Option<TaskAccessCachePolicy> {
+        TaskAccess::cache_policy(self, task_hash, task_id)
     }
 
     async fn save(&self) {
         TaskAccess::save(self).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::tempdir;
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_unescape::UnescapedString;
+
+    use super::{TaskAccessTraceAccess, TaskAccessTraceFile};
+
+    fn make_trace(outputs: &[&str]) -> TaskAccessTraceFile {
+        TaskAccessTraceFile {
+            accessed: TaskAccessTraceAccess {
+                network: false,
+                file_paths: Vec::new(),
+                env_var_keys: Vec::new(),
+            },
+            outputs: outputs
+                .iter()
+                .map(|output| UnescapedString::from((*output).to_string()))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn to_detected_outputs_splits_inclusions_and_exclusions() {
+        let trace = make_trace(&[
+            "dist/**",
+            "!dist/cache/**",
+            "dist/**",
+            "!dist/cache/**",
+            "",
+        ]);
+        let outputs = trace.to_detected_outputs().expect("expected outputs");
+
+        assert_eq!(outputs.inclusions, vec!["dist/**".to_string()]);
+        assert_eq!(outputs.exclusions, vec!["dist/cache/**".to_string()]);
+    }
+
+    #[test]
+    fn to_detected_outputs_ignores_only_exclusions() {
+        let trace = make_trace(&["!dist/cache/**"]);
+        assert!(trace.to_detected_outputs().is_none());
+    }
+
+    #[test]
+    fn to_repo_relative_outputs_uses_repo_relative_paths() {
+        let temp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let dist = repo_root.join_components(&["apps", "web", "dist"]);
+        let cache = repo_root.join_components(&["apps", "web", "dist", "cache"]);
+        let trace = make_trace(&[dist.to_string().as_str(), format!("!{}", cache).as_str()]);
+
+        let outputs = trace
+            .to_repo_relative_outputs(&repo_root)
+            .expect("expected repo-relative outputs");
+        assert_eq!(outputs.inclusions, vec!["apps/web/dist".to_string()]);
+        assert_eq!(outputs.exclusions, vec!["apps/web/dist/cache".to_string()]);
     }
 }

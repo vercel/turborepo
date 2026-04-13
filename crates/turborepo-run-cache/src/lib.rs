@@ -192,6 +192,7 @@ impl RunCache {
             expanded_outputs: Vec::new(),
             run_cache: self.clone(),
             repo_relative_globs,
+            output_override: None,
             hash: hash.to_owned(),
             task_id,
             task_output_logs,
@@ -228,6 +229,7 @@ pub struct TaskCache {
     expanded_outputs: Vec<AnchoredSystemPathBuf>,
     run_cache: Arc<RunCache>,
     repo_relative_globs: TaskOutputs,
+    output_override: Option<TaskOutputs>,
     hash: String,
     task_output_logs: OutputLogsMode,
     caching_disabled: bool,
@@ -252,6 +254,21 @@ impl TaskCache {
 
     pub fn is_caching_disabled(&self) -> bool {
         self.caching_disabled
+    }
+
+    pub fn set_output_override(&mut self, outputs: TaskOutputs) {
+        self.output_override = Some(outputs);
+    }
+
+    fn active_repo_relative_globs(&self) -> &TaskOutputs {
+        Self::resolve_output_globs(&self.repo_relative_globs, self.output_override.as_ref())
+    }
+
+    fn resolve_output_globs<'a>(
+        repo_relative_globs: &'a TaskOutputs,
+        output_override: Option<&'a TaskOutputs>,
+    ) -> &'a TaskOutputs {
+        output_override.unwrap_or(repo_relative_globs)
     }
 
     /// Will read log file and write to output a line at a time
@@ -382,7 +399,9 @@ impl TaskCache {
             return Ok(None);
         }
 
-        let validated_inclusions = self.repo_relative_globs.validated_inclusions()?;
+        self.ensure_log_file_in_output_override();
+        let active_globs = self.active_repo_relative_globs();
+        let validated_inclusions = active_globs.validated_inclusions()?;
 
         // If an output watcher is connected, check whether outputs have changed
         // since they were last written. When outputs are already on disk and
@@ -406,11 +425,11 @@ impl TaskCache {
                          to check cache",
                         self.task_id, err
                     );
-                    self.repo_relative_globs.inclusions.len()
+                    active_globs.inclusions.len()
                 }
             }
         } else {
-            self.repo_relative_globs.inclusions.len()
+            active_globs.inclusions.len()
         };
 
         let has_changed_outputs = changed_output_count > 0;
@@ -454,7 +473,7 @@ impl TaskCache {
 
             if let Some(output_watcher) = &self.output_watcher {
                 let exclusion_strings: Vec<String> = self
-                    .repo_relative_globs
+                    .active_repo_relative_globs()
                     .validated_exclusions()?
                     .iter()
                     .map(|g| g.as_ref().to_string())
@@ -549,10 +568,11 @@ impl TaskCache {
             return Ok(());
         }
 
-        debug!("caching outputs: outputs: {:?}", &self.repo_relative_globs);
+        let active_globs = self.active_repo_relative_globs();
+        debug!("caching outputs: outputs: {:?}", active_globs);
 
-        let validated_inclusions = self.repo_relative_globs.validated_inclusions()?;
-        let validated_exclusions = self.repo_relative_globs.validated_exclusions()?;
+        let validated_inclusions = active_globs.validated_inclusions()?;
+        let validated_exclusions = active_globs.validated_exclusions()?;
         let files_to_be_cached = globwalk::globwalk(
             &self.run_cache.repo_root,
             &validated_inclusions,
@@ -562,7 +582,7 @@ impl TaskCache {
 
         // If we're only caching the log output, *and* output globs are not empty,
         // we should warn the user
-        if files_to_be_cached.len() == 1 && !self.repo_relative_globs.is_empty() {
+        if files_to_be_cached.len() == 1 && !active_globs.is_empty() {
             let _ = self.warnings.lock().map(|mut warnings| {
                 warnings.push(format!(
                     "no output files found for task {}. Please check your `outputs` key in \
@@ -620,6 +640,17 @@ impl TaskCache {
 
     pub fn expanded_outputs(&self) -> &[AnchoredSystemPathBuf] {
         &self.expanded_outputs
+    }
+
+    fn ensure_log_file_in_output_override(&mut self) {
+        let Some(output_override) = &mut self.output_override else {
+            return;
+        };
+
+        let log_file = TaskDefinition::workspace_relative_log_file(self.task_id.task()).to_string();
+        if !output_override.inclusions.iter().any(|glob| glob == &log_file) {
+            output_override.inclusions.push(log_file);
+        }
     }
 
     /// Returns true if this task has incremental cache partitions configured
@@ -788,6 +819,8 @@ mod test {
         collections::HashSet,
         sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     };
+
+    use turborepo_types::TaskOutputs;
 
     use super::{OutputWatcher, OutputWatcherError};
 
@@ -1016,5 +1049,25 @@ mod test {
         // OutputWatcherError must be Send + Sync for use across async boundaries
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<OutputWatcherError>();
+    }
+
+    #[test]
+    fn resolve_output_globs_prefers_override() {
+        let default_outputs = TaskOutputs {
+            inclusions: vec!["default/**".to_string()],
+            exclusions: vec![],
+        };
+        let override_outputs = TaskOutputs {
+            inclusions: vec!["trace/**".to_string()],
+            exclusions: vec!["trace/tmp/**".to_string()],
+        };
+
+        let without_override = super::TaskCache::resolve_output_globs(&default_outputs, None);
+        assert_eq!(without_override.inclusions, vec!["default/**".to_string()]);
+
+        let with_override =
+            super::TaskCache::resolve_output_globs(&default_outputs, Some(&override_outputs));
+        assert_eq!(with_override.inclusions, vec!["trace/**".to_string()]);
+        assert_eq!(with_override.exclusions, vec!["trace/tmp/**".to_string()]);
     }
 }

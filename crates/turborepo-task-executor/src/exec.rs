@@ -26,7 +26,7 @@ use turborepo_telemetry::events::{TrackedErrors, task::PackageTaskEventBuilder};
 use turborepo_types::{ContinueMode, StopExecution, UIMode};
 use turborepo_ui::ColorConfig;
 
-use crate::{TaskAccessProvider, TaskOutput};
+use crate::{TaskAccessCachePolicy, TaskAccessProvider, TaskOutput};
 
 /// Windows NT status codes that indicate out-of-memory conditions.
 /// These are the signed i32 representations of the unsigned NT status codes.
@@ -282,33 +282,44 @@ where
 
         // Cache save runs after the callback so dependent tasks can start
         // while we walk the filesystem and write to cache.
-        if let Ok(ExecOutcome::Success(SuccessOutcome::Run)) = &result
-            && self
+        if let Ok(ExecOutcome::Success(SuccessOutcome::Run)) = &result {
+            let task_access_cache_policy = self
                 .task_access
-                .can_cache(&self.task_hash, &self.task_id_for_display)
-                .unwrap_or(true)
-        {
-            if let Err(e) = self
-                .task_cache
-                .save_outputs(task_duration, telemetry)
-                .instrument(tracing::info_span!("cache_save", task = %self.task_id))
-                .await
-            {
-                error!("error caching output: {e}");
-            } else {
-                self.hash_tracker.insert_expanded_outputs(
-                    self.task_id.clone(),
-                    self.task_cache.expanded_outputs().to_vec(),
-                );
-            }
+                .cache_policy(&self.task_hash, &self.task_id_for_display);
+            let should_cache = task_access_cache_policy
+                .as_ref()
+                .map_or(true, |policy| policy.should_cache);
+            if should_cache {
+                if let Some(TaskAccessCachePolicy {
+                    detected_outputs: Some(detected_outputs),
+                    ..
+                }) = task_access_cache_policy
+                {
+                    self.task_cache.set_output_override(detected_outputs);
+                }
 
-            let incremental_upload_failures = self
-                .task_cache
-                .upload_incremental()
-                .instrument(tracing::info_span!("incremental_upload", task = %self.task_id))
-                .await;
-            if incremental_upload_failures > 0 {
-                telemetry.track_error(TrackedErrors::IncrementalUploadFailed);
+                if let Err(e) = self
+                    .task_cache
+                    .save_outputs(task_duration, telemetry)
+                    .instrument(tracing::info_span!("cache_save", task = %self.task_id))
+                    .await
+                {
+                    error!("error caching output: {e}");
+                } else {
+                    self.hash_tracker.insert_expanded_outputs(
+                        self.task_id.clone(),
+                        self.task_cache.expanded_outputs().to_vec(),
+                    );
+                }
+
+                let incremental_upload_failures = self
+                    .task_cache
+                    .upload_incremental()
+                    .instrument(tracing::info_span!("incremental_upload", task = %self.task_id))
+                    .await;
+                if incremental_upload_failures > 0 {
+                    telemetry.track_error(TrackedErrors::IncrementalUploadFailed);
+                }
             }
         }
 

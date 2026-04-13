@@ -38,7 +38,9 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_task_id::TaskId;
 // Re-export StopExecution from turborepo-types for convenience
 pub use turborepo_types::StopExecution;
-use turborepo_types::{ContinueMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, UIMode};
+use turborepo_types::{
+    ContinueMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, TaskOutputs, UIMode,
+};
 pub use visitor::{
     EngineExecutor, EngineMessage, EngineProvider, TaskCallback, TaskHashProvider, turbo_regex,
 };
@@ -118,16 +120,49 @@ pub trait TaskAccessProvider: Clone + Send + Sync {
     /// Returns the environment variable key and trace file path for a task
     fn get_env_var(&self, task_hash: &str) -> (String, AbsoluteSystemPathBuf);
 
-    /// Returns whether the task can be cached based on its trace.
+    /// Returns a cache policy for the task based on trace information.
     ///
-    /// Returns `None` if tracing is disabled or the trace can't be found.
-    /// Returns `Some(true)` if the task can be cached.
-    /// Returns `Some(false)` if the task cannot be cached (e.g., network
-    /// access).
-    fn can_cache(&self, task_hash: &str, task_id: &str) -> Option<bool>;
+    /// Returns `None` if tracing is disabled or no trace was found.
+    fn cache_policy(&self, task_hash: &str, task_id: &str) -> Option<TaskAccessCachePolicy>;
 
     /// Saves the task access trace results
     fn save(&self) -> impl Future<Output = ()> + Send;
+}
+
+/// Cache policy inferred from task access tracing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskAccessCachePolicy {
+    pub should_cache: bool,
+    pub detected_outputs: Option<TaskOutputs>,
+}
+
+impl TaskAccessCachePolicy {
+    pub fn allow() -> Self {
+        Self {
+            should_cache: true,
+            detected_outputs: None,
+        }
+    }
+
+    pub fn allow_with_outputs(detected_outputs: TaskOutputs) -> Self {
+        Self {
+            should_cache: true,
+            detected_outputs: Some(detected_outputs),
+        }
+    }
+
+    pub fn deny() -> Self {
+        Self {
+            should_cache: false,
+            detected_outputs: None,
+        }
+    }
+}
+
+impl Default for TaskAccessCachePolicy {
+    fn default() -> Self {
+        Self::allow()
+    }
 }
 
 /// A no-op implementation of MfeConfigProvider for when MFE is not configured.
@@ -179,7 +214,7 @@ impl TaskAccessProvider for NoTaskAccess {
         (String::new(), AbsoluteSystemPathBuf::default())
     }
 
-    fn can_cache(&self, _task_hash: &str, _task_id: &str) -> Option<bool> {
+    fn cache_policy(&self, _task_hash: &str, _task_id: &str) -> Option<TaskAccessCachePolicy> {
         None
     }
 
@@ -209,7 +244,7 @@ mod tests {
         let provider = NoTaskAccess;
 
         assert!(!provider.is_enabled());
-        assert!(provider.can_cache("hash", "task").is_none());
+        assert!(provider.cache_policy("hash", "task").is_none());
     }
 
     #[tokio::test]
