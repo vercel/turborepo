@@ -16,8 +16,8 @@ mod unix {
         sys::signal::{self, Signal},
         unistd::Pid,
     };
-    use portable_pty::{native_pty_system, CommandBuilder, PtySize};
-    use serde_json::{json, Value};
+    use portable_pty::{CommandBuilder, PtySize, native_pty_system};
+    use serde_json::{Value, json};
     use tempfile::TempDir;
 
     use crate::common::{self, setup};
