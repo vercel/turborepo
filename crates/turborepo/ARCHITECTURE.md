@@ -154,6 +154,18 @@ Multi-layered caching system:
 3. **Cache Storage**: Compress and store task outputs
 4. **Cache Metadata**: Track cache hits, timing, and sources
 
+#### Task-Access Trace Output Overrides (PoC)
+
+When task-access tracing is enabled and a framework emits a trace file, the
+executor can derive a task-specific cache policy from that trace:
+
+- deny cache writes for traces that fail task-access safety checks
+- override the configured output globs with traced outputs for cache save
+- emit warnings for suspicious traced writes (e.g. outside repo root)
+
+The PoC keeps task execution semantics unchanged (no sandboxing) and only
+changes cache-save behavior when a valid trace policy is available.
+
 #### Key Components
 
 - `RunCache`: High-level cache coordination
