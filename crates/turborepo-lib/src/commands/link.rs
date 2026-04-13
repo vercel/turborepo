@@ -283,8 +283,8 @@ fn should_enable_caching() -> Result<bool, Error> {
 
 #[cfg(test)]
 fn select_team<'a>(_: &CommandBase, teams: &'a [Team]) -> Result<SelectedTeam<'a>, Error> {
-    let mut rng = rand::thread_rng();
-    let idx = rng.gen_range(0..(teams.len()));
+    let mut rng = rand::rng();
+    let idx = rng.random_range(0..teams.len());
     Ok(SelectedTeam::Team(&teams[idx]))
 }
 

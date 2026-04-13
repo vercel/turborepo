@@ -2,7 +2,7 @@ use std::{collections::HashMap, io};
 
 use itertools::Itertools;
 use petgraph::{Graph, visit::EdgeRef};
-use rand::{Rng, SeedableRng, distributions::Uniform, prelude::Distribution, rngs::SmallRng};
+use rand::{Rng, SeedableRng, distr::Distribution, rngs::SmallRng};
 
 use crate::{Built, Engine, TaskDefinitionInfo, TaskNode};
 
@@ -11,9 +11,7 @@ struct CapitalLetters;
 impl Distribution<char> for CapitalLetters {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> char {
         const GEN_ASCII_STR_CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        let range = Uniform::new(0u32, GEN_ASCII_STR_CHARSET.len() as u32);
-        char::from_u32(GEN_ASCII_STR_CHARSET[range.sample(rng) as usize] as u32)
-            .expect("random number should be in bounds")
+        char::from(GEN_ASCII_STR_CHARSET[rng.random_range(0..GEN_ASCII_STR_CHARSET.len())])
     }
 }
 

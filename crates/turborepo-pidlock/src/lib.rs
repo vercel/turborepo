@@ -245,7 +245,10 @@ impl Drop for Pidlock {
 mod tests {
     use std::{assert_matches::assert_matches, fs, io::Write, path::PathBuf};
 
-    use rand::{Rng, distributions::Alphanumeric, thread_rng};
+    use rand::{
+        Rng,
+        distr::{Alphanumeric, SampleString},
+    };
 
     use super::{PidFileError, Pidlock, PidlockError, PidlockState};
 
@@ -358,7 +361,7 @@ mod tests {
             .open(path.clone())
             .expect("Could not open file for writing");
 
-        file.write_all(&format!("{}", thread_rng().r#gen::<i32>()).into_bytes()[..])
+        file.write_all(&format!("{}", rand::rng().random::<i32>()).into_bytes()[..])
             .unwrap();
 
         drop(file);
@@ -372,11 +375,7 @@ mod tests {
     #[test]
     fn test_stale_pid_invalid_contents() {
         let (_tmp, path) = make_pid_path();
-        let contents: String = thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(20)
-            .map(char::from)
-            .collect();
+        let contents = Alphanumeric.sample_string(&mut rand::rng(), 20);
         let mut file = fs::OpenOptions::new()
             .create_new(true)
             .write(true)

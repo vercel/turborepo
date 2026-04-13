@@ -399,7 +399,7 @@ dependencies = [
  "sha1",
  "sync_wrapper",
  "tokio",
- "tokio-tungstenite 0.26.2",
+ "tokio-tungstenite",
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
@@ -4679,7 +4679,7 @@ version = "0.1.4"
 dependencies = [
  "libc",
  "log",
- "rand 0.8.5",
+ "rand 0.9.3",
  "tempfile",
  "thiserror 2.0.18",
  "windows-sys 0.45.0",
@@ -6782,18 +6782,6 @@ dependencies = [
 
 [[package]]
 name = "tokio-tungstenite"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c83b561d025642014097b66e6c1bb422783339e0909e4429cde4749d1990bc38"
-dependencies = [
- "futures-util",
- "log",
- "tokio",
- "tungstenite 0.21.0",
-]
-
-[[package]]
-name = "tokio-tungstenite"
 version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a9daff607c6d2bf6c16fd681ccb7eecc83e4e2cdc1ca067ffaadfca5de7f084"
@@ -6801,7 +6789,7 @@ dependencies = [
  "futures-util",
  "log",
  "tokio",
- "tungstenite 0.26.2",
+ "tungstenite",
 ]
 
 [[package]]
@@ -7187,25 +7175,6 @@ checksum = "16f4d2473af6ae50523181a971dd8c8557416ece8ba4fcd2d63331be6f73759c"
 dependencies = [
  "ratatui-core",
  "ratatui-widgets",
-]
-
-[[package]]
-name = "tungstenite"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ef1a641ea34f399a848dea702823bbecfb4c486f911735368f1f137cb8257e1"
-dependencies = [
- "byteorder",
- "bytes",
- "data-encoding",
- "http",
- "httparse",
- "log",
- "rand 0.8.5",
- "sha1",
- "thiserror 1.0.63",
- "url",
- "utf-8",
 ]
 
 [[package]]
@@ -7597,7 +7566,7 @@ dependencies = [
  "miette",
  "petgraph 0.8.3",
  "pretty_assertions",
- "rand 0.8.5",
+ "rand 0.9.3",
  "serde_json",
  "tempfile",
  "test-case",
@@ -7783,7 +7752,7 @@ dependencies = [
  "pretty_assertions",
  "prost 0.14.3",
  "radix_trie",
- "rand 0.8.5",
+ "rand 0.9.3",
  "rayon",
  "regex",
  "reqwest",
@@ -7949,7 +7918,7 @@ dependencies = [
  "serial_test",
  "thiserror 2.0.18",
  "tokio",
- "tokio-tungstenite 0.21.0",
+ "tokio-tungstenite",
  "tracing",
  "turborepo-errors",
  "turborepo-microfrontends",
@@ -8529,7 +8498,7 @@ dependencies = [
  "itoa",
  "log",
  "quickcheck",
- "rand 0.8.5",
+ "rand 0.9.3",
  "ratatui",
  "serde",
  "serde_json",
