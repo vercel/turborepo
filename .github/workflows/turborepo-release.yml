@@ -5,12 +5,11 @@
 # 1. Create a staging branch (acts as a lock to prevent concurrent releases)
 # 2. Run some smoke tests on that branch
 # 3. Build the Rust binary
-# 4. Run security audits (cargo audit + pnpm audit)
-# 5. Publish JS packages to npm (including turbo itself)
-# 6. Create the git tag (only after npm publish succeeds)
-# 7. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
-# 8. Create a release branch and open a PR
-# 9. On failure, cleanup the staging branch and release tag automatically
+# 4. Publish JS packages to npm (including turbo itself)
+# 5. Create the git tag (only after npm publish succeeds)
+# 6. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
+# 7. Create a release branch and open a PR
+# 8. On failure, cleanup the staging branch and release tag automatically
 #
 # Canary releases run on an hourly schedule.
 # Manual releases are triggered via workflow_dispatch.
@@ -379,34 +378,6 @@ jobs:
         with:
           name: turbo-${{ matrix.settings.target }}
           path: target/${{ matrix.settings.target }}/release-turborepo/turbo*
-
-  security-scan:
-    name: "Security Audit (Non-blocking)"
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    continue-on-error: true
-    needs: [stage]
-    if: ${{ always() && needs.stage.result == 'success' }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.stage.outputs.stage-branch }}
-          filter: blob:none
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          node-extra-flags: "--no-frozen-lockfile"
-
-      - name: Rust dependency audit
-        run: |
-          cargo install cargo-audit --locked --quiet
-          cargo audit --deny unsound --deny yanked
-
-      - name: JS dependency audit
-        # --ignore: false positive from workspace directory "cli/" matching npm package "cli"
-        run: pnpm audit --prod --audit-level low --ignore GHSA-6cpc-mj5c-m9rq
 
   npm-publish:
     name: "Publish To NPM"

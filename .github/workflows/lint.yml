@@ -147,45 +147,6 @@ jobs:
         run: |
           TURBO_API= turbo run quality --env-mode=strict
 
-  rust_audit:
-    name: Rust security audit
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.dependencies == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    continue-on-error: true
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Run cargo audit
-        run: |
-          cargo install cargo-audit --locked --quiet
-          cargo audit --deny unsound --deny yanked
-
-  js_audit:
-    name: JS security audit
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.dependencies == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    continue-on-error: true
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: ./.github/actions/setup-node
-
-      - name: Run pnpm audit
-        # --ignore: false positive from workspace directory "cli/" matching npm package "cli"
-        run: pnpm audit --prod --audit-level low --ignore GHSA-6cpc-mj5c-m9rq
-
   cleanup:
     name: Cleanup
     needs:
@@ -193,8 +154,6 @@ jobs:
       - rust_fmt
       - rust_clippy
       - rust_licenses
-      - rust_audit
-      - js_audit
       - format_lint
     if: always()
     uses: ./.github/workflows/pr-clean-caches.yml
