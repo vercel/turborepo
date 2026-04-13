@@ -868,6 +868,7 @@ impl RunBuilder {
                 repo_index,
                 observability_handle,
                 query_server: self.query_server,
+                shutdown_started_emitted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             },
             analytics_handle,
         ))

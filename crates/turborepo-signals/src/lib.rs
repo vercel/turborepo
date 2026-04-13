@@ -8,22 +8,38 @@ pub mod signals;
 
 use std::{
     fmt::Debug,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU8, Ordering},
+    },
 };
 
 use futures::{Stream, StreamExt, stream::FuturesUnordered};
 use signals::Signal;
 use tokio::{
     pin,
-    sync::{mpsc, oneshot},
+    sync::{Notify, mpsc, oneshot},
 };
 
-/// SignalHandler provides a mechanism to subscribe to a future and get alerted
-/// whenever the future completes or the handler gets a close message.
+/// Why the signal handler started shutdown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShutdownReason {
+    /// A real OS signal, such as Ctrl+C or SIGTERM, started shutdown.
+    Signal = 1,
+    /// Shutdown started because `close()` was called or because the signal
+    /// source ended without yielding a signal.
+    Close = 2,
+}
+
+/// SignalHandler notifies subscribers when shutdown starts because of a real
+/// signal, an explicit `close()`, or a signal source that ends without yielding
+/// a signal.
 #[derive(Debug, Clone)]
 pub struct SignalHandler {
     state: Arc<Mutex<HandlerState>>,
     close: mpsc::Sender<()>,
+    shutdown_reason: Arc<AtomicU8>,
+    started: Arc<Notify>,
 }
 
 #[derive(Debug, Default)]
@@ -41,23 +57,31 @@ pub struct SubscriberGuard {
 }
 
 impl SignalHandler {
-    /// Construct a new SignalHandler that will alert any subscribers when
-    /// `signal_source` completes or `close` is called on it.
+    /// Construct a new SignalHandler that alerts subscribers when
+    /// `signal_source` yields a signal, when `close()` is called, or when the
+    /// signal source ends without yielding a signal.
     pub fn new(signal_source: impl Stream<Item = Option<Signal>> + Send + 'static) -> Self {
         // think about channel size
         let state = Arc::new(Mutex::new(HandlerState::default()));
         let worker_state = state.clone();
+        let shutdown_reason = Arc::new(AtomicU8::new(0));
+        let worker_shutdown_reason = shutdown_reason.clone();
+        let started = Arc::new(Notify::new());
+        let worker_started = started.clone();
         let (close, mut rx) = mpsc::channel::<()>(1);
         tokio::spawn(async move {
             pin!(signal_source);
-            tokio::select! {
-                // We don't care if we get a signal or if we are unable to receive signals
-                // Either way we start the shutdown.
-                _ = signal_source.next() => {},
+            let shutdown_reason = tokio::select! {
+                signal = signal_source.next() => match signal {
+                    Some(Some(_signal)) => ShutdownReason::Signal,
+                    Some(None) | None => ShutdownReason::Close,
+                },
                 // We don't care if a close message was sent or if all handlers are dropped.
                 // Either way start the shutdown process.
-                _ = rx.recv() => {}
-            }
+                _ = rx.recv() => ShutdownReason::Close,
+            };
+            worker_shutdown_reason.store(shutdown_reason as u8, Ordering::Release);
+            worker_started.notify_waiters();
 
             let mut callbacks = {
                 let mut state = worker_state.lock().expect("lock poisoned");
@@ -80,7 +104,12 @@ impl SignalHandler {
             while let Some(_fut) = callbacks.next().await {}
         });
 
-        Self { state, close }
+        Self {
+            state,
+            close,
+            shutdown_reason,
+            started,
+        }
     }
 
     /// Register a new subscriber
@@ -109,6 +138,37 @@ impl SignalHandler {
     pub async fn done(&self) {
         // Receiver is dropped once the worker task completes
         self.close.closed().await;
+    }
+
+    /// Wait until shutdown starts for any reason.
+    pub async fn started(&self) {
+        let started = self.started.notified();
+        if self.shutdown_reason().is_some() {
+            return;
+        }
+
+        started.await;
+    }
+
+    /// Wait until shutdown starts because of a real OS signal.
+    pub async fn signal_started(&self) {
+        loop {
+            let started = self.started.notified();
+            match self.shutdown_reason() {
+                Some(ShutdownReason::Signal) => return,
+                Some(ShutdownReason::Close) => std::future::pending::<()>().await,
+                None => started.await,
+            }
+        }
+    }
+
+    /// Return the reason shutdown started, if shutdown has started.
+    pub fn shutdown_reason(&self) -> Option<ShutdownReason> {
+        match self.shutdown_reason.load(Ordering::Acquire) {
+            1 => Some(ShutdownReason::Signal),
+            2 => Some(ShutdownReason::Close),
+            _ => None,
+        }
     }
 
     // Check if the worker thread is done, only meant to be used for assertions in
@@ -172,6 +232,7 @@ mod test {
         });
 
         let _guard = subscriber.listen().await;
+        assert_eq!(handler.shutdown_reason(), Some(ShutdownReason::Signal));
         assert_matches!(
             is_done.try_recv(),
             Err(oneshot::error::TryRecvError::Empty),
@@ -199,6 +260,7 @@ mod test {
         });
 
         let _guard = subscriber.listen().await;
+        assert_eq!(handler.shutdown_reason(), Some(ShutdownReason::Close));
         assert_matches!(
             is_close_done.try_recv(),
             Err(oneshot::error::TryRecvError::Empty),
@@ -217,6 +279,65 @@ mod test {
         }));
         handler.close().await;
         handler.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_signal_source_none_treated_as_close() {
+        let handler = SignalHandler::new(stream::iter([None]));
+        let subscriber = handler.subscribe().unwrap();
+
+        let _guard = subscriber.listen().await;
+        assert_eq!(handler.shutdown_reason(), Some(ShutdownReason::Close));
+        drop(_guard);
+        handler.done().await;
+    }
+
+    #[tokio::test]
+    async fn test_signal_started_only_resolves_for_signal() {
+        let (_tx, rx) = oneshot::channel::<()>();
+        let handler = SignalHandler::new(stream::once(async move {
+            rx.await.ok();
+            Some(DEFAULT_SIGNAL)
+        }));
+
+        let signal_started = {
+            let handler = handler.clone();
+            tokio::spawn(async move {
+                handler.signal_started().await;
+            })
+        };
+
+        handler.close().await;
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        assert!(
+            !signal_started.is_finished(),
+            "signal_started should stay pending for close-driven shutdown"
+        );
+        signal_started.abort();
+    }
+
+    #[tokio::test]
+    async fn test_signal_started_resolves_for_signal() {
+        let (tx, rx) = oneshot::channel();
+        let handler = SignalHandler::new(stream::once(async move {
+            rx.await.ok();
+            Some(DEFAULT_SIGNAL)
+        }));
+
+        let signal_started = {
+            let handler = handler.clone();
+            tokio::spawn(async move {
+                handler.signal_started().await;
+            })
+        };
+
+        tx.send(DEFAULT_SIGNAL).unwrap();
+        tokio::time::timeout(Duration::from_secs(1), signal_started)
+            .await
+            .expect("signal_started should resolve after a signal")
+            .unwrap();
+        assert_eq!(handler.shutdown_reason(), Some(ShutdownReason::Signal));
+        handler.done().await;
     }
 
     #[tokio::test]
@@ -241,6 +362,7 @@ mod test {
             "handler that has received a signal should not accept new subscribers"
         );
         let _guard = subscriber.listen().await;
+        assert_eq!(handler.shutdown_reason(), Some(ShutdownReason::Signal));
         drop(_guard);
         handler.done().await;
     }

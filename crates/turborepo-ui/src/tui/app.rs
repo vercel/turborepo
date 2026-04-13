@@ -908,6 +908,10 @@ async fn run_app_inner(
         }
         if let Some(event) = event {
             callback = update(app, event)?;
+            if callback.is_some() {
+                drain_after_stop(terminal, app, &mut receiver, &mut last_render).await?;
+                break;
+            }
             if app.done {
                 break;
             }
@@ -924,6 +928,42 @@ async fn run_app_inner(
     }
 
     Ok(callback)
+}
+
+async fn drain_after_stop(
+    terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>,
+    app: &mut App<Box<dyn io::Write + Send>>,
+    receiver: &mut AppReceiver,
+    last_render: &mut Instant,
+) -> Result<(), Error> {
+    receiver.close();
+    let mut needs_rerender = false;
+
+    while let Some(event) = receiver.recv().await {
+        if !matches!(event, Event::Tick) {
+            needs_rerender = true;
+        }
+        update(app, event)?;
+
+        if let Some(term) = terminal.as_mut()
+            && FRAMERATE <= last_render.elapsed()
+            && needs_rerender
+        {
+            term.draw(|f| view(app, f))?;
+            *last_render = Instant::now();
+            needs_rerender = false;
+        }
+    }
+
+    if let Some(term) = terminal.as_mut()
+        && needs_rerender
+    {
+        term.draw(|f| view(app, f))?;
+        *last_render = Instant::now();
+    }
+
+    app.done = true;
+    Ok(())
 }
 
 /// Blocking poll for events, will only return None if app handle has been
@@ -1088,7 +1128,6 @@ fn update(
         }
         Event::Stop(callback) => {
             debug!("shutting down due to message");
-            app.done = true;
             return Ok(Some(callback));
         }
         Event::Tick => {
@@ -1254,6 +1293,7 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
 #[cfg(test)]
 mod test {
     use tempfile::tempdir;
+    use tokio::time::Instant;
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
@@ -2613,6 +2653,50 @@ mod test {
         assert_eq!(app.log_events.len(), 1);
         assert_eq!(app.log_events[0].message(), "something went wrong");
         assert_eq!(app.log_events[0].level(), turborepo_log::Level::Warn);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn stop_drains_queued_task_output_before_cleanup() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Box<dyn io::Write + Send>> = App::new(
+            100,
+            100,
+            vec!["app-a#dev".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        let (sender, mut receiver) = crate::tui::handle::TuiSender::new();
+
+        sender.start_task("app-a#dev".to_string(), OutputLogs::Full);
+        sender
+            .output("app-a#dev".to_string(), b"before stop\n".to_vec())
+            .expect("task output should enqueue");
+        sender
+            .output("app-a#dev".to_string(), b"after stop\n".to_vec())
+            .expect("task output should enqueue");
+        sender.end_task("app-a#dev".to_string(), TaskResult::Success);
+
+        let (callback_tx, _callback_rx) = oneshot::channel();
+        update(&mut app, Event::Stop(callback_tx))?;
+        let mut terminal = None;
+        let mut last_render = Instant::now();
+        drain_after_stop(&mut terminal, &mut app, &mut receiver, &mut last_render).await?;
+
+        assert!(app.done);
+        assert!(app.tasks_by_status.running.is_empty());
+        assert_eq!(app.tasks_by_status.finished.len(), 1);
+        let screen = app.tasks["app-a#dev"].parser.entire_screen();
+        let (_, cols) = screen.size();
+        let output =
+            String::from_utf8(screen.rows_formatted(0, cols).flatten().collect::<Vec<_>>())
+                .unwrap();
+        assert!(output.contains("before stop"));
+        assert!(output.contains("after stop"));
 
         Ok(())
     }

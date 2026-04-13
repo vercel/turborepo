@@ -25,7 +25,6 @@ use std::{
 };
 
 pub use command::Command;
-use futures::Future;
 use tokio::task::JoinSet;
 use tracing::{debug, trace};
 use turborepo_task_id::TaskId;
@@ -47,6 +46,14 @@ struct ProcessManagerInner {
     is_closing: bool,
     children: HashMap<TaskId<'static>, Vec<child::Child>>,
     size: Option<PtySize>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum CloseMode {
+    Stop,
+    Shutdown(Option<Duration>),
+    Kill,
+    Wait,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -74,6 +81,18 @@ impl ProcessManager {
         // in a TTY
         let use_pty = !cfg!(windows) && std::io::stdout().is_terminal();
         Self::new(use_pty)
+    }
+
+    pub fn running_task_ids(&self) -> Vec<String> {
+        let lock = self.state.lock().expect("lock poisoned");
+        let mut task_ids = lock
+            .children
+            .iter()
+            .filter(|(_, children)| children.iter().any(|child| !child.has_exited()))
+            .map(|(task_id, _)| task_id.to_string())
+            .collect::<Vec<_>>();
+        task_ids.sort();
+        task_ids
     }
 
     /// Returns whether children will be spawned attached to a pseudoterminal
@@ -121,7 +140,7 @@ impl ProcessManager {
         let pty_size = self.use_pty.then(|| lock.pty_size()).flatten();
         let child = child::Child::spawn(
             command,
-            child::ShutdownStyle::Graceful(stop_timeout),
+            child::ShutdownStyle::Graceful(Some(stop_timeout)),
             pty_size,
         );
         if let Ok(child) = &child {
@@ -138,7 +157,18 @@ impl ProcessManager {
     /// systems this will send a SIGINT, and on windows it will just kill
     /// the process immediately.
     pub async fn stop(&self) {
-        self.close(|mut c| async move { c.stop().await }).await
+        self.close(CloseMode::Stop).await
+    }
+
+    /// Gracefully shut down all child processes, optionally escalating to a
+    /// force kill after `stop_timeout` elapses.
+    pub async fn shutdown(&self, stop_timeout: Option<Duration>) {
+        self.close(CloseMode::Shutdown(stop_timeout)).await
+    }
+
+    /// Force kill all child processes immediately.
+    pub async fn kill_all(&self) {
+        self.close(CloseMode::Kill).await
     }
 
     /// Stop all processes associated with the given task IDs.
@@ -187,7 +217,7 @@ impl ProcessManager {
     /// If you want to set a timeout, use `tokio::time::timeout` and
     /// `Self::stop` if the timeout elapses.
     pub async fn wait(&self) {
-        self.close(|mut c| async move { c.wait().await }).await
+        self.close(CloseMode::Wait).await
     }
 
     /// Close the process manager, running the given callback on each child
@@ -196,11 +226,7 @@ impl ProcessManager {
     /// with two different strategies will propagate both signals to the child
     /// processes. clearing the task queue and re-enabling spawning are both
     /// idempotent operations
-    async fn close<F, C>(&self, callback: F)
-    where
-        F: Fn(Child) -> C + Sync + Send + Copy + 'static,
-        C: Future<Output = Option<ChildExit>> + Sync + Send + 'static,
-    {
+    async fn close(&self, close_mode: CloseMode) {
         let mut set = JoinSet::new();
 
         {
@@ -212,7 +238,19 @@ impl ProcessManager {
                 // This is done under the lock to ensure mutual exclusion with stop_tasks().
                 child.set_closing();
                 let child = child.clone();
-                set.spawn(async move { callback(child).await });
+                set.spawn(async move {
+                    let mut child = child;
+                    match close_mode {
+                        CloseMode::Stop => child.stop().await,
+                        CloseMode::Shutdown(stop_timeout) => {
+                            child
+                                .shutdown(child::ShutdownStyle::Graceful(stop_timeout))
+                                .await
+                        }
+                        CloseMode::Kill => child.kill().await,
+                        CloseMode::Wait => child.wait().await,
+                    }
+                });
             }
         }
 
@@ -553,5 +591,39 @@ mod test {
 
         assert_eq!(child.wait().await, STOPPED_EXIT);
         assert!(child.is_closing());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_shutdown_can_be_force_killed() {
+        let manager = ProcessManager::new(false);
+        let mut child = manager
+            .spawn(
+                get_script_command("sleep_5_ignore.js"),
+                Duration::from_secs(30),
+                test_task_id(),
+            )
+            .unwrap()
+            .unwrap();
+
+        // Give the child time to install its SIGINT handler before we begin the
+        // graceful shutdown flow.
+        sleep(Duration::from_millis(500)).await;
+
+        let shutdown_manager = manager.clone();
+        let shutdown = tokio::spawn(async move {
+            shutdown_manager.shutdown(None).await;
+        });
+
+        sleep(Duration::from_millis(100)).await;
+        assert!(
+            !shutdown.is_finished(),
+            "graceful shutdown should still be waiting before force kill"
+        );
+
+        manager.kill_all().await;
+        shutdown.await.unwrap();
+
+        assert_eq!(child.wait().await, Some(ChildExit::Killed));
     }
 }

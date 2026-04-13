@@ -135,6 +135,10 @@ impl TuiSender {
 }
 
 impl AppReceiver {
+    pub fn close(&mut self) {
+        self.primary.close();
+    }
+
     /// Receive an event, producing a tick event if no events are rec eived by
     /// the deadline.
     pub async fn recv(&mut self) -> Option<Event> {

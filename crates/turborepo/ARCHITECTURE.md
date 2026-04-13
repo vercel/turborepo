@@ -23,6 +23,41 @@ A run consists of the following steps:
 
 ## Core Architecture Components
 
+### Signal-Driven Shutdown
+
+- `crates/turborepo-lib/src/commands/run.rs` creates a shared
+  `SignalHandler` and does not return until all shutdown subscribers finish
+  their cleanup work.
+- The handler distinguishes signal-driven shutdown (`ShutdownReason::Signal`)
+  from close-driven shutdown (`ShutdownReason::Close`). Normal command
+  completion uses the close path to drain subscribers without printing
+  signal-specific shutdown UX.
+- `crates/turborepo-lib/src/run/mod.rs` registers shutdown subscribers for
+  task processes, cache writes, and the microfrontends proxy.
+- Task processes are spawned into dedicated process groups so Turbo can signal a
+  task and all of its descendants together.
+- On the first `SIGINT`/`SIGTERM`, Turbo enters graceful shutdown: it prints a
+  shutdown message, forwards `SIGINT` to running tasks, and waits for them to
+  exit.
+- Close-driven shutdown still flushes cache writes and stops processes, but it
+  does not arm signal-specific force-shutdown timers.
+- If tasks are still running after 3 seconds, Turbo prints the remaining task
+  list. In an interactive terminal it also prompts for a second `Ctrl+C` to
+  force shut down. Without a terminal on stdin, Turbo instead prints the
+  remaining time before the automatic force shutdown.
+- On Unix, a second signal escalates to a force kill. When stdin is not
+  attached to a terminal, Turbo auto-escalates after 10 seconds instead.
+- On Windows, graceful shutdown falls back to an immediate kill because the
+  platform does not support Unix-style signal forwarding to task process
+  groups.
+- On Unix, Turbo also starts a small best-effort parent-death watchdog for each
+  task process. The watchdog waits on a pipe from the Turbo parent process and,
+  where supported, also monitors the task leader for exit so it does not signal
+  a recycled PID. If Turbo disappears unexpectedly, the watchdog first sends
+  `SIGTERM` to the task process group and then escalates to `SIGKILL` if
+  anything is still running. On Windows, job objects provide the same
+  parent-death cleanup behavior.
+
 ### 1. Run Builder (`crates/turborepo-lib/src/run/builder.rs`)
 
 **Key responsibilities:**

@@ -1,4 +1,4 @@
-use std::{env, sync::Arc};
+use std::{env, future::Future, sync::Arc};
 
 use tracing::error;
 use turborepo_api_client::SharedHttpClient;
@@ -10,6 +10,34 @@ use turborepo_types::DryRunMode;
 use turborepo_ui::{sender::UISender, LogSinks};
 
 use crate::{commands::CommandBase, run, run::builder::RunBuilder, tracing::TurboSubscriber};
+
+#[derive(Debug, PartialEq, Eq)]
+enum RunOutcome<T> {
+    Completed(T),
+    Interrupted(T),
+}
+
+async fn wait_for_run_cleanup_on_signal<F, T>(handler: &SignalHandler, run_fut: F) -> RunOutcome<T>
+where
+    F: Future<Output = T>,
+{
+    tokio::pin!(run_fut);
+
+    tokio::select! {
+        biased;
+        _ = handler.signal_started() => {
+            // Keep the run future alive so the TUI can continue rendering task
+            // output until shutdown drains and the UI closes cleanly.
+            let result = (&mut run_fut).await;
+            handler.done().await;
+            RunOutcome::Interrupted(result)
+        }
+        result = &mut run_fut => {
+            handler.close().await;
+            RunOutcome::Completed(result)
+        }
+    }
+}
 
 #[tracing::instrument(skip_all)]
 pub async fn run(
@@ -153,24 +181,71 @@ pub async fn run(
         result
     };
 
-    let handler_fut = handler.done();
-    let result = tokio::select! {
-        biased;
-        // If we get a handler exit at the same time as a run finishes we choose that
-        // future to display that we're respecting user input
-        _ = handler_fut => {
-            // We caught a signal, which already notified the subscribers
-            Ok(1)
-        }
-        result = run_fut => {
-            // Run finished so close the signal handler
-            handler.close().await;
-            result
-        },
+    let result = match wait_for_run_cleanup_on_signal(&handler, run_fut).await {
+        RunOutcome::Completed(result) => result,
+        // The run future has already drained shutdown and closed the UI.
+        RunOutcome::Interrupted(_result) => Ok(1),
     };
 
     turborepo_log::flush();
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use futures::stream;
+    use tokio::sync::oneshot;
+    use turborepo_signals::{signals::Signal, SignalHandler};
+
+    use super::{wait_for_run_cleanup_on_signal, RunOutcome};
+
+    #[cfg(windows)]
+    const DEFAULT_SIGNAL: Signal = Signal::CtrlC;
+    #[cfg(not(windows))]
+    const DEFAULT_SIGNAL: Signal = Signal::Interrupt;
+
+    #[tokio::test]
+    async fn signal_wait_keeps_run_future_alive_until_cleanup_finishes() {
+        let (signal_tx, signal_rx) = oneshot::channel();
+        let handler = SignalHandler::new(stream::once(async move {
+            signal_rx.await.ok();
+            Some(DEFAULT_SIGNAL)
+        }));
+
+        let (cleanup_started_tx, cleanup_started_rx) = oneshot::channel();
+        let (cleanup_finish_tx, cleanup_finish_rx) = oneshot::channel();
+
+        let outcome = tokio::spawn({
+            let handler = handler.clone();
+            async move {
+                wait_for_run_cleanup_on_signal(&handler, async move {
+                    cleanup_started_tx.send(()).ok();
+                    cleanup_finish_rx.await.ok();
+                    "cleaned-up"
+                })
+                .await
+            }
+        });
+
+        signal_tx.send(DEFAULT_SIGNAL).unwrap();
+        cleanup_started_rx.await.unwrap();
+
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert!(
+            !outcome.is_finished(),
+            "signal handling should keep the run future alive until cleanup completes"
+        );
+
+        cleanup_finish_tx.send(()).unwrap();
+        let outcome = tokio::time::timeout(Duration::from_secs(1), outcome)
+            .await
+            .expect("cleanup should finish promptly")
+            .unwrap();
+
+        assert_eq!(outcome, RunOutcome::Interrupted("cleaned-up"));
+    }
 }
 
 fn create_structured_sink(

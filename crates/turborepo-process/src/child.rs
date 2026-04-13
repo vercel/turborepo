@@ -16,7 +16,13 @@
 //! them when the manager is closed.
 
 const CHILD_POLL_INTERVAL: Duration = Duration::from_micros(50);
+const POST_EXIT_OUTPUT_DRAIN_TIMEOUT: Duration = Duration::from_millis(100);
 
+#[cfg(unix)]
+const PARENT_DEATH_ESCALATION_DELAY: Duration = Duration::from_secs(2);
+
+#[cfg(unix)]
+use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
 use std::{
     fmt,
     io::{self, BufRead, Read, Write},
@@ -52,12 +58,15 @@ pub enum ChildExit {
     Failed,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum ShutdownStyle {
-    /// On windows this will immediately kill, and on posix systems it
-    /// will send a SIGINT. If `Duration` elapses, we then follow up with a
-    /// `Kill`.
-    Graceful(Duration),
+    /// On Windows this immediately kills the process. On Unix it sends SIGINT
+    /// to the process group.
+    ///
+    /// `Graceful(Some(timeout))` escalates to `Kill` after `timeout` elapses.
+    /// `Graceful(None)` waits indefinitely until an explicit `Kill` command
+    /// arrives.
+    Graceful(Option<Duration>),
 
     Kill,
 }
@@ -76,6 +85,8 @@ impl From<std::io::Error> for ShutdownFailed {
 struct ChildHandle {
     pid: Option<u32>,
     imp: ChildHandleImpl,
+    #[cfg(unix)]
+    parent_death_guard: Option<ParentDeathGuard>,
     #[cfg(windows)]
     _job: Option<super::job_object::JobObject>,
 }
@@ -83,6 +94,430 @@ struct ChildHandle {
 enum ChildHandleImpl {
     Tokio(tokio::process::Child),
     Pty(Box<dyn PtyChild + Send + Sync>),
+}
+
+#[cfg(unix)]
+#[derive(Debug, Clone, Copy)]
+struct TargetIdentity {
+    process_group_id: libc::pid_t,
+    session_id: libc::pid_t,
+}
+
+#[cfg(unix)]
+#[derive(Debug)]
+struct ParentDeathGuard {
+    write_fd: Option<OwnedFd>,
+    watchdog_pid: Option<libc::pid_t>,
+}
+
+#[cfg(unix)]
+impl ParentDeathGuard {
+    fn spawn_for_pid(target_pid: libc::pid_t) -> io::Result<Self> {
+        let (read_fd, write_fd) = parent_death_pipe()?;
+        let watchdog_pid = spawn_parent_death_watchdog(target_pid, read_fd)?;
+
+        Ok(Self {
+            write_fd: Some(write_fd),
+            watchdog_pid: Some(watchdog_pid),
+        })
+    }
+
+    fn disarm(&mut self) {
+        let Some(write_fd) = self.write_fd.take() else {
+            return;
+        };
+
+        let _ = unsafe { libc::write(write_fd.as_raw_fd(), [1_u8].as_ptr().cast(), 1) };
+        drop(write_fd);
+        self.reap_watchdog();
+    }
+
+    fn reap_watchdog(&mut self) {
+        let Some(watchdog_pid) = self.watchdog_pid.take() else {
+            return;
+        };
+
+        let mut status = 0;
+        loop {
+            let wait_result = unsafe { libc::waitpid(watchdog_pid, &mut status, 0) };
+            if wait_result != -1 {
+                break;
+            }
+
+            if io::Error::last_os_error().raw_os_error() != Some(libc::EINTR) {
+                break;
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for ParentDeathGuard {
+    fn drop(&mut self) {
+        self.write_fd.take();
+        self.reap_watchdog();
+    }
+}
+
+#[cfg(unix)]
+fn parent_death_pipe() -> io::Result<(OwnedFd, OwnedFd)> {
+    let mut fds = [0; 2];
+    if unsafe { libc::pipe(fds.as_mut_ptr()) } == -1 {
+        return Err(io::Error::last_os_error());
+    }
+
+    let read_fd = unsafe { OwnedFd::from_raw_fd(fds[0]) };
+    let write_fd = unsafe { OwnedFd::from_raw_fd(fds[1]) };
+    set_cloexec(read_fd.as_raw_fd())?;
+    set_cloexec(write_fd.as_raw_fd())?;
+    Ok((read_fd, write_fd))
+}
+
+#[cfg(unix)]
+fn set_cloexec(fd: RawFd) -> io::Result<()> {
+    let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+    if flags == -1 {
+        return Err(io::Error::last_os_error());
+    }
+
+    if unsafe { libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) } == -1 {
+        return Err(io::Error::last_os_error());
+    }
+
+    Ok(())
+}
+
+#[cfg(unix)]
+fn target_identity(target_pid: libc::pid_t) -> io::Result<TargetIdentity> {
+    let process_group_id = unsafe { libc::getpgid(target_pid) };
+    if process_group_id == -1 {
+        return Err(io::Error::last_os_error());
+    }
+
+    let session_id = unsafe { libc::getsid(target_pid) };
+    if session_id == -1 {
+        return Err(io::Error::last_os_error());
+    }
+
+    Ok(TargetIdentity {
+        process_group_id,
+        session_id,
+    })
+}
+
+#[cfg(unix)]
+fn process_group_matches_identity(target_pid: libc::pid_t, identity: TargetIdentity) -> bool {
+    let process_group_id = unsafe { libc::getpgid(target_pid) };
+    if process_group_id != -1 {
+        if process_group_id != identity.process_group_id {
+            return false;
+        }
+
+        let session_id = unsafe { libc::getsid(target_pid) };
+        return session_id != -1 && session_id == identity.session_id;
+    }
+
+    let result = unsafe { libc::kill(-identity.process_group_id, 0) };
+    result == 0 || io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
+#[cfg(unix)]
+fn close_fd(fd: RawFd) {
+    if fd >= 0 {
+        let _ = unsafe { libc::close(fd) };
+    }
+}
+
+#[cfg(unix)]
+fn close_inherited_fds(pipe_read_fd: RawFd, target_exit_fd: Option<RawFd>) {
+    let max_fd = unsafe { libc::getdtablesize() };
+    let max_fd = if max_fd > 0 { max_fd } else { 1024 };
+
+    for fd in 0..max_fd {
+        let fd = fd as RawFd;
+        if fd == pipe_read_fd || Some(fd) == target_exit_fd {
+            continue;
+        }
+        close_fd(fd);
+    }
+}
+
+#[cfg(unix)]
+fn signal_process_group(process_group_id: libc::pid_t, signal: libc::c_int) {
+    let _ = unsafe { libc::kill(-process_group_id, signal) };
+}
+
+#[cfg(unix)]
+fn sleep_unchecked(duration: Duration) {
+    let mut remaining = libc::timespec {
+        tv_sec: duration.as_secs() as libc::time_t,
+        tv_nsec: duration.subsec_nanos() as libc::c_long,
+    };
+
+    loop {
+        let mut next = libc::timespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        };
+        let result = unsafe { libc::nanosleep(&remaining, &mut next) };
+        if result == 0 {
+            break;
+        }
+
+        if io::Error::last_os_error().raw_os_error() != Some(libc::EINTR) {
+            break;
+        }
+        remaining = next;
+    }
+}
+
+#[cfg(unix)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ParentDeathWatchdogEvent {
+    Disarmed,
+    ParentDied,
+    TargetExited,
+    Error,
+}
+
+#[cfg(target_os = "linux")]
+fn create_target_exit_monitor(target_pid: libc::pid_t) -> io::Result<Option<RawFd>> {
+    let fd = unsafe { libc::syscall(libc::SYS_pidfd_open as libc::c_long, target_pid, 0) };
+    if fd == -1 {
+        let err = io::Error::last_os_error();
+        return match err.raw_os_error() {
+            Some(libc::ENOSYS | libc::EINVAL) => Ok(None),
+            _ => Err(err),
+        };
+    }
+
+    Ok(Some(fd as RawFd))
+}
+
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd",
+    target_os = "dragonfly"
+))]
+fn create_target_exit_monitor(target_pid: libc::pid_t) -> io::Result<Option<RawFd>> {
+    let kqueue_fd = unsafe { libc::kqueue() };
+    if kqueue_fd == -1 {
+        return Err(io::Error::last_os_error());
+    }
+
+    let change = libc::kevent {
+        ident: target_pid as libc::uintptr_t,
+        filter: libc::EVFILT_PROC,
+        flags: libc::EV_ADD | libc::EV_ENABLE | libc::EV_ONESHOT,
+        fflags: libc::NOTE_EXIT,
+        data: 0,
+        udata: std::ptr::null_mut(),
+    };
+    if unsafe {
+        libc::kevent(
+            kqueue_fd,
+            &change,
+            1,
+            std::ptr::null_mut(),
+            0,
+            std::ptr::null(),
+        )
+    } == -1
+    {
+        let err = io::Error::last_os_error();
+        close_fd(kqueue_fd);
+        return Err(err);
+    }
+
+    Ok(Some(kqueue_fd))
+}
+
+#[cfg(all(
+    unix,
+    not(target_os = "linux"),
+    not(target_os = "macos"),
+    not(target_os = "ios"),
+    not(target_os = "freebsd"),
+    not(target_os = "netbsd"),
+    not(target_os = "openbsd"),
+    not(target_os = "dragonfly")
+))]
+fn create_target_exit_monitor(_target_pid: libc::pid_t) -> io::Result<Option<RawFd>> {
+    Ok(None)
+}
+
+#[cfg(target_os = "linux")]
+fn target_exit_monitor_triggered(_target_exit_fd: RawFd) -> bool {
+    true
+}
+
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd",
+    target_os = "dragonfly"
+))]
+fn target_exit_monitor_triggered(target_exit_fd: RawFd) -> bool {
+    let mut event = libc::kevent {
+        ident: 0,
+        filter: 0,
+        flags: 0,
+        fflags: 0,
+        data: 0,
+        udata: std::ptr::null_mut(),
+    };
+    let timeout = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    let result =
+        unsafe { libc::kevent(target_exit_fd, std::ptr::null(), 0, &mut event, 1, &timeout) };
+
+    result == 1 && event.filter == libc::EVFILT_PROC && (event.fflags & libc::NOTE_EXIT) != 0
+}
+
+#[cfg(all(
+    unix,
+    not(target_os = "linux"),
+    not(target_os = "macos"),
+    not(target_os = "ios"),
+    not(target_os = "freebsd"),
+    not(target_os = "netbsd"),
+    not(target_os = "openbsd"),
+    not(target_os = "dragonfly")
+))]
+fn target_exit_monitor_triggered(_target_exit_fd: RawFd) -> bool {
+    true
+}
+
+#[cfg(unix)]
+fn wait_for_parent_death_or_target_exit(
+    pipe_read_fd: RawFd,
+    target_exit_fd: Option<RawFd>,
+) -> ParentDeathWatchdogEvent {
+    loop {
+        let mut fds = [
+            libc::pollfd {
+                fd: pipe_read_fd,
+                events: libc::POLLIN | libc::POLLHUP,
+                revents: 0,
+            },
+            libc::pollfd {
+                fd: target_exit_fd.unwrap_or(-1),
+                events: libc::POLLIN | libc::POLLHUP,
+                revents: 0,
+            },
+        ];
+        let nfds = if target_exit_fd.is_some() { 2 } else { 1 } as libc::nfds_t;
+
+        let poll_result = unsafe { libc::poll(fds.as_mut_ptr(), nfds, -1) };
+        if poll_result == -1 {
+            if io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
+                continue;
+            }
+            return ParentDeathWatchdogEvent::Error;
+        }
+
+        if let Some(target_exit_fd) = target_exit_fd
+            && fds[1].revents != 0
+            && target_exit_monitor_triggered(target_exit_fd)
+        {
+            return ParentDeathWatchdogEvent::TargetExited;
+        }
+
+        if fds[0].revents == 0 {
+            continue;
+        }
+
+        let mut byte = 0_u8;
+        let read_result = unsafe { libc::read(pipe_read_fd, (&mut byte as *mut u8).cast(), 1) };
+        if read_result > 0 {
+            return ParentDeathWatchdogEvent::Disarmed;
+        }
+        if read_result == 0 {
+            return ParentDeathWatchdogEvent::ParentDied;
+        }
+        if io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
+            continue;
+        }
+        return ParentDeathWatchdogEvent::Error;
+    }
+}
+
+#[cfg(unix)]
+fn run_parent_death_watchdog(
+    pipe_read_fd: RawFd,
+    target_exit_fd: Option<RawFd>,
+    target_pid: libc::pid_t,
+    identity: TargetIdentity,
+) -> ! {
+    // The watchdog must not keep unrelated task pipes open. Close every
+    // inherited descriptor except the control pipe and exit monitor.
+    close_inherited_fds(pipe_read_fd, target_exit_fd);
+    let event = wait_for_parent_death_or_target_exit(pipe_read_fd, target_exit_fd);
+    close_fd(pipe_read_fd);
+    if let Some(target_exit_fd) = target_exit_fd {
+        close_fd(target_exit_fd);
+    }
+
+    if event == ParentDeathWatchdogEvent::ParentDied
+        && process_group_matches_identity(target_pid, identity)
+    {
+        signal_process_group(identity.process_group_id, libc::SIGTERM);
+        sleep_unchecked(PARENT_DEATH_ESCALATION_DELAY);
+        if process_group_matches_identity(target_pid, identity) {
+            signal_process_group(identity.process_group_id, libc::SIGKILL);
+        }
+    }
+
+    unsafe { libc::_exit(0) }
+}
+
+#[cfg(unix)]
+fn spawn_parent_death_watchdog(
+    target_pid: libc::pid_t,
+    read_fd: OwnedFd,
+) -> io::Result<libc::pid_t> {
+    let identity = target_identity(target_pid)?;
+    let target_exit_fd = create_target_exit_monitor(target_pid)?;
+    let read_fd = read_fd.into_raw_fd();
+
+    match unsafe { libc::fork() } {
+        -1 => {
+            let err = io::Error::last_os_error();
+            close_fd(read_fd);
+            if let Some(target_exit_fd) = target_exit_fd {
+                close_fd(target_exit_fd);
+            }
+            Err(err)
+        }
+        0 => run_parent_death_watchdog(read_fd, target_exit_fd, target_pid, identity),
+        watchdog_pid => {
+            close_fd(read_fd);
+            if let Some(target_exit_fd) = target_exit_fd {
+                close_fd(target_exit_fd);
+            }
+            Ok(watchdog_pid)
+        }
+    }
+}
+
+#[cfg(unix)]
+fn setup_parent_death_guard(pid: Option<u32>) -> Option<ParentDeathGuard> {
+    pid.and_then(
+        |pid| match ParentDeathGuard::spawn_for_pid(pid as libc::pid_t) {
+            Ok(parent_death_guard) => Some(parent_death_guard),
+            Err(err) => {
+                debug!("failed to set up parent-death guard for process {pid}: {err}");
+                None
+            }
+        },
+    )
 }
 
 impl ChildHandle {
@@ -97,6 +532,9 @@ impl ChildHandle {
 
         let mut child = command.spawn()?;
         let pid = child.id();
+
+        #[cfg(unix)]
+        let parent_death_guard = setup_parent_death_guard(pid);
 
         #[cfg(windows)]
         let job = pid.and_then(|pid| {
@@ -120,6 +558,8 @@ impl ChildHandle {
             handle: Self {
                 pid,
                 imp: ChildHandleImpl::Tokio(child),
+                #[cfg(unix)]
+                parent_death_guard,
                 #[cfg(windows)]
                 _job: job,
             },
@@ -182,6 +622,9 @@ impl ChildHandle {
 
         let pid = child.process_id();
 
+        #[cfg(unix)]
+        let parent_death_guard = setup_parent_death_guard(pid);
+
         #[cfg(windows)]
         let job = pid.and_then(|pid| {
             super::job_object::JobObject::new()
@@ -218,6 +661,8 @@ impl ChildHandle {
             handle: Self {
                 pid,
                 imp: ChildHandleImpl::Pty(child),
+                #[cfg(unix)]
+                parent_death_guard,
                 #[cfg(windows)]
                 _job: job,
             },
@@ -271,6 +716,12 @@ impl ChildHandle {
     }
 
     pub async fn kill(&mut self) -> io::Result<()> {
+        #[cfg(unix)]
+        if let Some(pid) = self.pid() {
+            let pgid = -(pid as i32);
+            let _ = unsafe { libc::kill(pgid, libc::SIGKILL) };
+        }
+
         match &mut self.imp {
             ChildHandleImpl::Tokio(child) => child.kill().await,
             ChildHandleImpl::Pty(child) => {
@@ -279,6 +730,13 @@ impl ChildHandle {
                     .await
                     .unwrap()
             }
+        }
+    }
+
+    #[cfg(unix)]
+    fn disarm_parent_death_guard(&mut self) {
+        if let Some(parent_death_guard) = &mut self.parent_death_guard {
+            parent_death_guard.disarm();
         }
     }
 }
@@ -333,7 +791,11 @@ impl ShutdownStyle {
     ///
     /// If an exit channel is provided, the exit code will be sent to the
     /// channel when the child process exits.
-    async fn process(&self, child: &mut ChildHandle) -> ChildExit {
+    async fn process(
+        &self,
+        child: &mut ChildHandle,
+        command_rx: &mut mpsc::Receiver<ChildCommand>,
+    ) -> ChildExit {
         match self {
             // Windows doesn't give the ability to send a signal to a process so we
             // can't make use of the graceful shutdown timeout.
@@ -342,36 +804,75 @@ impl ShutdownStyle {
                 // try ro run the command for the given timeout
                 #[cfg(unix)]
                 {
-                    let fut = async {
-                        if let Some(pid) = child.pid() {
-                            debug!("sending SIGINT to child {}", pid);
-                            // kill takes negative pid to indicate that you want to use gpid
-                            let pgid = -(pid as i32);
-                            if unsafe { libc::kill(pgid, libc::SIGINT) } == -1 {
-                                debug!("failed to send SIGINT to {pgid}");
-                            };
-                            debug!("waiting for child {}", pid);
-                            child.wait().await
-                        } else {
-                            // if there is no pid, then just report successful with no exit code
-                            Ok(None)
-                        }
+                    let Some(pid) = child.pid() else {
+                        return ChildExit::Interrupted;
                     };
 
-                    debug!("starting shutdown");
+                    debug!("sending SIGINT to child {}", pid);
+                    // kill takes negative pid to indicate that you want to use gpid
+                    let pgid = -(pid as i32);
+                    if unsafe { libc::kill(pgid, libc::SIGINT) } == -1 {
+                        debug!("failed to send SIGINT to {pgid}");
+                    };
+                    debug!("waiting for child {}", pid);
 
-                    let result = tokio::time::timeout(*timeout, fut).await;
-                    match result {
-                        // We ignore the exit code and mark it as interrupted since we sent a SIGINT
-                        // This avoids reliance on an underlying process exiting with
-                        // no exit code or a non-zero in order for turbo to operate correctly.
-                        Ok(Ok(_exit_code)) => ChildExit::Interrupted,
-                        Ok(Err(_)) => ChildExit::Failed,
-                        Err(_) => {
-                            debug!("graceful shutdown timed out, killing child");
-                            match child.kill().await {
-                                Ok(_) => ChildExit::Killed,
-                                Err(_) => ChildExit::Failed,
+                    let deadline = timeout.map(|timeout| tokio::time::Instant::now() + timeout);
+                    let mut command_rx_open = true;
+
+                    loop {
+                        match deadline {
+                            Some(deadline) => {
+                                tokio::select! {
+                                    result = child.wait() => {
+                                        break match result {
+                                            Ok(_exit_code) => ChildExit::Interrupted,
+                                            Err(_) => ChildExit::Failed,
+                                        };
+                                    }
+                                    command = command_rx.recv(), if command_rx_open => {
+                                        match command {
+                                            Some(ChildCommand::Kill) => {
+                                                debug!("graceful shutdown interrupted, killing child");
+                                                break match child.kill().await {
+                                                    Ok(_) => ChildExit::Killed,
+                                                    Err(_) => ChildExit::Failed,
+                                                };
+                                            }
+                                            Some(ChildCommand::Shutdown(_)) => {}
+                                            None => command_rx_open = false,
+                                        }
+                                    }
+                                    _ = tokio::time::sleep_until(deadline) => {
+                                        debug!("graceful shutdown timed out, killing child");
+                                        break match child.kill().await {
+                                            Ok(_) => ChildExit::Killed,
+                                            Err(_) => ChildExit::Failed,
+                                        };
+                                    }
+                                }
+                            }
+                            None => {
+                                tokio::select! {
+                                    result = child.wait() => {
+                                        break match result {
+                                            Ok(_exit_code) => ChildExit::Interrupted,
+                                            Err(_) => ChildExit::Failed,
+                                        };
+                                    }
+                                    command = command_rx.recv(), if command_rx_open => {
+                                        match command {
+                                            Some(ChildCommand::Kill) => {
+                                                debug!("graceful shutdown interrupted, killing child");
+                                                break match child.kill().await {
+                                                    Ok(_) => ChildExit::Killed,
+                                                    Err(_) => ChildExit::Failed,
+                                                };
+                                            }
+                                            Some(ChildCommand::Shutdown(_)) => {}
+                                            None => command_rx_open = false,
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -415,6 +916,7 @@ pub struct Child {
     stdin: Arc<Mutex<Option<ChildInput>>>,
     output: Arc<Mutex<Option<ChildOutput>>>,
     label: String,
+    shutdown_style: ShutdownStyle,
     /// Flag indicating this child is being stopped as part of a shutdown of the
     /// ProcessManager, rather than individually stopped.
     closing: Arc<AtomicBool>,
@@ -429,17 +931,20 @@ impl ChildCommandChannel {
         (ChildCommandChannel(tx), rx)
     }
 
-    pub async fn kill(&self) -> Result<(), mpsc::error::SendError<ChildCommand>> {
-        self.0.send(ChildCommand::Kill).await
+    pub async fn shutdown(
+        &self,
+        shutdown_style: ShutdownStyle,
+    ) -> Result<(), mpsc::error::SendError<ChildCommand>> {
+        self.0.send(ChildCommand::Shutdown(shutdown_style)).await
     }
 
-    pub async fn stop(&self) -> Result<(), mpsc::error::SendError<ChildCommand>> {
-        self.0.send(ChildCommand::Stop).await
+    pub async fn kill(&self) -> Result<(), mpsc::error::SendError<ChildCommand>> {
+        self.0.send(ChildCommand::Kill).await
     }
 }
 
 pub enum ChildCommand {
-    Stop,
+    Shutdown(ShutdownStyle),
     Kill,
 }
 
@@ -488,11 +993,11 @@ impl Child {
                 biased;
                 command = command_rx.recv() => {
                     manager.shutdown_initiated = true;
-                    manager.handle_child_command(command, &mut child, controller).await;
+                    manager.handle_child_command(command, &mut command_rx, &mut child, controller).await;
                 }
                 status = child.wait() => {
                     drop(controller);
-                    manager.handle_child_exit(status).await;
+                    manager.handle_child_exit(status, &mut child).await;
                 }
             }
 
@@ -506,6 +1011,7 @@ impl Child {
             stdin: Arc::new(Mutex::new(stdin)),
             output: Arc::new(Mutex::new(output)),
             label,
+            shutdown_style,
             closing: Arc::new(AtomicBool::new(false)),
         })
     }
@@ -523,9 +1029,13 @@ impl Child {
 
     /// Perform a graceful shutdown of the `Child` process.
     pub async fn stop(&mut self) -> Option<ChildExit> {
+        self.shutdown(self.shutdown_style.clone()).await
+    }
+
+    pub async fn shutdown(&mut self, shutdown_style: ShutdownStyle) -> Option<ChildExit> {
         // if this fails, it's because the channel is dropped (toctou)
         // we can just ignore it
-        self.command_channel.stop().await.ok();
+        self.command_channel.shutdown(shutdown_style).await.ok();
         self.wait().await
     }
 
@@ -539,6 +1049,10 @@ impl Child {
 
     pub fn pid(&self) -> Option<u32> {
         self.pid
+    }
+
+    pub(crate) fn has_exited(&self) -> bool {
+        self.exit_channel.borrow().is_some()
     }
 
     fn stdin_inner(&mut self) -> Option<ChildInput> {
@@ -673,6 +1187,9 @@ impl Child {
         let mut stderr_buffer = Vec::new();
 
         let mut is_exited = false;
+        let mut exit_status = None;
+        let mut draining_after_exit = false;
+        let mut drain_deadline = tokio::time::Instant::now() + POST_EXIT_OUTPUT_DRAIN_TIMEOUT;
         loop {
             tokio::select! {
                 Some(result) = next_line(&mut stdout_lines, &mut stdout_buffer) => {
@@ -692,12 +1209,36 @@ impl Child {
                 status = self.wait(), if !is_exited => {
                     trace!("child process exited: {}", self.label());
                     is_exited = true;
+                    exit_status = status;
                     // We don't abort in the cases of a zero exit code as we could be
                     // caching this task and should read all the logs it produces.
-                    if status != Some(ChildExit::Finished(Some(0))) {
+                    if status == Some(ChildExit::Finished(Some(0))) {
+                        continue;
+                    }
+
+                    if self.is_closing() {
+                        // During Turbo-initiated shutdown, give the pipe readers a
+                        // short grace window to pull the child's final log lines.
+                        draining_after_exit = true;
+                        drain_deadline = tokio::time::Instant::now() + POST_EXIT_OUTPUT_DRAIN_TIMEOUT;
+                    } else {
                         debug!("child process failed, skipping reading stdout/stderr");
                         return Ok(status);
                     }
+                }
+                _ = tokio::time::sleep_until(drain_deadline), if draining_after_exit => {
+                    trace!("post-exit output drain timed out");
+                    if !stdout_buffer.is_empty() {
+                        add_trailing_newline(&mut stdout_buffer);
+                        stdout_pipe.write_all(&stdout_buffer)?;
+                        stdout_buffer.clear();
+                    }
+                    if !stderr_buffer.is_empty() {
+                        add_trailing_newline(&mut stderr_buffer);
+                        stdout_pipe.write_all(&stderr_buffer)?;
+                        stderr_buffer.clear();
+                    }
+                    return Ok(exit_status);
                 }
                 else => {
                     trace!("flushing child stdout/stderr buffers");
@@ -722,7 +1263,7 @@ impl Child {
         debug_assert!(stdout_buffer.is_empty(), "buffer should be empty");
         debug_assert!(stderr_buffer.is_empty(), "buffer should be empty");
 
-        Ok(self.wait().await)
+        Ok(exit_status.or(self.wait().await))
     }
 
     pub fn label(&self) -> &str {
@@ -754,31 +1295,29 @@ impl ChildStateManager {
     async fn handle_child_command(
         &self,
         command: Option<ChildCommand>,
+        command_rx: &mut mpsc::Receiver<ChildCommand>,
         child: &mut ChildHandle,
         controller: Option<Box<dyn PtyController + Send>>,
     ) {
-        let exit = match command {
-            // we received a command to stop the child process, or the channel was closed.
-            // in theory this happens when the last child is dropped, however in practice
-            // we will always get a `Permit` from the recv call before the channel can be
-            // dropped, and the channel is not closed while there are still permits
-            Some(ChildCommand::Stop) | None => {
+        let exit = match command.unwrap_or(ChildCommand::Shutdown(self.shutdown_style.clone())) {
+            ChildCommand::Shutdown(shutdown_style) => {
                 debug!("stopping child process");
-                self.shutdown_style.process(child).await
+                shutdown_style.process(child, command_rx).await
             }
-            // we received a command to kill the child process
-            Some(ChildCommand::Kill) => {
+            ChildCommand::Kill => {
                 debug!("killing child process");
-                ShutdownStyle::Kill.process(child).await
+                ShutdownStyle::Kill.process(child, command_rx).await
             }
         };
+        #[cfg(unix)]
+        child.disarm_parent_death_guard();
         // ignore the send error, failure means the channel is dropped
         trace!("sending child exit after shutdown");
         self.exit_tx.send(Some(exit)).ok();
         drop(controller);
     }
 
-    async fn handle_child_exit(&self, status: io::Result<Option<i32>>) {
+    async fn handle_child_exit(&self, status: io::Result<Option<i32>>, child: &mut ChildHandle) {
         // If a shutdown was initiated we defer to the exit returned by
         // `ShutdownStyle::process` as that will have information if the child
         // responded to a SIGINT or a SIGKILL. The `wait` response this function
@@ -789,6 +1328,8 @@ impl ChildStateManager {
         }
 
         debug!("child process exited normally");
+        #[cfg(unix)]
+        child.disarm_parent_death_guard();
         // the child process exited
         let child_exit = match status {
             Ok(Some(c)) => ChildExit::Finished(Some(c)),
@@ -814,14 +1355,26 @@ impl Child {
 
 #[cfg(test)]
 mod test {
-    use std::{assert_matches::assert_matches, time::Duration};
+    use std::{
+        assert_matches::assert_matches,
+        io,
+        process::Stdio,
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
 
     use futures::{StreamExt, stream::FuturesUnordered};
     use test_case::test_case;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::{
+        io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+        process::Command as TokioCommand,
+        sync::oneshot,
+    };
     use tracing_test::traced_test;
     use turbopath::AbsoluteSystemPathBuf;
 
+    #[cfg(unix)]
+    use super::ParentDeathGuard;
     use super::{Child, ChildInput, ChildOutput, Command};
     use crate::{
         PtySize,
@@ -831,6 +1384,48 @@ mod test {
     const STARTUP_DELAY: Duration = Duration::from_millis(500);
     // We skip testing PTY usage on Windows
     const TEST_PTY: bool = !cfg!(windows);
+
+    struct ObservedOutput {
+        buffer: Arc<Mutex<Vec<u8>>>,
+        ready_tx: Option<oneshot::Sender<()>>,
+    }
+
+    impl ObservedOutput {
+        fn new() -> (Self, Arc<Mutex<Vec<u8>>>, oneshot::Receiver<()>) {
+            let buffer = Arc::new(Mutex::new(Vec::new()));
+            let (ready_tx, ready_rx) = oneshot::channel();
+            (
+                Self {
+                    buffer: buffer.clone(),
+                    ready_tx: Some(ready_tx),
+                },
+                buffer,
+                ready_rx,
+            )
+        }
+    }
+
+    impl io::Write for ObservedOutput {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            let saw_ready = {
+                let mut buffer = self.buffer.lock().unwrap();
+                buffer.extend_from_slice(buf);
+                String::from_utf8_lossy(&buffer).contains("ready")
+            };
+
+            if saw_ready {
+                if let Some(ready_tx) = self.ready_tx.take() {
+                    ready_tx.send(()).ok();
+                }
+            }
+
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
     const EOT: char = '\u{4}';
 
     fn find_script_dir() -> AbsoluteSystemPathBuf {
@@ -840,6 +1435,78 @@ mod test {
             root = root.parent().unwrap().to_owned();
         }
         root.join_components(&["crates", "turborepo-process", "test", "scripts"])
+    }
+
+    #[cfg(unix)]
+    async fn spawn_parent_death_target() -> (tokio::process::Child, libc::pid_t, libc::pid_t) {
+        let script = find_script_dir().join_component("spawn_child_sleep.js");
+        let mut command = TokioCommand::new("node");
+        command
+            .arg(script.as_std_path())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .stdin(Stdio::null())
+            .process_group(0);
+
+        let mut child = command.spawn().unwrap();
+        let child_pid = child.id().expect("child should have a pid") as libc::pid_t;
+        let stdout = child.stdout.take().expect("child should have stdout");
+        let mut stdout = BufReader::new(stdout);
+        let mut line = String::new();
+        tokio::time::timeout(Duration::from_secs(2), stdout.read_line(&mut line))
+            .await
+            .expect("timed out waiting for child pid")
+            .expect("failed to read child pid from stdout");
+
+        let grandchild_pid = line
+            .trim()
+            .strip_prefix("CHILD_PID=")
+            .expect("child pid output should be prefixed")
+            .parse::<libc::pid_t>()
+            .expect("child pid should parse");
+
+        (child, child_pid, grandchild_pid)
+    }
+
+    #[cfg(unix)]
+    async fn spawn_term_ignoring_parent_death_target()
+    -> (tokio::process::Child, libc::pid_t, libc::pid_t) {
+        let mut command = TokioCommand::new("sh");
+        command
+            .args([
+                "-c",
+                "trap '' TERM; sh -c \"trap '' TERM; while true; do sleep 0.2; done\" & \
+                 CHILD_PID=$!; echo CHILD_PID=$CHILD_PID; while true; do sleep 0.2; done",
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .stdin(Stdio::null())
+            .process_group(0);
+
+        let mut child = command.spawn().unwrap();
+        let child_pid = child.id().expect("child should have a pid") as libc::pid_t;
+        let stdout = child.stdout.take().expect("child should have stdout");
+        let mut stdout = BufReader::new(stdout);
+        let mut line = String::new();
+        tokio::time::timeout(Duration::from_secs(2), stdout.read_line(&mut line))
+            .await
+            .expect("timed out waiting for child pid")
+            .expect("failed to read child pid from stdout");
+
+        let grandchild_pid = line
+            .trim()
+            .strip_prefix("CHILD_PID=")
+            .expect("child pid output should be prefixed")
+            .parse::<libc::pid_t>()
+            .expect("child pid should parse");
+
+        (child, child_pid, grandchild_pid)
+    }
+
+    #[cfg(unix)]
+    fn process_exists(pid: libc::pid_t) -> bool {
+        let result = unsafe { libc::kill(pid, 0) };
+        result == 0 || io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
     }
 
     #[test_case(false)]
@@ -991,7 +1658,7 @@ mod test {
 
         let mut child = Child::spawn(
             cmd,
-            ShutdownStyle::Graceful(Duration::from_millis(1000)),
+            ShutdownStyle::Graceful(Some(Duration::from_millis(1000))),
             use_pty.then(PtySize::default),
         )
         .unwrap();
@@ -1027,7 +1694,7 @@ mod test {
 
         let mut child = Child::spawn(
             cmd,
-            ShutdownStyle::Graceful(Duration::from_millis(1000)),
+            ShutdownStyle::Graceful(Some(Duration::from_millis(1000))),
             use_pty.then(PtySize::default),
         )
         .unwrap();
@@ -1058,6 +1725,57 @@ mod test {
     #[test_case(false)]
     #[test_case(TEST_PTY)]
     #[tokio::test]
+    async fn test_graceful_shutdown_drains_final_output(use_pty: bool) {
+        let script = find_script_dir().join_component("graceful_sigint_output.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Some(Duration::from_millis(1000))),
+            use_pty.then(PtySize::default),
+        )
+        .unwrap();
+
+        let mut output_child = child.clone();
+        let (mut observer, output, ready_rx) = ObservedOutput::new();
+        let output_task = tokio::spawn(async move {
+            let exit = output_child
+                .wait_with_piped_outputs(&mut observer)
+                .await
+                .unwrap();
+            exit
+        });
+
+        tokio::time::timeout(Duration::from_secs(2), ready_rx)
+            .await
+            .expect("timed out waiting for startup output")
+            .expect("ready notification channel closed unexpectedly");
+        child.set_closing();
+        child.stop().await;
+        let exit = output_task.await.unwrap();
+        let output = String::from_utf8(output.lock().unwrap().clone()).unwrap();
+
+        assert!(output.contains("ready"), "missing startup output: {output}");
+        assert!(
+            output.contains("received SIGINT"),
+            "missing SIGINT receipt log: {output}"
+        );
+        assert!(
+            output.contains("exiting after SIGINT"),
+            "missing SIGINT exit log: {output}"
+        );
+
+        if cfg!(windows) {
+            assert_matches!(exit, Some(ChildExit::Killed));
+        } else {
+            assert_matches!(exit, Some(ChildExit::Interrupted));
+        }
+    }
+
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
     #[traced_test]
     async fn test_detect_killed_someone_else(use_pty: bool) {
         let cmd = {
@@ -1069,7 +1787,7 @@ mod test {
 
         let mut child = Child::spawn(
             cmd,
-            ShutdownStyle::Graceful(Duration::from_millis(1000)),
+            ShutdownStyle::Graceful(Some(Duration::from_millis(1000))),
             use_pty.then(PtySize::default),
         )
         .unwrap();
@@ -1213,7 +1931,7 @@ mod test {
             cmd,
             // Bumping this to give ample time for the process to respond to the SIGINT to reduce
             // flakiness inherent with sending and receiving signals.
-            ShutdownStyle::Graceful(Duration::from_millis(1000)),
+            ShutdownStyle::Graceful(Some(Duration::from_millis(1000))),
             use_pty.then(PtySize::default),
         )
         .unwrap();
@@ -1274,6 +1992,105 @@ mod test {
             }
             Err(_) => panic!("expected wait_with_piped_outputs to exit after it was killed"),
         }
+    }
+
+    #[cfg(unix)]
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    #[traced_test]
+    async fn test_graceful_shutdown_waits_for_force_kill(use_pty: bool) {
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "trap '' INT; while true; do sleep 0.2; done"]);
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Some(Duration::from_secs(5))),
+            use_pty.then(PtySize::default),
+        )
+        .unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let mut shutdown_child = child.clone();
+        let shutdown =
+            tokio::spawn(
+                async move { shutdown_child.shutdown(ShutdownStyle::Graceful(None)).await },
+            );
+
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert!(
+            !shutdown.is_finished(),
+            "graceful shutdown should keep waiting until explicitly forced"
+        );
+
+        assert_eq!(child.kill().await, Some(ChildExit::Killed));
+        assert_eq!(shutdown.await.unwrap(), Some(ChildExit::Killed));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_parent_death_guard_drop_kills_process_group() {
+        let (mut child, child_pid, grandchild_pid) = spawn_parent_death_target().await;
+        let guard = ParentDeathGuard::spawn_for_pid(child_pid).unwrap();
+        drop(guard);
+
+        tokio::time::timeout(Duration::from_secs(5), child.wait())
+            .await
+            .expect("timed out waiting for watchdog to kill child")
+            .expect("failed waiting for child process");
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(
+            !process_exists(grandchild_pid),
+            "watchdog should kill the entire child process group"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_parent_death_guard_disarm_keeps_process_group_alive() {
+        let (mut child, child_pid, grandchild_pid) = spawn_parent_death_target().await;
+        let mut guard = ParentDeathGuard::spawn_for_pid(child_pid).unwrap();
+        guard.disarm();
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        assert!(
+            process_exists(child_pid),
+            "child should still be alive after disarm"
+        );
+        assert!(
+            process_exists(grandchild_pid),
+            "grandchild should still be alive after disarm"
+        );
+
+        unsafe {
+            libc::kill(-child_pid, libc::SIGKILL);
+        }
+        tokio::time::timeout(Duration::from_secs(5), child.wait())
+            .await
+            .expect("timed out waiting for cleanup after SIGKILL")
+            .expect("failed waiting for child process");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_parent_death_guard_escalates_after_sigterm() {
+        let (mut child, child_pid, grandchild_pid) =
+            spawn_term_ignoring_parent_death_target().await;
+        let guard = ParentDeathGuard::spawn_for_pid(child_pid).unwrap();
+        drop(guard);
+
+        tokio::time::timeout(Duration::from_secs(5), child.wait())
+            .await
+            .expect("timed out waiting for watchdog escalation")
+            .expect("failed waiting for child process");
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(
+            !process_exists(grandchild_pid),
+            "watchdog should escalate to SIGKILL for TERM-ignoring process trees"
+        );
     }
 
     #[test_case(false)]
@@ -1542,7 +2359,7 @@ mod test {
         cmd.open_stdin();
         let mut child = Child::spawn(
             cmd,
-            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            ShutdownStyle::Graceful(Some(Duration::from_millis(500))),
             use_pty.then(PtySize::default),
         )
         .unwrap();
@@ -1600,6 +2417,65 @@ mod test {
         );
     }
 
+    #[cfg(unix)]
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    async fn test_force_kill_process_tree_cleanup(use_pty: bool) {
+        let script = find_script_dir().join_component("spawn_child_sleep.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let grandchild_pid = {
+            let mut out = Vec::new();
+            match child.outputs().unwrap() {
+                ChildOutput::Std { mut stdout, .. } => {
+                    let mut buf = vec![0u8; 256];
+                    let n = tokio::time::timeout(Duration::from_secs(5), stdout.read(&mut buf))
+                        .await
+                        .expect("timed out reading grandchild PID")
+                        .expect("failed to read stdout");
+                    out.extend_from_slice(&buf[..n]);
+                }
+                ChildOutput::Pty(mut reader) => {
+                    let mut buf = vec![0u8; 256];
+                    let n = reader.read(&mut buf).expect("failed to read pty output");
+                    out.extend_from_slice(&buf[..n]);
+                }
+            };
+            let output = String::from_utf8(out).unwrap();
+            let pid_line = output
+                .lines()
+                .find(|line| line.contains("CHILD_PID="))
+                .unwrap_or_else(|| panic!("CHILD_PID not found in output: {output}"));
+            pid_line
+                .split('=')
+                .nth(1)
+                .unwrap()
+                .trim()
+                .parse::<u32>()
+                .unwrap()
+        };
+
+        assert!(
+            is_process_alive(grandchild_pid),
+            "grandchild process {grandchild_pid} should be alive before force kill"
+        );
+
+        assert_eq!(child.kill().await, Some(ChildExit::Killed));
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        assert!(
+            !is_process_alive(grandchild_pid),
+            "grandchild process {grandchild_pid} should have been force killed"
+        );
+    }
+
     // Regression tests for the pre_exec/setsid -> process_group(0) migration.
     //
     // We replaced an unsafe pre_exec callback that called setsid() with tokio's
@@ -1618,7 +2494,7 @@ mod test {
         cmd.args([script.as_std_path()]);
         let mut child = Child::spawn(
             cmd,
-            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            ShutdownStyle::Graceful(Some(Duration::from_millis(500))),
             None,
         )
         .unwrap();
@@ -1653,7 +2529,7 @@ mod test {
         cmd.open_stdin();
         let mut child = Child::spawn(
             cmd,
-            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            ShutdownStyle::Graceful(Some(Duration::from_millis(500))),
             None,
         )
         .unwrap();
@@ -1719,7 +2595,7 @@ mod test {
         cmd.open_stdin();
         let mut child = Child::spawn(
             cmd,
-            ShutdownStyle::Graceful(Duration::from_millis(2000)),
+            ShutdownStyle::Graceful(Some(Duration::from_millis(2000))),
             None,
         )
         .unwrap();
@@ -1793,7 +2669,7 @@ mod test {
         cmd.args([script.as_std_path()]);
         let mut child = Child::spawn(
             cmd,
-            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            ShutdownStyle::Graceful(Some(Duration::from_millis(500))),
             None,
         )
         .unwrap();
