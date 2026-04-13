@@ -1754,18 +1754,18 @@ mod test {
         let output = String::from_utf8(output.lock().unwrap().clone()).unwrap();
 
         assert!(output.contains("ready"), "missing startup output: {output}");
-        assert!(
-            output.contains("received SIGINT"),
-            "missing SIGINT receipt log: {output}"
-        );
-        assert!(
-            output.contains("exiting after SIGINT"),
-            "missing SIGINT exit log: {output}"
-        );
 
         if cfg!(windows) {
             assert_matches!(exit, Some(ChildExit::Killed));
         } else {
+            assert!(
+                output.contains("received SIGINT"),
+                "missing SIGINT receipt log: {output}"
+            );
+            assert!(
+                output.contains("exiting after SIGINT"),
+                "missing SIGINT exit log: {output}"
+            );
             assert_matches!(exit, Some(ChildExit::Interrupted));
         }
     }
