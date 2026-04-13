@@ -2,8 +2,16 @@
 // With stdin connected to NUL/null it gets EOF immediately and continues.
 // With an open pipe held by the parent it hangs before producing any output.
 
-const fs = require("node:fs");
+const chunks = [];
 
-const input = fs.readFileSync(0);
-process.stdout.write(`stdin bytes=${input.length}\n`);
-process.stdout.write("started\n");
+process.stdin.on("data", (chunk) => {
+  chunks.push(chunk);
+});
+
+process.stdin.on("end", () => {
+  const input = Buffer.concat(chunks);
+  process.stdout.write(`stdin bytes=${input.length}\n`);
+  process.stdout.write("started\n");
+});
+
+process.stdin.resume();

@@ -1686,7 +1686,7 @@ mod test {
             .expect("child should exit after stdin is closed");
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
 
-        let output = String::from_utf8(output).unwrap();
+        let output = String::from_utf8(output).unwrap().replace("\r\n", "\n");
         assert_eq!(output, "stdin bytes=0\nstarted\n");
     }
 
@@ -1709,7 +1709,7 @@ mod test {
         .expect("failed to wait for child output");
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
 
-        let output = String::from_utf8(output).unwrap();
+        let output = String::from_utf8(output).unwrap().replace("\r\n", "\n");
         assert_eq!(output, "stdin bytes=0\nstarted\n");
     }
 
