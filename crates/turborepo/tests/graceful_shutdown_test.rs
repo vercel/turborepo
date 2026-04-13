@@ -16,8 +16,8 @@ mod unix {
         sys::signal::{self, Signal},
         unistd::Pid,
     };
-    use portable_pty::{CommandBuilder, PtySize, native_pty_system};
-    use serde_json::{Value, json};
+    use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+    use serde_json::{json, Value};
     use tempfile::TempDir;
 
     use crate::common::{self, setup};
@@ -98,7 +98,7 @@ mod unix {
                 reader_thread.join().expect("pty reader thread panicked");
             }
 
-            normalize_output(&String::from_utf8_lossy(&self.output.lock().unwrap()).to_string())
+            normalize_output(String::from_utf8_lossy(&self.output.lock().unwrap()).as_ref())
         }
     }
 
