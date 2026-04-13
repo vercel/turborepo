@@ -191,6 +191,41 @@ pub async fn run(
     result
 }
 
+fn create_structured_sink(
+    file_path: Option<&turbopath::AbsoluteSystemPathBuf>,
+    terminal: bool,
+) -> Option<Arc<StructuredLogSink>> {
+    if file_path.is_none() && !terminal {
+        return None;
+    }
+
+    let mut builder = StructuredLogSink::builder();
+
+    if let Some(path) = file_path {
+        builder = builder.file_path(path.as_std_path());
+        // Warn that structured logs capture ALL output including potential secrets.
+        // This fires before the logger is initialized so we use eprintln.
+        eprintln!(
+            "turbo: structured logs will capture all output (including potential secrets) to {}",
+            path
+        );
+    }
+
+    if terminal {
+        builder = builder.terminal(true);
+    }
+
+    match builder.build() {
+        Ok(sink) => Some(Arc::new(sink)),
+        Err(e) => {
+            // Structured logging is best-effort. This fires before the
+            // global logger is initialized, so use eprintln directly.
+            eprintln!("turbo: failed to set up structured logging: {e}");
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -245,40 +280,5 @@ mod tests {
             .unwrap();
 
         assert_eq!(outcome, RunOutcome::Interrupted("cleaned-up"));
-    }
-}
-
-fn create_structured_sink(
-    file_path: Option<&turbopath::AbsoluteSystemPathBuf>,
-    terminal: bool,
-) -> Option<Arc<StructuredLogSink>> {
-    if file_path.is_none() && !terminal {
-        return None;
-    }
-
-    let mut builder = StructuredLogSink::builder();
-
-    if let Some(path) = file_path {
-        builder = builder.file_path(path.as_std_path());
-        // Warn that structured logs capture ALL output including potential secrets.
-        // This fires before the logger is initialized so we use eprintln.
-        eprintln!(
-            "turbo: structured logs will capture all output (including potential secrets) to {}",
-            path
-        );
-    }
-
-    if terminal {
-        builder = builder.terminal(true);
-    }
-
-    match builder.build() {
-        Ok(sink) => Some(Arc::new(sink)),
-        Err(e) => {
-            // Structured logging is best-effort. This fires before the
-            // global logger is initialized, so use eprintln directly.
-            eprintln!("turbo: failed to set up structured logging: {e}");
-            None
-        }
     }
 }
