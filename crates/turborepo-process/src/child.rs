@@ -1029,7 +1029,7 @@ impl Child {
 
     /// Perform a graceful shutdown of the `Child` process.
     pub async fn stop(&mut self) -> Option<ChildExit> {
-        self.shutdown(self.shutdown_style.clone()).await
+        self.shutdown(self.shutdown_style).await
     }
 
     pub async fn shutdown(&mut self, shutdown_style: ShutdownStyle) -> Option<ChildExit> {
@@ -1299,7 +1299,7 @@ impl ChildStateManager {
         child: &mut ChildHandle,
         controller: Option<Box<dyn PtyController + Send>>,
     ) {
-        let exit = match command.unwrap_or(ChildCommand::Shutdown(self.shutdown_style.clone())) {
+        let exit = match command.unwrap_or(ChildCommand::Shutdown(self.shutdown_style)) {
             ChildCommand::Shutdown(shutdown_style) => {
                 debug!("stopping child process");
                 shutdown_style.process(child, command_rx).await
