@@ -1642,6 +1642,77 @@ mod test {
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
+    /// Regression test for #7834: proves that a child process can block
+    /// before producing any output if stdin is an open pipe instead of EOF.
+    ///
+    /// This models the v1.13 regression on Windows stream mode:
+    /// `tsx watch` received an open piped stdin and never started executing.
+    #[tokio::test]
+    async fn test_std_open_stdin_blocks_startup_until_eof() {
+        let script = find_script_dir().join_component("startup_after_stdin_eof.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, None).unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let ChildOutput::Std { mut stdout, .. } = child.outputs().unwrap() else {
+            panic!("expected stdio child");
+        };
+
+        let mut output = Vec::new();
+        let result =
+            tokio::time::timeout(Duration::from_secs(1), stdout.read_to_end(&mut output)).await;
+        assert!(
+            result.is_err(),
+            "child should stay blocked while stdin is held open"
+        );
+        assert!(
+            output.is_empty(),
+            "child should not produce output before stdin reaches EOF"
+        );
+
+        // Closing the parent's stdin pipe should unblock the child immediately.
+        drop(child.stdin_inner());
+
+        tokio::time::timeout(Duration::from_secs(5), stdout.read_to_end(&mut output))
+            .await
+            .expect("child should finish reading after stdin is closed")
+            .expect("failed to read child output");
+
+        let exit = tokio::time::timeout(Duration::from_secs(5), child.wait())
+            .await
+            .expect("child should exit after stdin is closed");
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+
+        let output = String::from_utf8(output).unwrap();
+        assert_eq!(output, "stdin bytes=0\nstarted\n");
+    }
+
+    /// Regression test for #7834: verifies the pre-v1.13 behavior where tasks
+    /// that do not need input start immediately when stdin is already at EOF.
+    #[tokio::test]
+    async fn test_std_null_stdin_allows_startup() {
+        let script = find_script_dir().join_component("startup_after_stdin_eof.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, None).unwrap();
+
+        let mut output = Vec::new();
+        let exit = tokio::time::timeout(
+            Duration::from_secs(5),
+            child.wait_with_piped_outputs(&mut output),
+        )
+        .await
+        .expect("child should not block when stdin is null")
+        .expect("failed to wait for child output");
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+
+        let output = String::from_utf8(output).unwrap();
+        assert_eq!(output, "stdin bytes=0\nstarted\n");
+    }
+
     #[test_case(false)]
     #[test_case(TEST_PTY)]
     #[tokio::test]
