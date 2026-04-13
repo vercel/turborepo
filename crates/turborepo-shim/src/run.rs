@@ -524,6 +524,16 @@ where
         Err(e) => return ShimResult::ShimError(err(e)),
     };
 
+    // The child turbo process shares our process group and will receive
+    // SIGINT directly from the kernel when the user presses Ctrl+C.
+    // Ignore SIGINT in the shim *after* spawning so the child inherits
+    // the default disposition (and can register its own handler), while
+    // the shim stays alive to collect the child's exit status.
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGINT, libc::SIG_IGN);
+    }
+
     let exit_status = match child.wait() {
         Ok(status) => status,
         Err(e) => return ShimResult::ShimError(err(e)),

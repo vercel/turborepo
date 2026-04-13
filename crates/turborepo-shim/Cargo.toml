@@ -45,6 +45,9 @@ itertools = { workspace = true }
 const_format = "0.2.32"
 tiny-gradient = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(windows)'.dependencies]
 crossterm = "0.27"
 
