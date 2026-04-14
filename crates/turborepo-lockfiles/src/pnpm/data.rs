@@ -17,6 +17,8 @@ pub struct PnpmLockfile {
     lockfile_version: LockfileVersion,
     #[serde(skip)]
     cached_version: SupportedLockfileVersion,
+    #[serde(skip)]
+    leading_documents: Vec<serde_yaml_ng::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     settings: Option<LockfileSettings>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -208,6 +210,22 @@ struct LockfileSettings {
 
 impl PnpmLockfile {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, crate::Error> {
+        let mut documents = serde_yaml_ng::Deserializer::from_slice(bytes).peekable();
+        let mut leading_documents = Vec::new();
+
+        while let Some(document) = documents.next() {
+            if documents.peek().is_some() {
+                leading_documents.push(serde_yaml_ng::Value::deserialize(document)?);
+                continue;
+            }
+
+            let mut this: Self = Self::deserialize(document)?;
+            this.leading_documents = leading_documents;
+            this.cached_version = this.compute_version();
+            this.build_dependency_index();
+            return Ok(this);
+        }
+
         let mut this: Self = serde_yaml_ng::from_slice(bytes)?;
         this.cached_version = this.compute_version();
         this.build_dependency_index();
@@ -460,11 +478,12 @@ impl PnpmLockfile {
     // workspaces
     fn global_fields(&self) -> GlobalFields<'_> {
         GlobalFields {
-            version: &self.lockfile_version.version,
+            version: &self.lockfile_version,
             checksum: self.package_extensions_checksum.as_deref(),
             overrides: self.overrides.as_ref(),
             patched_dependencies: self.patched_dependencies.as_ref(),
             settings: self.settings.as_ref(),
+            leading_documents: &self.leading_documents,
         }
     }
 
@@ -505,11 +524,12 @@ impl PnpmLockfile {
 
 #[derive(Debug, PartialEq, Eq)]
 struct GlobalFields<'a> {
-    version: &'a str,
+    version: &'a LockfileVersion,
     checksum: Option<&'a str>,
     overrides: Option<&'a BTreeMap<String, String>>,
     patched_dependencies: Option<&'a BTreeMap<String, PatchFile>>,
     settings: Option<&'a LockfileSettings>,
+    leading_documents: &'a [serde_yaml_ng::Value],
 }
 
 impl crate::Lockfile for PnpmLockfile {
@@ -682,6 +702,7 @@ impl crate::Lockfile for PnpmLockfile {
             .transpose()?;
 
         Ok(Box::new(Self {
+            leading_documents: self.leading_documents.clone(),
             importers,
             packages: match pruned_packages.is_empty() {
                 false => Some(pruned_packages),
@@ -705,7 +726,18 @@ impl crate::Lockfile for PnpmLockfile {
     }
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
-        Ok(serde_yaml_ng::to_string(&self)?.into_bytes())
+        if self.leading_documents.is_empty() {
+            return Ok(serde_yaml_ng::to_string(&self)?.into_bytes());
+        }
+
+        let mut output = String::new();
+        for document in &self.leading_documents {
+            output.push_str("---\n");
+            output.push_str(&serde_yaml_ng::to_string(document)?);
+        }
+        output.push_str("---\n");
+        output.push_str(&serde_yaml_ng::to_string(&self)?);
+        Ok(output.into_bytes())
     }
 
     fn patches(&self) -> Result<Vec<RelativeUnixPathBuf>, crate::Error> {
@@ -862,11 +894,7 @@ pub fn pnpm_global_change(
 ) -> Result<bool, crate::Error> {
     let prev_data = PnpmLockfile::from_bytes(prev_contents)?;
     let curr_data = PnpmLockfile::from_bytes(curr_contents)?;
-    Ok(prev_data.lockfile_version != curr_data.lockfile_version
-        || prev_data.package_extensions_checksum != curr_data.package_extensions_checksum
-        || prev_data.overrides != curr_data.overrides
-        || prev_data.patched_dependencies != curr_data.patched_dependencies
-        || prev_data.settings != curr_data.settings)
+    Ok(prev_data.global_fields() != curr_data.global_fields())
 }
 
 #[cfg(test)]
@@ -943,6 +971,123 @@ importers:
                 malicious_version
             );
         }
+    }
+
+    fn pnpm_v11_lockfile(package_manager_version: &str) -> String {
+        format!(
+            r#"---
+lockfileVersion: '9.0'
+
+importers:
+  .:
+    configDependencies:
+      my-configs: "1.0.0+sha512-deadbeef"
+    packageManagerDependencies:
+      pnpm:
+        specifier: {package_manager_version}
+        version: {package_manager_version}
+
+packages:
+  pnpm@{package_manager_version}:
+    resolution: {{integrity: sha512-pnpm}}
+
+snapshots:
+  pnpm@{package_manager_version}: {{}}
+
+---
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+  .: {{}}
+
+  apps/web:
+    dependencies:
+      is-odd:
+        specifier: ^3.0.1
+        version: 3.0.1
+
+  apps/docs:
+    dependencies:
+      left-pad:
+        specifier: ^1.3.0
+        version: 1.3.0
+
+packages:
+  is-number@6.0.0:
+    resolution: {{integrity: sha512-abc}}
+
+  is-odd@3.0.1:
+    resolution: {{integrity: sha512-def}}
+
+  left-pad@1.3.0:
+    resolution: {{integrity: sha512-ghi}}
+
+snapshots:
+  is-number@6.0.0: {{}}
+
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+
+  left-pad@1.3.0: {{}}
+"#
+        )
+    }
+
+    #[test]
+    fn test_from_bytes_supports_multi_document_pnpm_v11_lockfile() {
+        let yaml = pnpm_v11_lockfile("11.0.0-rc.0");
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        assert_eq!(lockfile.leading_documents.len(), 1);
+        assert!(lockfile.importers.contains_key("."));
+        assert!(lockfile.importers.contains_key("apps/web"));
+        assert!(lockfile.importers.contains_key("apps/docs"));
+
+        let package = lockfile
+            .resolve_package("apps/web", "is-odd", "^3.0.1")
+            .unwrap()
+            .expect("apps/web dependency should resolve from the final document");
+        assert_eq!(package.key, "is-odd@3.0.1");
+        assert_eq!(package.version, "3.0.1");
+    }
+
+    #[test]
+    fn test_subgraph_preserves_leading_pnpm_v11_documents() {
+        let yaml = pnpm_v11_lockfile("11.0.0-rc.0");
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/web".to_string()];
+        let resolved_packages = vec!["is-number@6.0.0".to_string(), "is-odd@3.0.1".to_string()];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_contents = String::from_utf8(pruned_bytes.clone()).unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+
+        assert!(pruned_contents.contains("packageManagerDependencies"));
+        assert!(pruned_contents.contains("configDependencies"));
+        assert_eq!(pruned_lockfile.leading_documents.len(), 1);
+        assert!(pruned_lockfile.importers.contains_key("."));
+        assert!(pruned_lockfile.importers.contains_key("apps/web"));
+        assert!(
+            !pruned_lockfile.importers.contains_key("apps/docs"),
+            "pruned lockfile should still trim workspaces from the final document"
+        );
+    }
+
+    #[test]
+    fn test_pnpm_global_change_detects_leading_document_changes() {
+        let prev_yaml = pnpm_v11_lockfile("11.0.0-rc.0");
+        let curr_yaml = pnpm_v11_lockfile("11.0.0-rc.1");
+
+        assert!(pnpm_global_change(prev_yaml.as_bytes(), curr_yaml.as_bytes()).unwrap());
     }
 
     #[test]

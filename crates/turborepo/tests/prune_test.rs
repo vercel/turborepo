@@ -685,3 +685,55 @@ fn test_prune_pnpm_per_workspace_lockfile_docker() {
         ".npmrc in json/ should preserve shared-workspace-lockfile=false"
     );
 }
+
+#[test]
+fn test_prune_pnpm_v11_multi_document_lockfile() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("pnpm_v11_multi_document_lockfile", tempdir.path()).unwrap();
+    setup::setup_git(tempdir.path()).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(
+        !tempdir.path().join("out/apps/docs").exists(),
+        "docs should not be in pruned output"
+    );
+
+    let root_lockfile = fs::read_to_string(tempdir.path().join("out/pnpm-lock.yaml")).unwrap();
+    assert!(
+        root_lockfile.starts_with("---\nlockfileVersion: '9.0'\n"),
+        "pruned lockfile should preserve the leading pnpm-managed document"
+    );
+    assert_eq!(
+        root_lockfile.matches("lockfileVersion: '9.0'").count(),
+        2,
+        "pruned lockfile should remain a two-document YAML stream"
+    );
+    assert!(
+        root_lockfile.contains("configDependencies:"),
+        "pruned lockfile should preserve pnpm v11 config dependency metadata"
+    );
+    assert!(
+        root_lockfile.contains("packageManagerDependencies:"),
+        "pruned lockfile should preserve pnpm-managed package manager metadata"
+    );
+    assert!(
+        root_lockfile.contains("my-configs:"),
+        "pruned lockfile should retain leading document entries"
+    );
+    assert!(
+        root_lockfile.contains("apps/web:")
+            && root_lockfile.contains("packages/ui:")
+            && root_lockfile.contains("packages/config:"),
+        "pruned lockfile should keep the selected workspace graph"
+    );
+    assert!(
+        !root_lockfile.contains("apps/docs:"),
+        "pruned lockfile should still trim workspaces from the dependency document"
+    );
+}
