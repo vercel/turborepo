@@ -1,9 +1,4 @@
-export type OutputLogs =
-  | "full"
-  | "none"
-  | "hash-only"
-  | "new-only"
-  | "errors-only";
+export type OutputLogs = "full" | "none" | "hash-only" | "new-only" | "errors-only";
 export type EnvMode = "loose" | "strict";
 export type UI = "tui" | "stream" | "stream-with-experimental-timestamps";
 /**
