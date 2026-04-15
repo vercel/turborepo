@@ -4,10 +4,10 @@ use tracing::error;
 use turborepo_api_client::SharedHttpClient;
 use turborepo_log::StructuredLogSink;
 use turborepo_query_api::QueryServer;
-use turborepo_signals::{SignalHandler, listeners::get_signal};
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_types::DryRunMode;
-use turborepo_ui::{LogSinks, sender::UISender};
+use turborepo_ui::{sender::UISender, LogSinks};
 
 use crate::{commands::CommandBase, run, run::builder::RunBuilder, tracing::TurboSubscriber};
 
@@ -230,9 +230,9 @@ mod tests {
 
     use futures::stream;
     use tokio::sync::oneshot;
-    use turborepo_signals::{SignalHandler, signals::Signal};
+    use turborepo_signals::{signals::Signal, SignalHandler};
 
-    use super::{RunOutcome, wait_for_run_cleanup_on_signal};
+    use super::{wait_for_run_cleanup_on_signal, RunOutcome};
 
     #[cfg(windows)]
     const DEFAULT_SIGNAL: Signal = Signal::CtrlC;
