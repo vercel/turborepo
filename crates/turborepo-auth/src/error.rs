@@ -35,6 +35,8 @@ pub enum Error {
     TokenMissingFromCallback,
     #[error("token refresh failed with HTTP {status}")]
     TokenRefreshFailed { status: u16 },
+    #[error("token exchange failed with HTTP {status}: {message}")]
+    TokenExchangeFailed { status: u16, message: String },
     #[error("failed to fetch user: {0}")]
     FailedToFetchUser(#[source] turborepo_api_client::Error),
     #[error("url is invalid: {0}")]
@@ -82,8 +84,6 @@ pub enum Error {
         code: String,
         description: Option<String>,
     },
-    #[error("SSO requires an existing login. Please run `turbo login` first.")]
-    SSORequiresLogin,
     #[error("token introspection failed: {message}")]
     IntrospectionFailed { message: String },
 }

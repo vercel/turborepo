@@ -30,11 +30,13 @@ pub const VERCEL_TOKEN_FILE: &str = "auth.json";
 pub const TURBO_TOKEN_DIR: &str = "turborepo";
 pub const TURBO_TOKEN_FILE: &str = "config.json";
 
-const VERCEL_OAUTH_TOKEN_URL: &str = "https://vercel.com/api/login/oauth/token";
-const VERCEL_OAUTH_INTROSPECT_URL: &str = "https://vercel.com/api/login/oauth/token/introspect";
+const VERCEL_OAUTH_TOKEN_URL: &str = "https://api.vercel.com/login/oauth/token";
+const VERCEL_OAUTH_INTROSPECT_URL: &str = "https://api.vercel.com/login/oauth/token/introspect";
 const DEFAULT_TOKEN_EXPIRY_SECS: u64 = 8 * 60 * 60; // 8 hours
+const TOKEN_EXCHANGE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:token-exchange";
+const ACCESS_TOKEN_SUBJECT_TYPE: &str = "urn:ietf:params:oauth:token-type:access_token";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AuthTokens {
     pub token: Option<SecretString>,
     pub refresh_token: Option<SecretString>,
@@ -44,8 +46,24 @@ pub struct AuthTokens {
 #[derive(Debug, serde::Deserialize)]
 struct OAuthTokenResponse {
     access_token: SecretString,
-    refresh_token: SecretString,
+    refresh_token: Option<SecretString>,
     expires_in: Option<u64>,
+}
+
+fn auth_tokens_from_oauth_response(
+    oauth_response: OAuthTokenResponse,
+    fallback_refresh_token: Option<SecretString>,
+) -> AuthTokens {
+    AuthTokens {
+        token: Some(oauth_response.access_token),
+        refresh_token: oauth_response.refresh_token.or(fallback_refresh_token),
+        expires_at: Some(
+            current_unix_time_secs()
+                + oauth_response
+                    .expires_in
+                    .unwrap_or(DEFAULT_TOKEN_EXPIRY_SECS),
+        ),
+    }
 }
 
 /// Token.
@@ -465,16 +483,44 @@ impl AuthTokens {
 
         let oauth_response: OAuthTokenResponse = serde_json::from_str(&response_text)?;
 
-        Ok(AuthTokens {
-            token: Some(oauth_response.access_token),
-            refresh_token: Some(oauth_response.refresh_token),
-            expires_at: Some(
-                current_unix_time_secs()
-                    + oauth_response
-                        .expires_in
-                        .unwrap_or(DEFAULT_TOKEN_EXPIRY_SECS),
-            ),
-        })
+        Ok(auth_tokens_from_oauth_response(
+            oauth_response,
+            Some(refresh_token.clone()),
+        ))
+    }
+
+    pub async fn exchange_legacy_token(&self) -> Result<AuthTokens, Error> {
+        self.exchange_token_with_url(VERCEL_OAUTH_TOKEN_URL).await
+    }
+
+    async fn exchange_token_with_url(&self, token_url: &str) -> Result<AuthTokens, Error> {
+        let subject_token = self.token.as_ref().ok_or(Error::TokenNotFound)?;
+        let client = reqwest::Client::new();
+        let params = [
+            ("grant_type", TOKEN_EXCHANGE_GRANT_TYPE),
+            ("client_id", crate::device_flow::TURBOREPO_CLIENT_ID),
+            ("subject_token", subject_token.expose()),
+            ("subject_token_type", ACCESS_TOKEN_SUBJECT_TYPE),
+        ];
+
+        let mut request = client.post(token_url).form(&params);
+        if let Some(agent) = turborepo_ai_agents::get_agent() {
+            request = request.header("x-ai-agent", agent);
+        }
+        let response = request.send().await?;
+        let status = response.status();
+
+        if !status.is_success() {
+            let message = response.text().await.unwrap_or_default();
+            return Err(Error::TokenExchangeFailed {
+                status: status.as_u16(),
+                message,
+            });
+        }
+
+        let response_text = response.text().await?;
+        let oauth_response: OAuthTokenResponse = serde_json::from_str(&response_text)?;
+        Ok(auth_tokens_from_oauth_response(oauth_response, None))
     }
 
     /// Introspects a token to discover its client_id.
@@ -529,6 +575,7 @@ impl AuthTokens {
 mod tests {
     use std::backtrace::Backtrace;
 
+    use httpmock::prelude::*;
     use insta::assert_snapshot;
     use reqwest::{Method, RequestBuilder, Response};
     use tempfile::tempdir;
@@ -890,6 +937,73 @@ mod tests {
 
         let result = tokens.refresh_token().await;
         assert!(matches!(result, Err(Error::TokenNotFound)));
+    }
+
+    #[tokio::test]
+    async fn test_exchange_legacy_token() {
+        let mock = MockServer::start_async().await;
+        let exchange = mock
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/login/oauth/token")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(format!(
+                        "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange&client_id={}&subject_token=legacy-token&subject_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aaccess_token",
+                        crate::device_flow::TURBOREPO_CLIENT_ID
+                    ));
+                then.status(200).body(
+                    r#"{"access_token":"turbo-scoped-token","refresh_token":"turbo-refresh-token","expires_in":1800}"#,
+                );
+            })
+            .await;
+
+        let exchanged = AuthTokens {
+            token: Some(SecretString::new("legacy-token".to_string())),
+            refresh_token: None,
+            expires_at: None,
+        }
+        .exchange_token_with_url(&mock.url("/login/oauth/token"))
+        .await
+        .expect("Failed to exchange legacy token");
+
+        exchange.assert_async().await;
+        assert_eq!(
+            exchanged.token.as_ref().map(|token| token.expose()),
+            Some("turbo-scoped-token")
+        );
+        assert_eq!(
+            exchanged.refresh_token.as_ref().map(|token| token.expose()),
+            Some("turbo-refresh-token")
+        );
+        assert!(exchanged.expires_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_exchange_legacy_token_without_refresh_token() {
+        let mock = MockServer::start_async().await;
+        let exchange = mock
+            .mock_async(|when, then| {
+                when.method(POST).path("/login/oauth/token");
+                then.status(200)
+                    .body(r#"{"access_token":"turbo-scoped-token","expires_in":1800}"#);
+            })
+            .await;
+
+        let exchanged = AuthTokens {
+            token: Some(SecretString::new("legacy-token".to_string())),
+            refresh_token: Some(SecretString::new("legacy-refresh-token".to_string())),
+            expires_at: None,
+        }
+        .exchange_token_with_url(&mock.url("/login/oauth/token"))
+        .await
+        .expect("Failed to exchange legacy token");
+
+        exchange.assert_async().await;
+        assert_eq!(
+            exchanged.token.as_ref().map(|token| token.expose()),
+            Some("turbo-scoped-token")
+        );
+        assert!(exchanged.refresh_token.is_none());
     }
 
     #[test]

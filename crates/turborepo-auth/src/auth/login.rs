@@ -12,7 +12,7 @@ use url::Url;
 
 use crate::{
     LoginOptions, Token,
-    auth::is_vercel,
+    auth::{ExistingTokenSource, classify_existing_vercel_token, is_vercel},
     device_flow::{self, TokenSet},
     error, ui,
 };
@@ -21,7 +21,7 @@ const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 const LOGIN_REDIRECT_TIMEOUT: Duration = Duration::from_secs(300);
 
-fn is_inactive_token_error(error: &Error) -> bool {
+pub(super) fn is_inactive_token_error(error: &Error) -> bool {
     matches!(
         error,
         Error::APIError(turborepo_api_client::Error::InvalidToken { message, .. })
@@ -84,32 +84,74 @@ pub async fn login<T: Client + TokenClient>(
         }
     };
 
+    let is_vercel_login = is_vercel(login_url_configuration);
+
     // Check if passed in token exists first.
     // For Vercel logins, --force is silently ignored.
-    if !force || is_vercel(login_url_configuration) {
+    if !force || is_vercel_login {
         if let Some(token) = existing_token {
-            let token = Token::existing(token.into());
-            if let Some(token) = reuse_existing_token(
-                token,
-                api_client,
-                Some(valid_token_callback("Existing token found!", color_config)),
-            )
-            .await?
-            {
-                return Ok((token, None));
+            let token_source = if is_vercel_login {
+                classify_existing_vercel_token(token)?
+            } else {
+                ExistingTokenSource::Other
+            };
+
+            if token_source != ExistingTokenSource::LegacyAuth {
+                let token = Token::existing(token.into());
+                if let Some(token) = reuse_existing_token(
+                    token,
+                    api_client,
+                    Some(valid_token_callback("Using existing login.", color_config)),
+                )
+                .await?
+                {
+                    return Ok((token, None));
+                }
             }
-        } else if is_vercel(login_url_configuration) {
+
+            if matches!(
+                token_source,
+                ExistingTokenSource::TurboConfig | ExistingTokenSource::LegacyAuth
+            ) {
+                match crate::auth::get_token_with_refresh().await {
+                    Ok(Some(token_secret)) => {
+                        if classify_existing_vercel_token(token_secret.expose())?
+                            != ExistingTokenSource::LegacyAuth
+                        {
+                            let token = Token::existing_secret(token_secret);
+                            if let Some(token) = reuse_existing_token(
+                                token,
+                                api_client,
+                                Some(valid_token_callback("Using existing login.", color_config)),
+                            )
+                            .await?
+                            {
+                                return Ok((token, None));
+                            }
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        warn!("Failed to load existing token, proceeding with new login: {e}");
+                    }
+                }
+            }
+        } else if is_vercel_login {
             match crate::auth::get_token_with_refresh().await {
                 Ok(Some(token_secret)) => {
-                    let token = Token::existing_secret(token_secret);
-                    if let Some(token) = reuse_existing_token(
-                        token,
-                        api_client,
-                        Some(valid_token_callback("Existing token found!", color_config)),
-                    )
-                    .await?
+                    if classify_existing_vercel_token(token_secret.expose())?
+                        != ExistingTokenSource::LegacyAuth
                     {
-                        return Ok((token, None));
+                        let token = Token::existing_secret(token_secret);
+                        if let Some(token) = reuse_existing_token(
+                            token,
+                            api_client,
+                            Some(valid_token_callback("Using existing login.", color_config)),
+                        )
+                        .await?
+                        {
+                            return Ok((token, None));
+                        }
                     }
                 }
                 Ok(None) => {}
@@ -120,7 +162,7 @@ pub async fn login<T: Client + TokenClient>(
         }
     }
 
-    if is_vercel(login_url_configuration) {
+    if is_vercel_login {
         login_vercel_device_flow(api_client, color_config, login_url_configuration).await
     } else {
         let port = sso_login_callback_port.unwrap_or(DEFAULT_PORT);
@@ -129,7 +171,7 @@ pub async fn login<T: Client + TokenClient>(
 }
 
 /// Vercel login via OAuth 2.0 Device Authorization Grant (RFC 8628).
-async fn login_vercel_device_flow<T: Client>(
+pub(super) async fn login_vercel_device_flow<T: Client>(
     api_client: &T,
     color_config: &ColorConfig,
     login_url: &str,

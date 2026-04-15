@@ -9,10 +9,11 @@ use turborepo_api_client::{Client, TokenClient};
 use turborepo_ui::{BOLD, ColorConfig, start_spinner};
 use url::Url;
 
+use super::login::{is_inactive_token_error, login_vercel_device_flow};
 use crate::{
     Error, LoginOptions, Token,
-    auth::is_vercel,
-    device_flow::{self, TokenSet},
+    auth::{ExistingTokenSource, classify_existing_vercel_token, is_vercel},
+    device_flow::TokenSet,
     error, ui,
 };
 
@@ -20,6 +21,11 @@ const DEFAULT_SSO_PROVIDER: &str = "SAML/OIDC Single Sign-On";
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 const SSO_REDIRECT_TIMEOUT: Duration = Duration::from_secs(300); // 5 minutes
+
+enum ExistingSSOTokenAction {
+    Reuse(Token),
+    Discard,
+}
 
 fn make_token_name() -> Result<String, Error> {
     let host = hostname::get().map_err(Error::FailedToMakeSSOTokenName)?;
@@ -30,23 +36,50 @@ fn make_token_name() -> Result<String, Error> {
     ))
 }
 
+async fn classify_existing_sso_token<T: Client + TokenClient>(
+    token: Token,
+    api_client: &T,
+    sso_team: &str,
+    valid_message_fn: Option<impl FnOnce(&str)>,
+) -> Result<ExistingSSOTokenAction, Error> {
+    match token
+        .is_valid_sso(api_client, sso_team, valid_message_fn)
+        .await
+    {
+        Ok(true) => Ok(ExistingSSOTokenAction::Reuse(token)),
+        Ok(false) => Ok(ExistingSSOTokenAction::Discard),
+        Err(err) if is_inactive_token_error(&err) => {
+            warn!("Stored token is no longer active, proceeding with a fresh SSO login");
+            Ok(ExistingSSOTokenAction::Discard)
+        }
+        Err(Error::SSOTeamNotFound(_)) => {
+            warn!(
+                "Stored token does not have access to {sso_team}, proceeding with a fresh SSO \
+                 login"
+            );
+            Ok(ExistingSSOTokenAction::Discard)
+        }
+        Err(err) => Err(err),
+    }
+}
+
 /// Perform an SSO login flow.
 ///
 /// For Vercel:
-/// 1. Requires an existing device-flow login (needs refresh token).
-/// 2. Introspects the current token to get `session_id` and `client_id`.
-/// 3. Opens browser to SSO URL with session/client context and localhost
-///    redirect.
-/// 4. Receives verification token via localhost redirect.
-/// 5. Verifies the SSO token with the API.
+/// 1. Reuses an existing token when it already has access to the requested
+///    team.
+/// 2. Otherwise runs the OAuth device flow.
+/// 3. Vercel's device authorization page handles any additional SSO challenge.
+/// 4. Validates that the resulting token has access to the requested team.
 ///
 /// For non-Vercel (self-hosted):
 /// 1. Opens browser to `{login_url}/api/auth/sso?teamId=...&next=localhost`.
 /// 2. Receives token via localhost redirect.
 /// 3. Verifies the SSO token with the API.
 ///
-/// Returns `(Token, Option<TokenSet>)`. The `TokenSet` is always `None`
-/// for SSO flows since the SSO verification returns a different token type.
+/// Returns `(Token, Option<TokenSet>)`. The `TokenSet` is `Some` when Vercel
+/// SSO completes via device flow and `None` when an existing token is reused or
+/// when a self-hosted SSO flow returns a verified token directly.
 pub async fn sso_login<T: Client + TokenClient>(
     options: &LoginOptions<'_, T>,
 ) -> Result<(Token, Option<TokenSet>), Error> {
@@ -61,6 +94,7 @@ pub async fn sso_login<T: Client + TokenClient>(
     } = *options;
 
     let sso_team = sso_team.ok_or(Error::EmptySSOTeam)?;
+    let is_vercel_login = is_vercel(login_url_configuration);
 
     let valid_token_callback = |message: &str, color_config: &ColorConfig| {
         let message = message.to_string();
@@ -74,35 +108,81 @@ pub async fn sso_login<T: Client + TokenClient>(
     // Check if token exists first. Must be there for the user and contain the
     // sso_team passed into this function.
     // For Vercel logins, --force is silently ignored.
-    if !force || is_vercel(login_url_configuration) {
+    if !force || is_vercel_login {
         if let Some(token) = existing_token {
-            let token = Token::existing(token.into());
-            if token
-                .is_valid_sso(
+            let token_source = if is_vercel_login {
+                classify_existing_vercel_token(token)?
+            } else {
+                ExistingTokenSource::Other
+            };
+
+            if token_source != ExistingTokenSource::LegacyAuth {
+                match classify_existing_sso_token(
+                    Token::existing(token.to_string()),
                     api_client,
                     sso_team,
-                    Some(valid_token_callback("Existing token found!", color_config)),
+                    Some(valid_token_callback("Using existing login.", color_config)),
                 )
                 .await?
-            {
-                return Ok((token, None));
+                {
+                    ExistingSSOTokenAction::Reuse(token) => return Ok((token, None)),
+                    ExistingSSOTokenAction::Discard => {}
+                }
             }
-        } else if is_vercel(login_url_configuration) {
+
+            if matches!(
+                token_source,
+                ExistingTokenSource::TurboConfig | ExistingTokenSource::LegacyAuth
+            ) {
+                match crate::auth::get_token_with_refresh().await {
+                    Ok(Some(token_secret)) => {
+                        if classify_existing_vercel_token(token_secret.expose())?
+                            != ExistingTokenSource::LegacyAuth
+                        {
+                            match classify_existing_sso_token(
+                                Token::existing_secret(token_secret),
+                                api_client,
+                                sso_team,
+                                Some(valid_token_callback(
+                                    &format!("Using existing login for team: {sso_team}"),
+                                    color_config,
+                                )),
+                            )
+                            .await?
+                            {
+                                ExistingSSOTokenAction::Reuse(token) => {
+                                    return Ok((token, None));
+                                }
+                                ExistingSSOTokenAction::Discard => {}
+                            }
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        warn!("Failed to load existing token for SSO, proceeding: {e}");
+                    }
+                }
+            }
+        } else if is_vercel_login {
             match crate::auth::get_token_with_refresh().await {
                 Ok(Some(token_secret)) => {
-                    let token = Token::existing_secret(token_secret);
-                    if token
-                        .is_valid_sso(
+                    if classify_existing_vercel_token(token_secret.expose())?
+                        != ExistingTokenSource::LegacyAuth
+                    {
+                        match classify_existing_sso_token(
+                            Token::existing_secret(token_secret),
                             api_client,
                             sso_team,
                             Some(valid_token_callback(
-                                &format!("Existing token for {sso_team} found!"),
+                                &format!("Using existing login for team: {sso_team}"),
                                 color_config,
                             )),
                         )
                         .await?
-                    {
-                        return Ok((token, None));
+                        {
+                            ExistingSSOTokenAction::Reuse(token) => return Ok((token, None)),
+                            ExistingSSOTokenAction::Discard => {}
+                        }
                     }
                 }
                 Ok(None) => {}
@@ -113,12 +193,22 @@ pub async fn sso_login<T: Client + TokenClient>(
         }
     }
 
-    let verification_token = if is_vercel(login_url_configuration) {
-        sso_vercel(login_url_configuration, sso_team, existing_token).await?
-    } else {
-        let port = sso_login_callback_port.unwrap_or(DEFAULT_PORT);
-        sso_redirect(login_url_configuration, sso_team, port).await?
-    };
+    if is_vercel_login {
+        let (token, token_set) =
+            login_vercel_device_flow(api_client, color_config, login_url_configuration).await?;
+
+        return match token
+            .is_valid_sso(api_client, sso_team, Option::<fn(&str)>::None)
+            .await
+        {
+            Ok(true) => Ok((token, token_set)),
+            Ok(false) => Err(Error::SSOTokenExpired(sso_team.to_owned())),
+            Err(err) => Err(err),
+        };
+    }
+
+    let port = sso_login_callback_port.unwrap_or(DEFAULT_PORT);
+    let verification_token = sso_redirect(login_url_configuration, sso_team, port).await?;
 
     // Verify the SSO token with the API
     let secret_verification_token =
@@ -139,87 +229,6 @@ pub async fn sso_login<T: Client + TokenClient>(
     ui::print_cli_authorized(&user_response.user.email, color_config);
 
     Ok((Token::New(verified_user.token), None))
-}
-
-/// Vercel SSO: introspect current token, open browser with session context.
-async fn sso_vercel(
-    login_url_configuration: &str,
-    sso_team: &str,
-    existing_token: Option<&str>,
-) -> Result<String, Error> {
-    // SSO on Vercel requires an existing device-flow login so we can
-    // introspect the token for session_id and client_id.
-    let current_token = match existing_token {
-        Some(t) => t.to_string(),
-        None => match crate::auth::get_token_with_refresh().await {
-            Ok(Some(secret)) => secret.expose().to_string(),
-            _ => return Err(Error::SSORequiresLogin),
-        },
-    };
-
-    let http_client = reqwest::Client::new();
-    let metadata = device_flow::discover(&http_client, login_url_configuration).await?;
-    let introspection =
-        device_flow::introspect_token(&http_client, &metadata, &current_token).await?;
-
-    if !introspection.active {
-        return Err(Error::IntrospectionFailed {
-            message: "session is not active".to_string(),
-        });
-    }
-
-    let session_id = introspection.session_id.ok_or(Error::IntrospectionFailed {
-        message: "missing session_id".to_string(),
-    })?;
-    let client_id = introspection.client_id.ok_or(Error::IntrospectionFailed {
-        message: "missing client_id".to_string(),
-    })?;
-
-    let listener =
-        TcpListener::bind("127.0.0.1:0").map_err(|e| Error::DeviceAuthorizationFailed {
-            message: format!("failed to bind localhost server for SSO redirect: {e}"),
-        })?;
-    let port = listener.local_addr().unwrap().port();
-
-    // rand::random uses ThreadRng which is cryptographically secure (ChaCha12).
-    // If `rand` is ever swapped for a non-CSPRNG, this CSRF state generation
-    // must be updated to use an explicitly secure RNG.
-    let state = format!("{:x}{:x}", rand::random::<u64>(), rand::random::<u64>());
-
-    let mut sso_url =
-        Url::parse(login_url_configuration).map_err(|_| error::Error::LoginUrlCannotBeABase {
-            value: login_url_configuration.to_string(),
-        })?;
-    sso_url
-        .path_segments_mut()
-        .map_err(|_| error::Error::LoginUrlCannotBeABase {
-            value: login_url_configuration.to_string(),
-        })?
-        .extend(["sso", sso_team]);
-
-    sso_url
-        .query_pairs_mut()
-        .append_pair("session_id", &session_id)
-        .append_pair("client_id", &client_id)
-        .append_pair("state", &state)
-        .append_pair("next", &format!("http://localhost:{port}"));
-
-    println!(">>> Opening browser to {sso_url}");
-    let spinner = start_spinner("Waiting for your authorization...");
-    let url = sso_url.as_str();
-
-    if !cfg!(test) && webbrowser::open(url).is_err() {
-        warn!("Failed to open browser. Please visit {url} in your browser.");
-    }
-
-    let expected_state = state.clone();
-    let verification_token =
-        tokio::task::spawn_blocking(move || wait_for_sso_redirect(listener, Some(&expected_state)))
-            .await
-            .map_err(|_| Error::CallbackTaskFailed)??;
-
-    spinner.finish_and_clear();
-    Ok(verification_token)
 }
 
 /// Non-Vercel SSO: open browser to `{login_url}/api/auth/sso` with
@@ -275,9 +284,9 @@ async fn sso_redirect(
 /// other auxiliary requests before the real redirect arrives — looping
 /// prevents those from consuming the single-shot listener.
 ///
-/// If `expected_state` is provided (Vercel flow), validates the CSRF state
-/// param. For non-Vercel flows, state validation is skipped since the remote
-/// server may not support it.
+/// If `expected_state` is provided, validates the CSRF state param. This is
+/// only used by tests right now; non-Vercel flows skip state validation since
+/// the remote server may not support it.
 fn wait_for_sso_redirect(
     listener: TcpListener,
     expected_state: Option<&str>,
@@ -470,9 +479,13 @@ mod tests {
         }
         async fn get_team(
             &self,
-            _token: &turborepo_api_client::SecretString,
+            token: &turborepo_api_client::SecretString,
             team_id: &str,
         ) -> turborepo_api_client::Result<Option<Team>> {
+            if token.expose() == "needs-sso-token" || team_id == "needs-sso-team" {
+                return Ok(None);
+            }
+
             Ok(Some(Team {
                 id: team_id.to_string(),
                 slug: team_id.to_string(),
@@ -508,8 +521,16 @@ mod tests {
     impl TokenClient for MockApiClient {
         async fn get_metadata(
             &self,
-            _token: &turborepo_api_client::SecretString,
+            token: &turborepo_api_client::SecretString,
         ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
+            if token.expose() == "stale-token" {
+                return Err(turborepo_api_client::Error::InvalidToken {
+                    status: 200,
+                    url: "https://vercel.com/api/login/oauth/token/introspect".to_string(),
+                    message: "token is not active".to_string(),
+                });
+            }
+
             Ok(ResponseTokenMetadata {
                 scopes: vec![Scope {
                     scope_type: "team".to_string(),
@@ -565,6 +586,38 @@ mod tests {
         let (result, token_set) = sso_login(&options).await.unwrap();
         assert_matches!(result, Token::Existing(ref token) if token.expose() == "existing-token");
         assert!(token_set.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_classify_existing_sso_token_discards_inactive_token() {
+        let api_client = MockApiClient::new();
+
+        let result = classify_existing_sso_token(
+            Token::existing("stale-token".to_string()),
+            &api_client,
+            "my-team",
+            Option::<fn(&str)>::None,
+        )
+        .await
+        .unwrap();
+
+        assert!(matches!(result, ExistingSSOTokenAction::Discard));
+    }
+
+    #[tokio::test]
+    async fn test_classify_existing_sso_token_discards_token_missing_team_access() {
+        let api_client = MockApiClient::new();
+
+        let result = classify_existing_sso_token(
+            Token::existing("needs-sso-token".to_string()),
+            &api_client,
+            "needs-sso-team",
+            Option::<fn(&str)>::None,
+        )
+        .await
+        .unwrap();
+
+        assert!(matches!(result, ExistingSSOTokenAction::Discard));
     }
 
     #[test]

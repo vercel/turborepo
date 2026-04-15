@@ -1,6 +1,6 @@
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE};
-use turborepo_dirs::config_dir;
+use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE};
+use turborepo_dirs::{config_dir, vercel_config_dir};
 
 use crate::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
 
@@ -43,12 +43,21 @@ impl ResolvedConfigurationOptions for ConfigFile {
 
 pub struct AuthFile {
     path: AbsoluteSystemPathBuf,
+    legacy_path: Option<AbsoluteSystemPathBuf>,
 }
 
 impl AuthFile {
     pub fn global_auth(override_path: Option<AbsoluteSystemPathBuf>) -> Result<Self, Error> {
-        let path = override_path.map_or_else(global_auth_path, Ok)?;
-        Ok(Self { path })
+        match override_path {
+            Some(path) => Ok(Self {
+                path,
+                legacy_path: None,
+            }),
+            None => Ok(Self {
+                path: global_config_path()?,
+                legacy_path: legacy_auth_path()?,
+            }),
+        }
     }
 }
 
@@ -57,29 +66,32 @@ impl ResolvedConfigurationOptions for AuthFile {
         &self,
         _existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error> {
-        let token = match turborepo_auth::Token::from_file(&self.path) {
-            Ok(token) => token,
-            // Multiple ways this can go wrong. Don't error out if we can't find the token - it
-            // just might not be there.
-            Err(e) => {
-                if matches!(e, turborepo_auth::Error::TokenNotFound) {
-                    return Ok(ConfigurationOptions::default());
-                }
+        let fallback_legacy_token = || -> Result<Option<turborepo_auth::Token>, Error> {
+            let Some(legacy_path) = self.legacy_path.as_ref() else {
+                return Ok(None);
+            };
 
-                return Err(e.into());
+            match turborepo_auth::Token::from_file(legacy_path) {
+                Ok(token) if !token.into_inner().expose().is_empty() => Ok(Some(token)),
+                Ok(_)
+                | Err(turborepo_auth::Error::TokenNotFound)
+                | Err(turborepo_auth::Error::InvalidTokenFileFormat { .. }) => Ok(None),
+                Err(e) => Err(e.into()),
             }
         };
 
-        // No auth token found in the global Turbo config.
-        if token.into_inner().expose().is_empty() {
-            return Ok(ConfigurationOptions::default());
-        }
-
-        let global_auth: ConfigurationOptions = ConfigurationOptions {
-            token: Some(token.into_inner().expose().to_owned()),
-            ..Default::default()
+        let token = match turborepo_auth::Token::from_file(&self.path) {
+            Ok(token) if !token.into_inner().expose().is_empty() => Some(token),
+            Ok(_) | Err(turborepo_auth::Error::TokenNotFound) => fallback_legacy_token()?,
+            Err(e) => return Err(e.into()),
         };
-        Ok(global_auth)
+
+        Ok(token.map_or_else(ConfigurationOptions::default, |token| {
+            ConfigurationOptions {
+                token: Some(token.into_inner().expose().to_owned()),
+                ..Default::default()
+            }
+        }))
     }
 }
 
@@ -89,6 +101,88 @@ fn global_config_path() -> Result<AbsoluteSystemPathBuf, Error> {
     Ok(config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]))
 }
 
-fn global_auth_path() -> Result<AbsoluteSystemPathBuf, Error> {
-    global_config_path()
+fn legacy_auth_path() -> Result<Option<AbsoluteSystemPathBuf>, Error> {
+    Ok(vercel_config_dir()?.map(|dir| dir.join_components(&[VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE])))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{env, fs};
+
+    use tempfile::tempdir;
+
+    use super::*;
+
+    #[test]
+    fn global_auth_prefers_turbo_config_token() {
+        let turbo_dir = tempdir().expect("Failed to create turbo dir");
+        let vercel_dir = tempdir().expect("Failed to create vercel dir");
+        let turbo_config_path = turbo_dir.path().join("turborepo/config.json");
+        let legacy_auth_path = vercel_dir.path().join("com.vercel.cli/auth.json");
+
+        let turbo_config_path = AbsoluteSystemPathBuf::try_from(turbo_config_path.clone())
+            .expect("Failed to create turbo config path");
+        let legacy_auth_path = AbsoluteSystemPathBuf::try_from(legacy_auth_path.clone())
+            .expect("Failed to create legacy auth path");
+
+        fs::create_dir_all(turbo_dir.path().join("turborepo")).expect("Failed to create turbo dir");
+        fs::create_dir_all(vercel_dir.path().join("com.vercel.cli"))
+            .expect("Failed to create legacy auth dir");
+        turbo_config_path
+            .create_with_contents(r#"{"token":"turbo-token"}"#)
+            .expect("Failed to write turbo config");
+        legacy_auth_path
+            .create_with_contents(r#"{"token":"legacy-token"}"#)
+            .expect("Failed to write legacy auth");
+
+        unsafe {
+            env::set_var("TURBO_CONFIG_DIR_PATH", turbo_dir.path());
+            env::set_var("VERCEL_CONFIG_DIR_PATH", vercel_dir.path());
+        }
+
+        let auth_file = AuthFile::global_auth(None).expect("Failed to create auth file");
+        let config = auth_file
+            .get_configuration_options(&ConfigurationOptions::default())
+            .expect("Failed to load auth config");
+
+        assert_eq!(config.token(), Some("turbo-token"));
+
+        unsafe {
+            env::remove_var("TURBO_CONFIG_DIR_PATH");
+            env::remove_var("VERCEL_CONFIG_DIR_PATH");
+        }
+    }
+
+    #[test]
+    fn global_auth_falls_back_to_legacy_vercel_auth() {
+        let turbo_dir = tempdir().expect("Failed to create turbo dir");
+        let vercel_dir = tempdir().expect("Failed to create vercel dir");
+        let legacy_auth_path = vercel_dir.path().join("com.vercel.cli/auth.json");
+
+        let legacy_auth_path = AbsoluteSystemPathBuf::try_from(legacy_auth_path.clone())
+            .expect("Failed to create legacy auth path");
+
+        fs::create_dir_all(vercel_dir.path().join("com.vercel.cli"))
+            .expect("Failed to create legacy auth dir");
+        legacy_auth_path
+            .create_with_contents(r#"{"token":"legacy-token"}"#)
+            .expect("Failed to write legacy auth");
+
+        unsafe {
+            env::set_var("TURBO_CONFIG_DIR_PATH", turbo_dir.path());
+            env::set_var("VERCEL_CONFIG_DIR_PATH", vercel_dir.path());
+        }
+
+        let auth_file = AuthFile::global_auth(None).expect("Failed to create auth file");
+        let config = auth_file
+            .get_configuration_options(&ConfigurationOptions::default())
+            .expect("Failed to load auth config");
+
+        assert_eq!(config.token(), Some("legacy-token"));
+
+        unsafe {
+            env::remove_var("TURBO_CONFIG_DIR_PATH");
+            env::remove_var("VERCEL_CONFIG_DIR_PATH");
+        }
+    }
 }

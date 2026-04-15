@@ -5,6 +5,7 @@ mod sso;
 pub use login::*;
 pub use logout::*;
 pub use sso::*;
+use tracing::warn;
 use turbopath::AbsoluteSystemPath;
 #[cfg(test)]
 use turbopath::AbsoluteSystemPathBuf;
@@ -17,6 +18,13 @@ pub(crate) fn is_vercel(login_url: &str) -> bool {
 
 const VERCEL_TOKEN_DIR: &str = "com.vercel.cli";
 const VERCEL_TOKEN_FILE: &str = "auth.json";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ExistingTokenSource {
+    TurboConfig,
+    LegacyAuth,
+    Other,
+}
 
 pub struct LoginOptions<'a, T: Client + TokenClient> {
     pub color_config: &'a ColorConfig,
@@ -68,18 +76,8 @@ fn load_auth_tokens(turbo_config_path: &AbsoluteSystemPath) -> Result<crate::Aut
         return Ok(turbo_auth_tokens);
     }
 
-    let Some(vercel_config_dir) = turborepo_dirs::vercel_config_dir()? else {
-        return Ok(turbo_auth_tokens);
-    };
-    let vercel_auth_path =
-        vercel_config_dir.join_components(&[VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE]);
-    let vercel_auth_tokens = Token::from_auth_file(&vercel_auth_path)?;
-    let same_token = vercel_auth_tokens
-        .token
-        .as_ref()
-        .is_some_and(|vercel_token| vercel_token.expose() == turbo_token.expose());
-
-    if !same_token {
+    let vercel_auth_tokens = load_legacy_auth_tokens(Some(turbo_token))?;
+    if vercel_auth_tokens.token.is_none() {
         return Ok(turbo_auth_tokens);
     }
 
@@ -92,6 +90,119 @@ fn load_auth_tokens(turbo_config_path: &AbsoluteSystemPath) -> Result<crate::Aut
             .expires_at
             .or(vercel_auth_tokens.expires_at),
     })
+}
+
+fn load_turbo_auth_tokens() -> Result<crate::AuthTokens, Error> {
+    use crate::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, Token};
+
+    let Some(turbo_config_dir) = turborepo_dirs::config_dir()? else {
+        return Ok(crate::AuthTokens::default());
+    };
+    let turbo_auth_path = turbo_config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]);
+
+    match Token::from_auth_file(&turbo_auth_path) {
+        Ok(tokens) => Ok(tokens),
+        Err(Error::InvalidTokenFileFormat { .. }) => {
+            warn!("Ignoring malformed Turbo auth file at {turbo_auth_path}");
+            Ok(crate::AuthTokens::default())
+        }
+        Err(e) => Err(e),
+    }
+}
+
+pub(crate) fn classify_existing_vercel_token(token: &str) -> Result<ExistingTokenSource, Error> {
+    let legacy_auth_tokens = load_legacy_auth_tokens(None)?;
+    if legacy_auth_tokens
+        .token
+        .as_ref()
+        .is_some_and(|stored_token| stored_token.expose() == token)
+    {
+        return Ok(ExistingTokenSource::LegacyAuth);
+    }
+
+    let turbo_auth_tokens = load_turbo_auth_tokens()?;
+    if turbo_auth_tokens
+        .token
+        .as_ref()
+        .is_some_and(|stored_token| stored_token.expose() == token)
+    {
+        return Ok(ExistingTokenSource::TurboConfig);
+    }
+
+    Ok(ExistingTokenSource::Other)
+}
+
+fn load_legacy_auth_tokens(
+    expected_token: Option<&turborepo_api_client::SecretString>,
+) -> Result<crate::AuthTokens, Error> {
+    use crate::Token;
+
+    let Some(vercel_config_dir) = turborepo_dirs::vercel_config_dir()? else {
+        return Ok(crate::AuthTokens::default());
+    };
+    let vercel_auth_path =
+        vercel_config_dir.join_components(&[VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE]);
+    let legacy_auth_tokens = match Token::from_auth_file(&vercel_auth_path) {
+        Ok(tokens) => tokens,
+        Err(Error::InvalidTokenFileFormat { .. }) => {
+            warn!("Ignoring malformed legacy Vercel auth file at {vercel_auth_path}");
+            return Ok(crate::AuthTokens::default());
+        }
+        Err(e) => return Err(e),
+    };
+
+    if let Some(expected_token) = expected_token
+        && !legacy_auth_tokens
+            .token
+            .as_ref()
+            .is_some_and(|legacy_token| legacy_token.expose() == expected_token.expose())
+    {
+        return Ok(crate::AuthTokens::default());
+    }
+
+    Ok(legacy_auth_tokens)
+}
+
+async fn exchange_legacy_auth_token(
+    turbo_config_path: &AbsoluteSystemPath,
+    expected_token: Option<&turborepo_api_client::SecretString>,
+) -> Result<Option<turborepo_api_client::SecretString>, Error> {
+    let legacy_auth_tokens = load_legacy_auth_tokens(expected_token)?;
+    let Some(legacy_token) = legacy_auth_tokens.token.clone() else {
+        return Ok(None);
+    };
+
+    let exchange_source = if legacy_auth_tokens.is_expired()
+        && legacy_token.expose().starts_with("vca_")
+        && legacy_auth_tokens.refresh_token.is_some()
+    {
+        match legacy_auth_tokens.refresh_token().await {
+            Ok(refreshed_tokens) => refreshed_tokens,
+            Err(e) => {
+                warn!("Failed to refresh legacy Vercel auth token before exchange: {e}");
+                legacy_auth_tokens.clone()
+            }
+        }
+    } else {
+        legacy_auth_tokens.clone()
+    };
+
+    match exchange_source.exchange_legacy_token().await {
+        Ok(exchanged_tokens) => {
+            if let Err(e) = exchanged_tokens.write_to_config_file(turbo_config_path) {
+                warn!("Failed to write exchanged tokens to {turbo_config_path}: {e}");
+            }
+            Ok(exchanged_tokens.token)
+        }
+        Err(e) => {
+            warn!("Failed to exchange legacy Vercel auth token, using legacy token directly: {e}");
+            if exchange_source.is_expired() {
+                Ok(None)
+            } else {
+                Ok(exchange_source.token.or(Some(legacy_token)))
+            }
+        }
+    }
 }
 
 /// Attempts to get a valid token with automatic refresh if expired.
@@ -107,6 +218,10 @@ pub async fn get_token_with_refresh() -> Result<Option<turborepo_api_client::Sec
     let auth_tokens = load_auth_tokens(&turbo_config_path)?;
 
     if let Some(token) = &auth_tokens.token {
+        if classify_existing_vercel_token(token.expose())? == ExistingTokenSource::LegacyAuth {
+            return exchange_legacy_auth_token(&turbo_config_path, Some(token)).await;
+        }
+
         if auth_tokens.is_expired() {
             // Only attempt refresh for Vercel tokens that start with "vca_"
             if token.expose().starts_with("vca_")
@@ -119,23 +234,23 @@ pub async fn get_token_with_refresh() -> Result<Option<turborepo_api_client::Sec
                 return Ok(new_tokens.token);
             }
 
-            Ok(None)
+            exchange_legacy_auth_token(&turbo_config_path, Some(token)).await
         } else {
             Ok(Some(token.clone()))
         }
     } else {
-        Ok(None)
+        exchange_legacy_auth_token(&turbo_config_path, None).await
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{env, fs};
 
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use super::is_vercel;
+    use super::{ExistingTokenSource, classify_existing_vercel_token, is_vercel};
     use crate::{AuthTokens, Token, current_unix_time_secs};
 
     // Mock the turborepo_dirs functions for testing
@@ -179,6 +294,97 @@ mod tests {
         config_file
             .create_with_contents(content)
             .expect("Failed to write turbo config");
+    }
+
+    #[test]
+    fn test_classify_existing_vercel_token_prefers_turbo_config() {
+        let turbo_config_dir = create_mock_turbo_config_dir();
+        let vercel_config_dir = create_mock_vercel_config_dir();
+
+        setup_turbo_config_file(&turbo_config_dir, "turbo-token");
+        setup_auth_file(&vercel_config_dir, "legacy-token", None, None);
+
+        unsafe {
+            env::set_var("TURBO_CONFIG_DIR_PATH", turbo_config_dir.as_path());
+            env::set_var("VERCEL_CONFIG_DIR_PATH", vercel_config_dir.as_path());
+        }
+
+        let source = classify_existing_vercel_token("turbo-token").unwrap();
+
+        assert_eq!(source, ExistingTokenSource::TurboConfig);
+
+        unsafe {
+            env::remove_var("TURBO_CONFIG_DIR_PATH");
+            env::remove_var("VERCEL_CONFIG_DIR_PATH");
+        }
+    }
+
+    #[test]
+    fn test_classify_existing_vercel_token_detects_legacy_auth() {
+        let turbo_config_dir = create_mock_turbo_config_dir();
+        let vercel_config_dir = create_mock_vercel_config_dir();
+
+        setup_auth_file(&vercel_config_dir, "legacy-token", None, None);
+
+        unsafe {
+            env::set_var("TURBO_CONFIG_DIR_PATH", turbo_config_dir.as_path());
+            env::set_var("VERCEL_CONFIG_DIR_PATH", vercel_config_dir.as_path());
+        }
+
+        let source = classify_existing_vercel_token("legacy-token").unwrap();
+
+        assert_eq!(source, ExistingTokenSource::LegacyAuth);
+
+        unsafe {
+            env::remove_var("TURBO_CONFIG_DIR_PATH");
+            env::remove_var("VERCEL_CONFIG_DIR_PATH");
+        }
+    }
+
+    #[test]
+    fn test_classify_existing_vercel_token_prefers_legacy_when_duplicated() {
+        let turbo_config_dir = create_mock_turbo_config_dir();
+        let vercel_config_dir = create_mock_vercel_config_dir();
+
+        setup_turbo_config_file(&turbo_config_dir, "duplicated-token");
+        setup_auth_file(&vercel_config_dir, "duplicated-token", None, None);
+
+        unsafe {
+            env::set_var("TURBO_CONFIG_DIR_PATH", turbo_config_dir.as_path());
+            env::set_var("VERCEL_CONFIG_DIR_PATH", vercel_config_dir.as_path());
+        }
+
+        let source = classify_existing_vercel_token("duplicated-token").unwrap();
+
+        assert_eq!(source, ExistingTokenSource::LegacyAuth);
+
+        unsafe {
+            env::remove_var("TURBO_CONFIG_DIR_PATH");
+            env::remove_var("VERCEL_CONFIG_DIR_PATH");
+        }
+    }
+
+    #[test]
+    fn test_classify_existing_vercel_token_returns_other_for_untracked_token() {
+        let turbo_config_dir = create_mock_turbo_config_dir();
+        let vercel_config_dir = create_mock_vercel_config_dir();
+
+        setup_turbo_config_file(&turbo_config_dir, "turbo-token");
+        setup_auth_file(&vercel_config_dir, "legacy-token", None, None);
+
+        unsafe {
+            env::set_var("TURBO_CONFIG_DIR_PATH", turbo_config_dir.as_path());
+            env::set_var("VERCEL_CONFIG_DIR_PATH", vercel_config_dir.as_path());
+        }
+
+        let source = classify_existing_vercel_token("explicit-token").unwrap();
+
+        assert_eq!(source, ExistingTokenSource::Other);
+
+        unsafe {
+            env::remove_var("TURBO_CONFIG_DIR_PATH");
+            env::remove_var("VERCEL_CONFIG_DIR_PATH");
+        }
     }
 
     #[tokio::test]

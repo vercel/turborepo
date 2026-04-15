@@ -4,10 +4,6 @@
 //! 1. [`discover`] — fetch OIDC metadata from the issuer
 //! 2. [`device_authorization_request`] — request a device code
 //! 3. [`poll_for_token`] — poll until the user completes authentication
-//!
-//! Additionally, [`introspect_token`] (RFC 7662) is used by the SSO flow
-//! to extract session metadata from an existing token.
-
 use std::{sync::LazyLock, time::Duration};
 
 use reqwest::header;
@@ -85,16 +81,6 @@ impl std::fmt::Debug for TokenSet {
             .field("scope", &self.scope)
             .finish()
     }
-}
-
-/// Token introspection response (RFC 7662 §2.2).
-/// Used to extract `session_id` and `client_id` for SSO flows.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct IntrospectionResponse {
-    pub active: bool,
-    pub client_id: Option<String>,
-    pub session_id: Option<String>,
 }
 
 /// OAuth 2.0 error response body (RFC 6749 §5.2).
@@ -349,42 +335,6 @@ pub async fn poll_for_token(
     }
 }
 
-/// Introspect a token to get session info (RFC 7662).
-/// Used by the SSO flow to get `session_id` and `client_id`.
-///
-/// Includes `client_id` in the request body for RFC 7662 §2.1 compliance.
-/// Vercel's endpoint accepts this for public clients.
-pub async fn introspect_token(
-    client: &reqwest::Client,
-    metadata: &AuthorizationServerMetadata,
-    token: &str,
-) -> Result<IntrospectionResponse, Error> {
-    let response = client
-        .post(&metadata.introspection_endpoint)
-        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(header::USER_AGENT, USER_AGENT.as_str())
-        .form(&[("token", token), ("client_id", TURBOREPO_CLIENT_ID)])
-        .send()
-        .await
-        .map_err(|e| Error::IntrospectionFailed {
-            message: e.to_string(),
-        })?;
-
-    if !response.status().is_success() {
-        let text = response.text().await.unwrap_or_default();
-        return Err(Error::IntrospectionFailed {
-            message: format!("HTTP error: {}", truncate(&text, 512)),
-        });
-    }
-
-    response
-        .json()
-        .await
-        .map_err(|e| Error::IntrospectionFailed {
-            message: e.to_string(),
-        })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -510,23 +460,6 @@ mod tests {
         assert_eq!(resp.device_code, "dc_abc");
         assert!(resp.verification_uri_complete.is_none());
         assert_eq!(resp.interval, 5); // default
-    }
-
-    #[test]
-    fn test_deserialize_introspection_response() {
-        let json = r#"{"active": true, "client_id": "cl_abc", "session_id": "sess_123"}"#;
-        let resp: IntrospectionResponse = serde_json::from_str(json).unwrap();
-        assert!(resp.active);
-        assert_eq!(resp.client_id.as_deref(), Some("cl_abc"));
-        assert_eq!(resp.session_id.as_deref(), Some("sess_123"));
-    }
-
-    #[test]
-    fn test_deserialize_introspection_response_minimal() {
-        let json = r#"{"active": false}"#;
-        let resp: IntrospectionResponse = serde_json::from_str(json).unwrap();
-        assert!(!resp.active);
-        assert!(resp.client_id.is_none());
     }
 
     #[test]
