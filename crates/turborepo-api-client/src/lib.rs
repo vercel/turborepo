@@ -150,19 +150,7 @@ impl Client for APIClient {
             return self.get_vercel_app_user(token).await;
         }
 
-        let url = self.make_url("/v2/user")?;
-        let request_builder = self
-            .api_request(Method::GET, url)
-            .header("User-Agent", self.user_agent.clone())
-            .bearer_auth(token.expose())
-            .header("Content-Type", "application/json");
-        let response =
-            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
-                .await?
-                .into_response()
-                .error_for_status()?;
-
-        Ok(response.json().await?)
+        self.get_legacy_user(token).await
     }
 
     #[tracing::instrument(skip_all)]
@@ -472,7 +460,8 @@ struct VercelAppTokenIntrospectionResponse {
 #[derive(Deserialize)]
 struct UserinfoResponse {
     sub: String,
-    email: String,
+    #[serde(default)]
+    email: Option<String>,
     #[serde(default)]
     preferred_username: Option<String>,
     #[serde(default)]
@@ -903,7 +892,7 @@ impl APIClient {
         })
     }
 
-    /// Fetches user info for a Vercel App token (prefixed "vca_") using the
+    /// Fetches user info for a Vercel App token (prefixed `vca_`) using the
     /// OpenID Connect userinfo endpoint.
     async fn get_vercel_app_user(&self, token: &SecretString) -> Result<UserResponse> {
         let url = self.make_url("/login/oauth/userinfo")?;
@@ -918,19 +907,45 @@ impl APIClient {
                 .into_response()
                 .error_for_status()?;
 
-        let userinfo: UserinfoResponse = response.json().await?;
-        let username = userinfo.preferred_username.unwrap_or_default();
+        let UserinfoResponse {
+            sub,
+            email,
+            preferred_username,
+            name,
+        } = response.json().await?;
+        let username = preferred_username.unwrap_or_default();
+        let name = name.or((!username.is_empty()).then(|| username.clone()));
+        // Some OIDC userinfo responses omit email. Keep login working by
+        // falling back to another stable identifier we can display to the user.
+        let email = email
+            .or((!username.is_empty()).then(|| username.clone()))
+            .or_else(|| name.clone())
+            .unwrap_or_else(|| sub.clone());
 
         Ok(UserResponse {
             user: User {
-                id: userinfo.sub,
-                name: userinfo
-                    .name
-                    .or((!username.is_empty()).then(|| username.clone())),
+                id: sub,
+                name,
                 username,
-                email: userinfo.email,
+                email,
             },
         })
+    }
+
+    async fn get_legacy_user(&self, token: &SecretString) -> Result<UserResponse> {
+        let url = self.make_url("/v2/user")?;
+        let request_builder = self
+            .api_request(Method::GET, url)
+            .header("User-Agent", self.user_agent.clone())
+            .bearer_auth(token.expose())
+            .header("Content-Type", "application/json");
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
+
+        Ok(response.json().await?)
     }
 
     /// Revokes a Vercel App token (prefixed "vca_") using the RFC 7009
@@ -1632,7 +1647,33 @@ mod test {
             response.user.username,
             turborepo_vercel_api_mock::EXPECTED_USERNAME
         );
-        // The mock doesn't return a name, so it should default to the username
+        assert_eq!(
+            response.user.name,
+            Some(turborepo_vercel_api_mock::EXPECTED_USERNAME.to_string())
+        );
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_user_vca_token_without_email() -> Result<()> {
+        let (client, handle) = start_vca_test_client().await?;
+        let token = SecretString::new("vca_missing_email".to_string());
+
+        let response = client.get_user(&token).await?;
+        assert_eq!(
+            response.user.id,
+            turborepo_vercel_api_mock::EXPECTED_USER_ID
+        );
+        assert_eq!(
+            response.user.email,
+            turborepo_vercel_api_mock::EXPECTED_USERNAME
+        );
+        assert_eq!(
+            response.user.username,
+            turborepo_vercel_api_mock::EXPECTED_USERNAME
+        );
         assert_eq!(
             response.user.name,
             Some(turborepo_vercel_api_mock::EXPECTED_USERNAME.to_string())

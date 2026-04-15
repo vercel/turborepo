@@ -1,6 +1,6 @@
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE};
-use turborepo_dirs::{config_dir, vercel_config_dir};
+use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE};
+use turborepo_dirs::config_dir;
 
 use crate::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
 
@@ -70,7 +70,7 @@ impl ResolvedConfigurationOptions for AuthFile {
             }
         };
 
-        // No auth token found in either Vercel or Turbo config.
+        // No auth token found in the global Turbo config.
         if token.into_inner().expose().is_empty() {
             return Ok(ConfigurationOptions::default());
         }
@@ -90,14 +90,5 @@ fn global_config_path() -> Result<AbsoluteSystemPathBuf, Error> {
 }
 
 fn global_auth_path() -> Result<AbsoluteSystemPathBuf, Error> {
-    let vercel_config_dir = vercel_config_dir()?.ok_or(Error::NoGlobalConfigDir)?;
-    // Check for both Vercel and Turbo paths. Vercel takes priority.
-    let vercel_path = vercel_config_dir.join_components(&[VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE]);
-    if vercel_path.exists() {
-        return Ok(vercel_path);
-    }
-
-    let turbo_config_dir = config_dir()?.ok_or(Error::NoGlobalConfigDir)?;
-
-    Ok(turbo_config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]))
+    global_config_path()
 }

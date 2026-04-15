@@ -15,11 +15,10 @@ turborepo-auth
     │   ├── Token introspection (RFC 7662)
     │   └── Localhost redirect for SSO callback
     └── Token storage
-        ├── ~/.config/com.vercel.cli/auth.json (Vercel CLI tokens)
-        └── ~/.turbo/config.json (turbo tokens)
+        └── ~/.turbo/config.json (Turbo tokens and refresh metadata)
 ```
 
-Supports reading tokens from the Vercel CLI if present, allowing shared authentication.
+Older Vercel CLI auth files may still be read to preserve refresh support for existing Turbo sessions, but Turbo no longer writes credentials there.
 
 ## Notes
 

@@ -1,13 +1,10 @@
 use tracing::error;
 use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::TokenClient;
-use turborepo_dirs::{config_dir, vercel_config_dir};
+use turborepo_dirs::config_dir;
 use turborepo_ui::{GREY, cprintln};
 
-use crate::{
-    Error, LogoutOptions, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, Token, VERCEL_TOKEN_DIR,
-    VERCEL_TOKEN_FILE,
-};
+use crate::{AuthTokens, Error, LogoutOptions, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, Token};
 
 pub async fn logout<T: TokenClient>(options: &LogoutOptions<T>) -> Result<(), Error> {
     if let Err(err) = options.remove_tokens().await {
@@ -22,9 +19,9 @@ pub async fn logout<T: TokenClient>(options: &LogoutOptions<T>) -> Result<(), Er
 impl<T: TokenClient> LogoutOptions<T> {
     async fn try_remove_token(&self, path: &AbsoluteSystemPath) -> Result<(), Error> {
         // Read the existing content from the global configuration path
-        let Ok(content) = path.read_to_string() else {
+        if path.read_to_string().is_err() {
             return Ok(());
-        };
+        }
 
         if self.invalidate {
             match Token::from_file(path) {
@@ -35,23 +32,7 @@ impl<T: TokenClient> LogoutOptions<T> {
             }
         }
 
-        // Attempt to deserialize the content into a serde_json::Value
-        let mut data: serde_json::Value = serde_json::from_str(&content)?;
-
-        // Check if the data is an object and remove the "token" field if present
-        if let Some(obj) = data.as_object_mut() {
-            if obj.remove("token").is_none() {
-                return Ok(());
-            }
-        } else {
-            return Ok(());
-        }
-
-        // Serialize the updated data back to a string
-        let new_content = serde_json::to_string_pretty(&data)?;
-
-        // Write the updated content back to the file
-        path.create_with_contents_secret(new_content)?;
+        AuthTokens::clear_from_config_file(path)?;
 
         Ok(())
     }
@@ -62,12 +43,6 @@ impl<T: TokenClient> LogoutOptions<T> {
             return self.try_remove_token(path).await;
         }
 
-        if let Some(vercel_config_dir) = vercel_config_dir()? {
-            self.try_remove_token(
-                &vercel_config_dir.join_components(&[VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE]),
-            )
-            .await?;
-        }
         if let Some(turbo_config_dir) = config_dir()? {
             self.try_remove_token(
                 &turbo_config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]),

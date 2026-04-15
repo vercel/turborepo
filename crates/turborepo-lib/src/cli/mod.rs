@@ -751,8 +751,9 @@ pub enum Command {
     },
     /// Logout to your Vercel account
     Logout {
-        /// Invalidate the token on the server
-        #[clap(long)]
+        /// Invalidate the token on the server. Pass `--invalidate=false` to
+        /// skip the remote revoke.
+        #[clap(long, value_name = "BOOL", action = ArgAction::Set, default_value = "true", default_missing_value = "true", num_args = 0..=1)]
         invalidate: bool,
     },
     /// Print debugging information
@@ -3035,7 +3036,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "logout"]).unwrap(),
             Args {
-                command: Some(Command::Logout { invalidate: false }),
+                command: Some(Command::Logout { invalidate: true }),
                 ..Args::default()
             }
         );
@@ -3045,12 +3046,20 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
-                command: Some(Command::Logout { invalidate: false }),
+                command: Some(Command::Logout { invalidate: true }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
         .test();
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "logout", "--invalidate=false"]).unwrap(),
+            Args {
+                command: Some(Command::Logout { invalidate: false }),
+                ..Args::default()
+            }
+        );
     }
 
     #[test]

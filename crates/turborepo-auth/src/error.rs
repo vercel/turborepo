@@ -10,6 +10,8 @@ pub enum Error {
     #[error(transparent)]
     SerdeError(#[from] serde_json::Error),
     #[error(transparent)]
+    JsonRewrite(#[from] turborepo_json_rewrite::RewriteError),
+    #[error(transparent)]
     APIError(#[from] turborepo_api_client::Error),
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),

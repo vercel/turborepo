@@ -17,6 +17,7 @@ pub use error::Error;
 use serde::Deserialize;
 use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::{CacheClient, Client, SecretString, TokenClient};
+use turborepo_json_rewrite::{set_path, unset_path};
 use turborepo_vercel_api::{User, token::ResponseTokenMetadata};
 
 pub struct TeamInfo<'a> {
@@ -102,7 +103,7 @@ impl Token {
         }
     }
 
-    /// Reads token, refresh token, and expiration from auth.json
+    /// Reads token, refresh token, and expiration metadata from a JSON file.
     pub fn from_auth_file(path: &AbsoluteSystemPath) -> Result<AuthTokens, Error> {
         #[derive(Deserialize)]
         #[serde(rename_all = "camelCase")]
@@ -145,11 +146,14 @@ impl Token {
     /// * `client` - The client to use for API calls.
     /// * `valid_message_fn` - An optional callback that gets called if the
     ///   token is valid. It will be passed the user's email.
+    ///
+    /// This validates token activity and user identity only. Cache access is
+    /// checked later when the cache is actually used.
     // TODO(voz): This should do a `get_user` or `get_teams` instead of the caller
     // doing it. The reason we don't do it here is because the caller
     // needs to do printing and requires the user struct, which we don't want to
     // return here.
-    pub async fn is_valid<T: Client + TokenClient + CacheClient>(
+    pub async fn is_valid<T: Client + TokenClient>(
         &self,
         client: &T,
         // Making this optional since there are cases where we don't want to do anything after
@@ -158,11 +162,8 @@ impl Token {
         // passed in a user's email if the token is valid.
         valid_message_fn: Option<impl FnOnce(&str)>,
     ) -> Result<bool, Error> {
-        let (is_active, has_cache_access) = tokio::try_join!(
-            self.is_active(client),
-            self.has_cache_access(client, None, None)
-        )?;
-        if !is_active || !has_cache_access {
+        let is_active = self.is_active(client).await?;
+        if !is_active {
             return Ok(false);
         }
 
@@ -208,7 +209,7 @@ impl Token {
     /// * `sso_team` - The team to validate the token against.
     /// * `valid_message_fn` - An optional callback that gets called if the
     ///   token is valid. It will be passed the user's email.
-    pub async fn is_valid_sso<T: Client + TokenClient + CacheClient>(
+    pub async fn is_valid_sso<T: Client + TokenClient>(
         &self,
         client: &T,
         sso_team: &str,
@@ -236,10 +237,7 @@ impl Token {
                     return Err(Error::SSOTeamNotFound(sso_team.to_owned()));
                 }
 
-                let has_cache_access = self
-                    .has_cache_access(client, Some(info.id), Some(info.slug))
-                    .await?;
-                if !is_active || !has_cache_access {
+                if !is_active {
                     return Ok(false);
                 }
 
@@ -378,6 +376,56 @@ impl AuthTokens {
         } else {
             false
         }
+    }
+
+    /// Persists auth metadata into turborepo/config.json while preserving any
+    /// unrelated config fields already stored there.
+    pub fn write_to_config_file(&self, path: &AbsoluteSystemPath) -> Result<(), Error> {
+        let before = path
+            .read_existing_to_string()?
+            .unwrap_or_else(|| String::from("{}"));
+
+        let token = self
+            .token
+            .as_ref()
+            .map(|token| serde_json::to_string(token.expose()))
+            .transpose()?;
+        let refresh_token = self
+            .refresh_token
+            .as_ref()
+            .map(|token| serde_json::to_string(token.expose()))
+            .transpose()?;
+
+        let after = match token {
+            Some(token) => set_path(&before, &["token"], &token)?,
+            None => unset_path(&before, &["token"], false)?.unwrap_or(before),
+        };
+        let after = match refresh_token {
+            Some(refresh_token) => set_path(&after, &["refreshToken"], &refresh_token)?,
+            None => unset_path(&after, &["refreshToken"], false)?.unwrap_or(after),
+        };
+        let after = match self.expires_at {
+            Some(expires_at) => set_path(&after, &["expiresAt"], &expires_at.to_string())?,
+            None => unset_path(&after, &["expiresAt"], false)?.unwrap_or(after),
+        };
+
+        path.ensure_dir()?;
+        path.create_with_contents_secret(after)?;
+        Ok(())
+    }
+
+    pub fn clear_from_config_file(path: &AbsoluteSystemPath) -> Result<(), Error> {
+        let Some(before) = path.read_existing_to_string()? else {
+            return Ok(());
+        };
+
+        let after = unset_path(&before, &["token"], false)?.unwrap_or(before);
+        let after = unset_path(&after, &["refreshToken"], false)?.unwrap_or(after);
+        let after = unset_path(&after, &["expiresAt"], false)?.unwrap_or(after);
+
+        path.ensure_dir()?;
+        path.create_with_contents_secret(after)?;
+        Ok(())
     }
 
     /// Attempts to refresh the access token using the refresh token.
@@ -875,6 +923,90 @@ mod tests {
             read_tokens.refresh_token.as_ref().map(|t| t.expose())
         );
         assert_eq!(original_tokens.expires_at, read_tokens.expires_at);
+    }
+
+    #[test]
+    fn test_write_to_config_file_preserves_existing_fields() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("config.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path.clone())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        file_path
+            .create_with_contents(r#"{"apiUrl":"https://example.com","teamSlug":"acme"}"#)
+            .expect("Failed to write config file");
+
+        let auth_tokens = AuthTokens {
+            token: Some(SecretString::new("token-123".to_string())),
+            refresh_token: Some(SecretString::new("refresh-456".to_string())),
+            expires_at: Some(12345),
+        };
+
+        auth_tokens
+            .write_to_config_file(&file_path)
+            .expect("Failed to update config file");
+
+        let content = std::fs::read_to_string(tmp_path).expect("Failed to read config file");
+        let parsed: serde_json::Value = serde_json::from_str(&content).expect("Invalid JSON");
+
+        assert_eq!(parsed["apiUrl"], "https://example.com");
+        assert_eq!(parsed["teamSlug"], "acme");
+        assert_eq!(parsed["token"], "token-123");
+        assert_eq!(parsed["refreshToken"], "refresh-456");
+        assert_eq!(parsed["expiresAt"], 12345);
+    }
+
+    #[test]
+    fn test_write_to_config_file_clears_stale_refresh_metadata() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("config.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path.clone())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        file_path
+            .create_with_contents(
+                r#"{"teamSlug":"acme","token":"old-token","refreshToken":"old-refresh","expiresAt":12345}"#,
+            )
+            .expect("Failed to write config file");
+
+        let auth_tokens = AuthTokens {
+            token: Some(SecretString::new("new-token".to_string())),
+            refresh_token: None,
+            expires_at: None,
+        };
+
+        auth_tokens
+            .write_to_config_file(&file_path)
+            .expect("Failed to update config file");
+
+        let content = std::fs::read_to_string(tmp_path).expect("Failed to read config file");
+        let parsed: serde_json::Value = serde_json::from_str(&content).expect("Invalid JSON");
+
+        assert_eq!(parsed["teamSlug"], "acme");
+        assert_eq!(parsed["token"], "new-token");
+        assert!(parsed.get("refreshToken").is_none());
+        assert!(parsed.get("expiresAt").is_none());
+    }
+
+    #[test]
+    fn test_clear_from_config_file_preserves_non_auth_fields() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("config.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path.clone())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        file_path
+            .create_with_contents(
+                r#"{"teamSlug":"acme","token":"old-token","refreshToken":"old-refresh","expiresAt":12345}"#,
+            )
+            .expect("Failed to write config file");
+
+        AuthTokens::clear_from_config_file(&file_path).expect("Failed to clear config file");
+
+        let content = std::fs::read_to_string(tmp_path).expect("Failed to read config file");
+        let parsed: serde_json::Value = serde_json::from_str(&content).expect("Invalid JSON");
+
+        assert_eq!(parsed["teamSlug"], "acme");
+        assert!(parsed.get("token").is_none());
+        assert!(parsed.get("refreshToken").is_none());
+        assert!(parsed.get("expiresAt").is_none());
     }
 
     enum MockErrorType {

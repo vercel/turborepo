@@ -5,9 +5,10 @@ mod sso;
 pub use login::*;
 pub use logout::*;
 pub use sso::*;
+use turbopath::AbsoluteSystemPath;
 #[cfg(test)]
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_api_client::{CacheClient, Client, TokenClient};
+use turborepo_api_client::{Client, TokenClient};
 use turborepo_ui::ColorConfig;
 
 pub(crate) fn is_vercel(login_url: &str) -> bool {
@@ -17,7 +18,7 @@ pub(crate) fn is_vercel(login_url: &str) -> bool {
 const VERCEL_TOKEN_DIR: &str = "com.vercel.cli";
 const VERCEL_TOKEN_FILE: &str = "auth.json";
 
-pub struct LoginOptions<'a, T: Client + TokenClient + CacheClient> {
+pub struct LoginOptions<'a, T: Client + TokenClient> {
     pub color_config: &'a ColorConfig,
     pub login_url: &'a str,
     pub api_client: &'a T,
@@ -27,7 +28,7 @@ pub struct LoginOptions<'a, T: Client + TokenClient + CacheClient> {
     pub force: bool,
     pub sso_login_callback_port: Option<u16>,
 }
-impl<'a, T: Client + TokenClient + CacheClient> LoginOptions<'a, T> {
+impl<'a, T: Client + TokenClient> LoginOptions<'a, T> {
     pub fn new(color_config: &'a ColorConfig, login_url: &'a str, api_client: &'a T) -> Self {
         Self {
             color_config,
@@ -52,19 +53,58 @@ pub struct LogoutOptions<T> {
     pub path: Option<AbsoluteSystemPathBuf>,
 }
 
-/// Attempts to get a valid token with automatic refresh if expired.
-/// Falls back to turborepo/config.json if refresh fails.
-pub async fn get_token_with_refresh() -> Result<Option<turborepo_api_client::SecretString>, Error> {
-    use crate::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, Token};
+// Tokens and refresh metadata now live in turborepo/config.json. For existing
+// sessions, we can still read matching refresh metadata from the legacy Vercel
+// CLI auth file without rewriting it.
+fn load_auth_tokens(turbo_config_path: &AbsoluteSystemPath) -> Result<crate::AuthTokens, Error> {
+    use crate::Token;
 
-    let vercel_config_dir = match turborepo_dirs::vercel_config_dir()? {
+    let turbo_auth_tokens = Token::from_auth_file(turbo_config_path)?;
+    let Some(turbo_token) = turbo_auth_tokens.token.as_ref() else {
+        return Ok(turbo_auth_tokens);
+    };
+
+    if turbo_auth_tokens.refresh_token.is_some() && turbo_auth_tokens.expires_at.is_some() {
+        return Ok(turbo_auth_tokens);
+    }
+
+    let Some(vercel_config_dir) = turborepo_dirs::vercel_config_dir()? else {
+        return Ok(turbo_auth_tokens);
+    };
+    let vercel_auth_path =
+        vercel_config_dir.join_components(&[VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE]);
+    let vercel_auth_tokens = Token::from_auth_file(&vercel_auth_path)?;
+    let same_token = vercel_auth_tokens
+        .token
+        .as_ref()
+        .is_some_and(|vercel_token| vercel_token.expose() == turbo_token.expose());
+
+    if !same_token {
+        return Ok(turbo_auth_tokens);
+    }
+
+    Ok(crate::AuthTokens {
+        token: turbo_auth_tokens.token,
+        refresh_token: turbo_auth_tokens
+            .refresh_token
+            .or(vercel_auth_tokens.refresh_token),
+        expires_at: turbo_auth_tokens
+            .expires_at
+            .or(vercel_auth_tokens.expires_at),
+    })
+}
+
+/// Attempts to get a valid token with automatic refresh if expired.
+pub async fn get_token_with_refresh() -> Result<Option<turborepo_api_client::SecretString>, Error> {
+    use crate::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE};
+
+    let turbo_config_dir = match turborepo_dirs::config_dir()? {
         Some(dir) => dir,
         None => return Ok(None),
     };
 
-    let auth_path = vercel_config_dir.join_components(&[VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE]);
-
-    let auth_tokens = Token::from_auth_file(&auth_path)?;
+    let turbo_config_path = turbo_config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]);
+    let auth_tokens = load_auth_tokens(&turbo_config_path)?;
 
     if let Some(token) = &auth_tokens.token {
         if auth_tokens.is_expired() {
@@ -73,18 +113,10 @@ pub async fn get_token_with_refresh() -> Result<Option<turborepo_api_client::Sec
                 && auth_tokens.refresh_token.is_some()
                 && let Ok(new_tokens) = auth_tokens.refresh_token().await
             {
-                if let Err(e) = new_tokens.write_to_auth_file(&auth_path) {
-                    tracing::warn!("Failed to write refreshed tokens to {auth_path}: {e}");
+                if let Err(e) = new_tokens.write_to_config_file(&turbo_config_path) {
+                    tracing::warn!("Failed to write refreshed tokens to {turbo_config_path}: {e}");
                 }
                 return Ok(new_tokens.token);
-            }
-
-            if let Ok(Some(config_dir)) = turborepo_dirs::config_dir() {
-                let turbo_config_path =
-                    config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]);
-                if let Ok(turbo_token) = Token::from_file(&turbo_config_path) {
-                    return Ok(Some(turbo_token.into_inner().clone()));
-                }
             }
 
             Ok(None)
@@ -92,14 +124,6 @@ pub async fn get_token_with_refresh() -> Result<Option<turborepo_api_client::Sec
             Ok(Some(token.clone()))
         }
     } else {
-        // No token in auth.json, try turborepo/config.json
-        if let Ok(Some(config_dir)) = turborepo_dirs::config_dir() {
-            let turbo_config_path =
-                config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]);
-            if let Ok(turbo_token) = Token::from_file(&turbo_config_path) {
-                return Ok(Some(turbo_token.into_inner().clone()));
-            }
-        }
         Ok(None)
     }
 }

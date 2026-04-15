@@ -5,7 +5,7 @@ use std::{
 };
 
 use tracing::warn;
-use turborepo_api_client::{CacheClient, Client, TokenClient};
+use turborepo_api_client::{Client, TokenClient};
 use turborepo_ui::{BOLD, ColorConfig, start_spinner};
 use url::Url;
 
@@ -47,7 +47,7 @@ fn make_token_name() -> Result<String, Error> {
 ///
 /// Returns `(Token, Option<TokenSet>)`. The `TokenSet` is always `None`
 /// for SSO flows since the SSO verification returns a different token type.
-pub async fn sso_login<T: Client + TokenClient + CacheClient>(
+pub async fn sso_login<T: Client + TokenClient>(
     options: &LoginOptions<'_, T>,
 ) -> Result<(Token, Option<TokenSet>), Error> {
     let LoginOptions {
@@ -96,7 +96,7 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
                             api_client,
                             sso_team,
                             Some(valid_token_callback(
-                                &format!("Existing Vercel token for {sso_team} found!"),
+                                &format!("Existing token for {sso_team} found!"),
                                 color_config,
                             )),
                         )
@@ -107,7 +107,7 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
                 }
                 Ok(None) => {}
                 Err(e) => {
-                    warn!("Failed to load existing Vercel token for SSO, proceeding: {e}");
+                    warn!("Failed to load existing token for SSO, proceeding: {e}");
                 }
             }
         }
@@ -392,10 +392,9 @@ fn wait_for_sso_redirect(
 mod tests {
     use std::{assert_matches::assert_matches, io::Write, net::TcpStream};
 
-    use reqwest::{Method, RequestBuilder, Response};
+    use reqwest::{RequestBuilder, Response};
     use turborepo_vercel_api::{
-        CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse, User,
-        UserResponse, VerifiedSsoUser,
+        Membership, Role, Team, TeamsResponse, User, UserResponse, VerifiedSsoUser,
         token::{ResponseTokenMetadata, Scope},
     };
 
@@ -526,66 +525,6 @@ mod tests {
             _token: &turborepo_api_client::SecretString,
         ) -> turborepo_api_client::Result<()> {
             Ok(())
-        }
-    }
-
-    impl CacheClient for MockApiClient {
-        async fn get_artifact(
-            &self,
-            _hash: &str,
-            _token: &turborepo_api_client::SecretString,
-            _team_id: Option<&str>,
-            _team_slug: Option<&str>,
-            _method: Method,
-        ) -> Result<Option<Response>, turborepo_api_client::Error> {
-            unimplemented!("get_artifact")
-        }
-        async fn put_artifact(
-            &self,
-            _hash: &str,
-            _artifact_body: impl turborepo_api_client::Stream<
-                Item = Result<turborepo_api_client::Bytes, turborepo_api_client::Error>,
-            > + Send
-            + Sync
-            + 'static,
-            _body_len: usize,
-            _duration: u64,
-            _tag: Option<&str>,
-            _token: &turborepo_api_client::SecretString,
-            _team_id: Option<&str>,
-            _team_slug: Option<&str>,
-            _sha: Option<&str>,
-            _dirty_hash: Option<&str>,
-        ) -> Result<(), turborepo_api_client::Error> {
-            unimplemented!("set_artifact")
-        }
-        async fn fetch_artifact(
-            &self,
-            _hash: &str,
-            _token: &turborepo_api_client::SecretString,
-            _team_id: Option<&str>,
-            _team_slug: Option<&str>,
-        ) -> Result<Option<Response>, turborepo_api_client::Error> {
-            unimplemented!("fetch_artifact")
-        }
-        async fn artifact_exists(
-            &self,
-            _hash: &str,
-            _token: &turborepo_api_client::SecretString,
-            _team_id: Option<&str>,
-            _team_slug: Option<&str>,
-        ) -> Result<Option<Response>, turborepo_api_client::Error> {
-            unimplemented!("artifact_exists")
-        }
-        async fn get_caching_status(
-            &self,
-            _token: &turborepo_api_client::SecretString,
-            _team_id: Option<&str>,
-            _team_slug: Option<&str>,
-        ) -> Result<CachingStatusResponse, turborepo_api_client::Error> {
-            Ok(CachingStatusResponse {
-                status: CachingStatus::Enabled,
-            })
         }
     }
 

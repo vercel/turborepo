@@ -73,7 +73,16 @@ pub async fn start_test_server(
     let app = Router::new()
         .route(
             "/v2/user",
-            get(|| async move {
+            get(|headers: HeaderMap| async move {
+                let auth = headers
+                    .get("authorization")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("");
+
+                if auth.starts_with("Bearer vca_") {
+                    return StatusCode::NOT_FOUND.into_response();
+                }
+
                 Json(UserResponse {
                     user: User {
                         id: EXPECTED_USER_ID.to_string(),
@@ -82,6 +91,7 @@ pub async fn start_test_server(
                         name: None,
                     },
                 })
+                .into_response()
             }),
         )
         .route(
@@ -312,7 +322,13 @@ pub async fn start_test_server(
                     .get("authorization")
                     .and_then(|v| v.to_str().ok())
                     .unwrap_or("");
-                if auth.starts_with("Bearer vca_") {
+                if auth == "Bearer vca_missing_email" {
+                    Json(serde_json::json!({
+                        "sub": EXPECTED_USER_ID,
+                        "preferred_username": EXPECTED_USERNAME,
+                    }))
+                    .into_response()
+                } else if auth.starts_with("Bearer vca_") {
                     Json(serde_json::json!({
                         "sub": EXPECTED_USER_ID,
                         "email": EXPECTED_EMAIL,
