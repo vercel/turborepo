@@ -51,7 +51,7 @@ impl<T: TokenClient> LogoutOptions<T> {
 
         match AuthTokens::clear_from_config_file(path) {
             Ok(()) => {}
-            Err(Error::JsonRewrite(_)) => path.create_with_contents_secret("{}".to_string())?,
+            Err(Error::JsonRewrite(_)) => path.create_with_contents_secret("{}")?,
             Err(err) => return Err(err),
         }
 

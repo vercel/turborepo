@@ -152,10 +152,11 @@ fn load_legacy_auth_tokens(
     };
 
     if let Some(expected_token) = expected_token
-        && !legacy_auth_tokens
+        && legacy_auth_tokens
             .token
             .as_ref()
-            .is_some_and(|legacy_token| legacy_token.expose() == expected_token.expose())
+            .map(|legacy_token| legacy_token.expose())
+            != Some(expected_token.expose())
     {
         return Ok(crate::AuthTokens::default());
     }
