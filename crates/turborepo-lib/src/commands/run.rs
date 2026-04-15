@@ -4,10 +4,10 @@ use tracing::error;
 use turborepo_api_client::SharedHttpClient;
 use turborepo_log::StructuredLogSink;
 use turborepo_query_api::QueryServer;
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_signals::{SignalHandler, listeners::get_signal};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_types::DryRunMode;
-use turborepo_ui::{sender::UISender, LogSinks};
+use turborepo_ui::{LogSinks, sender::UISender};
 
 use crate::{commands::CommandBase, run, run::builder::RunBuilder, tracing::TurboSubscriber};
 
@@ -182,9 +182,7 @@ pub async fn run(
     };
 
     let result = match wait_for_run_cleanup_on_signal(&handler, run_fut).await {
-        RunOutcome::Completed(result) => result,
-        // The run future has already drained shutdown and closed the UI.
-        RunOutcome::Interrupted(_result) => Ok(1),
+        RunOutcome::Completed(result) | RunOutcome::Interrupted(result) => result,
     };
 
     turborepo_log::flush();
@@ -232,9 +230,9 @@ mod tests {
 
     use futures::stream;
     use tokio::sync::oneshot;
-    use turborepo_signals::{signals::Signal, SignalHandler};
+    use turborepo_signals::{SignalHandler, signals::Signal};
 
-    use super::{wait_for_run_cleanup_on_signal, RunOutcome};
+    use super::{RunOutcome, wait_for_run_cleanup_on_signal};
 
     #[cfg(windows)]
     const DEFAULT_SIGNAL: Signal = Signal::CtrlC;

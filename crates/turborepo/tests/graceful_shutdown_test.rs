@@ -389,6 +389,47 @@ while true; do sleep 0.2 || true; done
     }
 
     #[test]
+    fn run_gracefully_shuts_down_on_first_sigint_without_tty_and_exits_zero() {
+        let (_tempdir, test_dir) = setup_shutdown_example(
+            "graceful.sh",
+            r#"#!/usr/bin/env bash
+set -u
+trap 'printf "graceful cleanup start\n"; sleep 0.5; : > cleanup.done; printf "graceful cleanup done\n"; exit 0' INT
+printf "graceful ready\n"
+: > ready
+while true; do sleep 0.2 || true; done
+"#,
+        );
+
+        let ready_file = test_dir.join("apps/app-a/ready");
+        let cleanup_file = test_dir.join("apps/app-a/cleanup.done");
+
+        let mut child = spawn_noninteractive_turbo(&test_dir);
+        wait_for_path(&ready_file, START_TIMEOUT);
+
+        send_signal(child.child_mut().id() as i32, Signal::SIGINT);
+        let output = child.into_output(EXIT_TIMEOUT);
+        let combined = normalize_output(&format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+
+        assert!(
+            output.status.success(),
+            "graceful shutdown on SIGINT should exit 0\n{combined}"
+        );
+        assert!(
+            cleanup_file.exists(),
+            "graceful cleanup marker should exist"
+        );
+        assert!(
+            combined.contains("graceful cleanup done"),
+            "expected cleanup completion log after signal\n{combined}"
+        );
+    }
+
+    #[test]
     fn run_force_kills_on_second_sigint_in_tty() {
         let (_tempdir, test_dir) = setup_shutdown_example(
             "stubborn.sh",
