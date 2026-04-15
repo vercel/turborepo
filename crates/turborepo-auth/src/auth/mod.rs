@@ -112,15 +112,16 @@ async fn get_auth_file_token(
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, sync::Mutex};
+    use std::fs;
 
     use tempfile::tempdir;
+    use tokio::sync::Mutex;
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::{get_token_with_refresh, is_vercel};
     use crate::{AuthTokens, TURBO_AUTH_FILE, TURBO_TOKEN_DIR, Token, current_unix_time_secs};
 
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    static ENV_LOCK: Mutex<()> = Mutex::const_new(());
 
     struct ConfigDirEnvGuard;
 
@@ -210,7 +211,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_token_with_refresh_prefers_turbo_auth_file() {
-        let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+        let _lock = ENV_LOCK.lock().await;
         let vercel_config_dir = create_mock_vercel_config_dir();
         let turbo_config_dir = create_mock_turbo_config_dir();
         let _guard = ConfigDirEnvGuard::set(&turbo_config_dir, &vercel_config_dir);
@@ -236,7 +237,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_token_with_refresh_falls_back_to_legacy_config() {
-        let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+        let _lock = ENV_LOCK.lock().await;
         let vercel_config_dir = create_mock_vercel_config_dir();
         let turbo_config_dir = create_mock_turbo_config_dir();
         let _guard = ConfigDirEnvGuard::set(&turbo_config_dir, &vercel_config_dir);

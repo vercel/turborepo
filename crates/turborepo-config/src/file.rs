@@ -59,6 +59,18 @@ impl ResolvedConfigurationOptions for AuthFile {
         &self,
         _existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error> {
+        let contents =
+            self.path
+                .read_existing_to_string()
+                .map_err(|error| Error::FailedToReadConfig {
+                    config_path: self.path.clone(),
+                    error,
+                })?;
+
+        if contents.as_deref().is_none_or(str::is_empty) {
+            return Ok(ConfigurationOptions::default());
+        }
+
         let token = match turborepo_auth::Token::from_file(&self.path) {
             Ok(token) => token,
             // Multiple ways this can go wrong. Don't error out if we can't find the token - it
