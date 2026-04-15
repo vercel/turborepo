@@ -118,9 +118,7 @@ mod tests {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::{get_token_with_refresh, is_vercel};
-    use crate::{
-        AuthTokens, TURBO_AUTH_FILE, TURBO_TOKEN_DIR, Token, current_unix_time_secs,
-    };
+    use crate::{AuthTokens, TURBO_AUTH_FILE, TURBO_TOKEN_DIR, Token, current_unix_time_secs};
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
