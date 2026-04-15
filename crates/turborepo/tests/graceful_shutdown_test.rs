@@ -516,6 +516,64 @@ while true; do sleep 0.2 || true; done
     }
 
     #[test]
+    fn node_wrapper_forwards_sigterm_to_turbo() {
+        let (_tempdir, test_dir) = setup_shutdown_example(
+            "slow-sigterm.sh",
+            r#"#!/usr/bin/env bash
+set -u
+trap 'printf "wrapper sigterm cleanup start\n"; sleep 2; : > cleanup.done; printf "wrapper sigterm cleanup done\n"; exit 0' INT
+printf "wrapper term ready\n"
+: > ready
+while true; do sleep 0.2 || true; done
+"#,
+        );
+
+        let ready_file = test_dir.join("apps/app-a/ready");
+        let cleanup_file = test_dir.join("apps/app-a/cleanup.done");
+
+        let mut child = spawn_noninteractive_turbo_via_node_wrapper(&test_dir);
+        wait_for_path(&ready_file, START_TIMEOUT);
+
+        let wrapper_pid = child.child_mut().id() as i32;
+        send_signal(wrapper_pid, Signal::SIGTERM);
+        thread::sleep(Duration::from_secs(1));
+
+        let exited_early = child
+            .child_mut()
+            .try_wait()
+            .expect("failed waiting for node wrapper")
+            .is_some();
+
+        if exited_early {
+            let _ = signal::kill(Pid::from_raw(-wrapper_pid), Signal::SIGKILL);
+        }
+
+        let output = child.into_output(EXIT_TIMEOUT);
+        let combined = normalize_output(&format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+
+        assert!(
+            !exited_early,
+            "node wrapper exited before turbo finished graceful shutdown on SIGTERM\n{combined}"
+        );
+        assert!(
+            output.status.success(),
+            "graceful shutdown via node wrapper should exit 0 on SIGTERM\n{combined}"
+        );
+        assert!(
+            cleanup_file.exists(),
+            "graceful cleanup marker should exist"
+        );
+        assert!(
+            combined.contains("wrapper sigterm cleanup done"),
+            "expected cleanup completion log after signal\n{combined}"
+        );
+    }
+
+    #[test]
     fn run_force_kills_on_second_sigint_in_tty() {
         let (_tempdir, test_dir) = setup_shutdown_example(
             "stubborn.sh",
