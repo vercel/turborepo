@@ -17,6 +17,8 @@
 
 const CHILD_POLL_INTERVAL: Duration = Duration::from_micros(50);
 const POST_EXIT_OUTPUT_DRAIN_TIMEOUT: Duration = Duration::from_millis(100);
+#[cfg(unix)]
+const PROCESS_GROUP_DRAIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 #[cfg(unix)]
 const PARENT_DEATH_ESCALATION_DELAY: Duration = Duration::from_secs(2);
@@ -86,6 +88,10 @@ struct ChildHandle {
     pid: Option<u32>,
     imp: ChildHandleImpl,
     #[cfg(unix)]
+    shutdown_semantics: ShutdownSemantics,
+    #[cfg(unix)]
+    target_identity: Option<TargetIdentity>,
+    #[cfg(unix)]
     parent_death_guard: Option<ParentDeathGuard>,
     #[cfg(windows)]
     _job: Option<super::job_object::JobObject>,
@@ -94,6 +100,39 @@ struct ChildHandle {
 enum ChildHandleImpl {
     Tokio(tokio::process::Child),
     Pty(Box<dyn PtyChild + Send + Sync>),
+}
+
+#[cfg(unix)]
+#[derive(Debug, Clone, Copy)]
+enum GracefulInterruptTarget {
+    DirectChild,
+    ProcessGroup,
+}
+
+#[cfg(unix)]
+#[derive(Debug, Clone, Copy)]
+struct ShutdownSemantics {
+    // Who should receive the first graceful interrupt.
+    graceful_interrupt_target: GracefulInterruptTarget,
+    // Whether we should keep waiting on the process group after the direct child exits.
+    wait_for_process_group_after_child_exit: bool,
+}
+
+#[cfg(unix)]
+impl ShutdownSemantics {
+    fn process_group() -> Self {
+        Self {
+            graceful_interrupt_target: GracefulInterruptTarget::ProcessGroup,
+            wait_for_process_group_after_child_exit: false,
+        }
+    }
+
+    fn direct_child_then_wait_for_process_group() -> Self {
+        Self {
+            graceful_interrupt_target: GracefulInterruptTarget::DirectChild,
+            wait_for_process_group_after_child_exit: true,
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -520,6 +559,17 @@ fn setup_parent_death_guard(pid: Option<u32>) -> Option<ParentDeathGuard> {
     )
 }
 
+#[cfg(unix)]
+fn capture_target_identity(pid: Option<u32>) -> Option<TargetIdentity> {
+    pid.and_then(|pid| match target_identity(pid as libc::pid_t) {
+        Ok(identity) => Some(identity),
+        Err(err) => {
+            debug!("failed to capture target identity for process {pid}: {err}");
+            None
+        }
+    })
+}
+
 impl ChildHandle {
     #[tracing::instrument(skip(command))]
     pub fn spawn_normal(command: Command) -> io::Result<SpawnResult> {
@@ -532,6 +582,9 @@ impl ChildHandle {
 
         let mut child = command.spawn()?;
         let pid = child.id();
+
+        #[cfg(unix)]
+        let target_identity = capture_target_identity(pid);
 
         #[cfg(unix)]
         let parent_death_guard = setup_parent_death_guard(pid);
@@ -558,6 +611,10 @@ impl ChildHandle {
             handle: Self {
                 pid,
                 imp: ChildHandleImpl::Tokio(child),
+                #[cfg(unix)]
+                shutdown_semantics: ShutdownSemantics::process_group(),
+                #[cfg(unix)]
+                target_identity,
                 #[cfg(unix)]
                 parent_death_guard,
                 #[cfg(windows)]
@@ -623,6 +680,9 @@ impl ChildHandle {
         let pid = child.process_id();
 
         #[cfg(unix)]
+        let target_identity = capture_target_identity(pid);
+
+        #[cfg(unix)]
         let parent_death_guard = setup_parent_death_guard(pid);
 
         #[cfg(windows)]
@@ -662,6 +722,10 @@ impl ChildHandle {
                 pid,
                 imp: ChildHandleImpl::Pty(child),
                 #[cfg(unix)]
+                shutdown_semantics: ShutdownSemantics::direct_child_then_wait_for_process_group(),
+                #[cfg(unix)]
+                target_identity,
+                #[cfg(unix)]
                 parent_death_guard,
                 #[cfg(windows)]
                 _job: job,
@@ -676,6 +740,118 @@ impl ChildHandle {
 
     pub fn pid(&self) -> Option<u32> {
         self.pid
+    }
+
+    #[cfg(unix)]
+    fn process_group_id(&self) -> Option<libc::pid_t> {
+        self.target_identity
+            .map(|identity| identity.process_group_id)
+            .or(self.pid.map(|pid| pid as libc::pid_t))
+    }
+
+    #[cfg(unix)]
+    fn send_graceful_interrupt(&self, pid: libc::pid_t) {
+        let target = match self.shutdown_semantics.graceful_interrupt_target {
+            GracefulInterruptTarget::DirectChild => {
+                debug!("sending SIGINT to child {}", pid);
+                pid
+            }
+            GracefulInterruptTarget::ProcessGroup => {
+                let Some(process_group_id) = self.process_group_id() else {
+                    debug!("missing process group id for child {}", pid);
+                    return;
+                };
+                debug!("sending SIGINT to process group -{}", process_group_id);
+                -process_group_id
+            }
+        };
+
+        if unsafe { libc::kill(target, libc::SIGINT) } == -1 {
+            debug!("failed to send SIGINT to {target}");
+        }
+    }
+
+    #[cfg(unix)]
+    fn should_wait_for_process_group_after_child_exit(&self) -> bool {
+        self.shutdown_semantics
+            .wait_for_process_group_after_child_exit
+    }
+
+    #[cfg(unix)]
+    fn has_running_process_group(&self, pid: libc::pid_t) -> bool {
+        if let Some(identity) = self.target_identity {
+            return process_group_matches_identity(pid, identity);
+        }
+
+        let process_group_id = self.process_group_id().unwrap_or(pid);
+
+        let result = unsafe { libc::kill(-process_group_id, 0) };
+        result == 0 || io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+    }
+
+    #[cfg(unix)]
+    fn kill_process_group(&self, pid: libc::pid_t) {
+        let process_group_id = self.process_group_id().unwrap_or(pid);
+
+        debug!("killing process group {}", process_group_id);
+        signal_process_group(process_group_id, libc::SIGKILL);
+    }
+
+    #[cfg(unix)]
+    async fn wait_for_process_group_exit(
+        &mut self,
+        pid: libc::pid_t,
+        deadline: Option<tokio::time::Instant>,
+        command_rx: &mut mpsc::Receiver<ChildCommand>,
+        command_rx_open: &mut bool,
+    ) -> ChildExit {
+        if !self.should_wait_for_process_group_after_child_exit() {
+            return ChildExit::Interrupted;
+        }
+
+        while self.has_running_process_group(pid) {
+            match deadline {
+                Some(deadline) => {
+                    tokio::select! {
+                        command = command_rx.recv(), if *command_rx_open => {
+                            match command {
+                                Some(ChildCommand::Kill) => {
+                                    debug!("graceful shutdown interrupted, killing process group");
+                                    self.kill_process_group(pid);
+                                    return ChildExit::Killed;
+                                }
+                                Some(ChildCommand::Shutdown(_)) => {}
+                                None => *command_rx_open = false,
+                            }
+                        }
+                        _ = tokio::time::sleep_until(deadline) => {
+                            debug!("graceful shutdown timed out, killing process group");
+                            self.kill_process_group(pid);
+                            return ChildExit::Killed;
+                        }
+                        _ = tokio::time::sleep(PROCESS_GROUP_DRAIN_POLL_INTERVAL) => {}
+                    }
+                }
+                None => {
+                    tokio::select! {
+                        command = command_rx.recv(), if *command_rx_open => {
+                            match command {
+                                Some(ChildCommand::Kill) => {
+                                    debug!("graceful shutdown interrupted, killing process group");
+                                    self.kill_process_group(pid);
+                                    return ChildExit::Killed;
+                                }
+                                Some(ChildCommand::Shutdown(_)) => {}
+                                None => *command_rx_open = false,
+                            }
+                        }
+                        _ = tokio::time::sleep(PROCESS_GROUP_DRAIN_POLL_INTERVAL) => {}
+                    }
+                }
+            }
+        }
+
+        ChildExit::Interrupted
     }
 
     /// Perform a `wait` syscall on the child until it exits
@@ -717,9 +893,8 @@ impl ChildHandle {
 
     pub async fn kill(&mut self) -> io::Result<()> {
         #[cfg(unix)]
-        if let Some(pid) = self.pid() {
-            let pgid = -(pid as i32);
-            let _ = unsafe { libc::kill(pgid, libc::SIGKILL) };
+        if let Some(process_group_id) = self.process_group_id() {
+            signal_process_group(process_group_id, libc::SIGKILL);
         }
 
         match &mut self.imp {
@@ -808,18 +983,13 @@ impl ShutdownStyle {
                         return ChildExit::Interrupted;
                     };
 
-                    debug!("sending SIGINT to child {}", pid);
-                    // kill takes negative pid to indicate that you want to use gpid
-                    let pgid = -(pid as i32);
-                    if unsafe { libc::kill(pgid, libc::SIGINT) } == -1 {
-                        debug!("failed to send SIGINT to {pgid}");
-                    };
+                    child.send_graceful_interrupt(pid as libc::pid_t);
                     debug!("waiting for child {}", pid);
 
                     let deadline = timeout.map(|timeout| tokio::time::Instant::now() + timeout);
                     let mut command_rx_open = true;
 
-                    loop {
+                    let exit = loop {
                         match deadline {
                             Some(deadline) => {
                                 tokio::select! {
@@ -875,6 +1045,19 @@ impl ShutdownStyle {
                                 }
                             }
                         }
+                    };
+
+                    if exit == ChildExit::Interrupted {
+                        child
+                            .wait_for_process_group_exit(
+                                pid as libc::pid_t,
+                                deadline,
+                                command_rx,
+                                &mut command_rx_open,
+                            )
+                            .await
+                    } else {
+                        exit
                     }
                 }
 
@@ -1841,6 +2024,54 @@ mod test {
         }
     }
 
+    // Regression test: a wrapper process (simulating npm/pnpm) forwards SIGINT
+    // to its child. When turbo sends SIGINT to the process group, the child
+    // gets it twice — once from the group signal, once from the wrapper.
+    // For PTY children we now signal only the direct PID to avoid this.
+    #[cfg(unix)]
+    #[tokio::test]
+    #[traced_test]
+    async fn test_pty_child_receives_single_sigint() {
+        let script = find_script_dir().join_component("wrapper_count_sigints.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Some(Duration::from_millis(2000))),
+            Some(PtySize::default()),
+        )
+        .unwrap();
+
+        let mut output_child = child.clone();
+        let (mut observer, output, ready_rx) = ObservedOutput::new();
+        let output_task = tokio::spawn(async move {
+            output_child
+                .wait_with_piped_outputs(&mut observer)
+                .await
+                .unwrap()
+        });
+
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .expect("timed out waiting for ready")
+            .expect("ready channel closed");
+
+        child.set_closing();
+        child.stop().await;
+        output_task.await.unwrap();
+
+        let output = String::from_utf8(output.lock().unwrap().clone()).unwrap();
+        assert!(
+            output.contains("SIGINT_COUNT=1"),
+            "expected exactly one SIGINT, got output: {output}"
+        );
+        assert!(
+            !output.contains("SIGINT_COUNT=2"),
+            "child received SIGINT twice: {output}"
+        );
+    }
+
     #[test_case(false)]
     #[test_case(TEST_PTY)]
     #[tokio::test]
@@ -2017,13 +2248,13 @@ mod test {
 
         let exit = child.stop().await;
 
-        // On Unix systems, when not using a PTY, shell commands may not properly
-        // respond to SIGINT and will timeout, resulting in being killed rather
-        // than interrupted. This is different from using a proper interruptible
-        // program like Node.js that naturally handles signals correctly
-        // regardless of PTY usage.
-        if cfg!(unix) && !use_pty {
-            // On Unix without PTY, shell scripts may not respond to SIGINT properly
+        // On Unix, shell scripts may not respond to SIGINT and will timeout,
+        // resulting in being killed rather than interrupted. For non-PTY
+        // children, SIGINT goes to the process group but shells may still
+        // continue their loop. For PTY children, SIGINT goes only to the
+        // direct child to avoid double delivery through package managers,
+        // which also means the shell may not exit gracefully.
+        if cfg!(unix) {
             assert_matches!(exit, Some(ChildExit::Killed) | Some(ChildExit::Interrupted));
         } else {
             assert_matches!(exit, Some(ChildExit::Interrupted));
