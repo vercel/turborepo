@@ -27,6 +27,7 @@ pub struct TeamInfo<'a> {
 pub const VERCEL_TOKEN_DIR: &str = "com.vercel.cli";
 pub const VERCEL_TOKEN_FILE: &str = "auth.json";
 pub const TURBO_TOKEN_DIR: &str = "turborepo";
+pub const TURBO_AUTH_FILE: &str = "auth.json";
 pub const TURBO_TOKEN_FILE: &str = "config.json";
 
 const VERCEL_OAUTH_TOKEN_URL: &str = "https://vercel.com/api/login/oauth/token";

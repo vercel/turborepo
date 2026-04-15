@@ -5,8 +5,8 @@ use turborepo_dirs::{config_dir, vercel_config_dir};
 use turborepo_ui::{GREY, cprintln};
 
 use crate::{
-    Error, LogoutOptions, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, Token, VERCEL_TOKEN_DIR,
-    VERCEL_TOKEN_FILE,
+    Error, LogoutOptions, TURBO_AUTH_FILE, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, Token,
+    VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE,
 };
 
 pub async fn logout<T: TokenClient>(options: &LogoutOptions<T>) -> Result<(), Error> {
@@ -69,6 +69,10 @@ impl<T: TokenClient> LogoutOptions<T> {
             .await?;
         }
         if let Some(turbo_config_dir) = config_dir()? {
+            self.try_remove_token(
+                &turbo_config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_AUTH_FILE]),
+            )
+            .await?;
             self.try_remove_token(
                 &turbo_config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]),
             )

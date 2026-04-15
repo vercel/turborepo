@@ -3,7 +3,8 @@ mod manual;
 use manual::login_manual;
 use turborepo_api_client::APIClient;
 use turborepo_auth::{
-    login as auth_login, sso_login as auth_sso_login, AuthTokens, LoginOptions, Token, TokenSet,
+    login as auth_login, sso_login as auth_sso_login, AuthTokens, LoginOptions, Token,
+    TokenSet, TURBO_AUTH_FILE, TURBO_TOKEN_DIR,
 };
 use turborepo_json_rewrite::set_path;
 use turborepo_telemetry::events::command::{CommandEventBuilder, LoginMethod};
@@ -120,9 +121,8 @@ impl<'a> Drop for LoginTelemetry<'a> {
     }
 }
 
-/// Writes a token to disk. If a full OAuth token set is provided (from the
-/// device flow), writes it to the Vercel CLI auth.json so both CLIs share
-/// credentials. Always writes to the turbo config.json for backward compat.
+/// Writes a token to disk. Device-flow OAuth tokens go into Turbo's auth.json
+/// so older Turbos never treat them as legacy API tokens.
 fn write_token(
     base: &CommandBase,
     token: Token,
@@ -130,10 +130,11 @@ fn write_token(
 ) -> Result<(), Error> {
     let token_str = token.into_inner().expose().to_string();
 
-    // Write full OAuth token set to Vercel CLI auth.json when available
+    // Keep OAuth sessions in a Turbo-owned auth file so older Turbos don't try
+    // to validate them via legacy token endpoints.
     if let Some(ts) = token_set {
-        if let Ok(Some(vercel_config_dir)) = turborepo_dirs::vercel_config_dir() {
-            let auth_path = vercel_config_dir.join_components(&["com.vercel.cli", "auth.json"]);
+        if let Ok(Some(config_dir)) = turborepo_dirs::config_dir() {
+            let auth_path = config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_AUTH_FILE]);
             let now_secs = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("Time went backwards")
@@ -150,14 +151,18 @@ fn write_token(
             };
             if let Err(e) = auth_tokens.write_to_auth_file(&auth_path) {
                 tracing::warn!(
-                    "Failed to write Vercel auth.json at {auth_path}: {e}. Login succeeded but \
-                     the Vercel CLI won't share this session."
+                    "Failed to write Turbo auth.json at {auth_path}: {e}. Login succeeded but \
+                     Turbo will need to re-authenticate next time."
                 );
             }
         }
     }
 
-    // Also write to turborepo/config.json for backward compatibility
+    if token_str.starts_with("vca_") {
+        return Ok(());
+    }
+
+    // Legacy API tokens stay in turborepo/config.json for existing releases.
     let global_config_path = base.global_config_path()?;
     let before = global_config_path
         .read_existing_to_string()
