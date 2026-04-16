@@ -128,6 +128,12 @@ fn write_token(
     token_set: Option<&TokenSet>,
 ) -> Result<(), Error> {
     let global_config_path = base.global_config_path()?;
+    let Some(config_dir) =
+        turborepo_dirs::config_dir().map_err(|_| crate::config::Error::NoGlobalConfigPath)?
+    else {
+        return Err(crate::config::Error::NoGlobalConfigPath.into());
+    };
+    let turbo_auth_path = config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_AUTH_FILE]);
     let token = token.into_inner().clone();
     let token_str = token.expose().to_string();
     let auth_tokens = match token_set {
@@ -153,19 +159,91 @@ fn write_token(
     };
 
     if token_str.starts_with("vca_") {
-        let Some(config_dir) =
-            turborepo_dirs::config_dir().map_err(|_| crate::config::Error::NoGlobalConfigPath)?
-        else {
-            return Err(crate::config::Error::NoGlobalConfigPath.into());
-        };
-        let turbo_auth_path = config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_AUTH_FILE]);
-
         auth_tokens.write_to_config_file(&turbo_auth_path)?;
         AuthTokens::clear_from_config_file(&global_config_path)?;
         return Ok(());
     }
 
     auth_tokens.write_to_config_file(&global_config_path)?;
+    AuthTokens::clear_from_config_file(&turbo_auth_path)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{env, sync::Mutex};
+
+    use tempfile::tempdir;
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_ui::ColorConfig;
+
+    use super::*;
+    use crate::{config::TurborepoConfigBuilder, opts::Opts, Args};
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn create_command_base(repo_root: AbsoluteSystemPathBuf) -> CommandBase {
+        let args = Args::default();
+        let config = TurborepoConfigBuilder::new(&repo_root).build().unwrap();
+        let opts = Opts::new(&repo_root, &args, config).unwrap();
+
+        CommandBase::from_opts(opts, repo_root, "test-version", ColorConfig::new(false))
+    }
+
+    #[test]
+    fn write_token_clears_stale_turbo_auth_for_manual_tokens() {
+        let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+        let repo_root = tempdir().expect("failed to create repo tempdir");
+        let config_root = tempdir().expect("failed to create config tempdir");
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root.path().to_path_buf())
+            .expect("failed to create repo path");
+        let config_root = AbsoluteSystemPathBuf::try_from(config_root.path().to_path_buf())
+            .expect("failed to create config path");
+
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents("{}")
+            .expect("failed to write turbo.json");
+        repo_root
+            .join_component("package.json")
+            .create_with_contents("{}")
+            .expect("failed to write package.json");
+
+        let turbo_auth_path = config_root.join_components(&[TURBO_TOKEN_DIR, TURBO_AUTH_FILE]);
+        AuthTokens {
+            token: Some(turborepo_api_client::SecretString::new(
+                "vca_stale_token".to_owned(),
+            )),
+            refresh_token: Some(turborepo_api_client::SecretString::new(
+                "stale_refresh_token".to_owned(),
+            )),
+            expires_at: Some(4_102_444_800),
+        }
+        .write_to_config_file(&turbo_auth_path)
+        .expect("failed to write stale turbo auth file");
+
+        unsafe {
+            env::set_var("TURBO_CONFIG_DIR_PATH", config_root.as_path());
+        }
+
+        let base = create_command_base(repo_root);
+        write_token(&base, Token::new("manual_token".to_owned()), None)
+            .expect("failed to write manual token");
+
+        let global_config_path = config_root.join_components(&[TURBO_TOKEN_DIR, "config.json"]);
+        let written_token = Token::from_file(&global_config_path)
+            .expect("manual token should be written to config.json");
+        assert_eq!(written_token.into_inner().expose(), "manual_token");
+
+        let auth_tokens = Token::from_auth_file(&turbo_auth_path)
+            .expect("auth.json should remain parseable after clearing");
+        assert!(auth_tokens.token.is_none());
+        assert!(auth_tokens.refresh_token.is_none());
+        assert!(auth_tokens.expires_at.is_none());
+
+        unsafe {
+            env::remove_var("TURBO_CONFIG_DIR_PATH");
+        }
+    }
 }
