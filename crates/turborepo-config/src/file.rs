@@ -143,7 +143,7 @@ mod tests {
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn write_auth_file(path: &AbsoluteSystemPathBuf, token: &str) {
-        path.create_with_contents(&format!(r#"{{"token":"{token}"}}"#))
+        path.create_with_contents(format!(r#"{{"token":"{token}"}}"#))
             .expect("Failed to write auth file");
     }
 
