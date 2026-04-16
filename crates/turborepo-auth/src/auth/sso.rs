@@ -6,10 +6,13 @@ use std::{
 
 use tracing::warn;
 use turborepo_api_client::{Client, TokenClient};
-use turborepo_ui::{BOLD, ColorConfig, start_spinner};
+use turborepo_ui::{ColorConfig, start_spinner};
 use url::Url;
 
-use super::login::{is_inactive_token_error, login_vercel_device_flow};
+use super::login::{
+    is_auth_rejection_error, is_inactive_token_error, login_vercel_device_flow,
+    valid_token_callback,
+};
 use crate::{
     Error, LoginOptions, Token,
     auth::{ExistingTokenSource, classify_existing_vercel_token, is_vercel},
@@ -63,6 +66,66 @@ async fn classify_existing_sso_token<T: Client + TokenClient>(
     }
 }
 
+async fn classify_existing_sso_token_with_recovery<T: Client + TokenClient>(
+    token: Token,
+    api_client: &T,
+    sso_team: &str,
+    valid_message: &str,
+    color_config: &ColorConfig,
+) -> Result<ExistingSSOTokenAction, Error> {
+    match classify_existing_sso_token(
+        token.clone(),
+        api_client,
+        sso_team,
+        Some(valid_token_callback(valid_message, color_config)),
+    )
+    .await
+    {
+        Ok(ExistingSSOTokenAction::Reuse(token)) => Ok(ExistingSSOTokenAction::Reuse(token)),
+        Ok(ExistingSSOTokenAction::Discard) => {
+            let Some(recovered_token) =
+                crate::auth::recover_token_after_forbidden(token.into_inner()).await?
+            else {
+                return Ok(ExistingSSOTokenAction::Discard);
+            };
+
+            match classify_existing_sso_token(
+                Token::existing_secret(recovered_token),
+                api_client,
+                sso_team,
+                Some(valid_token_callback(valid_message, color_config)),
+            )
+            .await
+            {
+                Ok(result) => Ok(result),
+                Err(err) if is_auth_rejection_error(&err) => Ok(ExistingSSOTokenAction::Discard),
+                Err(err) => Err(err),
+            }
+        }
+        Err(err) if is_auth_rejection_error(&err) => {
+            let Some(recovered_token) =
+                crate::auth::recover_token_after_forbidden(token.into_inner()).await?
+            else {
+                return Ok(ExistingSSOTokenAction::Discard);
+            };
+
+            match classify_existing_sso_token(
+                Token::existing_secret(recovered_token),
+                api_client,
+                sso_team,
+                Some(valid_token_callback(valid_message, color_config)),
+            )
+            .await
+            {
+                Ok(result) => Ok(result),
+                Err(err) if is_auth_rejection_error(&err) => Ok(ExistingSSOTokenAction::Discard),
+                Err(err) => Err(err),
+            }
+        }
+        Err(err) => Err(err),
+    }
+}
+
 /// Perform an SSO login flow.
 ///
 /// For Vercel:
@@ -96,15 +159,6 @@ pub async fn sso_login<T: Client + TokenClient>(
     let sso_team = sso_team.ok_or(Error::EmptySSOTeam)?;
     let is_vercel_login = is_vercel(login_url_configuration);
 
-    let valid_token_callback = |message: &str, color_config: &ColorConfig| {
-        let message = message.to_string();
-        let color_config = *color_config;
-        move |user_email: &str| {
-            println!("{}", color_config.apply(BOLD.apply_to(message)));
-            ui::print_cli_authorized(user_email, &color_config);
-        }
-    };
-
     // Check if token exists first. Must be there for the user and contain the
     // sso_team passed into this function.
     // For Vercel logins, --force is silently ignored.
@@ -116,37 +170,23 @@ pub async fn sso_login<T: Client + TokenClient>(
                 ExistingTokenSource::Other
             };
 
-            if token_source != ExistingTokenSource::LegacyAuth {
-                match classify_existing_sso_token(
-                    Token::existing(token.to_string()),
-                    api_client,
-                    sso_team,
-                    Some(valid_token_callback("Using existing login.", color_config)),
+            if is_vercel_login
+                && matches!(
+                    token_source,
+                    ExistingTokenSource::TurboConfig | ExistingTokenSource::LegacyAuth
                 )
-                .await?
-                {
-                    ExistingSSOTokenAction::Reuse(token) => return Ok((token, None)),
-                    ExistingSSOTokenAction::Discard => {}
-                }
-            }
-
-            if matches!(
-                token_source,
-                ExistingTokenSource::TurboConfig | ExistingTokenSource::LegacyAuth
-            ) {
-                match crate::auth::get_token_with_refresh().await {
+            {
+                match crate::auth::get_token_with_refresh_for_login().await {
                     Ok(Some(token_secret)) => {
                         if classify_existing_vercel_token(token_secret.expose())?
                             != ExistingTokenSource::LegacyAuth
                         {
-                            match classify_existing_sso_token(
+                            match classify_existing_sso_token_with_recovery(
                                 Token::existing_secret(token_secret),
                                 api_client,
                                 sso_team,
-                                Some(valid_token_callback(
-                                    &format!("Using existing login for team: {sso_team}"),
-                                    color_config,
-                                )),
+                                &format!("Using existing Vercel login for team: {sso_team}"),
+                                color_config,
                             )
                             .await?
                             {
@@ -162,21 +202,43 @@ pub async fn sso_login<T: Client + TokenClient>(
                         warn!("Failed to load existing token for SSO, proceeding: {e}");
                     }
                 }
+            } else if token_source != ExistingTokenSource::LegacyAuth {
+                let token_action = if is_vercel_login {
+                    classify_existing_sso_token_with_recovery(
+                        Token::existing(token.to_string()),
+                        api_client,
+                        sso_team,
+                        "Using existing Vercel login.",
+                        color_config,
+                    )
+                    .await?
+                } else {
+                    classify_existing_sso_token(
+                        Token::existing(token.to_string()),
+                        api_client,
+                        sso_team,
+                        Some(valid_token_callback("Using existing login.", color_config)),
+                    )
+                    .await?
+                };
+
+                match token_action {
+                    ExistingSSOTokenAction::Reuse(token) => return Ok((token, None)),
+                    ExistingSSOTokenAction::Discard => {}
+                }
             }
         } else if is_vercel_login {
-            match crate::auth::get_token_with_refresh().await {
+            match crate::auth::get_token_with_refresh_for_login().await {
                 Ok(Some(token_secret)) => {
                     if classify_existing_vercel_token(token_secret.expose())?
                         != ExistingTokenSource::LegacyAuth
                     {
-                        match classify_existing_sso_token(
+                        match classify_existing_sso_token_with_recovery(
                             Token::existing_secret(token_secret),
                             api_client,
                             sso_team,
-                            Some(valid_token_callback(
-                                &format!("Using existing login for team: {sso_team}"),
-                                color_config,
-                            )),
+                            &format!("Using existing Vercel login for team: {sso_team}"),
+                            color_config,
                         )
                         .await?
                         {

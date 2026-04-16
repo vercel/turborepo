@@ -16,6 +16,7 @@ use dirs_next::home_dir;
 #[cfg(test)]
 use rand::Rng;
 use thiserror::Error;
+use tracing::warn;
 use turborepo_api_client::{CacheClient, Client};
 use turborepo_gitignore::ensure_turbo_is_gitignored;
 use turborepo_json_rewrite::{set_path, unset_path, RewriteError};
@@ -74,6 +75,45 @@ pub(crate) const REMOTE_CACHING_INFO: &str =
      developers and CI/CD systems.\n\nBuild and deploy faster.";
 pub(crate) const REMOTE_CACHING_URL: &str =
     "https://turborepo.dev/docs/core-concepts/remote-caching";
+
+fn is_auth_rejection_error(error: &turborepo_api_client::Error) -> bool {
+    match error {
+        turborepo_api_client::Error::InvalidToken { .. }
+        | turborepo_api_client::Error::ForbiddenToken { .. } => true,
+        turborepo_api_client::Error::UnknownStatus { code, .. } => code == "forbidden",
+        turborepo_api_client::Error::ReqwestError(err) => {
+            err.status() == Some(reqwest::StatusCode::FORBIDDEN)
+        }
+        _ => false,
+    }
+}
+
+async fn retry_with_recovered_token<T, F, Fut>(
+    token: &mut turborepo_api_client::SecretString,
+    operation: F,
+) -> turborepo_api_client::Result<T>
+where
+    F: Fn(turborepo_api_client::SecretString) -> Fut,
+    Fut: std::future::Future<Output = turborepo_api_client::Result<T>>,
+{
+    match operation(token.clone()).await {
+        Ok(result) => Ok(result),
+        Err(err) if is_auth_rejection_error(&err) => {
+            match turborepo_auth::recover_token_after_forbidden(token).await {
+                Ok(Some(recovered_token)) => {
+                    *token = recovered_token;
+                    operation(token.clone()).await
+                }
+                Ok(None) => Err(err),
+                Err(recovery_err) => {
+                    warn!("Failed to recover token for `turbo link`: {recovery_err}");
+                    Err(err)
+                }
+            }
+        }
+        Err(err) => Err(err),
+    }
+}
 
 /// Verifies that caching status for a team is enabled, or prompts the user to
 /// enable it.
@@ -152,7 +192,7 @@ pub async fn link(
     let api_client = base.api_client()?;
 
     // Always try to get a valid token with automatic refresh if expired
-    let token: turborepo_api_client::SecretString =
+    let mut token: turborepo_api_client::SecretString =
         match turborepo_auth::get_token_with_refresh().await {
             Ok(Some(refreshed_token)) => refreshed_token,
             Ok(None) | Err(_) => {
@@ -178,10 +218,12 @@ pub async fn link(
         return Err(Error::NotLinking);
     }
 
-    let user_response = api_client
-        .get_user(&token)
-        .await
-        .map_err(Error::UserNotFound)?;
+    let user_response = retry_with_recovered_token(&mut token, |token| {
+        let api_client = &api_client;
+        async move { api_client.get_user(&token).await }
+    })
+    .await
+    .map_err(Error::UserNotFound)?;
 
     let user_display_name = user_response
         .user
@@ -189,10 +231,12 @@ pub async fn link(
         .as_deref()
         .unwrap_or(user_response.user.username.as_str());
 
-    let teams_response = api_client
-        .get_teams(&token)
-        .await
-        .map_err(Error::TeamsRequest)?;
+    let teams_response = retry_with_recovered_token(&mut token, |token| {
+        let api_client = &api_client;
+        async move { api_client.get_teams(&token).await }
+    })
+    .await
+    .map_err(Error::TeamsRequest)?;
 
     let selected_team = if let Some(team_slug) = scope {
         SelectedTeam::Team(

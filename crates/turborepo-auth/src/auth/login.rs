@@ -29,6 +29,28 @@ pub(super) fn is_inactive_token_error(error: &Error) -> bool {
     )
 }
 
+pub(super) fn is_auth_rejection_error(error: &Error) -> bool {
+    match error {
+        Error::APIError(turborepo_api_client::Error::InvalidToken { .. })
+        | Error::APIError(turborepo_api_client::Error::ForbiddenToken { .. }) => true,
+        Error::APIError(turborepo_api_client::Error::UnknownStatus { code, .. }) => {
+            code == "forbidden"
+        }
+        Error::APIError(turborepo_api_client::Error::ReqwestError(err))
+        | Error::ReqwestError(err) => err.status() == Some(reqwest::StatusCode::FORBIDDEN),
+        _ => false,
+    }
+}
+
+pub(super) fn valid_token_callback(message: &str, color_config: &ColorConfig) -> impl FnOnce(&str) {
+    let message = message.to_string();
+    let color_config = *color_config;
+    move |user_email: &str| {
+        println!("{}", color_config.apply(BOLD.apply_to(message)));
+        ui::print_cli_authorized(user_email, &color_config);
+    }
+}
+
 async fn reuse_existing_token<T, F>(
     token: Token,
     api_client: &T,
@@ -45,6 +67,47 @@ where
             warn!("Stored token is no longer active, proceeding with new login");
             Ok(None)
         }
+        Err(err) => Err(err),
+    }
+}
+
+async fn reuse_existing_token_with_recovery<T>(
+    token: Token,
+    api_client: &T,
+    valid_message: &str,
+    color_config: &ColorConfig,
+) -> Result<Option<Token>, Error>
+where
+    T: Client + TokenClient,
+{
+    match reuse_existing_token(
+        token.clone(),
+        api_client,
+        Some(valid_token_callback(valid_message, color_config)),
+    )
+    .await
+    {
+        Ok(Some(token)) => return Ok(Some(token)),
+        Ok(None) => {}
+        Err(err) if is_auth_rejection_error(&err) => {}
+        Err(err) => return Err(err),
+    }
+
+    let Some(recovered_token) =
+        crate::auth::recover_token_after_forbidden(token.into_inner()).await?
+    else {
+        return Ok(None);
+    };
+
+    match reuse_existing_token(
+        Token::existing_secret(recovered_token),
+        api_client,
+        Some(valid_token_callback(valid_message, color_config)),
+    )
+    .await
+    {
+        Ok(result) => Ok(result),
+        Err(err) if is_auth_rejection_error(&err) => Ok(None),
         Err(err) => Err(err),
     }
 }
@@ -75,15 +138,6 @@ pub async fn login<T: Client + TokenClient>(
         sso_login_callback_port,
     } = *options;
 
-    let valid_token_callback = |message: &str, color_config: &ColorConfig| {
-        let message = message.to_string();
-        let color_config = *color_config;
-        move |user_email: &str| {
-            println!("{}", color_config.apply(BOLD.apply_to(message)));
-            ui::print_cli_authorized(user_email, &color_config);
-        }
-    };
-
     let is_vercel_login = is_vercel(login_url_configuration);
 
     // Check if passed in token exists first.
@@ -96,33 +150,22 @@ pub async fn login<T: Client + TokenClient>(
                 ExistingTokenSource::Other
             };
 
-            if token_source != ExistingTokenSource::LegacyAuth {
-                let token = Token::existing(token.into());
-                if let Some(token) = reuse_existing_token(
-                    token,
-                    api_client,
-                    Some(valid_token_callback("Using existing login.", color_config)),
+            if is_vercel_login
+                && matches!(
+                    token_source,
+                    ExistingTokenSource::TurboConfig | ExistingTokenSource::LegacyAuth
                 )
-                .await?
-                {
-                    return Ok((token, None));
-                }
-            }
-
-            if matches!(
-                token_source,
-                ExistingTokenSource::TurboConfig | ExistingTokenSource::LegacyAuth
-            ) {
-                match crate::auth::get_token_with_refresh().await {
+            {
+                match crate::auth::get_token_with_refresh_for_login().await {
                     Ok(Some(token_secret)) => {
                         if classify_existing_vercel_token(token_secret.expose())?
                             != ExistingTokenSource::LegacyAuth
                         {
-                            let token = Token::existing_secret(token_secret);
-                            if let Some(token) = reuse_existing_token(
-                                token,
+                            if let Some(token) = reuse_existing_token_with_recovery(
+                                Token::existing_secret(token_secret),
                                 api_client,
-                                Some(valid_token_callback("Using existing login.", color_config)),
+                                "Using existing Vercel login.",
+                                color_config,
                             )
                             .await?
                             {
@@ -135,18 +178,40 @@ pub async fn login<T: Client + TokenClient>(
                         warn!("Failed to load existing token, proceeding with new login: {e}");
                     }
                 }
+            } else if token_source != ExistingTokenSource::LegacyAuth {
+                let token = Token::existing(token.into());
+                let reused_token = if is_vercel_login {
+                    reuse_existing_token_with_recovery(
+                        token,
+                        api_client,
+                        "Using existing Vercel login.",
+                        color_config,
+                    )
+                    .await?
+                } else {
+                    reuse_existing_token(
+                        token,
+                        api_client,
+                        Some(valid_token_callback("Using existing login.", color_config)),
+                    )
+                    .await?
+                };
+
+                if let Some(token) = reused_token {
+                    return Ok((token, None));
+                }
             }
         } else if is_vercel_login {
-            match crate::auth::get_token_with_refresh().await {
+            match crate::auth::get_token_with_refresh_for_login().await {
                 Ok(Some(token_secret)) => {
                     if classify_existing_vercel_token(token_secret.expose())?
                         != ExistingTokenSource::LegacyAuth
                     {
-                        let token = Token::existing_secret(token_secret);
-                        if let Some(token) = reuse_existing_token(
-                            token,
+                        if let Some(token) = reuse_existing_token_with_recovery(
+                            Token::existing_secret(token_secret),
                             api_client,
-                            Some(valid_token_callback("Using existing login.", color_config)),
+                            "Using existing Vercel login.",
+                            color_config,
                         )
                         .await?
                         {
@@ -381,15 +446,25 @@ fn wait_for_login_redirect(listener: TcpListener, success_redirect: &str) -> Res
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, time::Duration};
+    use std::{assert_matches::assert_matches, env, time::Duration};
 
     use reqwest::{RequestBuilder, Response};
+    use tempfile::tempdir;
+    use tokio::sync::Mutex;
+    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_vercel_api::{
         Membership, Role, Team, TeamsResponse, User, UserResponse, VerifiedSsoUser,
     };
     use turborepo_vercel_api_mock::start_test_server;
 
     use super::*;
+
+    static ENV_LOCK: Mutex<()> = Mutex::const_new(());
+
+    fn create_mock_config_dir() -> AbsoluteSystemPathBuf {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        AbsoluteSystemPathBuf::try_from(tmp_dir.keep()).expect("Failed to create path")
+    }
 
     #[derive(Debug, thiserror::Error)]
     enum MockApiError {
@@ -506,6 +581,14 @@ mod tests {
                 });
             }
 
+            if token.expose() == "forbidden-token" {
+                return Err(turborepo_api_client::Error::InvalidToken {
+                    status: 403,
+                    url: "https://vercel.com/api/v5/user/tokens/current".to_string(),
+                    message: "Not authorized".to_string(),
+                });
+            }
+
             Ok(turborepo_vercel_api::token::ResponseTokenMetadata {
                 scopes: vec![turborepo_vercel_api::token::Scope {
                     scope_type: "user".to_string(),
@@ -591,6 +674,36 @@ mod tests {
 
         assert_matches!(token, Token::New(ref token) if token.expose() == "fresh-login-token");
         assert!(token_set.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_reuse_existing_token_with_recovery_discards_invalid_token_errors() {
+        let _lock = ENV_LOCK.lock().await;
+        let turbo_config_dir = create_mock_config_dir();
+        let vercel_config_dir = create_mock_config_dir();
+        let color_config = turborepo_ui::ColorConfig::new(false);
+        let api_client = MockApiClient::new();
+
+        unsafe {
+            env::set_var("TURBO_CONFIG_DIR_PATH", turbo_config_dir.as_path());
+            env::set_var("VERCEL_CONFIG_DIR_PATH", vercel_config_dir.as_path());
+        }
+
+        let reused = reuse_existing_token_with_recovery(
+            Token::existing("forbidden-token".to_string()),
+            &api_client,
+            "Using existing Vercel login.",
+            &color_config,
+        )
+        .await
+        .unwrap();
+
+        assert!(reused.is_none());
+
+        unsafe {
+            env::remove_var("TURBO_CONFIG_DIR_PATH");
+            env::remove_var("VERCEL_CONFIG_DIR_PATH");
+        }
     }
 
     #[test]

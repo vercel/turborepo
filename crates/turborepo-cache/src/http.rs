@@ -22,6 +22,18 @@ use crate::{
 
 pub type UploadMap = HashMap<String, UploadProgressQuery<10, 100>>;
 
+fn replace_api_auth_token(
+    api_auth: &mut APIAuth,
+    token: turborepo_api_client::SecretString,
+) -> bool {
+    if api_auth.token.expose() == token.expose() {
+        return false;
+    }
+
+    api_auth.token = token;
+    true
+}
+
 pub struct HTTPCache {
     client: APIClient,
     signer_verifier: Option<ArtifactSignatureAuthenticator>,
@@ -90,24 +102,36 @@ impl HTTPCache {
     /// 403 forbidden error. Returns true if the token was successfully
     /// refreshed, false otherwise.
     async fn try_refresh_token(&self) -> bool {
-        match turborepo_auth::get_token_with_refresh().await {
+        let current_token = match self.api_auth.lock() {
+            Ok(auth) => auth.token.clone(),
+            Err(_) => {
+                warn!("Failed to acquire lock for reading auth token");
+                return false;
+            }
+        };
+
+        match turborepo_auth::recover_token_after_forbidden(&current_token).await {
             Ok(Some(new_token)) => {
                 // Update the API auth with the new token
                 if let Ok(mut auth) = self.api_auth.lock() {
-                    auth.token = new_token;
-                    debug!("Successfully refreshed auth token for cache operations");
-                    true
+                    if replace_api_auth_token(&mut auth, new_token) {
+                        debug!("Successfully recovered auth token for cache operations");
+                        true
+                    } else {
+                        debug!("Recovered auth token matched the current token; skipping retry");
+                        false
+                    }
                 } else {
                     warn!("Failed to acquire lock for updating auth token");
                     false
                 }
             }
             Ok(None) => {
-                debug!("No refresh token available or token doesn't support refresh");
+                debug!("No replacement token available after forbidden response");
                 false
             }
             Err(e) => {
-                warn!("Failed to refresh token: {:?}", e);
+                warn!("Failed to recover token after forbidden response: {:?}", e);
                 false
             }
         }
@@ -836,10 +860,10 @@ mod test {
         let initial_auth = cache.api_auth.lock().unwrap().clone();
         assert_eq!(initial_auth.token.expose(), "initial-token");
 
-        // Test the token refresh mechanism (without actual HTTP call)
+        // Test the token recovery mechanism (without actual HTTP call)
         // In a real scenario, try_refresh_token would call
-        // turborepo_auth::get_token_with_refresh and update the internal token
-        // if successful
+        // turborepo_auth::recover_token_after_forbidden and update the internal
+        // token if successful.
         let refresh_result = cache.try_refresh_token().await;
 
         // The result depends on system state - could be true or false
@@ -917,6 +941,27 @@ mod test {
             let result = handle.join().unwrap();
             assert!(result.starts_with("thread-"));
         }
+    }
+
+    #[test]
+    fn test_replace_api_auth_token_requires_a_new_token() {
+        let mut api_auth = APIAuth {
+            team_id: Some("my-team".to_string()),
+            token: SecretString::new("initial-token".to_string()),
+            team_slug: None,
+        };
+
+        assert!(!super::replace_api_auth_token(
+            &mut api_auth,
+            SecretString::new("initial-token".to_string())
+        ));
+        assert_eq!(api_auth.token.expose(), "initial-token");
+
+        assert!(super::replace_api_auth_token(
+            &mut api_auth,
+            SecretString::new("replacement-token".to_string())
+        ));
+        assert_eq!(api_auth.token.expose(), "replacement-token");
     }
 
     #[test]
