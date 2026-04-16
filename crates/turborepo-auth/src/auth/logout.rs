@@ -5,8 +5,8 @@ use turborepo_dirs::{config_dir, vercel_config_dir};
 use turborepo_ui::{GREY, cprintln};
 
 use crate::{
-    AuthTokens, Error, LogoutOptions, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, Token, VERCEL_TOKEN_DIR,
-    VERCEL_TOKEN_FILE,
+    AuthTokens, Error, LogoutOptions, TURBO_AUTH_FILE, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, Token,
+    VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE,
 };
 
 pub async fn logout<T: TokenClient>(options: &LogoutOptions<T>) -> Result<(), Error> {
@@ -64,32 +64,56 @@ impl<T: TokenClient> LogoutOptions<T> {
             return self.try_remove_token(path, self.invalidate).await;
         }
 
-        let turbo_path =
+        let turbo_auth_path =
+            config_dir()?.map(|dir| dir.join_components(&[TURBO_TOKEN_DIR, TURBO_AUTH_FILE]));
+        let turbo_config_path =
             config_dir()?.map(|dir| dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]));
         let legacy_path = vercel_config_dir()?
             .map(|dir| dir.join_components(&[VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE]));
-        let skip_legacy_invalidate = if self.invalidate {
-            match (
-                turbo_path
-                    .as_ref()
-                    .map(|path| Self::token_at_path(path))
-                    .transpose()?,
-                legacy_path
-                    .as_ref()
-                    .map(|path| Self::token_at_path(path))
-                    .transpose()?,
-            ) {
-                (Some(Some(turbo_token)), Some(Some(legacy_token))) => {
-                    turbo_token.expose() == legacy_token.expose()
-                }
-                _ => false,
-            }
+        let (skip_config_invalidate, skip_legacy_invalidate) = if self.invalidate {
+            let turbo_auth_token = turbo_auth_path
+                .as_ref()
+                .map(|path| Self::token_at_path(path))
+                .transpose()?
+                .flatten();
+            let turbo_config_token = turbo_config_path
+                .as_ref()
+                .map(|path| Self::token_at_path(path))
+                .transpose()?
+                .flatten();
+            let legacy_token = legacy_path
+                .as_ref()
+                .map(|path| Self::token_at_path(path))
+                .transpose()?
+                .flatten();
+
+            let skip_config_invalidate = matches!(
+                (turbo_auth_token.as_ref(), turbo_config_token.as_ref()),
+                (Some(auth_token), Some(config_token)) if auth_token.expose() == config_token.expose()
+            );
+            let skip_legacy_invalidate = matches!(
+                (
+                    turbo_auth_token.as_ref().or(turbo_config_token.as_ref()),
+                    legacy_token.as_ref(),
+                ),
+                (Some(turbo_token), Some(legacy_token)) if turbo_token.expose() == legacy_token.expose()
+            );
+
+            (skip_config_invalidate, skip_legacy_invalidate)
         } else {
-            false
+            (false, false)
         };
 
-        if let Some(turbo_path) = turbo_path.as_ref() {
-            self.try_remove_token(turbo_path, self.invalidate).await?;
+        if let Some(turbo_auth_path) = turbo_auth_path.as_ref() {
+            self.try_remove_token(turbo_auth_path, self.invalidate)
+                .await?;
+        }
+        if let Some(turbo_config_path) = turbo_config_path.as_ref() {
+            self.try_remove_token(
+                turbo_config_path,
+                self.invalidate && !skip_config_invalidate,
+            )
+            .await?;
         }
         if let Some(legacy_path) = legacy_path.as_ref() {
             self.try_remove_token(legacy_path, self.invalidate && !skip_legacy_invalidate)

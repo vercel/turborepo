@@ -15,10 +15,11 @@ turborepo-auth
     │   ├── Vercel device-flow team validation
     │   └── Localhost redirect for self-hosted SSO callback
     └── Token storage
-        └── ~/.turbo/config.json (Turbo tokens and refresh metadata)
+        ├── ~/.turbo/auth.json (Turbo-managed OAuth sessions)
+        └── ~/.turbo/config.json (Legacy/manual tokens and config)
 ```
 
-Older Vercel CLI auth files may still be read for backward compatibility. When possible, Turbo exchanges that legacy token for a Turbo-scoped token and persists the result in `~/.turbo/config.json`.
+Older Vercel CLI auth files may still be read for backward compatibility. When possible, Turbo exchanges that legacy token for a Turbo-scoped token and persists the result in `~/.turbo/auth.json` so older Turbo releases do not try to reuse OAuth access tokens from the legacy config slot.
 
 ## Notes
 

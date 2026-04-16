@@ -4,6 +4,7 @@ use manual::login_manual;
 use turborepo_api_client::APIClient;
 use turborepo_auth::{
     login as auth_login, sso_login as auth_sso_login, AuthTokens, LoginOptions, Token, TokenSet,
+    TURBO_AUTH_FILE, TURBO_TOKEN_DIR,
 };
 use turborepo_telemetry::events::command::{CommandEventBuilder, LoginMethod};
 
@@ -119,9 +120,8 @@ impl<'a> Drop for LoginTelemetry<'a> {
     }
 }
 
-/// Writes a token to turborepo/config.json. If device-flow login returned
-/// refresh metadata, persist that alongside the access token so Turbo can
-/// refresh it without touching the Vercel CLI directory.
+/// Writes a token to disk. Device-flow OAuth tokens go into Turbo's auth.json
+/// so older Turbos never treat them as legacy API tokens.
 fn write_token(
     base: &CommandBase,
     token: Token,
@@ -129,6 +129,7 @@ fn write_token(
 ) -> Result<(), Error> {
     let global_config_path = base.global_config_path()?;
     let token = token.into_inner().clone();
+    let token_str = token.expose().to_string();
     let auth_tokens = match token_set {
         Some(ts) => {
             let now_secs = std::time::SystemTime::now()
@@ -150,6 +151,19 @@ fn write_token(
             expires_at: None,
         },
     };
+
+    if token_str.starts_with("vca_") {
+        let Some(config_dir) =
+            turborepo_dirs::config_dir().map_err(|_| crate::config::Error::NoGlobalConfigPath)?
+        else {
+            return Err(crate::config::Error::NoGlobalConfigPath.into());
+        };
+        let turbo_auth_path = config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_AUTH_FILE]);
+
+        auth_tokens.write_to_config_file(&turbo_auth_path)?;
+        AuthTokens::clear_from_config_file(&global_config_path)?;
+        return Ok(());
+    }
 
     auth_tokens.write_to_config_file(&global_config_path)?;
 
