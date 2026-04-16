@@ -489,10 +489,9 @@ pub async fn recover_token_after_forbidden(
             if let Some(refreshed_token) =
                 refresh_and_persist_turbo_token(&auth_tokens, &turbo_auth_path, &turbo_config_path)
                     .await
+                && refreshed_token.expose() != current_token.expose()
             {
-                if refreshed_token.expose() != current_token.expose() {
-                    return Ok(Some(refreshed_token));
-                }
+                return Ok(Some(refreshed_token));
             }
 
             exchange_legacy_auth_token(

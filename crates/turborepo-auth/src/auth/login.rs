@@ -160,17 +160,15 @@ pub async fn login<T: Client + TokenClient>(
                     Ok(Some(token_secret)) => {
                         if classify_existing_vercel_token(token_secret.expose())?
                             != ExistingTokenSource::LegacyAuth
-                        {
-                            if let Some(token) = reuse_existing_token_with_recovery(
+                            && let Some(token) = reuse_existing_token_with_recovery(
                                 Token::existing_secret(token_secret),
                                 api_client,
                                 "Using existing Vercel login.",
                                 color_config,
                             )
                             .await?
-                            {
-                                return Ok((token, None));
-                            }
+                        {
+                            return Ok((token, None));
                         }
                     }
                     Ok(None) => {}
@@ -206,17 +204,15 @@ pub async fn login<T: Client + TokenClient>(
                 Ok(Some(token_secret)) => {
                     if classify_existing_vercel_token(token_secret.expose())?
                         != ExistingTokenSource::LegacyAuth
-                    {
-                        if let Some(token) = reuse_existing_token_with_recovery(
+                        && let Some(token) = reuse_existing_token_with_recovery(
                             Token::existing_secret(token_secret),
                             api_client,
                             "Using existing Vercel login.",
                             color_config,
                         )
                         .await?
-                        {
-                            return Ok((token, None));
-                        }
+                    {
+                        return Ok((token, None));
                     }
                 }
                 Ok(None) => {}
