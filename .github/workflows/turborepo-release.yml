@@ -32,8 +32,8 @@ permissions:
   checks: write # Allows posting check statuses for release PRs
 
 on:
-  schedule:
-    - cron: "0 * * * *"
+  # schedule:
+  #   - cron: "0 * * * *"
   workflow_dispatch:
     inputs:
       increment:
@@ -698,7 +698,7 @@ jobs:
         js-smoke-test,
         npm-publish,
         create-release-tag,
-        create-release-pr
+        create-release-pr,
       ]
     if: >-
       ${{
