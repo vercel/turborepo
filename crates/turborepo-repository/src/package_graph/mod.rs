@@ -376,6 +376,10 @@ impl PackageGraph {
             .expect("package graph was built without root package.json")
     }
 
+    pub fn repo_root(&self) -> &AbsoluteSystemPath {
+        &self.repo_root
+    }
+
     /// Gets all the nodes that directly depend on this one, that is to say
     /// have a edge to `package`.
     ///

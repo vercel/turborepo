@@ -14,6 +14,8 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use wax::Program;
 
+use crate::package_manager::{yarnrc, PackageManager};
+
 use crate::package_graph::{
     ChangedPackagesError, ExternalDependencyChange, PackageGraph, PackageName, WorkspacePackage,
 };
@@ -266,12 +268,23 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         &self,
         lockfile_content: &[u8],
     ) -> Result<Vec<ExternalDependencyChange>, ChangeMapError> {
-        // We pass None for yarnrc since we're only comparing lockfiles for changes,
-        // not resolving package dependencies. Catalog resolution isn't needed here.
+        // For Berry (Yarn 4) repos that use the `catalog:` protocol we must
+        // resolve catalog entries when parsing the *previous* lockfile so that
+        // version strings are comparable across both snapshots.  Without this
+        // the catalog: literal survives as-is on one side of the diff, causing
+        // every cataloged dependency to appear as changed even when it is not.
+        let yarnrc = if matches!(self.pkg_graph.package_manager(), PackageManager::Berry) {
+            yarnrc::YarnRc::from_file(self.pkg_graph.repo_root())
+                .inspect_err(|e| debug!("unable to read yarnrc for lockfile diff: {e}"))
+                .ok()
+        } else {
+            None
+        };
+
         let previous_lockfile = self.pkg_graph.package_manager().parse_lockfile(
             self.pkg_graph.root_package_json(),
             lockfile_content,
-            None,
+            yarnrc,
         )?;
 
         let additional_packages = self
