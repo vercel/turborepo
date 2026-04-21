@@ -1,0 +1,31 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      turbo:
+        specifier: latest
+        version: 2.0.0
+
+  apps/web:
+    dependencies:
+      cli:
+        specifier: workspace:*
+        version: link:../../packages/cli
+      single-bin:
+        specifier: workspace:*
+        version: link:../../packages/single-bin
+
+  packages/cli: {}
+
+  packages/single-bin: {}
+
+packages:
+
+  turbo@2.0.0:
+    resolution: {integrity: sha512-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==}

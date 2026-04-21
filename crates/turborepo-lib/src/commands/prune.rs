@@ -161,7 +161,7 @@ pub async fn prune(
 
         // We don't want to do any copying for the root workspace
         if let PackageName::Other(workspace) = workspace {
-            prune.copy_workspace(entry.package_json_path())?;
+            prune.copy_workspace(entry.package_json_path(), &entry.package_json)?;
             workspace_paths.push(
                 entry
                     .package_json_path()
@@ -487,7 +487,7 @@ impl<'a> Prune<'a> {
         Ok(())
     }
 
-    fn copy_workspace(&self, package_json_path: &AnchoredSystemPath) -> Result<(), Error> {
+    fn copy_workspace(&self, package_json_path: &AnchoredSystemPath, pkg_json: &PackageJson) -> Result<(), Error> {
         let package_json_path = self.root.resolve(package_json_path);
         let original_dir = package_json_path
             .parent()
@@ -517,6 +517,44 @@ impl<'a> Prune<'a> {
                     )?;
                 }
             }
+
+            // Create empty stub files for bin entries so pnpm generates .bin shims
+            self.create_docker_bin_stubs(&docker_workspace_dir, pkg_json)?;
+        }
+
+        Ok(())
+    }
+
+    fn create_docker_bin_stubs(
+        &self,
+        docker_workspace_dir: &AbsoluteSystemPathBuf,
+        pkg_json: &PackageJson,
+    ) -> Result<(), Error> {
+        let Some(bin_value) = pkg_json.other.get("bin") else {
+            return Ok(());
+        };
+
+        let bin_paths: Vec<String> = match bin_value {
+            serde_json::Value::String(path) => vec![path.clone()],
+            serde_json::Value::Object(map) => map
+                .values()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect(),
+            _ => return Ok(()),
+        };
+
+        for bin_path in bin_paths {
+            // Strip leading "./" if present
+            let normalized = bin_path.trim_start_matches("./");
+            // Use join_unix_path to handle multi-segment paths (e.g. "dist/index.js")
+            let Ok(relative) = RelativeUnixPathBuf::new(normalized) else {
+                trace!("Skipping invalid bin path: {normalized}");
+                continue;
+            };
+            let stub_path = docker_workspace_dir.join_unix_path(&relative);
+            // Create parent directories and then an empty stub file
+            stub_path.ensure_dir()?;
+            stub_path.create_with_contents(b"")?;
         }
 
         Ok(())

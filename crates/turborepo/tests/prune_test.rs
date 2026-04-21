@@ -687,6 +687,61 @@ fn test_prune_pnpm_per_workspace_lockfile_docker() {
 }
 
 #[test]
+fn test_prune_docker_bin_stubs() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_bin",
+        "pnpm@9.0.0",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let json_dir = tempdir.path().join("out/json");
+
+    // cli package: bin as object -> "my-cli": "./dist/index.js"
+    let cli_stub = json_dir.join("packages/cli/dist/index.js");
+    assert!(
+        cli_stub.exists(),
+        "bin stub for cli/dist/index.js not created in docker json dir"
+    );
+    assert_eq!(
+        fs::read(&cli_stub).unwrap(),
+        b"",
+        "bin stub should be empty"
+    );
+
+    // single-bin package: bin as string -> "./bin/run.js"
+    let single_stub = json_dir.join("packages/single-bin/bin/run.js");
+    assert!(
+        single_stub.exists(),
+        "bin stub for single-bin/bin/run.js not created in docker json dir"
+    );
+    assert_eq!(
+        fs::read(&single_stub).unwrap(),
+        b"",
+        "bin stub should be empty"
+    );
+
+    // Verify the full dir has the REAL files (not stubs)
+    let full_cli = tempdir.path().join("out/full/packages/cli/dist/index.js");
+    assert!(full_cli.exists(), "real cli file should exist in full dir");
+    assert_ne!(
+        fs::read(&full_cli).unwrap(),
+        b"",
+        "real file in full dir should not be empty"
+    );
+}
+
+#[test]
 fn test_prune_pnpm_v11_multi_document_lockfile() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::copy_fixture("pnpm_v11_multi_document_lockfile", tempdir.path()).unwrap();
