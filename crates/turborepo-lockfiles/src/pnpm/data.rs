@@ -48,12 +48,41 @@ pub struct PnpmLockfile {
     time: Option<Map<String, String>>,
 }
 
+/// pnpm 10 and earlier stored patch metadata as a struct with `path` and
+/// `hash` fields.  pnpm 11 changed the on-disk format to a flat hash string,
+/// dropping the `path` field entirely.  This untagged enum deserialises both
+/// shapes transparently.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct PatchFile {
-    // This should be a RelativeUnixPathBuf, but since that might cause unnecessary
-    // parse failures we wait until access to validate.
-    path: String,
-    hash: String,
+#[serde(untagged)]
+pub enum PatchFile {
+    /// pnpm ≤10 format: `{ path: "patches/pkg@ver.patch", hash: "<hex>" }`
+    Struct {
+        // This should be a RelativeUnixPathBuf, but since that might cause
+        // unnecessary parse failures we wait until access to validate.
+        path: String,
+        hash: String,
+    },
+    /// pnpm 11+ format: just a flat hash string.
+    Hash(String),
+}
+
+impl PatchFile {
+    /// Returns the hash associated with this patch entry.
+    pub fn hash(&self) -> &str {
+        match self {
+            PatchFile::Struct { hash, .. } => hash,
+            PatchFile::Hash(hash) => hash,
+        }
+    }
+
+    /// Returns the patch file path, if available.
+    /// pnpm 11's flat-string format does not record the path.
+    pub fn path(&self) -> Option<&str> {
+        match self {
+            PatchFile::Struct { path, .. } => Some(path.as_str()),
+            PatchFile::Hash(_) => None,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -460,7 +489,7 @@ impl PnpmLockfile {
             if let Some(patch) = patches.get(&patch_key).filter(|patch| {
                 // In V7 patch hash isn't included in packages key, so no need to check
                 matches!(self.version(), SupportedLockfileVersion::V7AndV9)
-                    || dp.patch_hash() == Some(&patch.hash)
+                    || dp.patch_hash() == Some(patch.hash())
             }) {
                 pruned_patches.insert(patch_key, patch.clone());
                 continue;
@@ -745,7 +774,7 @@ impl crate::Lockfile for PnpmLockfile {
             .patched_dependencies
             .iter()
             .flatten()
-            .map(|(_, patch)| RelativeUnixPathBuf::new(&patch.path))
+            .filter_map(|(_, patch)| patch.path().map(RelativeUnixPathBuf::new))
             .collect::<Result<Vec<_>, turbopath::PathError>>()?;
         patches.sort();
         Ok(patches)
@@ -2187,5 +2216,78 @@ snapshots:
 
         // Root importer should still be present.
         assert!(pruned_lockfile.importers.contains_key("."));
+    }
+
+    #[test]
+    fn test_pnpm11_flat_string_patch_format() {
+        // pnpm 11 stores patchedDependencies as a flat hash string instead of a
+        // {path, hash} struct.  Parsing must succeed and the hash must be
+        // accessible via PatchFile::hash().
+        let yaml = r#"lockfileVersion: '9.0'
+
+importers:
+  .:
+    dependencies:
+      is-odd:
+        specifier: ^3.0.1
+        version: 3.0.1(patch_hash=abc123)
+
+patchedDependencies:
+  is-odd@3.0.1: 002799bd76edc8ffc78e26f30376c0f20f732a65313b8927213045ab6230c690
+
+packages:
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+
+snapshots:
+
+  is-odd@3.0.1(patch_hash=abc123): {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes())
+            .expect("should parse pnpm 11 flat-string patchedDependencies");
+
+        let patches = lockfile.patched_dependencies.as_ref().unwrap();
+        assert_eq!(patches.len(), 1);
+
+        let patch = patches.get("is-odd@3.0.1").unwrap();
+        assert_eq!(
+            patch.hash(),
+            "002799bd76edc8ffc78e26f30376c0f20f732a65313b8927213045ab6230c690"
+        );
+        // pnpm 11 flat format has no path
+        assert!(patch.path().is_none());
+    }
+
+    #[test]
+    fn test_pnpm10_struct_patch_format_still_works() {
+        // Regression guard: pnpm <=10 struct format must still deserialise correctly.
+        let yaml = r#"lockfileVersion: '6.0'
+
+importers:
+  .:
+    dependencies:
+      is-odd:
+        specifier: ^3.0.1
+        version: 3.0.1
+
+patchedDependencies:
+  is-odd@3.0.1:
+    hash: 2qoyzwmpaczaj2mabgmoz6ccpy
+    path: patches/is-odd@3.0.1.patch
+
+packages:
+
+  /is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+    dev: false
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes())
+            .expect("should parse pnpm <=10 struct patchedDependencies");
+
+        let patches = lockfile.patched_dependencies.as_ref().unwrap();
+        let patch = patches.get("is-odd@3.0.1").unwrap();
+        assert_eq!(patch.hash(), "2qoyzwmpaczaj2mabgmoz6ccpy");
+        assert_eq!(patch.path(), Some("patches/is-odd@3.0.1.patch"));
     }
 }
