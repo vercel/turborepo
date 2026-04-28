@@ -1,5 +1,4 @@
 #![feature(cow_is_borrowed)]
-#![feature(assert_matches)]
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]

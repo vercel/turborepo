@@ -329,12 +329,11 @@ impl<W> App<W> {
         match prev_focus {
             LayoutSections::Search {
                 previous_selection, ..
-            } if restore_scroll => {
-                if self.select_task(&previous_selection).is_err() {
-                    // If the task that was selected is no longer in the task list we reset
-                    // scrolling.
-                    self.reset_scroll();
-                }
+            } if restore_scroll && self.select_task(&previous_selection).is_err() =>
+            // If the task that was selected is no longer in the task list we reset
+            // scrolling.
+            {
+                self.reset_scroll()
             }
             _ => {}
         }

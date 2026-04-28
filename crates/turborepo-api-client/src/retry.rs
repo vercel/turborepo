@@ -105,7 +105,7 @@ impl RetryStrategy {
 
 #[cfg(test)]
 mod test {
-    use std::{assert_matches::assert_matches, time::Duration};
+    use std::{assert_matches, time::Duration};
 
     use crate::{
         Error,

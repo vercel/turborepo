@@ -3,7 +3,6 @@
 //! provided globs as well as escaping characters that `wax` considers special,
 //! but we do not support.
 
-#![feature(assert_matches)]
 #![deny(clippy::all)]
 
 use std::{

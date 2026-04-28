@@ -1939,7 +1939,7 @@ async fn run_main(
 
 #[cfg(test)]
 mod test {
-    use std::{assert_matches::assert_matches, ffi::OsString};
+    use std::{assert_matches, ffi::OsString};
 
     use camino::Utf8PathBuf;
     use clap::{CommandFactory, Parser};

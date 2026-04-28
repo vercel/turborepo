@@ -781,7 +781,7 @@ impl<W: PackageChangesWatcher + 'static> NamedService for TurboGrpcServiceInner<
 #[cfg(test)]
 mod test {
     use std::{
-        assert_matches::{self, assert_matches},
+        assert_matches,
         time::{Duration, Instant},
     };
 
@@ -975,7 +975,7 @@ mod test {
             now.elapsed() >= Duration::from_millis(10),
             "must wait at least 5ms"
         );
-        assert_matches::assert_matches!(
+        assert_matches!(
             close_reason,
             Ok(CloseReason::Timeout),
             "must close due to timeout"

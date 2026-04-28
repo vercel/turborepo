@@ -4,7 +4,6 @@
 //! This crate provides functionality for parsing, validating, and processing
 //! turbo.json configuration files.
 
-#![feature(assert_matches)]
 #![feature(error_generic_member_access)]
 // Allow unused_assignments for error/diagnostic struct fields that are read by
 // miette's derive macros, not directly by code. The derive macros generate code
@@ -492,9 +491,7 @@ mod tests {
         for (
             (pruned_task_name, pruned_pipeline_entry),
             (expected_task_name, expected_pipeline_entry),
-        ) in pruned_pipeline
-            .into_iter()
-            .zip(expected_pipeline.into_iter())
+        ) in pruned_pipeline.into_iter().zip(expected_pipeline)
         {
             assert_eq!(pruned_task_name, expected_task_name);
             assert_eq!(pruned_pipeline_entry.value, expected_pipeline_entry.value);

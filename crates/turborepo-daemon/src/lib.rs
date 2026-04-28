@@ -20,7 +20,6 @@
 //! `_tx`/`_rx` suffixes indicate that this variable is respectively a `Sender`
 //! or `Receiver`.
 
-#![feature(assert_matches)]
 #![feature(impl_trait_in_assoc_type)]
 #![deny(clippy::all)]
 #![allow(clippy::needless_lifetimes)]

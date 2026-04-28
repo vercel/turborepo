@@ -297,7 +297,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
 
 #[cfg(test)]
 mod tests {
-    use std::assert_matches::assert_matches;
+    use std::assert_matches;
 
     use test_case::test_case;
     use turbopath::{

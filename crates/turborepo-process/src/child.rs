@@ -1539,8 +1539,7 @@ impl Child {
 #[cfg(test)]
 mod test {
     use std::{
-        assert_matches::assert_matches,
-        io,
+        assert_matches, io,
         process::Stdio,
         sync::{Arc, Mutex},
         time::Duration,

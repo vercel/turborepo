@@ -383,18 +383,17 @@ async fn wait_for_file(
                     ..
                 }),
                 WaitAction::Deleted,
-            ) => {
-                if paths.iter().any(|p| {
-                    p.file_name()
-                        .map(|f| OsStr::new(&file_name).eq(f))
-                        .unwrap_or_default()
-                }) {
-                    futures::executor::block_on(async {
-                        // if the receiver is dropped, it is because the future has
-                        // been cancelled, so we don't need to do anything
-                        tx.send(()).await.ok();
-                    })
-                }
+            ) if paths.iter().any(|p| {
+                p.file_name()
+                    .map(|f| OsStr::new(&file_name).eq(f))
+                    .unwrap_or_default()
+            }) =>
+            {
+                futures::executor::block_on(async {
+                    // if the receiver is dropped, it is because the future has
+                    // been cancelled, so we don't need to do anything
+                    tx.send(()).await.ok();
+                })
             }
             _ => {}
         },
@@ -431,7 +430,7 @@ enum WaitAction {
 
 #[cfg(test)]
 mod test {
-    use std::assert_matches::assert_matches;
+    use std::assert_matches;
 
     use tokio::{
         select,

@@ -1,4 +1,3 @@
-#![feature(assert_matches)]
 #![deny(clippy::all)]
 
 //! Turborepo's path handling library.

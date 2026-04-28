@@ -259,16 +259,13 @@ mod test {
                     let package_json = path.join_component(&format!("{}.json", name));
 
                     let scripts = if had_build {
-                        BTreeMap::from_iter(
-                            [
-                                ("build".to_string(), Spanned::new("echo built!".to_string())),
-                                (
-                                    "dev".to_string(),
-                                    Spanned::new("echo running dev!".to_string()),
-                                ),
-                            ]
-                            .into_iter(),
-                        )
+                        BTreeMap::from_iter([
+                            ("build".to_string(), Spanned::new("echo built!".to_string())),
+                            (
+                                "dev".to_string(),
+                                Spanned::new("echo running dev!".to_string()),
+                            ),
+                        ])
                     } else {
                         BTreeMap::default()
                     };

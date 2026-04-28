@@ -1,5 +1,4 @@
 #![deny(clippy::all)]
-#![feature(assert_matches)]
 
 //! A crate for registering listeners for a given signal
 
@@ -202,7 +201,7 @@ impl HandlerState {
 
 #[cfg(test)]
 mod test {
-    use std::{assert_matches::assert_matches, time::Duration};
+    use std::{assert_matches, time::Duration};
 
     use futures::stream;
 

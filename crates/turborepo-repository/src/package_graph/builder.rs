@@ -701,7 +701,7 @@ impl PackageInfo {
 
 #[cfg(test)]
 mod test {
-    use std::{assert_matches::assert_matches, collections::HashMap};
+    use std::{assert_matches, collections::HashMap};
 
     use turborepo_errors::Spanned;
 

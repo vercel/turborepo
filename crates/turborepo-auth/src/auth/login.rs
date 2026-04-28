@@ -442,7 +442,7 @@ fn wait_for_login_redirect(listener: TcpListener, success_redirect: &str) -> Res
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, env, time::Duration};
+    use std::{assert_matches, env, time::Duration};
 
     use reqwest::{RequestBuilder, Response};
     use tempfile::tempdir;

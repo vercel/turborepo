@@ -3,7 +3,6 @@
 //! operations. By default configured for Vercel API
 
 #![feature(error_generic_member_access)]
-#![feature(assert_matches)]
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]

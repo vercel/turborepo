@@ -6,7 +6,6 @@
 //! `@turbo/repository` NPM package can avoid depending on the entire Turborepo
 //! binary.
 
-#![feature(assert_matches)]
 #![feature(error_generic_member_access)]
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]

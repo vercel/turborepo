@@ -590,7 +590,7 @@ impl Subscriber {
                 // actually affect what the hash is.
                 trace!("specs changed: {:?}", changed_specs_for_path);
                 //changed_specs.insert(package_path.to_owned());
-                changed_specs.extend(changed_specs_for_path.into_iter());
+                changed_specs.extend(changed_specs_for_path);
             } else {
                 trace!("Ignoring change to {repo_relative_change_path}");
             }
@@ -685,7 +685,7 @@ impl Subscriber {
 #[cfg(test)]
 mod tests {
     use std::{
-        assert_matches::assert_matches,
+        assert_matches,
         process::Command,
         time::{Duration, Instant},
     };

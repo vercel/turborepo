@@ -31,7 +31,7 @@ impl Serialize for NpmLockfile {
         // Sort packages keys for deterministic output matching npm's sorted
         // lockfile format.
         let mut sorted_packages: Vec<_> = self.packages.iter().collect();
-        sorted_packages.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+        sorted_packages.sort_unstable_by_key(|(a, _)| *a);
 
         let field_count = 2 + self.other.len(); // lockfileVersion + packages + flattened other fields
         let mut map = serializer.serialize_map(Some(field_count))?;
