@@ -160,7 +160,9 @@ jobs:
     timeout-minutes: 45
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    # Prebuilding test archives depends on Turborepo remote cache auth, which is disabled for now.
+    # if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    if: ${{ false }}
     name: Build test artifacts (windows)
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -227,7 +229,9 @@ jobs:
     timeout-minutes: 45
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    # Prebuilding test archives depends on Turborepo remote cache auth, which is disabled for now.
+    # if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    if: ${{ false }}
     name: Build test artifacts (macos)
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -274,7 +278,7 @@ jobs:
     timeout-minutes: 45
     needs:
       - find-changes
-      - build_rust_test_macos
+      # - build_rust_test_macos
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     strategy:
       fail-fast: false
@@ -303,13 +307,14 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      - name: Restore test archive from cache
+      - name: Build test archive
         run: turbo run build:test-archive --filter=@turbo/cli
         shell: bash
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-          TURBO_CACHE: remote:rw
+        # Remote cache is not authed right now; build locally instead.
+        # env:
+        #   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+        #   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+        #   TURBO_CACHE: remote:rw
 
       - name: Run tests
         timeout-minutes: 45
@@ -326,7 +331,7 @@ jobs:
     timeout-minutes: 45
     needs:
       - find-changes
-      - build_rust_test_windows
+      # - build_rust_test_windows
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     name: Rust testing on windows (partition ${{ matrix.partition }}/10)
     steps:
@@ -348,10 +353,11 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
-          capnproto: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
-          rust: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
+          # Local archive builds need Rust and capnproto even when remote cache is unavailable.
+          # capnproto: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
+          # rust: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
           package-install: "false"
-          rust-cache: "false"
+          rust-cache: "true"
 
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
@@ -365,13 +371,14 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      - name: Restore test archive from cache
+      - name: Build test archive
         run: turbo run build:test-archive --filter=@turbo/cli
         shell: bash
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-          TURBO_CACHE: remote:rw
+        # Remote cache is not authed right now; build locally instead.
+        # env:
+        #   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+        #   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+        #   TURBO_CACHE: remote:rw
 
       - name: Run tests
         timeout-minutes: 45
@@ -386,7 +393,9 @@ jobs:
     timeout-minutes: 45
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    # Prebuilding test archives depends on Turborepo remote cache auth, which is disabled for now.
+    # if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    if: ${{ false }}
     name: Build test artifacts (ubuntu)
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -433,7 +442,7 @@ jobs:
     timeout-minutes: 45
     needs:
       - find-changes
-      - build_rust_test_ubuntu
+      # - build_rust_test_ubuntu
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     strategy:
       fail-fast: false
@@ -462,13 +471,14 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      - name: Restore test archive from cache
+      - name: Build test archive
         run: turbo run build:test-archive --filter=@turbo/cli
         shell: bash
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-          TURBO_CACHE: remote:rw
+        # Remote cache is not authed right now; build locally instead.
+        # env:
+        #   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+        #   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+        #   TURBO_CACHE: remote:rw
 
       - name: Run tests
         timeout-minutes: 45
