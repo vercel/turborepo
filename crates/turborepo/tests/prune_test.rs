@@ -114,6 +114,58 @@ fn test_prune_out_dir() {
     );
 }
 
+#[test]
+fn test_prune_does_not_overmatch_root_gitignore_entries() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let nested_coverage_dir = tempdir.path().join("apps/web/src/api/coverage");
+    fs::create_dir_all(&nested_coverage_dir).unwrap();
+    fs::write(
+        nested_coverage_dir.join("test.js"),
+        "console.log('covered');\n",
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("apps/web/src/api/.gitignore"),
+        "ignored.js\n",
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("apps/web/src/api/ignored.js"),
+        "ignored\n",
+    )
+    .unwrap();
+    fs::write(tempdir.path().join(".gitignore"), "/apps/web/coverage\n").unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        tempdir
+            .path()
+            .join("out/apps/web/src/api/coverage/test.js")
+            .exists(),
+        "nested coverage file should not match root-anchored coverage ignore entry"
+    );
+    assert!(
+        !tempdir
+            .path()
+            .join("out/apps/web/src/api/ignored.js")
+            .exists(),
+        "workspace-local .gitignore entries should still be respected"
+    );
+}
+
 // --- produces-valid-turbo-json.t ---
 
 #[test]
