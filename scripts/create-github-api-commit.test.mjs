@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -35,7 +35,7 @@ async function withTempRepo(callback) {
   }
 }
 
-function mockGitHub({ remoteOid, verified = false }) {
+function mockGitHub({ commitOid = "commit-sha", remoteOid, verified = false }) {
   const requests = [];
   const originalFetch = globalThis.fetch;
 
@@ -63,7 +63,7 @@ function mockGitHub({ remoteOid, verified = false }) {
       }
       if (body.query.includes("createCommitOnBranch")) {
         return response({
-          data: { createCommitOnBranch: { commit: { oid: "commit-sha" } } },
+          data: { createCommitOnBranch: { commit: { oid: commitOid } } },
         });
       }
     }
@@ -157,6 +157,58 @@ test("verification failure preserves a branch after commit creation", async () =
         ),
         false,
       );
+    } finally {
+      github.restore();
+      delete process.env.GITHUB_REPOSITORY;
+      delete process.env.GH_TOKEN;
+      delete process.env.CREATE_GITHUB_API_COMMIT_VERIFY_ATTEMPTS;
+      delete process.env.CREATE_GITHUB_API_COMMIT_VERIFY_DELAY_MS;
+    }
+  });
+});
+
+test("run reads changed files from repository root when invoked in a subdirectory", async () => {
+  await withTempRepo(async () => {
+    mkdirSync("cli");
+    mkdirSync("packages/create-turbo", { recursive: true });
+    writeFileSync("packages/create-turbo/package.json", '{"version":"1.0.0"}\n');
+    git(["add", "cli", "packages/create-turbo/package.json"]);
+    git(["commit", "-m", "add package"]);
+    writeFileSync("packages/create-turbo/package.json", '{"version":"1.0.1"}\n');
+    process.chdir("cli");
+    const currentHead = git(["rev-parse", "HEAD"]);
+
+    process.env.GITHUB_REPOSITORY = "vercel/turbo";
+    process.env.GH_TOKEN = "test-token";
+    process.env.CREATE_GITHUB_API_COMMIT_VERIFY_ATTEMPTS = "1";
+    process.env.CREATE_GITHUB_API_COMMIT_VERIFY_DELAY_MS = "0";
+
+    const github = mockGitHub({
+      commitOid: currentHead,
+      remoteOid: null,
+      verified: true,
+    });
+    try {
+      await run({
+        allTracked: true,
+        branch: "release/test",
+        ifExists: "fail",
+        includeUntracked: false,
+        message: "test commit",
+        paths: [],
+      });
+
+      const createCommitRequest = github.requests.find((request) =>
+        request.body?.query.includes("createCommitOnBranch"),
+      );
+      assert.deepEqual(createCommitRequest.body.variables.input.fileChanges, {
+        additions: [
+          {
+            contents: Buffer.from('{"version":"1.0.1"}\n').toString("base64"),
+            path: "packages/create-turbo/package.json",
+          },
+        ],
+      });
     } finally {
       github.restore();
       delete process.env.GITHUB_REPOSITORY;

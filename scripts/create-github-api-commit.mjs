@@ -423,6 +423,8 @@ export async function run(options = parseArgs()) {
     return;
   }
 
+  process.chdir(git(["rev-parse", "--show-toplevel"]));
+
   const repositoryName = repository();
   const currentHead = git(["rev-parse", "HEAD"]);
   const currentBranch = git(["branch", "--show-current"]);
