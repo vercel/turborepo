@@ -359,14 +359,7 @@ function currentBase(config) {
 function baseSandboxes(config) {
   const prefix = baseSandboxPrefix(config);
   const result = sandbox(
-    [
-      "list",
-      "--all",
-      "--sort-by",
-      "statusUpdatedAt",
-      "--sort-order",
-      "desc"
-    ],
+    ["list", "--all", "--sort-by", "statusUpdatedAt", "--sort-order", "desc"],
     { capture: true, allowFailure: true }
   );
   if (result.status !== 0) {
