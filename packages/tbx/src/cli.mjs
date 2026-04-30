@@ -6,7 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
-  writeFileSync,
+  writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -16,10 +16,10 @@ import { Sandbox } from "@vercel/sandbox";
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = resolve(packageRoot, "../..");
 const rootPackageJson = JSON.parse(
-  readFileSync(join(repoRoot, "package.json"), "utf8"),
+  readFileSync(join(repoRoot, "package.json"), "utf8")
 );
 const toolPackageJson = JSON.parse(
-  readFileSync(join(packageRoot, "package.json"), "utf8"),
+  readFileSync(join(packageRoot, "package.json"), "utf8")
 );
 
 const defaults = {
@@ -30,16 +30,16 @@ const defaults = {
   snapshotExpiration: "14d",
   baseSnapshotExpiration: "none",
   runtime: "node22",
-  vcpus: "32",
+  vcpus: "32"
 };
 
 const userProfiles = {
   "anthony-shew": {
     dotfiles: {
       repo: "https://github.com/anthonyshew/dotfiles.git",
-      install: "./bootstrap-linux.sh",
-    },
-  },
+      install: "./bootstrap-linux.sh"
+    }
+  }
 };
 
 function usage() {
@@ -122,7 +122,7 @@ function run(command, args, options = {}) {
     cwd: options.cwd ?? repoRoot,
     env: sandboxEnv(),
     stdio: options.capture ? "pipe" : "inherit",
-    encoding: "utf8",
+    encoding: "utf8"
   });
 
   if (result.error) {
@@ -142,7 +142,7 @@ function runAsync(command, args, options = {}) {
     const child = spawn(command, args, {
       cwd: options.cwd ?? repoRoot,
       env: sandboxEnv(),
-      stdio: "inherit",
+      stdio: "inherit"
     });
 
     child.on("error", reject);
@@ -158,14 +158,14 @@ function runAsync(command, args, options = {}) {
 function sandbox(args, options = {}) {
   return run(sandboxBinPath(), sandboxArgs(args), {
     ...options,
-    cwd: packageRoot,
+    cwd: packageRoot
   });
 }
 
 function sandboxAsync(args, options = {}) {
   return runAsync(sandboxBinPath(), sandboxArgs(args), {
     ...options,
-    cwd: packageRoot,
+    cwd: packageRoot
   });
 }
 
@@ -188,7 +188,7 @@ function requireSandboxInstalled() {
 
   const version = toolPackageJson.dependencies?.sandbox;
   console.error(
-    `sandbox ${version ?? ""} is declared in @turbo/tbx but not installed.\n\nRun:\n  pnpm install --frozen-lockfile --ignore-scripts --filter @turbo/tbx\n`,
+    `sandbox ${version ?? ""} is declared in @turbo/tbx but not installed.\n\nRun:\n  pnpm install --frozen-lockfile --ignore-scripts --filter @turbo/tbx\n`
   );
   process.exit(1);
 }
@@ -199,7 +199,7 @@ function taskSandboxName(config, name) {
   }
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name)) {
     throw new Error(
-      "Sandbox names may only contain letters, numbers, dot, dash, and underscore",
+      "Sandbox names may only contain letters, numbers, dot, dash, and underscore"
     );
   }
   return `${config.prefix}-${name}`;
@@ -219,7 +219,7 @@ function latestSnapshot(config) {
     return base.snapshotId;
   }
   console.error(
-    `No snapshot found for ${base.name}. Run: pnpm tbx base refresh`,
+    `No snapshot found for ${base.name}. Run: pnpm tbx base refresh`
   );
   process.exit(1);
 }
@@ -251,7 +251,7 @@ function vercelUser() {
   try {
     result = run("vercel", ["whoami", "--format", "json"], {
       capture: true,
-      allowFailure: true,
+      allowFailure: true
     });
   } catch {
     return null;
@@ -307,7 +307,7 @@ function durationMs(value) {
     s: 1000,
     m: 60 * 1000,
     h: 60 * 60 * 1000,
-    d: 24 * 60 * 60 * 1000,
+    d: 24 * 60 * 60 * 1000
   };
 
   return amount * multipliers[unit];
@@ -331,7 +331,7 @@ function baseSandboxName(config) {
 function sandboxLine(name) {
   const result = sandbox(
     ["list", "--all", "--name-prefix", name, "--sort-by", "name"],
-    { capture: true, allowFailure: true },
+    { capture: true, allowFailure: true }
   );
   if (result.status !== 0) {
     return null;
@@ -349,14 +349,14 @@ function currentBase(config) {
   return {
     name,
     line,
-    snapshotId: line?.match(/snap_[a-zA-Z0-9_]+/)?.[0] ?? null,
+    snapshotId: line?.match(/snap_[a-zA-Z0-9_]+/)?.[0] ?? null
   };
 }
 
 function sandboxExists(name) {
   const result = sandbox(
     ["list", "--all", "--name-prefix", name, "--sort-by", "name"],
-    { capture: true, allowFailure: true },
+    { capture: true, allowFailure: true }
   );
 
   if (result.status !== 0) {
@@ -388,7 +388,7 @@ function hostGitHubToken() {
   }
 
   throw new Error(
-    "GitHub credential brokering requires host GitHub auth. Run `gh auth login` locally, then retry.",
+    "GitHub credential brokering requires host GitHub auth. Run `gh auth login` locally, then retry."
   );
 }
 
@@ -407,13 +407,13 @@ function requireBrokeredCredentials() {
     hostGitHubToken();
   } catch {
     missing.push(
-      "GitHub host auth: set GH_TOKEN/GITHUB_TOKEN or run `gh auth login` locally.",
+      "GitHub host auth: set GH_TOKEN/GITHUB_TOKEN or run `gh auth login` locally."
     );
   }
 
   if (!process.env.VERCEL_OIDC_TOKEN) {
     missing.push(
-      "Vercel OIDC auth: add VERCEL_OIDC_TOKEN to packages/tbx/.env.local.",
+      "Vercel OIDC auth: add VERCEL_OIDC_TOKEN to packages/tbx/.env.local."
     );
   }
 
@@ -421,7 +421,7 @@ function requireBrokeredCredentials() {
     throw new Error(
       `Credential brokering requires host credentials before continuing:\n\n${missing
         .map((item) => `- ${item}`)
-        .join("\n")}`,
+        .join("\n")}`
     );
   }
 }
@@ -431,13 +431,13 @@ function githubCredentialPolicy() {
   const basic = Buffer.from(`x-access-token:${token}`).toString("base64");
   const bearerRule = [
     {
-      transform: [{ headers: { authorization: `Bearer ${token}` } }],
-    },
+      transform: [{ headers: { authorization: `Bearer ${token}` } }]
+    }
   ];
   const basicRule = [
     {
-      transform: [{ headers: { authorization: `Basic ${basic}` } }],
-    },
+      transform: [{ headers: { authorization: `Basic ${basic}` } }]
+    }
   ];
 
   const allow = {
@@ -449,7 +449,7 @@ function githubCredentialPolicy() {
     "objects.githubusercontent.com": [],
     "raw.githubusercontent.com": [],
     "release-assets.githubusercontent.com": [],
-    "*.githubusercontent.com": [],
+    "*.githubusercontent.com": []
   };
 
   return { allow };
@@ -462,7 +462,7 @@ function hostVercelOidcToken() {
   }
 
   throw new Error(
-    "Vercel OIDC credential brokering requires VERCEL_OIDC_TOKEN in packages/tbx/.env.local.",
+    "Vercel OIDC credential brokering requires VERCEL_OIDC_TOKEN in packages/tbx/.env.local."
   );
 }
 
@@ -504,11 +504,11 @@ function vercelCredentialPolicy() {
         {
           headers: {
             authorization: `Bearer ${token}`,
-            "x-vercel-oidc-token": token,
-          },
-        },
-      ],
-    },
+            "x-vercel-oidc-token": token
+          }
+        }
+      ]
+    }
   ];
 
   return {
@@ -517,8 +517,8 @@ function vercelCredentialPolicy() {
       "api.vercel.com": oidcRule,
       "oidc.vercel.com": oidcRule,
       "vercel.com": oidcRule,
-      "*.vercel.com": oidcRule,
-    },
+      "*.vercel.com": oidcRule
+    }
   };
 }
 
@@ -528,8 +528,8 @@ function credentialPolicy() {
   return {
     allow: {
       ...githubCredentialPolicy().allow,
-      ...vercelCredentialPolicy().allow,
-    },
+      ...vercelCredentialPolicy().allow
+    }
   };
 }
 
@@ -553,7 +553,7 @@ function brokeredGitHubEnvArgs() {
     "--env",
     `GIT_CONFIG_KEY_1=${gitRewrite}`,
     "--env",
-    "GIT_CONFIG_VALUE_1=git@github.com:",
+    "GIT_CONFIG_VALUE_1=git@github.com:"
   ];
 }
 
@@ -574,7 +574,7 @@ function hostSigningProgram() {
     "config",
     "--global",
     "--get",
-    "gpg.ssh.program",
+    "gpg.ssh.program"
   ]);
   return result?.stdout.trim() || "ssh-keygen";
 }
@@ -584,12 +584,12 @@ function hostSigningKey() {
     "config",
     "--global",
     "--get",
-    "user.signingkey",
+    "user.signingkey"
   ]);
   const key = result?.stdout.trim();
   if (!key) {
     throw new Error(
-      "Verified commit signing requires a global Git user.signingkey on the host.",
+      "Verified commit signing requires a global Git user.signingkey on the host."
     );
   }
   return key;
@@ -655,7 +655,7 @@ git -C ${shellQuote(config.repoPath)} config commit.gpgsign true
 
 function ensureSigningShim(config, sandboxName, publicKey) {
   console.log(
-    `[tbx] configuring host-backed commit signing for ${sandboxName}`,
+    `[tbx] configuring host-backed commit signing for ${sandboxName}`
   );
   sandbox([
     "exec",
@@ -665,7 +665,7 @@ function ensureSigningShim(config, sandboxName, publicKey) {
     sandboxName,
     "bash",
     "-lc",
-    signingShimCommand(config, publicKey),
+    signingShimCommand(config, publicKey)
   ]);
 }
 
@@ -691,7 +691,7 @@ function signPayload(payload, publicKey, signer) {
     writeFileSync(payloadPath, payload);
     writeFileSync(keyPath, `${publicKey}\n`);
     run(signer, ["-Y", "sign", "-n", "git", "-f", keyPath, "-U", payloadPath], {
-      capture: true,
+      capture: true
     });
     return readFileSync(`${payloadPath}.sig`).toString("base64");
   } finally {
@@ -713,7 +713,7 @@ async function startSigningBroker(sandboxName) {
   const loop = (async () => {
     while (!closed) {
       const request = await target.readFileToBuffer({
-        path: "/tmp/tbx-sign/request.json",
+        path: "/tmp/tbx-sign/request.json"
       });
       if (request) {
         const body = JSON.parse(request.toString("utf8"));
@@ -727,8 +727,8 @@ async function startSigningBroker(sandboxName) {
           await target.writeFiles([
             {
               path: `/tmp/tbx-sign/response-${body.id}.sig`,
-              content: signature,
-            },
+              content: signature
+            }
           ]);
         }
       }
@@ -739,7 +739,7 @@ async function startSigningBroker(sandboxName) {
   loop.catch((error) => {
     if (!closed) {
       console.error(
-        `[tbx] signing broker failed: ${error instanceof Error ? error.message : String(error)}`,
+        `[tbx] signing broker failed: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   });
@@ -748,7 +748,7 @@ async function startSigningBroker(sandboxName) {
     publicKey,
     close() {
       closed = true;
-    },
+    }
   };
 }
 
@@ -775,21 +775,21 @@ async function checkGitHubCredentialBroker(name) {
     sandboxName,
     "bash",
     "-lc",
-    "gh api user --jq .login && git ls-remote https://github.com/vercel/turbo.git HEAD >/dev/null && opencode providers list | grep -i vercel",
+    "gh api user --jq .login && git ls-remote https://github.com/vercel/turbo.git HEAD >/dev/null && opencode providers list | grep -i vercel"
   ]);
 }
 
 function setup() {
   if (!sandboxBinExists()) {
     console.log(
-      `Installing repo-pinned sandbox dependency (${toolPackageJson.dependencies.sandbox})...`,
+      `Installing repo-pinned sandbox dependency (${toolPackageJson.dependencies.sandbox})...`
     );
     run("pnpm", [
       "install",
       "--frozen-lockfile",
       "--ignore-scripts",
       "--filter",
-      "@turbo/tbx",
+      "@turbo/tbx"
     ]);
   }
   authStatus();
@@ -805,15 +805,15 @@ function authStatus() {
   const { user, profile } = userProfile();
 
   console.log(
-    `sandbox: ${toolPackageJson.dependencies?.sandbox ?? "not declared"}`,
+    `sandbox: ${toolPackageJson.dependencies?.sandbox ?? "not declared"}`
   );
   console.log(`vercel user: ${user?.username ?? "not found"}`);
   console.log(`dotfiles: ${profile?.dotfiles ? "mapped" : "not mapped"}`);
   console.log(
-    `github host auth: ${hasHostGitHubToken() ? "available" : "not found"}`,
+    `github host auth: ${hasHostGitHubToken() ? "available" : "not found"}`
   );
   console.log(
-    `vercel oidc token: ${hasHostVercelOidcToken() ? "available" : "not found"}`,
+    `vercel oidc token: ${hasHostVercelOidcToken() ? "available" : "not found"}`
   );
   console.log("project: resolved by Sandbox CLI");
   console.log("team: resolved by Sandbox CLI");
@@ -830,7 +830,7 @@ function listSandboxes() {
     "--name-prefix",
     `${config.prefix}-`,
     "--sort-by",
-    "name",
+    "name"
   ]);
 }
 
@@ -844,7 +844,7 @@ async function createTask(name, publicKey = hostSigningPublicKey()) {
 
   loadPackageEnv();
   console.log(
-    `[tbx] creating ${sandboxName} from base snapshot with credential brokering`,
+    `[tbx] creating ${sandboxName} from base snapshot with credential brokering`
   );
   await Sandbox.create({
     name: sandboxName,
@@ -853,7 +853,7 @@ async function createTask(name, publicKey = hostSigningPublicKey()) {
     resources: { vcpus: Number(config.vcpus) },
     timeout: durationMs(config.defaultTimeout),
     snapshotExpiration: durationMs(config.snapshotExpiration),
-    networkPolicy: credentialPolicy(),
+    networkPolicy: credentialPolicy()
   });
 
   const command = `git switch -c ${shellQuote(branch)}`;
@@ -865,7 +865,7 @@ async function createTask(name, publicKey = hostSigningPublicKey()) {
     sandboxName,
     "bash",
     "-lc",
-    command,
+    command
   ]);
   ensureSigningShim(config, sandboxName, publicKey);
 }
@@ -873,12 +873,12 @@ async function createTask(name, publicKey = hostSigningPublicKey()) {
 async function ensureTaskSandbox(
   config,
   name,
-  publicKey = hostSigningPublicKey(),
+  publicKey = hostSigningPublicKey()
 ) {
   const sandboxName = taskSandboxName(config, name);
   if (!sandboxExists(sandboxName)) {
     console.log(
-      `[tbx] ${sandboxName} does not exist; creating from base snapshot`,
+      `[tbx] ${sandboxName} does not exist; creating from base snapshot`
     );
     await createTask(name, publicKey);
   } else {
@@ -904,7 +904,7 @@ async function shell(name) {
       ...brokeredCredentialEnvArgs(),
       sandboxName,
       "bash",
-      "-l",
+      "-l"
     ]);
   } finally {
     broker.close();
@@ -932,7 +932,7 @@ async function runInTask(name, command) {
       config.repoPath,
       ...brokeredCredentialEnvArgs(),
       sandboxName,
-      ...command,
+      ...command
     ]);
   } finally {
     broker.close();
@@ -985,9 +985,9 @@ function snapshotBase(config, base) {
       base.name,
       "--stop",
       "--expiration",
-      snapshotExpirationValue(config.baseSnapshotExpiration),
+      snapshotExpirationValue(config.baseSnapshotExpiration)
     ],
-    { capture: true },
+    { capture: true }
   );
 
   const id =
@@ -1017,7 +1017,7 @@ function baseRefresh(args = []) {
 
   if (installDotfiles && !profile?.dotfiles) {
     console.log(
-      `[tbx] no dotfiles mapping for ${user?.username ?? "current Vercel user"}; skipping dotfiles`,
+      `[tbx] no dotfiles mapping for ${user?.username ?? "current Vercel user"}; skipping dotfiles`
     );
     return;
   }
@@ -1025,7 +1025,7 @@ function baseRefresh(args = []) {
   if (installDotfiles) {
     if (!base.line) {
       console.error(
-        `No base sandbox found for ${base.name}. Run: pnpm tbx base refresh`,
+        `No base sandbox found for ${base.name}. Run: pnpm tbx base refresh`
       );
       process.exit(1);
     }
@@ -1056,7 +1056,7 @@ ${dotfilesBootstrap(profile)}
       "--timeout",
       config.defaultTimeout,
       "--snapshot-expiration",
-      config.baseSnapshotExpiration,
+      config.baseSnapshotExpiration
     ]);
   }
 
