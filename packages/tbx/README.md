@@ -99,7 +99,7 @@ Verifies brokered GitHub auth and Vercel provider detection inside `turbo-<name>
 pnpm tbx base refresh
 ```
 
-Creates or refreshes `turbo-base-<origin-main-sha12>`, installs Turborepo dependencies, runs `cargo build`, stops the sandbox, and snapshots it.
+Creates or refreshes `turbo-base-<origin-main-sha12>`, installs `turbo@latest` globally so it is on `PATH`, installs Turborepo dependencies, runs `cargo build`, stops the sandbox, and snapshots it.
 
 For mapped Vercel users, the base name includes the username:
 

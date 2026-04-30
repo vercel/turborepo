@@ -1123,6 +1123,10 @@ step "corepack enable"
 corepack enable
 step "corepack prepare ${rootPackageJson.packageManager} --activate"
 corepack prepare ${rootPackageJson.packageManager} --activate
+step "npm install --global turbo@latest"
+npm install --global turbo@latest
+step "turbo --version"
+turbo --version
 step "mkdir -p ${shellQuote(dirname(config.repoPath))}"
 mkdir -p ${shellQuote(dirname(config.repoPath))}
 if [ ! -d ${shellQuote(join(config.repoPath, ".git"))} ]; then
