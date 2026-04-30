@@ -711,7 +711,11 @@ async function startSigningBroker(sandboxName) {
   let closed = false;
 
   const loop = (async () => {
-    while (!closed) {
+    while (true) {
+      if (closed) {
+        break;
+      }
+
       const request = await target.readFileToBuffer({
         path: "/tmp/tbx-sign/request.json"
       });
