@@ -522,13 +522,22 @@ function vercelCredentialPolicy() {
   };
 }
 
+function publicPackageRegistryPolicy() {
+  return {
+    allow: {
+      "registry.npmjs.org": []
+    }
+  };
+}
+
 function credentialPolicy() {
   requireBrokeredCredentials();
 
   return {
     allow: {
       ...githubCredentialPolicy().allow,
-      ...vercelCredentialPolicy().allow
+      ...vercelCredentialPolicy().allow,
+      ...publicPackageRegistryPolicy().allow
     }
   };
 }
