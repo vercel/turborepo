@@ -214,13 +214,12 @@ function shellQuote(value) {
 }
 
 function latestSnapshot(config) {
-  const base = currentBase(config);
-  if (base.snapshotId) {
+  const base = latestBase(config);
+  if (base?.snapshotId) {
+    warnIfBaseIsOutOfDate(config, base);
     return base.snapshotId;
   }
-  console.error(
-    `No snapshot found for ${base.name}. Run: pnpm tbx base refresh`
-  );
+  console.error(`No base snapshot found. Run: pnpm tbx base refresh`);
   process.exit(1);
 }
 
@@ -322,10 +321,14 @@ function mainSha(config) {
   return sha;
 }
 
-function baseSandboxName(config) {
+function baseSandboxPrefix(config) {
   const { user, profile } = userProfile();
   const userSegment = profile ? `${user.username}-` : "";
-  return `${config.baseSandbox}-${userSegment}${mainSha(config).slice(0, 12)}`;
+  return `${config.baseSandbox}-${userSegment}`;
+}
+
+function baseSandboxName(config) {
+  return `${baseSandboxPrefix(config)}${mainSha(config).slice(0, 12)}`;
 }
 
 function sandboxLine(name) {
@@ -351,6 +354,54 @@ function currentBase(config) {
     line,
     snapshotId: line?.match(/snap_[a-zA-Z0-9_]+/)?.[0] ?? null
   };
+}
+
+function baseSandboxes(config) {
+  const prefix = baseSandboxPrefix(config);
+  const result = sandbox(
+    [
+      "list",
+      "--all",
+      "--sort-by",
+      "statusUpdatedAt",
+      "--sort-order",
+      "desc"
+    ],
+    { capture: true, allowFailure: true }
+  );
+  if (result.status !== 0) {
+    return [];
+  }
+
+  return result.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith(prefix))
+    .map((line) => {
+      const [name] = line.split(/\s+/);
+      return {
+        name,
+        line,
+        sha: name.slice(prefix.length),
+        snapshotId: line.match(/snap_[a-zA-Z0-9_]+/)?.[0] ?? null
+      };
+    })
+    .filter((base) => /^[a-f0-9]{12}$/.test(base.sha));
+}
+
+function latestBase(config) {
+  return baseSandboxes(config).find((base) => base.snapshotId) ?? null;
+}
+
+function warnIfBaseIsOutOfDate(config, base) {
+  const currentSha = mainSha(config);
+  if (base.sha === currentSha.slice(0, 12)) {
+    return;
+  }
+
+  console.warn(
+    `[tbx] warning: latest base snapshot is ${base.name}, but origin/main is ${currentSha.slice(0, 12)}. Run 'pnpm tbx base refresh' when you want a fresh base.`
+  );
 }
 
 function sandboxExists(name) {

@@ -123,7 +123,7 @@ Prints the current base sandbox name and snapshot ID when available.
 pnpm tbx new <name>
 ```
 
-Creates `turbo-<name>` from the current base snapshot, applies credential brokering, initializes a matching branch, and configures verified commit signing.
+Creates `turbo-<name>` from the newest available base snapshot, applies credential brokering, initializes a matching branch, and configures verified commit signing. If that base is older than current `origin/main`, `tbx` warns but continues.
 
 ```bash
 pnpm tbx sh <name>
@@ -165,7 +165,7 @@ Repo path: /vercel/sandbox/src/turbo
 
 ## Notes
 
-`tbx` does not store local snapshot IDs or project overrides. Base sandboxes are named from `origin/main` SHAs, and task sandboxes are named from your task name.
+`tbx` does not store local snapshot IDs or project overrides. Base sandboxes are named from `origin/main` SHAs, and task sandboxes are named from your task name. New task sandboxes use the newest existing base snapshot and warn when that base is behind current `origin/main`.
 
 Project and account resolution are owned by the Sandbox CLI and normal Vercel project context.
 
