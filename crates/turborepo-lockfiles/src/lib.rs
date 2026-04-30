@@ -103,6 +103,15 @@ pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
         Ok(Vec::new())
     }
 
+    /// Package identifiers that have patches in the lockfile.
+    ///
+    /// Some package managers store patch paths outside of the lockfile, so
+    /// these keys are used to recover the relevant paths from package
+    /// manager config.
+    fn patch_keys(&self) -> Vec<String> {
+        Vec::new()
+    }
+
     /// Determine if there's a global change between two lockfiles
     ///
     /// This generally is only `true` across lockfile version changes or when a

@@ -1,6 +1,7 @@
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::{
+    collections::BTreeSet,
     str::FromStr,
     sync::{LazyLock, OnceLock},
 };
@@ -15,7 +16,7 @@ use turbopath::{
 use turborepo_repository::{
     package_graph::{self, PackageGraph, PackageName, PackageNode},
     package_json::PackageJson,
-    package_manager::npmrc::NpmRc,
+    package_manager::{npmrc::NpmRc, PackageManager},
 };
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::BOLD;
@@ -226,13 +227,24 @@ pub async fn prune(
     prune.copy_turbo_json(&workspace_names)?;
     prune.copy_global_dependencies()?;
 
-    let original_patches = prune
+    let original_lockfile = prune
         .package_graph
         .lockfile()
-        .expect("lockfile presence checked earlier")
-        .patches()?;
+        .expect("lockfile presence checked earlier");
+    let package_manager = prune.package_graph.package_manager();
+    let original_patches = collect_patch_paths(
+        original_lockfile,
+        prune.package_graph.root_package_json(),
+        &prune.root,
+        package_manager,
+    )?;
     if !original_patches.is_empty() {
-        let pruned_patches = lockfile.patches()?;
+        let pruned_patches = collect_patch_paths(
+            lockfile.as_ref(),
+            prune.package_graph.root_package_json(),
+            &prune.root,
+            package_manager,
+        )?;
         trace!(
             "original patches: {:?}, pruned patches: {:?}",
             original_patches,
@@ -240,8 +252,6 @@ pub async fn prune(
         );
 
         let repo_root = &prune.root;
-        let package_manager = prune.package_graph.package_manager();
-
         let pruned_json = package_manager.prune_patched_packages(
             prune.package_graph.root_package_json(),
             &pruned_patches,
@@ -313,6 +323,69 @@ pub async fn prune(
     }
 
     Ok(())
+}
+
+fn collect_patch_paths(
+    lockfile: &dyn turborepo_lockfiles::Lockfile,
+    root_package_json: &PackageJson,
+    repo_root: &turbopath::AbsoluteSystemPath,
+    package_manager: &PackageManager,
+) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+    let mut patches = lockfile.patches()?;
+    let patch_keys = lockfile.patch_keys();
+
+    if !patch_keys.is_empty() {
+        patches.extend(package_json_patch_paths(root_package_json, &patch_keys));
+
+        if matches!(
+            package_manager,
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
+        ) {
+            let workspace_yaml_path = repo_root.join_component(
+                turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH,
+            );
+            patches.extend(
+                turborepo_repository::package_manager::pnpm::patch_paths_for_keys(
+                    &workspace_yaml_path,
+                    &patch_keys,
+                )?,
+            );
+        }
+    }
+
+    patches.sort();
+    patches.dedup();
+    Ok(patches)
+}
+
+fn package_json_patch_paths(
+    package_json: &PackageJson,
+    patch_keys: &[String],
+) -> Vec<RelativeUnixPathBuf> {
+    let patch_keys: BTreeSet<_> = patch_keys.iter().map(String::as_str).collect();
+    let mut patches = Vec::new();
+
+    if let Some(patched_dependencies) = package_json.patched_dependencies.as_ref() {
+        patches.extend(
+            patched_dependencies.iter().filter_map(|(key, path)| {
+                patch_keys.contains(key.as_str()).then_some(path.clone())
+            }),
+        );
+    }
+
+    if let Some(patched_dependencies) = package_json
+        .pnpm
+        .as_ref()
+        .and_then(|config| config.patched_dependencies.as_ref())
+    {
+        patches.extend(
+            patched_dependencies.iter().filter_map(|(key, path)| {
+                patch_keys.contains(key.as_str()).then_some(path.clone())
+            }),
+        );
+    }
+
+    patches
 }
 
 struct Prune<'a> {
