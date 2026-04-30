@@ -48,12 +48,44 @@ pub struct PnpmLockfile {
     time: Option<Map<String, String>>,
 }
 
+/// A patch file entry in `patchedDependencies`.
+///
+/// pnpm ≤ 10 stores a struct with `path` and `hash` fields; pnpm 11 changed
+/// the on-disk format to a flat hash string.  The `#[serde(untagged)]`
+/// attribute makes serde_yaml try both representations.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct PatchFile {
-    // This should be a RelativeUnixPathBuf, but since that might cause unnecessary
-    // parse failures we wait until access to validate.
-    path: String,
-    hash: String,
+#[serde(untagged)]
+pub enum PatchFile {
+    /// pnpm ≤ 10: `{ path: "patches/pkg@1.0.0.patch", hash: "abc123" }`
+    Struct {
+        // This should be a RelativeUnixPathBuf, but since that might cause
+        // unnecessary parse failures we wait until access to validate.
+        path: String,
+        hash: String,
+    },
+    /// pnpm 11+: flat hash string
+    Hash(String),
+}
+
+impl PatchFile {
+    /// Returns the hash of the patch, regardless of format.
+    pub fn hash(&self) -> &str {
+        match self {
+            PatchFile::Struct { hash, .. } => hash.as_str(),
+            PatchFile::Hash(hash) => hash.as_str(),
+        }
+    }
+
+    /// Returns the path to the patch file if available (pnpm ≤ 10 only).
+    ///
+    /// pnpm 11+ does not store the path in the lockfile, so this returns
+    /// `None` for `PatchFile::Hash` variants.
+    pub fn path(&self) -> Option<&str> {
+        match self {
+            PatchFile::Struct { path, .. } => Some(path.as_str()),
+            PatchFile::Hash(_) => None,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -460,7 +492,7 @@ impl PnpmLockfile {
             if let Some(patch) = patches.get(&patch_key).filter(|patch| {
                 // In V7 patch hash isn't included in packages key, so no need to check
                 matches!(self.version(), SupportedLockfileVersion::V7AndV9)
-                    || dp.patch_hash() == Some(&patch.hash)
+                    || dp.patch_hash() == Some(patch.hash())
             }) {
                 pruned_patches.insert(patch_key, patch.clone());
                 continue;
@@ -745,7 +777,7 @@ impl crate::Lockfile for PnpmLockfile {
             .patched_dependencies
             .iter()
             .flatten()
-            .map(|(_, patch)| RelativeUnixPathBuf::new(&patch.path))
+            .filter_map(|(_, patch)| patch.path().map(RelativeUnixPathBuf::new))
             .collect::<Result<Vec<_>, turbopath::PathError>>()?;
         patches.sort();
         Ok(patches)
@@ -2188,4 +2220,118 @@ snapshots:
         // Root importer should still be present.
         assert!(pruned_lockfile.importers.contains_key("."));
     }
+    #[test]
+    fn test_patch_file_pnpm11_flat_hash_format() {
+        // pnpm 11 changed patchedDependencies values from a struct
+        //   { path: "patches/foo@1.0.0.patch", hash: "abc123" }
+        // to a plain hash string
+        //   "abc123"
+        // Verify that both representations deserialise correctly.
+
+        // pnpm ≤ 10 struct format
+        let struct_yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+patchedDependencies:
+  is-odd@3.0.1:
+    path: patches/is-odd@3.0.1.patch
+    hash: 0000000000000000000000000000000000000000
+
+importers:
+  .:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1(patch_hash=0000000000000000000000000000000000000000)
+
+packages:
+
+snapshots:
+  is-odd@3.0.1(patch_hash=0000000000000000000000000000000000000000):
+    resolution:
+      integrity: sha512-fake
+"#;
+        let struct_lockfile = PnpmLockfile::from_bytes(struct_yaml.as_bytes())
+            .expect("should parse pnpm ≤10 struct PatchFile format");
+        let patches = struct_lockfile
+            .patches()
+            .expect("should extract patches from struct format");
+        assert_eq!(patches.len(), 1);
+        assert_eq!(
+            patches[0].to_string(),
+            "patches/is-odd@3.0.1.patch",
+            "struct format should expose the path"
+        );
+
+        // pnpm 11+ flat-hash format
+        let hash_yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+patchedDependencies:
+  is-odd@3.0.1: 0000000000000000000000000000000000000000
+
+importers:
+  .:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+
+packages:
+
+snapshots:
+  is-odd@3.0.1:
+    resolution:
+      integrity: sha512-fake
+"#;
+        let hash_lockfile = PnpmLockfile::from_bytes(hash_yaml.as_bytes())
+            .expect("should parse pnpm 11 flat-hash PatchFile format");
+        // In the flat-hash format the path is unknown; patches() should not error.
+        let patches = hash_lockfile
+            .patches()
+            .expect("patches() must not error for flat-hash PatchFile format");
+        // No path information available → empty list
+        assert_eq!(
+            patches.len(),
+            0,
+            "flat-hash format has no path; patches() should return an empty vec"
+        );
+    }
+
+    #[test]
+    fn test_patch_file_serde_roundtrip() {
+        // PatchFile::Struct round-trips through serde_yaml_ng
+        let patch = PatchFile::Struct {
+            path: "patches/foo@1.0.0.patch".to_string(),
+            hash: "abc123".to_string(),
+        };
+        let yaml = serde_yaml_ng::to_string(&patch).unwrap();
+        let reparsed: PatchFile = serde_yaml_ng::from_str(&yaml).unwrap();
+        assert_eq!(patch, reparsed);
+
+        // PatchFile::Hash round-trips through serde_yaml_ng
+        let hash_patch = PatchFile::Hash("abc123".to_string());
+        let yaml = serde_yaml_ng::to_string(&hash_patch).unwrap();
+        let reparsed: PatchFile = serde_yaml_ng::from_str(&yaml).unwrap();
+        assert_eq!(hash_patch, reparsed);
+
+        // Methods work on both variants
+        assert_eq!(
+            PatchFile::Struct { path: "p".to_string(), hash: "h".to_string() }.hash(),
+            "h"
+        );
+        assert_eq!(
+            PatchFile::Struct { path: "p".to_string(), hash: "h".to_string() }.path(),
+            Some("p")
+        );
+        assert_eq!(PatchFile::Hash("h".to_string()).hash(), "h");
+        assert_eq!(PatchFile::Hash("h".to_string()).path(), None);
+    }
+
 }
