@@ -99,7 +99,7 @@ Verifies brokered GitHub auth and Vercel provider detection inside `turbo-<name>
 pnpm tbx base refresh
 ```
 
-Creates or refreshes `turbo-base-<origin-main-sha12>`, installs `turbo@latest` globally so it is on `PATH`, installs Turborepo dependencies, runs `cargo build`, installs mapped user dotfiles, stops the sandbox, and snapshots it.
+Creates or refreshes `turbo-base-<origin-main-sha12>`, reusing the newest previous base snapshot when the current base does not exist. It installs `turbo@latest` globally so it is on `PATH`, installs Turborepo dependencies, runs `cargo build`, installs mapped user dotfiles, stops the sandbox, and snapshots it.
 
 For mapped Vercel users, the base name includes the username:
 
@@ -129,7 +129,7 @@ Creates `turbo-<name>` from the newest available base snapshot, applies credenti
 pnpm tbx sh <name>
 ```
 
-Opens an interactive login Bash shell in `turbo-<name>`. Creates it first if missing.
+Opens an interactive login Zsh shell in `turbo-<name>`. Creates it first if missing.
 
 ```bash
 pnpm tbx run <name> -- <command>

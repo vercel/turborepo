@@ -386,6 +386,32 @@ function latestBase(config) {
   return baseSandboxes(config).find((base) => base.snapshotId) ?? null;
 }
 
+function createBaseSandbox(config, base) {
+  const previousBase = latestBase(config);
+  const args = [
+    "create",
+    "--name",
+    base.name,
+    "--runtime",
+    config.runtime,
+    "--vcpus",
+    config.vcpus,
+    "--timeout",
+    config.defaultTimeout,
+    "--snapshot-expiration",
+    config.baseSnapshotExpiration
+  ];
+
+  if (previousBase?.snapshotId) {
+    console.log(
+      `[tbx] creating ${base.name} from previous base ${previousBase.name}`
+    );
+    args.push("--snapshot", previousBase.snapshotId);
+  }
+
+  sandbox(args);
+}
+
 function warnIfBaseIsOutOfDate(config, base) {
   const currentSha = mainSha(config);
   if (base.sha === currentSha.slice(0, 12)) {
@@ -960,7 +986,7 @@ async function shell(name) {
       config.repoPath,
       ...brokeredCredentialEnvArgs(),
       sandboxName,
-      "bash",
+      "zsh",
       "-l"
     ]);
   } finally {
@@ -1102,19 +1128,7 @@ ${dotfilesBootstrap(profile)}
   }
 
   if (!base.line) {
-    sandbox([
-      "create",
-      "--name",
-      base.name,
-      "--runtime",
-      config.runtime,
-      "--vcpus",
-      config.vcpus,
-      "--timeout",
-      config.defaultTimeout,
-      "--snapshot-expiration",
-      config.baseSnapshotExpiration
-    ]);
+    createBaseSandbox(config, base);
   }
 
   const command = `
