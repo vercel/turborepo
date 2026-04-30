@@ -25,7 +25,7 @@ const toolPackageJson = JSON.parse(
 const defaults = {
   prefix: "turbo",
   baseSandbox: "turbo-base",
-  repoPath: "/vercel/sandbox/src/turbo",
+  repoPath: "/vercel/sandbox/turbo",
   defaultTimeout: "30m",
   snapshotExpiration: "14d",
   baseSnapshotExpiration: "none",
@@ -986,7 +986,7 @@ async function shell(name) {
       config.repoPath,
       ...brokeredCredentialEnvArgs(),
       sandboxName,
-      "zsh",
+      "bash",
       "-l"
     ]);
   } finally {

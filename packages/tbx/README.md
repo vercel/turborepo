@@ -129,13 +129,13 @@ Creates `turbo-<name>` from the newest available base snapshot, applies credenti
 pnpm tbx sh <name>
 ```
 
-Opens an interactive login Zsh shell in `turbo-<name>`. Creates it first if missing.
+Opens an interactive login Bash shell in `turbo-<name>`. Creates it first if missing.
 
 ```bash
 pnpm tbx run <name> -- <command>
 ```
 
-Runs a command in `/vercel/sandbox/src/turbo` inside `turbo-<name>`. Creates it first if missing.
+Runs a command in `/vercel/sandbox/turbo` inside `turbo-<name>`. Creates it first if missing.
 
 ```bash
 pnpm tbx stop <name>
@@ -160,7 +160,7 @@ Memory: 64 GiB, derived by Vercel from 32 vCPUs
 Timeout: 30m, the current Sandbox API maximum
 Task snapshot expiration: 14d
 Base snapshot expiration: none
-Repo path: /vercel/sandbox/src/turbo
+Repo path: /vercel/sandbox/turbo
 ```
 
 ## Notes
