@@ -58,7 +58,7 @@ Commands:
   stop <name>           Stop a PR sandbox session
   rm <name>             Permanently remove a PR sandbox
   base refresh          Create or refresh the base for origin/main's SHA
-                         Use --dotfiles to install mapped user dotfiles into the base
+                         Use --dotfiles to refresh only mapped user dotfiles in the base
   base id               Print the current base sandbox name
 
 Repo auth:
@@ -1191,6 +1191,7 @@ step "cargo fetch"
 cargo fetch
 step "cargo build"
 cargo build
+${dotfilesBootstrap(profile)}
 `;
 
   console.log(`[tbx] refreshing base sandbox ${base.name}`);

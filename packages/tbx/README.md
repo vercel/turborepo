@@ -40,7 +40,7 @@ Create or refresh the warm base sandbox for the current `origin/main` SHA:
 pnpm tbx base refresh
 ```
 
-After the warm base exists, mapped Vercel users can refresh only dotfiles in that base:
+Mapped Vercel users also get dotfiles installed into the base. After the warm base exists, they can refresh only dotfiles in that base:
 
 ```bash
 pnpm tbx base refresh --dotfiles
@@ -99,7 +99,7 @@ Verifies brokered GitHub auth and Vercel provider detection inside `turbo-<name>
 pnpm tbx base refresh
 ```
 
-Creates or refreshes `turbo-base-<origin-main-sha12>`, installs `turbo@latest` globally so it is on `PATH`, installs Turborepo dependencies, runs `cargo build`, stops the sandbox, and snapshots it.
+Creates or refreshes `turbo-base-<origin-main-sha12>`, installs `turbo@latest` globally so it is on `PATH`, installs Turborepo dependencies, runs `cargo build`, installs mapped user dotfiles, stops the sandbox, and snapshots it.
 
 For mapped Vercel users, the base name includes the username:
 
@@ -169,7 +169,7 @@ Repo path: /vercel/sandbox/src/turbo
 
 Project and account resolution are owned by the Sandbox CLI and normal Vercel project context.
 
-Dotfiles are installed only during `base refresh --dotfiles`, not per task sandbox. Task sandboxes inherit dotfiles from the base snapshot.
+Dotfiles are installed during `base refresh` for mapped Vercel users. Use `base refresh --dotfiles` to update only dotfiles without rebuilding the base. Task sandboxes inherit dotfiles from the base snapshot.
 
 ## Credential Brokering
 
