@@ -99,9 +99,10 @@ jobs:
         if: ${{ matrix.settings.install }}
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
@@ -147,9 +148,10 @@ jobs:
       branch: ${{ steps.version.outputs.branch }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node
         uses: ./.github/actions/setup-node
@@ -162,11 +164,6 @@ jobs:
           npm install -g npm@11.5.1
           npm config set registry https://registry.npmjs.org
 
-      - name: Configure git
-        run: |
-          git config --global user.name 'Turbobot'
-          git config --global user.email 'turbobot@vercel.com'
-
       - name: Bump version
         id: version
         run: |
@@ -178,11 +175,18 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           BRANCH="library-release/${NEXT_VERSION}"
           git checkout -b "${BRANCH}"
-          git add -A
-          git commit -m "library release: ${NEXT_VERSION}"
-          git push origin "${BRANCH}"
           echo "version=${NEXT_VERSION}" >> $GITHUB_OUTPUT
           echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
+
+      - name: Commit version bump
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/create-github-api-commit.mjs \
+            --branch "${{ steps.version.outputs.branch }}" \
+            --message "library release: ${{ steps.version.outputs.version }}" \
+            --all-tracked \
+            --include-untracked
 
       - name: Download Artifacts
         uses: actions/download-artifact@v4
@@ -255,12 +259,21 @@ jobs:
         run: |
           VERSION="${{ needs.package.outputs.version }}"
           BRANCH="${{ needs.package.outputs.branch }}"
-          gh pr create \
+          PR_URL=$(gh pr list \
             --repo "${{ github.repository }}" \
-            --title "release(library): ${VERSION}" \
-            --body "Bumps \`@turbo/repository\` packages to \`${VERSION}\`." \
             --head "${BRANCH}" \
-            --base main
+            --base main \
+            --state open \
+            --json url \
+            --jq '.[0].url // ""')
+          if [ -z "$PR_URL" ]; then
+            PR_URL=$(gh pr create \
+              --repo "${{ github.repository }}" \
+              --title "release(library): ${VERSION}" \
+              --body "Bumps \`@turbo/repository\` packages to \`${VERSION}\`." \
+              --head "${BRANCH}" \
+              --base main)
+          fi
           PR_NUM=$(gh pr view "${BRANCH}" --repo "${{ github.repository }}" --json number --jq '.number')
           gh pr merge "$PR_NUM" --repo "${{ github.repository }}" --auto --squash
 
