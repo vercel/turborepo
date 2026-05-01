@@ -266,8 +266,7 @@ mod test {
             "devDependencies": { "shared-pkg": "1.0.0", "dev-only": "1.0.0" }
         });
         let pkg: PackageJson = PackageJson::from_value(json).unwrap();
-        // Simulate the first-occurrence-wins dedup used by
-        // Dependencies::new (via BTreeMap::entry().or_insert_with).
+        // Simulate the first-occurrence-wins dedup used by Dependencies::new.
         let mut deduped = std::collections::BTreeMap::new();
         for (k, v) in pkg.all_dependencies() {
             deduped.entry(k.as_str()).or_insert(v.as_str());
