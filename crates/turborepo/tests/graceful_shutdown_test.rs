@@ -831,6 +831,7 @@ mod windows {
         fs,
         io::{Read, Write},
         path::{Path, PathBuf},
+        process::Command,
         sync::{Arc, Mutex},
         thread,
         time::{Duration, Instant},
@@ -916,17 +917,40 @@ mod windows {
         assert_cmd::cargo::cargo_bin("turbo")
     }
 
+    fn sh_script_shell() -> String {
+        let where_output = Command::new("where")
+            .arg("sh")
+            .output()
+            .expect("failed to search for sh.exe");
+        if where_output.status.success() {
+            if let Some(path) = String::from_utf8_lossy(&where_output.stdout)
+                .lines()
+                .find(|line| !line.trim().is_empty())
+            {
+                return path.trim().to_string();
+            }
+        }
+
+        let git_sh = PathBuf::from(r"C:\Program Files\Git\bin\sh.exe");
+        assert!(
+            git_sh.exists(),
+            "Windows npm script-shell=sh regression requires sh.exe"
+        );
+        git_sh.display().to_string()
+    }
+
     fn setup_npm_root_shutdown_example_with_command(
         script_name: &str,
         script_command: &str,
         script_contents: &str,
+        script_shell: &str,
     ) -> (TempDir, PathBuf) {
         let tempdir = tempfile::tempdir().expect("failed to create tempdir");
         let test_dir = tempdir.path().to_path_buf();
         setup::copy_fixture("basic_monorepo", &test_dir).expect("failed to copy npm fixture");
         fs::write(
             test_dir.join(".npmrc"),
-            "script-shell=sh\nupdate-notifier=false\n",
+            format!("script-shell={script_shell}\nupdate-notifier=false\n"),
         )
         .expect("failed to write npm config");
 
@@ -1046,6 +1070,7 @@ mod windows {
 
     #[test]
     fn run_forwards_ctrl_c_to_root_node_script_with_sh_script_shell() {
+        let script_shell = sh_script_shell();
         let (_tempdir, test_dir) = setup_npm_root_shutdown_example_with_command(
             "graceful.mjs",
             "node ./graceful.mjs",
@@ -1064,13 +1089,16 @@ console.log("node ready");
 writeFileSync("ready", "");
 setInterval(() => {}, 200);
 "#,
+            &script_shell,
         );
 
         let ready_file = test_dir.join("ready");
         let cleanup_file = test_dir.join("cleanup.done");
 
-        let mut child =
-            spawn_interactive_turbo_start_with_env(&test_dir, &[("NPM_CONFIG_SCRIPT_SHELL", "sh")]);
+        let mut child = spawn_interactive_turbo_start_with_env(
+            &test_dir,
+            &[("NPM_CONFIG_SCRIPT_SHELL", script_shell.as_str())],
+        );
         wait_for_path(&ready_file, START_TIMEOUT);
 
         child.send_ctrl_c();
