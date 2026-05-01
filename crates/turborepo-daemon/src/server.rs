@@ -456,8 +456,8 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
             .map_err(RpcError::FileHashing)
             .map(|hashes| {
                 hashes
-                    .into_iter()
-                    .map(|(path, hash)| (path.to_string(), String::from(hash)))
+                    .iter()
+                    .map(|(path, hash)| (path.to_string(), String::from(*hash)))
                     .collect()
             })
     }
