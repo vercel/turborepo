@@ -1035,12 +1035,7 @@ async function createTask(name, publicKey = hostSigningPublicKey()) {
   await writeInteractiveShellCommand(sandboxName);
 }
 
-async function ensureTaskSandbox(
-  config,
-  name,
-  publicKey,
-  options = {}
-) {
+async function ensureTaskSandbox(config, name, publicKey, options = {}) {
   const sandboxName = taskSandboxName(config, name);
   if (!sandboxExists(sandboxName)) {
     console.log(
