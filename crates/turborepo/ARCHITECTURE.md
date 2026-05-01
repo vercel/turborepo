@@ -143,6 +143,14 @@ The core task graph consists of:
 - Root is an artifacts of our Go graph library which required all graphs have a single entrypoint
 - Edges: Dependencies between tasks, at the moment no additional data (weights) are added to the edge
 
+#### Engine Pruning (`crates/turborepo-engine/src/lib.rs`)
+
+- `retain_affected_tasks` keeps directly affected tasks, transitive dependents,
+  and all transitive dependencies required for normal `--affected` execution
+- `create_engine_for_subgraph` is used by watch mode. It keeps changed package
+  tasks, transitive dependents, and only cacheable upstream dependencies that can
+  restore outputs without forcing non-cacheable tasks to rerun
+
 ### 4. Task Visitor (`crates/turborepo-lib/src/task_graph/visitor/`)
 
 The task graph visitor handles task execution:

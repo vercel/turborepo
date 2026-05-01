@@ -518,6 +518,50 @@ mod test {
         );
     }
 
+    /// Regression test for https://github.com/vercel/turborepo/issues/12654
+    ///
+    /// `turbo watch dev` should not re-run a dependency package's `dev` task
+    /// when only the dependent app changed. Non-cacheable tasks cannot restore
+    /// outputs from cache, so retaining them would force unnecessary execution.
+    #[test]
+    fn test_subgraph_excludes_non_cacheable_upstream_dependency() {
+        let mut engine: Engine<Building> = Engine::new();
+
+        let lib_dev = TaskId::new("lib", "dev");
+        let app_dev = TaskId::new("app", "dev");
+
+        let lib_idx = engine.get_index(&lib_dev);
+        let app_idx = engine.get_index(&app_dev);
+
+        let dev_definition = TaskDefinition {
+            cache: false,
+            ..Default::default()
+        };
+
+        engine.add_definition(lib_dev.clone(), dev_definition.clone());
+        engine.add_definition(app_dev.clone(), dev_definition);
+
+        // app#dev depends on lib#dev (^dev)
+        engine.task_graph_mut().add_edge(app_idx, lib_idx, ());
+        engine.connect_to_root(&lib_dev);
+
+        let engine = engine.seal();
+
+        // Only app's files changed — lib is untouched.
+        let subgraph =
+            engine.create_engine_for_subgraph(&[PackageName::from("app")].into_iter().collect());
+
+        let task_ids: HashSet<_> = subgraph.task_ids().cloned().collect();
+        assert!(
+            task_ids.contains(&app_dev),
+            "changed package's task should survive"
+        );
+        assert!(
+            !task_ids.contains(&lib_dev),
+            "non-cacheable upstream dependency should not be re-run for an app-only change"
+        );
+    }
+
     #[tokio::test]
     async fn test_tasks_impacted_by_packages() {
         // Tests the batched transitive dependents lookup for watch mode.
