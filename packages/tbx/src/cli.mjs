@@ -279,36 +279,7 @@ tbx_keepalive() {
 }
 
 tbx_keepalive &
-tbx_bashrc="$(mktemp /tmp/tbx-bashrc.XXXXXX)"
-cat > "$tbx_bashrc" <<'TBX_BASHRC'
-if [ -r "$HOME/.bashrc" ]; then
-  . "$HOME/.bashrc"
-fi
-PS1='▲ \[\e[38;5;245m\]\w\[\e[0m\] '
-TBX_BASHRC
-
-tbx_shell="\${SHELL:-}"
-if [ -z "$tbx_shell" ] || [ ! -x "$tbx_shell" ]; then
-  tbx_shell="$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)"
-fi
-if [ -f "$HOME/.zshrc" ] && command -v zsh >/dev/null 2>&1; then
-  tbx_shell="$(command -v zsh)"
-fi
-if [ -z "$tbx_shell" ] || [ ! -x "$tbx_shell" ]; then
-  tbx_shell="$(command -v bash 2>/dev/null || command -v sh)"
-fi
-
-case "$(basename "$tbx_shell")" in
-  zsh)
-    exec env -u PS1 -u PS2 -u PS3 -u PS4 -u PROMPT -u RPROMPT -u RPS1 -u PROMPT_COMMAND -u BASH_ENV -u ENV "$tbx_shell" -l
-    ;;
-  bash)
-    exec env -u PS1 -u PS2 -u PS3 -u PS4 -u PROMPT -u RPROMPT -u RPS1 -u PROMPT_COMMAND -u BASH_ENV -u ENV "$tbx_shell" --rcfile "$tbx_bashrc" -i
-    ;;
-  *)
-    exec env -u PS1 -u PS2 -u PS3 -u PS4 -u PROMPT -u RPROMPT -u RPS1 -u PROMPT_COMMAND -u BASH_ENV -u ENV "$tbx_shell" -l
-    ;;
-esac
+exec bash -l
 `;
 }
 
