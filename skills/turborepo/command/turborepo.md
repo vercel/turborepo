@@ -41,10 +41,10 @@ Apply Turborepo-specific patterns from references to complete the user's request
 
 **CRITICAL - When creating tasks/scripts/pipelines:**
 
-1. **DO NOT create Root Tasks** - Always create package tasks
+1. **Prefer package tasks over Root Tasks.** Root Tasks (`//#taskname`) are only for tasks that truly cannot exist in packages, such as Vitest Projects' `//#test`, repo-wide release scripts, or tooling that does not invoke `turbo` itself.
 2. Add scripts to each relevant package's `package.json` (e.g., `apps/web/package.json`, `packages/ui/package.json`)
 3. Register the task in root `turbo.json`
-4. Root `package.json` only contains `turbo run <task>` - never actual task logic
+4. Root `package.json` only contains `turbo run <task>` - never actual task logic, unless defining a valid Root Task exception
 
 **Other things to verify:**
 

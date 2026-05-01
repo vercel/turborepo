@@ -18,15 +18,15 @@ Build system for JavaScript/TypeScript monorepos. Turborepo caches task outputs 
 
 ## IMPORTANT: Package Tasks, Not Root Tasks
 
-**DO NOT create Root Tasks. ALWAYS create package tasks.**
+**Prefer package tasks over Root Tasks.**
 
-When creating tasks/scripts/pipelines, you MUST:
+When creating tasks/scripts/pipelines, you MUST default to package tasks:
 
 1. Add the script to each relevant package's `package.json`
 2. Register the task in root `turbo.json`
 3. Root `package.json` only delegates via `turbo run <task>`
 
-**DO NOT** put task logic in root `package.json`. This defeats Turborepo's parallelization.
+**DO NOT** put task logic in root `package.json` when it can live in packages. This defeats Turborepo's parallelization.
 
 ```json
 // DO THIS: Scripts in each package
@@ -74,7 +74,7 @@ When creating tasks/scripts/pipelines, you MUST:
 }
 ```
 
-Root Tasks (`//#taskname`) are ONLY for tasks that truly cannot exist in packages (rare).
+Root Tasks (`//#taskname`) are ONLY for tasks that truly cannot exist in packages, such as Vitest Projects' `//#test`, repo-wide release scripts, or tooling that does not invoke `turbo` itself.
 
 ## Secondary Rule: `turbo run` vs `turbo`
 
