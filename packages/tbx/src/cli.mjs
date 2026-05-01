@@ -279,6 +279,7 @@ tbx_keepalive() {
 }
 
 tbx_keepalive &
+export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
 if command -v zsh >/dev/null 2>&1 && [ -r "$HOME/.zshrc" ]; then
   exec env -u PS1 -u PROMPT zsh -l
 fi
