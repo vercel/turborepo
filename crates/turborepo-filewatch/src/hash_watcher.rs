@@ -1188,7 +1188,8 @@ mod tests {
             query_rx,
         );
 
-        let package_path = AnchoredSystemPathBuf::try_from("packages/foo").unwrap();
+        let package_dir = repo_root.join_components(&["packages", "foo"]);
+        let package_path = repo_root.anchor(&package_dir).unwrap();
         let spec = HashSpec {
             package_path: package_path.clone(),
             inputs: InputGlobs::Default,
@@ -1207,7 +1208,7 @@ mod tests {
             },
         );
 
-        let changed_file = repo_root.join_components(&["packages", "foo", "large.bin"]);
+        let changed_file = package_dir.join_component("large.bin");
         subscriber.handle_file_event(
             notify::Event {
                 kind: notify::EventKind::Modify(notify::event::ModifyKind::Data(
