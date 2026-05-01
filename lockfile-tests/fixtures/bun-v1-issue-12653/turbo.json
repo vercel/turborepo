@@ -1,0 +1,68 @@
+{
+  "$schema": "https://v2-9-6.turborepo.dev/schema.json",
+  "ui": "stream",
+  "globalEnv": [
+    "SKIP_ENV_VALIDATION",
+    "AUTH_SECRET",
+    "AUTH_DISCORD_ID",
+    "AUTH_DISCORD_SECRET",
+    "DATABASE_URL",
+    "NODE_ENV",
+    "NEXTAUTH_URL",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_PRICE_ID_PRO",
+    "STRIPE_PRICE_ID_PRO_YEARLY",
+    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+    "DISCORD_BOT_TOKEN",
+    "BOT_API_KEY",
+    "BOT_API_URL",
+    "DISCORD_FEEDBACK_WEBHOOK_URL",
+    "DISCORD_BUG_WEBHOOK_URL",
+    "CRON_SECRET"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "passThroughEnv": ["BACKEND_URL"]
+    },
+
+    "database#build": {
+      "dependsOn": ["backend#generate:trpc-contract"],
+      "outputs": ["dist/**", "tsconfig.tsbuildinfo"]
+    },
+
+    "@eventmate/database#build": {
+      "outputs": ["packages/database/prisma/generated/prisma/**"]
+    },
+
+    "@eventmate/stripe-listener#build": {
+      "cache": false
+    },
+
+    "generate:trpc-contract": {
+      "cache": false,
+      "outputs": ["packages/database/src/trpc-contract.ts"]
+    },
+
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "start:dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "migrate": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

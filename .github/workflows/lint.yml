@@ -78,15 +78,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      SCCACHE_BUCKET: turborepo-sccache
-      SCCACHE_REGION: us-east-2
-      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      # AWS-backed sccache is disabled.
+      # SCCACHE_BUCKET: turborepo-sccache
+      # SCCACHE_REGION: us-east-2
+      # RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
       CARGO_INCREMENTAL: 0
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      SCCACHE_IDLE_TIMEOUT: 0
-      SCCACHE_REQUEST_TIMEOUT: 30
-      SCCACHE_ERROR_LOG: error
+      # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      # SCCACHE_IDLE_TIMEOUT: 0
+      # SCCACHE_REQUEST_TIMEOUT: 30
+      # SCCACHE_ERROR_LOG: error
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -97,15 +98,11 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node: "false"
 
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.6
+      # - name: Run sccache-cache
+      #   uses: mozilla-actions/sccache-action@v0.0.6
 
       - name: Run cargo clippy
-        run: |
-          if [ -z "${RUSTC_WRAPPER}" ]; then
-            unset RUSTC_WRAPPER
-          fi
-          cargo lint
+        run: cargo lint
 
   rust_licenses:
     name: Rust licenses

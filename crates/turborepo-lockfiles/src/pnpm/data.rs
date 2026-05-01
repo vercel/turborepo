@@ -49,11 +49,30 @@ pub struct PnpmLockfile {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct PatchFile {
-    // This should be a RelativeUnixPathBuf, but since that might cause unnecessary
-    // parse failures we wait until access to validate.
-    path: String,
-    hash: String,
+#[serde(untagged)]
+pub enum PatchFile {
+    PathAndHash {
+        // This should be a RelativeUnixPathBuf, but since that might cause unnecessary
+        // parse failures we wait until access to validate.
+        path: String,
+        hash: String,
+    },
+    Hash(String),
+}
+
+impl PatchFile {
+    fn hash(&self) -> &str {
+        match self {
+            Self::PathAndHash { hash, .. } | Self::Hash(hash) => hash,
+        }
+    }
+
+    fn path(&self) -> Option<&str> {
+        match self {
+            Self::PathAndHash { path, .. } => Some(path),
+            Self::Hash(_) => None,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -460,7 +479,7 @@ impl PnpmLockfile {
             if let Some(patch) = patches.get(&patch_key).filter(|patch| {
                 // In V7 patch hash isn't included in packages key, so no need to check
                 matches!(self.version(), SupportedLockfileVersion::V7AndV9)
-                    || dp.patch_hash() == Some(&patch.hash)
+                    || dp.patch_hash() == Some(patch.hash())
             }) {
                 pruned_patches.insert(patch_key, patch.clone());
                 continue;
@@ -745,10 +764,18 @@ impl crate::Lockfile for PnpmLockfile {
             .patched_dependencies
             .iter()
             .flatten()
-            .map(|(_, patch)| RelativeUnixPathBuf::new(&patch.path))
+            .filter_map(|(_, patch)| patch.path())
+            .map(RelativeUnixPathBuf::new)
             .collect::<Result<Vec<_>, turbopath::PathError>>()?;
         patches.sort();
         Ok(patches)
+    }
+
+    fn patch_keys(&self) -> Vec<String> {
+        self.patched_dependencies
+            .iter()
+            .flat_map(|patches| patches.keys().cloned())
+            .collect()
     }
 
     fn global_change(&self, other: &dyn crate::Lockfile) -> bool {
@@ -1054,6 +1081,27 @@ snapshots:
             .expect("apps/web dependency should resolve from the final document");
         assert_eq!(package.key, "is-odd@3.0.1");
         assert_eq!(package.version, "3.0.1");
+    }
+
+    #[test]
+    fn test_from_bytes_supports_flat_pnpm_v11_patched_dependencies() {
+        let yaml = r#"
+lockfileVersion: '9.0'
+
+patchedDependencies:
+  is-odd@3.0.1: 14cc7ca69e60d7f134a084780497229ca84ff01fcd958298f26495bd6c120c6f
+
+importers:
+  .: {}
+"#;
+
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        assert_eq!(lockfile.patch_keys(), vec!["is-odd@3.0.1"]);
+        assert_eq!(
+            lockfile.patches().unwrap(),
+            Vec::<RelativeUnixPathBuf>::new()
+        );
     }
 
     #[test]

@@ -4,6 +4,10 @@ on:
   workflow_dispatch:
   workflow_call:
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   update-examples-pr:
     name: "Update examples PR"
@@ -13,6 +17,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           filter: blob:none
+          persist-credentials: false
 
       - uses: ./.github/actions/setup-node
 
@@ -21,11 +26,6 @@ jobs:
         run: |
           npm install --force --global corepack@latest
           npm config get prefix >> $GITHUB_PATH
-
-      - name: Configure git
-        run: |
-          git config --global user.name 'Turbobot'
-          git config --global user.email 'turbobot@vercel.com'
 
       - name: Make branch
         id: branch
@@ -38,24 +38,34 @@ jobs:
 
       - name: Commit and push
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HUSKY: "0"
         run: |
-          git commit -am "release(turborepo): update examples to latest"
-
-          for attempt in 1 2 3; do
-            git pull --rebase origin ${{ steps.branch.outputs.STAGE_BRANCH }} || true
-            git push origin ${{ steps.branch.outputs.STAGE_BRANCH }} && break
-            echo "Push attempt $attempt failed, retrying..."
-            sleep 5
-          done
+          node scripts/create-github-api-commit.mjs \
+            --branch "${{ steps.branch.outputs.STAGE_BRANCH }}" \
+            --message "release(turborepo): update examples to latest" \
+            --all-tracked \
+            --if-exists update
 
       - name: Create pull request
         id: pr
-        uses: thomaseizinger/create-pull-request@master
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          head: ${{ steps.branch.outputs.STAGE_BRANCH }}
-          base: main
-          title: "release(turborepo): update examples to latest"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_URL=$(gh pr list \
+            --head "${{ steps.branch.outputs.STAGE_BRANCH }}" \
+            --base main \
+            --state open \
+            --json url \
+            --jq '.[0].url // ""')
+          if [ -z "$PR_URL" ]; then
+            PR_URL=$(gh pr create \
+              --title "release(turborepo): update examples to latest" \
+              --body "Updates examples to use the latest released Turborepo packages." \
+              --head "${{ steps.branch.outputs.STAGE_BRANCH }}" \
+              --base main)
+          fi
+          echo "html_url=$PR_URL" >> $GITHUB_OUTPUT
+
       - name: PR link
         run: echo ${{ steps.pr.outputs.html_url }}

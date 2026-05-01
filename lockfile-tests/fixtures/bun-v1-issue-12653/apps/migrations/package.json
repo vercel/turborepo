@@ -1,0 +1,20 @@
+{
+  "name": "@eventmate/migrations",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Database migration service for EventMate",
+  "type": "module",
+  "scripts": {
+    "migrate:deploy": "prisma migrate deploy --config=../../packages/database/prisma.config.ts",
+    "migrate:status": "prisma migrate status --config=../../packages/database/prisma.config.ts",
+    "generate": "prisma generate --config=../../packages/database/prisma.config.ts"
+  },
+  "dependencies": {
+    "@eventmate/database": "workspace:*",
+    "dotenv": "catalog:"
+  },
+  "devDependencies": {
+    "prisma": "catalog:",
+    "tsx": "^4.19.0"
+  }
+}

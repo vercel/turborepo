@@ -9,6 +9,148 @@ fn setup_affected(dir: &std::path::Path) {
     git(dir, &["checkout", "-b", "my-branch"]);
 }
 
+fn setup_berry_catalog_affected(dir: &Path) {
+    fs::create_dir_all(dir.join("packages/pkg-a")).unwrap();
+    fs::create_dir_all(dir.join("packages/pkg-b")).unwrap();
+
+    fs::write(
+        dir.join("package.json"),
+        r#"{
+  "name": "root",
+  "private": true,
+  "packageManager": "yarn@4.12.0",
+  "workspaces": ["packages/*"],
+  "dependencies": {
+    "lodash": "catalog:"
+  }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("turbo.json"),
+        r#"{"tasks":{}}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join(".yarnrc.yml"),
+        "nodeLinker: node-modules\ncatalog:\n  chalk: ^5.3.0\n  lodash: ^4.17.21\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("packages/pkg-a/package.json"),
+        r#"{
+  "name": "pkg-a",
+  "version": "1.0.0"
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("packages/pkg-b/package.json"),
+        r#"{
+  "name": "pkg-b",
+  "version": "1.0.0",
+  "dependencies": {
+    "chalk": "catalog:"
+  }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(dir.join("yarn.lock"), berry_catalog_lockfile(false)).unwrap();
+
+    git(dir, &["init", "--quiet", "--initial-branch=main"]);
+    git(dir, &["config", "user.email", "turbo-test@example.com"]);
+    git(dir, &["config", "user.name", "Turbo Test"]);
+    git(dir, &["add", "."]);
+    git(
+        dir,
+        &[
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-m",
+            "Initial",
+            "--quiet",
+        ],
+    );
+    git(dir, &["checkout", "-b", "my-branch"]);
+}
+
+fn berry_catalog_lockfile(include_pkg_a_dependency: bool) -> String {
+    let pkg_a_dependencies = if include_pkg_a_dependency {
+        "  dependencies:\n    is-odd: 3.0.1\n"
+    } else {
+        ""
+    };
+    let is_odd_entries = if include_pkg_a_dependency {
+        r#"
+"is-number@npm:^6.0.0":
+  version: 6.0.0
+  resolution: "is-number@npm:6.0.0"
+  checksum: abc123
+  languageName: node
+  linkType: hard
+
+"is-odd@npm:3.0.1":
+  version: 3.0.1
+  resolution: "is-odd@npm:3.0.1"
+  dependencies:
+    is-number: ^6.0.0
+  checksum: abc123
+  languageName: node
+  linkType: hard
+"#
+    } else {
+        ""
+    };
+
+    format!(
+        r#"__metadata:
+  version: 8
+  cacheKey: 10
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  dependencies:
+    lodash: "catalog:"
+  languageName: unknown
+  linkType: soft
+
+"pkg-a@workspace:packages/pkg-a":
+  version: 0.0.0-use.local
+  resolution: "pkg-a@workspace:packages/pkg-a"
+{pkg_a_dependencies}  languageName: unknown
+  linkType: soft
+
+"pkg-b@workspace:packages/pkg-b":
+  version: 0.0.0-use.local
+  resolution: "pkg-b@workspace:packages/pkg-b"
+  dependencies:
+    chalk: "catalog:"
+  languageName: unknown
+  linkType: soft
+
+"chalk@npm:^5.3.0":
+  version: 5.3.0
+  resolution: "chalk@npm:5.3.0"
+  checksum: abc123
+  languageName: node
+  linkType: hard
+
+"lodash@npm:^4.17.21":
+  version: 4.17.21
+  resolution: "lodash@npm:4.17.21"
+  checksum: abc123
+  languageName: node
+  linkType: hard
+{is_odd_entries}"#,
+    )
+}
+
 #[test]
 fn test_nothing_affected_on_new_branch() {
     let tempdir = tempfile::tempdir().unwrap();
@@ -166,6 +308,83 @@ fn test_affected_dependency_changed() {
     assert_eq!(util_item["reason"]["__typename"], "FileChanged");
     let app_item = items.iter().find(|i| i["name"] == "my-app").unwrap();
     assert_eq!(app_item["reason"]["__typename"], "DependencyChanged");
+}
+
+#[test]
+fn test_affected_berry_catalog_lockfile_change_does_not_affect_unchanged_workspace() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_berry_catalog_affected(tempdir.path());
+
+    fs::write(
+        tempdir.path().join("packages/pkg-a/package.json"),
+        r#"{
+  "name": "pkg-a",
+  "version": "1.0.0",
+  "dependencies": {
+    "is-odd": "3.0.1"
+  }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("yarn.lock"),
+        berry_catalog_lockfile(true),
+    )
+    .unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(
+        tempdir.path(),
+        &[
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-m",
+            "add pkg-a dependency",
+            "--quiet",
+        ],
+    );
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            r#"query {
+  affectedPackages(base: "HEAD~1", head: "HEAD") {
+    items {
+      name
+      reason {
+        __typename
+        ... on LockfileChanged {
+          added { items { name } }
+          removed { items { name } }
+        }
+      }
+    }
+  }
+}"#,
+        ],
+    );
+
+    assert!(
+        output.status.success(),
+        "query should succeed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedPackages"]["items"]
+        .as_array()
+        .unwrap();
+    let names: Vec<&str> = items.iter().map(|i| i["name"].as_str().unwrap()).collect();
+    let workspace_names: Vec<&str> = names.iter().copied().filter(|name| *name != "//").collect();
+
+    assert_eq!(
+        workspace_names,
+        vec!["pkg-a"],
+        "unexpected affected packages: {items:?}"
+    );
+    let pkg_a = items.iter().find(|i| i["name"] == "pkg-a").unwrap();
+    assert_eq!(pkg_a["reason"]["__typename"], "FileChanged");
 }
 
 #[test]

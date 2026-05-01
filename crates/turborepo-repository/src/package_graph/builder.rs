@@ -662,6 +662,7 @@ impl Dependencies {
             .expect("package.json path should have parent");
         let mut internal = HashSet::new();
         let mut external = BTreeMap::new();
+        let mut seen = HashSet::new();
         let splitter = DependencySplitter::new(
             repo_root,
             workspace_dir,
@@ -671,17 +672,14 @@ impl Dependencies {
             catalogs,
         );
         for (name, version) in dependencies.into_iter() {
+            if !seen.insert(name.clone()) {
+                continue;
+            }
+
             if let Some(workspace) = splitter.is_internal(name, version) {
                 internal.insert(workspace);
             } else {
-                // Use entry API so earlier dependency types (dev, optional,
-                // regular) are not overwritten by later ones (peer).
-                // peerDependencies often use broad specifiers like "*" that
-                // don't resolve through the lockfile, so the concrete
-                // specifier from a prior dependency type must be preserved.
-                external
-                    .entry(name.clone())
-                    .or_insert_with(|| version.clone());
+                external.insert(name.clone(), version.clone());
             }
         }
         Self { internal, external }
@@ -884,6 +882,91 @@ mod test {
             utils_ext.is_empty(),
             "utils should have no external deps, got: {:?}",
             utils_ext
+        );
+    }
+
+    #[tokio::test]
+    async fn test_peer_workspace_dep_does_not_override_concrete_external_dep() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+
+        let graph = PackageGraphBuilder::new(
+            &root,
+            PackageJson {
+                name: Some(Spanned::new("root".into())),
+                ..Default::default()
+            },
+        )
+        .with_single_package_mode(false)
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut package_jsons = HashMap::new();
+            package_jsons.insert(
+                root.join_components(&["packages", "a", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("a".into())),
+                    version: Some("1.0.0".to_string()),
+                    dependencies: Some(
+                        [("b".to_string(), "workspace:*".to_string())]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    ..Default::default()
+                },
+            );
+            package_jsons.insert(
+                root.join_components(&["packages", "b", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("b".into())),
+                    version: Some("1.0.0".to_string()),
+                    dev_dependencies: Some(
+                        [("buffer".to_string(), "npm:buffer@6.0.3".to_string())]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    peer_dependencies: Some(
+                        [("buffer".to_string(), "workspace:*".to_string())]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    ..Default::default()
+                },
+            );
+            package_jsons.insert(
+                root.join_components(&["packages", "buffer", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("buffer".into())),
+                    version: Some("6.0.3".to_string()),
+                    ..Default::default()
+                },
+            );
+            package_jsons
+        }))
+        .build()
+        .await
+        .unwrap();
+
+        let b = PackageName::from("b");
+        let buffer = PackageName::from("buffer");
+        let b_deps = graph
+            .immediate_dependencies(&PackageNode::Workspace(b.clone()))
+            .unwrap();
+        assert!(
+            !b_deps.contains(&PackageNode::Workspace(buffer)),
+            "peer workspace specifier should not create an internal edge when a concrete external \
+             dependency exists, got: {:?}",
+            b_deps
+        );
+
+        let b_external = graph
+            .package_info(&b)
+            .unwrap()
+            .unresolved_external_dependencies
+            .as_ref()
+            .unwrap();
+        assert_eq!(
+            b_external.get("buffer").map(|v| v.as_str()),
+            Some("npm:buffer@6.0.3")
         );
     }
 

@@ -1,0 +1,16 @@
+{
+  "name": "@turbo/tbx",
+  "version": "0.0.0",
+  "private": true,
+  "bin": {
+    "tbx": "./src/cli.mjs"
+  },
+  "type": "module",
+  "scripts": {
+    "tbx": "node src/cli.mjs"
+  },
+  "dependencies": {
+    "@vercel/sandbox": "2.0.0-beta.14",
+    "sandbox": "3.0.0-beta.16"
+  }
+}

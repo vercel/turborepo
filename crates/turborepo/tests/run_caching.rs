@@ -330,3 +330,83 @@ fn test_excluded_inputs() {
     assert!(stdout.contains("1 cached, 1 total"));
     assert!(stdout.contains("FULL TURBO"));
 }
+
+#[test]
+fn test_gitignored_output_deletion_restores_from_cache() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+
+    fs::write(
+        tempdir.path().join("apps/my-app/package.json"),
+        r#"{
+  "name": "my-app",
+  "scripts": {
+    "build": "node -e \"require('fs').mkdirSync('.output', { recursive: true }); require('fs').writeFileSync('.output/result.txt', 'built\\n')\"",
+    "maybefails": "exit 4"
+  },
+  "dependencies": {
+    "util": "*"
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "build": {
+      "outputs": [".output/**"]
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    fs::write(tempdir.path().join("apps/my-app/.gitignore"), ".output\n").unwrap();
+
+    git(tempdir.path(), &["add", "."]);
+    git(
+        tempdir.path(),
+        &[
+            "commit",
+            "-m",
+            "configure gitignored build output",
+            "--quiet",
+        ],
+    );
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=my-app", "--output-logs=hash-only"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("cache miss, executing"));
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=my-app", "--output-logs=hash-only"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("FULL TURBO"));
+
+    let output_dir = tempdir.path().join("apps/my-app/.output");
+    fs::remove_dir_all(&output_dir).unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=my-app", "--output-logs=hash-only"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("FULL TURBO"),
+        "expected deleted gitignored output to restore from cache, got: {stdout}"
+    );
+    assert!(
+        output_dir.join("result.txt").exists(),
+        "expected cache hit to restore deleted output"
+    );
+}

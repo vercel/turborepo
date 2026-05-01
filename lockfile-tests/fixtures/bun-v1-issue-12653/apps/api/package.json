@@ -1,0 +1,46 @@
+{
+  "name": "@eventmate/api",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bunx tsgo",
+    "typecheck": "bunx tsgo --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:extraction": "bun run src/tests/extraction/run.ts"
+  },
+  "dependencies": {
+    "@elysiajs/cors": "^1.4.1",
+    "@elysiajs/jwt": "^1.4.1",
+    "@eventmate/audit": "workspace:*",
+    "@eventmate/database": "workspace:*",
+    "@eventmate/metrics": "workspace:*",
+    "@eventmate/permissions": "workspace:*",
+    "@openrouter/sdk": "^0.11.2",
+    "@sinclair/typebox": "^0.34.49",
+    "@t3-oss/env-core": "catalog:",
+    "better-auth": "catalog:",
+    "dotenv": "catalog:",
+    "elysia": "catalog:",
+    "pino": "^10.1.0",
+    "pino-pretty": "catalog:",
+    "prom-client": "catalog:",
+    "sharp": "^0.34.5",
+    "stripe": "^18.0.0",
+    "zod": "catalog:zod4"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.11",
+    "@types/node": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "jest-mock-extended": "^4.0.0",
+    "vitest": "catalog:"
+  }
+}
