@@ -200,7 +200,7 @@ function restoreHostTerminal(state) {
   }
 
   process.stderr.write(
-    "\x1b[?25h\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l"
+    "\u001B[?25h\u001B[?1049l\u001B[?1000l\u001B[?1002l\u001B[?1003l\u001B[?1006l\u001B[?2004l"
   );
 }
 
