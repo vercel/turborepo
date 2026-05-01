@@ -284,7 +284,7 @@ cat > "$tbx_bashrc" <<'TBX_BASHRC'
 if [ -r "$HOME/.bashrc" ]; then
   . "$HOME/.bashrc"
 fi
-PS1='\W $ '
+PS1='▲ \[\e[38;5;245m\]\w\[\e[0m\] '
 TBX_BASHRC
 
 tbx_shell="\${SHELL:-}"
