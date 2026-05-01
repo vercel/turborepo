@@ -263,16 +263,41 @@ function shellQuote(value) {
 function interactiveShellCommand() {
   return `
 tbx_keepalive() {
+  parent_pid="$$"
   while sleep 20; do
-    shell_pgid="$(ps -o pgid= -p "$$" | tr -d ' ')"
-    tty_pgid="$(ps -o tpgid= -p "$$" | tr -d ' ')"
-    if [ "$shell_pgid" = "$tty_pgid" ]; then
+    if ! kill -0 "$parent_pid" 2>/dev/null; then
+      exit 0
+    fi
+    shell_pgid="$(ps -o pgid= -p "$parent_pid" 2>/dev/null | tr -d ' ')"
+    tty_pgid="$(ps -o tpgid= -p "$parent_pid" 2>/dev/null | tr -d ' ')"
+    if [ -n "$shell_pgid" ] && [ "$shell_pgid" = "$tty_pgid" ]; then
       printf '\\033[?25h' > /dev/tty
     fi
   done
 }
 tbx_keepalive &
-exec env -u PS1 bash -l
+tbx_shell="\${SHELL:-}"
+if [ -z "$tbx_shell" ] || [ ! -x "$tbx_shell" ]; then
+  tbx_shell="$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)"
+fi
+if [ -f "$HOME/.zshrc" ] && command -v zsh >/dev/null 2>&1; then
+  tbx_shell="$(command -v zsh)"
+fi
+if [ -z "$tbx_shell" ] || [ ! -x "$tbx_shell" ]; then
+  tbx_shell="$(command -v bash 2>/dev/null || command -v sh)"
+fi
+
+case "$(basename "$tbx_shell")" in
+  zsh)
+    exec env -u PS1 -u PS2 -u PS3 -u PS4 -u PROMPT -u RPROMPT -u RPS1 -u PROMPT_COMMAND -u BASH_ENV -u ENV "$tbx_shell" -l
+    ;;
+  bash)
+    exec env -u PS1 -u PS2 -u PS3 -u PS4 -u PROMPT -u RPROMPT -u RPS1 -u PROMPT_COMMAND -u BASH_ENV -u ENV "$tbx_shell" -i
+    ;;
+  *)
+    exec env -u PS1 -u PS2 -u PS3 -u PS4 -u PROMPT -u RPROMPT -u RPS1 -u PROMPT_COMMAND -u BASH_ENV -u ENV "$tbx_shell" -l
+    ;;
+esac
 `;
 }
 
