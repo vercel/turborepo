@@ -34,6 +34,7 @@ const defaults = {
 };
 
 const interactiveShellPath = "/tmp/tbx-interactive-shell";
+const signingShimPath = "/tmp/tbx-signing-shim";
 
 const userProfiles = {
   "anthony-shew": {
@@ -801,10 +802,21 @@ git -C ${shellQuote(config.repoPath)} config commit.gpgsign true
 `;
 }
 
-function ensureSigningShim(config, sandboxName, publicKey) {
+async function writeSigningShimCommand(config, sandboxName, publicKey) {
+  const target = await Sandbox.get({ name: sandboxName });
+  await target.writeFiles([
+    {
+      path: signingShimPath,
+      content: signingShimCommand(config, publicKey)
+    }
+  ]);
+}
+
+async function ensureSigningShim(config, sandboxName, publicKey) {
   console.log(
     `[tbx] configuring host-backed commit signing for ${sandboxName}`
   );
+  await writeSigningShimCommand(config, sandboxName, publicKey);
   sandbox([
     "exec",
     "--workdir",
@@ -812,8 +824,7 @@ function ensureSigningShim(config, sandboxName, publicKey) {
     ...brokeredCredentialEnvArgs(),
     sandboxName,
     "bash",
-    "-lc",
-    signingShimCommand(config, publicKey)
+    signingShimPath
   ]);
 }
 
@@ -1019,7 +1030,7 @@ async function createTask(name, publicKey = hostSigningPublicKey()) {
     "-lc",
     command
   ]);
-  ensureSigningShim(config, sandboxName, publicKey);
+  await ensureSigningShim(config, sandboxName, publicKey);
 }
 
 async function ensureTaskSandbox(
@@ -1035,7 +1046,7 @@ async function ensureTaskSandbox(
     await createTask(name, publicKey);
   } else {
     await applyGitHubCredentialBroker(config, name);
-    ensureSigningShim(config, sandboxName, publicKey);
+    await ensureSigningShim(config, sandboxName, publicKey);
   }
   return sandboxName;
 }
