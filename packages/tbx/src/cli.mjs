@@ -279,14 +279,10 @@ tbx_keepalive() {
 }
 
 tbx_keepalive &
-tbx_bashrc="$(mktemp /tmp/tbx-bashrc.XXXXXX)"
-cat > "$tbx_bashrc" <<'TBX_BASHRC'
-if [ -r "$HOME/.bashrc" ]; then
-  . "$HOME/.bashrc"
+if command -v zsh >/dev/null 2>&1 && [ -r "$HOME/.zshrc" ]; then
+  exec env -u PS1 -u PROMPT zsh -l
 fi
-PS1='▲ \[\\033[2m\]\w/\[\\033[0m\] '
-TBX_BASHRC
-exec bash --rcfile "$tbx_bashrc" -i
+exec bash -l
 `;
 }
 
