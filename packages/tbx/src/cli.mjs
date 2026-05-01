@@ -53,7 +53,7 @@ Commands:
   creds github <name>   Apply credential brokering to a PR sandbox
   creds check <name>    Verify brokered auth in a PR sandbox
   new <name>            Create a PR sandbox from the latest base snapshot
-  sh <name>             Connect to a PR sandbox
+  sh|ssh <name>         Connect to a PR sandbox
   run <name> -- <cmd>   Run a command in a PR sandbox
   stop <name>           Stop a PR sandbox session
   rm <name>             Permanently remove a PR sandbox
@@ -155,6 +155,51 @@ function runAsync(command, args, options = {}) {
   });
 }
 
+function readHostTerminalState() {
+  if (!process.stdin.isTTY) {
+    return null;
+  }
+
+  const result = spawnSync("stty", ["-g"], {
+    cwd: repoRoot,
+    env: process.env,
+    stdio: ["inherit", "pipe", "ignore"],
+    encoding: "utf8"
+  });
+
+  return result.status === 0 ? result.stdout.trim() : null;
+}
+
+function restoreHostTerminal(state) {
+  if (!process.stdin.isTTY) {
+    return;
+  }
+
+  if (state) {
+    spawnSync("stty", [state], {
+      cwd: repoRoot,
+      env: process.env,
+      stdio: ["inherit", "ignore", "ignore"]
+    });
+  } else {
+    spawnSync("stty", ["sane"], {
+      cwd: repoRoot,
+      env: process.env,
+      stdio: ["inherit", "ignore", "ignore"]
+    });
+  }
+
+  try {
+    process.stdin.setRawMode?.(false);
+  } catch {
+    // The Sandbox CLI may destroy stdin during cleanup after a dropped pty.
+  }
+
+  process.stderr.write(
+    "\x1b[?25h\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l"
+  );
+}
+
 function sandbox(args, options = {}) {
   return run(sandboxBinPath(), sandboxArgs(args), {
     ...options,
@@ -211,6 +256,22 @@ function taskBranchName(name) {
 
 function shellQuote(value) {
   return `'${String(value).replaceAll("'", `'"'"'`)}'`;
+}
+
+function interactiveShellCommand() {
+  return `
+tbx_keepalive() {
+  while sleep 20; do
+    shell_pgid="$(ps -o pgid= -p "$$" | tr -d ' ')"
+    tty_pgid="$(ps -o tpgid= -p "$$" | tr -d ' ')"
+    if [ "$shell_pgid" = "$tty_pgid" ]; then
+      printf '\\033[?25h' > /dev/tty
+    fi
+  done
+}
+tbx_keepalive &
+exec bash -l
+`;
 }
 
 function latestSnapshot(config) {
@@ -977,20 +1038,31 @@ async function shell(name) {
   const publicKey = hostSigningPublicKey();
   const sandboxName = await ensureTaskSandbox(config, name, publicKey);
   const broker = await startSigningBroker(sandboxName);
+  const terminalState = readHostTerminalState();
+  let status = 0;
   try {
-    await sandboxAsync([
-      "exec",
-      "--interactive",
-      "--tty",
-      "--workdir",
-      config.repoPath,
-      ...brokeredCredentialEnvArgs(),
-      sandboxName,
-      "bash",
-      "-l"
-    ]);
+    const result = await sandboxAsync(
+      [
+        "exec",
+        "--interactive",
+        "--tty",
+        "--workdir",
+        config.repoPath,
+        ...brokeredCredentialEnvArgs(),
+        sandboxName,
+        "bash",
+        "-lc",
+        interactiveShellCommand()
+      ],
+      { allowFailure: true }
+    );
+    status = result.status ?? 0;
   } finally {
+    restoreHostTerminal(terminalState);
     broker.close();
+  }
+  if (status !== 0) {
+    process.exit(status);
   }
 }
 
@@ -1238,7 +1310,7 @@ async function main() {
       await checkGitHubCredentialBroker(args[1]);
     } else if (command === "new") {
       await createTask(args[0]);
-    } else if (command === "sh") {
+    } else if (command === "sh" || command === "ssh") {
       await shell(args[0]);
     } else if (command === "run") {
       await runInTask(args[0], args.slice(1));

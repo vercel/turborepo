@@ -127,9 +127,11 @@ Creates `turbo-<name>` from the newest available base snapshot, applies credenti
 
 ```bash
 pnpm tbx sh <name>
+# or
+pnpm tbx ssh <name>
 ```
 
-Opens an interactive login Bash shell in `turbo-<name>`. Creates it first if missing.
+Opens an interactive login Bash shell in `turbo-<name>`. Creates it first if missing. The shell sends an invisible keepalive while it is idle at the prompt so the pty tunnel does not close during inactivity. When the connection closes, `tbx` restores the host terminal state and exits common TUI modes.
 
 ```bash
 pnpm tbx run <name> -- <command>
