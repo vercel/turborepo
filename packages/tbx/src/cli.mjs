@@ -110,7 +110,9 @@ function loadPackageEnv() {
 }
 
 function sandboxEnv() {
-  return process.env;
+  const env = { ...process.env };
+  delete env.VERCEL_OIDC_TOKEN;
+  return env;
 }
 
 function sandboxArgs(args) {
@@ -270,7 +272,7 @@ tbx_keepalive() {
   done
 }
 tbx_keepalive &
-exec bash -l
+exec env -u PS1 bash -l
 `;
 }
 
@@ -609,20 +611,6 @@ function hasHostVercelOidcToken() {
   }
 }
 
-function brokeredVercelOidcToken() {
-  const token = maybeHostVercelOidcToken();
-  if (!token) {
-    return null;
-  }
-
-  const parts = token.split(".");
-  if (parts.length !== 3 || !parts[0] || !parts[1]) {
-    return "tbx-brokered";
-  }
-
-  return `${parts[0]}.${parts[1]}.tbx-brokered`;
-}
-
 function vercelCredentialPolicy() {
   const token = maybeHostVercelOidcToken();
   if (!token) {
@@ -701,9 +689,8 @@ function brokeredCredentialEnvArgs() {
   requireBrokeredCredentials();
 
   const args = brokeredGitHubEnvArgs();
-  const token = brokeredVercelOidcToken();
-  if (token) {
-    args.push("--env", `VERCEL_OIDC_TOKEN=${token}`);
+  if (maybeHostVercelOidcToken()) {
+    args.push("--env", "VERCEL_OIDC_TOKEN=tbx-brokered");
     args.push("--env", "AI_GATEWAY_API_KEY=tbx-brokered");
   }
   return args;
