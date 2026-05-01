@@ -33,6 +33,8 @@ const defaults = {
   vcpus: "32"
 };
 
+const interactiveShellPath = "/tmp/tbx-interactive-shell";
+
 const userProfiles = {
   "anthony-shew": {
     dotfiles: {
@@ -275,6 +277,7 @@ tbx_keepalive() {
     fi
   done
 }
+
 tbx_keepalive &
 tbx_shell="\${SHELL:-}"
 if [ -z "$tbx_shell" ] || [ ! -x "$tbx_shell" ]; then
@@ -299,6 +302,16 @@ case "$(basename "$tbx_shell")" in
     ;;
 esac
 `;
+}
+
+async function writeInteractiveShellCommand(sandboxName) {
+  const target = await Sandbox.get({ name: sandboxName });
+  await target.writeFiles([
+    {
+      path: interactiveShellPath,
+      content: interactiveShellCommand()
+    }
+  ]);
 }
 
 function latestSnapshot(config) {
@@ -1049,6 +1062,7 @@ async function shell(name) {
   requireSandboxInstalled();
   const publicKey = hostSigningPublicKey();
   const sandboxName = await ensureTaskSandbox(config, name, publicKey);
+  await writeInteractiveShellCommand(sandboxName);
   const broker = await startSigningBroker(sandboxName);
   const terminalState = readHostTerminalState();
   let status = 0;
@@ -1063,8 +1077,7 @@ async function shell(name) {
         ...brokeredCredentialEnvArgs(),
         sandboxName,
         "bash",
-        "-lc",
-        interactiveShellCommand()
+        interactiveShellPath
       ],
       { allowFailure: true }
     );
