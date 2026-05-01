@@ -97,16 +97,7 @@ enum ChildHandleImpl {
 
 #[cfg(unix)]
 #[derive(Debug, Clone, Copy)]
-enum GracefulInterruptTarget {
-    DirectChild,
-    ProcessGroup,
-}
-
-#[cfg(unix)]
-#[derive(Debug, Clone, Copy)]
 struct ShutdownSemantics {
-    // Who should receive the first graceful interrupt.
-    graceful_interrupt_target: GracefulInterruptTarget,
     // Whether we should keep waiting on the process group after the direct child exits.
     wait_for_process_group_after_child_exit: bool,
 }
@@ -115,14 +106,6 @@ struct ShutdownSemantics {
 impl ShutdownSemantics {
     fn process_group() -> Self {
         Self {
-            graceful_interrupt_target: GracefulInterruptTarget::ProcessGroup,
-            wait_for_process_group_after_child_exit: true,
-        }
-    }
-
-    fn direct_child_then_wait_for_process_group() -> Self {
-        Self {
-            graceful_interrupt_target: GracefulInterruptTarget::DirectChild,
             wait_for_process_group_after_child_exit: true,
         }
     }
@@ -373,7 +356,7 @@ impl ChildHandle {
                 pid,
                 imp: ChildHandleImpl::Pty(child),
                 #[cfg(unix)]
-                shutdown_semantics: ShutdownSemantics::direct_child_then_wait_for_process_group(),
+                shutdown_semantics: ShutdownSemantics::process_group(),
                 #[cfg(unix)]
                 target_identity,
                 #[cfg(windows)]
@@ -400,20 +383,12 @@ impl ChildHandle {
 
     #[cfg(unix)]
     fn send_graceful_interrupt(&self, pid: libc::pid_t) {
-        let target = match self.shutdown_semantics.graceful_interrupt_target {
-            GracefulInterruptTarget::DirectChild => {
-                debug!("sending SIGINT to child {}", pid);
-                pid
-            }
-            GracefulInterruptTarget::ProcessGroup => {
-                let Some(process_group_id) = self.process_group_id() else {
-                    debug!("missing process group id for child {}", pid);
-                    return;
-                };
-                debug!("sending SIGINT to process group -{}", process_group_id);
-                -process_group_id
-            }
+        let Some(process_group_id) = self.process_group_id() else {
+            debug!("missing process group id for child {}", pid);
+            return;
         };
+        debug!("sending SIGINT to process group -{}", process_group_id);
+        let target = -process_group_id;
 
         if unsafe { libc::kill(target, libc::SIGINT) } == -1 {
             debug!("failed to send SIGINT to {target}");
@@ -776,10 +751,66 @@ impl ShutdownStyle {
 
                 #[cfg(windows)]
                 {
-                    debug!("timeout not supported on windows, killing");
-                    match child.kill().await {
-                        Ok(_) => ChildExit::Killed,
-                        Err(_) => ChildExit::Failed,
+                    // Windows broadcasts Ctrl+C to all processes attached to the
+                    // console. Turbo's graceful shutdown should give child
+                    // processes a chance to handle that event before escalating.
+                    let deadline = timeout.map(|timeout| tokio::time::Instant::now() + timeout);
+                    let mut command_rx_open = true;
+
+                    match deadline {
+                        Some(deadline) => loop {
+                            tokio::select! {
+                                result = child.wait() => {
+                                    break match result {
+                                        Ok(_exit_code) => ChildExit::Interrupted,
+                                        Err(_) => ChildExit::Failed,
+                                    };
+                                }
+                                command = command_rx.recv(), if command_rx_open => {
+                                    match command {
+                                        Some(ChildCommand::Kill) => {
+                                            debug!("graceful shutdown interrupted, killing child");
+                                            break match child.kill().await {
+                                                Ok(_) => ChildExit::Killed,
+                                                Err(_) => ChildExit::Failed,
+                                            };
+                                        }
+                                        Some(ChildCommand::Shutdown(_)) => {}
+                                        None => command_rx_open = false,
+                                    }
+                                }
+                                _ = tokio::time::sleep_until(deadline) => {
+                                    debug!("graceful shutdown timed out, killing child");
+                                    break match child.kill().await {
+                                        Ok(_) => ChildExit::Killed,
+                                        Err(_) => ChildExit::Failed,
+                                    };
+                                }
+                            }
+                        },
+                        None => loop {
+                            tokio::select! {
+                                result = child.wait() => {
+                                    break match result {
+                                        Ok(_exit_code) => ChildExit::Interrupted,
+                                        Err(_) => ChildExit::Failed,
+                                    };
+                                }
+                                command = command_rx.recv(), if command_rx_open => {
+                                    match command {
+                                        Some(ChildCommand::Kill) => {
+                                            debug!("graceful shutdown interrupted, killing child");
+                                            break match child.kill().await {
+                                                Ok(_) => ChildExit::Killed,
+                                                Err(_) => ChildExit::Failed,
+                                            };
+                                        }
+                                        Some(ChildCommand::Shutdown(_)) => {}
+                                        None => command_rx_open = false,
+                                    }
+                                }
+                            }
+                        },
                     }
                 }
             }
@@ -1919,11 +1950,7 @@ mod test {
         let exit = child.stop().await;
 
         // On Unix, shell scripts may not respond to SIGINT and will timeout,
-        // resulting in being killed rather than interrupted. For non-PTY
-        // children, SIGINT goes to the process group but shells may still
-        // continue their loop. For PTY children, SIGINT goes only to the
-        // direct child to avoid double delivery through package managers,
-        // which also means the shell may not exit gracefully.
+        // resulting in being killed rather than interrupted.
         if cfg!(unix) {
             assert_matches!(exit, Some(ChildExit::Killed) | Some(ChildExit::Interrupted));
         } else {
