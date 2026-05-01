@@ -1123,6 +1123,21 @@ function dotfilesBootstrap(profile) {
   const install = shellQuote(profile.dotfiles.install);
 
   return `
+step "install shell prompt dependencies"
+if ! command -v zsh >/dev/null 2>&1; then
+  if command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update
+    sudo apt-get install -y zsh
+  elif command -v dnf >/dev/null 2>&1; then
+    sudo dnf install -y zsh
+  elif command -v pacman >/dev/null 2>&1; then
+    sudo pacman -Sy --needed --noconfirm zsh
+  fi
+fi
+if ! command -v starship >/dev/null 2>&1; then
+  mkdir -p "$HOME/.local/bin"
+  curl -fsSL https://starship.rs/install.sh | sh -s -- -y -b "$HOME/.local/bin"
+fi
 step "install mapped dotfiles"
 dotfiles_dir="$HOME/.dotfiles"
 if [ -d "$dotfiles_dir/.git" ]; then
