@@ -692,6 +692,35 @@ impl Lockfile for BunLockfile {
         // found during pruning
         let mut packages_with_workspaces: std::collections::HashSet<String> =
             packages.iter().cloned().collect();
+
+        if let Some(root_workspace) = self.data.workspaces.get("") {
+            let mut root_deps = BTreeMap::new();
+            if let Some(deps) = &root_workspace.dependencies {
+                root_deps.extend(deps.clone());
+            }
+            if let Some(dev_deps) = &root_workspace.dev_dependencies {
+                root_deps.extend(dev_deps.clone());
+            }
+            if let Some(optional_deps) = &root_workspace.optional_dependencies {
+                root_deps.extend(optional_deps.clone());
+            }
+            if let Some(peer_deps) = &root_workspace.peer_dependencies {
+                root_deps.extend(peer_deps.clone());
+            }
+
+            if !root_deps.is_empty() {
+                let root_closures = crate::all_transitive_closures(
+                    self,
+                    Some(("".to_string(), root_deps)).into_iter().collect(),
+                    true,
+                )?;
+                if let Some(root_closure) = root_closures.get("") {
+                    packages_with_workspaces
+                        .extend(root_closure.iter().map(|package| package.key.clone()));
+                }
+            }
+        }
+
         for ws_path in workspace_packages {
             if ws_path.is_empty() {
                 continue;
@@ -1391,9 +1420,11 @@ impl BunLockfile {
         let mut sorted_keys: Vec<_> = keys_to_include.iter().collect();
         sorted_keys.sort();
 
+        let mut renamed_prefixes: Vec<(String, String)> = Vec::new();
+
         for key in sorted_keys {
             if let Some(entry) = self.data.packages.get(key) {
-                let pruned_key = if should_dealias {
+                let mut pruned_key = if should_dealias {
                     let parsed_key = PackageKey::parse(key);
 
                     // Check if this is a nested key that could be dealiased
@@ -1444,6 +1475,18 @@ impl BunLockfile {
                     // Not dealiasing - keep key as-is
                     key.clone()
                 };
+
+                if let Some((old_prefix, new_prefix)) = renamed_prefixes
+                    .iter()
+                    .filter(|(old_prefix, _)| key.starts_with(old_prefix))
+                    .max_by_key(|(old_prefix, _)| old_prefix.len())
+                {
+                    pruned_key = format!("{}{}", new_prefix, &key[old_prefix.len()..]);
+                }
+
+                if pruned_key != *key {
+                    renamed_prefixes.push((format!("{key}/"), format!("{pruned_key}/")));
+                }
 
                 // Check if this is a workspace mapping entry (e.g., "storybook":
                 // ["storybook@workspace:apps/storybook"])
@@ -1506,6 +1549,20 @@ impl BunLockfile {
                 pruned_data
                     .packages
                     .insert(pruned_key.clone(), entry.clone());
+
+                if pruned_key != *key {
+                    let old_prefix = format!("{key}/");
+                    let new_prefix = format!("{pruned_key}/");
+                    for (descendant_key, descendant_entry) in &self.data.packages {
+                        if descendant_key.starts_with(&old_prefix) {
+                            let renamed_key =
+                                format!("{}{}", new_prefix, &descendant_key[old_prefix.len()..]);
+                            pruned_data
+                                .packages
+                                .insert(renamed_key, descendant_entry.clone());
+                        }
+                    }
+                }
 
                 // Check if this package references a workspace (e.g., via @workspace: in ident)
                 // and ensure that workspace is included
@@ -1761,7 +1818,13 @@ impl BunLockfile {
 
             let mut promote_target: Option<(String, String)> = None; // (pkg_name, old_key)
             for key in &sorted_pkg_keys {
-                if PackageKey::parse(key).parent().is_none() {
+                if let Some(parent) = PackageKey::parse(key).parent() {
+                    if (parent == "npm" || parent.starts_with("npm/"))
+                        && pruned_data.packages.contains_key(&parent)
+                    {
+                        continue;
+                    }
+                } else {
                     continue;
                 }
 
@@ -1898,6 +1961,67 @@ impl BunLockfile {
                     None => true,
                 }
             });
+        }
+
+        // De-aliasing can turn a workspace-scoped package key like
+        // `@repo/app/pkg` into `pkg`. Its nested resolutions need to remain
+        // addressable from the new key, otherwise bun treats required deps as
+        // missing during frozen installs.
+        loop {
+            let package_snapshot: Vec<(String, PackageEntry)> = pruned_data
+                .packages
+                .iter()
+                .map(|(key, entry)| (key.clone(), entry.clone()))
+                .collect();
+            let mut additions = Vec::new();
+
+            for (key, entry) in package_snapshot {
+                let Some(info) = &entry.info else {
+                    continue;
+                };
+
+                for dep_name in info
+                    .dependencies
+                    .keys()
+                    .chain(info.optional_dependencies.keys())
+                {
+                    let nested_key = format!("{key}/{dep_name}");
+                    if pruned_data.packages.contains_key(dep_name)
+                        || pruned_data.packages.contains_key(&nested_key)
+                    {
+                        continue;
+                    }
+
+                    let Some((_, source_dep_entry)) =
+                        self.data
+                            .packages
+                            .iter()
+                            .find_map(|(source_key, source_entry)| {
+                                if source_entry.ident != entry.ident {
+                                    return None;
+                                }
+
+                                let source_dep_key = format!("{source_key}/{dep_name}");
+                                self.data
+                                    .packages
+                                    .get(&source_dep_key)
+                                    .map(|dep_entry| (source_dep_key, dep_entry))
+                            })
+                    else {
+                        continue;
+                    };
+
+                    additions.push((nested_key, source_dep_entry.clone()));
+                }
+            }
+
+            if additions.is_empty() {
+                break;
+            }
+
+            for (key, entry) in additions {
+                pruned_data.packages.insert(key, entry);
+            }
         }
 
         // Rebuild key_to_entry HashMap for the pruned lockfile
