@@ -279,7 +279,14 @@ tbx_keepalive() {
 }
 
 tbx_keepalive &
-exec bash -l
+tbx_bashrc="$(mktemp /tmp/tbx-bashrc.XXXXXX)"
+cat > "$tbx_bashrc" <<'TBX_BASHRC'
+if [ -r "$HOME/.bashrc" ]; then
+  . "$HOME/.bashrc"
+fi
+PS1='▲ \[\\033[2m\]\w/\[\\033[0m\] '
+TBX_BASHRC
+exec bash --rcfile "$tbx_bashrc" -i
 `;
 }
 
