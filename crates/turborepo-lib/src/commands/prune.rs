@@ -161,7 +161,7 @@ pub async fn prune(
 
         // We don't want to do any copying for the root workspace
         if let PackageName::Other(workspace) = workspace {
-            prune.copy_workspace(entry.package_json_path())?;
+            prune.copy_workspace(entry.package_json_path(), &entry.package_json)?;
             workspace_paths.push(
                 entry
                     .package_json_path()
@@ -487,7 +487,11 @@ impl<'a> Prune<'a> {
         Ok(())
     }
 
-    fn copy_workspace(&self, package_json_path: &AnchoredSystemPath) -> Result<(), Error> {
+    fn copy_workspace(
+        &self,
+        package_json_path: &AnchoredSystemPath,
+        workspace_package_json: &PackageJson,
+    ) -> Result<(), Error> {
         let package_json_path = self.root.resolve(package_json_path);
         let original_dir = package_json_path
             .parent()
@@ -506,6 +510,11 @@ impl<'a> Prune<'a> {
                 &package_json_path,
                 docker_workspace_dir.resolve(package_json()),
             )?;
+            self.create_docker_bin_stubs(
+                workspace_package_json,
+                original_dir,
+                &docker_workspace_dir,
+            )?;
 
             if self.uses_per_workspace_lockfiles {
                 let lockfile_name = self.package_graph.package_manager().lockfile_name();
@@ -516,6 +525,34 @@ impl<'a> Prune<'a> {
                         docker_workspace_dir.join_component(lockfile_name),
                     )?;
                 }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn create_docker_bin_stubs(
+        &self,
+        package_json: &PackageJson,
+        original_dir: &turbopath::AbsoluteSystemPath,
+        docker_workspace_dir: &turbopath::AbsoluteSystemPath,
+    ) -> Result<(), Error> {
+        for bin_path in bin_paths(package_json) {
+            let Ok(relative_bin_path) = RelativeUnixPathBuf::new(bin_path) else {
+                trace!("bin entry {bin_path} is not relative, skipping stub");
+                continue;
+            };
+
+            let original_bin_path = original_dir.join_unix_path(&relative_bin_path);
+            if !original_bin_path.starts_with(original_dir.as_std_path()) {
+                trace!("bin entry {bin_path} escapes workspace, skipping stub");
+                continue;
+            }
+
+            let docker_bin_path = docker_workspace_dir.join_unix_path(relative_bin_path);
+            if !docker_bin_path.try_exists()? {
+                docker_bin_path.ensure_dir()?;
+                docker_bin_path.create_with_contents("")?;
             }
         }
 
@@ -692,6 +729,17 @@ impl<'a> Prune<'a> {
     }
 }
 
+fn bin_paths(package_json: &PackageJson) -> Vec<&str> {
+    match package_json.other.get("bin") {
+        Some(serde_json::Value::String(path)) => vec![path.as_str()],
+        Some(serde_json::Value::Object(entries)) => entries
+            .values()
+            .filter_map(serde_json::Value::as_str)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// Merge `pruned` values into `original`, preserving the key ordering from
 /// `original`. Keys present in `original` but absent from `pruned` are dropped.
 /// Keys present in `pruned` but absent from `original` are appended.
@@ -724,8 +772,34 @@ fn merge_preserving_key_order(
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use turborepo_repository::package_json::PackageJson;
 
-    use super::{merge_preserving_key_order, ADDITIONAL_FILES};
+    use super::{bin_paths, merge_preserving_key_order, ADDITIONAL_FILES};
+
+    #[test]
+    fn bin_paths_reads_string_bin() {
+        let package_json = PackageJson::from_value(json!({
+            "name": "bin-package",
+            "bin": "cli.js"
+        }))
+        .unwrap();
+
+        assert_eq!(bin_paths(&package_json), vec!["cli.js"]);
+    }
+
+    #[test]
+    fn bin_paths_reads_object_bin() {
+        let package_json = PackageJson::from_value(json!({
+            "name": "bin-package",
+            "bin": {
+                "one": "bin/one.js",
+                "two": "bin/two.js"
+            }
+        }))
+        .unwrap();
+
+        assert_eq!(bin_paths(&package_json), vec!["bin/one.js", "bin/two.js"]);
+    }
 
     #[test]
     fn merge_preserves_key_order() {

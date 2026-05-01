@@ -79,6 +79,76 @@ fn test_prune_docker() {
     );
 }
 
+#[test]
+fn test_prune_docker_creates_bin_stubs() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("monorepo_with_root_dep", tempdir.path()).unwrap();
+    fs::write(
+        tempdir.path().join(".npmrc"),
+        "script-shell=bash\nupdate-notifier=false\n",
+    )
+    .unwrap();
+
+    fs::write(
+        tempdir.path().join("packages/shared/package.json"),
+        r#"{
+  "name": "shared",
+  "bin": {
+    "shared-tool": "bin/shared-tool.js",
+    "nested-tool": "nested/tool.js"
+  },
+  "scripts": {
+    "build": "echo 'building'"
+  }
+}
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(tempdir.path().join("packages/shared/bin")).unwrap();
+    fs::write(
+        tempdir.path().join("packages/shared/bin/shared-tool.js"),
+        "console.log('shared-tool');\n",
+    )
+    .unwrap();
+    fs::create_dir_all(tempdir.path().join("packages/shared/nested")).unwrap();
+    fs::write(
+        tempdir.path().join("packages/shared/nested/tool.js"),
+        "console.log('nested-tool');\n",
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let json_tool = tempdir
+        .path()
+        .join("out/json/packages/shared/bin/shared-tool.js");
+    let json_nested_tool = tempdir
+        .path()
+        .join("out/json/packages/shared/nested/tool.js");
+    assert!(json_tool.exists(), "bin stub should exist in out/json");
+    assert!(
+        json_nested_tool.exists(),
+        "nested bin stub should exist in out/json"
+    );
+    assert_eq!(fs::metadata(json_tool).unwrap().len(), 0);
+    assert_eq!(fs::metadata(json_nested_tool).unwrap().len(), 0);
+
+    assert_eq!(
+        fs::read_to_string(
+            tempdir
+                .path()
+                .join("out/full/packages/shared/bin/shared-tool.js")
+        )
+        .unwrap(),
+        "console.log('shared-tool');\n"
+    );
+}
+
 // --- out-dir.t ---
 
 #[test]
