@@ -927,7 +927,7 @@ mod windows {
                 .lines()
                 .find(|line| !line.trim().is_empty())
             {
-                return path.trim().to_string();
+                return path.trim().replace('\\', "/");
             }
         }
 
@@ -936,7 +936,7 @@ mod windows {
             git_sh.exists(),
             "Windows npm script-shell=sh regression requires sh.exe"
         );
-        git_sh.display().to_string()
+        git_sh.display().to_string().replace('\\', "/")
     }
 
     fn setup_npm_root_shutdown_example_with_command(
@@ -1054,11 +1054,13 @@ mod windows {
         }
     }
 
-    fn wait_for_path(path: &Path, timeout: Duration) {
+    fn wait_for_path(path: &Path, timeout: Duration, output: &Arc<Mutex<Vec<u8>>>) {
         let start = Instant::now();
         while !path.exists() {
             if start.elapsed() > timeout {
-                panic!("timed out waiting for {}", path.display());
+                let transcript =
+                    normalize_output(String::from_utf8_lossy(&output.lock().unwrap()).as_ref());
+                panic!("timed out waiting for {}\n{transcript}", path.display());
             }
             thread::sleep(Duration::from_millis(100));
         }
@@ -1099,7 +1101,7 @@ setInterval(() => {}, 200);
             &test_dir,
             &[("NPM_CONFIG_SCRIPT_SHELL", script_shell.as_str())],
         );
-        wait_for_path(&ready_file, START_TIMEOUT);
+        wait_for_path(&ready_file, START_TIMEOUT, &child.output);
 
         child.send_ctrl_c();
         let transcript = child.finish(EXIT_TIMEOUT);
