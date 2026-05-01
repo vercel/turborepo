@@ -1020,10 +1020,13 @@ mod windows {
             }
         });
 
-        let writer = pair
+        let mut writer = pair
             .master
             .take_writer()
             .expect("failed to take pty writer");
+        writer
+            .write_all(b"\x1b[1;1R")
+            .expect("failed to write ConPTY cursor position response");
 
         let mut command = CommandBuilder::new(turbo_bin());
         command.arg("run");
