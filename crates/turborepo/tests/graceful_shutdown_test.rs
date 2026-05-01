@@ -168,6 +168,57 @@ mod unix {
         (tempdir, test_dir)
     }
 
+    fn setup_npm_root_shutdown_example_with_command(
+        script_name: &str,
+        script_command: &str,
+        script_contents: &str,
+    ) -> (TempDir, PathBuf) {
+        let tempdir = tempfile::tempdir().expect("failed to create tempdir");
+        let test_dir = tempdir.path().to_path_buf();
+        setup::copy_fixture("basic_monorepo", &test_dir).expect("failed to copy npm fixture");
+        fs::write(
+            test_dir.join(".npmrc"),
+            "script-shell=sh\nupdate-notifier=false\n",
+        )
+        .expect("failed to write npm config");
+
+        fs::write(test_dir.join(script_name), script_contents).expect("failed to write script");
+
+        fs::write(
+            test_dir.join("package.json"),
+            serde_json::to_string_pretty(&json!({
+                "name": "monorepo",
+                "scripts": {
+                    "start": script_command,
+                },
+                "packageManager": "npm@10.5.0",
+                "workspaces": [
+                    "apps/**",
+                    "packages/**",
+                ],
+            }))
+            .expect("failed to serialize package.json"),
+        )
+        .expect("failed to update package.json");
+
+        fs::write(
+            test_dir.join("turbo.json"),
+            serde_json::to_string_pretty(&json!({
+                "$schema": "https://turborepo.dev/schema.json",
+                "tasks": {
+                    "//#start": {
+                        "cache": false,
+                        "persistent": true,
+                    }
+                }
+            }))
+            .expect("failed to serialize turbo.json"),
+        )
+        .expect("failed to update turbo.json");
+
+        (tempdir, test_dir)
+    }
+
     fn turbo_bin() -> PathBuf {
         assert_cmd::cargo::cargo_bin("turbo")
     }
@@ -262,6 +313,69 @@ mod unix {
         command.env("DO_NOT_TRACK", "1");
         command.env("NPM_CONFIG_UPDATE_NOTIFIER", "false");
         command.env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0");
+        command.env_remove("CI");
+        command.env_remove("GITHUB_ACTIONS");
+
+        let child = pair
+            .slave
+            .spawn_command(command)
+            .expect("failed to spawn turbo in pty");
+
+        PtyTurbo {
+            child: Some(child),
+            writer: Some(writer),
+            output,
+            reader_thread: Some(reader_thread),
+        }
+    }
+
+    fn spawn_interactive_turbo_start_with_env(test_dir: &Path, env: &[(&str, &str)]) -> PtyTurbo {
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("failed to create pty pair");
+
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let output_clone = output.clone();
+        let mut reader = pair
+            .master
+            .try_clone_reader()
+            .expect("failed to clone pty reader");
+        let reader_thread = thread::spawn(move || {
+            let mut buffer = [0; 1024];
+            loop {
+                match reader.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(n) => append_capped_output(&output_clone, &buffer[..n]),
+                    Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let writer = pair
+            .master
+            .take_writer()
+            .expect("failed to take pty writer");
+
+        let mut command = CommandBuilder::new(turbo_bin());
+        command.arg("run");
+        command.arg("start");
+        command.cwd(test_dir);
+        command.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1");
+        command.env("TURBO_GLOBAL_WARNING_DISABLED", "1");
+        command.env("TURBO_PRINT_VERSION_DISABLED", "1");
+        command.env("DO_NOT_TRACK", "1");
+        command.env("NPM_CONFIG_UPDATE_NOTIFIER", "false");
+        command.env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0");
+        for (key, value) in env {
+            command.env(key, value);
+        }
         command.env_remove("CI");
         command.env_remove("GITHUB_ACTIONS");
 
@@ -417,6 +531,48 @@ while true; do sleep 0.2 || true; done
         assert!(
             cleanup_idx < cleanup_done_idx,
             "cleanup completion log should appear after cleanup starts\n{transcript}"
+        );
+    }
+
+    #[test]
+    fn run_forwards_sigint_to_root_node_script_with_sh_script_shell_in_tty() {
+        let (_tempdir, test_dir) = setup_npm_root_shutdown_example_with_command(
+            "graceful.mjs",
+            "node ./graceful.mjs",
+            r#"import { writeFileSync } from "node:fs";
+
+process.on("SIGINT", () => {
+  console.log("node cleanup start");
+  setTimeout(() => {
+    writeFileSync("cleanup.done", "");
+    console.log("node cleanup done");
+    process.exit(0);
+  }, 500);
+});
+
+console.log("node ready");
+writeFileSync("ready", "");
+setInterval(() => {}, 200);
+"#,
+        );
+
+        let ready_file = test_dir.join("ready");
+        let cleanup_file = test_dir.join("cleanup.done");
+
+        let mut child =
+            spawn_interactive_turbo_start_with_env(&test_dir, &[("NPM_CONFIG_SCRIPT_SHELL", "sh")]);
+        wait_for_path(&ready_file, START_TIMEOUT);
+
+        child.send_ctrl_c();
+        let transcript = child.finish(EXIT_TIMEOUT);
+
+        assert!(
+            cleanup_file.exists(),
+            "node SIGINT cleanup marker should exist"
+        );
+        assert!(
+            transcript.contains("node cleanup done"),
+            "expected Node SIGINT handler to finish with script-shell=sh\n{transcript}"
         );
     }
 
@@ -665,6 +821,268 @@ while true; do sleep 0.2 || true; done
             combined
                 .contains("Graceful shutdown timed out. Force killing Turborepo tasks: app-a#dev"),
             "expected auto-force banner after timeout\n{combined}"
+        );
+    }
+}
+
+#[cfg(windows)]
+mod windows {
+    use std::{
+        fs,
+        io::{Read, Write},
+        path::{Path, PathBuf},
+        sync::{Arc, Mutex},
+        thread,
+        time::{Duration, Instant},
+    };
+
+    use portable_pty::{CommandBuilder, PtySize, native_pty_system};
+    use serde_json::json;
+    use tempfile::TempDir;
+
+    use crate::common::setup;
+
+    const START_TIMEOUT: Duration = Duration::from_secs(15);
+    const EXIT_TIMEOUT: Duration = Duration::from_secs(20);
+    const MAX_PTY_OUTPUT_BYTES: usize = 256 * 1024;
+
+    struct PtyTurbo {
+        child: Option<Box<dyn portable_pty::Child + Send + Sync>>,
+        writer: Option<Box<dyn Write + Send>>,
+        output: Arc<Mutex<Vec<u8>>>,
+        reader_thread: Option<thread::JoinHandle<()>>,
+    }
+
+    impl PtyTurbo {
+        fn send_ctrl_c(&mut self) {
+            let writer = self.writer.as_mut().expect("pty writer already taken");
+            writer
+                .write_all(&[3])
+                .expect("failed to write Ctrl+C to pty");
+            writer.flush().expect("failed to flush Ctrl+C to pty");
+        }
+
+        fn finish(mut self, timeout: Duration) -> String {
+            let start = Instant::now();
+            loop {
+                let status = self
+                    .child
+                    .as_mut()
+                    .expect("pty child guard consumed")
+                    .try_wait()
+                    .expect("failed waiting for pty child");
+                if status.is_some() {
+                    break;
+                }
+                if start.elapsed() > timeout {
+                    panic!("timed out waiting for pty child exit");
+                }
+                thread::sleep(Duration::from_millis(100));
+            }
+
+            let _ = self.child.take();
+            drop(self.writer.take());
+            if let Some(reader_thread) = self.reader_thread.take() {
+                reader_thread.join().expect("pty reader thread panicked");
+            }
+
+            normalize_output(String::from_utf8_lossy(&self.output.lock().unwrap()).as_ref())
+        }
+    }
+
+    impl Drop for PtyTurbo {
+        fn drop(&mut self) {
+            drop(self.writer.take());
+            if let Some(child) = self.child.as_mut() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+            if let Some(reader_thread) = self.reader_thread.take() {
+                let _ = reader_thread.join();
+            }
+        }
+    }
+
+    fn append_capped_output(output: &Arc<Mutex<Vec<u8>>>, chunk: &[u8]) {
+        let mut output = output.lock().unwrap();
+        output.extend_from_slice(chunk);
+        if output.len() > MAX_PTY_OUTPUT_BYTES {
+            let excess = output.len() - MAX_PTY_OUTPUT_BYTES;
+            output.drain(..excess);
+        }
+    }
+
+    fn turbo_bin() -> PathBuf {
+        assert_cmd::cargo::cargo_bin("turbo")
+    }
+
+    fn setup_npm_root_shutdown_example_with_command(
+        script_name: &str,
+        script_command: &str,
+        script_contents: &str,
+    ) -> (TempDir, PathBuf) {
+        let tempdir = tempfile::tempdir().expect("failed to create tempdir");
+        let test_dir = tempdir.path().to_path_buf();
+        setup::copy_fixture("basic_monorepo", &test_dir).expect("failed to copy npm fixture");
+        fs::write(
+            test_dir.join(".npmrc"),
+            "script-shell=sh\nupdate-notifier=false\n",
+        )
+        .expect("failed to write npm config");
+
+        fs::write(test_dir.join(script_name), script_contents).expect("failed to write script");
+
+        fs::write(
+            test_dir.join("package.json"),
+            serde_json::to_string_pretty(&json!({
+                "name": "monorepo",
+                "scripts": {
+                    "start": script_command,
+                },
+                "packageManager": "npm@10.5.0",
+                "workspaces": [
+                    "apps/**",
+                    "packages/**",
+                ],
+            }))
+            .expect("failed to serialize package.json"),
+        )
+        .expect("failed to update package.json");
+
+        fs::write(
+            test_dir.join("turbo.json"),
+            serde_json::to_string_pretty(&json!({
+                "$schema": "https://turborepo.dev/schema.json",
+                "tasks": {
+                    "//#start": {
+                        "cache": false,
+                        "persistent": true,
+                    }
+                }
+            }))
+            .expect("failed to serialize turbo.json"),
+        )
+        .expect("failed to update turbo.json");
+
+        (tempdir, test_dir)
+    }
+
+    fn spawn_interactive_turbo_start_with_env(test_dir: &Path, env: &[(&str, &str)]) -> PtyTurbo {
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("failed to create pty pair");
+
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let output_clone = output.clone();
+        let mut reader = pair
+            .master
+            .try_clone_reader()
+            .expect("failed to clone pty reader");
+        let reader_thread = thread::spawn(move || {
+            let mut buffer = [0; 1024];
+            loop {
+                match reader.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(n) => append_capped_output(&output_clone, &buffer[..n]),
+                    Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let writer = pair
+            .master
+            .take_writer()
+            .expect("failed to take pty writer");
+
+        let mut command = CommandBuilder::new(turbo_bin());
+        command.arg("run");
+        command.arg("start");
+        command.cwd(test_dir);
+        command.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1");
+        command.env("TURBO_GLOBAL_WARNING_DISABLED", "1");
+        command.env("TURBO_PRINT_VERSION_DISABLED", "1");
+        command.env("DO_NOT_TRACK", "1");
+        command.env("NPM_CONFIG_UPDATE_NOTIFIER", "false");
+        command.env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0");
+        for (key, value) in env {
+            command.env(key, value);
+        }
+        command.env_remove("CI");
+        command.env_remove("GITHUB_ACTIONS");
+
+        let child = pair
+            .slave
+            .spawn_command(command)
+            .expect("failed to spawn turbo in pty");
+
+        PtyTurbo {
+            child: Some(child),
+            writer: Some(writer),
+            output,
+            reader_thread: Some(reader_thread),
+        }
+    }
+
+    fn wait_for_path(path: &Path, timeout: Duration) {
+        let start = Instant::now();
+        while !path.exists() {
+            if start.elapsed() > timeout {
+                panic!("timed out waiting for {}", path.display());
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    fn normalize_output(text: &str) -> String {
+        text.replace("\r\n", "\n").replace('\r', "\n")
+    }
+
+    #[test]
+    fn run_forwards_ctrl_c_to_root_node_script_with_sh_script_shell() {
+        let (_tempdir, test_dir) = setup_npm_root_shutdown_example_with_command(
+            "graceful.mjs",
+            "node ./graceful.mjs",
+            r#"import { writeFileSync } from "node:fs";
+
+process.on("SIGINT", () => {
+  console.log("node cleanup start");
+  setTimeout(() => {
+    writeFileSync("cleanup.done", "");
+    console.log("node cleanup done");
+    process.exit(0);
+  }, 500);
+});
+
+console.log("node ready");
+writeFileSync("ready", "");
+setInterval(() => {}, 200);
+"#,
+        );
+
+        let ready_file = test_dir.join("ready");
+        let cleanup_file = test_dir.join("cleanup.done");
+
+        let mut child =
+            spawn_interactive_turbo_start_with_env(&test_dir, &[("NPM_CONFIG_SCRIPT_SHELL", "sh")]);
+        wait_for_path(&ready_file, START_TIMEOUT);
+
+        child.send_ctrl_c();
+        let transcript = child.finish(EXIT_TIMEOUT);
+
+        assert!(
+            cleanup_file.exists(),
+            "node SIGINT cleanup marker should exist"
+        );
+        assert!(
+            transcript.contains("node cleanup done"),
+            "expected Node SIGINT handler to finish with script-shell=sh\n{transcript}"
         );
     }
 }
