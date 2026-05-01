@@ -56,7 +56,8 @@ Commands:
   creds github <name>   Apply credential brokering to a PR sandbox
   creds check <name>    Verify brokered auth in a PR sandbox
   new <name>            Create a PR sandbox from the latest base snapshot
-  sh|ssh <name>         Connect to a PR sandbox
+  sh|ssh [--repair] <name>
+                        Connect to a PR sandbox
   run <name> -- <cmd>   Run a command in a PR sandbox
   stop <name>           Stop a PR sandbox session
   rm <name>             Permanently remove a PR sandbox
@@ -1031,32 +1032,49 @@ async function createTask(name, publicKey = hostSigningPublicKey()) {
     command
   ]);
   await ensureSigningShim(config, sandboxName, publicKey);
+  await writeInteractiveShellCommand(sandboxName);
 }
 
 async function ensureTaskSandbox(
   config,
   name,
-  publicKey = hostSigningPublicKey()
+  publicKey,
+  options = {}
 ) {
   const sandboxName = taskSandboxName(config, name);
   if (!sandboxExists(sandboxName)) {
     console.log(
       `[tbx] ${sandboxName} does not exist; creating from base snapshot`
     );
-    await createTask(name, publicKey);
-  } else {
+    await createTask(name, publicKey ?? hostSigningPublicKey());
+  } else if (options.repair ?? true) {
+    const signingPublicKey = publicKey ?? hostSigningPublicKey();
     await applyGitHubCredentialBroker(config, name);
-    await ensureSigningShim(config, sandboxName, publicKey);
+    await ensureSigningShim(config, sandboxName, signingPublicKey);
+    await writeInteractiveShellCommand(sandboxName);
   }
   return sandboxName;
 }
 
-async function shell(name) {
+function parseShellArgs(args) {
+  const repair = args.includes("--repair");
+  const names = args.filter((arg) => arg !== "--repair");
+
+  if (names.length !== 1) {
+    console.error("Usage: pnpm tbx sh [--repair] <name>");
+    process.exit(1);
+  }
+
+  return { name: names[0], repair };
+}
+
+async function shell(args) {
+  const { name, repair } = parseShellArgs(args);
   const config = readConfig();
   requireSandboxInstalled();
-  const publicKey = hostSigningPublicKey();
-  const sandboxName = await ensureTaskSandbox(config, name, publicKey);
-  await writeInteractiveShellCommand(sandboxName);
+  const sandboxName = await ensureTaskSandbox(config, name, undefined, {
+    repair
+  });
   const broker = await startSigningBroker(sandboxName);
   const terminalState = readHostTerminalState();
   let status = 0;
@@ -1330,7 +1348,7 @@ async function main() {
     } else if (command === "new") {
       await createTask(args[0]);
     } else if (command === "sh" || command === "ssh") {
-      await shell(args[0]);
+      await shell(args);
     } else if (command === "run") {
       await runInTask(args[0], args.slice(1));
     } else if (command === "stop") {
