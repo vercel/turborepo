@@ -14,8 +14,11 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use wax::Program;
 
-use crate::package_graph::{
-    ChangedPackagesError, ExternalDependencyChange, PackageGraph, PackageName, WorkspacePackage,
+use crate::{
+    package_graph::{
+        ChangedPackagesError, ExternalDependencyChange, PackageGraph, PackageName, WorkspacePackage,
+    },
+    package_manager::{PackageManager, yarnrc},
 };
 
 mod package;
@@ -266,12 +269,15 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         &self,
         lockfile_content: &[u8],
     ) -> Result<Vec<ExternalDependencyChange>, ChangeMapError> {
-        // We pass None for yarnrc since we're only comparing lockfiles for changes,
-        // not resolving package dependencies. Catalog resolution isn't needed here.
+        let yarnrc = if matches!(self.pkg_graph.package_manager(), PackageManager::Berry) {
+            Some(yarnrc::YarnRc::from_file(self.pkg_graph.repo_root())?)
+        } else {
+            None
+        };
         let previous_lockfile = self.pkg_graph.package_manager().parse_lockfile(
             self.pkg_graph.root_package_json(),
             lockfile_content,
-            None,
+            yarnrc,
         )?;
 
         let additional_packages = self
@@ -300,6 +306,8 @@ pub enum ChangeMapError {
     Wax(#[from] wax::BuildError),
     #[error("Package manager error: {0}")]
     PackageManager(#[from] crate::package_manager::Error),
+    #[error("Yarn config error: {0}")]
+    Yarnrc(#[from] yarnrc::Error),
     #[error("No lockfile")]
     NoLockfile,
     #[error("Lockfile error: {0}")]
