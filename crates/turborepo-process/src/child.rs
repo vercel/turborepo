@@ -315,146 +315,19 @@ fn sleep_unchecked(duration: Duration) {
 enum ParentDeathWatchdogEvent {
     Disarmed,
     ParentDied,
-    TargetExited,
     Error,
 }
 
-#[cfg(target_os = "linux")]
-fn create_target_exit_monitor(target_pid: libc::pid_t) -> io::Result<Option<RawFd>> {
-    let fd = unsafe { libc::syscall(libc::SYS_pidfd_open as libc::c_long, target_pid, 0) };
-    if fd == -1 {
-        let err = io::Error::last_os_error();
-        return match err.raw_os_error() {
-            Some(libc::ENOSYS | libc::EINVAL) => Ok(None),
-            _ => Err(err),
-        };
-    }
-
-    Ok(Some(fd as RawFd))
-}
-
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "freebsd",
-    target_os = "netbsd",
-    target_os = "openbsd",
-    target_os = "dragonfly"
-))]
-fn create_target_exit_monitor(target_pid: libc::pid_t) -> io::Result<Option<RawFd>> {
-    let kqueue_fd = unsafe { libc::kqueue() };
-    if kqueue_fd == -1 {
-        return Err(io::Error::last_os_error());
-    }
-
-    let change = libc::kevent {
-        ident: target_pid as libc::uintptr_t,
-        filter: libc::EVFILT_PROC,
-        flags: libc::EV_ADD | libc::EV_ENABLE | libc::EV_ONESHOT,
-        fflags: libc::NOTE_EXIT,
-        data: 0,
-        udata: std::ptr::null_mut(),
-    };
-    if unsafe {
-        libc::kevent(
-            kqueue_fd,
-            &change,
-            1,
-            std::ptr::null_mut(),
-            0,
-            std::ptr::null(),
-        )
-    } == -1
-    {
-        let err = io::Error::last_os_error();
-        close_fd(kqueue_fd);
-        return Err(err);
-    }
-
-    Ok(Some(kqueue_fd))
-}
-
-#[cfg(all(
-    unix,
-    not(target_os = "linux"),
-    not(target_os = "macos"),
-    not(target_os = "ios"),
-    not(target_os = "freebsd"),
-    not(target_os = "netbsd"),
-    not(target_os = "openbsd"),
-    not(target_os = "dragonfly")
-))]
-fn create_target_exit_monitor(_target_pid: libc::pid_t) -> io::Result<Option<RawFd>> {
-    Ok(None)
-}
-
-#[cfg(target_os = "linux")]
-fn target_exit_monitor_triggered(_target_exit_fd: RawFd) -> bool {
-    true
-}
-
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "freebsd",
-    target_os = "netbsd",
-    target_os = "openbsd",
-    target_os = "dragonfly"
-))]
-fn target_exit_monitor_triggered(target_exit_fd: RawFd) -> bool {
-    let mut event = libc::kevent {
-        ident: 0,
-        filter: 0,
-        flags: 0,
-        fflags: 0,
-        data: 0,
-        udata: std::ptr::null_mut(),
-    };
-    let timeout = libc::timespec {
-        tv_sec: 0,
-        tv_nsec: 0,
-    };
-    let result =
-        unsafe { libc::kevent(target_exit_fd, std::ptr::null(), 0, &mut event, 1, &timeout) };
-
-    result == 1 && event.filter == libc::EVFILT_PROC && (event.fflags & libc::NOTE_EXIT) != 0
-}
-
-#[cfg(all(
-    unix,
-    not(target_os = "linux"),
-    not(target_os = "macos"),
-    not(target_os = "ios"),
-    not(target_os = "freebsd"),
-    not(target_os = "netbsd"),
-    not(target_os = "openbsd"),
-    not(target_os = "dragonfly")
-))]
-fn target_exit_monitor_triggered(_target_exit_fd: RawFd) -> bool {
-    true
-}
-
 #[cfg(unix)]
-fn wait_for_parent_death_or_target_exit(
-    pipe_read_fd: RawFd,
-    target_exit_fd: Option<RawFd>,
-) -> ParentDeathWatchdogEvent {
+fn wait_for_parent_death_or_disarm(pipe_read_fd: RawFd) -> ParentDeathWatchdogEvent {
     loop {
-        let mut fds = [
-            libc::pollfd {
-                fd: pipe_read_fd,
-                events: libc::POLLIN | libc::POLLHUP,
-                revents: 0,
-            },
-            libc::pollfd {
-                fd: target_exit_fd.unwrap_or(-1),
-                events: libc::POLLIN | libc::POLLHUP,
-                revents: 0,
-            },
-        ];
-        let nfds = if target_exit_fd.is_some() { 2 } else { 1 } as libc::nfds_t;
+        let mut fd = libc::pollfd {
+            fd: pipe_read_fd,
+            events: libc::POLLIN | libc::POLLHUP,
+            revents: 0,
+        };
 
-        let poll_result = unsafe { libc::poll(fds.as_mut_ptr(), nfds, -1) };
+        let poll_result = unsafe { libc::poll(&mut fd, 1, -1) };
         if poll_result == -1 {
             if io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
                 continue;
@@ -462,14 +335,7 @@ fn wait_for_parent_death_or_target_exit(
             return ParentDeathWatchdogEvent::Error;
         }
 
-        if let Some(target_exit_fd) = target_exit_fd
-            && fds[1].revents != 0
-            && target_exit_monitor_triggered(target_exit_fd)
-        {
-            return ParentDeathWatchdogEvent::TargetExited;
-        }
-
-        if fds[0].revents == 0 {
+        if fd.revents == 0 {
             continue;
         }
 
@@ -491,18 +357,13 @@ fn wait_for_parent_death_or_target_exit(
 #[cfg(unix)]
 fn run_parent_death_watchdog(
     pipe_read_fd: RawFd,
-    target_exit_fd: Option<RawFd>,
     target_pid: libc::pid_t,
     identity: TargetIdentity,
 ) -> ! {
-    // The watchdog must not keep unrelated task pipes open. Close every
-    // inherited descriptor except the control pipe and exit monitor.
-    close_inherited_fds(pipe_read_fd, target_exit_fd);
-    let event = wait_for_parent_death_or_target_exit(pipe_read_fd, target_exit_fd);
+    // The watchdog must not keep unrelated task pipes open.
+    close_inherited_fds(pipe_read_fd, None);
+    let event = wait_for_parent_death_or_disarm(pipe_read_fd);
     close_fd(pipe_read_fd);
-    if let Some(target_exit_fd) = target_exit_fd {
-        close_fd(target_exit_fd);
-    }
 
     if event == ParentDeathWatchdogEvent::ParentDied
         && process_group_matches_identity(target_pid, identity)
@@ -523,24 +384,17 @@ fn spawn_parent_death_watchdog(
     read_fd: OwnedFd,
 ) -> io::Result<libc::pid_t> {
     let identity = target_identity(target_pid)?;
-    let target_exit_fd = create_target_exit_monitor(target_pid)?;
     let read_fd = read_fd.into_raw_fd();
 
     match unsafe { libc::fork() } {
         -1 => {
             let err = io::Error::last_os_error();
             close_fd(read_fd);
-            if let Some(target_exit_fd) = target_exit_fd {
-                close_fd(target_exit_fd);
-            }
             Err(err)
         }
-        0 => run_parent_death_watchdog(read_fd, target_exit_fd, target_pid, identity),
+        0 => run_parent_death_watchdog(read_fd, target_pid, identity),
         watchdog_pid => {
             close_fd(read_fd);
-            if let Some(target_exit_fd) = target_exit_fd {
-                close_fd(target_exit_fd);
-            }
             Ok(watchdog_pid)
         }
     }
