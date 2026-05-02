@@ -299,7 +299,7 @@ impl Default for PtySize {
 
 #[cfg(test)]
 mod test {
-    use std::time::Instant;
+    use std::{fs, time::Instant};
 
     use futures::{StreamExt, stream::FuturesUnordered};
     use test_case::test_case;
@@ -320,6 +320,24 @@ mod test {
 
     fn test_task_id() -> TaskId<'static> {
         TaskId::new("test-pkg", "test-task")
+    }
+
+    #[cfg(unix)]
+    fn process_exists(pid: libc::pid_t) -> bool {
+        let result = unsafe { libc::kill(pid, 0) };
+        result == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+    }
+
+    #[cfg(unix)]
+    async fn wait_for_process_to_exit(pid: libc::pid_t) {
+        for _ in 0..50 {
+            if !process_exists(pid) {
+                return;
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
+
+        panic!("process {pid} should have exited");
     }
 
     const STOPPED_EXIT: Option<ChildExit> = Some(if cfg!(windows) {
@@ -624,5 +642,60 @@ mod test {
         shutdown.await.unwrap();
 
         assert_eq!(child.wait().await, Some(ChildExit::Killed));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_shutdown_waits_for_process_group_after_child_exit() {
+        let manager = ProcessManager::new(false);
+        let pid_file =
+            std::env::temp_dir().join(format!("turbo-process-grandchild-{}", std::process::id()));
+        let _ = fs::remove_file(&pid_file);
+
+        let script = format!(
+            "trap 'exit 0' INT; sh -c 'trap \"\" INT TERM; while true; do sleep 0.2; done' & echo \
+             $! > {}; while true; do sleep 0.2; done",
+            pid_file.display()
+        );
+        let mut command = Command::new("sh");
+        command.args(["-c", &script]);
+        let mut child = manager
+            .spawn(command, Duration::from_secs(30), test_task_id())
+            .unwrap()
+            .unwrap();
+
+        let grandchild_pid = loop {
+            if let Ok(contents) = fs::read_to_string(&pid_file)
+                && let Ok(pid) = contents.trim().parse::<libc::pid_t>()
+            {
+                break pid;
+            }
+            sleep(Duration::from_millis(50)).await;
+        };
+
+        let shutdown_manager = manager.clone();
+        let shutdown = tokio::spawn(async move {
+            shutdown_manager.shutdown(None).await;
+        });
+
+        sleep(Duration::from_millis(500)).await;
+        assert!(
+            !shutdown.is_finished(),
+            "shutdown should wait for the still-running process group"
+        );
+        assert!(
+            process_exists(grandchild_pid),
+            "grandchild should still be running before force kill"
+        );
+
+        manager.kill_all().await;
+        tokio::time::timeout(Duration::from_secs(5), shutdown)
+            .await
+            .expect("shutdown should finish after force kill")
+            .expect("shutdown task should not panic");
+        assert_eq!(child.wait().await, Some(ChildExit::Killed));
+        wait_for_process_to_exit(grandchild_pid).await;
+
+        let _ = fs::remove_file(pid_file);
     }
 }

@@ -20,11 +20,6 @@ const POST_EXIT_OUTPUT_DRAIN_TIMEOUT: Duration = Duration::from_millis(100);
 #[cfg(unix)]
 const PROCESS_GROUP_DRAIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
-#[cfg(unix)]
-const PARENT_DEATH_ESCALATION_DELAY: Duration = Duration::from_secs(2);
-
-#[cfg(unix)]
-use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
 use std::{
     fmt,
     io::{self, BufRead, Read, Write},
@@ -91,8 +86,6 @@ struct ChildHandle {
     shutdown_semantics: ShutdownSemantics,
     #[cfg(unix)]
     target_identity: Option<TargetIdentity>,
-    #[cfg(unix)]
-    parent_death_guard: Option<ParentDeathGuard>,
     #[cfg(windows)]
     _job: Option<super::job_object::JobObject>,
 }
@@ -123,7 +116,7 @@ impl ShutdownSemantics {
     fn process_group() -> Self {
         Self {
             graceful_interrupt_target: GracefulInterruptTarget::ProcessGroup,
-            wait_for_process_group_after_child_exit: false,
+            wait_for_process_group_after_child_exit: true,
         }
     }
 
@@ -140,90 +133,6 @@ impl ShutdownSemantics {
 struct TargetIdentity {
     process_group_id: libc::pid_t,
     session_id: libc::pid_t,
-}
-
-#[cfg(unix)]
-#[derive(Debug)]
-struct ParentDeathGuard {
-    write_fd: Option<OwnedFd>,
-    watchdog_pid: Option<libc::pid_t>,
-}
-
-#[cfg(unix)]
-impl ParentDeathGuard {
-    fn spawn_for_pid(target_pid: libc::pid_t) -> io::Result<Self> {
-        let (read_fd, write_fd) = parent_death_pipe()?;
-        let watchdog_pid = spawn_parent_death_watchdog(target_pid, read_fd)?;
-
-        Ok(Self {
-            write_fd: Some(write_fd),
-            watchdog_pid: Some(watchdog_pid),
-        })
-    }
-
-    fn disarm(&mut self) {
-        let Some(write_fd) = self.write_fd.take() else {
-            return;
-        };
-
-        let _ = unsafe { libc::write(write_fd.as_raw_fd(), [1_u8].as_ptr().cast(), 1) };
-        drop(write_fd);
-        self.reap_watchdog();
-    }
-
-    fn reap_watchdog(&mut self) {
-        let Some(watchdog_pid) = self.watchdog_pid.take() else {
-            return;
-        };
-
-        let mut status = 0;
-        loop {
-            let wait_result = unsafe { libc::waitpid(watchdog_pid, &mut status, 0) };
-            if wait_result != -1 {
-                break;
-            }
-
-            if io::Error::last_os_error().raw_os_error() != Some(libc::EINTR) {
-                break;
-            }
-        }
-    }
-}
-
-#[cfg(unix)]
-impl Drop for ParentDeathGuard {
-    fn drop(&mut self) {
-        self.write_fd.take();
-        self.reap_watchdog();
-    }
-}
-
-#[cfg(unix)]
-fn parent_death_pipe() -> io::Result<(OwnedFd, OwnedFd)> {
-    let mut fds = [0; 2];
-    if unsafe { libc::pipe(fds.as_mut_ptr()) } == -1 {
-        return Err(io::Error::last_os_error());
-    }
-
-    let read_fd = unsafe { OwnedFd::from_raw_fd(fds[0]) };
-    let write_fd = unsafe { OwnedFd::from_raw_fd(fds[1]) };
-    set_cloexec(read_fd.as_raw_fd())?;
-    set_cloexec(write_fd.as_raw_fd())?;
-    Ok((read_fd, write_fd))
-}
-
-#[cfg(unix)]
-fn set_cloexec(fd: RawFd) -> io::Result<()> {
-    let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
-    if flags == -1 {
-        return Err(io::Error::last_os_error());
-    }
-
-    if unsafe { libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) } == -1 {
-        return Err(io::Error::last_os_error());
-    }
-
-    Ok(())
 }
 
 #[cfg(unix)]
@@ -261,159 +170,10 @@ fn process_group_matches_identity(target_pid: libc::pid_t, identity: TargetIdent
 }
 
 #[cfg(unix)]
-fn close_fd(fd: RawFd) {
-    if fd >= 0 {
-        let _ = unsafe { libc::close(fd) };
-    }
-}
-
-#[cfg(unix)]
-fn close_inherited_fds(pipe_read_fd: RawFd, target_exit_fd: Option<RawFd>) {
-    let max_fd = unsafe { libc::getdtablesize() };
-    let max_fd = if max_fd > 0 { max_fd } else { 1024 };
-
-    for fd in 0..max_fd {
-        let fd = fd as RawFd;
-        if fd == pipe_read_fd || Some(fd) == target_exit_fd {
-            continue;
-        }
-        close_fd(fd);
-    }
-}
-
-#[cfg(unix)]
 fn signal_process_group(process_group_id: libc::pid_t, signal: libc::c_int) {
     let _ = unsafe { libc::kill(-process_group_id, signal) };
 }
 
-#[cfg(unix)]
-fn sleep_unchecked(duration: Duration) {
-    let mut remaining = libc::timespec {
-        tv_sec: duration.as_secs() as libc::time_t,
-        tv_nsec: duration.subsec_nanos() as libc::c_long,
-    };
-
-    loop {
-        let mut next = libc::timespec {
-            tv_sec: 0,
-            tv_nsec: 0,
-        };
-        let result = unsafe { libc::nanosleep(&remaining, &mut next) };
-        if result == 0 {
-            break;
-        }
-
-        if io::Error::last_os_error().raw_os_error() != Some(libc::EINTR) {
-            break;
-        }
-        remaining = next;
-    }
-}
-
-#[cfg(unix)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ParentDeathWatchdogEvent {
-    Disarmed,
-    ParentDied,
-    Error,
-}
-
-#[cfg(unix)]
-fn wait_for_parent_death_or_disarm(pipe_read_fd: RawFd) -> ParentDeathWatchdogEvent {
-    loop {
-        let mut fd = libc::pollfd {
-            fd: pipe_read_fd,
-            events: libc::POLLIN | libc::POLLHUP,
-            revents: 0,
-        };
-
-        let poll_result = unsafe { libc::poll(&mut fd, 1, -1) };
-        if poll_result == -1 {
-            if io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
-                continue;
-            }
-            return ParentDeathWatchdogEvent::Error;
-        }
-
-        if fd.revents == 0 {
-            continue;
-        }
-
-        let mut byte = 0_u8;
-        let read_result = unsafe { libc::read(pipe_read_fd, (&mut byte as *mut u8).cast(), 1) };
-        if read_result > 0 {
-            return ParentDeathWatchdogEvent::Disarmed;
-        }
-        if read_result == 0 {
-            return ParentDeathWatchdogEvent::ParentDied;
-        }
-        if io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
-            continue;
-        }
-        return ParentDeathWatchdogEvent::Error;
-    }
-}
-
-#[cfg(unix)]
-fn run_parent_death_watchdog(
-    pipe_read_fd: RawFd,
-    target_pid: libc::pid_t,
-    identity: TargetIdentity,
-) -> ! {
-    // The watchdog must not keep unrelated task pipes open.
-    close_inherited_fds(pipe_read_fd, None);
-    let event = wait_for_parent_death_or_disarm(pipe_read_fd);
-    close_fd(pipe_read_fd);
-
-    if event == ParentDeathWatchdogEvent::ParentDied
-        && process_group_matches_identity(target_pid, identity)
-    {
-        signal_process_group(identity.process_group_id, libc::SIGTERM);
-        sleep_unchecked(PARENT_DEATH_ESCALATION_DELAY);
-        if process_group_matches_identity(target_pid, identity) {
-            signal_process_group(identity.process_group_id, libc::SIGKILL);
-        }
-    }
-
-    unsafe { libc::_exit(0) }
-}
-
-#[cfg(unix)]
-fn spawn_parent_death_watchdog(
-    target_pid: libc::pid_t,
-    read_fd: OwnedFd,
-) -> io::Result<libc::pid_t> {
-    let identity = target_identity(target_pid)?;
-    let read_fd = read_fd.into_raw_fd();
-
-    match unsafe { libc::fork() } {
-        -1 => {
-            let err = io::Error::last_os_error();
-            close_fd(read_fd);
-            Err(err)
-        }
-        0 => run_parent_death_watchdog(read_fd, target_pid, identity),
-        watchdog_pid => {
-            close_fd(read_fd);
-            Ok(watchdog_pid)
-        }
-    }
-}
-
-#[cfg(unix)]
-fn setup_parent_death_guard(pid: Option<u32>) -> Option<ParentDeathGuard> {
-    pid.and_then(
-        |pid| match ParentDeathGuard::spawn_for_pid(pid as libc::pid_t) {
-            Ok(parent_death_guard) => Some(parent_death_guard),
-            Err(err) => {
-                debug!("failed to set up parent-death guard for process {pid}: {err}");
-                None
-            }
-        },
-    )
-}
-
-#[cfg(unix)]
 fn capture_target_identity(pid: Option<u32>) -> Option<TargetIdentity> {
     pid.and_then(|pid| match target_identity(pid as libc::pid_t) {
         Ok(identity) => Some(identity),
@@ -439,9 +199,6 @@ impl ChildHandle {
 
         #[cfg(unix)]
         let target_identity = capture_target_identity(pid);
-
-        #[cfg(unix)]
-        let parent_death_guard = setup_parent_death_guard(pid);
 
         #[cfg(windows)]
         let job = pid.and_then(|pid| {
@@ -469,8 +226,6 @@ impl ChildHandle {
                 shutdown_semantics: ShutdownSemantics::process_group(),
                 #[cfg(unix)]
                 target_identity,
-                #[cfg(unix)]
-                parent_death_guard,
                 #[cfg(windows)]
                 _job: job,
             },
@@ -536,9 +291,6 @@ impl ChildHandle {
         #[cfg(unix)]
         let target_identity = capture_target_identity(pid);
 
-        #[cfg(unix)]
-        let parent_death_guard = setup_parent_death_guard(pid);
-
         #[cfg(windows)]
         let job = pid.and_then(|pid| {
             super::job_object::JobObject::new()
@@ -579,8 +331,6 @@ impl ChildHandle {
                 shutdown_semantics: ShutdownSemantics::direct_child_then_wait_for_process_group(),
                 #[cfg(unix)]
                 target_identity,
-                #[cfg(unix)]
-                parent_death_guard,
                 #[cfg(windows)]
                 _job: job,
             },
@@ -759,13 +509,6 @@ impl ChildHandle {
                     .await
                     .unwrap()
             }
-        }
-    }
-
-    #[cfg(unix)]
-    fn disarm_parent_death_guard(&mut self) {
-        if let Some(parent_death_guard) = &mut self.parent_death_guard {
-            parent_death_guard.disarm();
         }
     }
 }
@@ -1034,7 +777,7 @@ impl Child {
                 }
                 status = child.wait() => {
                     drop(controller);
-                    manager.handle_child_exit(status, &mut child).await;
+                    manager.handle_child_exit(status).await;
                 }
             }
 
@@ -1346,15 +1089,13 @@ impl ChildStateManager {
                 ShutdownStyle::Kill.process(child, command_rx).await
             }
         };
-        #[cfg(unix)]
-        child.disarm_parent_death_guard();
         // ignore the send error, failure means the channel is dropped
         trace!("sending child exit after shutdown");
         self.exit_tx.send(Some(exit)).ok();
         drop(controller);
     }
 
-    async fn handle_child_exit(&self, status: io::Result<Option<i32>>, child: &mut ChildHandle) {
+    async fn handle_child_exit(&self, status: io::Result<Option<i32>>) {
         // If a shutdown was initiated we defer to the exit returned by
         // `ShutdownStyle::process` as that will have information if the child
         // responded to a SIGINT or a SIGKILL. The `wait` response this function
@@ -1365,8 +1106,6 @@ impl ChildStateManager {
         }
 
         debug!("child process exited normally");
-        #[cfg(unix)]
-        child.disarm_parent_death_guard();
         // the child process exited
         let child_exit = match status {
             Ok(Some(c)) => ChildExit::Finished(Some(c)),
@@ -1394,7 +1133,6 @@ impl Child {
 mod test {
     use std::{
         assert_matches, io,
-        process::Stdio,
         sync::{Arc, Mutex},
         time::Duration,
     };
@@ -1402,15 +1140,12 @@ mod test {
     use futures::{StreamExt, stream::FuturesUnordered};
     use test_case::test_case;
     use tokio::{
-        io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
-        process::Command as TokioCommand,
+        io::{AsyncReadExt, AsyncWriteExt},
         sync::oneshot,
     };
     use tracing_test::traced_test;
     use turbopath::AbsoluteSystemPathBuf;
 
-    #[cfg(unix)]
-    use super::ParentDeathGuard;
     use super::{Child, ChildInput, ChildOutput, Command};
     use crate::{
         PtySize,
@@ -1469,78 +1204,6 @@ mod test {
             root = root.parent().unwrap().to_owned();
         }
         root.join_components(&["crates", "turborepo-process", "test", "scripts"])
-    }
-
-    #[cfg(unix)]
-    async fn spawn_parent_death_target() -> (tokio::process::Child, libc::pid_t, libc::pid_t) {
-        let script = find_script_dir().join_component("spawn_child_sleep.js");
-        let mut command = TokioCommand::new("node");
-        command
-            .arg(script.as_std_path())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .stdin(Stdio::null())
-            .process_group(0);
-
-        let mut child = command.spawn().unwrap();
-        let child_pid = child.id().expect("child should have a pid") as libc::pid_t;
-        let stdout = child.stdout.take().expect("child should have stdout");
-        let mut stdout = BufReader::new(stdout);
-        let mut line = String::new();
-        tokio::time::timeout(Duration::from_secs(2), stdout.read_line(&mut line))
-            .await
-            .expect("timed out waiting for child pid")
-            .expect("failed to read child pid from stdout");
-
-        let grandchild_pid = line
-            .trim()
-            .strip_prefix("CHILD_PID=")
-            .expect("child pid output should be prefixed")
-            .parse::<libc::pid_t>()
-            .expect("child pid should parse");
-
-        (child, child_pid, grandchild_pid)
-    }
-
-    #[cfg(unix)]
-    async fn spawn_term_ignoring_parent_death_target()
-    -> (tokio::process::Child, libc::pid_t, libc::pid_t) {
-        let mut command = TokioCommand::new("sh");
-        command
-            .args([
-                "-c",
-                "trap '' TERM; sh -c \"trap '' TERM; while true; do sleep 0.2; done\" & \
-                 CHILD_PID=$!; echo CHILD_PID=$CHILD_PID; while true; do sleep 0.2; done",
-            ])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .stdin(Stdio::null())
-            .process_group(0);
-
-        let mut child = command.spawn().unwrap();
-        let child_pid = child.id().expect("child should have a pid") as libc::pid_t;
-        let stdout = child.stdout.take().expect("child should have stdout");
-        let mut stdout = BufReader::new(stdout);
-        let mut line = String::new();
-        tokio::time::timeout(Duration::from_secs(2), stdout.read_line(&mut line))
-            .await
-            .expect("timed out waiting for child pid")
-            .expect("failed to read child pid from stdout");
-
-        let grandchild_pid = line
-            .trim()
-            .strip_prefix("CHILD_PID=")
-            .expect("child pid output should be prefixed")
-            .parse::<libc::pid_t>()
-            .expect("child pid should parse");
-
-        (child, child_pid, grandchild_pid)
-    }
-
-    #[cfg(unix)]
-    fn process_exists(pid: libc::pid_t) -> bool {
-        let result = unsafe { libc::kill(pid, 0) };
-        result == 0 || io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
     }
 
     #[test_case(false)]
@@ -2177,72 +1840,6 @@ mod test {
 
         assert_eq!(child.kill().await, Some(ChildExit::Killed));
         assert_eq!(shutdown.await.unwrap(), Some(ChildExit::Killed));
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn test_parent_death_guard_drop_kills_process_group() {
-        let (mut child, child_pid, grandchild_pid) = spawn_parent_death_target().await;
-        let guard = ParentDeathGuard::spawn_for_pid(child_pid).unwrap();
-        drop(guard);
-
-        tokio::time::timeout(Duration::from_secs(5), child.wait())
-            .await
-            .expect("timed out waiting for watchdog to kill child")
-            .expect("failed waiting for child process");
-
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        assert!(
-            !process_exists(grandchild_pid),
-            "watchdog should kill the entire child process group"
-        );
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn test_parent_death_guard_disarm_keeps_process_group_alive() {
-        let (mut child, child_pid, grandchild_pid) = spawn_parent_death_target().await;
-        let mut guard = ParentDeathGuard::spawn_for_pid(child_pid).unwrap();
-        guard.disarm();
-
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        assert!(
-            process_exists(child_pid),
-            "child should still be alive after disarm"
-        );
-        assert!(
-            process_exists(grandchild_pid),
-            "grandchild should still be alive after disarm"
-        );
-
-        unsafe {
-            libc::kill(-child_pid, libc::SIGKILL);
-        }
-        tokio::time::timeout(Duration::from_secs(5), child.wait())
-            .await
-            .expect("timed out waiting for cleanup after SIGKILL")
-            .expect("failed waiting for child process");
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn test_parent_death_guard_escalates_after_sigterm() {
-        let (mut child, child_pid, grandchild_pid) =
-            spawn_term_ignoring_parent_death_target().await;
-        let guard = ParentDeathGuard::spawn_for_pid(child_pid).unwrap();
-        drop(guard);
-
-        tokio::time::timeout(Duration::from_secs(5), child.wait())
-            .await
-            .expect("timed out waiting for watchdog escalation")
-            .expect("failed waiting for child process");
-
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        assert!(
-            !process_exists(grandchild_pid),
-            "watchdog should escalate to SIGKILL for TERM-ignoring process trees"
-        );
     }
 
     #[test_case(false)]
