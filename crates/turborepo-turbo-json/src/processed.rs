@@ -460,7 +460,7 @@ impl ProcessedTaskDefinition {
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, sync::Arc};
+    use std::{assert_matches, sync::Arc};
 
     use test_case::test_case;
     use turborepo_errors::Spanned;

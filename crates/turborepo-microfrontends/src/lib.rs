@@ -20,7 +20,6 @@
 //! 5. Vercel-specific fields (asset_prefix, production, vercel config) are
 //!    passed through but ignored by Turborepo
 
-#![feature(assert_matches)]
 #![deny(clippy::all)]
 mod configv1;
 mod error;

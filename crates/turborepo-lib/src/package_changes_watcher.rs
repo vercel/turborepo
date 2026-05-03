@@ -346,7 +346,7 @@ impl Subscriber {
     async fn is_same_hash(
         &self,
         pkg: &WorkspacePackage,
-        package_file_hashes: &mut HashMap<AnchoredSystemPathBuf, GitHashes>,
+        package_file_hashes: &mut HashMap<AnchoredSystemPathBuf, Arc<GitHashes>>,
     ) -> bool {
         let Ok(hash) = self
             .hash_watcher
@@ -360,13 +360,17 @@ impl Subscriber {
             return false;
         };
 
-        let old_hash = package_file_hashes.get(&pkg.path).cloned();
+        let old_hash = package_file_hashes.get(&pkg.path);
 
-        if Some(&hash) != old_hash.as_ref() {
+        if old_hash
+            .map(|old_hash| old_hash.as_ref() != hash.as_ref())
+            .unwrap_or(true)
+        {
             package_file_hashes.insert(pkg.path.clone(), hash);
             return false;
         }
 
+        package_file_hashes.insert(pkg.path.clone(), hash);
         tracing::debug!("hashes are the same, no need to rerun");
 
         true

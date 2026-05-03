@@ -79,6 +79,76 @@ fn test_prune_docker() {
     );
 }
 
+#[test]
+fn test_prune_docker_creates_bin_stubs() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("monorepo_with_root_dep", tempdir.path()).unwrap();
+    fs::write(
+        tempdir.path().join(".npmrc"),
+        "script-shell=bash\nupdate-notifier=false\n",
+    )
+    .unwrap();
+
+    fs::write(
+        tempdir.path().join("packages/shared/package.json"),
+        r#"{
+  "name": "shared",
+  "bin": {
+    "shared-tool": "bin/shared-tool.js",
+    "nested-tool": "nested/tool.js"
+  },
+  "scripts": {
+    "build": "echo 'building'"
+  }
+}
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(tempdir.path().join("packages/shared/bin")).unwrap();
+    fs::write(
+        tempdir.path().join("packages/shared/bin/shared-tool.js"),
+        "console.log('shared-tool');\n",
+    )
+    .unwrap();
+    fs::create_dir_all(tempdir.path().join("packages/shared/nested")).unwrap();
+    fs::write(
+        tempdir.path().join("packages/shared/nested/tool.js"),
+        "console.log('nested-tool');\n",
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let json_tool = tempdir
+        .path()
+        .join("out/json/packages/shared/bin/shared-tool.js");
+    let json_nested_tool = tempdir
+        .path()
+        .join("out/json/packages/shared/nested/tool.js");
+    assert!(json_tool.exists(), "bin stub should exist in out/json");
+    assert!(
+        json_nested_tool.exists(),
+        "nested bin stub should exist in out/json"
+    );
+    assert_eq!(fs::metadata(json_tool).unwrap().len(), 0);
+    assert_eq!(fs::metadata(json_nested_tool).unwrap().len(), 0);
+
+    assert_eq!(
+        fs::read_to_string(
+            tempdir
+                .path()
+                .join("out/full/packages/shared/bin/shared-tool.js")
+        )
+        .unwrap(),
+        "console.log('shared-tool');\n"
+    );
+}
+
 // --- out-dir.t ---
 
 #[test]
@@ -111,6 +181,58 @@ fn test_prune_out_dir() {
     assert_eq!(
         pkg_json["pnpm"]["patchedDependencies"]["is-number@7.0.0"],
         "patches/is-number@7.0.0.patch"
+    );
+}
+
+#[test]
+fn test_prune_does_not_overmatch_root_gitignore_entries() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let nested_coverage_dir = tempdir.path().join("apps/web/src/api/coverage");
+    fs::create_dir_all(&nested_coverage_dir).unwrap();
+    fs::write(
+        nested_coverage_dir.join("test.js"),
+        "console.log('covered');\n",
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("apps/web/src/api/.gitignore"),
+        "ignored.js\n",
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("apps/web/src/api/ignored.js"),
+        "ignored\n",
+    )
+    .unwrap();
+    fs::write(tempdir.path().join(".gitignore"), "/apps/web/coverage\n").unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        tempdir
+            .path()
+            .join("out/apps/web/src/api/coverage/test.js")
+            .exists(),
+        "nested coverage file should not match root-anchored coverage ignore entry"
+    );
+    assert!(
+        !tempdir
+            .path()
+            .join("out/apps/web/src/api/ignored.js")
+            .exists(),
+        "workspace-local .gitignore entries should still be respected"
     );
 }
 

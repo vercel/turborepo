@@ -36,6 +36,7 @@ interface FixtureMeta {
   packageManagerVersion: string;
   lockfileName: string;
   frozenInstallCommand: string[];
+  pruneTargets?: string[];
   /** Workspace names where pruning or frozen install is known to fail. */
   expectedFailures?: string[];
 }
@@ -172,7 +173,7 @@ function discoverFixtures(args: CliArgs): DiscoveredFixture[] {
       name: entry.name,
       dir: fixtureDir,
       meta,
-      pruneTargets: discoverPruneTargets(fixtureDir)
+      pruneTargets: meta.pruneTargets ?? discoverPruneTargets(fixtureDir)
     });
   }
 

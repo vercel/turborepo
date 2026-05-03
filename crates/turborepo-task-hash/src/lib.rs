@@ -580,7 +580,7 @@ pub fn get_internal_deps_hash(
             |acc, hashes| {
                 let mut acc = acc?;
                 let hashes = hashes?;
-                acc.extend(hashes.into_iter());
+                acc.extend(hashes);
                 Ok(acc)
             },
         )?;

@@ -129,15 +129,14 @@ impl<T: TaskDefinitionInfo + Clone + Send + Sync + 'static> Engine<Built, T> {
                     );
                     Ok(())
                 }) {
-                    Err(StopExecution::AllTasks) => {
+                    Err(StopExecution::AllTasks)
                         if walker
                             .lock()
                             .expect("Walker mutex poisoned")
                             .cancel()
-                            .is_err()
-                        {
-                            debug!("Unable to cancel graph walk");
-                        }
+                            .is_err() =>
+                    {
+                        debug!("Unable to cancel graph walk");
                     }
                     Err(StopExecution::DependentTasks) => {
                         continue_walking_subgraph = false;

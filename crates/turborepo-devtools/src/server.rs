@@ -210,11 +210,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                         debug!("Client disconnected");
                         break;
                     }
-                    Some(Ok(Message::Ping(data))) => {
-                        if sender.send(Message::Pong(data)).await.is_err() {
+                    Some(Ok(Message::Ping(data)))
+                        if sender.send(Message::Pong(data.clone())).await.is_err() => {
                             break;
                         }
-                    }
                     Some(Err(e)) => {
                         // Connection resets without closing handshake are expected when
                         // clients disconnect abruptly (laptop sleep, network drop, etc.)

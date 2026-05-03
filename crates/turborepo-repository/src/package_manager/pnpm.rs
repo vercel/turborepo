@@ -117,6 +117,27 @@ pub fn prune_workspace_patches<R: AsRef<RelativeUnixPath>>(
     Ok(())
 }
 
+pub fn patch_paths_for_keys(
+    workspace_yaml_path: &AbsoluteSystemPath,
+    patch_keys: &[String],
+) -> Result<Vec<RelativeUnixPathBuf>, std::io::Error> {
+    if !workspace_yaml_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let patch_keys: HashSet<&str> = patch_keys.iter().map(String::as_str).collect();
+    let contents = workspace_yaml_path.read_to_string()?;
+    let workspace: PnpmWorkspace = serde_yaml_ng::from_str(&contents)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+    Ok(workspace
+        .patched_dependencies
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|(key, path)| patch_keys.contains(key.as_str()).then_some(path))
+        .collect())
+}
+
 pub fn link_workspace_packages(pnpm_version: PnpmVersion, repo_root: &AbsoluteSystemPath) -> bool {
     let npmrc_config = npmrc::NpmRc::from_file(repo_root)
         .inspect_err(|e| debug!("unable to read npmrc: {e}"))
@@ -158,7 +179,7 @@ struct PnpmWorkspace {
     pub packages: Vec<String>,
     link_workspace_packages: Option<LinkWorkspacePackages>,
     #[serde(rename = "patchedDependencies")]
-    _patched_dependencies:
+    patched_dependencies:
         Option<std::collections::BTreeMap<String, turbopath::RelativeUnixPathBuf>>,
     /// Default catalog (`catalog:` protocol resolves to these)
     #[serde(default)]

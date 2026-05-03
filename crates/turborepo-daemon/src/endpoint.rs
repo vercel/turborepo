@@ -214,7 +214,7 @@ impl<T> Connected for UdsWindowsStream<T> {
 #[cfg(test)]
 mod test {
     use std::{
-        assert_matches::assert_matches,
+        assert_matches,
         process::Command,
         sync::{atomic::AtomicBool, Arc},
     };

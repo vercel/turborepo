@@ -535,7 +535,7 @@ pub fn previous_content(
 #[cfg(test)]
 mod tests {
     use std::{
-        assert_matches::assert_matches,
+        assert_matches,
         collections::HashSet,
         env::VarError,
         fs,

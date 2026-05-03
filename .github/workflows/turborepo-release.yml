@@ -148,15 +148,11 @@ jobs:
         with:
           ref: ${{ inputs.sha || github.sha }}
           filter: blob:none
+          persist-credentials: false
 
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
-
-      - name: Configure git
-        run: |
-          git config --global user.name 'Turbobot'
-          git config --global user.email 'turbobot@vercel.com'
 
       - name: Get base SHA
         id: base-sha
@@ -195,6 +191,7 @@ jobs:
       - name: Clear stale staging branch (if requested)
         if: ${{ inputs.clear-staging-branch }}
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INCREMENT: ${{ github.event_name == 'schedule' && 'prerelease' || inputs.increment }}
           TAG_OVERRIDE: ${{ inputs.tag-override }}
         run: |
@@ -209,7 +206,7 @@ jobs:
 
           if git ls-remote --exit-code --heads origin "staging-${VERSION}" >/dev/null 2>&1; then
             echo "::warning::Deleting staging branch staging-${VERSION}..."
-            git push origin --delete "staging-${VERSION}"
+            gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/staging-${VERSION}"
             echo "Deleted staging branch staging-${VERSION}"
           else
             echo "No staging branch found for staging-${VERSION}"
@@ -254,10 +251,16 @@ jobs:
           echo "New version: $VERSION"
           cat version.txt
 
-      - name: Stage Commit
-        id: stage
+      - name: Prepare stage branch
         run: |
-          cd cli && make stage-release
+          cd cli && make prepare-stage-release
+
+      - name: Commit stage branch
+        id: stage
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd cli && make commit-stage-release
           echo "stage-branch=$(git branch --show-current)" >> $GITHUB_OUTPUT
 
   # TODO: Re-enable Rust unit tests once flakiness is resolved.
@@ -298,6 +301,7 @@ jobs:
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
           filter: blob:none
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -402,11 +406,6 @@ jobs:
         with:
           turbo-version: ${{ inputs.ci-tag-override || '' }}
 
-      - name: Configure git
-        run: |
-          git config --global user.name 'Turbobot'
-          git config --global user.email 'turbobot@vercel.com'
-
       - name: Download Rust artifacts
         uses: actions/download-artifact@v4
         with:
@@ -450,11 +449,6 @@ jobs:
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
           filter: blob:none
-
-      - name: Configure git
-        run: |
-          git config --global user.name 'Turbobot'
-          git config --global user.email 'turbobot@vercel.com'
 
       - name: Create and push release tag
         run: cd cli && make create-release-tag
@@ -588,22 +582,22 @@ jobs:
           enable-corepack: false
           extra-flags: "--no-frozen-lockfile"
 
-      - name: Configure git
-        run: |
-          git config --global user.name 'Turbobot'
-          git config --global user.email 'turbobot@vercel.com'
-
       - name: Commit lockfile if updated by install
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if git diff --quiet pnpm-lock.yaml; then
             echo "Lockfile already up to date."
           else
-            git add pnpm-lock.yaml
-            git commit -m "Update lockfile for release"
-            git push origin "${{ needs.stage.outputs.stage-branch }}"
+            node scripts/create-github-api-commit.mjs \
+              --branch "${{ needs.stage.outputs.stage-branch }}" \
+              --message "Update lockfile for release" \
+              --path pnpm-lock.yaml \
+              --if-exists update
           fi
 
       - name: Bump to next canary for stable releases
+        id: next-canary
         run: |
           TAG=$(sed -n '2p' version.txt)
 
@@ -612,11 +606,23 @@ jobs:
             echo "Stable release detected (${VERSION}). Bumping to next prepatch canary..."
             ./scripts/version.js prepatch
             cat version.txt
-            git commit -anm "bump to next canary after ${VERSION}"
-            git push origin "${{ needs.stage.outputs.stage-branch }}"
+            echo "updated=true" >> $GITHUB_OUTPUT
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
           else
             echo "Pre-release ($TAG), skipping canary bump."
+            echo "updated=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Commit next canary bump
+        if: ${{ steps.next-canary.outputs.updated == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/create-github-api-commit.mjs \
+            --branch "${{ needs.stage.outputs.stage-branch }}" \
+            --message "bump to next canary after ${{ steps.next-canary.outputs.version }}" \
+            --all-tracked \
+            --if-exists update
 
       - name: Build PR body
         env:

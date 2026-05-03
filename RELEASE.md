@@ -154,11 +154,11 @@ When a release is triggered, the `scripts/version.js` script:
 
 #### Version Synchronization
 
-Once the version is calculated, the `cli/Makefile` (target: `stage-release`) updates all package.json files by running `pnpm version` for each package to match `TURBO_VERSION`.
+Once the version is calculated, the `cli/Makefile` (target: `prepare-stage-release`) updates all package.json files by running `pnpm version` for each package to match `TURBO_VERSION`.
 
 Additionally, the `packages/turbo/bump-version.js` postversion hook updates the `optionalDependencies` in `packages/turbo/package.json` to reference the correct versions of platform-specific packages.
 
-See: `cli/Makefile` (stage-release target) and `packages/turbo/bump-version.js`
+See: `cli/Makefile` (`prepare-stage-release` and `commit-stage-release` targets) and `packages/turbo/bump-version.js`
 
 ---
 
@@ -172,8 +172,7 @@ The release workflow consists of 7 sequential and parallel stages:
 │ - Calculate new version                                      │
 │ - Create staging branch (staging-X.Y.Z)                      │
 │ - Update all package.json files                              │
-│ - Commit and tag (vX.Y.Z)                                     │
-│ - Push staging branch                                         │
+│ - Commit staging branch through GitHub API                    │
 └──────────────────────┬──────────────────────────────────────┘
                        │
           ┌────────────┴────────────┐
@@ -224,22 +223,22 @@ The release workflow consists of 7 sequential and parallel stages:
 
 1. Checkout repository at the specified SHA (defaults to latest commit on `main`)
 2. Setup Node.js environment
-3. Configure git with Turbobot credentials
-4. Run `node scripts/version.js <increment>` to calculate the new version
-5. Create staging branch: `staging-$(VERSION)` (e.g., `staging-2.6.2`)
-6. Execute `make -C cli stage-release` which:
+3. Run `node scripts/version.js <increment>` to calculate the new version
+4. Execute `make -C cli prepare-stage-release` which:
    - Verifies no unpushed commits exist
    - Verifies `version.txt` was updated
+   - Verifies the release tag and staging branch do not already exist
    - Updates all `package.json` files with the new version
-   - Commits with message: `"publish $(VERSION) to registry"`
-7. Create git tag: `v$(VERSION)` (e.g., `v2.6.2`)
-8. Force push staging branch with tags to origin
+   - Creates staging branch: `staging-$(VERSION)` (e.g., `staging-2.6.2`)
+5. Execute `make -C cli commit-stage-release` which creates the staging commit through `scripts/create-github-api-commit.mjs`
 
 **Output**: `stage-branch` (e.g., `staging-2.6.2`)
 
-**Safety Checks**: The Makefile includes safety checks to verify no unpushed commits exist and that `version.txt` was properly updated before proceeding.
+**Safety Checks**: The Makefile includes safety checks to verify no unpushed commits exist, `version.txt` was properly updated, and the target staging branch is not already present before proceeding. The commit helper creates the remote branch from local `HEAD`, uploads selected file changes through GitHub's `createCommitOnBranch` API, waits for GitHub commit verification, and then updates the local branch ref.
 
-See: `cli/Makefile` (stage-release target)
+If the API commit is created but verification does not complete, the helper leaves the remote branch in place and exits with the commit SHA in the logs. Use the logged SHA and branch name to inspect recovery state before retrying or clearing the staging branch.
+
+See: `cli/Makefile` (`prepare-stage-release` and `commit-stage-release` targets)
 
 #### Stage 2: Rust Smoke Test
 
@@ -502,25 +501,36 @@ See: `packages/turbo-releaser/` for the Windows wrapper generation
 
 #### Key Scripts and Commands
 
-| Script/Command                                     | Location                   | Purpose                                        |
-| -------------------------------------------------- | -------------------------- | ---------------------------------------------- |
-| `node scripts/version.js <increment>`              | `scripts/version.js`       | Calculate new version and update `version.txt` |
-| `make -C cli stage-release`                        | `cli/Makefile`             | Update all package.json versions and commit    |
-| `cargo build --profile release-turborepo -p turbo` | `Cargo.toml`               | Build Rust binary for release                  |
-| `turbo release-native`                             | `cli/turbo.json`           | Pack and publish native packages               |
-| `make -C cli build`                                | `cli/Makefile`             | Build all JavaScript packages                  |
-| `make -C cli publish-turbo`                        | `cli/Makefile`             | Pack and publish all packages                  |
-| `pnpm version <version> --allow-same-version`      | package.json               | Update package version                         |
-| `turboreleaser --version-path ../version.txt`      | `packages/turbo-releaser/` | Pack native packages                           |
+| Script/Command                                     | Location                   | Purpose                                           |
+| -------------------------------------------------- | -------------------------- | ------------------------------------------------- |
+| `node scripts/version.js <increment>`              | `scripts/version.js`       | Calculate new version and update `version.txt`    |
+| `make -C cli prepare-stage-release`                | `cli/Makefile`             | Update package versions and create staging branch |
+| `make -C cli commit-stage-release`                 | `cli/Makefile`             | Commit staging changes through GitHub API         |
+| `node scripts/create-github-api-commit.mjs`        | `scripts/`                 | Create a GitHub-verified API commit on a branch   |
+| `cargo build --profile release-turborepo -p turbo` | `Cargo.toml`               | Build Rust binary for release                     |
+| `turbo release-native`                             | `cli/turbo.json`           | Pack and publish native packages                  |
+| `make -C cli build`                                | `cli/Makefile`             | Build all JavaScript packages                     |
+| `make -C cli publish-turbo`                        | `cli/Makefile`             | Pack and publish all packages                     |
+| `pnpm version <version> --allow-same-version`      | package.json               | Update package version                            |
+| `turboreleaser --version-path ../version.txt`      | `packages/turbo-releaser/` | Pack native packages                              |
 
 #### Environment Variables
 
-| Variable                    | Purpose                                    | Example              |
-| --------------------------- | ------------------------------------------ | -------------------- |
-| `TURBO_VERSION`             | Version to release (read from version.txt) | `2.6.2`              |
-| `TURBO_TAG`                 | npm dist-tag (read from version.txt)       | `latest` or `canary` |
-| `CARGO_PROFILE_RELEASE_LTO` | Enable link-time optimization for Rust     | `true`               |
-| `TURBO_BINARY_PATH`         | Override binary path (development only)    | `/path/to/turbo`     |
+| Variable                    | Purpose                                    | Example                       |
+| --------------------------- | ------------------------------------------ | ----------------------------- |
+| `TURBO_VERSION`             | Version to release (read from version.txt) | `2.6.2`                       |
+| `TURBO_TAG`                 | npm dist-tag (read from version.txt)       | `latest` or `canary`          |
+| `CARGO_PROFILE_RELEASE_LTO` | Enable link-time optimization for Rust     | `true`                        |
+| `TURBO_BINARY_PATH`         | Override binary path (development only)    | `/path/to/turbo`              |
+| `GH_TOKEN`                  | GitHub API token for commit/PR steps only  | `${{ secrets.GITHUB_TOKEN }}` |
+
+#### API Commit Helper
+
+`scripts/create-github-api-commit.mjs` replaces local release `git commit` and branch pushes for generated release commits. It requires `GITHUB_REPOSITORY` and `GH_TOKEN` or `GITHUB_TOKEN`, creates a missing branch from local `HEAD`, then calls GitHub's `createCommitOnBranch` mutation with selected file changes.
+
+Use explicit `--path` values when possible. `--all-tracked` includes all tracked changes compared to `HEAD`, and `--include-untracked` also includes unignored untracked files. The helper refuses sensitive-looking files, unsupported non-regular files, and oversized payloads before creating or updating the remote branch.
+
+By default, an existing remote branch must point at local `HEAD`; otherwise the helper fails to preserve release lock semantics. Use `--if-exists update` only for idempotent workflows, such as the examples update PR, where reruns should commit onto an existing branch.
 
 #### Rust Build Profile
 

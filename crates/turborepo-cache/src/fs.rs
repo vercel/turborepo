@@ -381,7 +381,7 @@ pub(crate) fn evict_cache_dir(
         let mut total_size: u64 = remaining.iter().map(|e| e.size).sum();
 
         if total_size > max_size {
-            remaining.sort_by(|a, b| a.mtime.cmp(&b.mtime));
+            remaining.sort_by_key(|a| a.mtime);
 
             for entry in &remaining {
                 if total_size <= max_size {

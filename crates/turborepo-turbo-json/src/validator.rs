@@ -182,8 +182,8 @@ pub fn validate_extends(_validator: &Validator, turbo_json: &TurboJson) -> Vec<E
 pub fn validate_with_has_no_topo(_validator: &Validator, turbo_json: &TurboJson) -> Vec<Error> {
     turbo_json
         .tasks
-        .iter()
-        .flat_map(|(_, definition)| {
+        .values()
+        .flat_map(|definition| {
             definition.with.iter().flatten().filter_map(|with_task| {
                 if with_task.starts_with(TOPOLOGICAL_PIPELINE_DELIMITER) {
                     let (span, text) = with_task.span_and_text("turbo.json");

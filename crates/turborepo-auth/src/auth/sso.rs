@@ -461,7 +461,7 @@ fn wait_for_sso_redirect(
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, io::Write, net::TcpStream};
+    use std::{assert_matches, io::Write, net::TcpStream};
 
     use reqwest::{RequestBuilder, Response};
     use turborepo_vercel_api::{

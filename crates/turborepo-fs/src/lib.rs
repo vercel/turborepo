@@ -35,6 +35,7 @@ pub fn recursive_copy(
     if src_metadata.is_dir() {
         let walker = WalkBuilder::new(src.as_path())
             .hidden(false)
+            .parents(false)
             .git_ignore(use_gitignore)
             .git_global(false)
             .git_exclude(use_gitignore)

@@ -3,7 +3,6 @@
 //! ability to query the owner of the pidlock.
 
 #![deny(clippy::all)]
-#![feature(assert_matches)]
 
 use std::{
     fs,
@@ -243,7 +242,7 @@ impl Drop for Pidlock {
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, fs, io::Write, path::PathBuf};
+    use std::{assert_matches, fs, io::Write, path::PathBuf};
 
     use rand::{
         Rng,

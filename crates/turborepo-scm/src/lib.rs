@@ -1,6 +1,5 @@
 #![feature(error_generic_member_access)]
 #![feature(io_error_more)]
-#![feature(assert_matches)]
 #![deny(clippy::all)]
 #![allow(clippy::result_large_err)]
 
@@ -480,7 +479,7 @@ impl SCM {
 #[cfg(test)]
 mod tests {
     use std::{
-        assert_matches::assert_matches,
+        assert_matches,
         io::Read,
         process::{Command, Stdio},
     };

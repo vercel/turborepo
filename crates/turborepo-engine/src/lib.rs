@@ -56,6 +56,10 @@ pub use validate::{TaskDefinitionResult, validate_task_name};
 /// This allows the engine to be decoupled from the full TaskDefinition type
 /// while still having access to the fields it needs for execution decisions.
 pub trait TaskDefinitionInfo {
+    /// Returns true if this task can restore outputs from cache.
+    fn cache(&self) -> bool {
+        true
+    }
     /// Returns true if this task is persistent (long-running)
     fn persistent(&self) -> bool;
     /// Returns true if this task can be interrupted and restarted
@@ -65,6 +69,10 @@ pub trait TaskDefinitionInfo {
 }
 
 impl TaskDefinitionInfo for turborepo_types::TaskDefinition {
+    fn cache(&self) -> bool {
+        self.cache
+    }
+
     fn persistent(&self) -> bool {
         self.persistent
     }
@@ -237,15 +245,16 @@ impl<T: TaskDefinitionInfo + Default + Clone> Default for Engine<Building, T> {
 
 impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     /// Creates an engine containing only tasks reachable from the given
-    /// packages: their direct tasks, transitive dependents, and all
+    /// packages: their direct tasks, transitive dependents, and cacheable
     /// transitive dependencies needed for execution. Persistent
     /// non-interruptible tasks are excluded (they can't be restarted in
     /// watch mode). Used by watch mode to scope rebuilds to the changed
     /// portion of the task graph.
     ///
-    /// Transitive dependencies are included because the executor needs them
-    /// to produce outputs that downstream tasks consume — on a cold cache
-    /// or first run, those outputs won't already be on disk.
+    /// Cacheable transitive dependencies are included because the executor
+    /// needs them to restore outputs that downstream tasks consume.
+    /// Non-cacheable dependencies are excluded because retaining them would
+    /// force execution even when they did not change.
     pub fn create_engine_for_subgraph(self, changed_packages: &HashSet<PackageName>) -> Self {
         let entrypoint_indices: Vec<_> = changed_packages
             .iter()
@@ -254,7 +263,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
             .copied()
             .collect();
 
-        let reachable = self.reachable_closure(entrypoint_indices);
+        let reachable = self.watch_reachable_closure(entrypoint_indices);
         self.prune_to_reachable(&reachable, true)
     }
 
@@ -359,6 +368,61 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         });
 
         reachable
+    }
+
+    /// Computes the watch-mode reachable set from changed package task nodes:
+    /// reverse DFS for transitive dependents, then forward traversal for only
+    /// cacheable transitive dependencies.
+    fn watch_reachable_closure(
+        &self,
+        entrypoint_indices: Vec<petgraph::graph::NodeIndex>,
+    ) -> HashSet<petgraph::graph::NodeIndex> {
+        // Reverse DFS: find transitive dependents (downstream consumers).
+        let mut reachable = HashSet::new();
+        reachable.insert(self.root_index);
+        depth_first_search(Reversed(&self.task_graph), entrypoint_indices, |event| {
+            if let DfsEvent::Discover(n, _) = event {
+                reachable.insert(n);
+            }
+        });
+
+        let mut stack: Vec<_> = reachable
+            .iter()
+            .copied()
+            .filter(|&n| n != self.root_index)
+            .collect();
+
+        while let Some(node) = stack.pop() {
+            for dependency in self
+                .task_graph
+                .neighbors_directed(node, petgraph::Direction::Outgoing)
+            {
+                if dependency == self.root_index || !self.is_cacheable_task_node(dependency) {
+                    continue;
+                }
+
+                if reachable.insert(dependency) {
+                    stack.push(dependency);
+                }
+            }
+        }
+
+        reachable
+    }
+
+    fn is_cacheable_task_node(&self, node: petgraph::graph::NodeIndex) -> bool {
+        let TaskNode::Task(task) = self
+            .task_graph
+            .node_weight(node)
+            .expect("node index should be present")
+        else {
+            return false;
+        };
+
+        self.task_definitions
+            .get(task)
+            .expect("task should have definition")
+            .cache()
     }
 
     /// Prunes the engine graph to only nodes in `reachable` and rebuilds all
