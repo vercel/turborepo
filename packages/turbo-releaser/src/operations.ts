@@ -69,7 +69,8 @@ async function packPlatform({
     .replace("@", "")
     .replace("/", "-");
   validatePathSegment("package directory name", npmDirName);
-  const tarballDir = path.join(srcDir, "dist", `${npmDirName}-${version}`);
+  const distDir = path.join(srcDir, "dist");
+  const tarballDir = path.join(distDir, `${npmDirName}-${version}`);
   const scaffoldDir = path.join(tarballDir, npmDirName);
 
   console.log("Generating native package...");
@@ -77,6 +78,7 @@ async function packPlatform({
     platform,
     version,
     outputDir: scaffoldDir,
+    outputBaseDir: tarballDir,
     packagePrefix,
     description
   });
@@ -99,7 +101,7 @@ async function packPlatform({
 
   console.log("Creating tar.gz...");
   const tarName = `${npmDirName}-${version}.tar.gz`;
-  const tarPath = path.join(srcDir, "dist", tarName);
+  const tarPath = path.join(distDir, tarName);
   await tar.create(
     {
       gzip: true,

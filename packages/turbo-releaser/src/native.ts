@@ -25,27 +25,30 @@ async function generateNativePackage({
   platform,
   version,
   outputDir,
+  outputBaseDir,
   packagePrefix = "turbo",
   description
 }: {
   platform: Platform;
   version: string;
   outputDir: string;
+  outputBaseDir: string;
   packagePrefix?: string;
   description?: string;
 }) {
   const { os, arch } = platform;
+  const safeOutputDir = resolveOutputDir(outputDir, outputBaseDir);
   console.log(`Generating native package for ${os}-${arch}...`);
 
-  console.log(`Cleaning output directory: ${outputDir}`);
-  await rm(outputDir, { recursive: true, force: true });
-  await mkdir(path.join(outputDir, "bin"), { recursive: true });
+  console.log(`Cleaning output directory: ${safeOutputDir}`);
+  await rm(safeOutputDir, { recursive: true, force: true });
+  await mkdir(path.join(safeOutputDir, "bin"), { recursive: true });
 
   const copyFromTemplate = async (part: string, ...parts: Array<string>) => {
     console.log("Copying ", path.join(part, ...parts));
     await copyFile(
       path.join(templateDir, part, ...parts),
-      path.join(outputDir, part, ...parts)
+      path.join(safeOutputDir, part, ...parts)
     );
   };
 
@@ -77,11 +80,32 @@ async function generateNativePackage({
     packageJson.publishConfig = { access: "public" };
   }
   await writeFile(
-    path.join(outputDir, "package.json"),
+    path.join(safeOutputDir, "package.json"),
     JSON.stringify(packageJson, null, 2)
   );
 
-  console.log(`Native package generated successfully in ${outputDir}`);
+  console.log(`Native package generated successfully in ${safeOutputDir}`);
+}
+
+function resolveOutputDir(outputDir: string, outputBaseDir: string) {
+  const resolvedOutputDir = path.resolve(outputDir);
+  const resolvedOutputBaseDir = path.resolve(outputBaseDir);
+  const relativeOutputDir = path.relative(
+    resolvedOutputBaseDir,
+    resolvedOutputDir
+  );
+
+  if (
+    relativeOutputDir === "" ||
+    relativeOutputDir.startsWith("..") ||
+    path.isAbsolute(relativeOutputDir)
+  ) {
+    throw new Error(
+      `Refusing to clean output directory outside package base: ${outputDir}`
+    );
+  }
+
+  return resolvedOutputDir;
 }
 
 // Exported asn an object instead of export keyword, so that these functions

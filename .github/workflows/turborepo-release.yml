@@ -538,10 +538,16 @@ jobs:
       - name: Find Vercel deployment for SHA
         id: find-deployment
         env:
+          BASE_SHA: ${{ needs.stage.outputs.base-sha }}
           VERCEL_TOKEN: ${{ secrets.TURBO_TOKEN }}
         run: |
-          SHA="${{ needs.stage.outputs.base-sha }}"
-          DEPLOYMENT_URL=$(vercel list turbo-site --scope=vercel -m githubCommitSha="${SHA}" --status=READY --token="${VERCEL_TOKEN}" 2>&1 | tee /dev/stderr | grep -E '^\S+\.vercel\.(app|sh)' | head -n 1 | awk '{print $1}')
+          SHA="${BASE_SHA}"
+          VERCEL_LIST_STDERR="${RUNNER_TEMP}/vercel-list.stderr"
+          if ! VERCEL_LIST_OUTPUT=$(vercel list turbo-site --scope=vercel -m githubCommitSha="${SHA}" --status=READY --token="${VERCEL_TOKEN}" 2>"${VERCEL_LIST_STDERR}"); then
+            echo "::error::Failed to list Vercel deployments for SHA ${SHA}. Vercel CLI stderr was captured without printing to logs."
+            exit 1
+          fi
+          DEPLOYMENT_URL=$(printf '%s\n' "${VERCEL_LIST_OUTPUT}" | grep -E '^\S+\.vercel\.(app|sh)' | head -n 1 | awk '{print $1}' || true)
 
           if [ -z "$DEPLOYMENT_URL" ]; then
             echo "::error::No deployment found for SHA ${SHA}."
