@@ -5,16 +5,18 @@ on:
   workflow_call:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   update-examples-pr:
     name: "Update examples PR"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           filter: blob:none
           persist-credentials: false
@@ -24,7 +26,7 @@ jobs:
       - name: Upgrade corepack
         shell: bash
         run: |
-          npm install --force --global corepack@latest
+          npm install --force --global corepack@0.32.0
           npm config get prefix >> $GITHUB_PATH
 
       - name: Make branch
@@ -68,4 +70,6 @@ jobs:
           echo "html_url=$PR_URL" >> $GITHUB_OUTPUT
 
       - name: PR link
-        run: echo ${{ steps.pr.outputs.html_url }}
+        env:
+          PR_URL: ${{ steps.pr.outputs.html_url }}
+        run: printf '%s\n' "$PR_URL"

@@ -8,8 +8,7 @@ on:
         type: boolean
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   build:
@@ -21,39 +20,49 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          - host: macos-latest
+          - host: macos-14
             target: aarch64-apple-darwin
 
-          - host: macos-latest
+          - host: macos-14
             target: x86_64-apple-darwin
 
-          - host: ubuntu-latest
+          - host: ubuntu-24.04
             target: aarch64-unknown-linux-gnu
             setup: |
               sudo apt update
               sudo apt install -y g++-aarch64-linux-gnu libc6-dev-arm64-cross xz-utils
               mkdir zig
-              curl --show-error --location https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz | tar -J -xf - -C zig --strip-components 1
+              curl --fail --show-error --silent --location --output zig.tar.xz https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz
+              echo "473ec26806133cf4d1918caf1a410f8403a13d979726a9045b421b685031a982  zig.tar.xz" | sha256sum --check --strict
+              tar -J -xf zig.tar.xz -C zig --strip-components 1
+              rm zig.tar.xz
               export PATH=$PATH:$(pwd)/zig
               echo "$(pwd)/zig" >> $GITHUB_PATH
 
-          - host: ubuntu-latest
+          - host: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-            container: amazon/aws-lambda-nodejs:20
+            container: amazon/aws-lambda-nodejs:20@sha256:a7ac1ea17664bc42317bf0f4b25482413dc6427e73c319b4e46ac63a2b4cad73
             install: |
               microdnf install -y gcc gcc-c++ git tar xz make
-              curl https://sh.rustup.rs -sSf | bash -s -- -y
+              curl --proto '=https' --tlsv1.2 --fail --show-error --silent --location --output rustup-init https://static.rust-lang.org/rustup/archive/1.29.0/x86_64-unknown-linux-gnu/rustup-init
+              echo "4acc9acc76d5079515b46346a485974457b5a79893cfb01112423c89aeb5aa10  rustup-init" | sha256sum --check --strict
+              chmod +x rustup-init
+              ./rustup-init -y
+              rm rustup-init
               npm i -g pnpm@10.28.0
               mkdir ../zig
-              curl --show-error --location https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz | tar -J -xf - -C ../zig --strip-components 1
+              curl --fail --show-error --silent --location --output zig.tar.xz https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz
+              echo "473ec26806133cf4d1918caf1a410f8403a13d979726a9045b421b685031a982  zig.tar.xz" | sha256sum --check --strict
+              tar -J -xf zig.tar.xz -C ../zig --strip-components 1
+              rm zig.tar.xz
               export PATH=$PATH:$(pwd)/../zig
               echo "$(pwd)/../zig" >> $GITHUB_PATH
             setup: |
-              pnpm install
+              pnpm install --frozen-lockfile
 
-          - host: ubuntu-latest
+          - host: ubuntu-24.04
             target: x86_64-unknown-linux-musl
-            container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine
+            container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine@sha256:11bf6f488b38a7d22592c92bfacfbb1479ef61943e42c911f84135c3aae67112
             install: |
               apk update && apk upgrade
               apk add libc6-compat curl
@@ -63,11 +72,11 @@ jobs:
               export PATH=/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
               rustup show active-toolchain
               dirname $(rustup which cargo) >> ${GITHUB_PATH}
-              pnpm install
+              pnpm install --frozen-lockfile
 
-          - host: ubuntu-latest
+          - host: ubuntu-24.04
             target: aarch64-unknown-linux-musl
-            container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine
+            container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine@sha256:11bf6f488b38a7d22592c92bfacfbb1479ef61943e42c911f84135c3aae67112
             install: |
               apk update && apk upgrade
               apk add libc6-compat curl
@@ -79,13 +88,13 @@ jobs:
               rustup show active-toolchain
               rustup target add aarch64-unknown-linux-musl
               dirname $(rustup which cargo) >> ${GITHUB_PATH}
-              pnpm install
+              pnpm install --frozen-lockfile
             rust_env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc RUSTFLAGS="-Ctarget-feature=-crt-static"
 
-          - host: windows-latest
+          - host: windows-2022
             target: aarch64-pc-windows-msvc
 
-          - host: windows-latest
+          - host: windows-2022
             target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.settings.host }}
@@ -98,7 +107,7 @@ jobs:
         if: ${{ matrix.settings.install }}
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -132,25 +141,27 @@ jobs:
           ${{ matrix.settings.rust_env }} pnpm build:release --target=${{ matrix.settings.target }}
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: turbo-library-${{ matrix.settings.target }}
           path: packages/turbo-repository/native
 
   package:
     name: Publish to NPM
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: write
       id-token: write # Required for npm Trusted Publishing using OIDC
+    env:
+      NPM_CONFIG_PROVENANCE: "true"
     needs: [build]
     outputs:
       version: ${{ steps.version.outputs.version }}
       branch: ${{ steps.version.outputs.branch }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -191,7 +202,7 @@ jobs:
             --include-untracked
 
       - name: Download Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: native-packages
 
@@ -226,7 +237,7 @@ jobs:
           mv *.tgz tarballs/
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Upload Tarballs
           path: tarballs
@@ -238,20 +249,23 @@ jobs:
           cd tarballs
           ls
           TAG="canary"
-          npm publish -ddd --tag ${TAG} --access public turbo-repository-darwin-arm64-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} --access public turbo-repository-darwin-x64-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-arm64-gnu-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-arm64-musl-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-x64-gnu-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-x64-musl-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} --access public turbo-repository-win32-arm64-msvc-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} --access public turbo-repository-win32-x64-msvc-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} --access public turbo-repository-${VERSION}.tgz
+          npm publish --provenance --tag "$TAG" --access public "turbo-repository-darwin-arm64-${VERSION}.tgz"
+          npm publish --provenance --tag "$TAG" --access public "turbo-repository-darwin-x64-${VERSION}.tgz"
+          npm publish --provenance --tag "$TAG" --access public "turbo-repository-linux-arm64-gnu-${VERSION}.tgz"
+          npm publish --provenance --tag "$TAG" --access public "turbo-repository-linux-arm64-musl-${VERSION}.tgz"
+          npm publish --provenance --tag "$TAG" --access public "turbo-repository-linux-x64-gnu-${VERSION}.tgz"
+          npm publish --provenance --tag "$TAG" --access public "turbo-repository-linux-x64-musl-${VERSION}.tgz"
+          npm publish --provenance --tag "$TAG" --access public "turbo-repository-win32-arm64-msvc-${VERSION}.tgz"
+          npm publish --provenance --tag "$TAG" --access public "turbo-repository-win32-x64-msvc-${VERSION}.tgz"
+          npm publish --provenance --tag "$TAG" --access public "turbo-repository-${VERSION}.tgz"
 
   create-release-pr:
     name: Create Release PR
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
     needs: [package]
     if: ${{ !inputs.dry_run }}
     steps:
@@ -281,8 +295,10 @@ jobs:
 
   cleanup-on-failure:
     name: Cleanup Failed Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: write
     needs: [package]
     if: ${{ always() && needs.package.result == 'failure' }}
     steps:
@@ -292,6 +308,10 @@ jobs:
         run: |
           BRANCH="${{ needs.package.outputs.branch }}"
           if [ -n "${BRANCH}" ]; then
+            if [[ ! "$BRANCH" =~ ^library-release/[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+              echo "::error::Refusing to delete unexpected release branch: $BRANCH"
+              exit 1
+            fi
             echo "Cleaning up branch ${BRANCH}..."
             gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/${BRANCH}" || echo "Branch may already be deleted"
           fi
