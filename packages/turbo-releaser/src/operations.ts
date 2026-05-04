@@ -41,7 +41,8 @@ function validatePathSegment(name: string, value: string) {
 }
 
 function validatePackagePrefix(packagePrefix: string) {
-  const validPackagePrefix = /^(@[0-9A-Za-z._-]+(\/[0-9A-Za-z._-]+)?|[0-9A-Za-z._-]+)$/;
+  const validPackagePrefix =
+    /^(@[0-9A-Za-z._-]+(\/[0-9A-Za-z._-]+)?|[0-9A-Za-z._-]+)$/;
 
   if (!validPackagePrefix.test(packagePrefix)) {
     throw new Error(`Invalid package prefix: ${packagePrefix}`);
