@@ -18,8 +18,7 @@ export function signOgParams(params: Record<string, string>): string {
   const data = normalizeParams(params);
   return createHmac("sha256", OG_SECRET)
     .update(data)
-    .digest("hex")
-    .slice(0, 16);
+    .digest("hex");
 }
 
 /**

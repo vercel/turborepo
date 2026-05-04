@@ -37,7 +37,7 @@ export async function signOgParamsEdge(
 
   const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
 
-  return bufferToHex(signature).slice(0, 16);
+  return bufferToHex(signature);
 }
 
 /**
