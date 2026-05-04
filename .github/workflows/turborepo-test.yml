@@ -16,6 +16,9 @@ jobs:
     name: Find path changes
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       is-release-pr: ${{ steps.check-release.outputs.is-release-pr }}
       docs: ${{ steps.filter.outputs.docs }}
@@ -26,14 +29,63 @@ jobs:
       # Detect automated release PRs which only contain version bumps.
       # These PRs are created by the release workflow after code has already
       # been tested on main. Skipping tests on version-only changes saves CI time.
+      - name: Check if automated release PR
+        id: check-release
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "is-release-pr=false" >> "$GITHUB_OUTPUT"
+            echo "Not a pull_request event, skipping release PR check"
+            exit 0
+          fi
+
+          if [[ "$PR_AUTHOR" != "github-actions[bot]" || ! "$PR_TITLE" =~ ^release\(turborepo\): ]]; then
+            echo "is-release-pr=false" >> "$GITHUB_OUTPUT"
+            echo "Not a release PR (author: $PR_AUTHOR, title: $PR_TITLE)"
+            exit 0
+          fi
+
+          CHANGED_FILES=$(gh api --paginate "repos/${REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename')
+          if [[ -z "$CHANGED_FILES" ]]; then
+            echo "::error::Unable to determine changed files for release PR"
+            exit 1
+          fi
+
+          echo "Changed files in release PR:"
+          printf '%s\n' "$CHANGED_FILES"
+
+          ALLOWED_PATTERN="^(version\.txt|.*/package\.json|package\.json|Cargo\.toml|Cargo\.lock|.*/Cargo\.toml|CHANGELOG.*|pnpm-lock\.yaml)$"
+          INVALID_FILES=""
+          while IFS= read -r file; do
+            if [[ -n "$file" && ! "$file" =~ $ALLOWED_PATTERN ]]; then
+              INVALID_FILES="$INVALID_FILES$file"$'\n'
+            fi
+          done <<< "$CHANGED_FILES"
+
+          if [[ -n "$INVALID_FILES" ]]; then
+            echo "::error::Release PR contains unexpected files that are not version-related:"
+            printf '%s\n' "$INVALID_FILES"
+            echo "::error::Release PRs should only modify version.txt, package.json, Cargo.toml, Cargo.lock, CHANGELOG, or pnpm-lock.yaml"
+            exit 1
+          fi
+
+          echo "is-release-pr=true" >> "$GITHUB_OUTPUT"
+          echo "Release PR content validation passed - only version-related files changed"
+
       - name: Checkout
+        if: steps.check-release.outputs.is-release-pr != 'true'
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
-
-      - name: Check if automated release PR
-        id: check-release
-        uses: ./.github/actions/check-release-pr
 
       - name: Check path changes
         if: steps.check-release.outputs.is-release-pr != 'true'
@@ -653,6 +705,10 @@ jobs:
       - check-lockfiles
       - js_native_packages
     steps:
+      - name: Fail if change detection failed
+        if: needs.find-changes.result != 'success'
+        run: exit 1
+
       - name: Skip for release PR
         if: needs.find-changes.outputs.is-release-pr == 'true'
         run: |

@@ -26,7 +26,11 @@ runs:
           VERSION=$(npm view turbo --json | jq -r '.versions | map(select(test("^2\\."))) | last')
           echo "No version provided, using latest 2.x version: $VERSION"
         fi
-        echo "TURBO_VERSION=$VERSION" >> $GITHUB_ENV
+        if [[ ! "$VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z._-]{0,127}$ ]]; then
+          echo "::error::Invalid Turbo version '${VERSION}'. Use a semver version or safe npm dist-tag."
+          exit 1
+        fi
+        echo "TURBO_VERSION=$VERSION" >> "$GITHUB_ENV"
 
     - name: Install Turbo globally
       shell: bash
