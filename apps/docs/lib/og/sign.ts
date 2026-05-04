@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 const OG_SECRET = process.env.OG_IMAGE_SECRET || "fallback-secret-for-dev";
 
@@ -30,7 +30,19 @@ export function verifyOgSignature(
   signature: string
 ): boolean {
   const expectedSignature = signOgParams(params);
-  return signature === expectedSignature;
+
+  if (signature.length !== expectedSignature.length) {
+    return false;
+  }
+
+  const signatureBuffer = Buffer.from(signature, "hex");
+  const expectedSignatureBuffer = Buffer.from(expectedSignature, "hex");
+
+  if (signatureBuffer.length !== expectedSignatureBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(signatureBuffer, expectedSignatureBuffer);
 }
 
 /**
