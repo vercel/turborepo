@@ -8,6 +8,9 @@ on:
         type: string
         default: "canary"
 
+permissions:
+  contents: read
+
 jobs:
   generate_cache_artifact:
     strategy:
@@ -15,15 +18,33 @@ jobs:
         os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      TURBO_VERSION: ${{ inputs.version }}
 
     steps:
+      - name: Validate version input
+        shell: bash
+        run: |
+          if [[ ! "$TURBO_VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z._-]{0,127}$ ]]; then
+            echo "::error::Invalid Turborepo version '${TURBO_VERSION}'. Use a semver version or safe npm dist-tag."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
       - name: Setup Node
         uses: ./.github/actions/setup-node
+        with:
+          package-install: false
 
       - name: create-turbo
+        shell: bash
         run: |
-          npm install -g pnpm turbo@${{ inputs.version }}
-          pnpm dlx create-turbo@${{ inputs.version }} my-turborepo pnpm
+          npm install -g "turbo@${TURBO_VERSION}"
+          pnpm dlx "create-turbo@${TURBO_VERSION}" my-turborepo pnpm
 
       - name: Run build
         run: |
@@ -31,7 +52,7 @@ jobs:
           turbo run build --filter=docs --filter=web --summarize --skip-infer -vvv
 
       - name: Grab artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: cache-item-${{ matrix.os }}-${{ inputs.version }}
           path: |
@@ -48,18 +69,36 @@ jobs:
         cache_os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      TURBO_VERSION: ${{ inputs.version }}
 
     steps:
+      - name: Validate version input
+        shell: bash
+        run: |
+          if [[ ! "$TURBO_VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z._-]{0,127}$ ]]; then
+            echo "::error::Invalid Turborepo version '${TURBO_VERSION}'. Use a semver version or safe npm dist-tag."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
       - name: Setup Node
         uses: ./.github/actions/setup-node
+        with:
+          package-install: false
 
       - name: create-turbo
+        shell: bash
         run: |
-          npm install -g pnpm turbo@${{ inputs.version }}
-          pnpm dlx create-turbo@${{ inputs.version }} my-turborepo pnpm
+          npm install -g "turbo@${TURBO_VERSION}"
+          pnpm dlx "create-turbo@${TURBO_VERSION}" my-turborepo pnpm
 
       - name: Download cache artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: cache-item-${{ matrix.cache_os }}-${{ inputs.version }}
           path: my-turborepo
@@ -73,5 +112,4 @@ jobs:
 
       - name: Check for functional server
         run: |
-          curl https://raw.githubusercontent.com/vercel/turbo/main/scripts/server.js -O
-          node server.js my-turborepo/apps/docs
+          node scripts/server.js my-turborepo/apps/docs

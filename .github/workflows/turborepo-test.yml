@@ -9,9 +9,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
-  actions: write
   contents: read
-  pull-requests: write
 
 jobs:
   find-changes:
@@ -29,7 +27,9 @@ jobs:
       # These PRs are created by the release workflow after code has already
       # been tested on main. Skipping tests on version-only changes saves CI time.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Check if automated release PR
         id: check-release
@@ -130,7 +130,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -165,9 +167,9 @@ jobs:
     if: ${{ false }}
     name: Build test artifacts (windows)
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
+      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
       # AWS-backed sccache is disabled.
       # SCCACHE_BUCKET: turborepo-sccache
       # SCCACHE_REGION: us-east-2
@@ -199,7 +201,9 @@ jobs:
           git config --global core.eol lf
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -234,9 +238,9 @@ jobs:
     if: ${{ false }}
     name: Build test artifacts (macos)
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
+      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
       # AWS-backed sccache is disabled.
       # SCCACHE_BUCKET: turborepo-sccache
       # SCCACHE_REGION: us-east-2
@@ -249,7 +253,9 @@ jobs:
       # SCCACHE_ERROR_LOG: error
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -287,7 +293,9 @@ jobs:
     name: Rust testing on macos (partition ${{ matrix.partition }}/2)
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -346,7 +354,9 @@ jobs:
           git config --global core.eol lf
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -398,9 +408,9 @@ jobs:
     if: ${{ false }}
     name: Build test artifacts (ubuntu)
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
+      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
       # AWS-backed sccache is disabled.
       # SCCACHE_BUCKET: turborepo-sccache
       # SCCACHE_REGION: us-east-2
@@ -413,7 +423,9 @@ jobs:
       # SCCACHE_ERROR_LOG: error
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -451,7 +463,9 @@ jobs:
     name: Rust testing on ubuntu (partition ${{ matrix.partition }}/2)
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -491,24 +505,26 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && !github.event.pull_request.head.repo.fork }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
+      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
 
       - name: Install dependencies
         run: pnpm install
@@ -519,8 +535,8 @@ jobs:
       - name: Setup Vercel credentials
         run: |
           cd examples
-          npx vercel link --yes --token=${{ secrets.VERCEL_TOKEN }} --project turborepo-examples-app
-          npx vercel env pull --yes --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel link --yes --token="${VERCEL_TOKEN}" --project turborepo-examples-app
+          npx vercel env pull --yes --token="${VERCEL_TOKEN}"
 
       - name: Run examples check
         run: turbo run check-examples --filter=turborepo-examples --env-mode=strict
@@ -533,9 +549,9 @@ jobs:
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' }}
     runs-on: ubuntu-latest
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
+      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
       # AWS-backed sccache is disabled.
       # SCCACHE_BUCKET: turborepo-sccache
       # SCCACHE_REGION: us-east-2
@@ -545,7 +561,9 @@ jobs:
       # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -586,9 +604,9 @@ jobs:
           - 22
           - 24
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
+      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
     steps:
       - name: Determine fetch depth
         id: fetch-depth
@@ -596,10 +614,11 @@ jobs:
           echo "depth=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> $GITHUB_OUTPUT
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ github.ref }}
           fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -686,5 +705,7 @@ jobs:
     name: Cleanup
     needs: summary
     if: always()
+    permissions:
+      actions: write
     uses: ./.github/workflows/pr-clean-caches.yml
     secrets: inherit

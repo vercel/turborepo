@@ -8,6 +8,9 @@ name: LSP
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-rust:
     name: "Build Rust"
@@ -46,7 +49,9 @@ jobs:
       options: ${{ matrix.settings.container-options }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Setup Container
         if: ${{ matrix.settings.container-setup }}
         run: ${{ matrix.settings.container-setup }}
@@ -69,7 +74,7 @@ jobs:
         run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo-lsp -p turborepo-lsp --target ${{ matrix.settings.target }}
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: turborepo-lsp-${{ matrix.settings.target }}
           path: target/${{ matrix.settings.target }}/release-turborepo-lsp/turborepo-lsp*

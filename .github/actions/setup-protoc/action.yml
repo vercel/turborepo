@@ -15,14 +15,14 @@ runs:
     - name: Set Up Protoc
       id: set-up-protoc
       continue-on-error: true
-      uses: arduino/setup-protoc@v3
+      uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
       with:
         version: ${{ inputs.version }}
         repo-token: ${{ inputs.github-token }}
 
     - name: Set Up Protoc (second try)
       if: steps.set-up-protoc.outcome == 'failure'
-      uses: arduino/setup-protoc@v3
+      uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
       with:
         version: ${{ inputs.version }}
         repo-token: ${{ inputs.github-token }}

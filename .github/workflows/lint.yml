@@ -10,9 +10,7 @@ env:
   RUSTFLAGS: "-D warnings"
 
 permissions:
-  actions: write
   contents: read
-  pull-requests: read
 
 jobs:
   determine_changes:
@@ -21,16 +19,19 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      pull-requests: read
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
       formatting: ${{ steps.filter.outputs.formatting }}
       dependencies: ${{ steps.filter.outputs.dependencies }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Check for changes
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@6852f92c20ea7fd3b0c25de3b5112db3a98da050 # v3
         id: filter
         with:
           filters: |
@@ -61,7 +62,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
@@ -90,7 +93,9 @@ jobs:
       # SCCACHE_ERROR_LOG: error
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -112,10 +117,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Check licenses
-        uses: EmbarkStudios/cargo-deny-action@v2
+        uses: EmbarkStudios/cargo-deny-action@5bb39ff5d5a0e94dc9e2dc94eced0c6129743a57 # v2
         with:
           command: check licenses
 
@@ -126,12 +133,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
+      TURBO_CACHE: local:rw
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: "Setup Node"
         uses: ./.github/actions/setup-node
@@ -153,5 +160,7 @@ jobs:
       - rust_licenses
       - format_lint
     if: always()
+    permissions:
+      actions: write
     uses: ./.github/workflows/pr-clean-caches.yml
     secrets: inherit
