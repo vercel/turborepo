@@ -22,11 +22,9 @@ name: Release
 env:
   CARGO_PROFILE_RELEASE_LTO: true
   HUSKY: "0"
-  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
   RELEASE_TURBO_CLI: true # TODO: do we need this?
 
 permissions:
-  id-token: write # Required for npm Trusted Publishing using OIDC
   contents: write # Allow workflow to checkout code from the repository
   pull-requests: write # Allows the PR for post-release to be created
   checks: write # Allows posting check statuses for release PRs
@@ -387,6 +385,9 @@ jobs:
     name: "Publish To NPM"
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # Required for npm Trusted Publishing using OIDC
     # TODO: Add rust-smoke-test back to needs and if-condition when re-enabled.
     needs: [stage, build-rust, js-smoke-test]
     if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.js-smoke-test.result == 'success' }}

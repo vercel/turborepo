@@ -8,7 +8,6 @@ on:
         type: boolean
 
 permissions:
-  id-token: write # Required for npm Trusted Publishing using OIDC
   contents: write
   pull-requests: write
 
@@ -142,6 +141,9 @@ jobs:
     name: Publish to NPM
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write
+      id-token: write # Required for npm Trusted Publishing using OIDC
     needs: [build]
     outputs:
       version: ${{ steps.version.outputs.version }}
