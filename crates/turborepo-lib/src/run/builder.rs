@@ -7,7 +7,9 @@ use std::{
 
 use chrono::Local;
 use tracing::Instrument;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPathBuf,
+};
 use turborepo_analytics::{start_analytics, AnalyticsHandle};
 use turborepo_api_client::{APIAuth, APIClient, CacheClient, SharedHttpClient};
 use turborepo_cache::{AsyncCache, CacheScmState, LazyScmState};
@@ -284,21 +286,39 @@ impl RunBuilder {
         }
     }
 
-    fn all_package_prefixes(pkg_dep_graph: &PackageGraph) -> Vec<RelativeUnixPathBuf> {
+    fn package_prefix_for_repo_index(
+        repo_root: &AbsoluteSystemPath,
+        index_root: &AbsoluteSystemPath,
+        package_dir: &AnchoredSystemPath,
+    ) -> Result<RelativeUnixPathBuf, Error> {
+        let full_package_dir = repo_root.resolve(package_dir);
+        Ok(index_root.anchor(&full_package_dir)?.to_unix())
+    }
+
+    fn all_package_prefixes(
+        pkg_dep_graph: &PackageGraph,
+        scm: &SCM,
+    ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+        let repo_root = pkg_dep_graph.repo_root();
+        let index_root = scm.git_root().unwrap_or(repo_root);
         let mut prefixes = pkg_dep_graph
             .packages()
             .filter_map(|(name, _)| pkg_dep_graph.package_dir(name))
-            .map(|package_dir| package_dir.to_unix())
-            .collect::<Vec<_>>();
+            .map(|package_dir| {
+                Self::package_prefix_for_repo_index(repo_root, index_root, package_dir)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
-        prefixes.extend(
-            pkg_dep_graph
-                .root_internal_package_dependencies_paths()
-                .into_iter()
-                .map(|package_dir| package_dir.to_unix()),
-        );
+        let root_dependency_prefixes = pkg_dep_graph
+            .root_internal_package_dependencies_paths()
+            .into_iter()
+            .map(|package_dir| {
+                Self::package_prefix_for_repo_index(repo_root, index_root, package_dir)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        prefixes.extend(root_dependency_prefixes);
 
-        prefixes
+        Ok(prefixes)
     }
 
     /// Resolve the set of packages that should participate in this run.
@@ -493,11 +513,11 @@ impl RunBuilder {
         // parallel walk for untracked file discovery. This replaces the
         // subprocess approach (ls-tree + diff-index + ls-files race) which
         // burned ~500ms of CPU on background threads.
-        let all_prefixes = Self::all_package_prefixes(&pkg_dep_graph);
         let scm = scm_task
             .instrument(tracing::info_span!("scm_task_await"))
             .await
             .expect("detecting scm panicked");
+        let all_prefixes = Self::all_package_prefixes(&pkg_dep_graph, &scm)?;
         let repo_index_task = if all_prefixes.is_empty() {
             None
         } else {
@@ -1049,6 +1069,51 @@ fn hosts_match(url1: &str, url2: &str) -> bool {
     match (extract_host(url1), extract_host(url2)) {
         (Some(h1), Some(h2)) => h1.eq_ignore_ascii_case(h2),
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod package_prefix_tests {
+    use super::*;
+
+    #[test]
+    fn repo_index_prefixes_are_git_root_relative_for_nested_turbo_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let git_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let repo_root = git_root.join_component("downloaded-app");
+
+        let root_package = AnchoredSystemPath::new("").unwrap();
+        let workspace_package = AnchoredSystemPath::new("packages/web").unwrap();
+
+        assert_eq!(
+            RunBuilder::package_prefix_for_repo_index(&repo_root, &git_root, root_package).unwrap(),
+            RelativeUnixPathBuf::new("downloaded-app").unwrap()
+        );
+        assert_eq!(
+            RunBuilder::package_prefix_for_repo_index(&repo_root, &git_root, workspace_package)
+                .unwrap(),
+            RelativeUnixPathBuf::new("downloaded-app/packages/web").unwrap()
+        );
+    }
+
+    #[test]
+    fn repo_index_prefixes_stay_repo_relative_when_git_root_matches_turbo_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+        let root_package = AnchoredSystemPath::new("").unwrap();
+        let workspace_package = AnchoredSystemPath::new("packages/web").unwrap();
+
+        assert_eq!(
+            RunBuilder::package_prefix_for_repo_index(&repo_root, &repo_root, root_package)
+                .unwrap(),
+            RelativeUnixPathBuf::new("").unwrap()
+        );
+        assert_eq!(
+            RunBuilder::package_prefix_for_repo_index(&repo_root, &repo_root, workspace_package)
+                .unwrap(),
+            RelativeUnixPathBuf::new("packages/web").unwrap()
+        );
     }
 }
 

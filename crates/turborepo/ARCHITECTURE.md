@@ -261,6 +261,11 @@ still warming the client before the first network request in the common case.
    actually needs for hashing and augments that tracked index with untracked
    files only for those prefixes
 
+Those prefixes are relative to the repo index root, which is usually the Git
+root. This matters when the Turbo root is nested inside a larger Git repository:
+the root package should scope to the nested Turbo directory, not request an
+untracked walk of the entire parent repository.
+
 This keeps the cheap tracked-index work overlapped with other startup work while
 avoiding a repo-wide untracked walk when only a subset of packages will be
 hashed.
