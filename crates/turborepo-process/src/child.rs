@@ -174,6 +174,7 @@ fn signal_process_group(process_group_id: libc::pid_t, signal: libc::c_int) {
     let _ = unsafe { libc::kill(-process_group_id, signal) };
 }
 
+#[cfg(unix)]
 fn capture_target_identity(pid: Option<u32>) -> Option<TargetIdentity> {
     pid.and_then(|pid| match target_identity(pid as libc::pid_t) {
         Ok(identity) => Some(identity),
@@ -568,6 +569,9 @@ impl ShutdownStyle {
         child: &mut ChildHandle,
         command_rx: &mut mpsc::Receiver<ChildCommand>,
     ) -> ChildExit {
+        #[cfg(windows)]
+        let _ = &command_rx;
+
         match self {
             // Windows doesn't give the ability to send a signal to a process so we
             // can't make use of the graceful shutdown timeout.

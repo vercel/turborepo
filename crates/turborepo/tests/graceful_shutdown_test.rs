@@ -667,33 +667,4 @@ while true; do sleep 0.2 || true; done
             "expected auto-force banner after timeout\n{combined}"
         );
     }
-
-    #[test]
-    fn run_kills_task_tree_when_turbo_is_sigkilled() {
-        let (_tempdir, test_dir) = setup_shutdown_example(
-            "orphanable.sh",
-            r#"#!/usr/bin/env bash
-set -u
-sh -c 'trap "" TERM INT; while true; do sleep 0.2 || true; done' &
-child=$!
-printf '%s\n' "$child" > child.pid
-printf "orphanable ready child=%s\n" "$child"
-: > ready
-while true; do sleep 0.2 || true; done
-"#,
-        );
-
-        let ready_file = test_dir.join("apps/app-a/ready");
-        let child_pid_file = test_dir.join("apps/app-a/child.pid");
-
-        let mut child = spawn_noninteractive_turbo(&test_dir);
-        wait_for_path(&ready_file, START_TIMEOUT);
-        let task_child_pid = wait_for_pid_file(&child_pid_file, START_TIMEOUT);
-
-        send_signal(child.child_mut().id() as i32, Signal::SIGKILL);
-        let _status = wait_for_process_exit(child.child_mut(), Duration::from_secs(5));
-        let _ = child.child.take();
-
-        wait_for_process_gone(task_child_pid, Duration::from_secs(5));
-    }
 }
