@@ -1,32 +1,52 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
+import { crawlPages } from "@/lib/sitemap/crawler";
+import { getAllPageUrls } from "@/lib/sitemap/pages";
 import {
-  loadState,
-  saveState,
   createEmptyState,
-  updatePageState,
+  loadState,
   pruneRemovedPages,
-  crawlPages,
-  getAllPageUrls,
-  SITEMAP_CONFIG
-} from "@/lib/sitemap";
+  saveState,
+  updatePageState
+} from "@/lib/sitemap/redis";
+import { SITEMAP_CONFIG } from "@/lib/sitemap/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes max for crawling
+
+function isValidCronRequest(request: Request, cronSecret: string): boolean {
+  const authHeader = request.headers.get("authorization");
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice("Bearer ".length)
+    : null;
+
+  if (!token) {
+    return false;
+  }
+
+  const tokenBuffer = Buffer.from(token);
+  const secretBuffer = Buffer.from(cronSecret);
+
+  if (tokenBuffer.length !== secretBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(tokenBuffer, secretBuffer);
+}
 
 /**
  * GET handler for Vercel Cron
  * Crawls all pages and updates sitemap state in Redis
  */
 export async function GET(request: Request): Promise<Response> {
-  // Verify cron secret
-  const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
-  if (!cronSecret && process.env.NODE_ENV === "production") {
-    return new NextResponse("Server configuration error", { status: 500 });
+  if (!cronSecret) {
+    console.error("CRON_SECRET is not configured");
+    return new NextResponse("Internal Server Error", { status: 500 });
   }
 
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  if (!isValidCronRequest(request, cronSecret)) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
@@ -118,8 +138,7 @@ export async function GET(request: Request): Promise<Response> {
 
     return NextResponse.json(
       {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
+        success: false
       },
       { status: 500 }
     );

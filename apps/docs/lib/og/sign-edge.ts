@@ -1,12 +1,30 @@
-const OG_SECRET = process.env.OG_IMAGE_SECRET || "fallback-secret-for-dev";
 const HMAC_SHA256_HEX_LENGTH = 64;
+
+function getOgSecret(): string | null {
+  return process.env.OG_IMAGE_SECRET || null;
+}
+
+function requireOgSecret(): string {
+  const secret = getOgSecret();
+
+  if (!secret) {
+    throw new Error("OG_IMAGE_SECRET is not configured");
+  }
+
+  return secret;
+}
 
 /**
  * Normalizes parameters into a consistent string for signing.
  */
 function normalizeParams(params: Record<string, string>): string {
-  const sortedKeys = Object.keys(params).sort();
-  return sortedKeys.map((key) => `${key}=${params[key]}`).join("&");
+  const searchParams = new URLSearchParams();
+
+  for (const key of Object.keys(params).sort()) {
+    searchParams.set(key, params[key]);
+  }
+
+  return searchParams.toString();
 }
 
 /**
@@ -18,7 +36,7 @@ function bufferToHex(buffer: ArrayBuffer): string {
     .join("");
 }
 
-function hexToUint8Array(hex: string): Uint8Array | null {
+function hexToArrayBuffer(hex: string): ArrayBuffer | null {
   if (hex.length % 2 !== 0 || !/^[0-9a-f]*$/i.test(hex)) {
     return null;
   }
@@ -28,7 +46,7 @@ function hexToUint8Array(hex: string): Uint8Array | null {
     bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
   }
 
-  return bytes;
+  return bytes.buffer;
 }
 
 /**
@@ -40,10 +58,11 @@ export async function signOgParamsEdge(
 ): Promise<string> {
   const data = normalizeParams(params);
   const encoder = new TextEncoder();
+  const secret = requireOgSecret();
 
   const key = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(OG_SECRET),
+    encoder.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"]
@@ -62,11 +81,18 @@ export async function verifyOgSignatureEdge(
   params: Record<string, string>,
   signature: string
 ): Promise<boolean> {
+  const secret = getOgSecret();
+
+  if (!secret) {
+    console.error("OG_IMAGE_SECRET is not configured");
+    return false;
+  }
+
   if (signature.length !== HMAC_SHA256_HEX_LENGTH) {
     return false;
   }
 
-  const signatureBytes = hexToUint8Array(signature);
+  const signatureBytes = hexToArrayBuffer(signature);
   if (!signatureBytes) {
     return false;
   }
@@ -75,11 +101,16 @@ export async function verifyOgSignatureEdge(
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(OG_SECRET),
+    encoder.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["verify"]
   );
 
-  return crypto.subtle.verify("HMAC", key, signatureBytes, encoder.encode(data));
+  return crypto.subtle.verify(
+    "HMAC",
+    key,
+    signatureBytes,
+    encoder.encode(data)
+  );
 }
