@@ -1,5 +1,6 @@
 import path from "node:path";
 import execa from "execa";
+import fs from "fs-extra";
 import * as turboUtils from "@turbo/utils";
 import { setupTestFixtures } from "@turbo/test-utils";
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
@@ -182,6 +183,57 @@ describe("Node entrypoint", () => {
   });
 
   describe("convert", () => {
+    it.each([
+      {
+        fixtureManager: "npm" as const,
+        toManager: "yarn" as const,
+        lockfile: "package-lock.json"
+      },
+      {
+        fixtureManager: "pnpm" as const,
+        toManager: "npm" as const,
+        lockfile: "pnpm-lock.yaml"
+      },
+      {
+        fixtureManager: "yarn" as const,
+        toManager: "npm" as const,
+        lockfile: "yarn.lock"
+      }
+    ])(
+      "preserves $lockfile during dry-run conversion from $fixtureManager to $toManager",
+      async ({ fixtureManager, toManager, lockfile }) => {
+        const mockedGetAvailablePackageManagers = jest
+          .spyOn(turboUtils, "getAvailablePackageManagers")
+          .mockResolvedValue({
+            npm: "8.19.2",
+            yarn: "1.22.19",
+            pnpm: "7.29.1",
+            bun: "1.0.1"
+          });
+
+        const { root } = useFixture({
+          fixture: `./${fixtureManager}/monorepo`
+        });
+        const lockfilePath = path.join(root, lockfile);
+
+        try {
+          expect(fs.existsSync(lockfilePath)).toBe(true);
+
+          await expect(
+            convert({
+              root,
+              to: toManager,
+              options: { interactive: false, dry: true }
+            })
+          ).resolves.toBeUndefined();
+
+          expect(fs.existsSync(lockfilePath)).toBe(true);
+        } finally {
+          mockedGetAvailablePackageManagers.mockRestore();
+        }
+      }
+    );
+
     it.each(generateConvertMatrix())(
       "detects $fixtureType project using $fixtureManager and converts to $toManager (interactive=$interactive dry=$dry install=$install)",
       async ({
