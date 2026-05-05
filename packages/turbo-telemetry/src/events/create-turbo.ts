@@ -1,12 +1,26 @@
 import { TelemetryClient } from "../client";
 import type { Event } from "./types";
 
+function classifyExample(value: string): string {
+  if (value === "default") {
+    return "default";
+  }
+
+  try {
+    const url = new URL(value);
+
+    return url.hostname === "github.com" ? "github_url" : "other_url";
+  } catch {
+    return "official";
+  }
+}
+
 export class CreateTurboTelemetry extends TelemetryClient {
   trackOptionExample(value: string | undefined): Event | undefined {
     if (value) {
       return this.trackCliOption({
         option: "example",
-        value
+        value: classifyExample(value)
       });
     }
   }
@@ -51,7 +65,7 @@ export class CreateTurboTelemetry extends TelemetryClient {
     if (value) {
       return this.trackCliOption({
         option: "example_path",
-        value
+        value: "provided"
       });
     }
   }
