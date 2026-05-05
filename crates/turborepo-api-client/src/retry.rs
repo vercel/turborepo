@@ -98,10 +98,8 @@ impl RetryStrategy {
     }
 
     fn should_retry(&self, error: &reqwest::Error) -> bool {
-        if let Some(status) = error.status() {
-            if Self::should_retry_status(status) {
-                return true;
-            }
+        if error.status().is_some_and(Self::should_retry_status) {
+            return true;
         }
 
         match self {
