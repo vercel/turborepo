@@ -50,12 +50,12 @@ pub(crate) fn validated_host_header<T>(req: &Request<T>) -> Result<&str, ProxyEr
 }
 
 fn validate_request_uri_host<T>(req: &Request<T>, host: &str) -> Result<(), ProxyError> {
-    if let Some(authority) = req.uri().authority() {
-        if authority.as_str() != host {
-            return Err(ProxyError::InvalidRequest(
-                "Request URI host does not match Host header".to_string(),
-            ));
-        }
+    if let Some(authority) = req.uri().authority()
+        && authority.as_str() != host
+    {
+        return Err(ProxyError::InvalidRequest(
+            "Request URI host does not match Host header".to_string(),
+        ));
     }
 
     Ok(())
