@@ -38,7 +38,9 @@ export async function transformer({
     });
   }
 
-  const availablePackageManagers = await getAvailablePackageManagers();
+  const availablePackageManagers = await getAvailablePackageManagers({
+    projectRoot: root
+  });
   const { packageManager } = project;
   const version = availablePackageManagers[packageManager];
   if (!version) {

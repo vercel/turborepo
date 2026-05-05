@@ -66,7 +66,7 @@ export async function convertCommand(
 
   const [project, availablePackageManagers] = await Promise.all([
     getWorkspaceDetails({ root }),
-    getAvailablePackageManagers()
+    getAvailablePackageManagers({ projectRoot: root })
   ]);
 
   let selectedPackageManager: PackageManager;
