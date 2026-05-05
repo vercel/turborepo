@@ -84,7 +84,8 @@ bitflags::bitflags! {
 /// - `to_device_relative()` strips the mount point prefix and prepends "/"
 ///
 /// When receiving events in the callback:
-/// - `to_absolute()` joins the mount point with the device-relative path
+/// - `to_absolute()` strips the leading separator and joins the mount point
+///   with the device-relative path
 ///
 /// This symmetry must be maintained for correct path reporting.
 #[derive(Debug, Clone)]
@@ -139,7 +140,8 @@ impl DeviceContext {
     ///
     /// This is the inverse of `to_device_relative()`.
     fn to_absolute(&self, device_relative: &str) -> PathBuf {
-        self.mount_point.join(device_relative)
+        self.mount_point
+            .join(device_relative.trim_start_matches(std::path::MAIN_SEPARATOR))
     }
 }
 
@@ -851,6 +853,20 @@ fn test_fsevent_watcher_drop() {
 fn test_steam_context_info_send_and_sync() {
     fn check_send<T: Send + Sync>() {}
     check_send::<StreamContextInfo>();
+}
+
+#[test]
+fn test_device_context_round_trips_non_root_mount_paths() {
+    let device_context = DeviceContext {
+        device_id: 0,
+        mount_point: PathBuf::from("/Volumes/TurboDisk"),
+    };
+
+    let absolute_path = Path::new("/Volumes/TurboDisk/project/file.txt");
+    let device_relative = device_context.to_device_relative(absolute_path).unwrap();
+
+    assert_eq!(device_relative, "/project/file.txt");
+    assert_eq!(device_context.to_absolute(&device_relative), absolute_path);
 }
 
 /// A temporary RAM disk volume for testing FSEvents on non-root filesystems.
