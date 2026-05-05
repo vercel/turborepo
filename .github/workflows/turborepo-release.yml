@@ -504,6 +504,18 @@ jobs:
             "${NOTES_START_TAG_FLAG[@]}" \
             "${PRERELEASE_FLAG[@]}"
 
+  publish-vscode-extension:
+    name: "Publish VS Code Extension"
+    needs: [stage, create-release-tag, create-release-pr]
+    if: ${{ always() && needs.create-release-tag.result == 'success' && needs.create-release-pr.result == 'success' && !inputs.dry_run }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/lsp.yml
+    with:
+      publish: true
+      dry_run: false
+      ref: v${{ needs.stage.outputs.version }}
+
   alias-versioned-docs:
     name: "Alias Versioned Docs"
     runs-on: ubuntu-24.04

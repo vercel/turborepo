@@ -1,15 +1,45 @@
 # LSP Pipeline
 #
-# Currently this just dumps the LSP binaries into the artifacts, but in the future
-# we will want to do the entire packaging process here.
+# Builds the LSP binaries, packages the VS Code extension, and publishes it to
+# the VS Code Marketplace from the main release workflow or a manual dispatch.
 
 name: LSP
 
+run-name: LSP ${{ inputs.ref || github.ref_name }}
+
 on:
+  workflow_call:
+    inputs:
+      publish:
+        type: boolean
+        default: false
+      dry_run:
+        type: boolean
+        default: true
+      ref:
+        type: string
+        required: false
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the VS Code extension to the Marketplace. Requires dry_run=false."
+        type: boolean
+        default: false
+      dry_run:
+        description: "Package the VSIX without publishing it."
+        type: boolean
+        default: true
+      ref:
+        description: "Git ref to package, such as v1.2.3 or v1.2.3-canary.0."
+        required: false
+        type: string
 
 permissions:
   contents: read
+
+concurrency:
+  group: lsp-${{ inputs.ref || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   build-rust:
@@ -42,6 +72,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
       - name: Prepare build environment
         if: ${{ matrix.settings.prepare }}
@@ -53,7 +84,7 @@ jobs:
       - name: Rust Setup
         uses: ./.github/actions/setup-rust
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
           targets: ${{ matrix.settings.target }}
 
       - name: Build Setup
@@ -69,3 +100,236 @@ jobs:
         with:
           name: turborepo-lsp-${{ matrix.settings.target }}
           path: target/${{ matrix.settings.target }}/release-turborepo-lsp/turborepo-lsp*
+
+  package-vscode:
+    name: "Package VS Code Extension"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: [build-rust]
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      pre_release: ${{ steps.version.outputs.pre_release }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+        with:
+          extra-flags: "--frozen-lockfile"
+
+      - name: Validate manual publish ref
+        if: ${{ inputs.publish && !inputs.dry_run }}
+        env:
+          PUBLISH_REF: ${{ inputs.ref || github.ref_name }}
+        run: |
+          if [[ ! "$PUBLISH_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-canary\.[0-9]+)?$ ]]; then
+            echo "::error::Marketplace publishes must use a version tag like v1.2.3 or v1.2.3-canary.0."
+            exit 1
+          fi
+
+      - name: Download darwin arm64 LSP
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: turborepo-lsp-aarch64-apple-darwin
+          path: packages/turbo-vsc/out/artifacts/turborepo-lsp-aarch64-apple-darwin
+
+      - name: Download darwin x64 LSP
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: turborepo-lsp-x86_64-apple-darwin
+          path: packages/turbo-vsc/out/artifacts/turborepo-lsp-x86_64-apple-darwin
+
+      - name: Download linux arm64 LSP
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: turborepo-lsp-aarch64-unknown-linux-musl
+          path: packages/turbo-vsc/out/artifacts/turborepo-lsp-aarch64-unknown-linux-musl
+
+      - name: Download linux x64 LSP
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: turborepo-lsp-x86_64-unknown-linux-musl
+          path: packages/turbo-vsc/out/artifacts/turborepo-lsp-x86_64-unknown-linux-musl
+
+      - name: Download win32 arm64 LSP
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: turborepo-lsp-aarch64-pc-windows-msvc
+          path: packages/turbo-vsc/out/artifacts/turborepo-lsp-aarch64-pc-windows-msvc
+
+      - name: Download win32 x64 LSP
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: turborepo-lsp-x86_64-pc-windows-msvc
+          path: packages/turbo-vsc/out/artifacts/turborepo-lsp-x86_64-pc-windows-msvc
+
+      - name: Stamp extension version
+        id: version
+        env:
+          RELEASE_REF: ${{ inputs.ref }}
+        run: |
+          node <<'EOF'
+          const fs = require("node:fs");
+
+          const version = fs
+            .readFileSync("version.txt", "utf8")
+            .split(/\r?\n/)[0]
+            .trim();
+          const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-canary\.(\d+))?$/);
+          if (!match) {
+            throw new Error(
+              `Invalid Turborepo version for VS Code publishing: ${version}`
+            );
+          }
+
+          const [, major, minor, patch, canary] = match;
+          const patchNumber = Number(patch);
+          const canaryNumber = canary == null ? null : Number(canary);
+          const preRelease = canaryNumber != null;
+
+          let marketplaceMajor = Number(major);
+          let marketplaceMinor = Number(minor);
+          let marketplacePatch;
+          if (preRelease) {
+            if (patchNumber > 0) {
+              marketplacePatch = (patchNumber - 1) * 1000 + canaryNumber + 1;
+            } else if (marketplaceMinor > 0) {
+              marketplaceMinor -= 1;
+              marketplacePatch = 999000 + canaryNumber + 1;
+            } else if (marketplaceMajor > 0) {
+              marketplaceMajor -= 1;
+              marketplaceMinor = 999;
+              marketplacePatch = 999000 + canaryNumber + 1;
+            } else {
+              throw new Error(`Cannot map canary version ${version}`);
+            }
+          } else {
+            marketplacePatch = patchNumber * 1000;
+          }
+
+          if (preRelease && canaryNumber >= 999) {
+            throw new Error(
+              `Canary version ${version} exceeds the 999 canary releases reserved before the stable version.`
+            );
+          }
+
+          const marketplaceVersion = `${marketplaceMajor}.${marketplaceMinor}.${marketplacePatch}`;
+
+          const releaseTag =
+            process.env.RELEASE_REF ||
+            (process.env.GITHUB_REF_TYPE === "tag" ? process.env.GITHUB_REF_NAME : "");
+          if (releaseTag) {
+            const tagVersion = releaseTag.startsWith("v")
+              ? releaseTag.slice(1)
+              : releaseTag;
+            if (tagVersion !== version) {
+              throw new Error(
+                `Release tag ${releaseTag} does not match version.txt ${version}`
+              );
+            }
+          }
+
+          const packageJsonPath = "packages/turbo-vsc/package.json";
+          const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+          packageJson.version = marketplaceVersion;
+          fs.writeFileSync(
+            packageJsonPath,
+            `${JSON.stringify(packageJson, null, 2)}\n`
+          );
+
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `version=${marketplaceVersion}\npre_release=${preRelease}\n`
+          );
+          EOF
+
+      - name: Copy LSP binaries into extension
+        working-directory: packages/turbo-vsc
+        run: pnpm run copy
+
+      - name: Validate packaged binaries
+        working-directory: packages/turbo-vsc
+        run: |
+          test -x out/turborepo-lsp-darwin-arm64
+          test -x out/turborepo-lsp-darwin-x64
+          test -x out/turborepo-lsp-linux-arm64
+          test -x out/turborepo-lsp-linux-x64
+          test -f out/turborepo-lsp-win32-arm64.exe
+          test -f out/turborepo-lsp-win32-x64.exe
+
+      - name: Compile extension
+        run: pnpm --filter turbo-vsc run test-compile
+
+      - name: Package VSIX
+        working-directory: packages/turbo-vsc
+        env:
+          PRE_RELEASE: ${{ steps.version.outputs.pre_release }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          PRE_RELEASE_FLAG=()
+          if [ "$PRE_RELEASE" = "true" ]; then
+            PRE_RELEASE_FLAG=("--pre-release")
+          fi
+
+          COMMIT_SHA=$(git rev-parse HEAD)
+          pnpm exec vsce package \
+            --no-dependencies \
+            --baseContentUrl "https://github.com/vercel/turborepo/raw/${COMMIT_SHA}/packages/turbo-vsc" \
+            --out "turbo-vsc-${VERSION}.vsix" \
+            "${PRE_RELEASE_FLAG[@]}"
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: turbo-vsc-${{ steps.version.outputs.version }}
+          path: packages/turbo-vsc/turbo-vsc-${{ steps.version.outputs.version }}.vsix
+
+  publish-vscode:
+    name: "Publish VS Code Extension"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [package-vscode]
+    if: ${{ needs.package-vscode.result == 'success' && inputs.publish && !inputs.dry_run }}
+    environment: vscode-marketplace
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+        with:
+          extra-flags: "--frozen-lockfile"
+
+      - name: Download VSIX
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: turbo-vsc-${{ needs.package-vscode.outputs.version }}
+          path: packages/turbo-vsc
+
+      - name: Publish VSIX
+        working-directory: packages/turbo-vsc
+        env:
+          PRE_RELEASE: ${{ needs.package-vscode.outputs.pre_release }}
+          VERSION: ${{ needs.package-vscode.outputs.version }}
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then
+            echo "::error::VSCE_PAT is required to publish the VS Code extension."
+            exit 1
+          fi
+
+          PRE_RELEASE_FLAG=()
+          if [ "$PRE_RELEASE" = "true" ]; then
+            PRE_RELEASE_FLAG=("--pre-release")
+          fi
+
+          pnpm exec vsce publish \
+            --packagePath "turbo-vsc-${VERSION}.vsix" \
+            "${PRE_RELEASE_FLAG[@]}"

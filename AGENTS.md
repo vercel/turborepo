@@ -50,3 +50,9 @@ feat: Add new cache configuration option
 fix: Resolve race condition in task scheduling
 docs: Update installation instructions
 ```
+
+## Release Workflow Notes
+
+- The `LSP` workflow publishes `packages/turbo-vsc` to the VS Code Marketplace. Stable and canary Turborepo versions are mapped to Marketplace-safe `major.minor.patch` versions before publishing.
+- Canary VS Code extension publishes use `--pre-release`.
+- Marketplace publishing requires a `VSCE_PAT` secret on the protected `vscode-marketplace` environment.
