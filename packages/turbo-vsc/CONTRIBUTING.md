@@ -8,9 +8,9 @@
 
 ## Marketplace Release
 
-The Turborepo release workflow calls the reusable `LSP` GitHub Actions workflow after creating a release tag and release PR. The `LSP` workflow can also be run manually with `publish=true` and `dry_run=false`.
+The Turborepo release workflow calls the reusable `LSP` GitHub Actions workflow after creating a release tag and release PR to package and upload the VSIX artifact. The `LSP` workflow can also be run manually with `publish=false` and `dry_run=true` to package without publishing.
 
-Publishing requires a `VSCE_PAT` secret on the protected `vscode-marketplace` environment. Dry runs package and upload the VSIX without publishing.
+Publishing is manual for now. If automated publishing is enabled later, it requires `publish=true`, `dry_run=false`, and a `VSCE_PAT` secret on the protected `vscode-marketplace` environment.
 
 VS Code extension versions must use `major.minor.patch`, so the workflow maps Turborepo versions before publishing:
 
