@@ -196,7 +196,7 @@ turbo query affected --packages web docs
 
 Base git ref for comparison. Defaults to the auto-detected base (e.g. `GITHUB_BASE_REF` on GitHub Actions, or the merge-base with `main`).
 
-Can also be set with the `TURBO_SCM_BASE` environment variable.
+Can also be set with the `TURBO_SCM_BASE` environment variable. When both are provided, `--base` takes precedence.
 
 ```bash title="Terminal"
 turbo query affected --base main
@@ -206,7 +206,7 @@ turbo query affected --base main
 
 Head git ref for comparison. Defaults to `HEAD`.
 
-Can also be set with the `TURBO_SCM_HEAD` environment variable.
+Can also be set with the `TURBO_SCM_HEAD` environment variable. When both are provided, `--head` takes precedence.
 
 ```bash title="Terminal"
 turbo query affected --head my-branch
