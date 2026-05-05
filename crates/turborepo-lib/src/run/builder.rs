@@ -35,6 +35,7 @@ use turborepo_telemetry::events::{
 use turborepo_types::UIMode;
 use turborepo_ui::ColorConfig;
 use turborepo_vercel_api::CachingStatusResponse;
+use url::Url;
 
 use crate::{
     commands::CommandBase,
@@ -844,7 +845,7 @@ impl RunBuilder {
                     }
                     let endpoint = otel.endpoint.as_deref().unwrap_or("");
                     let api_url = &self.opts.api_client_opts.api_url;
-                    if !hosts_match(endpoint, api_url) {
+                    if !origins_match(endpoint, api_url) {
                         tracing::warn!(
                             "use_remote_cache_token is enabled but the OTEL endpoint ({endpoint}) \
                              does not match the API URL ({api_url}). Skipping cache token \
@@ -1057,19 +1058,20 @@ impl RunBuilder {
     }
 }
 
-fn extract_host(url: &str) -> Option<&str> {
-    let after_scheme = url
-        .strip_prefix("https://")
-        .or_else(|| url.strip_prefix("http://"))?;
-    let host_and_port = after_scheme.split('/').next()?;
-    Some(host_and_port.split(':').next().unwrap_or(host_and_port))
+fn origins_match(url1: &str, url2: &str) -> bool {
+    let (Ok(url1), Ok(url2)) = (Url::parse(url1), Url::parse(url2)) else {
+        return false;
+    };
+
+    if has_userinfo(&url1) || has_userinfo(&url2) {
+        return false;
+    }
+
+    url1.origin() == url2.origin()
 }
 
-fn hosts_match(url1: &str, url2: &str) -> bool {
-    match (extract_host(url1), extract_host(url2)) {
-        (Some(h1), Some(h2)) => h1.eq_ignore_ascii_case(h2),
-        _ => false,
-    }
+fn has_userinfo(url: &Url) -> bool {
+    !url.username().is_empty() || url.password().is_some()
 }
 
 #[cfg(test)]
@@ -1118,12 +1120,12 @@ mod package_prefix_tests {
 }
 
 #[cfg(test)]
-mod hosts_match_tests {
+mod origins_match_tests {
     use super::*;
 
     #[test]
     fn same_host_different_paths() {
-        assert!(hosts_match(
+        assert!(origins_match(
             "https://vercel.com/otel",
             "https://vercel.com/api"
         ));
@@ -1131,7 +1133,7 @@ mod hosts_match_tests {
 
     #[test]
     fn different_hosts() {
-        assert!(!hosts_match(
+        assert!(!origins_match(
             "https://third-party.com/otel",
             "https://vercel.com/api"
         ));
@@ -1139,7 +1141,7 @@ mod hosts_match_tests {
 
     #[test]
     fn case_insensitive() {
-        assert!(hosts_match(
+        assert!(origins_match(
             "https://Vercel.COM/otel",
             "https://vercel.com/api"
         ));
@@ -1147,27 +1149,67 @@ mod hosts_match_tests {
 
     #[test]
     fn with_port() {
-        assert!(hosts_match(
+        assert!(origins_match(
             "https://vercel.com:443/otel",
             "https://vercel.com/api"
         ));
     }
 
     #[test]
+    fn different_ports_do_not_match() {
+        assert!(!origins_match(
+            "https://vercel.com:4317/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn different_schemes_do_not_match() {
+        assert!(!origins_match(
+            "http://vercel.com/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
     fn different_subdomains_do_not_match() {
-        assert!(!hosts_match(
+        assert!(!origins_match(
             "https://otel.vercel.com/v1",
             "https://vercel.com/api"
         ));
     }
 
     #[test]
+    fn userinfo_host_bypass_does_not_match() {
+        assert!(!origins_match(
+            "https://api.vercel.com:443@attacker.example/otel",
+            "https://api.vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn same_origin_with_userinfo_does_not_match() {
+        assert!(!origins_match(
+            "https://token@vercel.com/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn api_url_with_userinfo_does_not_match() {
+        assert!(!origins_match(
+            "https://vercel.com/otel",
+            "https://token@vercel.com/api"
+        ));
+    }
+
+    #[test]
     fn missing_scheme_returns_false() {
-        assert!(!hosts_match("vercel.com/otel", "https://vercel.com/api"));
+        assert!(!origins_match("vercel.com/otel", "https://vercel.com/api"));
     }
 
     #[test]
     fn empty_url_returns_false() {
-        assert!(!hosts_match("", "https://vercel.com/api"));
+        assert!(!origins_match("", "https://vercel.com/api"));
     }
 }
