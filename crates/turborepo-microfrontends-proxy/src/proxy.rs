@@ -9,7 +9,7 @@ use tracing::{debug, error};
 
 use crate::{
     ProxyError,
-    headers::{is_websocket_upgrade, validate_request_headers, validated_host_header},
+    headers::{is_websocket_upgrade, validate_request_headers},
     http::{BoxedBody, HttpClient, handle_http_request},
     http_router::Router,
     websocket::{WebSocketContext, handle_websocket_request},
@@ -23,11 +23,6 @@ pub(crate) async fn handle_request(
     http_client: HttpClient,
 ) -> Result<Response<BoxedBody>, hyper::Error> {
     if let Err(e) = validate_request_headers(&req) {
-        error!("Request validation error: {}", e);
-        return Ok(create_generic_error_response(e));
-    }
-
-    if let Err(e) = validated_host_header(&req) {
         error!("Request validation error: {}", e);
         return Ok(create_generic_error_response(e));
     }
@@ -71,9 +66,10 @@ pub(crate) async fn handle_request(
 }
 
 fn create_generic_error_response(error: ProxyError) -> Response<BoxedBody> {
-    let status = match &error {
-        ProxyError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
-        _ => StatusCode::BAD_GATEWAY,
+    let status = if matches!(&error, ProxyError::InvalidRequest(_)) {
+        StatusCode::BAD_REQUEST
+    } else {
+        StatusCode::BAD_GATEWAY
     };
 
     let body_text = format!(
@@ -246,9 +242,10 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_request_response_status() {
-        let response =
-            create_generic_error_response(ProxyError::InvalidRequest("Invalid host header".into()));
+    fn test_invalid_request_error_response_is_bad_request() {
+        let response = create_generic_error_response(ProxyError::InvalidRequest(
+            "Invalid host header".to_string(),
+        ));
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
