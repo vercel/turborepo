@@ -9,7 +9,7 @@ use tracing::{debug, error};
 
 use crate::{
     ProxyError,
-    headers::{is_websocket_upgrade, validate_request_headers},
+    headers::{is_websocket_upgrade, validate_request_headers, validated_host_header},
     http::{BoxedBody, HttpClient, handle_http_request},
     http_router::Router,
     websocket::{WebSocketContext, handle_websocket_request},
@@ -23,6 +23,11 @@ pub(crate) async fn handle_request(
     http_client: HttpClient,
 ) -> Result<Response<BoxedBody>, hyper::Error> {
     if let Err(e) = validate_request_headers(&req) {
+        error!("Request validation error: {}", e);
+        return Ok(create_generic_error_response(e));
+    }
+
+    if let Err(e) = validated_host_header(&req) {
         error!("Request validation error: {}", e);
         return Ok(create_generic_error_response(e));
     }
@@ -66,6 +71,11 @@ pub(crate) async fn handle_request(
 }
 
 fn create_generic_error_response(error: ProxyError) -> Response<BoxedBody> {
+    let status = match &error {
+        ProxyError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
+        _ => StatusCode::BAD_GATEWAY,
+    };
+
     let body_text = format!(
         r#"<!DOCTYPE html>
 <html lang="en">
@@ -177,7 +187,7 @@ fn create_generic_error_response(error: ProxyError) -> Response<BoxedBody> {
     );
 
     Response::builder()
-        .status(StatusCode::BAD_GATEWAY)
+        .status(status)
         .header("Content-Type", "text/html; charset=utf-8")
         .body(
             Full::new(Bytes::from(body_text))
@@ -198,6 +208,9 @@ fn create_generic_error_response(error: ProxyError) -> Response<BoxedBody> {
 
 #[cfg(test)]
 mod tests {
+    use hyper::StatusCode;
+
+    use super::create_generic_error_response;
     use crate::ProxyError;
 
     #[test]
@@ -230,5 +243,13 @@ mod tests {
         let error_string = error.to_string();
         assert!(error_string.contains("web"));
         assert!(error_string.contains("3000"));
+    }
+
+    #[test]
+    fn test_invalid_request_response_status() {
+        let response =
+            create_generic_error_response(ProxyError::InvalidRequest("Invalid host header".into()));
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }

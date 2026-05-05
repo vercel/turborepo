@@ -1,6 +1,6 @@
 use hyper::{
     Request,
-    header::{CONNECTION, CONTENT_LENGTH, TRANSFER_ENCODING, UPGRADE},
+    header::{CONNECTION, CONTENT_LENGTH, HOST, TRANSFER_ENCODING, UPGRADE},
 };
 
 use crate::error::ProxyError;
@@ -47,6 +47,25 @@ pub(crate) fn validate_host_header(host: &str) -> Result<(), ProxyError> {
     ))
 }
 
+pub(crate) fn validated_host_header<T>(req: &Request<T>) -> Result<&str, ProxyError> {
+    let mut hosts = req.headers().get_all(HOST).iter();
+    let host = hosts
+        .next()
+        .ok_or_else(|| ProxyError::InvalidRequest("Missing Host header".to_string()))?
+        .to_str()
+        .map_err(|_| ProxyError::InvalidRequest("Invalid host header".to_string()))?;
+
+    if hosts.next().is_some() {
+        return Err(ProxyError::InvalidRequest(
+            "Multiple Host headers are not allowed".to_string(),
+        ));
+    }
+
+    validate_host_header(host)?;
+
+    Ok(host)
+}
+
 pub(crate) fn is_websocket_upgrade<T>(req: &Request<T>) -> bool {
     req.headers()
         .get(UPGRADE)
@@ -66,7 +85,10 @@ pub(crate) fn is_websocket_upgrade<T>(req: &Request<T>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use hyper::{Method, header::HeaderValue};
+    use hyper::{
+        Method,
+        header::{HOST, HeaderValue},
+    };
 
     use super::*;
 
@@ -266,6 +288,24 @@ mod tests {
     fn test_validate_host_header_malicious_injection() {
         let result = validate_host_header("localhost:3000\r\nX-Injected: evil");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validated_host_header_rejects_multiple_hosts() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("http://localhost:3000/api")
+            .header(HOST, "localhost:3000")
+            .header(HOST, "127.0.0.1:3000")
+            .body(())
+            .unwrap();
+
+        let result = validated_host_header(&req);
+
+        assert!(result.is_err());
+        if let Err(ProxyError::InvalidRequest(msg)) = result {
+            assert!(msg.contains("Multiple Host headers"));
+        }
     }
 
     #[test]

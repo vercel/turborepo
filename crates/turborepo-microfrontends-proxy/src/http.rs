@@ -9,7 +9,7 @@ use hyper_util::client::legacy::Client;
 use tracing::{debug, error, warn};
 
 use crate::{
-    ProxyError, error::ErrorPage, headers::validate_host_header, http_router::RouteMatch,
+    ProxyError, error::ErrorPage, headers::validated_host_header, http_router::RouteMatch,
     ports::validate_port,
 };
 
@@ -63,8 +63,7 @@ pub(crate) async fn forward_request(
             .unwrap_or("/")
     );
 
-    let original_host = req.uri().host().unwrap_or("localhost").to_string();
-    validate_host_header(&original_host)?;
+    let original_host = validated_host_header(&req)?.to_string();
 
     let headers = req.headers_mut();
     headers.insert("Host", format!("localhost:{port}").parse()?);
