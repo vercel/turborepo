@@ -36,6 +36,10 @@ use turborepo_types::{
     TaskDefinitionHashInfo, TaskInputs,
 };
 
+fn env_var_names_for_debug_log(env_vars: &EnvironmentVariableMap) -> Vec<String> {
+    env_vars.names()
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Missing pipeline entry: {0}")]
@@ -350,17 +354,18 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         let env_vars = if let Some(framework) = framework {
             let mut computed_wildcards = framework.env(self.env_at_execution_start);
 
-            if let Some(exclude_prefix) = self
-                .env_at_execution_start
-                .get("TURBO_CI_VENDOR_ENV_KEY")
-                .filter(|prefix| !prefix.is_empty())
-            {
-                let computed_exclude = format!("!{exclude_prefix}*");
-                debug!(
-                    "excluding environment variables matching wildcard {}",
-                    computed_exclude
-                );
-                computed_wildcards.push(computed_exclude);
+            match self.env_at_execution_start.get("TURBO_CI_VENDOR_ENV_KEY") {
+                Some(exclude_prefix) if !exclude_prefix.is_empty() => {
+                    let computed_exclude = format!("!{exclude_prefix}*");
+                    debug!("TURBO_CI_VENDOR_ENV_KEY present; excluding matching env vars");
+                    computed_wildcards.push(computed_exclude);
+                }
+                Some(_) => {
+                    debug!("TURBO_CI_VENDOR_ENV_KEY present but empty; no env vars excluded");
+                }
+                None => {
+                    debug!("TURBO_CI_VENDOR_ENV_KEY not present; no env vars excluded");
+                }
             }
 
             // Combine task-specific env patterns with global env exclusions
@@ -397,7 +402,6 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             }
         };
 
-        let hashable_env_pairs = env_vars.all.to_hashable();
         let outputs = task_definition.hashable_outputs(task_id);
         let task_dependency_hashes = self.calculate_dependency_hashes(dependency_set)?;
         let ext_hash_fallback;
@@ -410,14 +414,16 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             Some(ext_hash_fallback.as_str())
         };
 
-        if !hashable_env_pairs.is_empty() {
+        if !env_vars.all.is_empty() {
             debug!(
-                "task hash env vars for {}:{}\n vars: {:?}",
+                "task hash env var names for {}:{}\n vars: {:?}",
                 task_id.package(),
                 task_id.task(),
-                hashable_env_pairs
+                env_var_names_for_debug_log(&env_vars.all)
             );
         }
+
+        let hashable_env_pairs = env_vars.all.to_hashable();
 
         let package_dir = workspace.package_path().to_unix();
         let is_root_package = package_dir.is_empty();
@@ -746,6 +752,25 @@ mod test {
         fn assert_sync<T: Sync>() {}
         assert_send::<TaskHashTracker>();
         assert_sync::<TaskHashTracker>();
+    }
+
+    #[test]
+    fn test_task_hash_debug_env_vars_exclude_values() {
+        let env_vars = EnvironmentVariableMap::from(HashMap::from([
+            ("SECRET_TOKEN".to_string(), "super-secret-token".to_string()),
+            ("PUBLIC_FLAG".to_string(), "true".to_string()),
+        ]));
+
+        let debug_env_vars = env_var_names_for_debug_log(&env_vars);
+
+        assert_eq!(
+            debug_env_vars,
+            vec!["PUBLIC_FLAG".to_string(), "SECRET_TOKEN".to_string()]
+        );
+
+        let rendered_log_value = format!("{debug_env_vars:?}");
+        assert!(!rendered_log_value.contains("super-secret-token"));
+        assert!(!rendered_log_value.contains("true"));
     }
 
     #[test]
