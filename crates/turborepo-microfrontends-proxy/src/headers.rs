@@ -1,6 +1,6 @@
 use hyper::{
     Request,
-    header::{CONNECTION, CONTENT_LENGTH, TRANSFER_ENCODING, UPGRADE},
+    header::{CONNECTION, CONTENT_LENGTH, HOST, TRANSFER_ENCODING, UPGRADE},
 };
 
 use crate::error::ProxyError;
@@ -9,7 +9,9 @@ use crate::error::ProxyError;
 ///
 /// While this proxy is intended for local development only, we check for
 /// conflicting Content-Length and Transfer-Encoding headers, which could be
-/// exploited if different servers in the chain interpret them differently.
+/// exploited if different servers in the chain interpret them differently. We
+/// also require a single localhost Host header so browser-driven requests
+/// cannot use this proxy as a forwarding primitive for arbitrary hostnames.
 pub(crate) fn validate_request_headers<T>(req: &Request<T>) -> Result<(), ProxyError> {
     let has_content_length = req.headers().contains_key(CONTENT_LENGTH);
     let has_transfer_encoding = req.headers().contains_key(TRANSFER_ENCODING);
@@ -20,6 +22,42 @@ pub(crate) fn validate_request_headers<T>(req: &Request<T>) -> Result<(), ProxyE
         ));
     }
 
+    let host = validated_host_header(req)?;
+    validate_request_uri_host(req, host)?;
+
+    Ok(())
+}
+
+pub(crate) fn validated_host_header<T>(req: &Request<T>) -> Result<&str, ProxyError> {
+    let mut host_headers = req.headers().get_all(HOST).iter();
+    let host_header = host_headers
+        .next()
+        .ok_or_else(|| ProxyError::InvalidRequest("Missing Host header".to_string()))?;
+
+    if host_headers.next().is_some() {
+        return Err(ProxyError::InvalidRequest(
+            "Duplicate Host headers are not allowed".to_string(),
+        ));
+    }
+
+    let host = host_header
+        .to_str()
+        .map_err(|_| ProxyError::InvalidRequest("Malformed Host header".to_string()))?;
+
+    validate_host_header(host)?;
+
+    Ok(host)
+}
+
+fn validate_request_uri_host<T>(req: &Request<T>, host: &str) -> Result<(), ProxyError> {
+    if let Some(authority) = req.uri().authority() {
+        if authority.as_str() != host {
+            return Err(ProxyError::InvalidRequest(
+                "Request URI host does not match Host header".to_string(),
+            ));
+        }
+    }
+
     Ok(())
 }
 
@@ -28,23 +66,23 @@ pub(crate) fn validate_request_headers<T>(req: &Request<T>) -> Result<(), ProxyE
 /// This proxy is intended for local development only, so we restrict
 /// Host headers to localhost or 127.0.0.1 addresses only.
 pub(crate) fn validate_host_header(host: &str) -> Result<(), ProxyError> {
-    if let Some(colon_idx) = host.rfind(':') {
-        let host_part = &host[..colon_idx];
-        let port_part = &host[colon_idx + 1..];
-
-        if (host_part == "localhost" || host_part == "127.0.0.1")
-            && !port_part.is_empty()
-            && port_part.chars().all(|c| c.is_ascii_digit())
-        {
-            return Ok(());
-        }
-    } else if host == "localhost" || host == "127.0.0.1" {
+    if host == "localhost"
+        || host == "127.0.0.1"
+        || valid_localhost_with_port(host, "localhost")
+        || valid_localhost_with_port(host, "127.0.0.1")
+    {
         return Ok(());
     }
 
     Err(ProxyError::InvalidRequest(
         "Invalid host header: only localhost and 127.0.0.1 are allowed".to_string(),
     ))
+}
+
+fn valid_localhost_with_port(host: &str, allowed_host: &str) -> bool {
+    host.strip_prefix(allowed_host)
+        .and_then(|remaining| remaining.strip_prefix(':'))
+        .is_some_and(|port| !port.is_empty() && port.parse::<u16>().is_ok())
 }
 
 pub(crate) fn is_websocket_upgrade<T>(req: &Request<T>) -> bool {
@@ -175,6 +213,7 @@ mod tests {
         let req = Request::builder()
             .method(Method::POST)
             .uri("http://localhost:3000/api")
+            .header(HOST, "localhost:3000")
             .header(CONTENT_LENGTH, "100")
             .body(())
             .unwrap();
@@ -187,6 +226,7 @@ mod tests {
         let req = Request::builder()
             .method(Method::POST)
             .uri("http://localhost:3000/api")
+            .header(HOST, "localhost:3000")
             .header(CONTENT_LENGTH, "100")
             .header(TRANSFER_ENCODING, "chunked")
             .body(())
@@ -203,7 +243,8 @@ mod tests {
     fn test_validate_request_headers_no_body_headers() {
         let req = Request::builder()
             .method(Method::GET)
-            .uri("http://localhost:3000/api")
+            .uri("/api")
+            .header(HOST, "localhost:3000")
             .body(())
             .unwrap();
 
@@ -215,11 +256,96 @@ mod tests {
         let req = Request::builder()
             .method(Method::POST)
             .uri("http://localhost:3000/api")
+            .header(HOST, "localhost:3000")
             .header(TRANSFER_ENCODING, "chunked")
             .body(())
             .unwrap();
 
         assert!(validate_request_headers(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_request_headers_missing_host() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/api")
+            .body(())
+            .unwrap();
+
+        let result = validate_request_headers(&req);
+        assert!(result.is_err());
+        if let Err(ProxyError::InvalidRequest(msg)) = result {
+            assert!(msg.contains("Missing Host header"));
+        }
+    }
+
+    #[test]
+    fn test_validate_request_headers_duplicate_host() {
+        let mut req = Request::builder()
+            .method(Method::GET)
+            .uri("/api")
+            .header(HOST, "localhost:3000")
+            .body(())
+            .unwrap();
+        req.headers_mut()
+            .append(HOST, HeaderValue::from_static("127.0.0.1:3000"));
+
+        let result = validate_request_headers(&req);
+        assert!(result.is_err());
+        if let Err(ProxyError::InvalidRequest(msg)) = result {
+            assert!(msg.contains("Duplicate Host headers"));
+        }
+    }
+
+    #[test]
+    fn test_validate_request_headers_malformed_host() {
+        let mut req = Request::builder()
+            .method(Method::GET)
+            .uri("/api")
+            .body(())
+            .unwrap();
+        req.headers_mut().insert(
+            HOST,
+            HeaderValue::from_bytes(b"localhost:3000\xff").unwrap(),
+        );
+
+        let result = validate_request_headers(&req);
+        assert!(result.is_err());
+        if let Err(ProxyError::InvalidRequest(msg)) = result {
+            assert!(msg.contains("Malformed Host header"));
+        }
+    }
+
+    #[test]
+    fn test_validate_request_headers_rejects_non_localhost_host() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/api")
+            .header(HOST, "example.com")
+            .body(())
+            .unwrap();
+
+        let result = validate_request_headers(&req);
+        assert!(result.is_err());
+        if let Err(ProxyError::InvalidRequest(msg)) = result {
+            assert!(msg.contains("Invalid host header"));
+        }
+    }
+
+    #[test]
+    fn test_validate_request_headers_rejects_mismatched_uri_host() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("http://evil.com/api")
+            .header(HOST, "localhost:3000")
+            .body(())
+            .unwrap();
+
+        let result = validate_request_headers(&req);
+        assert!(result.is_err());
+        if let Err(ProxyError::InvalidRequest(msg)) = result {
+            assert!(msg.contains("Request URI host does not match Host header"));
+        }
     }
 
     #[test]
@@ -266,6 +392,13 @@ mod tests {
     fn test_validate_host_header_malicious_injection() {
         let result = validate_host_header("localhost:3000\r\nX-Injected: evil");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_host_header_invalid_port() {
+        assert!(validate_host_header("localhost:").is_err());
+        assert!(validate_host_header("localhost:abc").is_err());
+        assert!(validate_host_header("localhost:99999").is_err());
     }
 
     #[test]

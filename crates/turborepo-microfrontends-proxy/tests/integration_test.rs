@@ -257,6 +257,35 @@ fn mock_server(listener: TcpListener, response_text: &'static str) -> tokio::tas
     })
 }
 
+fn forwarded_host_echo_server(listener: TcpListener) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        loop {
+            let (stream, _) = listener.accept().await.unwrap();
+            let io = TokioIo::new(stream);
+
+            let service = service_fn(move |req: Request<Incoming>| async move {
+                let forwarded_host = req
+                    .headers()
+                    .get("x-forwarded-host")
+                    .and_then(|value| value.to_str().ok())
+                    .unwrap_or("")
+                    .to_string();
+
+                Ok::<_, hyper::Error>(
+                    Response::builder()
+                        .status(200)
+                        .body(Full::new(Bytes::from(forwarded_host)))
+                        .unwrap(),
+                )
+            });
+
+            let _ = hyper::server::conn::http1::Builder::new()
+                .serve_connection(io, service)
+                .await;
+        }
+    })
+}
+
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_end_to_end_proxy() {
@@ -369,6 +398,72 @@ async fn test_end_to_end_proxy() {
 
     web_handle.abort();
     docs_handle.abort();
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[serial]
+async fn test_proxy_forwards_validated_host_header() {
+    let (ports, mut listeners) = find_available_port_range(2).await.unwrap();
+    let web_port = ports[0];
+    let proxy_port = ports[1];
+
+    let web_listener = listeners.remove(0);
+    let proxy_listener = listeners.remove(0);
+
+    drop(proxy_listener);
+
+    let web_handle = forwarded_host_echo_server(web_listener);
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let config_json = format!(
+        r#"{{
+        "options": {{
+            "localProxyPort": {proxy_port}
+        }},
+        "applications": {{
+            "web": {{
+                "development": {{
+                    "local": {{ "port": {web_port} }}
+                }}
+            }}
+        }}
+    }}"#
+    );
+
+    let config = Config::from_str(&config_json, "test.json").unwrap();
+    let mut server = ProxyServer::new(config).unwrap();
+
+    let (shutdown_complete_tx, shutdown_complete_rx) = tokio::sync::oneshot::channel();
+    server.set_shutdown_complete_tx(shutdown_complete_tx);
+    let shutdown_handle = server.shutdown_handle();
+
+    tokio::spawn(async move {
+        let _ = server.run().await;
+    });
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    let connector = hyper_util::client::legacy::connect::HttpConnector::new();
+    let client: Client<_, Full<Bytes>> =
+        Client::builder(hyper_util::rt::TokioExecutor::new()).build(connector);
+
+    let response = tokio::time::timeout(
+        Duration::from_secs(5),
+        client.get(format!("http://127.0.0.1:{proxy_port}/").parse().unwrap()),
+    )
+    .await
+    .expect("Request timed out")
+    .expect("Request failed");
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(body, format!("127.0.0.1:{proxy_port}"));
+
+    let _ = shutdown_handle.send(());
+    let _ = tokio::time::timeout(Duration::from_secs(3), shutdown_complete_rx).await;
+
+    web_handle.abort();
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 }

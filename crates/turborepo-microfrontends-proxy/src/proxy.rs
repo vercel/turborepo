@@ -66,6 +66,12 @@ pub(crate) async fn handle_request(
 }
 
 fn create_generic_error_response(error: ProxyError) -> Response<BoxedBody> {
+    let status = if matches!(&error, ProxyError::InvalidRequest(_)) {
+        StatusCode::BAD_REQUEST
+    } else {
+        StatusCode::BAD_GATEWAY
+    };
+
     let body_text = format!(
         r#"<!DOCTYPE html>
 <html lang="en">
@@ -177,7 +183,7 @@ fn create_generic_error_response(error: ProxyError) -> Response<BoxedBody> {
     );
 
     Response::builder()
-        .status(StatusCode::BAD_GATEWAY)
+        .status(status)
         .header("Content-Type", "text/html; charset=utf-8")
         .body(
             Full::new(Bytes::from(body_text))
@@ -198,6 +204,9 @@ fn create_generic_error_response(error: ProxyError) -> Response<BoxedBody> {
 
 #[cfg(test)]
 mod tests {
+    use hyper::StatusCode;
+
+    use super::create_generic_error_response;
     use crate::ProxyError;
 
     #[test]
@@ -230,5 +239,14 @@ mod tests {
         let error_string = error.to_string();
         assert!(error_string.contains("web"));
         assert!(error_string.contains("3000"));
+    }
+
+    #[test]
+    fn test_invalid_request_error_response_is_bad_request() {
+        let response = create_generic_error_response(ProxyError::InvalidRequest(
+            "Invalid host header".to_string(),
+        ));
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }
