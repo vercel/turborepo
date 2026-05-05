@@ -303,13 +303,10 @@ impl Tracer {
         if tsconfig_dir.is_some() || node_modules_dir.is_some() {
             let mut options = existing_resolver.options().clone();
             if let Some(tsconfig_dir) = tsconfig_dir {
-                options.tsconfig = Some(TsconfigOptions {
-                    config_file: tsconfig_dir
-                        .join_component("tsconfig.json")
-                        .as_std_path()
-                        .into(),
-                    references: TsconfigReferences::Auto,
-                });
+                Self::apply_tsconfig_options(
+                    &mut options,
+                    &tsconfig_dir.join_component("tsconfig.json"),
+                );
             }
 
             if let Some(node_modules_dir) = node_modules_dir {
@@ -321,6 +318,37 @@ impl Tracer {
         } else {
             None
         }
+    }
+
+    fn typescript_extension_aliases() -> Vec<(String, Vec<String>)> {
+        vec![
+            (
+                ".js".to_string(),
+                vec![
+                    ".ts".to_string(),
+                    ".tsx".to_string(),
+                    ".d.ts".to_string(),
+                    ".js".to_string(),
+                    ".jsx".to_string(),
+                ],
+            ),
+            (
+                ".mjs".to_string(),
+                vec![".mts".to_string(), ".d.mts".to_string(), ".mjs".to_string()],
+            ),
+            (
+                ".cjs".to_string(),
+                vec![".cts".to_string(), ".d.cts".to_string(), ".cjs".to_string()],
+            ),
+        ]
+    }
+
+    fn apply_tsconfig_options(options: &mut ResolveOptions, ts_config: &AbsoluteSystemPath) {
+        options.tsconfig = Some(TsconfigOptions {
+            config_file: ts_config.as_std_path().into(),
+            references: TsconfigReferences::Auto,
+        });
+        options.extension_alias = Self::typescript_extension_aliases();
     }
 
     pub fn create_resolver(ts_config: Option<&AbsoluteSystemPath>) -> Resolver {
@@ -338,10 +366,7 @@ impl Tracer {
             .with_condition_names(&["import", "require", "node", "types", "default"]);
 
         if let Some(ts_config) = ts_config {
-            options.tsconfig = Some(TsconfigOptions {
-                config_file: ts_config.as_std_path().into(),
-                references: TsconfigReferences::Auto,
-            });
+            Self::apply_tsconfig_options(&mut options, ts_config);
         }
 
         Resolver::new(options)
@@ -457,5 +482,133 @@ impl Tracer {
             files: usages,
             errors,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::path::{Path, PathBuf};
+
+    use test_case::test_case;
+
+    use super::*;
+
+    fn canonical_tempdir() -> (tempfile::TempDir, PathBuf) {
+        let tmp = tempfile::tempdir().expect("create temp project");
+        let root = dunce::canonicalize(tmp.path()).expect("canonicalize temp project");
+        (tmp, root)
+    }
+
+    fn absolute_path(path: &Path) -> &AbsoluteSystemPath {
+        AbsoluteSystemPath::new(path.to_str().expect("test path is utf-8"))
+            .expect("test path is absolute")
+    }
+
+    fn write_tsconfig(root: &Path) -> PathBuf {
+        let tsconfig = root.join("tsconfig.json");
+        std::fs::write(
+            &tsconfig,
+            r#"{ "compilerOptions": { "module": "nodenext", "moduleResolution": "nodenext" } }"#,
+        )
+        .expect("write tsconfig");
+        tsconfig
+    }
+
+    fn write_fixture(root: &Path, relative: &str) -> PathBuf {
+        let path = root.join(relative);
+        let parent = path.parent().expect("fixture path has parent");
+        std::fs::create_dir_all(parent).expect("create fixture directory");
+        std::fs::write(&path, "export const value = 1;").expect("write fixture file");
+        path
+    }
+
+    fn resolved_path(resolver: &Resolver, root: &Path, import: &str) -> PathBuf {
+        resolver
+            .resolve(absolute_path(root), import)
+            .expect("resolve import")
+            .into_path_buf()
+    }
+
+    #[test_case("./foo.js", &["foo.ts"], "foo.ts" ; "js to ts")]
+    #[test_case("./foo.js", &["foo.tsx"], "foo.tsx" ; "js to tsx")]
+    #[test_case("./foo.js", &["foo.d.ts"], "foo.d.ts" ; "js to dts")]
+    #[test_case("./foo.mjs", &["foo.mts"], "foo.mts" ; "mjs to mts")]
+    #[test_case("./foo.mjs", &["foo.d.mts"], "foo.d.mts" ; "mjs to dmts")]
+    #[test_case("./foo.cjs", &["foo.cts"], "foo.cts" ; "cjs to cts")]
+    #[test_case("./foo.cjs", &["foo.d.cts"], "foo.d.cts" ; "cjs to dcts")]
+    fn create_resolver_with_tsconfig_resolves_typescript_extension_aliases(
+        import: &str,
+        candidates: &[&str],
+        expected: &str,
+    ) {
+        let (_tmp, root) = canonical_tempdir();
+        let tsconfig = write_tsconfig(&root);
+        for candidate in candidates {
+            write_fixture(&root, candidate);
+        }
+
+        let resolver = Tracer::create_resolver(Some(absolute_path(&tsconfig)));
+
+        assert_eq!(resolved_path(&resolver, &root, import), root.join(expected));
+    }
+
+    #[test_case(&["foo.ts", "foo.js"], "foo.ts" ; "ts before js")]
+    #[test_case(&["foo.d.ts", "foo.js"], "foo.d.ts" ; "dts before js")]
+    #[test_case(&["foo.jsx", "foo.js"], "foo.js" ; "js before jsx")]
+    fn create_resolver_with_tsconfig_uses_typescript_alias_precedence(
+        candidates: &[&str],
+        expected: &str,
+    ) {
+        let (_tmp, root) = canonical_tempdir();
+        let tsconfig = write_tsconfig(&root);
+        for candidate in candidates {
+            write_fixture(&root, candidate);
+        }
+
+        let resolver = Tracer::create_resolver(Some(absolute_path(&tsconfig)));
+
+        assert_eq!(
+            resolved_path(&resolver, &root, "./foo.js"),
+            root.join(expected)
+        );
+    }
+
+    #[test]
+    fn create_resolver_without_tsconfig_does_not_apply_typescript_aliases() {
+        let (_tmp, root) = canonical_tempdir();
+        write_fixture(&root, "source-only.ts");
+        write_fixture(&root, "foo.ts");
+        write_fixture(&root, "foo.js");
+
+        let resolver = Tracer::create_resolver(None);
+
+        assert!(
+            resolver
+                .resolve(absolute_path(&root), "./source-only.js")
+                .is_err()
+        );
+        assert_eq!(
+            resolved_path(&resolver, &root, "./foo.js"),
+            root.join("foo.js")
+        );
+    }
+
+    #[test]
+    fn inferred_tsconfig_resolver_applies_typescript_aliases() {
+        let (_tmp, root) = canonical_tempdir();
+        write_tsconfig(&root);
+        write_fixture(&root, "index.ts");
+        write_fixture(&root, "foo.ts");
+
+        let file_path = root.join("index.ts");
+        let resolver = Tracer::create_resolver(None);
+        let inferred_resolver =
+            Tracer::infer_resolver_with_ts_config(absolute_path(&file_path), &resolver)
+                .expect("infer resolver from tsconfig");
+
+        assert_eq!(
+            resolved_path(&inferred_resolver, &root, "./foo.js"),
+            root.join("foo.ts")
+        );
     }
 }

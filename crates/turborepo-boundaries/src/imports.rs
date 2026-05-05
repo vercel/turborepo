@@ -990,4 +990,59 @@ mod test {
             "expected an ImportLeavesPackage diagnostic for an out-of-package alias"
         );
     }
+
+    #[test_case("test/*", "./test/*", "test/factories/item.factory.ts", "test/factories/item.factory.js" ; "js to ts")]
+    #[test_case("@/*", "./src/*", "src/helper.mts", "@/helper.mjs" ; "mjs to mts")]
+    #[test_case("@/*", "./src/*", "src/helper.cts", "@/helper.cjs" ; "cjs to cts")]
+    fn tsconfig_alias_resolves_typescript_extension_aliases(
+        alias_key: &str,
+        alias_target: &str,
+        target_file: &str,
+        import: &str,
+    ) {
+        let tmp = tempfile::tempdir().expect("create temp project");
+        let root = dunce::canonicalize(tmp.path()).expect("canonicalize temp project");
+
+        let tsconfig = root.join("tsconfig.json");
+        let tsconfig_content = format!(
+            r#"{{ "compilerOptions": {{ "module": "nodenext", "moduleResolution": "nodenext", "paths": {{ "{alias_key}": ["{alias_target}"] }} }} }}"#
+        );
+        std::fs::write(&tsconfig, tsconfig_content).expect("write tsconfig");
+
+        let target_path = root.join(target_file);
+        std::fs::create_dir_all(target_path.parent().expect("target file has parent"))
+            .expect("create target directory");
+        std::fs::write(&target_path, "export const x = 1;").expect("write target file");
+
+        let file_content = format!(r#"import {{ x }} from "{import}";"#);
+        std::fs::write(root.join("index.ts"), &file_content).expect("write source file");
+
+        let package_root = AbsoluteSystemPath::new(root.to_str().expect("root path is utf-8"))
+            .expect("root path is absolute");
+        let tsconfig_path =
+            AbsoluteSystemPath::new(tsconfig.to_str().expect("tsconfig path is utf-8"))
+                .expect("tsconfig path is absolute");
+        let file_path = package_root.join_component("index.ts");
+        let package_name = PackageName::from("test-pkg");
+        let span = SourceSpan::new(0.into(), 0);
+
+        let resolver = Tracer::create_resolver(Some(tsconfig_path));
+
+        let (resolved, diag) = check_import_as_tsconfig_path_alias(
+            &resolver,
+            &package_name,
+            package_root,
+            span,
+            &file_path,
+            &file_content,
+            import,
+        )
+        .expect("check tsconfig path alias");
+
+        assert!(
+            resolved,
+            "{import} should resolve through the tsconfig alias"
+        );
+        assert!(diag.is_none());
+    }
 }
