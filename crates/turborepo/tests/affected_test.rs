@@ -947,6 +947,134 @@ fn test_affected_tasks_with_explicit_base() {
     );
 }
 
+#[test]
+fn test_query_affected_shorthand_respects_scm_base_env() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected_tasks_fixture(tempdir.path());
+
+    fs::write(
+        tempdir.path().join("packages/lib-a/index.ts"),
+        "export const changed = true;",
+    )
+    .unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(tempdir.path(), &["commit", "-m", "change lib-a", "--quiet"]);
+
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &["query", "affected", "--tasks", "build", "--exit-code"],
+        &[("TURBO_SCM_BASE", "HEAD")],
+    );
+    assert!(
+        output.status.success(),
+        "TURBO_SCM_BASE=HEAD should show no affected tasks: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["data"]["affectedTasks"]["length"], 0);
+}
+
+#[test]
+fn test_query_affected_shorthand_respects_scm_head_env() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected_tasks_fixture(tempdir.path());
+
+    fs::write(
+        tempdir.path().join("packages/lib-a/index.ts"),
+        "export const changed = true;",
+    )
+    .unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(tempdir.path(), &["commit", "-m", "change lib-a", "--quiet"]);
+
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &["query", "affected", "--tasks", "build", "--exit-code"],
+        &[("TURBO_SCM_BASE", "main"), ("TURBO_SCM_HEAD", "main")],
+    );
+    assert!(
+        output.status.success(),
+        "TURBO_SCM_HEAD=main should be respected: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["data"]["affectedTasks"]["length"], 0);
+}
+
+#[test]
+fn test_query_affected_shorthand_base_flag_overrides_scm_base_env() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected_tasks_fixture(tempdir.path());
+
+    fs::write(
+        tempdir.path().join("packages/lib-a/index.ts"),
+        "export const changed = true;",
+    )
+    .unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(tempdir.path(), &["commit", "-m", "change lib-a", "--quiet"]);
+
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &[
+            "query",
+            "affected",
+            "--tasks",
+            "build",
+            "--base",
+            "HEAD",
+            "--exit-code",
+        ],
+        &[("TURBO_SCM_BASE", "main")],
+    );
+    assert!(
+        output.status.success(),
+        "--base=HEAD should override TURBO_SCM_BASE=main: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["data"]["affectedTasks"]["length"], 0);
+}
+
+#[test]
+fn test_query_affected_shorthand_head_flag_overrides_scm_head_env() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected_tasks_fixture(tempdir.path());
+
+    fs::write(
+        tempdir.path().join("packages/lib-a/index.ts"),
+        "export const changed = true;",
+    )
+    .unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(tempdir.path(), &["commit", "-m", "change lib-a", "--quiet"]);
+
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &[
+            "query",
+            "affected",
+            "--tasks",
+            "build",
+            "--head",
+            "HEAD",
+            "--exit-code",
+        ],
+        &[("TURBO_SCM_BASE", "main"), ("TURBO_SCM_HEAD", "main")],
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "--head=HEAD should override TURBO_SCM_HEAD=main: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(
+        json["data"]["affectedTasks"]["length"].as_i64().unwrap() > 0,
+        "--head=HEAD should find affected tasks: {json}"
+    );
+}
+
 // ── turbo run --affected + affectedUsingTaskInputs future flag ──
 
 const TURBO_JSON_WITH_TASK_INPUTS_FLAG: &str = r#"{

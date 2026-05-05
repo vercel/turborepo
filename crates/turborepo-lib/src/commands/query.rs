@@ -1,4 +1,4 @@
-use std::{fmt::Write, fs, sync::Arc};
+use std::{env, fmt::Write, fs, sync::Arc};
 
 use camino::Utf8Path;
 use miette::{Diagnostic, Report, SourceSpan};
@@ -107,18 +107,32 @@ pub(crate) fn escape_graphql_string(s: &str) -> String {
 
 impl AffectedArgs {
     fn to_graphql_query(&self) -> String {
+        self.to_graphql_query_with_refs(None, None)
+    }
+
+    fn to_graphql_query_with_env(&self) -> String {
+        let scm_base = Self::env_ref("TURBO_SCM_BASE");
+        let scm_head = Self::env_ref("TURBO_SCM_HEAD");
+        self.to_graphql_query_with_refs(scm_base.as_deref(), scm_head.as_deref())
+    }
+
+    fn to_graphql_query_with_refs(&self, scm_base: Option<&str>, scm_head: Option<&str>) -> String {
         // --packages alone → affectedPackages
         // Everything else (default, --tasks, --tasks + --packages) → affectedTasks
         if self.packages.is_some() && self.tasks.is_none() {
-            self.build_affected_packages_query()
+            self.build_affected_packages_query(scm_base, scm_head)
         } else {
-            self.build_affected_tasks_query()
+            self.build_affected_tasks_query(scm_base, scm_head)
         }
     }
 
-    fn build_affected_packages_query(&self) -> String {
+    fn build_affected_packages_query(
+        &self,
+        scm_base: Option<&str>,
+        scm_head: Option<&str>,
+    ) -> String {
         let mut query = String::from("{ affectedPackages");
-        let mut args = self.build_ref_args();
+        let mut args = self.build_ref_args(scm_base, scm_head);
         self.push_package_filter(&mut args);
         if !args.is_empty() {
             let joined = args.join(", ");
@@ -128,9 +142,9 @@ impl AffectedArgs {
         query
     }
 
-    fn build_affected_tasks_query(&self) -> String {
+    fn build_affected_tasks_query(&self, scm_base: Option<&str>, scm_head: Option<&str>) -> String {
         let mut query = String::from("{ affectedTasks");
-        let mut args = self.build_ref_args();
+        let mut args = self.build_ref_args(scm_base, scm_head);
         let tasks = self.tasks.as_deref().unwrap_or_default();
         if !tasks.is_empty() {
             let task_values: Vec<String> = tasks
@@ -150,15 +164,25 @@ impl AffectedArgs {
         query
     }
 
-    fn build_ref_args(&self) -> Vec<String> {
+    fn build_ref_args(&self, scm_base: Option<&str>, scm_head: Option<&str>) -> Vec<String> {
         let mut args = Vec::new();
-        if let Some(ref base) = self.base {
+        if let Some(base) = Self::ref_arg(self.base.as_ref(), scm_base) {
             args.push(format!("base: \"{}\"", escape_graphql_string(base)));
         }
-        if let Some(ref head) = self.head {
+        if let Some(head) = Self::ref_arg(self.head.as_ref(), scm_head) {
             args.push(format!("head: \"{}\"", escape_graphql_string(head)));
         }
         args
+    }
+
+    fn ref_arg<'a>(cli_value: Option<&'a String>, env_value: Option<&'a str>) -> Option<&'a str> {
+        cli_value
+            .map(String::as_str)
+            .or_else(|| env_value.filter(|value| !value.is_empty()))
+    }
+
+    fn env_ref(env_key: &str) -> Option<String> {
+        env::var(env_key).ok().filter(|value| !value.is_empty())
     }
 
     fn push_package_filter(&self, args: &mut Vec<String>) {
@@ -222,7 +246,7 @@ pub async fn run(
     if let Some(subcommand) = subcommand {
         match &subcommand {
             QuerySubcommand::Affected(args) => {
-                let query = args.to_graphql_query();
+                let query = args.to_graphql_query_with_env();
                 let (exit_code, result_json) =
                     execute_query_and_print(run, query_server, &query, None).await?;
 
