@@ -99,6 +99,10 @@ function getBinaryPath() {
   // our package naming conventions (i.e. `@turbo/windows-64`).
   if (platform === "win32") {
     platform = "windows";
+  } else if (platform === "android") {
+    // Android (e.g. Termux) ships a Linux-compatible userspace and can
+    // run the `linux-<arch>` binary directly.
+    platform = "linux";
   }
   const resolvedArch = arch === 'x64' ? '64' : arch;
 
