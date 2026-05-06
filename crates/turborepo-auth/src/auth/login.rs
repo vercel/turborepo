@@ -13,8 +13,9 @@ use url::Url;
 use crate::{
     LoginOptions, Token,
     auth::{
-        ExistingTokenSource, classify_existing_vercel_token, ensure_trusted_vercel_api, is_vercel,
-        should_attempt_vercel_token_refresh, should_skip_existing_token_for_login,
+        ExistingTokenSource, classify_existing_vercel_token, ensure_trusted_vercel_api,
+        generate_csrf_state, is_vercel, should_attempt_vercel_token_refresh,
+        should_skip_existing_token_for_login,
     },
     device_flow::{self, TokenSet},
     error, ui,
@@ -307,8 +308,8 @@ fn wait_for_browser_confirmation() -> Result<bool, Error> {
 
 /// Non-Vercel login via browser redirect to a localhost server.
 /// Preserves the original login flow for self-hosted remote cache servers:
-/// opens `{login_url}/turborepo/token?redirect_uri=http://127.0.0.1:{port}`,
-/// waits for the server to redirect back with a `?token=` query parameter.
+/// opens `{login_url}/turborepo/token?redirect_uri=http://127.0.0.1:{port}&state=...`,
+/// waits for the server to redirect back with `?token=...&state=...`.
 async fn login_redirect<T: Client>(
     api_client: &T,
     color_config: &ColorConfig,
@@ -319,6 +320,7 @@ async fn login_redirect<T: Client>(
         .map_err(error::Error::CallbackListenerFailed)?;
     let port = listener.local_addr().unwrap().port();
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{port}");
+    let state = generate_csrf_state();
 
     let mut login_url =
         Url::parse(login_url_configuration).map_err(|_| error::Error::LoginUrlCannotBeABase {
@@ -342,7 +344,8 @@ async fn login_redirect<T: Client>(
 
     login_url
         .query_pairs_mut()
-        .append_pair("redirect_uri", &redirect_url);
+        .append_pair("redirect_uri", &redirect_url)
+        .append_pair("state", &state);
 
     println!(">>> Opening browser to {login_url}");
     let spinner = start_spinner("Waiting for your authorization...");
@@ -353,10 +356,11 @@ async fn login_redirect<T: Client>(
     }
 
     let success_redirect = success_url.to_string();
-    let token_string =
-        tokio::task::spawn_blocking(move || wait_for_login_redirect(listener, &success_redirect))
-            .await
-            .map_err(|_| Error::CallbackTaskFailed)??;
+    let token_string = tokio::task::spawn_blocking(move || {
+        wait_for_login_redirect(listener, &success_redirect, &state)
+    })
+    .await
+    .map_err(|_| Error::CallbackTaskFailed)??;
 
     spinner.finish_and_clear();
 
@@ -376,7 +380,11 @@ async fn login_redirect<T: Client>(
 /// parameter. Browsers may send preflight, favicon, or other auxiliary
 /// requests before the real redirect arrives — looping prevents those from
 /// consuming the single-shot listener.
-fn wait_for_login_redirect(listener: TcpListener, success_redirect: &str) -> Result<String, Error> {
+fn wait_for_login_redirect(
+    listener: TcpListener,
+    success_redirect: &str,
+    expected_state: &str,
+) -> Result<String, Error> {
     listener
         .set_nonblocking(false)
         .map_err(Error::CallbackListenerFailed)?;
@@ -425,6 +433,14 @@ fn wait_for_login_redirect(listener: TcpListener, success_redirect: &str) -> Res
             .collect();
 
         if let Some(token) = params.get("token").cloned() {
+            match params.get("state") {
+                Some(returned_state) if returned_state == expected_state => {}
+                _ => {
+                    warn!("Login redirect state parameter mismatch or missing");
+                    return Err(Error::CsrfStateMismatch);
+                }
+            }
+
             let response = format!(
                 "HTTP/1.1 302 Found\r\nLocation: {success_redirect}\r\nConnection: close\r\n\r\n"
             );
@@ -609,13 +625,18 @@ mod tests {
         }
     }
 
-    fn spawn_login_callback(port: u16, token: &'static str) -> std::thread::JoinHandle<()> {
+    fn spawn_login_callback(
+        port: u16,
+        token: &'static str,
+        state: &'static str,
+    ) -> std::thread::JoinHandle<()> {
         std::thread::spawn(move || {
             for _ in 0..100 {
                 match std::net::TcpStream::connect(format!("127.0.0.1:{port}")) {
                     Ok(mut stream) => {
-                        let request =
-                            format!("GET /?token={token} HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                        let request = format!(
+                            "GET /?token={token}&state={state} HTTP/1.1\r\nHost: localhost\r\n\r\n"
+                        );
                         stream.write_all(request.as_bytes()).unwrap();
                         return;
                     }
@@ -655,10 +676,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_login_stale_existing_token_falls_back_to_redirect() {
+        let _lock = ENV_LOCK.lock().await;
+        unsafe { env::set_var("TURBO_TEST_CSRF_STATE", "test-login-state") };
+
         let color_config = turborepo_ui::ColorConfig::new(false);
         let api_client = MockApiClient::new();
         let port = port_scanner::request_open_port().unwrap();
-        let callback = spawn_login_callback(port, "fresh-login-token");
+        let callback = spawn_login_callback(port, "fresh-login-token", "test-login-state");
 
         let options = LoginOptions {
             color_config: &color_config,
@@ -673,6 +697,7 @@ mod tests {
         let (token, token_set) = login(&options).await.unwrap();
 
         callback.join().unwrap();
+        unsafe { env::remove_var("TURBO_TEST_CSRF_STATE") };
 
         assert_matches!(token, Token::New(ref token) if token.expose() == "fresh-login-token");
         assert!(token_set.is_none());
@@ -735,13 +760,38 @@ mod tests {
 
         let handle = std::thread::spawn(move || {
             let mut stream = std::net::TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
-            let request = "GET /?token=my-login-token HTTP/1.1\r\nHost: localhost\r\n\r\n";
+            let request =
+                "GET /?token=my-login-token&state=test-state HTTP/1.1\r\nHost: localhost\r\n\r\n";
             stream.write_all(request.as_bytes()).unwrap();
         });
 
-        let result = wait_for_login_redirect(listener, "https://example.com/turborepo/success");
+        let result = wait_for_login_redirect(
+            listener,
+            "https://example.com/turborepo/success",
+            "test-state",
+        );
         handle.join().unwrap();
         assert_eq!(result.unwrap(), "my-login-token");
+    }
+
+    #[test]
+    fn test_wait_for_login_redirect_rejects_missing_state() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let handle = std::thread::spawn(move || {
+            let mut stream = std::net::TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
+            let request = "GET /?token=stolen-token HTTP/1.1\r\nHost: localhost\r\n\r\n";
+            stream.write_all(request.as_bytes()).unwrap();
+        });
+
+        let result = wait_for_login_redirect(
+            listener,
+            "https://example.com/turborepo/success",
+            "test-state",
+        );
+        handle.join().unwrap();
+        assert_matches!(result, Err(Error::CsrfStateMismatch));
     }
 
     #[test]
@@ -760,11 +810,16 @@ mod tests {
 
             // Second: the real callback with a token.
             let mut stream = std::net::TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
-            let request = "GET /?token=my-login-token HTTP/1.1\r\nHost: localhost\r\n\r\n";
+            let request =
+                "GET /?token=my-login-token&state=test-state HTTP/1.1\r\nHost: localhost\r\n\r\n";
             stream.write_all(request.as_bytes()).unwrap();
         });
 
-        let result = wait_for_login_redirect(listener, "https://example.com/turborepo/success");
+        let result = wait_for_login_redirect(
+            listener,
+            "https://example.com/turborepo/success",
+            "test-state",
+        );
         handle.join().unwrap();
         assert_eq!(result.unwrap(), "my-login-token");
     }

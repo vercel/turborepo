@@ -4,6 +4,7 @@ mod sso;
 
 pub use login::*;
 pub use logout::*;
+use rand::distr::{Alphanumeric, SampleString};
 pub use sso::*;
 use tracing::warn;
 use turbopath::AbsoluteSystemPath;
@@ -12,6 +13,8 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{Client, TokenClient};
 use turborepo_ui::ColorConfig;
 use url::Url;
+
+const CSRF_STATE_LENGTH: usize = 32;
 
 pub(crate) fn is_vercel(login_url: &str) -> bool {
     Url::parse(login_url)
@@ -67,6 +70,15 @@ fn is_trusted_vercel_origin(url: &Url) -> bool {
 
 fn is_vercel_host(host: &str) -> bool {
     host == "vercel.com" || host.ends_with(".vercel.com")
+}
+
+fn generate_csrf_state() -> String {
+    #[cfg(test)]
+    if let Ok(state) = std::env::var("TURBO_TEST_CSRF_STATE") {
+        return state;
+    }
+
+    Alphanumeric.sample_string(&mut rand::rng(), CSRF_STATE_LENGTH)
 }
 
 const VERCEL_TOKEN_DIR: &str = "com.vercel.cli";
