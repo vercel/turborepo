@@ -2,6 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use turborepo_config::{ExperimentalOtelMetricsOptions, ExperimentalOtelOptions};
 use turborepo_otel::{RunMetricsPayload, TaskCacheStatus, TaskMetricsPayload};
+use url::Url;
 
 use super::{Handle, RunObserver};
 use crate::{
@@ -58,11 +59,10 @@ fn config_from_options(
     if endpoint.is_empty() {
         return None;
     }
-    if !is_https_endpoint(endpoint) {
+    if !is_valid_https_endpoint(endpoint) {
         tracing::warn!(
-            "Ignoring experimentalObservability.otel endpoint `{}` because only HTTPS endpoints \
-             are supported.",
-            endpoint
+            "Ignoring experimentalObservability.otel endpoint because it must be a valid HTTPS \
+             URL without userinfo."
         );
         return None;
     }
@@ -108,8 +108,16 @@ fn apply_auth_token(config: &mut turborepo_otel::Config, token: Option<&str>) {
     }
 }
 
-fn is_https_endpoint(endpoint: &str) -> bool {
-    endpoint.to_ascii_lowercase().starts_with("https://")
+fn is_valid_https_endpoint(endpoint: &str) -> bool {
+    let Ok(url) = Url::parse(endpoint) else {
+        return false;
+    };
+
+    url.scheme() == "https" && url.host_str().is_some() && !has_userinfo(&url)
+}
+
+fn has_userinfo(url: &Url) -> bool {
+    !url.username().is_empty() || url.password().is_some()
 }
 
 fn metrics_config(
@@ -260,6 +268,34 @@ mod tests {
                 "insecure http endpoint",
                 ExperimentalOtelOptions {
                     endpoint: Some("http://collector.example.com:4317".to_string()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "malformed https endpoint",
+                ExperimentalOtelOptions {
+                    endpoint: Some("https://".to_string()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "userinfo endpoint",
+                ExperimentalOtelOptions {
+                    endpoint: Some("https://token@collector.example.com/otel".to_string()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "userinfo endpoint with password",
+                ExperimentalOtelOptions {
+                    endpoint: Some("https://user:pass@collector.example.com/otel".to_string()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "userinfo host bypass endpoint",
+                ExperimentalOtelOptions {
+                    endpoint: Some("https://api.vercel.com:443@attacker.example/otel".to_string()),
                     ..Default::default()
                 },
             ),
