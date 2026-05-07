@@ -15,6 +15,11 @@ const DEVTOOLS_URL: &str = if cfg!(debug_assertions) {
 } else {
     "https://turborepo.dev/devtools"
 };
+const DEVTOOLS_ORIGIN: &str = if cfg!(debug_assertions) {
+    "http://localhost:3000"
+} else {
+    "https://turborepo.dev"
+};
 
 /// Run the devtools server.
 pub async fn run(
@@ -30,14 +35,19 @@ pub async fn run(
     let task_graph_builder = ProperTaskGraphBuilder::new(repo_root.clone());
 
     // Create server with the task graph builder
-    let server = DevtoolsServer::new(repo_root, port, task_graph_builder);
+    let server = DevtoolsServer::new(repo_root, port, task_graph_builder, DEVTOOLS_ORIGIN);
 
-    let url = format!("{}?port={}", DEVTOOLS_URL, port);
+    let url = format!(
+        "{}?port={}#token={}",
+        DEVTOOLS_URL,
+        port,
+        server.auth_token()
+    );
 
     println!();
     println!("  Turborepo Devtools");
     println!("  ──────────────────────────────────────");
-    println!("  WebSocket: ws://localhost:{}", port);
+    println!("  WebSocket: ws://localhost:{} (token required)", port);
     println!("  Browser:   {}", url);
     println!();
     println!("  Press Ctrl+C to stop");

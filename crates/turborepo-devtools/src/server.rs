@@ -8,20 +8,24 @@ use std::sync::Arc;
 use axum::{
     Router,
     extract::{
-        State, WebSocketUpgrade,
+        Query, State, WebSocketUpgrade,
         ws::{Message, WebSocket},
     },
-    http::Method,
-    response::IntoResponse,
+    http::{HeaderMap, StatusCode, header},
+    response::{IntoResponse, Response},
     routing::get,
 };
 use futures::{SinkExt, StreamExt};
+use rand::{
+    distr::{Alphanumeric, SampleString},
+    rng,
+};
+use serde::Deserialize;
 use thiserror::Error;
 use tokio::{
     net::TcpListener,
     sync::{RwLock, broadcast},
 };
-use tower_http::cors::{Any, CorsLayer};
 use tracing::{debug, error, info, warn};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::{package_graph::PackageGraphBuilder, package_json::PackageJson};
@@ -31,6 +35,8 @@ use crate::{
     types::{GraphState, ServerMessage, TaskGraphBuilder},
     watcher::{DevtoolsWatcher, WatchEvent},
 };
+
+const AUTH_TOKEN_LENGTH: usize = 32;
 
 /// Errors that can occur in the devtools server
 #[derive(Debug, Error)]
@@ -65,6 +71,10 @@ struct AppState {
     graph_state: Arc<RwLock<GraphState>>,
     /// Channel to notify clients of updates
     update_tx: broadcast::Sender<()>,
+    /// Per-session token required for WebSocket upgrades
+    auth_token: String,
+    /// Browser origin allowed to connect to this local server
+    allowed_origin: String,
 }
 
 /// The devtools WebSocket server
@@ -72,6 +82,8 @@ pub struct DevtoolsServer<T: TaskGraphBuilder> {
     repo_root: AbsoluteSystemPathBuf,
     port: u16,
     task_graph_builder: T,
+    auth_token: String,
+    allowed_origin: String,
 }
 
 impl<T: TaskGraphBuilder + 'static> DevtoolsServer<T> {
@@ -80,17 +92,29 @@ impl<T: TaskGraphBuilder + 'static> DevtoolsServer<T> {
     /// The task graph builder should use the same logic as `turbo run`
     /// to ensure consistency between what the devtools shows and what
     /// turbo actually executes.
-    pub fn new(repo_root: AbsoluteSystemPathBuf, port: u16, task_graph_builder: T) -> Self {
+    pub fn new(
+        repo_root: AbsoluteSystemPathBuf,
+        port: u16,
+        task_graph_builder: T,
+        allowed_origin: impl Into<String>,
+    ) -> Self {
         Self {
             repo_root,
             port,
             task_graph_builder,
+            auth_token: generate_auth_token(),
+            allowed_origin: allowed_origin.into(),
         }
     }
 
     /// Returns the port the server will listen on
     pub fn port(&self) -> u16 {
         self.port
+    }
+
+    /// Returns the per-session token clients must present when connecting
+    pub fn auth_token(&self) -> &str {
+        &self.auth_token
     }
 
     /// Run the server until shutdown
@@ -134,22 +158,17 @@ impl<T: TaskGraphBuilder + 'static> DevtoolsServer<T> {
             debug!("File watcher task ended");
         });
 
-        // Set up CORS
-        let cors = CorsLayer::new()
-            .allow_methods([Method::GET])
-            .allow_headers(Any)
-            .allow_origin(Any);
-
         // Create app state
         let app_state = AppState {
             graph_state,
             update_tx,
+            auth_token: self.auth_token,
+            allowed_origin: self.allowed_origin,
         };
 
         // Build router
         let app = Router::new()
             .route("/", get(ws_handler))
-            .layer(cors)
             .with_state(app_state);
 
         // Bind and serve
@@ -169,9 +188,55 @@ impl<T: TaskGraphBuilder + 'static> DevtoolsServer<T> {
     }
 }
 
+#[derive(Debug, Deserialize)]
+struct AuthQuery {
+    token: Option<String>,
+}
+
+fn generate_auth_token() -> String {
+    let mut rng = rng();
+    Alphanumeric.sample_string(&mut rng, AUTH_TOKEN_LENGTH)
+}
+
+fn validate_ws_request(
+    headers: &HeaderMap,
+    query: &AuthQuery,
+    auth_token: &str,
+    allowed_origin: &str,
+) -> Result<(), StatusCode> {
+    let Some(origin) = headers
+        .get(header::ORIGIN)
+        .and_then(|origin| origin.to_str().ok())
+    else {
+        return Err(StatusCode::FORBIDDEN);
+    };
+
+    if origin != allowed_origin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    if query.token.as_deref() != Some(auth_token) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    Ok(())
+}
+
 /// WebSocket upgrade handler
-async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
+async fn ws_handler(
+    headers: HeaderMap,
+    Query(query): Query<AuthQuery>,
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
+) -> Response {
+    if let Err(status) =
+        validate_ws_request(&headers, &query, &state.auth_token, &state.allowed_origin)
+    {
+        return status.into_response();
+    }
+
     ws.on_upgrade(|socket| handle_socket(socket, state))
+        .into_response()
 }
 
 /// Handle a WebSocket connection
@@ -289,4 +354,92 @@ async fn build_graph_state(
         repo_root: repo_root.to_string(),
         turbo_version: env!("CARGO_PKG_VERSION").to_string(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::http::HeaderValue;
+
+    use super::*;
+
+    const AUTH_TOKEN: &str = "session-token";
+    const ALLOWED_ORIGIN: &str = "https://turborepo.dev";
+
+    fn headers_with_origin(origin: &str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::ORIGIN,
+            HeaderValue::from_str(origin).expect("origin should be a valid header value"),
+        );
+        headers
+    }
+
+    fn query_with_token(token: Option<&str>) -> AuthQuery {
+        AuthQuery {
+            token: token.map(ToString::to_string),
+        }
+    }
+
+    #[test]
+    fn auth_token_is_unguessable_url_safe_value() {
+        let token = generate_auth_token();
+
+        assert_eq!(token.len(), AUTH_TOKEN_LENGTH);
+        assert!(token.chars().all(|c| c.is_ascii_alphanumeric()));
+    }
+
+    #[test]
+    fn allows_matching_origin_and_token() {
+        let headers = headers_with_origin(ALLOWED_ORIGIN);
+        let query = query_with_token(Some(AUTH_TOKEN));
+
+        assert_eq!(
+            validate_ws_request(&headers, &query, AUTH_TOKEN, ALLOWED_ORIGIN),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn rejects_missing_origin() {
+        let headers = HeaderMap::new();
+        let query = query_with_token(Some(AUTH_TOKEN));
+
+        assert_eq!(
+            validate_ws_request(&headers, &query, AUTH_TOKEN, ALLOWED_ORIGIN),
+            Err(StatusCode::FORBIDDEN)
+        );
+    }
+
+    #[test]
+    fn rejects_wrong_origin() {
+        let headers = headers_with_origin("https://example.com");
+        let query = query_with_token(Some(AUTH_TOKEN));
+
+        assert_eq!(
+            validate_ws_request(&headers, &query, AUTH_TOKEN, ALLOWED_ORIGIN),
+            Err(StatusCode::FORBIDDEN)
+        );
+    }
+
+    #[test]
+    fn rejects_missing_token() {
+        let headers = headers_with_origin(ALLOWED_ORIGIN);
+        let query = query_with_token(None);
+
+        assert_eq!(
+            validate_ws_request(&headers, &query, AUTH_TOKEN, ALLOWED_ORIGIN),
+            Err(StatusCode::UNAUTHORIZED)
+        );
+    }
+
+    #[test]
+    fn rejects_wrong_token() {
+        let headers = headers_with_origin(ALLOWED_ORIGIN);
+        let query = query_with_token(Some("wrong-token"));
+
+        assert_eq!(
+            validate_ws_request(&headers, &query, AUTH_TOKEN, ALLOWED_ORIGIN),
+            Err(StatusCode::UNAUTHORIZED)
+        );
+    }
 }
