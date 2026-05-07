@@ -41,6 +41,11 @@ pub enum Error {
     FailedToFetchUser(#[source] turborepo_api_client::Error),
     #[error("url is invalid: {0}")]
     InvalidUrl(#[from] url::ParseError),
+    #[error(
+        "Vercel login requires a trusted Vercel API URL, but `apiUrl` is configured to \
+         \"{api_url}\""
+    )]
+    UntrustedVercelApiUrl { api_url: String },
 
     #[error("failed to validate sso token")]
     FailedToValidateSSOToken(#[source] turborepo_api_client::Error),

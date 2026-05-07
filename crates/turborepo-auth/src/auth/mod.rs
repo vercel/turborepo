@@ -11,9 +11,62 @@ use turbopath::AbsoluteSystemPath;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{Client, TokenClient};
 use turborepo_ui::ColorConfig;
+use url::Url;
 
 pub(crate) fn is_vercel(login_url: &str) -> bool {
-    login_url.contains("vercel.com")
+    Url::parse(login_url)
+        .ok()
+        .is_some_and(|url| is_trusted_vercel_origin(&url))
+}
+
+pub(crate) fn ensure_trusted_vercel_api<T: Client>(api_client: &T) -> Result<(), Error> {
+    let api_url = api_client.make_url("")?;
+
+    if is_trusted_vercel_origin(&api_url) {
+        return Ok(());
+    }
+
+    Err(Error::UntrustedVercelApiUrl {
+        api_url: api_url.to_string(),
+    })
+}
+
+pub(crate) fn should_attempt_vercel_token_refresh(source: ExistingTokenSource) -> bool {
+    matches!(
+        source,
+        ExistingTokenSource::TurboAuth
+            | ExistingTokenSource::TurboConfig
+            | ExistingTokenSource::LegacyAuth
+    )
+}
+
+pub(crate) fn should_skip_existing_token_for_login(
+    source: ExistingTokenSource,
+    is_vercel_login: bool,
+    login_url: &str,
+) -> bool {
+    if is_vercel_login {
+        return false;
+    }
+
+    matches!(
+        source,
+        ExistingTokenSource::TurboAuth | ExistingTokenSource::LegacyAuth
+    ) || (looks_like_vercel_substring(login_url) && source == ExistingTokenSource::TurboConfig)
+}
+
+fn looks_like_vercel_substring(login_url: &str) -> bool {
+    login_url.to_ascii_lowercase().contains("vercel.com")
+}
+
+fn is_trusted_vercel_origin(url: &Url) -> bool {
+    url.scheme() == "https"
+        && url.port().is_none_or(|port| port == 443)
+        && url.host_str().is_some_and(is_vercel_host)
+}
+
+fn is_vercel_host(host: &str) -> bool {
+    host == "vercel.com" || host.ends_with(".vercel.com")
 }
 
 const VERCEL_TOKEN_DIR: &str = "com.vercel.cli";
@@ -21,6 +74,7 @@ const VERCEL_TOKEN_FILE: &str = "auth.json";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ExistingTokenSource {
+    TurboAuth,
     TurboConfig,
     LegacyAuth,
     Other,
@@ -130,29 +184,12 @@ fn load_turbo_auth_tokens_from_paths(
     Ok(load_tokens_from_path(turbo_config_path, "Turbo config file")?.unwrap_or_default())
 }
 
-fn load_turbo_auth_tokens() -> Result<crate::AuthTokens, Error> {
-    use crate::{TURBO_AUTH_FILE, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE};
-
-    let Some(turbo_config_dir) = turborepo_dirs::config_dir()? else {
-        return Ok(crate::AuthTokens::default());
-    };
-    let turbo_auth_path = turbo_config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_AUTH_FILE]);
-    let turbo_config_path = turbo_config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]);
-
-    load_turbo_auth_tokens_from_paths(&turbo_auth_path, &turbo_config_path)
-}
-
 pub(crate) fn classify_existing_vercel_token(token: &str) -> Result<ExistingTokenSource, Error> {
     if let Some(turbo_config_dir) = turborepo_dirs::config_dir()? {
         let turbo_auth_path =
             turbo_config_dir.join_components(&[crate::TURBO_TOKEN_DIR, crate::TURBO_AUTH_FILE]);
-        if let Some(turbo_auth_tokens) = load_tokens_from_path(&turbo_auth_path, "Turbo auth file")?
-            && turbo_auth_tokens
-                .token
-                .as_ref()
-                .is_some_and(|stored_token| stored_token.expose() == token)
-        {
-            return Ok(ExistingTokenSource::TurboConfig);
+        if path_contains_token(&turbo_auth_path, "Turbo auth file", token)? {
+            return Ok(ExistingTokenSource::TurboAuth);
         }
     }
 
@@ -165,13 +202,12 @@ pub(crate) fn classify_existing_vercel_token(token: &str) -> Result<ExistingToke
         return Ok(ExistingTokenSource::LegacyAuth);
     }
 
-    let turbo_auth_tokens = load_turbo_auth_tokens()?;
-    if turbo_auth_tokens
-        .token
-        .as_ref()
-        .is_some_and(|stored_token| stored_token.expose() == token)
-    {
-        return Ok(ExistingTokenSource::TurboConfig);
+    if let Some(turbo_config_dir) = turborepo_dirs::config_dir()? {
+        let turbo_config_path =
+            turbo_config_dir.join_components(&[crate::TURBO_TOKEN_DIR, crate::TURBO_TOKEN_FILE]);
+        if path_contains_token(&turbo_config_path, "Turbo config file", token)? {
+            return Ok(ExistingTokenSource::TurboConfig);
+        }
     }
 
     Ok(ExistingTokenSource::Other)
@@ -467,7 +503,7 @@ pub async fn recover_token_after_forbidden(
             )
             .await
         }
-        ExistingTokenSource::TurboConfig => {
+        ExistingTokenSource::TurboAuth | ExistingTokenSource::TurboConfig => {
             let auth_tokens = load_auth_tokens(&turbo_auth_path, &turbo_config_path)?;
             if auth_tokens.token.as_ref().map(|token| token.expose())
                 != Some(current_token.expose())
@@ -517,7 +553,7 @@ mod tests {
     use super::{
         ExistingTokenSource, can_refresh_token, classify_existing_vercel_token,
         get_token_with_refresh, is_vercel, load_auth_tokens, recover_token_after_forbidden,
-        should_exchange_turbo_config_token,
+        should_exchange_turbo_config_token, should_skip_existing_token_for_login,
     };
     use crate::{
         AuthTokens, TURBO_AUTH_FILE, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, Token,
@@ -653,7 +689,7 @@ mod tests {
 
         let source = classify_existing_vercel_token("duplicated-token").unwrap();
 
-        assert_eq!(source, ExistingTokenSource::TurboConfig);
+        assert_eq!(source, ExistingTokenSource::TurboAuth);
 
         unsafe {
             env::remove_var("TURBO_CONFIG_DIR_PATH");
@@ -1136,7 +1172,28 @@ mod tests {
         assert!(is_vercel("https://vercel.com"));
         assert!(is_vercel("https://api.vercel.com"));
         assert!(is_vercel("https://vercel.com/api"));
+        assert!(is_vercel("https://preview.vercel.com/login"));
         assert!(!is_vercel("https://my-cache.example.com"));
         assert!(!is_vercel("http://localhost:3000"));
+        assert!(!is_vercel("http://vercel.com"));
+        assert!(!is_vercel("https://notvercel.com"));
+        assert!(!is_vercel("https://vercel.com.attacker.test"));
+        assert!(!is_vercel("https://attacker.test/vercel.com"));
+        assert!(!is_vercel("https://api.vercel.com:444"));
+    }
+
+    #[test]
+    fn test_suspicious_vercel_substring_skips_stored_config_token() {
+        assert!(should_skip_existing_token_for_login(
+            ExistingTokenSource::TurboConfig,
+            false,
+            "https://vercel.com.attacker.test"
+        ));
+
+        assert!(!should_skip_existing_token_for_login(
+            ExistingTokenSource::TurboConfig,
+            false,
+            "https://cache.example.com"
+        ));
     }
 }

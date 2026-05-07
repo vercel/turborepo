@@ -107,12 +107,12 @@ fn truncate(s: &str, max: usize) -> &str {
 }
 
 /// Derive the OIDC issuer URL from a login URL.
-/// If the login URL is a Vercel-hosted URL (contains "vercel.com"),
-/// use the default Vercel issuer. Otherwise fall back to `https://` + host
-/// of the login URL to support self-hosted/enterprise deployments.
+/// If the login URL is a trusted Vercel URL, use the default Vercel issuer.
+/// Otherwise fall back to `https://` + host of the login URL to support
+/// self-hosted/enterprise deployments.
 /// Non-HTTPS schemes are rejected to prevent token exchange over plaintext.
 fn issuer_from_login_url(login_url: &str) -> Result<String, Error> {
-    if login_url.contains("vercel.com") {
+    if crate::auth::is_vercel(login_url) {
         return Ok(DEFAULT_VERCEL_ISSUER.to_string());
     }
     if let Ok(parsed) = Url::parse(login_url) {
@@ -390,6 +390,14 @@ mod tests {
         assert_eq!(
             issuer_from_login_url("https://my-company.example.com/api").unwrap(),
             "https://my-company.example.com"
+        );
+        assert_eq!(
+            issuer_from_login_url("https://vercel.com.attacker.test/api").unwrap(),
+            "https://vercel.com.attacker.test"
+        );
+        assert_eq!(
+            issuer_from_login_url("https://attacker.test/vercel.com").unwrap(),
+            "https://attacker.test"
         );
     }
 

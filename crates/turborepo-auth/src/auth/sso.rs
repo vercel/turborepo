@@ -15,7 +15,10 @@ use super::login::{
 };
 use crate::{
     Error, LoginOptions, Token,
-    auth::{ExistingTokenSource, classify_existing_vercel_token, is_vercel},
+    auth::{
+        ExistingTokenSource, classify_existing_vercel_token, ensure_trusted_vercel_api, is_vercel,
+        should_attempt_vercel_token_refresh, should_skip_existing_token_for_login,
+    },
     device_flow::TokenSet,
     error, ui,
 };
@@ -158,24 +161,23 @@ pub async fn sso_login<T: Client + TokenClient>(
 
     let sso_team = sso_team.ok_or(Error::EmptySSOTeam)?;
     let is_vercel_login = is_vercel(login_url_configuration);
+    if is_vercel_login {
+        ensure_trusted_vercel_api(api_client)?;
+    }
 
     // Check if token exists first. Must be there for the user and contain the
     // sso_team passed into this function.
     // For Vercel logins, --force is silently ignored.
     if !force || is_vercel_login {
         if let Some(token) = existing_token {
-            let token_source = if is_vercel_login {
-                classify_existing_vercel_token(token)?
-            } else {
-                ExistingTokenSource::Other
-            };
+            let token_source = classify_existing_vercel_token(token)?;
+            let skip_existing_token = should_skip_existing_token_for_login(
+                token_source,
+                is_vercel_login,
+                login_url_configuration,
+            );
 
-            if is_vercel_login
-                && matches!(
-                    token_source,
-                    ExistingTokenSource::TurboConfig | ExistingTokenSource::LegacyAuth
-                )
-            {
+            if is_vercel_login && should_attempt_vercel_token_refresh(token_source) {
                 match crate::auth::get_token_with_refresh_for_login().await {
                     Ok(Some(token_secret)) => {
                         if classify_existing_vercel_token(token_secret.expose())?
@@ -202,7 +204,7 @@ pub async fn sso_login<T: Client + TokenClient>(
                         warn!("Failed to load existing token for SSO, proceeding: {e}");
                     }
                 }
-            } else if token_source != ExistingTokenSource::LegacyAuth {
+            } else if !skip_existing_token && token_source != ExistingTokenSource::LegacyAuth {
                 let token_action = if is_vercel_login {
                     classify_existing_sso_token_with_recovery(
                         Token::existing(token.to_string()),
@@ -496,8 +498,12 @@ mod tests {
 
     impl MockApiClient {
         fn new() -> Self {
+            Self::with_base_url("https://vercel.com/api")
+        }
+
+        fn with_base_url(base_url: &str) -> Self {
             Self {
-                base_url: String::new(),
+                base_url: base_url.to_string(),
             }
         }
     }
@@ -648,6 +654,30 @@ mod tests {
         let (result, token_set) = sso_login(&options).await.unwrap();
         assert_matches!(result, Token::Existing(ref token) if token.expose() == "existing-token");
         assert!(token_set.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_vercel_sso_rejects_untrusted_api_url() {
+        let color_config = turborepo_ui::ColorConfig::new(false);
+        let api_client = MockApiClient::with_base_url("https://attacker.test/api");
+
+        let options = LoginOptions {
+            color_config: &color_config,
+            login_url: "https://vercel.com",
+            api_client: &api_client,
+            existing_token: Some("existing-token"),
+            sso_team: Some("my-team"),
+            force: false,
+            sso_login_callback_port: None,
+        };
+
+        let result = sso_login(&options).await;
+
+        assert_matches!(
+            result,
+            Err(Error::UntrustedVercelApiUrl { ref api_url })
+                if api_url == "https://attacker.test/api"
+        );
     }
 
     #[tokio::test]
