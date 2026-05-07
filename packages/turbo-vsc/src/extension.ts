@@ -208,7 +208,6 @@ export function activate(context: ExtensionContext) {
   );
 
   toolbar = window.createStatusBarItem(StatusBarAlignment.Left, 100);
-  commands.executeCommand("turbo.daemon.start");
 
   // decorate when changing the active editor editor
   context.subscriptions.push(

@@ -13,7 +13,7 @@ use thiserror::Error;
 use tokio::{sync::mpsc, time::timeout};
 use tonic::transport::Endpoint;
 use tracing::debug;
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use super::{proto::turbod_client::TurbodClient, DaemonClient, Paths};
 use crate::DaemonError;
@@ -66,8 +66,9 @@ pub struct DaemonConnector {
     /// in the event of a version mismatch).
     pub can_kill_server: bool,
     pub paths: Paths,
+    repo_root: AbsoluteSystemPathBuf,
     /// Optional custom turbo.json path to watch
-    pub custom_turbo_json_path: Option<turbopath::AbsoluteSystemPathBuf>,
+    pub custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
 }
 
 impl DaemonConnector {
@@ -75,13 +76,14 @@ impl DaemonConnector {
         can_start_server: bool,
         can_kill_server: bool,
         repo_root: &AbsoluteSystemPath,
-        custom_turbo_json_path: Option<turbopath::AbsoluteSystemPathBuf>,
+        custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     ) -> Self {
         let paths = Paths::from_repo_root(repo_root);
         Self {
             can_start_server,
             can_kill_server,
             paths,
+            repo_root: repo_root.to_owned(),
             custom_turbo_json_path,
         }
     }
@@ -158,27 +160,18 @@ impl DaemonConnector {
             }
             None if self.can_start_server => {
                 debug!("no pid found, starting daemon");
-                Self::start_daemon(&self.custom_turbo_json_path).await
+                self.start_daemon().await
             }
             None => Err(DaemonConnectorError::NotRunning),
         }
     }
 
     /// Starts the daemon process, returning its PID.
-    async fn start_daemon(
-        custom_turbo_json_path: &Option<turbopath::AbsoluteSystemPathBuf>,
-    ) -> Result<sysinfo::Pid, DaemonConnectorError> {
+    async fn start_daemon(&self) -> Result<sysinfo::Pid, DaemonConnectorError> {
         let binary_path =
             std::env::current_exe().map_err(|e| DaemonConnectorError::Fork(e.into()))?;
-        // this creates a new process group for the given command
-        // in a cross platform way, directing all output to /dev/null
-        let mut command = tokio::process::Command::new(binary_path);
-        command.arg("--skip-infer").arg("daemon");
-
-        // Pass custom turbo.json path if specified
-        if let Some(path) = custom_turbo_json_path {
-            command.arg("--turbo-json-path").arg(path.as_str());
-        }
+        let mut command =
+            Self::daemon_command(binary_path, &self.repo_root, &self.custom_turbo_json_path);
 
         let mut group = command
             .stderr(Stdio::null())
@@ -193,6 +186,24 @@ impl DaemonConnector {
             .id()
             .map(|id| sysinfo::Pid::from(id as usize))
             .ok_or(DaemonConnectorError::Fork(ForkError::Exited))
+    }
+
+    fn daemon_command(
+        binary_path: impl AsRef<OsStr>,
+        repo_root: &AbsoluteSystemPath,
+        custom_turbo_json_path: &Option<AbsoluteSystemPathBuf>,
+    ) -> tokio::process::Command {
+        let mut command = tokio::process::Command::new(binary_path);
+        command
+            .current_dir(repo_root.as_std_path())
+            .arg("--skip-infer")
+            .arg("daemon");
+
+        if let Some(path) = custom_turbo_json_path {
+            command.arg("--turbo-json-path").arg(path.as_str());
+        }
+
+        command
     }
 
     /// Gets a connection to given path
@@ -485,6 +496,40 @@ mod test {
         assert_matches!(
             connector.connect().await,
             Err(DaemonConnectorError::NotRunning)
+        );
+    }
+
+    #[test]
+    fn daemon_command_uses_repo_root_as_current_dir() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        let mut command = DaemonConnector::daemon_command("turbo", &repo_root, &None);
+        let command = command.as_std_mut();
+
+        assert_eq!(command.get_current_dir(), Some(repo_root.as_std_path()));
+        assert_eq!(
+            command.get_args().collect::<Vec<_>>(),
+            vec![OsStr::new("--skip-infer"), OsStr::new("daemon")]
+        );
+    }
+
+    #[test]
+    fn daemon_command_passes_custom_turbo_json_path() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        let custom_turbo_json_path = Some(repo_root.join_component("custom-turbo.json"));
+        let mut command =
+            DaemonConnector::daemon_command("turbo", &repo_root, &custom_turbo_json_path);
+        let command = command.as_std_mut();
+
+        assert_eq!(
+            command.get_args().collect::<Vec<_>>(),
+            vec![
+                OsStr::new("--skip-infer"),
+                OsStr::new("daemon"),
+                OsStr::new("--turbo-json-path"),
+                OsStr::new(custom_turbo_json_path.as_ref().unwrap().as_str()),
+            ]
         );
     }
 
