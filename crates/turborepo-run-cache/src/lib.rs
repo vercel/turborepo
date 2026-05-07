@@ -802,7 +802,7 @@ mod test {
     };
 
     use tempfile::tempdir;
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
     use turborepo_cache::{AsyncCache, CacheActions, CacheConfig, CacheOpts, LazyScmState};
     use turborepo_task_id::TaskId;
     use turborepo_telemetry::events::task::PackageTaskEventBuilder;
@@ -1116,12 +1116,13 @@ mod test {
             .await
             .unwrap();
 
-        assert!(
-            task_cache
-                .expanded_outputs()
-                .iter()
-                .any(|path| path.as_str().ends_with("dist/output.txt"))
-        );
+        let expected = AnchoredSystemPathBuf::from_raw(format!(
+            "dist{}output.txt",
+            std::path::MAIN_SEPARATOR_STR
+        ))
+        .unwrap();
+
+        assert!(task_cache.expanded_outputs().contains(&expected));
     }
 
     #[tokio::test]
