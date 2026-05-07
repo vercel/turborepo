@@ -17,6 +17,50 @@ import type { PackageJson, PNPMWorkspaceConfig } from "./types";
 const ROOT_GLOB = "{turbo.json,turbo.jsonc}";
 const ROOT_WORKSPACE_GLOB = "package.json";
 
+function isInsideRoot(root: string, filePath: string): boolean {
+  const relativePath = path.relative(root, filePath);
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
+  );
+}
+
+function realpathSync(filePath: string): string | null {
+  try {
+    return fs.realpathSync(filePath);
+  } catch {
+    return null;
+  }
+}
+
+function isSafeWorkspaceGlob(workspaceGlob: string): boolean {
+  const glob = workspaceGlob.startsWith("!")
+    ? workspaceGlob.slice(1)
+    : workspaceGlob;
+
+  return (
+    !path.isAbsolute(glob) &&
+    !path.posix.isAbsolute(glob) &&
+    !path.win32.isAbsolute(glob) &&
+    !glob.split(/[\\/]/).includes("..")
+  );
+}
+
+function filterPathsInsideRoot(
+  root: string,
+  filePaths: Array<string>
+): Array<string> {
+  const realRoot = realpathSync(root);
+  if (!realRoot) {
+    return [];
+  }
+
+  return filePaths.filter((filePath) => {
+    const realFilePath = realpathSync(filePath);
+    return realFilePath ? isInsideRoot(realRoot, realFilePath) : false;
+  });
+}
+
 /**
  * Given a directory path, determines which turbo config file to use.
  * Returns error information if both turbo.json and turbo.jsonc exist in the same directory.
@@ -113,18 +157,22 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
 
   // parse workspaces
   if (turboRoot) {
-    const workspaceGlobs = getWorkspaceGlobs(turboRoot);
+    const workspaceGlobs =
+      getWorkspaceGlobs(turboRoot).filter(isSafeWorkspaceGlob);
     const workspaceConfigGlobs = workspaceGlobs.map(
       (glob) => `${glob}/${ROOT_GLOB}`
     );
 
-    const configPaths = sync([ROOT_GLOB, ...workspaceConfigGlobs], {
-      cwd: turboRoot,
-      onlyFiles: true,
-      followSymbolicLinks: false,
-      // avoid throwing when encountering permission errors or unreadable paths
-      suppressErrors: true
-    }).map((configPath) => path.join(turboRoot, configPath));
+    const configPaths = filterPathsInsideRoot(
+      turboRoot,
+      sync([ROOT_GLOB, ...workspaceConfigGlobs], {
+        cwd: turboRoot,
+        onlyFiles: true,
+        followSymbolicLinks: false,
+        // avoid throwing when encountering permission errors or unreadable paths
+        suppressErrors: true
+      }).map((configPath) => path.resolve(turboRoot, configPath))
+    );
 
     // Check for both turbo.json and turbo.jsonc in the same directory
     const configPathsByDir: Record<string, Array<string>> = {};
@@ -198,18 +246,22 @@ export function getWorkspaceConfigs(
 
   // parse workspaces
   if (turboRoot) {
-    const workspaceGlobs = getWorkspaceGlobs(turboRoot);
+    const workspaceGlobs =
+      getWorkspaceGlobs(turboRoot).filter(isSafeWorkspaceGlob);
     const workspaceConfigGlobs = workspaceGlobs.map(
       (glob) => `${glob}/package.json`
     );
 
-    const configPaths = sync([ROOT_WORKSPACE_GLOB, ...workspaceConfigGlobs], {
-      cwd: turboRoot,
-      onlyFiles: true,
-      followSymbolicLinks: false,
-      // avoid throwing when encountering permission errors or unreadable paths
-      suppressErrors: true
-    }).map((configPath) => path.join(turboRoot, configPath));
+    const configPaths = filterPathsInsideRoot(
+      turboRoot,
+      sync([ROOT_WORKSPACE_GLOB, ...workspaceConfigGlobs], {
+        cwd: turboRoot,
+        onlyFiles: true,
+        followSymbolicLinks: false,
+        // avoid throwing when encountering permission errors or unreadable paths
+        suppressErrors: true
+      }).map((configPath) => path.resolve(turboRoot, configPath))
+    );
 
     for (const configPath of configPaths) {
       try {

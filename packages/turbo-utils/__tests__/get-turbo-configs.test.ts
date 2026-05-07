@@ -1,6 +1,7 @@
 import path from "node:path";
 import { setupTestFixtures } from "@turbo/test-utils";
 import { describe, it, expect } from "@jest/globals";
+import { ensureDirSync, writeJsonSync } from "fs-extra";
 import JSON5 from "json5";
 import type { TurboConfigs } from "../src/get-turbo-configs";
 import { getTurboConfigs } from "../src/get-turbo-configs";
@@ -143,6 +144,84 @@ describe("getTurboConfigs", () => {
         },
       }
     `);
+  });
+
+  it("ignores workspace config globs that leave the root", () => {
+    const { root, write } = useFixture({ fixture: "workspace-configs" });
+    const outsideWorkspace = path.join(root, "..", "outside-workspace");
+    ensureDirSync(outsideWorkspace);
+    writeJsonSync(path.join(outsideWorkspace, "turbo.json"), {
+      extends: ["//"],
+      tasks: {
+        build: {
+          env: ["OUTSIDE"]
+        }
+      }
+    });
+    write(
+      "package.json",
+      JSON.stringify(
+        {
+          private: true,
+          workspaces: ["apps/*", "../outside-workspace"],
+          packageManager: "yarn@1.22.19"
+        },
+        null,
+        2
+      )
+    );
+
+    const configs = getTurboConfigs(root, { cache: false });
+    const configPaths = configs.map(({ turboConfigPath }) =>
+      path.relative(root, turboConfigPath)
+    );
+
+    expect(configPaths).not.toContain("../outside-workspace/turbo.json");
+    expect(
+      configPaths.every((configPath) => !configPath.startsWith(".."))
+    ).toBe(true);
+  });
+
+  it("ignores absolute workspace config globs", () => {
+    const { root, write } = useFixture({ fixture: "workspace-configs" });
+    const outsideWorkspace = path.join(
+      root,
+      "..",
+      "outside-absolute-workspace"
+    );
+    ensureDirSync(outsideWorkspace);
+    writeJsonSync(path.join(outsideWorkspace, "turbo.json"), {
+      extends: ["//"],
+      tasks: {
+        build: {
+          env: ["OUTSIDE"]
+        }
+      }
+    });
+    write(
+      "package.json",
+      JSON.stringify(
+        {
+          private: true,
+          workspaces: [outsideWorkspace],
+          packageManager: "yarn@1.22.19"
+        },
+        null,
+        2
+      )
+    );
+
+    const configs = getTurboConfigs(root, { cache: false });
+    const configPaths = configs.map(({ turboConfigPath }) =>
+      path.relative(root, turboConfigPath)
+    );
+
+    expect(configPaths).not.toContain(
+      "../outside-absolute-workspace/turbo.json"
+    );
+    expect(
+      configPaths.every((configPath) => !configPath.startsWith(".."))
+    ).toBe(true);
   });
 
   it("throws when both turbo.json and turbo.jsonc exist", () => {
