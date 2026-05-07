@@ -1,11 +1,11 @@
 # LSP Pipeline
 #
-# Builds the LSP binaries, packages the VS Code extension, and optionally
+# Builds the LSP binaries, optionally packages the VS Code extension, and optionally
 # publishes it to the VS Code Marketplace from a manual dispatch.
 
 name: LSP
 
-run-name: LSP ${{ inputs.ref || github.ref_name }}
+run-name: LSP ${{ inputs.ref || github.ref_name }} (${{ inputs.target || 'all' }})
 
 on:
   workflow_call:
@@ -19,10 +19,32 @@ on:
       ref:
         type: string
         required: false
+      target:
+        type: string
+        default: all
+      package_vscode:
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
+      target:
+        description: "LSP target to build."
+        type: choice
+        default: all
+        options:
+          - all
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+          - x86_64-pc-windows-msvc
+          - aarch64-pc-windows-msvc
+      package_vscode:
+        description: "Package the VS Code extension after building all targets."
+        type: boolean
+        default: false
       publish:
-        description: "Publish the VS Code extension to the Marketplace. Requires dry_run=false."
+        description: "Publish the VS Code extension to the Marketplace. Requires target=all, package_vscode=true, dry_run=false."
         type: boolean
         default: false
       dry_run:
@@ -30,7 +52,7 @@ on:
         type: boolean
         default: true
       ref:
-        description: "Git ref to package, such as v1.2.3 or v1.2.3-canary.0."
+        description: "Git ref to build, such as v1.2.3 or v1.2.3-canary.0."
         required: false
         type: string
 
@@ -38,12 +60,44 @@ permissions:
   contents: read
 
 concurrency:
-  group: lsp-${{ inputs.ref || github.ref_name }}
+  group: lsp-${{ inputs.ref || github.ref_name }}-${{ inputs.target || 'all' }}
   cancel-in-progress: false
 
 jobs:
+  validate-inputs:
+    name: "Validate inputs"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate target
+        env:
+          TARGET: ${{ inputs.target || 'all' }}
+          PACKAGE_VSCODE: ${{ inputs.package_vscode }}
+          PUBLISH: ${{ inputs.publish }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          case "$TARGET" in
+            all|x86_64-apple-darwin|aarch64-apple-darwin|x86_64-unknown-linux-musl|aarch64-unknown-linux-musl|x86_64-pc-windows-msvc|aarch64-pc-windows-msvc)
+              ;;
+            *)
+              echo "::error::Invalid LSP target '$TARGET'."
+              exit 1
+              ;;
+          esac
+
+          if [ "$PACKAGE_VSCODE" = "true" ] && [ "$TARGET" != "all" ]; then
+            echo "::error::Packaging the VS Code extension requires target=all."
+            exit 1
+          fi
+
+          if [ "$PUBLISH" = "true" ] && [ "$DRY_RUN" != "true" ] && { [ "$TARGET" != "all" ] || [ "$PACKAGE_VSCODE" != "true" ]; }; then
+            echo "::error::Publishing requires target=all and package_vscode=true."
+            exit 1
+          fi
+
   build-rust:
     name: "Build Rust"
+    needs: [validate-inputs]
     strategy:
       fail-fast: false
       matrix:
@@ -62,26 +116,31 @@ jobs:
             setup: "sudo apt-get update && sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
           - host: windows-latest
             target: x86_64-pc-windows-msvc
-            setup: "rustup set default-host x86_64-pc-windows-msvc"
           - host: windows-latest
             target: aarch64-pc-windows-msvc
-            setup: "rustup set default-host aarch64-pc-windows-msvc"
     runs-on: ${{ matrix.settings.host }}
     timeout-minutes: 30
     steps:
+      - name: Skip unselected target
+        if: ${{ inputs.target != 'all' && inputs.target != matrix.settings.target }}
+        run: echo "Skipping ${{ matrix.settings.target }} because target=${{ inputs.target }}."
+
       - name: Checkout repo
+        if: ${{ inputs.target == 'all' || inputs.target == matrix.settings.target }}
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
       - name: Prepare build environment
-        if: ${{ matrix.settings.prepare }}
+        if: ${{ (inputs.target == 'all' || inputs.target == matrix.settings.target) && matrix.settings.prepare }}
         run: ${{ matrix.settings.prepare }}
 
       - name: Setup capnproto
+        if: ${{ inputs.target == 'all' || inputs.target == matrix.settings.target }}
         uses: ./.github/actions/setup-capnproto
 
       - name: Rust Setup
+        if: ${{ inputs.target == 'all' || inputs.target == matrix.settings.target }}
         uses: ./.github/actions/setup-rust
         with:
           github-token: ${{ github.token }}
@@ -89,13 +148,15 @@ jobs:
 
       - name: Build Setup
         shell: bash
-        if: ${{ matrix.settings.setup }}
+        if: ${{ (inputs.target == 'all' || inputs.target == matrix.settings.target) && matrix.settings.setup }}
         run: ${{ matrix.settings.setup }}
 
       - name: Build
+        if: ${{ inputs.target == 'all' || inputs.target == matrix.settings.target }}
         run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo-lsp -p turborepo-lsp --target ${{ matrix.settings.target }}
 
       - name: Upload Artifacts
+        if: ${{ inputs.target == 'all' || inputs.target == matrix.settings.target }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: turborepo-lsp-${{ matrix.settings.target }}
@@ -104,6 +165,7 @@ jobs:
   package-vscode:
     name: "Package VS Code Extension"
     runs-on: ubuntu-24.04
+    if: ${{ inputs.package_vscode && inputs.target == 'all' }}
     timeout-minutes: 30
     needs: [build-rust]
     outputs:
