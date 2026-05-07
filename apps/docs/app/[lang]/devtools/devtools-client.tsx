@@ -698,7 +698,7 @@ function DevtoolsContent() {
   const port = searchParams.get("port");
   const { fitBounds, fitView, getNodes } = useReactFlow();
 
-  const [hashToken, setHashToken] = useState<string | null>(null);
+  const [hashToken, setHashToken] = useState<string | null>();
   const [graphState, setGraphState] = useState<GraphState | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -966,11 +966,15 @@ function DevtoolsContent() {
   }, []);
 
   useEffect(() => {
-    if (!port || !token) return;
+    if (!port || token === undefined) return;
 
     const connect = () => {
-      const params = new URLSearchParams({ token });
-      const ws = new WebSocket(`ws://localhost:${port}?${params.toString()}`);
+      const url = new URL(`ws://localhost:${port}`);
+      if (token) {
+        url.searchParams.set("token", token);
+      }
+
+      const ws = new WebSocket(url.toString());
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -1199,7 +1203,7 @@ function DevtoolsContent() {
     [selectedNode, selectionMode, adjacencyMaps, focusOnNodes, clearSelection]
   );
 
-  if (!port || !token) {
+  if (!port) {
     return <SetupInstructions />;
   }
 
