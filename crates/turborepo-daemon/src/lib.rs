@@ -95,6 +95,31 @@ fn repo_hash(repo_root: &AbsoluteSystemPath) -> String {
     hex::encode(&hasher.finalize()[..8])
 }
 
+#[cfg(unix)]
+fn daemon_file_root(repo_hash: &str) -> AbsoluteSystemPathBuf {
+    let uid = unsafe { libc::geteuid() };
+    AbsoluteSystemPathBuf::new(std::env::temp_dir().to_str().expect("UTF-8 path"))
+        .expect("temp dir is valid")
+        .join_component(format!("turbod-{uid}").as_str())
+        .join_component(repo_hash)
+}
+
+#[cfg(windows)]
+fn daemon_file_root(repo_hash: &str) -> AbsoluteSystemPathBuf {
+    let root = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| {
+        std::env::temp_dir()
+            .to_str()
+            .expect("UTF-8 path")
+            .to_string()
+    });
+
+    AbsoluteSystemPathBuf::new(&root)
+        .expect("daemon root is valid")
+        .join_component("turbod")
+        .join_component(repo_hash)
+}
+
+#[cfg(not(any(unix, windows)))]
 fn daemon_file_root(repo_hash: &str) -> AbsoluteSystemPathBuf {
     AbsoluteSystemPathBuf::new(std::env::temp_dir().to_str().expect("UTF-8 path"))
         .expect("temp dir is valid")

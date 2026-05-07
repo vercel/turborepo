@@ -218,6 +218,7 @@ impl DaemonConnector {
             let path = path.clone();
             async move {
                 let stream = tokio::net::UnixStream::connect(path.as_path()).await?;
+                super::endpoint::authorize_peer(&stream)?;
                 Ok::<_, std::io::Error>(hyper_util::rt::TokioIo::new(stream))
             }
         };
@@ -225,7 +226,10 @@ impl DaemonConnector {
         #[cfg(target_os = "windows")]
         let make_service = move |_| {
             let path = path.clone();
-            async move { win(path) }
+            async move {
+                super::endpoint::validate_socket_owner(&path)?;
+                win(path)
+            }
         };
 
         // note, this endpoint is just a placeholder. the actual path is passed in via
