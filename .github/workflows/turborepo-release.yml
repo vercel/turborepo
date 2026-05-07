@@ -505,16 +505,17 @@ jobs:
             "${PRERELEASE_FLAG[@]}"
 
   publish-vscode-extension:
-    name: "Package VS Code Extension"
-    needs: [stage, create-release-tag, create-release-pr]
-    if: ${{ always() && needs.create-release-tag.result == 'success' && needs.create-release-pr.result == 'success' && !inputs.dry_run }}
+    name: "Publish VS Code Extension"
+    needs: [stage, create-release-tag]
+    if: ${{ always() && needs.create-release-tag.result == 'success' && !inputs.dry_run }}
     permissions:
       contents: read
     uses: ./.github/workflows/lsp.yml
     with:
-      publish: false
-      dry_run: true
+      publish: true
+      dry_run: false
       ref: v${{ needs.stage.outputs.version }}
+    secrets: inherit
 
   alias-versioned-docs:
     name: "Alias Versioned Docs"
