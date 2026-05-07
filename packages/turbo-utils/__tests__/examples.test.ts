@@ -9,6 +9,7 @@ import {
 import { Readable, PassThrough } from "node:stream";
 import {
   mkdirSync,
+  mkdtempSync,
   rmSync,
   existsSync,
   readFileSync,
@@ -423,6 +424,58 @@ describe("examples", () => {
         );
       } finally {
         rmSync(root, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("downloadAndExtractRepo", () => {
+    it("does not write to the old predictable temp path", async () => {
+      const timestamp = 5_446_000_000_000;
+      const predictableTempFile = join(
+        tmpdir(),
+        `turbo-download-${timestamp}.tar.gz`
+      );
+      const root = mkdtempSync(join(tmpdir(), "turbo-test-download-"));
+      const sourceDir = mkdtempSync(join(tmpdir(), "turbo-test-source-"));
+      const dateNowSpy = jest.spyOn(Date, "now").mockReturnValue(timestamp);
+
+      try {
+        rmSync(predictableTempFile, { recursive: true, force: true });
+        writeFileSync(predictableTempFile, "unchanged");
+
+        const repoRoot = join(sourceDir, "repo-root");
+        mkdirSync(repoRoot, { recursive: true });
+        writeFileSync(join(repoRoot, "package.json"), "{}");
+
+        const tarFile = join(sourceDir, "archive.tar.gz");
+        await tar.create({ gzip: true, file: tarFile, cwd: sourceDir }, [
+          "repo-root"
+        ]);
+        const archive = readFileSync(tarFile);
+
+        global.fetch = jest.fn(() =>
+          Promise.resolve({
+            ok: true,
+            body: {},
+            arrayBuffer: () =>
+              Promise.resolve(Uint8Array.from(archive).buffer as ArrayBuffer)
+          } as Response)
+        ) as typeof fetch;
+
+        await downloadAndExtractRepo(root, {
+          username: "vercel",
+          name: "turborepo",
+          branch: "main",
+          filePath: ""
+        });
+
+        expect(readFileSync(predictableTempFile, "utf-8")).toBe("unchanged");
+        expect(existsSync(join(root, "package.json"))).toBe(true);
+      } finally {
+        dateNowSpy.mockRestore();
+        rmSync(predictableTempFile, { recursive: true, force: true });
+        rmSync(root, { recursive: true, force: true });
+        rmSync(sourceDir, { recursive: true, force: true });
       }
     });
   });
