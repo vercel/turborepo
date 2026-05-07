@@ -768,7 +768,7 @@ A list of file glob patterns relative to the package's `package.json` to cache w
 See [`$TURBO_ROOT$`](#turbo_root) if output paths need to be relative to the repository root.
 
 Output paths must resolve inside the repository root. Turborepo will not cache
-outputs that escape the repository, even through `..` traversal.
+outputs that escape the repository.
 
 ```jsonc title="./turbo.json"
 {
