@@ -228,6 +228,11 @@ Multi-layered caching system:
 3. **Cache Storage**: Compress and store task outputs
 4. **Cache Metadata**: Track cache hits, timing, and sources
 
+Cache restore and storage enforce filesystem boundaries. Restores are anchored
+to the selected restore directory, preserve safe symlinks, and reject symlink
+targets that escape that anchor. Cache storage rejects task outputs that resolve
+outside the repository root.
+
 #### Key Components
 
 - `RunCache`: High-level cache coordination

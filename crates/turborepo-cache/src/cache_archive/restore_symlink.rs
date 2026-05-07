@@ -19,7 +19,7 @@ pub fn restore_symlink(
         .link_name()?
         .ok_or_else(|| CacheError::MalformedTar(Backtrace::capture()))?;
 
-    let processed_linkname = canonicalize_linkname(anchor, &processed_name, &linkname)?;
+    let processed_linkname = validate_linkname(anchor, &processed_name, &linkname)?;
 
     if processed_linkname.symlink_metadata().is_err() {
         return Err(CacheError::LinkTargetDoesNotExist(
@@ -40,9 +40,50 @@ pub fn restore_symlink_allow_missing_target(
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
     let processed_name = AnchoredSystemPathBuf::from_system_path(&entry.path()?)?;
 
+    let linkname = entry
+        .link_name()?
+        .ok_or_else(|| CacheError::MalformedTar(Backtrace::capture()))?;
+    validate_linkname(anchor, &processed_name, &linkname)?;
+
     actually_restore_symlink(dir_cache, anchor, &processed_name, entry)?;
 
     Ok(processed_name)
+}
+
+fn validate_linkname(
+    anchor: &AbsoluteSystemPath,
+    processed_name: &AnchoredSystemPathBuf,
+    linkname: &std::path::Path,
+) -> Result<AbsoluteSystemPathBuf, CacheError> {
+    let linkname_str = linkname.to_str().ok_or_else(|| {
+        CacheError::PathError(
+            PathError::InvalidUnicode(linkname.to_string_lossy().to_string()),
+            Backtrace::capture(),
+        )
+    })?;
+
+    if is_windows_absolute_path(linkname_str) {
+        return Err(CacheError::LinkOutsideOfDirectory(
+            linkname_str.to_string(),
+            Backtrace::capture(),
+        ));
+    }
+
+    let processed_linkname = canonicalize_linkname(anchor, processed_name, linkname)?;
+    if !processed_linkname.starts_with(anchor) {
+        return Err(CacheError::LinkOutsideOfDirectory(
+            linkname_str.to_string(),
+            Backtrace::capture(),
+        ));
+    }
+
+    Ok(processed_linkname)
+}
+
+fn is_windows_absolute_path(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    bytes.first() == Some(&b'\\')
+        || matches!(bytes, [drive, b':', ..] if drive.is_ascii_alphabetic())
 }
 
 fn actually_restore_symlink<'a>(
