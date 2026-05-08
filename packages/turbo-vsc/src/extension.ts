@@ -24,6 +24,10 @@ let toolbar: StatusBarItem;
 
 const logs = window.createOutputChannel("Turborepo Extension");
 
+type InternalLspProbeResult =
+  | { supported: true }
+  | { supported: false; reason: string };
+
 export function activate(context: ExtensionContext) {
   const workspaceRoot = workspace.workspaceFolders?.[0]?.uri.fsPath;
   const options = { cwd: workspaceRoot };
@@ -355,7 +359,8 @@ function findInstalledTurboLsp(
       `turbo LSP: probing ${candidate.label} at ${candidate.path}`
     );
 
-    if (supportsInternalLsp(candidate.path, options)) {
+    const probe = probeInternalLsp(candidate.path, options);
+    if (probe.supported) {
       logs.appendLine(
         `turbo LSP: using ${candidate.label} at ${candidate.path}`
       );
@@ -363,29 +368,81 @@ function findInstalledTurboLsp(
     }
 
     logs.appendLine(
-      `turbo LSP: ${candidate.label} does not support internal LSP`
+      `turbo LSP: rejected ${candidate.label} at ${candidate.path}: ${probe.reason}`
     );
   }
 
-  logs.appendLine("turbo LSP: falling back to packaged LSP binary");
+  logs.appendLine(
+    "turbo LSP: no installed turbo candidate supports internal LSP; falling back to packaged LSP binary"
+  );
 }
 
-function supportsInternalLsp(
+function probeInternalLsp(
   turboPath: string,
   options: cp.ExecSyncOptionsWithStringEncoding
-) {
+): InternalLspProbeResult {
   try {
-    return (
-      cp
-        .execSync(`${quoteCommand(turboPath)} __internal_lsp --probe`, {
-          ...options,
-          timeout: 1000
-        })
-        .trim() === "turbo-lsp"
-    );
+    const output = cp
+      .execSync(`${quoteCommand(turboPath)} __internal_lsp --probe`, {
+        ...options,
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 1000
+      })
+      .trim();
+
+    if (output === "turbo-lsp") {
+      return { supported: true };
+    }
+
+    return { supported: false, reason: formatProbeOutput(output) };
   } catch (e) {
-    return false;
+    return { supported: false, reason: formatProbeError(e) };
   }
+}
+
+function formatProbeOutput(output: string) {
+  const line = firstNonEmptyLine(output);
+  return line ? `unexpected probe output: ${line}` : "empty probe output";
+}
+
+function formatProbeError(error: unknown) {
+  const stderr = outputFromError(error, "stderr");
+  if (stderr) {
+    return firstNonEmptyLine(stderr) ?? "probe command failed with stderr";
+  }
+
+  const stdout = outputFromError(error, "stdout");
+  if (stdout) {
+    return `probe command failed with stdout: ${firstNonEmptyLine(stdout)}`;
+  }
+
+  if (error instanceof Error && error.message) {
+    return firstNonEmptyLine(error.message) ?? error.message;
+  }
+
+  return "probe command failed";
+}
+
+function outputFromError(error: unknown, key: "stdout" | "stderr") {
+  if (typeof error !== "object" || error === null || !(key in error)) {
+    return;
+  }
+
+  const output = (error as Record<string, unknown>)[key];
+  if (Buffer.isBuffer(output)) {
+    return output.toString("utf8").trim();
+  }
+
+  if (typeof output === "string") {
+    return output.trim();
+  }
+}
+
+function firstNonEmptyLine(output: string) {
+  return output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
 }
 
 async function promptGlobalTurbo(useLocalTurbo: boolean) {

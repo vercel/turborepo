@@ -8,6 +8,12 @@ use miette::Report;
 
 const INTERNAL_LSP_COMMAND: &str = "__internal_lsp";
 
+#[derive(Debug, PartialEq)]
+enum InternalLspCommand {
+    Probe,
+    Server,
+}
+
 /// Concrete [`turborepo_query_api::QueryServer`] that delegates to
 /// `turborepo_query`.
 ///
@@ -65,8 +71,8 @@ impl turborepo_query_api::QueryServer for TurboQueryServer {
 // This function should not expanded. Please add any logic to
 // `turborepo_lib::main` instead
 fn main() -> Result<()> {
-    if std::env::args().nth(1).as_deref() == Some(INTERNAL_LSP_COMMAND) {
-        if std::env::args().nth(2).as_deref() == Some("--probe") {
+    if let Some(command) = internal_lsp_command(std::env::args()) {
+        if command == InternalLspCommand::Probe {
             println!("turbo-lsp");
             return Ok(());
         }
@@ -84,4 +90,68 @@ fn main() -> Result<()> {
     });
 
     process::exit(exit_code)
+}
+
+fn internal_lsp_command(args: impl IntoIterator<Item = String>) -> Option<InternalLspCommand> {
+    let mut args = args.into_iter().skip(1);
+    let first_arg = args.next()?;
+    let command_arg = if first_arg == "--skip-infer" {
+        args.next()?
+    } else {
+        first_arg
+    };
+
+    if command_arg != INTERNAL_LSP_COMMAND {
+        return None;
+    }
+
+    if args.next().as_deref() == Some("--probe") {
+        Some(InternalLspCommand::Probe)
+    } else {
+        Some(InternalLspCommand::Server)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{InternalLspCommand, internal_lsp_command};
+
+    fn args(args: &[&str]) -> Vec<String> {
+        args.iter().map(|arg| arg.to_string()).collect()
+    }
+
+    #[test]
+    fn detects_internal_lsp_probe() {
+        assert_eq!(
+            internal_lsp_command(args(&["turbo", "__internal_lsp", "--probe"])),
+            Some(InternalLspCommand::Probe)
+        );
+    }
+
+    #[test]
+    fn detects_shimmed_internal_lsp_probe() {
+        assert_eq!(
+            internal_lsp_command(args(&[
+                "turbo",
+                "--skip-infer",
+                "__internal_lsp",
+                "--probe",
+                "--",
+            ])),
+            Some(InternalLspCommand::Probe)
+        );
+    }
+
+    #[test]
+    fn detects_internal_lsp_server() {
+        assert_eq!(
+            internal_lsp_command(args(&["turbo", "--skip-infer", "__internal_lsp", "--"])),
+            Some(InternalLspCommand::Server)
+        );
+    }
+
+    #[test]
+    fn ignores_regular_turbo_command() {
+        assert_eq!(internal_lsp_command(args(&["turbo", "run", "build"])), None);
+    }
 }
