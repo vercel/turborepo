@@ -5,11 +5,12 @@
 # 1. Create a staging branch (acts as a lock to prevent concurrent releases)
 # 2. Run some smoke tests on that branch
 # 3. Build the Rust binary
-# 4. Publish JS packages to npm and the VS Code extension as parallel worksets
+# 4. Publish JS packages to npm
 # 5. Create the git tag (only after npm publish succeeds)
-# 6. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
-# 7. Create a release branch and open a PR, even if VS Code publishing fails
-# 8. On failure, cleanup the staging branch and release tag automatically
+# 6. Publish the VS Code extension from the release tag
+# 7. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
+# 8. Create a release branch and open a PR, even if VS Code publishing fails
+# 9. On failure, cleanup the staging branch and release tag automatically
 #
 # Canary releases run on an hourly schedule.
 # Manual releases are triggered via workflow_dispatch.
@@ -506,15 +507,15 @@ jobs:
 
   publish-vscode-extension:
     name: "Publish VS Code Extension"
-    needs: [stage, js-smoke-test]
-    if: ${{ always() && needs.stage.result == 'success' && needs.js-smoke-test.result == 'success' && !inputs.dry_run }}
+    needs: [stage, js-smoke-test, create-release-tag]
+    if: ${{ always() && needs.stage.result == 'success' && needs.js-smoke-test.result == 'success' && needs.create-release-tag.result == 'success' && !inputs.dry_run }}
     permissions:
       contents: read
     uses: ./.github/workflows/lsp.yml
     with:
       publish: true
       dry_run: false
-      ref: ${{ needs.stage.outputs.stage-branch }}
+      ref: v${{ needs.stage.outputs.version }}
     secrets: inherit
 
   alias-versioned-docs:
