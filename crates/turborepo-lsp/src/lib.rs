@@ -546,7 +546,10 @@ impl LanguageServer for Backend {
     /// Add an entry to the list of ropes for a newly opened file
     async fn did_open(&self, document: DidOpenTextDocumentParams) {
         self.client
-            .log_message(MessageType::INFO, "file opened!")
+            .log_message(
+                MessageType::INFO,
+                format!("file opened: {}", document.text_document.uri),
+            )
             .await;
 
         let rope = crop::Rope::from(document.text_document.text);
@@ -564,7 +567,10 @@ impl LanguageServer for Backend {
     /// made to the buffer in the editor
     async fn did_change(&self, document: DidChangeTextDocumentParams) {
         self.client
-            .log_message(MessageType::INFO, "file changed!")
+            .log_message(
+                MessageType::INFO,
+                format!("file changed: {}", document.text_document.uri),
+            )
             .await;
 
         let updated_rope = {
@@ -596,15 +602,21 @@ impl LanguageServer for Backend {
         .await;
     }
 
-    async fn did_save(&self, _: DidSaveTextDocumentParams) {
+    async fn did_save(&self, document: DidSaveTextDocumentParams) {
         self.client
-            .log_message(MessageType::INFO, "file saved!")
+            .log_message(
+                MessageType::INFO,
+                format!("file saved: {}", document.text_document.uri),
+            )
             .await;
     }
 
-    async fn did_close(&self, _: DidCloseTextDocumentParams) {
+    async fn did_close(&self, document: DidCloseTextDocumentParams) {
         self.client
-            .log_message(MessageType::INFO, "file closed!")
+            .log_message(
+                MessageType::INFO,
+                format!("file closed: {}", document.text_document.uri),
+            )
             .await;
     }
 
