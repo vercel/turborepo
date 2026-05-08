@@ -1957,6 +1957,86 @@ mod test {
         assert_eq!(all_dependencies(&engine), expected);
     }
 
+    /// --only should preserve ^dependency edges for packages that are
+    /// direct dependencies in the package graph, even if they aren't
+    /// explicitly in the --filter set.
+    ///
+    /// Currently FAILS: --only drops ALL dependency edges for packages
+    /// not in the filter, even when they're direct package.json
+    /// dependencies. Users must manually add --filter for each upstream
+    /// package, which is fragile and defeats the purpose of ^dependsOn.
+    ///
+    /// Real-world scenario: checkit-runtime depends on yolean-types and
+    /// declares `"bundle": { "dependsOn": ["^bundle"] }`.
+    /// Running `turbo bundle --only --filter=checkit-runtime` should
+    /// still include yolean-types#bundle in the cache key because
+    /// checkit-runtime declares it as a package dependency.
+    /// Instead, the edge is dropped and changes in yolean-types don't
+    /// invalidate the cache — causing stale builds shipped to prod.
+    ///
+    /// Workaround: explicitly add --filter=yolean-types --filter=yolean-op
+    /// or declare $TURBO_ROOT$ inputs in turbo.json.
+    #[test]
+    #[should_panic]
+    fn test_tasks_only_should_preserve_package_dependency_edges() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "types" => [],
+                "runtime" => ["types"]
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "fetch": {
+                        "cache": false,
+                        "outputs": ["target-fetched/**"]
+                    },
+                    "bundle": {
+                        "dependsOn": ["fetch", "^bundle"],
+                        "inputs": ["target-fetched/**"],
+                        "outputs": ["target/**"]
+                    }
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+
+        // --only with ONLY runtime in filter.
+        // types is a package.json dependency of runtime and bundle
+        // declares ^bundle, so types#bundle should be in the graph.
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks_only(true)
+            .with_tasks(Some(Spanned::new(TaskName::from("bundle"))))
+            .with_workspaces(vec![PackageName::from("runtime")])
+            .with_root_tasks(vec![
+                TaskName::from("fetch"),
+                TaskName::from("bundle"),
+            ])
+            .build()
+            .unwrap();
+
+        let deps = all_dependencies(&engine);
+
+        // runtime depends on types in package.json and bundle declares
+        // ^bundle, so types#bundle should be preserved as a dependency
+        // even though types is not in the --filter set.
+        let expected = deps! {
+            "runtime#bundle" => ["types#bundle"],
+            "types#bundle" => ["___ROOT___"]
+        };
+        assert_eq!(deps, expected,
+            "--only should preserve ^bundle edges for package.json dependencies \
+             so that upstream changes invalidate the cache key");
+    }
+
     // Note: test_validate_task_name has been moved to turborepo-engine crate
     // See: crates/turborepo-engine/src/validate.rs
 
