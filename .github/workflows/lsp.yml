@@ -120,7 +120,7 @@ jobs:
           extra-flags: "--frozen-lockfile"
 
       - name: Validate manual publish ref
-        if: ${{ inputs.publish && !inputs.dry_run }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish && !inputs.dry_run }}
         env:
           PUBLISH_REF: ${{ inputs.ref || github.ref_name }}
         run: |
@@ -217,16 +217,14 @@ jobs:
 
           const marketplaceVersion = `${marketplaceMajor}.${marketplaceMinor}.${marketplacePatch}`;
 
-          const releaseTag =
+          const releaseRef =
             process.env.RELEASE_REF ||
             (process.env.GITHUB_REF_TYPE === "tag" ? process.env.GITHUB_REF_NAME : "");
-          if (releaseTag) {
-            const tagVersion = releaseTag.startsWith("v")
-              ? releaseTag.slice(1)
-              : releaseTag;
+          if (releaseRef.startsWith("v")) {
+            const tagVersion = releaseRef.slice(1);
             if (tagVersion !== version) {
               throw new Error(
-                `Release tag ${releaseTag} does not match version.txt ${version}`
+                `Release tag ${releaseRef} does not match version.txt ${version}`
               );
             }
           }
