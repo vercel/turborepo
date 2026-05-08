@@ -9,7 +9,7 @@ description: |
   monorepo, shares code between apps, runs changed/affected packages, debugs cache,
   or has apps/packages directories.
 metadata:
-  version: 2.9.11-canary.2
+  version: 2.9.11-canary.3
 ---
 
 # Turborepo Skill
@@ -740,7 +740,7 @@ import { Button } from "@repo/ui/button";
 
 ```json
 {
-  "$schema": "https://v2-9-11-canary-2.turborepo.dev/schema.json",
+  "$schema": "https://v2-9-11-canary-3.turborepo.dev/schema.json",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
