@@ -1,28 +1,54 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getPipelineDecorationOffsets } from "./json-decorations";
+import { getTaskDefinitionKeyDecorationOffsets } from "./json-decorations";
 
-function pipelineOffsets(json: string): number[] {
-  const start = json.indexOf("pipeline");
-  return Array.from({ length: "pipeline".length }, (_, i) => start + i);
+function keyOffsets(json: string, key: "pipeline" | "tasks"): number[] {
+  const start = json.indexOf(key);
+  return Array.from({ length: key.length }, (_, i) => start + i);
 }
 
-test("decorates top-level pipeline without throwing", () => {
-  const json = `{"pipeline":{"build":{}}}`;
+test("decorates top-level tasks without throwing", () => {
+  const json = `{"tasks":{"build":{}}}`;
 
-  assert.deepEqual(getPipelineDecorationOffsets(json), pipelineOffsets(json));
+  assert.deepEqual(
+    getTaskDefinitionKeyDecorationOffsets(json),
+    keyOffsets(json, "tasks")
+  );
 });
 
-test("does not decorate nested pipeline", () => {
+test("decorates legacy top-level pipeline", () => {
+  const json = `{"pipeline":{"build":{}}}`;
+
   assert.deepEqual(
-    getPipelineDecorationOffsets(`{"tasks":{"pipeline":{}}}`),
+    getTaskDefinitionKeyDecorationOffsets(json),
+    keyOffsets(json, "pipeline")
+  );
+});
+
+test("does not decorate nested task definition keys", () => {
+  assert.deepEqual(
+    getTaskDefinitionKeyDecorationOffsets(
+      `{"config":{"tasks":{},"pipeline":{}}}`
+    ),
     []
   );
 });
 
 test("returns to top-level after a sibling object", () => {
-  const json = `{"tasks":{},"pipeline":{}}`;
+  const json = `{"globalEnv":{},"tasks":{}}`;
 
-  assert.deepEqual(getPipelineDecorationOffsets(json), pipelineOffsets(json));
+  assert.deepEqual(
+    getTaskDefinitionKeyDecorationOffsets(json),
+    keyOffsets(json, "tasks")
+  );
+});
+
+test("prefers tasks over pipeline", () => {
+  const json = `{"pipeline":{},"tasks":{}}`;
+
+  assert.deepEqual(
+    getTaskDefinitionKeyDecorationOffsets(json),
+    keyOffsets(json, "tasks")
+  );
 });

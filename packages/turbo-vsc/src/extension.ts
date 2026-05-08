@@ -20,7 +20,7 @@ import {
   ServerOptions
 } from "vscode-languageclient/node";
 
-import { getPipelineDecorationOffsets } from "./json-decorations";
+import { getTaskDefinitionKeyDecorationOffsets } from "./json-decorations";
 
 let client: LanguageClient;
 
@@ -51,11 +51,13 @@ function rainbowRgb(i: number) {
     .padStart(2, "0")}${Math.round(b).toString(16).padStart(2, "0")}`;
 }
 
-const pipelineColors = [...Array(10).keys()].map(rainbowRgb).map((color) =>
-  window.createTextEditorDecorationType({
-    color
-  })
-);
+const taskDefinitionColors = [...Array(10).keys()]
+  .map(rainbowRgb)
+  .map((color) =>
+    window.createTextEditorDecorationType({
+      color
+    })
+  );
 
 const refreshDecorations = useDebounce(updateJSONDecorations, 1000);
 
@@ -307,13 +309,13 @@ function updateJSONDecorations(editor?: TextEditor) {
     return;
   }
 
-  const decorationOffsets = getPipelineDecorationOffsets(
+  const decorationOffsets = getTaskDefinitionKeyDecorationOffsets(
     editor.document.getText()
   );
 
   for (let i = 0; i < decorationOffsets.length; i++) {
     const index = decorationOffsets[i];
-    editor.setDecorations(pipelineColors[i + 1], [
+    editor.setDecorations(taskDefinitionColors[i + 1], [
       new Range(
         editor.document.positionAt(index),
         editor.document.positionAt(index + 1)

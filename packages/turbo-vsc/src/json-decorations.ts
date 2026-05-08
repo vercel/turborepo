@@ -1,17 +1,17 @@
 import { visit } from "jsonc-parser";
 
-export function getPipelineDecorationOffsets(json: string): number[] {
-  const offsets: number[] = [];
+const taskDefinitionKeys = ["tasks", "pipeline"] as const;
+
+type TaskDefinitionKey = (typeof taskDefinitionKeys)[number];
+
+export function getTaskDefinitionKeyDecorationOffsets(json: string): number[] {
+  const topLevelTaskDefinitionKeyOffsets = new Map<TaskDefinitionKey, number>();
   let depth = -1;
-  let hasDecoratedPipeline = false;
 
   visit(json, {
     onObjectProperty: (property, offset) => {
-      if (property === "pipeline" && depth === 0 && !hasDecoratedPipeline) {
-        hasDecoratedPipeline = true;
-        for (let i = 1; i < 9; i++) {
-          offsets.push(offset + i);
-        }
+      if (depth === 0 && isTaskDefinitionKey(property)) {
+        topLevelTaskDefinitionKeyOffsets.set(property, offset);
       }
     },
     onObjectBegin: () => {
@@ -26,5 +26,17 @@ export function getPipelineDecorationOffsets(json: string): number[] {
     }
   });
 
-  return offsets;
+  for (const key of taskDefinitionKeys) {
+    const offset = topLevelTaskDefinitionKeyOffsets.get(key);
+
+    if (offset !== undefined) {
+      return Array.from({ length: key.length }, (_, i) => offset + i + 1);
+    }
+  }
+
+  return [];
+}
+
+function isTaskDefinitionKey(property: string): property is TaskDefinitionKey {
+  return taskDefinitionKeys.includes(property as TaskDefinitionKey);
 }
