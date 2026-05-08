@@ -247,7 +247,11 @@ export function activate(context: ExtensionContext) {
     }`
   ).fsPath;
 
-  const installedTurboLspPath = findInstalledTurboLsp(workspaceRoot, syncOptions, turboPath);
+  const installedTurboLspPath = findInstalledTurboLsp(
+    workspaceRoot,
+    syncOptions,
+    turboPath
+  );
 
   if (!installedTurboLspPath && !fs.existsSync(packagedLspPath)) {
     window.showInformationMessage(
@@ -364,7 +368,10 @@ function executableNames(name: string) {
     : [name];
 }
 
-function resolveTurboPath(turboPath: string | undefined, workspaceRoot?: string) {
+function resolveTurboPath(
+  turboPath: string | undefined,
+  workspaceRoot?: string
+) {
   if (!turboPath) {
     return undefined;
   }
@@ -374,7 +381,9 @@ function resolveTurboPath(turboPath: string | undefined, workspaceRoot?: string)
     : path.resolve(workspaceRoot ?? process.cwd(), turboPath);
 
   if (!fs.existsSync(resolvedPath)) {
-    logs.appendLine(`manually specified turbo does not exist at path ${turboPath}`);
+    logs.appendLine(
+      `manually specified turbo does not exist at path ${turboPath}`
+    );
     return undefined;
   }
 
@@ -409,7 +418,9 @@ function findTurbo(
   options: cp.ExecSyncOptionsWithStringEncoding
 ) {
   logs.appendLine("attempting to find turbo");
-  return findExecutableOnPath("turbo") ?? findLocalTurbo(workspaceRoot, options);
+  return (
+    findExecutableOnPath("turbo") ?? findLocalTurbo(workspaceRoot, options)
+  );
 }
 
 function findInstalledTurboLsp(
@@ -436,14 +447,20 @@ function findInstalledTurboLsp(
       continue;
     }
 
-    logs.appendLine(`turbo LSP: probing ${candidate.label} at ${candidate.path}`);
+    logs.appendLine(
+      `turbo LSP: probing ${candidate.label} at ${candidate.path}`
+    );
 
     if (supportsInternalLsp(candidate.path, options)) {
-      logs.appendLine(`turbo LSP: using ${candidate.label} at ${candidate.path}`);
+      logs.appendLine(
+        `turbo LSP: using ${candidate.label} at ${candidate.path}`
+      );
       return candidate.path;
     }
 
-    logs.appendLine(`turbo LSP: ${candidate.label} does not support internal LSP`);
+    logs.appendLine(
+      `turbo LSP: ${candidate.label} does not support internal LSP`
+    );
   }
 
   logs.appendLine("turbo LSP: falling back to packaged LSP binary");
@@ -509,7 +526,9 @@ function findLocalTurbo(
     () => {
       if (workspaceRoot) {
         logs.appendLine("attempting to find local turbo in node_modules/.bin");
-        return findTurboInDirectory(path.join(workspaceRoot, "node_modules", ".bin"));
+        return findTurboInDirectory(
+          path.join(workspaceRoot, "node_modules", ".bin")
+        );
       }
     },
     () => {
