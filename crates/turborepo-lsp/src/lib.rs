@@ -151,12 +151,21 @@ impl LanguageServer for Backend {
                 }
                 Err(e) => {
                     self.client
+                        .show_message(
+                            MessageType::ERROR,
+                            "Turborepo language server failed to connect to the daemon. See the \
+                             output for details.",
+                        )
+                        .await;
+                    self.client
                         .log_message(
                             MessageType::ERROR,
                             format!("failed to connect to daemon: {e}"),
                         )
                         .await;
-                    return Err(Error::internal_error());
+                    return Ok(InitializeResult {
+                        ..Default::default()
+                    });
                 }
             };
 
@@ -184,12 +193,21 @@ impl LanguageServer for Backend {
                 }
                 Err(e) => {
                     self.client
+                        .show_message(
+                            MessageType::ERROR,
+                            "Turborepo language server failed to initialize. See the output for \
+                             details.",
+                        )
+                        .await;
+                    self.client
                         .log_message(
                             MessageType::ERROR,
                             format!("Failed to acquire pidlock: {e}"),
                         )
                         .await;
-                    return Err(Error::internal_error());
+                    return Ok(InitializeResult {
+                        ..Default::default()
+                    });
                 }
             }
         }

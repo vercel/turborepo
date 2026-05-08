@@ -43,6 +43,22 @@ export function activate(context: ExtensionContext) {
     logs.appendLine(`using turbo at path ${turboPath}`);
   }
 
+  const packagedLspPath = Uri.joinPath(
+    context.extensionUri,
+    "out",
+    `turborepo-lsp-${process.platform}-${process.arch}${
+      process.platform === "win32" ? ".exe" : ""
+    }`
+  ).fsPath;
+
+  const installedTurboLspPath = findInstalledTurboLsp(
+    workspaceRoot,
+    syncOptions,
+    turboPath
+  );
+
+  const daemonCommandPath = installedTurboLspPath ?? packagedLspPath;
+
   const getTurboPath = async () => {
     turboPath ??= findTurbo(workspaceRoot, syncOptions);
     if (turboPath) {
@@ -54,14 +70,22 @@ export function activate(context: ExtensionContext) {
     return turboPath;
   };
 
+  const getDaemonCommandPath = async () => {
+    if (fs.existsSync(daemonCommandPath)) {
+      return daemonCommandPath;
+    }
+
+    return getTurboPath();
+  };
+
   context.subscriptions.push(
     commands.registerCommand("turbo.daemon.start", async () => {
-      const turboPath = await getTurboPath();
-      if (!turboPath) {
+      const daemonPath = await getDaemonCommandPath();
+      if (!daemonPath) {
         return;
       }
 
-      cp.exec(`${quoteCommand(turboPath)} daemon start`, options, (err) => {
+      cp.exec(`${quoteCommand(daemonPath)} daemon start`, options, (err) => {
         if (err) {
           if (err.message.includes("command not found")) {
             promptGlobalTurbo(useLocalTurbo);
@@ -78,12 +102,12 @@ export function activate(context: ExtensionContext) {
 
   context.subscriptions.push(
     commands.registerCommand("turbo.daemon.stop", async () => {
-      const turboPath = await getTurboPath();
-      if (!turboPath) {
+      const daemonPath = await getDaemonCommandPath();
+      if (!daemonPath) {
         return;
       }
 
-      cp.exec(`${quoteCommand(turboPath)} daemon stop`, options, (err) => {
+      cp.exec(`${quoteCommand(daemonPath)} daemon stop`, options, (err) => {
         if (err) {
           if (err.message.includes("command not found")) {
             promptGlobalTurbo(useLocalTurbo);
@@ -100,12 +124,12 @@ export function activate(context: ExtensionContext) {
 
   context.subscriptions.push(
     commands.registerCommand("turbo.daemon.status", async () => {
-      const turboPath = await getTurboPath();
-      if (!turboPath) {
+      const daemonPath = await getDaemonCommandPath();
+      if (!daemonPath) {
         return;
       }
 
-      cp.exec(`${quoteCommand(turboPath)} daemon status`, options, (err) => {
+      cp.exec(`${quoteCommand(daemonPath)} daemon status`, options, (err) => {
         if (err) {
           if (err.message.includes("command not found")) {
             promptGlobalTurbo(useLocalTurbo);
@@ -176,20 +200,6 @@ export function activate(context: ExtensionContext) {
   // If the extension is launched in debug mode then the debug server options are used
   // Otherwise the run options are used
 
-  const packagedLspPath = Uri.joinPath(
-    context.extensionUri,
-    "out",
-    `turborepo-lsp-${process.platform}-${process.arch}${
-      process.platform === "win32" ? ".exe" : ""
-    }`
-  ).fsPath;
-
-  const installedTurboLspPath = findInstalledTurboLsp(
-    workspaceRoot,
-    syncOptions,
-    turboPath
-  );
-
   if (!installedTurboLspPath && !fs.existsSync(packagedLspPath)) {
     window.showInformationMessage(
       `The turbo LSP is not yet supported on your platform (${process.platform}-${process.arch})`
@@ -222,6 +232,7 @@ export function activate(context: ExtensionContext) {
     // Register the server for turbo json documents
     documentSelector: [
       { scheme: "file", pattern: "**/turbo.json" },
+      { scheme: "file", pattern: "**/turbo.jsonc" },
       { scheme: "file", pattern: "**/package.json" }
     ]
   };
@@ -275,7 +286,7 @@ function resolveTurboPath(
 
   if (!fs.existsSync(resolvedPath)) {
     logs.appendLine(
-      `manually specified turbo does not exist at path ${turboPath}`
+      `Manually specified turbo does not exist at path ${turboPath}`
     );
     return undefined;
   }
