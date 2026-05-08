@@ -20,7 +20,7 @@ import {
   ServerOptions
 } from "vscode-languageclient/node";
 
-import { visit } from "jsonc-parser";
+import { getPipelineDecorationOffsets } from "./json-decorations";
 
 let client: LanguageClient;
 
@@ -307,40 +307,19 @@ function updateJSONDecorations(editor?: TextEditor) {
     return;
   }
 
-  let depth = 0; // indicates we're not in a pipeline block
-  let inPipeline = false; // we do not use this right now but could highlight tasks
+  const decorationOffsets = getPipelineDecorationOffsets(
+    editor.document.getText()
+  );
 
-  visit(editor.document.getText(), {
-    onObjectProperty: (property, offset) => {
-      // only highlight pipeline at the top level
-      if (property === "pipeline" && depth === 0 && !inPipeline) {
-        inPipeline = true;
-        for (let i = 1; i < 9; i++) {
-          const index = i + offset;
-          editor.setDecorations(pipelineColors[i], [
-            new Range(
-              editor.document.positionAt(index),
-              editor.document.positionAt(index + 1)
-            )
-          ]);
-        }
-      }
-    },
-    onObjectBegin: () => {
-      if (depth === -1) {
-        depth = 0;
-      } else if (depth !== -1) {
-        depth += 1;
-      }
-    },
-    onObjectEnd: () => {
-      if (depth < -1) {
-        depth -= 1;
-      } else {
-        throw Error("imbalanced visitor");
-      }
-    }
-  });
+  for (let i = 0; i < decorationOffsets.length; i++) {
+    const index = decorationOffsets[i];
+    editor.setDecorations(pipelineColors[i + 1], [
+      new Range(
+        editor.document.positionAt(index),
+        editor.document.positionAt(index + 1)
+      )
+    ]);
+  }
 }
 
 async function promptGlobalTurbo(useLocalTurbo: boolean) {
