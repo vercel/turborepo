@@ -27,7 +27,7 @@ use jsonc_parser::{
 use serde_json::Value;
 use tokio::sync::watch::{Receiver, Sender};
 use tower_lsp::{
-    Client, LanguageServer,
+    Client, LanguageServer, LspService, Server,
     jsonrpc::{Error, Result as LspResult},
     lsp_types::*,
 };
@@ -51,6 +51,23 @@ pub struct Backend {
 
     // this is only used for turbo optimize
     pidlock: Mutex<Option<pidlock::Pidlock>>,
+}
+
+pub fn run_lsp_server() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to build tokio runtime");
+
+    runtime.block_on(run_lsp());
+}
+
+pub async fn run_lsp() {
+    let stdin = tokio::io::stdin();
+    let stdout = tokio::io::stdout();
+
+    let (service, socket) = LspService::new(Backend::new);
+    Server::new(stdin, stdout, socket).serve(service).await;
 }
 
 #[tower_lsp::async_trait]
@@ -96,7 +113,7 @@ impl LanguageServer for Backend {
                     tokio_retry::strategy::FixedInterval::from_millis(100).take(5),
                     || {
                         let can_start_server = true;
-                        let can_kill_server = false;
+                        let can_kill_server = true;
                         let connector = DaemonConnector::new(
                             can_start_server,
                             can_kill_server,

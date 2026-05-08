@@ -88,11 +88,11 @@ impl DaemonConnector {
         }
     }
 
-    const CONNECT_RETRY_MAX: usize = 3;
+    const CONNECT_RETRY_MAX: usize = 50;
     const CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
     const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
-    const SOCKET_TIMEOUT: Duration = Duration::from_secs(1);
-    const SOCKET_ERROR_WAIT: Duration = Duration::from_millis(50);
+    const SOCKET_TIMEOUT: Duration = Duration::from_secs(5);
+    const SOCKET_ERROR_WAIT: Duration = Duration::from_millis(100);
 
     /// Attempt, with retries, to:
     /// 1. find (or start) the daemon process

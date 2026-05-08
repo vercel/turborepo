@@ -1,27 +1,11 @@
 use std::ffi::{OsStr, OsString};
 
-use tower_lsp::{LspService, Server};
-use turborepo_lsp::Backend;
-
 fn main() {
     if is_daemon_command() {
         run_daemon_command();
     }
 
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("failed to build tokio runtime");
-
-    runtime.block_on(run_lsp());
-}
-
-async fn run_lsp() {
-    let stdin = tokio::io::stdin();
-    let stdout = tokio::io::stdout();
-
-    let (service, socket) = LspService::new(Backend::new);
-    Server::new(stdin, stdout, socket).serve(service).await;
+    turborepo_lsp::run_lsp_server();
 }
 
 fn is_daemon_command() -> bool {

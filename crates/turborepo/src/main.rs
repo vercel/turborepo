@@ -6,6 +6,8 @@ use std::{future::Future, pin::Pin, process, sync::Arc};
 use anyhow::Result;
 use miette::Report;
 
+const INTERNAL_LSP_COMMAND: &str = "__internal_lsp";
+
 /// Concrete [`turborepo_query_api::QueryServer`] that delegates to
 /// `turborepo_query`.
 ///
@@ -63,6 +65,16 @@ impl turborepo_query_api::QueryServer for TurboQueryServer {
 // This function should not expanded. Please add any logic to
 // `turborepo_lib::main` instead
 fn main() -> Result<()> {
+    if std::env::args().nth(1).as_deref() == Some(INTERNAL_LSP_COMMAND) {
+        if std::env::args().nth(2).as_deref() == Some("--probe") {
+            println!("turbo-lsp");
+            return Ok(());
+        }
+
+        turborepo_lsp::run_lsp_server();
+        return Ok(());
+    }
+
     std::panic::set_hook(Box::new(turborepo_lib::panic_handler));
 
     let query_server: Arc<dyn turborepo_lib::QueryServer> = Arc::new(TurboQueryServer);
