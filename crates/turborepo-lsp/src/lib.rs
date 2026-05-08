@@ -42,6 +42,8 @@ use turborepo_repository::{
     package_json::PackageJson,
 };
 
+const TURBO_EXTENDS: &str = "$TURBO_EXTENDS$";
+
 pub struct Backend {
     client: Client,
     repo_root: Arc<Mutex<Option<AbsoluteSystemPathBuf>>>,
@@ -879,6 +881,10 @@ impl Backend {
                 {
                     for depends_on in &array.elements {
                         if let Some(string) = depends_on.as_string_lit().cloned() {
+                            if is_turbo_extends_sentinel(&string) {
+                                continue;
+                            }
+
                             let suffix = if let Some(suffix) = strip_lit_prefix(&string, "^") {
                                 diagnostics.push(Diagnostic {
                                     message: format!(
@@ -997,6 +1003,10 @@ fn strip_lit_prefix<'a>(s: &'a StringLit<'a>, prefix: &str) -> Option<StringLit<
         })
 }
 
+fn is_turbo_extends_sentinel(string: &StringLit<'_>) -> bool {
+    string.value == TURBO_EXTENDS
+}
+
 /// remove quotes from a string range
 fn collapse_string_range(range: jsonc_parser::common::Range) -> jsonc_parser::common::Range {
     jsonc_parser::common::Range {
@@ -1076,5 +1086,35 @@ fn report_invalid_packages_and_tasks(
         // the task exists and we haven't specified a package, so we're
         // good
         (Some(_), None) => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::borrow::Cow;
+
+    use jsonc_parser::{ast::StringLit, common::Range};
+
+    use super::is_turbo_extends_sentinel;
+
+    fn string_lit(value: &'static str) -> StringLit<'static> {
+        StringLit {
+            value: Cow::Borrowed(value),
+            range: Range {
+                start: 0,
+                end: value.len() + 2,
+            },
+        }
+    }
+
+    #[test]
+    fn detects_turbo_extends_sentinel() {
+        assert!(is_turbo_extends_sentinel(&string_lit("$TURBO_EXTENDS$")));
+    }
+
+    #[test]
+    fn does_not_treat_other_dollar_syntax_as_turbo_extends_sentinel() {
+        assert!(!is_turbo_extends_sentinel(&string_lit("$FOO")));
+        assert!(!is_turbo_extends_sentinel(&string_lit("^$TURBO_EXTENDS$")));
     }
 }
