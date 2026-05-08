@@ -55,4 +55,4 @@ docs: Update installation instructions
 
 - The `LSP` workflow packages `packages/turbo-vsc` VSIX artifacts for release. Stable and canary Turborepo versions are mapped to Marketplace-safe `major.minor.patch` versions before packaging.
 - Canary VS Code extension packages use `--pre-release`.
-- Non-dry-run releases publish the VS Code extension through the `LSP` workflow using `publish=true`, `dry_run=false`, and a `VSCE_PAT` secret on the protected `vscode-marketplace` environment.
+- Non-dry-run releases publish the VS Code extension through the `LSP` workflow using `publish=true`, `dry_run=false`, and a `VSCE_PAT` secret on the protected `vscode-marketplace` environment. This publish path must not block release PR creation or cleanup published npm release state.

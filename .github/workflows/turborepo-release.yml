@@ -8,7 +8,7 @@
 # 4. Publish JS packages to npm and the VS Code extension as parallel worksets
 # 5. Create the git tag (only after npm publish succeeds)
 # 6. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
-# 7. Create a release branch and open a PR
+# 7. Create a release branch and open a PR, even if VS Code publishing fails
 # 8. On failure, cleanup the staging branch and release tag automatically
 #
 # Canary releases run on an hourly schedule.
@@ -618,15 +618,8 @@ jobs:
 
   create-release-pr:
     name: "Create Release PR"
-    needs:
-      [
-        stage,
-        npm-publish,
-        create-release-tag,
-        publish-vscode-extension,
-        alias-versioned-docs
-      ]
-    if: ${{ always() && needs.npm-publish.result == 'success' && needs.create-release-tag.result == 'success' && needs.publish-vscode-extension.result == 'success' && !inputs.dry_run }}
+    needs: [stage, npm-publish, create-release-tag, alias-versioned-docs]
+    if: ${{ always() && needs.npm-publish.result == 'success' && needs.create-release-tag.result == 'success' && !inputs.dry_run }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -750,7 +743,6 @@ jobs:
         js-smoke-test,
         npm-publish,
         create-release-tag,
-        publish-vscode-extension,
         create-release-pr
       ]
     if: >-
@@ -762,7 +754,6 @@ jobs:
           || needs.js-smoke-test.result == 'failure'
           || needs.npm-publish.result == 'failure'
           || needs.create-release-tag.result == 'failure'
-          || needs.publish-vscode-extension.result == 'failure'
           || needs.create-release-pr.result == 'failure'
         )
       }}
