@@ -398,6 +398,16 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                         if let Some(allowed_tasks) = &allowed_tasks
                             && !allowed_tasks.contains(&from_task_id)
                         {
+                            tracing::warn!(
+                                "--only: dropping topological dependency {} from {}. \
+                                 Changes in {} won't affect the cache key for {}. \
+                                 To include it, add --filter={}",
+                                from_task_id,
+                                to_task_id,
+                                from_task_id.package(),
+                                to_task_id,
+                                from_task_id.package(),
+                            );
                             return;
                         }
                         let from_task_index = engine.get_index(&from_task_id);
@@ -431,6 +441,16 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 if let Some(allowed_tasks) = &allowed_tasks
                     && !allowed_tasks.contains(&from_task_id)
                 {
+                    tracing::warn!(
+                        "--only: dropping task dependency {} from {}. \
+                         Changes in {} won't affect the cache key for {}. \
+                         To include it, add --filter={}",
+                        from_task_id,
+                        to_task_id,
+                        from_task_id.package(),
+                        to_task_id,
+                        from_task_id.package(),
+                    );
                     continue;
                 }
                 has_deps = true;
