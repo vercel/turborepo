@@ -26,6 +26,8 @@ let client: LanguageClient;
 
 let toolbar: StatusBarItem;
 
+const TURBO_CONFIG_FILES = new Set(["turbo.json", "turbo.jsonc"]);
+
 // thunks passed to this function will executed
 // after no calls have been made for `waitMs` milliseconds
 const useDebounce = <T>(func: (args: T) => void, waitMs: number) => {
@@ -287,6 +289,7 @@ export function activate(context: ExtensionContext) {
     // Register the server for turbo json documents
     documentSelector: [
       { scheme: "file", pattern: "**/turbo.json" },
+      { scheme: "file", pattern: "**/turbo.jsonc" },
       { scheme: "file", pattern: "**/package.json" }
     ]
   };
@@ -319,7 +322,7 @@ function updateStatusBarItem(running: boolean) {
 function updateJSONDecorations(editor?: TextEditor) {
   if (
     !editor ||
-    !path.basename(editor.document.fileName).endsWith("turbo.json")
+    !TURBO_CONFIG_FILES.has(path.basename(editor.document.fileName))
   ) {
     return;
   }
