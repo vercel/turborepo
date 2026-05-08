@@ -20,7 +20,7 @@ import {
   ServerOptions
 } from "vscode-languageclient/node";
 
-import { visit } from "jsonc-parser";
+import { getTaskDefinitionKeyDecorationOffsets } from "./json-decorations";
 
 let client: LanguageClient;
 
@@ -51,11 +51,13 @@ function rainbowRgb(i: number) {
     .padStart(2, "0")}${Math.round(b).toString(16).padStart(2, "0")}`;
 }
 
-const pipelineColors = [...Array(10).keys()].map(rainbowRgb).map((color) =>
-  window.createTextEditorDecorationType({
-    color
-  })
-);
+const taskDefinitionColors = [...Array(10).keys()]
+  .map(rainbowRgb)
+  .map((color) =>
+    window.createTextEditorDecorationType({
+      color
+    })
+  );
 
 const refreshDecorations = useDebounce(updateJSONDecorations, 1000);
 
@@ -322,40 +324,19 @@ function updateJSONDecorations(editor?: TextEditor) {
     return;
   }
 
-  let depth = 0; // indicates we're not in a pipeline block
-  let inPipeline = false; // we do not use this right now but could highlight tasks
+  const decorationOffsets = getTaskDefinitionKeyDecorationOffsets(
+    editor.document.getText()
+  );
 
-  visit(editor.document.getText(), {
-    onObjectProperty: (property, offset) => {
-      // only highlight pipeline at the top level
-      if (property === "pipeline" && depth === 0 && !inPipeline) {
-        inPipeline = true;
-        for (let i = 1; i < 9; i++) {
-          const index = i + offset;
-          editor.setDecorations(pipelineColors[i], [
-            new Range(
-              editor.document.positionAt(index),
-              editor.document.positionAt(index + 1)
-            )
-          ]);
-        }
-      }
-    },
-    onObjectBegin: () => {
-      if (depth === -1) {
-        depth = 0;
-      } else if (depth !== -1) {
-        depth += 1;
-      }
-    },
-    onObjectEnd: () => {
-      if (depth < -1) {
-        depth -= 1;
-      } else {
-        throw Error("imbalanced visitor");
-      }
-    }
-  });
+  for (let i = 0; i < decorationOffsets.length; i++) {
+    const index = decorationOffsets[i];
+    editor.setDecorations(taskDefinitionColors[i + 1], [
+      new Range(
+        editor.document.positionAt(index),
+        editor.document.positionAt(index + 1)
+      )
+    ]);
+  }
 }
 
 function quoteCommand(command: string) {

@@ -1,0 +1,33 @@
+{
+  "name": "@eventmate/docs",
+  "version": "1.0.8",
+  "description": "",
+  "keywords": [],
+  "license": "ISC",
+  "author": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev --port 3003",
+    "build": "next build",
+    "start": "next start",
+    "start:standalone": "node .next/standalone/apps/docs/server.js",
+    "postbuild": "node scripts/postbuild-search.mjs",
+    "build:standalone": "pnpm build && pnpm postbuild:standalone",
+    "postbuild:standalone": "cp -r .next/static .next/standalone/apps/docs/.next && cp -r public .next/standalone/apps/docs/public"
+  },
+  "dependencies": {
+    "next": "catalog:",
+    "nextra": "^4.2.17",
+    "nextra-theme-docs": "^4.2.17",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19"
+  },
+  "devDependencies": {
+    "@asyncapi/cli": "4.1.0",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
+    "pagefind": "^1.3.0",
+    "typescript": "catalog:"
+  }
+}
