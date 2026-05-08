@@ -445,6 +445,32 @@ impl BunLockfile {
         }
     }
 
+    fn nested_dependency_entry(
+        &self,
+        entry_key: &str,
+        dependency: &str,
+        version: &str,
+    ) -> Option<(String, &PackageEntry)> {
+        let direct_key = format!("{entry_key}/{dependency}");
+        if let Some(entry) = self.data.packages.get(&direct_key) {
+            return Some((direct_key, entry));
+        }
+
+        let mut search_key = entry_key;
+        while let Some(slash_pos) = search_key.rfind('/') {
+            search_key = &search_key[..slash_pos];
+            let ancestor_key = format!("{search_key}/{dependency}");
+            if let Some(entry) = self.data.packages.get(&ancestor_key) {
+                if self.version_satisfies_spec(entry.version(), version) {
+                    return Some((ancestor_key, entry));
+                }
+                break;
+            }
+        }
+
+        None
+    }
+
     /// Find a package version that satisfies the given version spec.
     ///
     /// Searches in order:
@@ -625,29 +651,10 @@ impl Lockfile for BunLockfile {
 
         for (dependency, version) in info.all_dependencies() {
             // Bun resolves nested dependencies by walking up the parent chain
-            // from the current package. Check the direct child first, then
-            // each ancestor level until we find a nested entry whose version
-            // matches the declared dependency version.
-            let nested_entry = {
-                let direct_key = format!("{entry_key}/{dependency}");
-                if let Some(e) = self.data.packages.get(&direct_key) {
-                    Some(e)
-                } else {
-                    let mut found = None;
-                    let mut search_key = entry_key.as_str();
-                    while let Some(slash_pos) = search_key.rfind('/') {
-                        search_key = &search_key[..slash_pos];
-                        let ancestor_key = format!("{search_key}/{dependency}");
-                        if let Some(e) = self.data.packages.get(&ancestor_key) {
-                            if e.version() == version {
-                                found = Some(e);
-                            }
-                            break;
-                        }
-                    }
-                    found
-                }
-            };
+            // from the current package.
+            let nested_entry = self
+                .nested_dependency_entry(entry_key, dependency, version)
+                .map(|(_, entry)| entry);
 
             let is_optional = info.optional_dependencies.contains_key(dependency)
                 || info.optional_peers.contains(dependency);
@@ -1980,10 +1987,10 @@ impl BunLockfile {
                     continue;
                 };
 
-                for dep_name in info
+                for (dep_name, dep_version) in info
                     .dependencies
-                    .keys()
-                    .chain(info.optional_dependencies.keys())
+                    .iter()
+                    .chain(info.optional_dependencies.iter())
                 {
                     let nested_key = format!("{key}/{dep_name}");
                     if pruned_data.packages.contains_key(dep_name)
@@ -1992,26 +1999,48 @@ impl BunLockfile {
                         continue;
                     }
 
-                    let Some((_, source_dep_entry)) =
+                    let exact_source = self
+                        .data
+                        .packages
+                        .get_key_value(&key)
+                        .filter(|(_, source_entry)| source_entry.ident == entry.ident)
+                        .and_then(|(source_key, _)| {
+                            self.nested_dependency_entry(source_key, dep_name, dep_version)
+                                .map(|(dep_key, dep_entry)| (dep_key, dep_entry, source_key))
+                        });
+
+                    let ident_source = || {
                         self.data
                             .packages
                             .iter()
-                            .find_map(|(source_key, source_entry)| {
-                                if source_entry.ident != entry.ident {
-                                    return None;
-                                }
-
-                                let source_dep_key = format!("{source_key}/{dep_name}");
-                                self.data
-                                    .packages
-                                    .get(&source_dep_key)
-                                    .map(|dep_entry| (source_dep_key, dep_entry))
+                            .filter(|(source_key, source_entry)| {
+                                source_key.as_str() != key && source_entry.ident == entry.ident
                             })
+                            .find_map(|(source_key, _)| {
+                                self.nested_dependency_entry(source_key, dep_name, dep_version)
+                                    .map(|(dep_key, dep_entry)| (dep_key, dep_entry, source_key))
+                            })
+                    };
+
+                    let Some((source_dep_key, source_dep_entry, source_parent_key)) =
+                        exact_source.or_else(ident_source)
                     else {
                         continue;
                     };
 
-                    additions.push((nested_key, source_dep_entry.clone()));
+                    let source_prefix = format!("{source_parent_key}/");
+                    let pruned_dep_key =
+                        if let Some(suffix) = source_dep_key.strip_prefix(&source_prefix) {
+                            format!("{key}/{suffix}")
+                        } else {
+                            source_dep_key
+                        };
+
+                    if pruned_data.packages.contains_key(&pruned_dep_key) {
+                        continue;
+                    }
+
+                    additions.push((pruned_dep_key, source_dep_entry.clone()));
                 }
             }
 
@@ -3497,6 +3526,64 @@ mod test {
             .unwrap()
             .expect("should resolve chalk");
         assert_eq!(chalk_dep.key, "chalk@2.4.2");
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/12744
+    // Bun resolves nested package dependencies from ancestor scopes too. If
+    // `npm/@npmcli/arborist` depends on `@npmcli/metavuln-calculator`, the
+    // matching entry is `npm/@npmcli/metavuln-calculator`, not
+    // `npm/@npmcli/arborist/@npmcli/metavuln-calculator`.
+    #[test]
+    fn test_subgraph_preserves_ancestor_scoped_nested_dependencies() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "configVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test-monorepo"
+                },
+                "apps/app": {
+                    "name": "app",
+                    "dependencies": {
+                        "npm": "^11.0.0"
+                    }
+                }
+            },
+            "packages": {
+                "app": ["app@workspace:apps/app"],
+                "npm": ["npm@11.0.0", "", { "dependencies": { "@npmcli/arborist": "^8.0.0", "postcss-selector-parser": "^7.0.0" } }, "sha512-npm"],
+                "npm/@npmcli/arborist": ["@npmcli/arborist@8.0.5", "", { "dependencies": { "@npmcli/metavuln-calculator": "^8.0.0" }, "bundled": true }, "sha512-arborist"],
+                "npm/@npmcli/metavuln-calculator": ["@npmcli/metavuln-calculator@8.0.1", "", {}, "sha512-metavuln"],
+                "npm/cssesc": ["cssesc@3.0.0", "", {}, "sha512-cssesc"],
+                "npm/postcss-selector-parser": ["postcss-selector-parser@7.1.1", "", { "dependencies": { "cssesc": "^3.0.0" } }, "sha512-postcss"],
+                "@oclif/plugin-plugins/npm/cssesc": ["cssesc@3.0.0", "", {}, "sha512-cssesc"],
+                "@oclif/plugin-plugins/npm/postcss-selector-parser": ["postcss-selector-parser@7.1.1", "", { "dependencies": { "cssesc": "^3.0.0" } }, "sha512-postcss"]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+        let mut app_deps = std::collections::BTreeMap::new();
+        app_deps.insert("npm".to_string(), "^11.0.0".to_string());
+
+        let closure = crate::transitive_closure(&lockfile, "apps/app", app_deps, false).unwrap();
+        let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+        let subgraph = lockfile
+            .subgraph(&["apps/app".into()], &package_idents)
+            .unwrap();
+        let subgraph_data = subgraph.lockfile().unwrap();
+
+        assert!(subgraph_data.packages.contains_key("npm/@npmcli/arborist"));
+        assert!(
+            subgraph_data
+                .packages
+                .contains_key("npm/@npmcli/metavuln-calculator"),
+            "ancestor-scoped nested dependency should remain in pruned lockfile"
+        );
+        assert!(
+            subgraph_data.packages.contains_key("npm/cssesc"),
+            "exact source key should win when duplicate idents exist in other nested scopes"
+        );
     }
 
     // Regression test for https://github.com/vercel/turborepo/issues/12156
