@@ -88,7 +88,7 @@ impl DaemonConnector {
         }
     }
 
-    const CONNECT_RETRY_MAX: usize = 50;
+    const CONNECT_RETRY_MAX: usize = 5;
     const CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
     const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
     const SOCKET_TIMEOUT: Duration = Duration::from_secs(5);
