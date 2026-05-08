@@ -77,7 +77,7 @@
           "type": "string",
           "required": false,
           "default": null,
-          "description": "The path to your global `turbo` executable, if you'd rather not rely on auto-detection."
+          "description": "The path to your `turbo` executable, if you'd rather not rely on auto-detection. Relative paths are resolved from the workspace root."
         },
         "turbo.useLocalTurbo": {
           "type": "boolean",

@@ -68,8 +68,13 @@ export function activate(context: ExtensionContext) {
   const turboSettings = workspace.getConfiguration("turbo");
   let turboPath: string | undefined = turboSettings.get("path");
   const useLocalTurbo: boolean = turboSettings.get("useLocalTurbo") ?? false;
+  const workspacePath = workspace.workspaceFolders?.[0].uri.fsPath;
 
   logs.appendLine("starting the turbo extension");
+
+  if (turboPath && workspacePath && !path.isAbsolute(turboPath)) {
+    turboPath = path.resolve(workspacePath, turboPath);
+  }
 
   if (turboPath && !fs.existsSync(turboPath)) {
     logs.appendLine(
