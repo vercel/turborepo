@@ -1,4 +1,9 @@
 import { DocsLayout as FumadocsDocsLayout } from "fumadocs-ui/layouts/docs";
+import {
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar
+} from "fumadocs-ui/layouts/docs/slots/sidebar";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { i18n } from "@/lib/geistdocs/i18n";
 import { Folder, Item, Separator, Sidebar } from "./sidebar";
@@ -28,11 +33,18 @@ export const HomeLayout = ({ tree, children }: HomeLayoutProps) => (
     sidebar={{
       className: "md:hidden",
       collapsible: false,
-      component: <Sidebar />,
       components: {
         Folder,
         Item,
         Separator
+      }
+    }}
+    slots={{
+      sidebar: {
+        provider: SidebarProvider,
+        root: Sidebar,
+        trigger: SidebarTrigger,
+        useSidebar
       }
     }}
     tabMode="auto"

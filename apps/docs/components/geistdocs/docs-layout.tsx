@@ -1,4 +1,9 @@
 import { DocsLayout as FumadocsDocsLayout } from "fumadocs-ui/layouts/docs";
+import {
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar
+} from "fumadocs-ui/layouts/docs/slots/sidebar";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import {
   Folder,
@@ -29,11 +34,18 @@ export const DocsLayout = ({ tree, children }: DocsLayoutProps) => (
     }}
     sidebar={{
       collapsible: false,
-      component: <Sidebar />,
       components: {
         Folder,
         Item,
         Separator
+      }
+    }}
+    slots={{
+      sidebar: {
+        provider: SidebarProvider,
+        root: Sidebar,
+        trigger: SidebarTrigger,
+        useSidebar
       }
     }}
     tabMode="auto"
