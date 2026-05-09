@@ -4,7 +4,7 @@ import {
   Folder,
   Item,
   Separator,
-  Sidebar
+  sidebarSlots
 } from "@/components/geistdocs/sidebar";
 import { i18n } from "@/lib/geistdocs/i18n";
 
@@ -29,12 +29,14 @@ export const DocsLayout = ({ tree, children }: DocsLayoutProps) => (
     }}
     sidebar={{
       collapsible: false,
-      component: <Sidebar />,
       components: {
         Folder,
         Item,
         Separator
       }
+    }}
+    slots={{
+      sidebar: sidebarSlots
     }}
     tabMode="auto"
     themeSwitch={{

@@ -2,6 +2,12 @@
 
 import type { Node } from "fumadocs-core/page-tree";
 import DynamicLink from "fumadocs-core/dynamic-link";
+import type { DocsSlots } from "fumadocs-ui/layouts/docs";
+import {
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar
+} from "fumadocs-ui/layouts/docs/slots/sidebar";
 import {
   SidebarFolder,
   SidebarFolderContent,
@@ -24,35 +30,47 @@ import {
 } from "@/components/ui/sheet";
 import { github, nav } from "@/geistdocs";
 import { useSidebarContext } from "@/hooks/geistdocs/use-sidebar";
+import { cn } from "@/lib/utils";
 import { SearchButton } from "./search";
 import { VersionWarning } from "@/components/version-warning";
 
-export const Sidebar = () => {
+export const Sidebar: DocsSlots["sidebar"]["root"] = ({
+  className,
+  components
+}) => {
   const { root } = useTreeContext();
   const { isOpen, setIsOpen } = useSidebarContext();
+  const {
+    Folder: FolderComponent = Folder,
+    Item: ItemComponent = Item,
+    Separator: SeparatorComponent = Separator
+  } = components ?? {};
 
   const renderSidebarList = (items: Node[]) =>
     items.map((item) => {
       if (item.type === "separator") {
-        return <Separator item={item} key={item.$id} />;
+        return <SeparatorComponent item={item} key={item.$id} />;
       }
 
       if (item.type === "folder") {
         const children = renderSidebarList(item.children);
         return (
-          <Folder item={item} key={item.$id}>
+          <FolderComponent item={item} key={item.$id}>
             {children}
-          </Folder>
+          </FolderComponent>
         );
       }
 
-      return <Item item={item} key={item.$id} />;
+      return <ItemComponent item={item} key={item.$id} />;
     });
 
   return (
     <>
       <div
-        className="pointer-events-none sticky top-(--fd-docs-row-1) z-20 h-[calc(var(--fd-docs-height)-var(--fd-docs-row-1))] [grid-area:sidebar] *:pointer-events-auto max-md:hidden md:layout:[--fd-sidebar-width:268px]"
+        className={cn(
+          "pointer-events-none sticky top-(--fd-docs-row-1) z-20 h-[calc(var(--fd-docs-height)-var(--fd-docs-row-1))] [grid-area:sidebar] *:pointer-events-auto max-md:hidden md:layout:[--fd-sidebar-width:268px]",
+          className
+        )}
         data-sidebar-placeholder
       >
         <div className="px-4 pt-12 pb-4 h-full overflow-y-auto">
@@ -115,6 +133,13 @@ export const Sidebar = () => {
       </Sheet>
     </>
   );
+};
+
+export const sidebarSlots: DocsSlots["sidebar"] = {
+  provider: SidebarProvider,
+  root: Sidebar,
+  trigger: SidebarTrigger,
+  useSidebar
 };
 
 export const Folder: SidebarPageTreeComponents["Folder"] = ({
