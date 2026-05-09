@@ -837,9 +837,13 @@ impl Backend {
                     .flatten(),
             );
 
-            let pipeline = object
-                .and_then(|o| o.get_object("tasks"))
-                .map(|p| p.properties.iter());
+            let tasks_object = object.and_then(|o| o.get_object("tasks"));
+
+            let pipeline = tasks_object.map(|p| p.properties.iter());
+
+            let transit_nodes = tasks_object
+                .map(collect_transit_node_tasks)
+                .unwrap_or_default();
 
             for property in pipeline.into_iter().flatten() {
                 let mut object_range = property.range;
@@ -852,6 +856,7 @@ impl Backend {
                 {
                     report_invalid_packages_and_tasks(
                         tasks,
+                        &transit_nodes,
                         packages,
                         &rope,
                         &mut diagnostics,
@@ -941,6 +946,7 @@ impl Backend {
                             if let Ok((tasks, packages)) = &tasks_and_packages {
                                 report_invalid_packages_and_tasks(
                                     tasks,
+                                    &transit_nodes,
                                     packages,
                                     &rope,
                                     &mut diagnostics,
@@ -1007,6 +1013,25 @@ fn is_turbo_extends_sentinel(string: &StringLit<'_>) -> bool {
     string.value == TURBO_EXTENDS
 }
 
+fn collect_transit_node_tasks(tasks: &jsonc_parser::ast::Object<'_>) -> HashSet<String> {
+    tasks
+        .properties
+        .iter()
+        .filter_map(|property| {
+            let task = property.name.as_str();
+            let dependency = format!("^{task}");
+            let depends_on = property.value.as_object()?.get_array("dependsOn")?;
+
+            depends_on
+                .elements
+                .iter()
+                .filter_map(|value| value.as_string_lit())
+                .any(|value| value.value == dependency)
+                .then(|| task.to_string())
+        })
+        .collect()
+}
+
 /// remove quotes from a string range
 fn collapse_string_range(range: jsonc_parser::common::Range) -> jsonc_parser::common::Range {
     jsonc_parser::common::Range {
@@ -1017,6 +1042,7 @@ fn collapse_string_range(range: jsonc_parser::common::Range) -> jsonc_parser::co
 
 fn report_invalid_packages_and_tasks(
     tasks: &HashMap<String, Vec<Option<String>>>,
+    transit_nodes: &HashSet<String>,
     packages: &HashSet<&str>,
     rope: &crop::Rope,
     diagnostics: &mut Vec<Diagnostic>,
@@ -1060,6 +1086,9 @@ fn report_invalid_packages_and_tasks(
                 ..Default::default()
             });
         }
+        // transit nodes are configured tasks that intentionally do not have a
+        // matching package script.
+        (None, None) if transit_nodes.contains(task) => {}
         // the task doesn't exist anywhere, so we have a problem
         (None, None) => {
             diagnostics.push(Diagnostic {
@@ -1091,11 +1120,17 @@ fn report_invalid_packages_and_tasks(
 
 #[cfg(test)]
 mod tests {
-    use std::borrow::Cow;
+    use std::{
+        borrow::Cow,
+        collections::{HashMap, HashSet},
+    };
 
     use jsonc_parser::{ast::StringLit, common::Range};
+    use tower_lsp::lsp_types::{Diagnostic, NumberOrString};
 
-    use super::is_turbo_extends_sentinel;
+    use super::{
+        collect_transit_node_tasks, is_turbo_extends_sentinel, report_invalid_packages_and_tasks,
+    };
 
     fn string_lit(value: &'static str) -> StringLit<'static> {
         StringLit {
@@ -1116,5 +1151,77 @@ mod tests {
     fn does_not_treat_other_dollar_syntax_as_turbo_extends_sentinel() {
         assert!(!is_turbo_extends_sentinel(&string_lit("$FOO")));
         assert!(!is_turbo_extends_sentinel(&string_lit("^$TURBO_EXTENDS$")));
+    }
+
+    #[test]
+    fn detects_transit_node_tasks() {
+        let parsed = jsonc_parser::parse_to_ast(
+            r#"{
+              "tasks": {
+                "topology": { "dependsOn": ["^topology"] },
+                "build": { "dependsOn": ["^topology"] }
+              }
+            }"#,
+            &Default::default(),
+            &Default::default(),
+        )
+        .expect("valid json");
+
+        let tasks = parsed
+            .value
+            .as_ref()
+            .and_then(|value| value.as_object())
+            .and_then(|object| object.get_object("tasks"))
+            .expect("tasks object");
+
+        let transit_nodes = collect_transit_node_tasks(tasks);
+
+        assert!(transit_nodes.contains("topology"));
+        assert!(!transit_nodes.contains("build"));
+    }
+
+    #[test]
+    fn does_not_report_missing_task_for_transit_node() {
+        let rope = crop::Rope::from(r#""topology""#);
+        let mut diagnostics = Vec::new();
+        let transit_nodes = HashSet::from(["topology".to_string()]);
+        let tasks = HashMap::new();
+        let packages = Default::default();
+
+        report_invalid_packages_and_tasks(
+            &tasks,
+            &transit_nodes,
+            &packages,
+            &rope,
+            &mut diagnostics,
+            &string_lit("topology"),
+        );
+
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn reports_missing_task_when_not_a_transit_node() {
+        let rope = crop::Rope::from(r#""topology""#);
+        let mut diagnostics = Vec::new();
+
+        report_invalid_packages_and_tasks(
+            &HashMap::new(),
+            &Default::default(),
+            &Default::default(),
+            &rope,
+            &mut diagnostics,
+            &string_lit("topology"),
+        );
+
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostic_code(&diagnostics[0]), Some("turbo:no-such-task"));
+    }
+
+    fn diagnostic_code(diagnostic: &Diagnostic) -> Option<&str> {
+        match diagnostic.code.as_ref()? {
+            NumberOrString::String(code) => Some(code.as_str()),
+            NumberOrString::Number(_) => None,
+        }
     }
 }
