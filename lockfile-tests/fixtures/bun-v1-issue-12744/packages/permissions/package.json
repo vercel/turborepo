@@ -1,0 +1,24 @@
+{
+  "name": "@eventmate/permissions",
+  "version": "1.0.0",
+  "description": "Shared permission system for EventMate - client-safe",
+  "keywords": [],
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "bunx tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@typescript/native-preview": "catalog:",
+    "typescript": "catalog:"
+  }
+}

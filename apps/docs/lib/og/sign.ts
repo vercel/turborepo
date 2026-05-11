@@ -1,13 +1,42 @@
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
-const OG_SECRET = process.env.OG_IMAGE_SECRET || "fallback-secret-for-dev";
+const HMAC_SHA256_HEX_LENGTH = 64;
+const HEX_SIGNATURE_PATTERN = /^[0-9a-f]+$/i;
+
+function getOgSecret(): string | null {
+  return process.env.OG_IMAGE_SECRET || null;
+}
+
+function requireOgSecret(): string {
+  const secret = getOgSecret();
+
+  if (!secret) {
+    throw new Error("OG_IMAGE_SECRET is not configured");
+  }
+
+  return secret;
+}
 
 /**
  * Normalizes parameters into a consistent string for signing.
  */
 function normalizeParams(params: Record<string, string>): string {
-  const sortedKeys = Object.keys(params).sort();
-  return sortedKeys.map((key) => `${key}=${params[key]}`).join("&");
+  const searchParams = new URLSearchParams();
+
+  for (const key of Object.keys(params).sort()) {
+    searchParams.set(key, params[key]);
+  }
+
+  return searchParams.toString();
+}
+
+function createSignature(
+  params: Record<string, string>,
+  secret: string
+): string {
+  const data = normalizeParams(params);
+
+  return createHmac("sha256", secret).update(data).digest("hex");
 }
 
 /**
@@ -15,11 +44,7 @@ function normalizeParams(params: Record<string, string>): string {
  * This prevents unauthorized generation of OG images with arbitrary content.
  */
 export function signOgParams(params: Record<string, string>): string {
-  const data = normalizeParams(params);
-  return createHmac("sha256", OG_SECRET)
-    .update(data)
-    .digest("hex")
-    .slice(0, 16);
+  return createSignature(params, requireOgSecret());
 }
 
 /**
@@ -30,8 +55,34 @@ export function verifyOgSignature(
   params: Record<string, string>,
   signature: string
 ): boolean {
-  const expectedSignature = signOgParams(params);
-  return signature === expectedSignature;
+  const secret = getOgSecret();
+
+  if (!secret) {
+    console.error("OG_IMAGE_SECRET is not configured");
+    return false;
+  }
+
+  if (
+    signature.length !== HMAC_SHA256_HEX_LENGTH ||
+    !HEX_SIGNATURE_PATTERN.test(signature)
+  ) {
+    return false;
+  }
+
+  const expectedSignature = createSignature(params, secret);
+
+  if (signature.length !== expectedSignature.length) {
+    return false;
+  }
+
+  const signatureBuffer = Buffer.from(signature, "hex");
+  const expectedSignatureBuffer = Buffer.from(expectedSignature, "hex");
+
+  if (signatureBuffer.length !== expectedSignatureBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(signatureBuffer, expectedSignatureBuffer);
 }
 
 /**

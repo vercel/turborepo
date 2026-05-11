@@ -9,8 +9,8 @@ license = "MIT"
 # This is for the convenience of running daily dev workflows, i.e running
 # `cargo xxx` without explicitly specifying features.
 default = ["rustls-tls"]
-native-tls = ["turborepo-lib/native-tls"]
-rustls-tls = ["turborepo-lib/rustls-tls"]
+native-tls = ["turborepo-lib/native-tls", "turborepo-lsp/native-tls"]
+rustls-tls = ["turborepo-lib/rustls-tls", "turborepo-lsp/rustls-tls"]
 pprof = ["turborepo-lib/pprof"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -41,6 +41,7 @@ workspace = true
 anyhow = { workspace = true, features = ["backtrace"] }
 miette.workspace = true
 turborepo-lib = { workspace = true, default-features = false }
+turborepo-lsp = { workspace = true, default-features = false }
 turborepo-query = { workspace = true }
 turborepo-query-api = { workspace = true }
 turborepo-signals = { workspace = true }

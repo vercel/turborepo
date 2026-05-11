@@ -53,6 +53,8 @@ pub enum Error {
     OutputWatcher(#[from] OutputWatcherError),
     #[error("Task spawn failed: {0}")]
     SpawnBlocking(String),
+    #[error("Task output resolves outside of repository root: {0}")]
+    OutputOutsideRepo(String),
     #[error(transparent)]
     Scm(#[from] turborepo_scm::Error),
     #[error(transparent)]
@@ -560,6 +562,12 @@ impl TaskCache {
             globwalk::WalkType::All,
         )?;
 
+        for path in &files_to_be_cached {
+            if !self.run_cache.repo_root.contains(path) {
+                return Err(Error::OutputOutsideRepo(path.to_string()));
+            }
+        }
+
         // If we're only caching the log output, *and* output globs are not empty,
         // we should warn the user
         if files_to_be_cached.len() == 1 && !self.repo_relative_globs.is_empty() {
@@ -786,10 +794,85 @@ fn format_sha_context(meta: Option<&CacheHitMetadata>) -> Option<String> {
 mod test {
     use std::{
         collections::HashSet,
-        sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+        sync::{
+            Arc, Mutex,
+            atomic::{AtomicBool, AtomicUsize, Ordering},
+        },
+        time::Duration,
     };
 
-    use super::{OutputWatcher, OutputWatcherError};
+    use tempfile::tempdir;
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use turborepo_cache::{AsyncCache, CacheActions, CacheConfig, CacheOpts, LazyScmState};
+    use turborepo_task_id::TaskId;
+    use turborepo_telemetry::events::task::PackageTaskEventBuilder;
+    use turborepo_types::{OutputLogsMode, TaskOutputs};
+    use turborepo_ui::ColorConfig;
+
+    use super::{OutputWatcher, OutputWatcherError, RunCache, TaskCache};
+
+    fn local_cache_opts(repo_root: &AbsoluteSystemPathBuf) -> CacheOpts {
+        CacheOpts {
+            cache_dir: repo_root.as_path().join(".turbo/cache"),
+            cache: CacheConfig {
+                local: CacheActions::enabled(),
+                remote: CacheActions::disabled(),
+            },
+            workers: 1,
+            remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
+        }
+    }
+
+    fn task_cache_for_outputs(
+        repo_root: &AbsoluteSystemPathBuf,
+        outputs: Vec<String>,
+    ) -> TaskCache {
+        let cache_opts = local_cache_opts(repo_root);
+        let cache = AsyncCache::new(
+            &cache_opts,
+            repo_root,
+            None,
+            None,
+            None,
+            LazyScmState::resolved(None),
+        )
+        .unwrap();
+        let warnings = Arc::new(Mutex::new(Vec::new()));
+        let ui = ColorConfig::new(true);
+        let run_cache = Arc::new(RunCache {
+            task_output_logs: None,
+            cache,
+            warnings: warnings.clone(),
+            reads_disabled: false,
+            writes_disabled: false,
+            repo_root: repo_root.to_owned(),
+            output_watcher: None,
+            ui,
+            errors_only_show_hash: false,
+            remote_only: false,
+        });
+
+        TaskCache {
+            expanded_outputs: Vec::new(),
+            run_cache,
+            repo_relative_globs: TaskOutputs {
+                inclusions: outputs,
+                exclusions: Vec::new(),
+            },
+            hash: "test-hash".to_string(),
+            task_id: TaskId::new("pkg", "build"),
+            task_output_logs: OutputLogsMode::None,
+            caching_disabled: false,
+            log_file_path: repo_root.join_components(&["pkg", ".turbo", "turbo-build.log"]),
+            output_watcher: None,
+            ui,
+            warnings,
+            errors_only_show_hash: false,
+            incremental_cache: None,
+        }
+    }
 
     /// Mock OutputWatcher that records calls and returns configurable results.
     struct MockOutputWatcher {
@@ -1016,5 +1099,52 @@ mod test {
         // OutputWatcherError must be Send + Sync for use across async boundaries
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<OutputWatcherError>();
+    }
+
+    #[tokio::test]
+    async fn save_outputs_allows_files_inside_repo_root() {
+        let temp = tempdir().unwrap();
+        let repo_dir = temp.path().join("repo");
+        std::fs::create_dir_all(repo_dir.join("dist")).unwrap();
+        std::fs::write(repo_dir.join("dist/output.txt"), b"output").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_dir.as_path()).unwrap();
+        let mut task_cache = task_cache_for_outputs(&repo_root, vec!["dist/**".to_string()]);
+        let telemetry = PackageTaskEventBuilder::new("pkg", "build");
+
+        task_cache
+            .save_outputs(Duration::from_millis(10), &telemetry)
+            .await
+            .unwrap();
+
+        let expected = AnchoredSystemPathBuf::from_raw(format!(
+            "dist{}output.txt",
+            std::path::MAIN_SEPARATOR_STR
+        ))
+        .unwrap();
+
+        assert!(task_cache.expanded_outputs().contains(&expected));
+    }
+
+    #[tokio::test]
+    async fn save_outputs_rejects_glob_that_escapes_repo_root() {
+        let temp = tempdir().unwrap();
+        let repo_dir = temp.path().join("repo");
+        let outside_dir = temp.path().join("outside");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+        std::fs::create_dir_all(&outside_dir).unwrap();
+        std::fs::write(outside_dir.join("output.txt"), b"outside").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_dir.as_path()).unwrap();
+        let mut task_cache = task_cache_for_outputs(&repo_root, vec!["../outside/**".to_string()]);
+        let telemetry = PackageTaskEventBuilder::new("pkg", "build");
+
+        let result = task_cache
+            .save_outputs(Duration::from_millis(10), &telemetry)
+            .await;
+
+        assert!(
+            result.is_err(),
+            "outputs outside repo root should be rejected before cache upload"
+        );
+        assert!(task_cache.expanded_outputs().is_empty());
     }
 }

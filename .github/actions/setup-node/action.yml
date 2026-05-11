@@ -21,10 +21,10 @@ runs:
   using: "composite"
   steps:
     - name: Setup pnpm
-      uses: pnpm/action-setup@v4
+      uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
 
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
       with:
         # node-version-file is the default, but can be overridden using node-version
         node-version-file: "package.json"
@@ -38,7 +38,7 @@ runs:
       # The bundled version in node 16 has known issues.
       # Prepends the npm bin dir so that it is always first.
       run: |
-        npm install --force --global corepack@latest
+        npm install --force --global corepack@0.32.0
         npm config get prefix >> $GITHUB_PATH
 
     - name: Configure corepack

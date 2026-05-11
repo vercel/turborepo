@@ -3,7 +3,7 @@ import { pipeline } from "node:stream/promises";
 import type { ReadableStream } from "node:stream/web";
 import { createGunzip } from "node:zlib";
 import { createWriteStream, mkdirSync, rmSync, cpSync } from "node:fs";
-import { writeFile, unlink } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve, relative, join, isAbsolute } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
@@ -438,18 +438,19 @@ export async function downloadAndExtractRepo(
 ) {
   const url = `https://codeload.github.com/${username}/${name}/tar.gz/${branch}`;
 
-  // Download to temp file first (async - allows spinner to animate)
-  const tempFile = join(tmpdir(), `turbo-download-${Date.now()}.tar.gz`);
   const response = await fetchWithTimeout(url, {}, DOWNLOAD_TIMEOUT);
   if (!response.ok || !response.body) {
     throw new Error(`Failed to download: ${response.status}`);
   }
   const buffer = Buffer.from(await response.arrayBuffer());
-  await writeFile(tempFile, buffer);
+
+  const tempDir = await mkdtemp(join(tmpdir(), "turbo-download-"));
+  const tempFile = join(tempDir, "archive.tar.gz");
 
   // Extract from file (sync but fast)
   let rootPath: string | null = null;
   try {
+    await writeFile(tempFile, buffer, { flag: "wx" });
     await extract({
       file: tempFile,
       cwd: root,
@@ -463,7 +464,7 @@ export async function downloadAndExtractRepo(
       }
     });
   } finally {
-    await unlink(tempFile);
+    await rm(tempDir, { recursive: true, force: true });
   }
 }
 

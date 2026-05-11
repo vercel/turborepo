@@ -290,7 +290,7 @@ mod test {
         let mut edges_that_break = HashSet::new();
         for brk in breaks {
             assert_eq!(brk.len(), 1);
-            edges_that_break.extend(brk.into_iter());
+            edges_that_break.extend(brk);
         }
         assert_eq!(
             edges_that_break,

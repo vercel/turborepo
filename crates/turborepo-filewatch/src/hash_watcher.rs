@@ -146,7 +146,7 @@ impl HashWatcher {
     // responding. Both package discovery and file hashing can fail depending on the
     // state of the filesystem, so clients will need to be robust to receiving
     // errors.
-    pub async fn get_file_hashes(&self, hash_spec: HashSpec) -> Result<GitHashes, Error> {
+    pub async fn get_file_hashes(&self, hash_spec: HashSpec) -> Result<Arc<GitHashes>, Error> {
         let (tx, rx) = oneshot::channel();
         self.query_tx.send(Query::GetHash(hash_spec, tx)).await?;
         rx.await?
@@ -163,7 +163,7 @@ struct Subscriber {
 
 #[derive(Debug)]
 enum Query {
-    GetHash(HashSpec, oneshot::Sender<Result<GitHashes, Error>>),
+    GetHash(HashSpec, oneshot::Sender<Result<Arc<GitHashes>, Error>>),
 }
 
 // Version is a type that exists to stamp an asynchronous hash computation
@@ -173,12 +173,13 @@ enum Query {
 struct Version(usize);
 
 enum HashState {
-    Hashes(GitHashes),
-    Pending(
-        Version,
-        Arc<Debouncer>,
-        Vec<oneshot::Sender<Result<GitHashes, Error>>>,
-    ),
+    Hashes(Arc<GitHashes>),
+    Pending {
+        version: Version,
+        debouncer: Arc<Debouncer>,
+        txs: Vec<oneshot::Sender<Result<Arc<GitHashes>, Error>>>,
+        rerun_after_current: bool,
+    },
     Unavailable(String),
 }
 // We use a radix_trie to store hashes so that we can quickly match a file path
@@ -221,7 +222,7 @@ impl FileHashes {
                 self.0.insert(key, previous_value);
             } else {
                 for state in previous_value.into_values() {
-                    if let HashState::Pending(_, _, txs) = state {
+                    if let HashState::Pending { txs, .. } = state {
                         for tx in txs {
                             let _ = tx.send(Err(Error::Unavailable(reason.to_string())));
                         }
@@ -399,7 +400,7 @@ impl Subscriber {
                 },
                 hash_update = hash_update_rx.recv() => {
                     if let Some(hash_update) = hash_update {
-                        self.handle_hash_update(hash_update, &mut hashes);
+                        self.handle_hash_update(hash_update, &mut hashes, &hash_update_tx);
                     } else {
                         // note that we only ever lend out hash_update_tx, so this should be impossible
                         unreachable!("hash update channel closed, but we have a live reference to it");
@@ -449,9 +450,9 @@ impl Subscriber {
                 if let Some(state) = hashes.get_mut(&spec) {
                     match state {
                         HashState::Hashes(hashes) => {
-                            tx.send(Ok(hashes.clone())).unwrap();
+                            tx.send(Ok(Arc::clone(hashes))).unwrap();
                         }
-                        HashState::Pending(_, _, txs) => {
+                        HashState::Pending { txs, .. } => {
                             txs.push(tx);
                         }
                         HashState::Unavailable(e) => {
@@ -469,7 +470,15 @@ impl Subscriber {
                     let (version, debouncer) = self.queue_package_hash(&spec, hash_update_tx, true);
                     // this request will likely time out. However, if the client has asked for
                     // this spec once, they might ask again, and we can start tracking it.
-                    hashes.insert(spec, HashState::Pending(version, debouncer, vec![tx]));
+                    hashes.insert(
+                        spec,
+                        HashState::Pending {
+                            version,
+                            debouncer,
+                            txs: vec![tx],
+                            rerun_after_current: false,
+                        },
+                    );
                 } else {
                     // We don't know anything about this package.
                     let _ = tx.send(Err(Error::UnknownPackage(spec)));
@@ -478,7 +487,12 @@ impl Subscriber {
         }
     }
 
-    fn handle_hash_update(&self, update: HashUpdate, hashes: &mut FileHashes) {
+    fn handle_hash_update(
+        &self,
+        update: HashUpdate,
+        hashes: &mut FileHashes,
+        hash_update_tx: &mpsc::Sender<HashUpdate>,
+    ) {
         let HashUpdate {
             spec,
             version,
@@ -490,14 +504,33 @@ impl Subscriber {
             // We need mutable access to 'state' to update it, as well as being able to
             // extract the pending state, so we need two separate if statements
             // to pull the value apart.
-            if let HashState::Pending(existing_version, _, pending_queries) = state
+            if let HashState::Pending {
+                version: existing_version,
+                txs: pending_queries,
+                rerun_after_current,
+                ..
+            } = state
                 && *existing_version == version
             {
+                if *rerun_after_current {
+                    let (new_version, new_debouncer) =
+                        self.queue_package_hash(&spec, hash_update_tx, false);
+                    let mut txs = Vec::new();
+                    std::mem::swap(pending_queries, &mut txs);
+                    *state = HashState::Pending {
+                        version: new_version,
+                        debouncer: new_debouncer,
+                        txs,
+                        rerun_after_current: false,
+                    };
+                    return;
+                }
                 match result {
                     Ok(hashes) => {
+                        let hashes = Arc::new(hashes);
                         for pending_query in pending_queries.drain(..) {
                             // We don't care if the client has gone away
-                            let _ = pending_query.send(Ok(hashes.clone()));
+                            let _ = pending_query.send(Ok(Arc::clone(&hashes)));
                         }
                         *state = HashState::Hashes(hashes);
                     }
@@ -590,7 +623,7 @@ impl Subscriber {
                 // actually affect what the hash is.
                 trace!("specs changed: {:?}", changed_specs_for_path);
                 //changed_specs.insert(package_path.to_owned());
-                changed_specs.extend(changed_specs_for_path.into_iter());
+                changed_specs.extend(changed_specs_for_path);
             } else {
                 trace!("Ignoring change to {repo_relative_change_path}");
             }
@@ -607,26 +640,39 @@ impl Subscriber {
                 None => {
                     let (version, debouncer) =
                         self.queue_package_hash(&spec, hash_update_tx, immediate);
-                    hashes.insert(spec, HashState::Pending(version, debouncer, vec![]));
+                    hashes.insert(
+                        spec,
+                        HashState::Pending {
+                            version,
+                            debouncer,
+                            txs: vec![],
+                            rerun_after_current: false,
+                        },
+                    );
                 }
                 Some(entry) => {
-                    if let HashState::Pending(_, debouncer, txs) = entry {
+                    if let HashState::Pending {
+                        debouncer,
+                        rerun_after_current,
+                        ..
+                    } = entry
+                    {
                         if !debouncer.bump() {
-                            // we failed to bump the debouncer, the hash must already be in
-                            // progress. Drop this calculation and start
-                            // a new one
-                            let (version, debouncer) =
-                                self.queue_package_hash(&spec, hash_update_tx, immediate);
-                            let mut swap_target = vec![];
-                            std::mem::swap(txs, &mut swap_target);
-                            *entry = HashState::Pending(version, debouncer, swap_target);
+                            // The hash is already in progress. Let it finish and run one
+                            // follow-up hash instead of starting parallel hashes for the same spec.
+                            *rerun_after_current = true;
                         }
                     } else {
                         // it's not a pending hash calculation, overwrite the entry with a new
                         // pending calculation
                         let (version, debouncer) =
                             self.queue_package_hash(&spec, hash_update_tx, immediate);
-                        *entry = HashState::Pending(version, debouncer, vec![]);
+                        *entry = HashState::Pending {
+                            version,
+                            debouncer,
+                            txs: vec![],
+                            rerun_after_current: false,
+                        };
                     }
                 }
             }
@@ -669,7 +715,15 @@ impl Subscriber {
                     if !hashes.contains_key(&spec) {
                         let (version, debouncer) =
                             self.queue_package_hash(&spec, hash_update_tx, immediate);
-                        hashes.insert(spec, HashState::Pending(version, debouncer, vec![]));
+                        hashes.insert(
+                            spec,
+                            HashState::Pending {
+                                version,
+                                debouncer,
+                                txs: vec![],
+                                rerun_after_current: false,
+                            },
+                        );
                     }
                 }
                 tracing::debug!("received package discovery data: {:?}", data);
@@ -685,8 +739,9 @@ impl Subscriber {
 #[cfg(test)]
 mod tests {
     use std::{
-        assert_matches::assert_matches,
+        assert_matches,
         process::Command,
+        sync::Arc,
         time::{Duration, Instant},
     };
 
@@ -696,10 +751,11 @@ mod tests {
     };
     use turborepo_scm::{GitHashes, OidHash, SCM};
 
-    use super::{FileHashes, HashState};
+    use super::{FileHashes, HashState, Subscriber, Version};
     use crate::{
         FileSystemWatcher,
         cookies::CookieWriter,
+        debouncer::Debouncer,
         globwatcher::GlobSet,
         hash_watcher::{HashSpec, HashWatcher, InputGlobs},
         package_watcher::PackageWatcher,
@@ -1047,7 +1103,7 @@ mod tests {
         while Instant::now() < deadline {
             match hash_watcher.get_file_hashes(spec.clone()).await {
                 Ok(hashes) => {
-                    if hashes == expected {
+                    if *hashes == expected {
                         return;
                     } else {
                         last_value = Some(hashes);
@@ -1083,13 +1139,13 @@ mod tests {
             package_path: foo_path.clone(),
             inputs: InputGlobs::Default,
         };
-        hashes.insert(foo_spec, HashState::Hashes(GitHashes::new()));
+        hashes.insert(foo_spec, HashState::Hashes(Arc::new(GitHashes::new())));
         let foo_bar_path = root.join_components(&["apps", "foobar"]);
         let foo_bar_spec = HashSpec {
             package_path: foo_bar_path.clone(),
             inputs: InputGlobs::Default,
         };
-        hashes.insert(foo_bar_spec, HashState::Hashes(GitHashes::new()));
+        hashes.insert(foo_bar_spec, HashState::Hashes(Arc::new(GitHashes::new())));
 
         let foo_candidate = foo_path.join_component("README.txt");
         let result = hashes.get_changed_specs(&foo_candidate);
@@ -1113,6 +1169,69 @@ mod tests {
         let decoy = root.join_components(&["apps", "foodecoy"]);
         let result = hashes.get_changed_specs(&decoy);
         assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn file_event_during_hashing_defers_follow_up_hash() {
+        let tmp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        let (package_discovery_tx, package_discovery_rx) = tokio::sync::watch::channel(None);
+        let (query_tx, query_rx) = tokio::sync::mpsc::channel(1);
+        let (hash_update_tx, mut hash_update_rx) = tokio::sync::mpsc::channel(1);
+        let subscriber = Subscriber::new(
+            repo_root.clone(),
+            package_discovery_rx,
+            SCM::Manual,
+            query_rx,
+        );
+
+        let package_dir = repo_root.join_components(&["packages", "foo"]);
+        let package_path = repo_root.anchor(&package_dir).unwrap();
+        let spec = HashSpec {
+            package_path: package_path.clone(),
+            inputs: InputGlobs::Default,
+        };
+        let debouncer = Arc::new(Debouncer::new(Duration::from_millis(0)));
+        debouncer.debounce().await;
+
+        let mut hashes = FileHashes::new();
+        hashes.insert(
+            spec.clone(),
+            HashState::Pending {
+                version: Version(0),
+                debouncer,
+                txs: vec![],
+                rerun_after_current: false,
+            },
+        );
+
+        let changed_file = package_dir.join_component("large.bin");
+        subscriber.handle_file_event(
+            notify::Event {
+                kind: notify::EventKind::Modify(notify::event::ModifyKind::Data(
+                    notify::event::DataChange::Content,
+                )),
+                paths: vec![changed_file.into()],
+                attrs: Default::default(),
+            },
+            &mut hashes,
+            &hash_update_tx,
+        );
+
+        match hashes.get_mut(&spec).expect("spec should still be tracked") {
+            HashState::Pending {
+                rerun_after_current,
+                ..
+            } => assert!(*rerun_after_current),
+            _ => panic!("expected pending hash"),
+        }
+        assert!(hash_update_rx.try_recv().is_err());
+
+        drop(query_tx);
+        drop(package_discovery_tx);
     }
 
     #[tokio::test]

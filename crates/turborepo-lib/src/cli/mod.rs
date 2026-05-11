@@ -740,9 +740,9 @@ pub enum Command {
     Login {
         #[clap(long = "sso-team")]
         sso_team: Option<String>,
-        /// Force a login to receive a new token. Will overwrite any existing
-        /// tokens for the given login url.
-        #[clap(long = "force", short = 'f')]
+        /// Deprecated, no-op. Previously forced a new login even if a valid
+        /// token existed.
+        #[clap(long = "force", short = 'f', hide = true)]
         force: bool,
         /// Manually enter token instead of requesting one from the login
         /// service.
@@ -751,8 +751,9 @@ pub enum Command {
     },
     /// Logout to your Vercel account
     Logout {
-        /// Invalidate the token on the server
-        #[clap(long)]
+        /// Invalidate the token on the server. Pass `--invalidate=false` to
+        /// skip the remote revoke.
+        #[clap(long, value_name = "BOOL", action = ArgAction::Set, default_value = "true", default_missing_value = "true", num_args = 0..=1)]
         invalidate: bool,
     },
     /// Print debugging information
@@ -1938,7 +1939,7 @@ async fn run_main(
 
 #[cfg(test)]
 mod test {
-    use std::{assert_matches::assert_matches, ffi::OsString};
+    use std::{assert_matches, ffi::OsString};
 
     use camino::Utf8PathBuf;
     use clap::{CommandFactory, Parser};
@@ -3035,7 +3036,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "logout"]).unwrap(),
             Args {
-                command: Some(Command::Logout { invalidate: false }),
+                command: Some(Command::Logout { invalidate: true }),
                 ..Args::default()
             }
         );
@@ -3045,12 +3046,20 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
-                command: Some(Command::Logout { invalidate: false }),
+                command: Some(Command::Logout { invalidate: true }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
         .test();
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "logout", "--invalidate=false"]).unwrap(),
+            Args {
+                command: Some(Command::Logout { invalidate: false }),
+                ..Args::default()
+            }
+        );
     }
 
     #[test]

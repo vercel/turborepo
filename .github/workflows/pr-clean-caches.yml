@@ -23,19 +23,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh extension install actions/gh-actions-cache
-
           REPO=${{ github.repository }}
           BRANCH=${{ github.ref }}
 
-          echo "Fetching list of cache key"
-          cacheKeysForPR=$(gh actions-cache list -R "$REPO" -B "$BRANCH" --limit 100 | cut -f 1)
+          echo "Fetching cache ids for ${BRANCH}"
+          cacheIdsForBranch=$(gh api --method GET "repos/${REPO}/actions/caches" \
+            -f ref="${BRANCH}" \
+            -f per_page=100 \
+            --jq '.actions_caches[].id')
 
-          ## Setting this to not fail the workflow while deleting cache keys.
+          # Cache deletion is best-effort so cleanup failures do not fail CI.
           set +e
           echo "Deleting caches..."
-          for cacheKey in $cacheKeysForPR
+          for cacheId in $cacheIdsForBranch
           do
-              gh actions-cache delete "$cacheKey" -R "$REPO" -B "$BRANCH" --confirm
+              gh api --method DELETE "repos/${REPO}/actions/caches/${cacheId}"
           done
           echo "Done"

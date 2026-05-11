@@ -6,14 +6,15 @@ use std::{collections::HashMap, fs::OpenOptions, io::Write, net::SocketAddr, syn
 
 use anyhow::Result;
 use axum::{
-    Json, Router,
+    Form, Json, Router,
     body::Body,
     extract::Path,
     http::{HeaderMap, HeaderValue, StatusCode, header::CONTENT_LENGTH},
+    response::IntoResponse,
     routing::{get, head, options, post, put},
 };
 use futures_util::StreamExt;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::{net::TcpListener, sync::Mutex};
 use turborepo_vercel_api::{
     AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse,
@@ -24,7 +25,6 @@ pub const EXPECTED_TOKEN: &str = "expected_token";
 pub const EXPECTED_USER_ID: &str = "expected_user_id";
 pub const EXPECTED_USERNAME: &str = "expected_username";
 pub const EXPECTED_EMAIL: &str = "expected_email";
-pub const EXPECTED_USER_CREATED_AT: Option<u64> = Some(0);
 
 pub const EXPECTED_TEAM_ID: &str = "expected_team_id";
 pub const EXPECTED_TEAM_SLUG: &str = "expected_team_slug";
@@ -33,6 +33,20 @@ pub const EXPECTED_TEAM_CREATED_AT: u64 = 0;
 
 pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
 pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
+
+pub const EXPECTED_CLIENT_ID: &str = "cl_kyUx2zVvA4MGptBohkmtYHJly2XltXzD";
+
+#[derive(Deserialize)]
+struct VercelAppTokenIntrospectRequest {
+    token: String,
+}
+
+#[derive(Deserialize)]
+struct VercelAppTokenRevokeRequest {
+    #[allow(dead_code)]
+    token: String,
+    client_id: String,
+}
 
 /// Per-artifact SCM metadata: (sha, dirty_hash).
 type ArtifactScmMetadata = HashMap<String, (Option<String>, Option<String>)>;
@@ -59,16 +73,25 @@ pub async fn start_test_server(
     let app = Router::new()
         .route(
             "/v2/user",
-            get(|| async move {
+            get(|headers: HeaderMap| async move {
+                let auth = headers
+                    .get("authorization")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("");
+
+                if auth.starts_with("Bearer vca_") {
+                    return StatusCode::NOT_FOUND.into_response();
+                }
+
                 Json(UserResponse {
                     user: User {
                         id: EXPECTED_USER_ID.to_string(),
                         username: EXPECTED_USERNAME.to_string(),
                         email: EXPECTED_EMAIL.to_string(),
                         name: None,
-                        created_at: EXPECTED_USER_CREATED_AT,
                     },
                 })
+                .into_response()
             }),
         )
         .route(
@@ -290,6 +313,64 @@ pub async fn start_test_server(
                 headers.insert("Access-Control-Allow-Headers", "*".parse().unwrap());
 
                 headers
+            }),
+        )
+        .route(
+            "/login/oauth/userinfo",
+            get(|headers: HeaderMap| async move {
+                let auth = headers
+                    .get("authorization")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("");
+                if auth == "Bearer vca_missing_email" {
+                    Json(serde_json::json!({
+                        "sub": EXPECTED_USER_ID,
+                        "preferred_username": EXPECTED_USERNAME,
+                    }))
+                    .into_response()
+                } else if auth.starts_with("Bearer vca_") {
+                    Json(serde_json::json!({
+                        "sub": EXPECTED_USER_ID,
+                        "email": EXPECTED_EMAIL,
+                        "preferred_username": EXPECTED_USERNAME,
+                    }))
+                    .into_response()
+                } else {
+                    StatusCode::UNAUTHORIZED.into_response()
+                }
+            }),
+        )
+        .route(
+            "/login/oauth/token/introspect",
+            post(
+                |Form(form): Form<VercelAppTokenIntrospectRequest>| async move {
+                    if form.token.starts_with("vca_") {
+                        Json(serde_json::json!({
+                            "active": true,
+                            "scope": "openid",
+                            "exp": 1700000000u64,
+                            "iat": 1690000000u64,
+                            "client_id": EXPECTED_CLIENT_ID,
+                        }))
+                    } else {
+                        Json(serde_json::json!({ "active": false }))
+                    }
+                },
+            ),
+        )
+        .route(
+            "/login/oauth/token/revoke",
+            post(|Form(form): Form<VercelAppTokenRevokeRequest>| async move {
+                if form.client_id != EXPECTED_CLIENT_ID {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(serde_json::json!({
+                            "error": "Client not allowed to revoke the token"
+                        })),
+                    )
+                        .into_response();
+                }
+                StatusCode::OK.into_response()
             }),
         )
         .route(

@@ -26,6 +26,11 @@ pub fn restore_regular(
     }
 
     dir_cache.safe_mkdir_file(anchor, &processed_name)?;
+    if let Ok(metadata) = resolved_path.symlink_metadata()
+        && metadata.is_symlink()
+    {
+        remove_symlink(&resolved_path)?;
+    }
 
     let mut open_options = OpenOptions::new();
     open_options.write(true).truncate(true).create(true);
@@ -41,6 +46,18 @@ pub fn restore_regular(
     io::copy(entry, &mut file)?;
 
     Ok((processed_name, false))
+}
+
+fn remove_symlink(path: &AbsoluteSystemPath) -> Result<(), CacheError> {
+    #[cfg(not(windows))]
+    {
+        path.remove_file()?;
+    }
+    #[cfg(windows)]
+    {
+        path.remove_file().or_else(|_| path.remove_dir())?;
+    }
+    Ok(())
 }
 
 impl CachedDirTree {

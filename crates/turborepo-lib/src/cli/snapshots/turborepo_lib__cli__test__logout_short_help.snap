@@ -7,5 +7,5 @@ Logout to your Vercel account
 Usage: logout [OPTIONS]
 
 Options:
-      --invalidate  Invalidate the token on the server
-  -h, --help        Print help
+      --invalidate [<BOOL>]  Invalidate the token on the server. Pass `--invalidate=false` to skip the remote revoke [default: true] [possible values: true, false]
+  -h, --help                 Print help

@@ -17,6 +17,7 @@
     "turbo-prebuilt": "pnpm -- turbo",
     "prepare": "husky install",
     "test": "turbo run test",
+    "tbx": "pnpm --filter @turbo/tbx tbx",
     "rustdoc": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going || true",
     "rustdoc:open": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --open",
     "check": "ultracite check",

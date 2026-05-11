@@ -230,7 +230,7 @@ impl AsyncCache {
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, time::Duration};
+    use std::{assert_matches, time::Duration};
 
     use anyhow::Result;
     use camino::Utf8PathBuf;

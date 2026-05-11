@@ -8,7 +8,7 @@ use std::{
 };
 
 use dashmap::DashMap;
-use hyper::{Request, Response, StatusCode, body::Incoming, upgrade::Upgraded};
+use hyper::{Request, Response, StatusCode, body::Incoming, header::HOST, upgrade::Upgraded};
 use hyper_util::rt::TokioIo;
 use tokio::sync::broadcast;
 use tokio_tungstenite::{WebSocketStream, tungstenite::protocol::Role};
@@ -16,7 +16,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     ProxyError,
-    headers::validate_host_header,
+    headers::validated_host_header,
     http::{BoxedBody, HttpClient, handle_forward_result},
     http_router::RouteMatch,
 };
@@ -102,8 +102,8 @@ async fn forward_websocket(
     Ok(response)
 }
 
-fn prepare_websocket_request(
-    req: &mut Request<Incoming>,
+fn prepare_websocket_request<T>(
+    req: &mut Request<T>,
     port: u16,
     remote_addr: SocketAddr,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -116,11 +116,10 @@ fn prepare_websocket_request(
             .unwrap_or("/")
     );
 
-    let original_host = req.uri().host().unwrap_or("localhost").to_string();
-    validate_host_header(&original_host)?;
+    let original_host = validated_host_header(req)?.to_string();
 
     let headers = req.headers_mut();
-    headers.insert("Host", format!("localhost:{port}").parse()?);
+    headers.insert(HOST, format!("localhost:{port}").parse()?);
     headers.insert("X-Forwarded-For", remote_addr.ip().to_string().parse()?);
     headers.insert("X-Forwarded-Proto", "http".parse()?);
     headers.insert("X-Forwarded-Host", original_host.parse()?);
@@ -411,6 +410,7 @@ fn cleanup_websocket_connection(
 mod tests {
     use std::sync::atomic::AtomicUsize;
 
+    use hyper::header::HOST;
     use tokio::sync::broadcast;
 
     use super::*;
@@ -524,5 +524,56 @@ mod tests {
         assert_eq!(ids.len(), 10);
         assert_eq!(*ids.first().unwrap(), 0);
         assert_eq!(*ids.last().unwrap(), 9);
+    }
+
+    #[test]
+    fn test_prepare_websocket_request_uses_validated_host_header() {
+        let remote_addr = "127.0.0.1:12345".parse().unwrap();
+        let mut req = Request::builder()
+            .uri("/ws?token=1")
+            .header(HOST, "localhost:3024")
+            .body(())
+            .unwrap();
+
+        prepare_websocket_request(&mut req, 3000, remote_addr).unwrap();
+
+        assert_eq!(req.uri().to_string(), "http://localhost:3000/ws?token=1");
+        assert_eq!(
+            req.headers().get(HOST).and_then(|host| host.to_str().ok()),
+            Some("localhost:3000")
+        );
+        assert_eq!(
+            req.headers()
+                .get("X-Forwarded-Host")
+                .and_then(|host| host.to_str().ok()),
+            Some("localhost:3024")
+        );
+    }
+
+    #[test]
+    fn test_prepare_websocket_request_rejects_invalid_host_header() {
+        let remote_addr = "127.0.0.1:12345".parse().unwrap();
+        let mut req = Request::builder()
+            .uri("http://localhost:3024/ws")
+            .header(HOST, "example.com:3024")
+            .body(())
+            .unwrap();
+
+        let err = prepare_websocket_request(&mut req, 3000, remote_addr).unwrap_err();
+
+        assert!(err.to_string().contains("Invalid host header"));
+    }
+
+    #[test]
+    fn test_prepare_websocket_request_requires_host_header() {
+        let remote_addr = "127.0.0.1:12345".parse().unwrap();
+        let mut req = Request::builder()
+            .uri("http://localhost:3024/ws")
+            .body(())
+            .unwrap();
+
+        let err = prepare_websocket_request(&mut req, 3000, remote_addr).unwrap_err();
+
+        assert!(err.to_string().contains("Missing Host header"));
     }
 }

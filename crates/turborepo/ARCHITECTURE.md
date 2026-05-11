@@ -25,6 +25,11 @@ A run consists of the following steps:
 
 ### Signal-Driven Shutdown
 
+Graceful shutdown and parent-death cleanup are separate responsibilities.
+Graceful shutdown happens while the Turbo process is still alive, so it should
+be handled internally by the run and process manager. Parent-death cleanup only
+applies when Turbo disappears before Rust cleanup code can run.
+
 - `crates/turborepo-lib/src/commands/run.rs` creates a shared
   `SignalHandler` and does not return until all shutdown subscribers finish
   their cleanup work.
@@ -37,8 +42,12 @@ A run consists of the following steps:
 - Task processes are spawned into dedicated process groups so Turbo can signal a
   task and all of its descendants together.
 - On the first `SIGINT`/`SIGTERM`, Turbo enters graceful shutdown: it prints a
-  shutdown message, forwards `SIGINT` to running tasks, and waits for them to
-  exit.
+  shutdown message, forwards `SIGINT` to running tasks, and waits for their
+  process groups to exit.
+- Turbo must not treat direct-child exit as task-tree exit. Package managers,
+  shells, and watch commands can leave descendants running after the leader
+  exits, so the process manager should track the process targets it spawned and
+  keep Turbo alive until all tracked process groups are gone.
 - Close-driven shutdown still flushes cache writes and stops processes, but it
   does not arm signal-specific force-shutdown timers.
 - If tasks are still running after 3 seconds, Turbo prints the remaining task
@@ -50,13 +59,35 @@ A run consists of the following steps:
 - On Windows, graceful shutdown falls back to an immediate kill because the
   platform does not support Unix-style signal forwarding to task process
   groups.
-- On Unix, Turbo also starts a small best-effort parent-death watchdog for each
-  task process. The watchdog waits on a pipe from the Turbo parent process and,
-  where supported, also monitors the task leader for exit so it does not signal
-  a recycled PID. If Turbo disappears unexpectedly, the watchdog first sends
-  `SIGTERM` to the task process group and then escalates to `SIGKILL` if
-  anything is still running. On Windows, job objects provide the same
-  parent-death cleanup behavior.
+
+Parent-death cleanup is not part of normal graceful shutdown. An in-process map
+cannot help after `SIGKILL`, a crash, or OOM because the map dies with Turbo.
+Turbo should not start a per-task Unix watchdog for this case. If abnormal
+cleanup is required later, prefer a bounded run-level mechanism:
+
+- A run-level reaper, if used, should be owned by `ProcessManager` and shared by
+  all tasks in the run.
+- Tasks register their process target (`pid`, `pgid`, and session identity) when
+  spawned and unregister on normal exit or Turbo-managed shutdown.
+- If the Turbo process disappears and the control pipe reaches EOF, the reaper
+  can signal the remaining registered process groups and escalate if needed.
+- Linux can use `prctl(PR_SET_PDEATHSIG)` as a best-effort no-helper option, but
+  it only signals the direct child and cannot provide delayed escalation.
+- Windows should continue using job objects for parent-death cleanup.
+
+Regression coverage for shutdown changes should focus on observable lifecycle
+behavior:
+
+- A direct child exiting during shutdown must not let Turbo exit while a tracked
+  descendant process group is still alive.
+- Graceful shutdown must wait for all tracked process groups, not just all
+  direct children.
+- Forced shutdown must kill stubborn descendants and clear the tracked task
+  records.
+- End-to-end `turbo run` signal tests should assert that descendants are not
+  leaked after force shutdown.
+- Existing final-output coverage should continue proving that shutdown keeps the
+  UI and log pipeline alive long enough to drain task output.
 
 ### 1. Run Builder (`crates/turborepo-lib/src/run/builder.rs`)
 
@@ -143,6 +174,14 @@ The core task graph consists of:
 - Root is an artifacts of our Go graph library which required all graphs have a single entrypoint
 - Edges: Dependencies between tasks, at the moment no additional data (weights) are added to the edge
 
+#### Engine Pruning (`crates/turborepo-engine/src/lib.rs`)
+
+- `retain_affected_tasks` keeps directly affected tasks, transitive dependents,
+  and all transitive dependencies required for normal `--affected` execution
+- `create_engine_for_subgraph` is used by watch mode. It keeps changed package
+  tasks, transitive dependents, and only cacheable upstream dependencies that can
+  restore outputs without forcing non-cacheable tasks to rerun
+
 ### 4. Task Visitor (`crates/turborepo-lib/src/task_graph/visitor/`)
 
 The task graph visitor handles task execution:
@@ -189,6 +228,11 @@ Multi-layered caching system:
 3. **Cache Storage**: Compress and store task outputs
 4. **Cache Metadata**: Track cache hits, timing, and sources
 
+Cache restore and storage enforce filesystem boundaries. Restores are anchored
+to the selected restore directory, preserve safe symlinks, and reject symlink
+targets that escape that anchor. Cache storage rejects task outputs that resolve
+outside the repository root.
+
 #### Key Components
 
 - `RunCache`: High-level cache coordination
@@ -221,6 +265,11 @@ still warming the client before the first network request in the common case.
 2. After package filtering finishes, Turborepo computes the package roots it
    actually needs for hashing and augments that tracked index with untracked
    files only for those prefixes
+
+Those prefixes are relative to the repo index root, which is usually the Git
+root. This matters when the Turbo root is nested inside a larger Git repository:
+the root package should scope to the nested Turbo directory, not request an
+untracked walk of the entire parent repository.
 
 This keeps the cheap tracked-index work overlapped with other startup work while
 avoiding a repo-wide untracked walk when only a subset of packages will be

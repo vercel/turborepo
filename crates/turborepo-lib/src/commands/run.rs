@@ -182,9 +182,7 @@ pub async fn run(
     };
 
     let result = match wait_for_run_cleanup_on_signal(&handler, run_fut).await {
-        RunOutcome::Completed(result) => result,
-        // The run future has already drained shutdown and closed the UI.
-        RunOutcome::Interrupted(_result) => Ok(1),
+        RunOutcome::Completed(result) | RunOutcome::Interrupted(result) => result,
     };
 
     turborepo_log::flush();

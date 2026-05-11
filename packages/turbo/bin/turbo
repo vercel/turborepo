@@ -297,14 +297,54 @@ function getBinaryPath() {
   process.exit(1);
 }
 
-// Run the binary we got.
-try {
-  child_process.execFileSync(
+function exitWithCodeOrSignal(code, signal) {
+  if (signal) {
+    try {
+      process.kill(process.pid, signal);
+      return;
+    } catch (e) {
+      process.exit(1);
+    }
+  }
+
+  process.exit(code === null ? 1 : code);
+}
+
+function runTurbo() {
+  const child = child_process.spawn(
     getBinaryPath(),
     process.argv.slice(2),
     { stdio: "inherit" }
   );
-} catch (e) {
-  if (e && e.status) process.exit(e.status);
-  throw e;
+
+  const handleSigint = () => {
+    // The child shares our process group, so Ctrl+C already reached it.
+    // Keep the wrapper alive until the child finishes its own shutdown.
+  };
+
+  const handleSigterm = () => {
+    if (!child.killed) {
+      child.kill("SIGTERM");
+    }
+  };
+
+  const cleanup = () => {
+    process.off("SIGINT", handleSigint);
+    process.off("SIGTERM", handleSigterm);
+  };
+
+  process.on("SIGINT", handleSigint);
+  process.on("SIGTERM", handleSigterm);
+
+  child.once("error", (error) => {
+    cleanup();
+    throw error;
+  });
+
+  child.once("exit", (code, signal) => {
+    cleanup();
+    exitWithCodeOrSignal(code, signal);
+  });
 }
+
+runTurbo();

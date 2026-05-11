@@ -18,6 +18,11 @@ use turborepo_types::TaskArgs;
 
 use crate::MfeConfigProvider;
 
+fn apply_environment(cmd: &mut Command, environment: &EnvironmentVariableMap) {
+    cmd.env_clear();
+    cmd.envs(environment.iter());
+}
+
 /// Trait for providing commands to execute tasks.
 ///
 /// Implementors of this trait are responsible for determining how to execute
@@ -208,9 +213,7 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
         let package_dir = self.repo_root.resolve(workspace_info.package_path());
         cmd.current_dir(package_dir);
 
-        // We clear the env before populating it with variables we expect
-        cmd.env_clear();
-        cmd.envs(environment.iter());
+        apply_environment(&mut cmd, environment);
 
         // If the task has an associated proxy, then we indicate this to the underlying
         // task via an env var
@@ -305,7 +308,7 @@ impl<'a, T: PackageInfoProvider + Send + Sync, M: MfeConfigProvider, E: From<Com
     fn command(
         &self,
         task_id: &TaskId,
-        _environment: &EnvironmentVariableMap,
+        environment: &EnvironmentVariableMap,
     ) -> Result<Option<Command>, E> {
         debug!(
             "MicroFrontendProxyProvider::command - called for task: {}",
@@ -374,6 +377,7 @@ impl<'a, T: PackageInfoProvider + Send + Sync, M: MfeConfigProvider, E: From<Com
                 which::which(package_manager.command()).map_err(CommandProviderError::from)?;
             let mut cmd = Command::new(&program);
             cmd.current_dir(package_dir).args(args).open_stdin();
+            apply_environment(&mut cmd, environment);
             Some(cmd)
         } else if has_mfe_dependency {
             debug!("MicroFrontendProxyProvider::command - using @vercel/microfrontends proxy");
@@ -392,6 +396,7 @@ impl<'a, T: PackageInfoProvider + Send + Sync, M: MfeConfigProvider, E: From<Com
             let program = package_dir.join_components(&["node_modules", ".bin", bin_name]);
             let mut cmd = Command::new(program.as_std_path());
             cmd.current_dir(package_dir).args(args).open_stdin();
+            apply_environment(&mut cmd, environment);
             Some(cmd)
         } else {
             debug!("MicroFrontendProxyProvider::command - using Turborepo built-in proxy");
@@ -411,9 +416,199 @@ impl<'a, T: PackageInfoProvider + Send + Sync, M: MfeConfigProvider, E: From<Com
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::OsStr;
+    use std::{
+        collections::{BTreeMap, HashMap},
+        ffi::OsStr,
+        fs,
+        path::{Path, PathBuf},
+    };
+
+    use tempfile::TempDir;
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use turborepo_errors::Spanned;
+    use turborepo_repository::package_json::PackageJson;
 
     use super::*;
+
+    struct MockPackageInfoProvider {
+        package_info: PackageInfo,
+        package_manager: PackageManager,
+    }
+
+    impl PackageInfoProvider for MockPackageInfoProvider {
+        fn package_manager(&self) -> &PackageManager {
+            &self.package_manager
+        }
+
+        fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {
+            matches!(name, PackageName::Other(package) if package == "web")
+                .then_some(&self.package_info)
+        }
+    }
+
+    struct MockMfeConfig;
+
+    impl MfeConfigProvider for MockMfeConfig {
+        fn task_has_mfe_proxy(&self, _task_id: &TaskId) -> bool {
+            false
+        }
+
+        fn dev_task_port(&self, _task_id: &TaskId) -> Option<u16> {
+            None
+        }
+
+        fn task_uses_turborepo_proxy(&self, _task_id: &TaskId) -> bool {
+            false
+        }
+
+        fn has_dev_task<'a>(&self, _task_ids: impl Iterator<Item = &'a TaskId<'static>>) -> bool {
+            false
+        }
+
+        fn should_use_turborepo_proxy(&self) -> bool {
+            false
+        }
+
+        fn dev_tasks(&self, package_name: &str) -> Option<Vec<(TaskId<'static>, String)>> {
+            (package_name == "web")
+                .then(|| vec![(TaskId::new("docs", "dev"), "docs-app".to_owned())])
+        }
+
+        fn config_filename(&self, package_name: &str) -> Option<String> {
+            (package_name == "web").then(|| "web/microfrontends.json".to_owned())
+        }
+    }
+
+    fn create_test_repo() -> (TempDir, AbsoluteSystemPathBuf, PathBuf) {
+        let tempdir = tempfile::tempdir().unwrap();
+        let repo_root =
+            AbsoluteSystemPathBuf::new(tempdir.path().to_string_lossy().to_string()).unwrap();
+        let package_dir = tempdir.path().join("web");
+        fs::create_dir_all(&package_dir).unwrap();
+
+        (tempdir, repo_root, package_dir)
+    }
+
+    fn inherited_env_name() -> &'static str {
+        let name = if cfg!(windows) { "USERNAME" } else { "USER" };
+        assert!(
+            std::env::var_os(name).is_some(),
+            "{name} must be set for this environment filtering regression test"
+        );
+        name
+    }
+
+    fn filtered_environment() -> EnvironmentVariableMap {
+        EnvironmentVariableMap::from(HashMap::from([
+            ("ALLOWED_VAR".to_owned(), "allowed".to_owned()),
+            ("PATH".to_owned(), std::env::var("PATH").unwrap()),
+        ]))
+    }
+
+    fn package_info(package_json: PackageJson) -> PackageInfo {
+        PackageInfo {
+            package_json,
+            package_json_path: AnchoredSystemPathBuf::from_raw("web/package.json").unwrap(),
+            unresolved_external_dependencies: None,
+            transitive_dependencies: None,
+        }
+    }
+
+    fn proxy_command(
+        repo_root: &AbsoluteSystemPathBuf,
+        package_info_provider: &MockPackageInfoProvider,
+        environment: &EnvironmentVariableMap,
+    ) -> Command {
+        let mfe_config = MockMfeConfig;
+        let tasks = [TaskId::new("docs", "dev"), TaskId::new("web", "proxy")];
+        let provider = MicroFrontendProxyProvider::new(
+            repo_root,
+            package_info_provider,
+            tasks.iter(),
+            &mfe_config,
+        );
+
+        CommandProvider::<CommandProviderError>::command(
+            &provider,
+            &TaskId::new("web", "proxy"),
+            environment,
+        )
+        .unwrap()
+        .unwrap()
+    }
+
+    async fn command_stdout(cmd: Command) -> String {
+        let output = tokio::process::Command::from(cmd).output().await.unwrap();
+        assert!(
+            output.status.success(),
+            "command failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        String::from_utf8(output.stdout).unwrap()
+    }
+
+    fn assert_filtered_environment(stdout: &str, inherited_env: &str) {
+        assert!(
+            stdout.lines().any(|line| line == "ALLOWED_VAR=allowed"),
+            "allowed env var missing from stdout: {stdout}"
+        );
+        assert!(
+            stdout
+                .lines()
+                .any(|line| line == format!("{inherited_env}=")),
+            "inherited env var leaked into stdout: {stdout}"
+        );
+    }
+
+    fn write_custom_proxy_package(package_dir: &Path, inherited_env: &str) {
+        fs::write(
+            package_dir.join("package.json"),
+            r#"{"scripts":{"proxy":"node print-env.js"}}"#,
+        )
+        .unwrap();
+        fs::write(
+            package_dir.join("print-env.js"),
+            format!(
+                "const inherited = {inherited_env:?};\nconsole.log('ALLOWED_VAR=' + \
+                 (process.env.ALLOWED_VAR ?? ''));\nconsole.log(inherited + '=' + \
+                 (process.env[inherited] ?? ''));\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    fn write_microfrontends_binary(package_dir: &Path, inherited_env: &str) {
+        let bin_dir = package_dir.join("node_modules").join(".bin");
+        fs::create_dir_all(&bin_dir).unwrap();
+
+        let binary_path = bin_dir.join(if cfg!(windows) {
+            "microfrontends.cmd"
+        } else {
+            "microfrontends"
+        });
+        let script = if cfg!(windows) {
+            format!(
+                "@echo off\r\necho ALLOWED_VAR=%ALLOWED_VAR%\r\necho \
+                 {inherited_env}=%{inherited_env}%\r\n"
+            )
+        } else {
+            format!(
+                "#!/bin/sh\nprintf 'ALLOWED_VAR=%s\\n' \"${{ALLOWED_VAR-}}\"\nprintf \
+                 '{inherited_env}=%s\\n' \"${{{inherited_env}-}}\"\n"
+            )
+        };
+        fs::write(&binary_path, script).unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            let mut permissions = fs::metadata(&binary_path).unwrap().permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(&binary_path, permissions).unwrap();
+        }
+    }
 
     struct EchoProvider;
 
@@ -496,5 +691,47 @@ mod tests {
             .command(&task_id, &EnvironmentVariableMap::default())
             .unwrap();
         assert!(cmd.is_none(), "expected no cmd, got {cmd:?}");
+    }
+
+    #[tokio::test]
+    async fn test_custom_microfrontend_proxy_command_applies_filtered_environment() {
+        let (_tempdir, repo_root, package_dir) = create_test_repo();
+        let inherited_env = inherited_env_name();
+        write_custom_proxy_package(&package_dir, inherited_env);
+        let package_info_provider = MockPackageInfoProvider {
+            package_info: package_info(PackageJson {
+                scripts: BTreeMap::from([(
+                    "proxy".to_owned(),
+                    Spanned::new("node print-env.js".to_owned()),
+                )]),
+                ..Default::default()
+            }),
+            package_manager: PackageManager::Npm,
+        };
+        let cmd = proxy_command(&repo_root, &package_info_provider, &filtered_environment());
+        let stdout = command_stdout(cmd).await;
+
+        assert_filtered_environment(&stdout, inherited_env);
+    }
+
+    #[tokio::test]
+    async fn test_microfrontends_binary_proxy_command_applies_filtered_environment() {
+        let (_tempdir, repo_root, package_dir) = create_test_repo();
+        let inherited_env = inherited_env_name();
+        write_microfrontends_binary(&package_dir, inherited_env);
+        let package_info_provider = MockPackageInfoProvider {
+            package_info: package_info(PackageJson {
+                dependencies: Some(BTreeMap::from([(
+                    "@vercel/microfrontends".to_owned(),
+                    "1.0.0".to_owned(),
+                )])),
+                ..Default::default()
+            }),
+            package_manager: PackageManager::Npm,
+        };
+        let cmd = proxy_command(&repo_root, &package_info_provider, &filtered_environment());
+        let stdout = command_stdout(cmd).await;
+
+        assert_filtered_environment(&stdout, inherited_env);
     }
 }

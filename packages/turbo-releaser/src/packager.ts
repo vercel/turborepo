@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import type { Platform } from "./types";
 import operations from "./operations";
 
@@ -44,7 +44,9 @@ export async function packAndPublish({
 
   if (!skipPublish) {
     console.log("Publishing artifacts...");
-    const npmVersion = execSync("npm --version").toString().trim();
+    const npmVersion = execFileSync("npm", ["--version"], {
+      encoding: "utf8"
+    }).trim();
     console.log(`npm version: ${npmVersion}`);
     operations.publishArtifacts(artifacts, npmTag);
   } else {

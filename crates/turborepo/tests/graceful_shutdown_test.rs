@@ -5,6 +5,7 @@ mod unix {
     use std::{
         fs,
         io::{Read, Write},
+        os::unix::process::CommandExt,
         path::{Path, PathBuf},
         process::{Child, Command, Output, Stdio},
         sync::{Arc, Mutex},
@@ -171,6 +172,10 @@ mod unix {
         assert_cmd::cargo::cargo_bin("turbo")
     }
 
+    fn turbo_node_wrapper() -> PathBuf {
+        common::manifest_dir().join("../../packages/turbo/bin/turbo")
+    }
+
     fn spawn_noninteractive_turbo(test_dir: &Path) -> ChildGuard {
         let mut cmd = Command::new(turbo_bin());
         cmd.arg("run")
@@ -188,6 +193,28 @@ mod unix {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         ChildGuard::new(cmd.spawn().expect("failed to spawn turbo"))
+    }
+
+    fn spawn_noninteractive_turbo_via_node_wrapper(test_dir: &Path) -> ChildGuard {
+        let mut cmd = Command::new("node");
+        cmd.arg(turbo_node_wrapper())
+            .arg("run")
+            .arg("dev")
+            .arg("--filter=app-a")
+            .env("TURBO_BINARY_PATH", turbo_bin())
+            .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+            .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
+            .env("TURBO_PRINT_VERSION_DISABLED", "1")
+            .env("DO_NOT_TRACK", "1")
+            .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
+            .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
+            .env_remove("CI")
+            .env_remove("GITHUB_ACTIONS")
+            .current_dir(test_dir)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .process_group(0);
+        ChildGuard::new(cmd.spawn().expect("failed to spawn turbo wrapper"))
     }
 
     fn spawn_interactive_turbo(test_dir: &Path) -> PtyTurbo {
@@ -296,6 +323,11 @@ mod unix {
         signal::kill(Pid::from_raw(pid), signal_kind).expect("failed to send signal");
     }
 
+    fn send_signal_to_process_group(process_group_id: i32, signal_kind: Signal) {
+        signal::kill(Pid::from_raw(-process_group_id), signal_kind)
+            .expect("failed to send signal to process group");
+    }
+
     fn process_exists(pid: i32) -> bool {
         Command::new("kill")
             .arg("-0")
@@ -385,6 +417,159 @@ while true; do sleep 0.2 || true; done
         assert!(
             cleanup_idx < cleanup_done_idx,
             "cleanup completion log should appear after cleanup starts\n{transcript}"
+        );
+    }
+
+    #[test]
+    fn run_gracefully_shuts_down_on_first_sigint_without_tty_and_exits_zero() {
+        let (_tempdir, test_dir) = setup_shutdown_example(
+            "graceful.sh",
+            r#"#!/usr/bin/env bash
+set -u
+trap 'printf "graceful cleanup start\n"; sleep 0.5; : > cleanup.done; printf "graceful cleanup done\n"; exit 0' INT
+printf "graceful ready\n"
+: > ready
+while true; do sleep 0.2 || true; done
+"#,
+        );
+
+        let ready_file = test_dir.join("apps/app-a/ready");
+        let cleanup_file = test_dir.join("apps/app-a/cleanup.done");
+
+        let mut child = spawn_noninteractive_turbo(&test_dir);
+        wait_for_path(&ready_file, START_TIMEOUT);
+
+        send_signal(child.child_mut().id() as i32, Signal::SIGINT);
+        let output = child.into_output(EXIT_TIMEOUT);
+        let combined = normalize_output(&format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+
+        assert!(
+            output.status.success(),
+            "graceful shutdown on SIGINT should exit 0\n{combined}"
+        );
+        assert!(
+            cleanup_file.exists(),
+            "graceful cleanup marker should exist"
+        );
+        assert!(
+            combined.contains("graceful cleanup done"),
+            "expected cleanup completion log after signal\n{combined}"
+        );
+    }
+
+    #[test]
+    fn node_wrapper_waits_for_graceful_shutdown_on_sigint() {
+        let (_tempdir, test_dir) = setup_shutdown_example(
+            "slow-graceful.sh",
+            r#"#!/usr/bin/env bash
+set -u
+trap 'printf "wrapper cleanup start\n"; sleep 2; : > cleanup.done; printf "wrapper cleanup done\n"; exit 0' INT
+printf "wrapper ready\n"
+: > ready
+while true; do sleep 0.2 || true; done
+"#,
+        );
+
+        let ready_file = test_dir.join("apps/app-a/ready");
+        let cleanup_file = test_dir.join("apps/app-a/cleanup.done");
+
+        let mut child = spawn_noninteractive_turbo_via_node_wrapper(&test_dir);
+        wait_for_path(&ready_file, START_TIMEOUT);
+
+        let wrapper_pid = child.child_mut().id() as i32;
+        send_signal_to_process_group(wrapper_pid, Signal::SIGINT);
+        thread::sleep(Duration::from_secs(1));
+
+        let exited_early = child
+            .child_mut()
+            .try_wait()
+            .expect("failed waiting for node wrapper")
+            .is_some();
+
+        let output = child.into_output(EXIT_TIMEOUT);
+        let combined = normalize_output(&format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+
+        assert!(
+            !exited_early,
+            "node wrapper exited before turbo finished graceful shutdown\n{combined}"
+        );
+        assert!(
+            output.status.success(),
+            "graceful shutdown via node wrapper should exit 0\n{combined}"
+        );
+        assert!(
+            cleanup_file.exists(),
+            "graceful cleanup marker should exist"
+        );
+        assert!(
+            combined.contains("wrapper cleanup done"),
+            "expected cleanup completion log after signal\n{combined}"
+        );
+    }
+
+    #[test]
+    fn node_wrapper_forwards_sigterm_to_turbo() {
+        let (_tempdir, test_dir) = setup_shutdown_example(
+            "slow-sigterm.sh",
+            r#"#!/usr/bin/env bash
+set -u
+trap 'printf "wrapper sigterm cleanup start\n"; sleep 2; : > cleanup.done; printf "wrapper sigterm cleanup done\n"; exit 0' INT
+printf "wrapper term ready\n"
+: > ready
+while true; do sleep 0.2 || true; done
+"#,
+        );
+
+        let ready_file = test_dir.join("apps/app-a/ready");
+        let cleanup_file = test_dir.join("apps/app-a/cleanup.done");
+
+        let mut child = spawn_noninteractive_turbo_via_node_wrapper(&test_dir);
+        wait_for_path(&ready_file, START_TIMEOUT);
+
+        let wrapper_pid = child.child_mut().id() as i32;
+        send_signal(wrapper_pid, Signal::SIGTERM);
+        thread::sleep(Duration::from_secs(1));
+
+        let exited_early = child
+            .child_mut()
+            .try_wait()
+            .expect("failed waiting for node wrapper")
+            .is_some();
+
+        if exited_early {
+            let _ = signal::kill(Pid::from_raw(-wrapper_pid), Signal::SIGKILL);
+        }
+
+        let output = child.into_output(EXIT_TIMEOUT);
+        let combined = normalize_output(&format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+
+        assert!(
+            !exited_early,
+            "node wrapper exited before turbo finished graceful shutdown on SIGTERM\n{combined}"
+        );
+        assert!(
+            output.status.success(),
+            "graceful shutdown via node wrapper should exit 0 on SIGTERM\n{combined}"
+        );
+        assert!(
+            cleanup_file.exists(),
+            "graceful cleanup marker should exist"
+        );
+        assert!(
+            combined.contains("wrapper sigterm cleanup done"),
+            "expected cleanup completion log after signal\n{combined}"
         );
     }
 
@@ -481,34 +666,5 @@ while true; do sleep 0.2 || true; done
                 .contains("Graceful shutdown timed out. Force killing Turborepo tasks: app-a#dev"),
             "expected auto-force banner after timeout\n{combined}"
         );
-    }
-
-    #[test]
-    fn run_kills_task_tree_when_turbo_is_sigkilled() {
-        let (_tempdir, test_dir) = setup_shutdown_example(
-            "orphanable.sh",
-            r#"#!/usr/bin/env bash
-set -u
-sh -c 'trap "" TERM INT; while true; do sleep 0.2 || true; done' &
-child=$!
-printf '%s\n' "$child" > child.pid
-printf "orphanable ready child=%s\n" "$child"
-: > ready
-while true; do sleep 0.2 || true; done
-"#,
-        );
-
-        let ready_file = test_dir.join("apps/app-a/ready");
-        let child_pid_file = test_dir.join("apps/app-a/child.pid");
-
-        let mut child = spawn_noninteractive_turbo(&test_dir);
-        wait_for_path(&ready_file, START_TIMEOUT);
-        let task_child_pid = wait_for_pid_file(&child_pid_file, START_TIMEOUT);
-
-        send_signal(child.child_mut().id() as i32, Signal::SIGKILL);
-        let _status = wait_for_process_exit(child.child_mut(), Duration::from_secs(5));
-        let _ = child.child.take();
-
-        wait_for_process_gone(task_child_pid, Duration::from_secs(5));
     }
 }

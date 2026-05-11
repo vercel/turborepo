@@ -27,7 +27,7 @@ use jsonc_parser::{
 use serde_json::Value;
 use tokio::sync::watch::{Receiver, Sender};
 use tower_lsp::{
-    Client, LanguageServer,
+    Client, LanguageServer, LspService, Server,
     jsonrpc::{Error, Result as LspResult},
     lsp_types::*,
 };
@@ -42,6 +42,8 @@ use turborepo_repository::{
     package_json::PackageJson,
 };
 
+const TURBO_EXTENDS: &str = "$TURBO_EXTENDS$";
+
 pub struct Backend {
     client: Client,
     repo_root: Arc<Mutex<Option<AbsoluteSystemPathBuf>>>,
@@ -51,6 +53,23 @@ pub struct Backend {
 
     // this is only used for turbo optimize
     pidlock: Mutex<Option<pidlock::Pidlock>>,
+}
+
+pub fn run_lsp_server() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to build tokio runtime");
+
+    runtime.block_on(run_lsp());
+}
+
+pub async fn run_lsp() {
+    let stdin = tokio::io::stdin();
+    let stdout = tokio::io::stdout();
+
+    let (service, socket) = LspService::new(Backend::new);
+    Server::new(stdin, stdout, socket).serve(service).await;
 }
 
 #[tower_lsp::async_trait]
@@ -96,7 +115,7 @@ impl LanguageServer for Backend {
                     tokio_retry::strategy::FixedInterval::from_millis(100).take(5),
                     || {
                         let can_start_server = true;
-                        let can_kill_server = false;
+                        let can_kill_server = true;
                         let connector = DaemonConnector::new(
                             can_start_server,
                             can_kill_server,
@@ -134,12 +153,21 @@ impl LanguageServer for Backend {
                 }
                 Err(e) => {
                     self.client
+                        .show_message(
+                            MessageType::ERROR,
+                            "Turborepo language server failed to connect to the daemon. See the \
+                             output for details.",
+                        )
+                        .await;
+                    self.client
                         .log_message(
                             MessageType::ERROR,
                             format!("failed to connect to daemon: {e}"),
                         )
                         .await;
-                    return Err(Error::internal_error());
+                    return Ok(InitializeResult {
+                        ..Default::default()
+                    });
                 }
             };
 
@@ -167,12 +195,21 @@ impl LanguageServer for Backend {
                 }
                 Err(e) => {
                     self.client
+                        .show_message(
+                            MessageType::ERROR,
+                            "Turborepo language server failed to initialize. See the output for \
+                             details.",
+                        )
+                        .await;
+                    self.client
                         .log_message(
                             MessageType::ERROR,
                             format!("Failed to acquire pidlock: {e}"),
                         )
                         .await;
-                    return Err(Error::internal_error());
+                    return Ok(InitializeResult {
+                        ..Default::default()
+                    });
                 }
             }
         }
@@ -546,7 +583,10 @@ impl LanguageServer for Backend {
     /// Add an entry to the list of ropes for a newly opened file
     async fn did_open(&self, document: DidOpenTextDocumentParams) {
         self.client
-            .log_message(MessageType::INFO, "file opened!")
+            .log_message(
+                MessageType::INFO,
+                format!("file opened: {}", document.text_document.uri),
+            )
             .await;
 
         let rope = crop::Rope::from(document.text_document.text);
@@ -564,7 +604,10 @@ impl LanguageServer for Backend {
     /// made to the buffer in the editor
     async fn did_change(&self, document: DidChangeTextDocumentParams) {
         self.client
-            .log_message(MessageType::INFO, "file changed!")
+            .log_message(
+                MessageType::INFO,
+                format!("file changed: {}", document.text_document.uri),
+            )
             .await;
 
         let updated_rope = {
@@ -596,15 +639,21 @@ impl LanguageServer for Backend {
         .await;
     }
 
-    async fn did_save(&self, _: DidSaveTextDocumentParams) {
+    async fn did_save(&self, document: DidSaveTextDocumentParams) {
         self.client
-            .log_message(MessageType::INFO, "file saved!")
+            .log_message(
+                MessageType::INFO,
+                format!("file saved: {}", document.text_document.uri),
+            )
             .await;
     }
 
-    async fn did_close(&self, _: DidCloseTextDocumentParams) {
+    async fn did_close(&self, document: DidCloseTextDocumentParams) {
         self.client
-            .log_message(MessageType::INFO, "file closed!")
+            .log_message(
+                MessageType::INFO,
+                format!("file closed: {}", document.text_document.uri),
+            )
             .await;
     }
 
@@ -716,7 +765,7 @@ impl Backend {
         let root_turbo_json = repo_root.join_component("turbo.json");
         let workspaces = packages.map(|p| {
             chain(
-                p.workspaces.into_iter(),
+                p.workspaces,
                 iter::once(WorkspaceData {
                     package_json: repo_root.join_component("package.json"),
                     turbo_json: root_turbo_json.exists().then_some(root_turbo_json),
@@ -788,9 +837,13 @@ impl Backend {
                     .flatten(),
             );
 
-            let pipeline = object
-                .and_then(|o| o.get_object("tasks"))
-                .map(|p| p.properties.iter());
+            let tasks_object = object.and_then(|o| o.get_object("tasks"));
+
+            let pipeline = tasks_object.map(|p| p.properties.iter());
+
+            let transit_nodes = tasks_object
+                .map(collect_transit_node_tasks)
+                .unwrap_or_default();
 
             for property in pipeline.into_iter().flatten() {
                 let mut object_range = property.range;
@@ -803,6 +856,7 @@ impl Backend {
                 {
                     report_invalid_packages_and_tasks(
                         tasks,
+                        &transit_nodes,
                         packages,
                         &rope,
                         &mut diagnostics,
@@ -832,6 +886,10 @@ impl Backend {
                 {
                     for depends_on in &array.elements {
                         if let Some(string) = depends_on.as_string_lit().cloned() {
+                            if is_turbo_extends_sentinel(&string) {
+                                continue;
+                            }
+
                             let suffix = if let Some(suffix) = strip_lit_prefix(&string, "^") {
                                 diagnostics.push(Diagnostic {
                                     message: format!(
@@ -888,6 +946,7 @@ impl Backend {
                             if let Ok((tasks, packages)) = &tasks_and_packages {
                                 report_invalid_packages_and_tasks(
                                     tasks,
+                                    &transit_nodes,
                                     packages,
                                     &rope,
                                     &mut diagnostics,
@@ -950,6 +1009,29 @@ fn strip_lit_prefix<'a>(s: &'a StringLit<'a>, prefix: &str) -> Option<StringLit<
         })
 }
 
+fn is_turbo_extends_sentinel(string: &StringLit<'_>) -> bool {
+    string.value == TURBO_EXTENDS
+}
+
+fn collect_transit_node_tasks(tasks: &jsonc_parser::ast::Object<'_>) -> HashSet<String> {
+    tasks
+        .properties
+        .iter()
+        .filter_map(|property| {
+            let task = property.name.as_str();
+            let dependency = format!("^{task}");
+            let depends_on = property.value.as_object()?.get_array("dependsOn")?;
+
+            depends_on
+                .elements
+                .iter()
+                .filter_map(|value| value.as_string_lit())
+                .any(|value| value.value == dependency)
+                .then(|| task.to_string())
+        })
+        .collect()
+}
+
 /// remove quotes from a string range
 fn collapse_string_range(range: jsonc_parser::common::Range) -> jsonc_parser::common::Range {
     jsonc_parser::common::Range {
@@ -960,6 +1042,7 @@ fn collapse_string_range(range: jsonc_parser::common::Range) -> jsonc_parser::co
 
 fn report_invalid_packages_and_tasks(
     tasks: &HashMap<String, Vec<Option<String>>>,
+    transit_nodes: &HashSet<String>,
     packages: &HashSet<&str>,
     rope: &crop::Rope,
     diagnostics: &mut Vec<Diagnostic>,
@@ -1003,6 +1086,9 @@ fn report_invalid_packages_and_tasks(
                 ..Default::default()
             });
         }
+        // transit nodes are configured tasks that intentionally do not have a
+        // matching package script.
+        (None, None) if transit_nodes.contains(task) => {}
         // the task doesn't exist anywhere, so we have a problem
         (None, None) => {
             diagnostics.push(Diagnostic {
@@ -1029,5 +1115,113 @@ fn report_invalid_packages_and_tasks(
         // the task exists and we haven't specified a package, so we're
         // good
         (Some(_), None) => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        borrow::Cow,
+        collections::{HashMap, HashSet},
+    };
+
+    use jsonc_parser::{ast::StringLit, common::Range};
+    use tower_lsp::lsp_types::{Diagnostic, NumberOrString};
+
+    use super::{
+        collect_transit_node_tasks, is_turbo_extends_sentinel, report_invalid_packages_and_tasks,
+    };
+
+    fn string_lit(value: &'static str) -> StringLit<'static> {
+        StringLit {
+            value: Cow::Borrowed(value),
+            range: Range {
+                start: 0,
+                end: value.len() + 2,
+            },
+        }
+    }
+
+    #[test]
+    fn detects_turbo_extends_sentinel() {
+        assert!(is_turbo_extends_sentinel(&string_lit("$TURBO_EXTENDS$")));
+    }
+
+    #[test]
+    fn does_not_treat_other_dollar_syntax_as_turbo_extends_sentinel() {
+        assert!(!is_turbo_extends_sentinel(&string_lit("$FOO")));
+        assert!(!is_turbo_extends_sentinel(&string_lit("^$TURBO_EXTENDS$")));
+    }
+
+    #[test]
+    fn detects_transit_node_tasks() {
+        let parsed = jsonc_parser::parse_to_ast(
+            r#"{
+              "tasks": {
+                "topology": { "dependsOn": ["^topology"] },
+                "build": { "dependsOn": ["^topology"] }
+              }
+            }"#,
+            &Default::default(),
+            &Default::default(),
+        )
+        .expect("valid json");
+
+        let tasks = parsed
+            .value
+            .as_ref()
+            .and_then(|value| value.as_object())
+            .and_then(|object| object.get_object("tasks"))
+            .expect("tasks object");
+
+        let transit_nodes = collect_transit_node_tasks(tasks);
+
+        assert!(transit_nodes.contains("topology"));
+        assert!(!transit_nodes.contains("build"));
+    }
+
+    #[test]
+    fn does_not_report_missing_task_for_transit_node() {
+        let rope = crop::Rope::from(r#""topology""#);
+        let mut diagnostics = Vec::new();
+        let transit_nodes = HashSet::from(["topology".to_string()]);
+        let tasks = HashMap::new();
+        let packages = Default::default();
+
+        report_invalid_packages_and_tasks(
+            &tasks,
+            &transit_nodes,
+            &packages,
+            &rope,
+            &mut diagnostics,
+            &string_lit("topology"),
+        );
+
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn reports_missing_task_when_not_a_transit_node() {
+        let rope = crop::Rope::from(r#""topology""#);
+        let mut diagnostics = Vec::new();
+
+        report_invalid_packages_and_tasks(
+            &HashMap::new(),
+            &Default::default(),
+            &Default::default(),
+            &rope,
+            &mut diagnostics,
+            &string_lit("topology"),
+        );
+
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostic_code(&diagnostics[0]), Some("turbo:no-such-task"));
+    }
+
+    fn diagnostic_code(diagnostic: &Diagnostic) -> Option<&str> {
+        match diagnostic.code.as_ref()? {
+            NumberOrString::String(code) => Some(code.as_str()),
+            NumberOrString::Number(_) => None,
+        }
     }
 }

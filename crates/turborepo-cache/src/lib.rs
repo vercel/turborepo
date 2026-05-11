@@ -5,7 +5,6 @@
 //! gzipped tarballs.
 
 #![feature(error_generic_member_access)]
-#![feature(assert_matches)]
 #![feature(box_patterns)]
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]

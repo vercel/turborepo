@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "node:fs/promises";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import * as tar from "tar";
 import native from "./native";
 import type { Platform } from "./types";
@@ -22,6 +22,33 @@ export interface PackOptions {
   description?: string;
 }
 
+function validateVersion(version: string) {
+  if (!/^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$/.test(version)) {
+    throw new Error(`Invalid version: ${version}`);
+  }
+}
+
+function validateNpmTag(npmTag: string) {
+  if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,127}$/.test(npmTag)) {
+    throw new Error(`Invalid npm tag: ${npmTag}`);
+  }
+}
+
+function validatePathSegment(name: string, value: string) {
+  if (!/^[0-9A-Za-z._-]+$/.test(value) || value.includes("..")) {
+    throw new Error(`Invalid ${name}: ${value}`);
+  }
+}
+
+function validatePackagePrefix(packagePrefix: string) {
+  const validPackagePrefix =
+    /^(@[0-9A-Za-z._-]+(\/[0-9A-Za-z._-]+)?|[0-9A-Za-z._-]+)$/;
+
+  if (!validPackagePrefix.test(packagePrefix)) {
+    throw new Error(`Invalid package prefix: ${packagePrefix}`);
+  }
+}
+
 async function packPlatform({
   platform,
   version,
@@ -31,12 +58,19 @@ async function packPlatform({
   srcDirPrefix = "dist",
   description
 }: PackOptions): Promise<string> {
+  validateVersion(version);
+  validatePackagePrefix(packagePrefix);
+  validatePathSegment("binary name", binaryBaseName);
+  validatePathSegment("source directory prefix", srcDirPrefix);
+
   const { os, arch } = platform;
   console.log(`Packing platform: ${os}-${arch}`);
   const npmDirName = `${packagePrefix}-${os}-${arch}`
     .replace("@", "")
     .replace("/", "-");
-  const tarballDir = path.join(srcDir, "dist", `${npmDirName}-${version}`);
+  validatePathSegment("package directory name", npmDirName);
+  const distDir = path.join(srcDir, "dist");
+  const tarballDir = path.join(distDir, `${npmDirName}-${version}`);
   const scaffoldDir = path.join(tarballDir, npmDirName);
 
   console.log("Generating native package...");
@@ -44,6 +78,7 @@ async function packPlatform({
     platform,
     version,
     outputDir: scaffoldDir,
+    outputBaseDir: tarballDir,
     packagePrefix,
     description
   });
@@ -66,7 +101,7 @@ async function packPlatform({
 
   console.log("Creating tar.gz...");
   const tarName = `${npmDirName}-${version}.tar.gz`;
-  const tarPath = path.join(srcDir, "dist", tarName);
+  const tarPath = path.join(distDir, tarName);
   await tar.create(
     {
       gzip: true,
@@ -81,12 +116,23 @@ async function packPlatform({
 }
 
 function publishArtifacts(artifacts: Array<string>, npmTag: string) {
+  validateNpmTag(npmTag);
+
   for (const artifact of artifacts) {
-    const npmVersion = execSync("npm --version").toString().trim();
+    const npmVersion = execFileSync("npm", ["--version"], {
+      encoding: "utf8"
+    }).trim();
     console.log(`npm version: ${npmVersion}`);
-    const publishCommand = `npm publish "${artifact}" --tag ${npmTag} --access public`;
-    console.log(`Executing: ${publishCommand}`);
-    execSync(publishCommand, { stdio: "inherit" });
+    console.log(
+      `Executing: npm publish ${artifact} --tag ${npmTag} --access public`
+    );
+    execFileSync(
+      "npm",
+      ["publish", artifact, "--tag", npmTag, "--access", "public"],
+      {
+        stdio: "inherit"
+      }
+    );
   }
 }
 

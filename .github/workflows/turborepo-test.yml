@@ -9,15 +9,16 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
-  actions: write
   contents: read
-  pull-requests: write
 
 jobs:
   find-changes:
     name: Find path changes
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       is-release-pr: ${{ steps.check-release.outputs.is-release-pr }}
       docs: ${{ steps.filter.outputs.docs }}
@@ -28,12 +29,63 @@ jobs:
       # Detect automated release PRs which only contain version bumps.
       # These PRs are created by the release workflow after code has already
       # been tested on main. Skipping tests on version-only changes saves CI time.
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Check if automated release PR
         id: check-release
-        uses: ./.github/actions/check-release-pr
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "is-release-pr=false" >> "$GITHUB_OUTPUT"
+            echo "Not a pull_request event, skipping release PR check"
+            exit 0
+          fi
+
+          if [[ "$PR_AUTHOR" != "github-actions[bot]" || ! "$PR_TITLE" =~ ^release\(turborepo\): ]]; then
+            echo "is-release-pr=false" >> "$GITHUB_OUTPUT"
+            echo "Not a release PR (author: $PR_AUTHOR, title: $PR_TITLE)"
+            exit 0
+          fi
+
+          CHANGED_FILES=$(gh api --paginate "repos/${REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename')
+          if [[ -z "$CHANGED_FILES" ]]; then
+            echo "::error::Unable to determine changed files for release PR"
+            exit 1
+          fi
+
+          echo "Changed files in release PR:"
+          printf '%s\n' "$CHANGED_FILES"
+
+          ALLOWED_PATTERN="^(version\.txt|.*/package\.json|package\.json|Cargo\.toml|Cargo\.lock|.*/Cargo\.toml|CHANGELOG.*|pnpm-lock\.yaml)$"
+          INVALID_FILES=""
+          while IFS= read -r file; do
+            if [[ -n "$file" && ! "$file" =~ $ALLOWED_PATTERN ]]; then
+              INVALID_FILES="$INVALID_FILES$file"$'\n'
+            fi
+          done <<< "$CHANGED_FILES"
+
+          if [[ -n "$INVALID_FILES" ]]; then
+            echo "::error::Release PR contains unexpected files that are not version-related:"
+            printf '%s\n' "$INVALID_FILES"
+            echo "::error::Release PRs should only modify version.txt, package.json, Cargo.toml, Cargo.lock, CHANGELOG, or pnpm-lock.yaml"
+            exit 1
+          fi
+
+          echo "is-release-pr=true" >> "$GITHUB_OUTPUT"
+          echo "Release PR content validation passed - only version-related files changed"
+
+      - name: Checkout
+        if: steps.check-release.outputs.is-release-pr != 'true'
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Check path changes
         if: steps.check-release.outputs.is-release-pr != 'true'
@@ -130,7 +182,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -160,21 +214,24 @@ jobs:
     timeout-minutes: 45
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    # Prebuilding test archives depends on Turborepo remote cache auth, which is disabled for now.
+    # if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    if: ${{ false }}
     name: Build test artifacts (windows)
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
-      SCCACHE_BUCKET: turborepo-sccache
-      SCCACHE_REGION: us-east-2
-      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
+      # AWS-backed sccache is disabled.
+      # SCCACHE_BUCKET: turborepo-sccache
+      # SCCACHE_REGION: us-east-2
+      # RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
       CARGO_INCREMENTAL: 0
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      SCCACHE_IDLE_TIMEOUT: 0
-      SCCACHE_REQUEST_TIMEOUT: 30
-      SCCACHE_ERROR_LOG: error
+      # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      # SCCACHE_IDLE_TIMEOUT: 0
+      # SCCACHE_REQUEST_TIMEOUT: 30
+      # SCCACHE_ERROR_LOG: error
     steps:
       - name: Install git (Windows larger runners)
         shell: cmd
@@ -196,7 +253,9 @@ jobs:
           git config --global core.eol lf
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -205,8 +264,8 @@ jobs:
           node-version: "18.20.2"
           package-install: "false"
 
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.6
+      # - name: Run sccache-cache
+      #   uses: mozilla-actions/sccache-action@v0.0.6
 
       - name: Install cargo-nextest
         shell: cmd
@@ -218,11 +277,7 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Build and archive test binaries
-        run: |
-          if [ -z "${RUSTC_WRAPPER}" ]; then
-            unset RUSTC_WRAPPER
-          fi
-          turbo run build:test-archive --filter=@turbo/cli
+        run: turbo run build:test-archive --filter=@turbo/cli
         shell: bash
 
   build_rust_test_macos:
@@ -230,24 +285,29 @@ jobs:
     timeout-minutes: 45
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    # Prebuilding test archives depends on Turborepo remote cache auth, which is disabled for now.
+    # if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    if: ${{ false }}
     name: Build test artifacts (macos)
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
-      SCCACHE_BUCKET: turborepo-sccache
-      SCCACHE_REGION: us-east-2
-      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
+      # AWS-backed sccache is disabled.
+      # SCCACHE_BUCKET: turborepo-sccache
+      # SCCACHE_REGION: us-east-2
+      # RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
       CARGO_INCREMENTAL: 0
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      SCCACHE_IDLE_TIMEOUT: 0
-      SCCACHE_REQUEST_TIMEOUT: 30
-      SCCACHE_ERROR_LOG: error
+      # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      # SCCACHE_IDLE_TIMEOUT: 0
+      # SCCACHE_REQUEST_TIMEOUT: 30
+      # SCCACHE_ERROR_LOG: error
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -256,8 +316,8 @@ jobs:
           node-version: "18.20.2"
           package-install: "false"
 
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.6
+      # - name: Run sccache-cache
+      #   uses: mozilla-actions/sccache-action@v0.0.6
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
@@ -268,11 +328,7 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Build and archive test binaries
-        run: |
-          if [ -z "${RUSTC_WRAPPER}" ]; then
-            unset RUSTC_WRAPPER
-          fi
-          turbo run build:test-archive --filter=@turbo/cli
+        run: turbo run build:test-archive --filter=@turbo/cli
         shell: bash
 
   rust_test_macos:
@@ -280,7 +336,7 @@ jobs:
     timeout-minutes: 45
     needs:
       - find-changes
-      - build_rust_test_macos
+      # - build_rust_test_macos
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     strategy:
       fail-fast: false
@@ -289,7 +345,9 @@ jobs:
     name: Rust testing on macos (partition ${{ matrix.partition }}/2)
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -309,13 +367,14 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      - name: Restore test archive from cache
+      - name: Build test archive
         run: turbo run build:test-archive --filter=@turbo/cli
         shell: bash
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-          TURBO_CACHE: remote:rw
+        # Remote cache is not authed right now; build locally instead.
+        # env:
+        #   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+        #   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+        #   TURBO_CACHE: remote:rw
 
       - name: Run tests
         timeout-minutes: 45
@@ -332,7 +391,7 @@ jobs:
     timeout-minutes: 45
     needs:
       - find-changes
-      - build_rust_test_windows
+      # - build_rust_test_windows
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     name: Rust testing on windows (partition ${{ matrix.partition }}/10)
     steps:
@@ -347,17 +406,20 @@ jobs:
           git config --global core.eol lf
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
-          capnproto: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
-          rust: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
+          # Local archive builds need Rust and capnproto even when remote cache is unavailable.
+          # capnproto: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
+          # rust: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
           package-install: "false"
-          rust-cache: "false"
+          rust-cache: "true"
 
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
@@ -371,13 +433,14 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      - name: Restore test archive from cache
+      - name: Build test archive
         run: turbo run build:test-archive --filter=@turbo/cli
         shell: bash
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-          TURBO_CACHE: remote:rw
+        # Remote cache is not authed right now; build locally instead.
+        # env:
+        #   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+        #   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+        #   TURBO_CACHE: remote:rw
 
       - name: Run tests
         timeout-minutes: 45
@@ -392,24 +455,29 @@ jobs:
     timeout-minutes: 45
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    # Prebuilding test archives depends on Turborepo remote cache auth, which is disabled for now.
+    # if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    if: ${{ false }}
     name: Build test artifacts (ubuntu)
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
-      SCCACHE_BUCKET: turborepo-sccache
-      SCCACHE_REGION: us-east-2
-      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
+      # AWS-backed sccache is disabled.
+      # SCCACHE_BUCKET: turborepo-sccache
+      # SCCACHE_REGION: us-east-2
+      # RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
       CARGO_INCREMENTAL: 0
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      SCCACHE_IDLE_TIMEOUT: 0
-      SCCACHE_REQUEST_TIMEOUT: 30
-      SCCACHE_ERROR_LOG: error
+      # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      # SCCACHE_IDLE_TIMEOUT: 0
+      # SCCACHE_REQUEST_TIMEOUT: 30
+      # SCCACHE_ERROR_LOG: error
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -418,8 +486,8 @@ jobs:
           node-version: "18.20.2"
           package-install: "false"
 
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.6
+      # - name: Run sccache-cache
+      #   uses: mozilla-actions/sccache-action@v0.0.6
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
@@ -430,11 +498,7 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Build and archive test binaries
-        run: |
-          if [ -z "${RUSTC_WRAPPER}" ]; then
-            unset RUSTC_WRAPPER
-          fi
-          turbo run build:test-archive --filter=@turbo/cli
+        run: turbo run build:test-archive --filter=@turbo/cli
         shell: bash
 
   rust_test_ubuntu:
@@ -442,7 +506,7 @@ jobs:
     timeout-minutes: 45
     needs:
       - find-changes
-      - build_rust_test_ubuntu
+      # - build_rust_test_ubuntu
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     strategy:
       fail-fast: false
@@ -451,7 +515,9 @@ jobs:
     name: Rust testing on ubuntu (partition ${{ matrix.partition }}/2)
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -471,13 +537,14 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      - name: Restore test archive from cache
+      - name: Build test archive
         run: turbo run build:test-archive --filter=@turbo/cli
         shell: bash
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-          TURBO_CACHE: remote:rw
+        # Remote cache is not authed right now; build locally instead.
+        # env:
+        #   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+        #   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+        #   TURBO_CACHE: remote:rw
 
       - name: Run tests
         timeout-minutes: 45
@@ -490,24 +557,26 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && !github.event.pull_request.head.repo.fork }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
+      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
 
       - name: Install dependencies
         run: pnpm install
@@ -518,8 +587,8 @@ jobs:
       - name: Setup Vercel credentials
         run: |
           cd examples
-          npx vercel link --yes --token=${{ secrets.VERCEL_TOKEN }} --project turborepo-examples-app
-          npx vercel env pull --yes --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel link --yes --token="${VERCEL_TOKEN}" --project turborepo-examples-app
+          npx vercel env pull --yes --token="${VERCEL_TOKEN}"
 
       - name: Run examples check
         run: turbo run check-examples --filter=turborepo-examples --env-mode=strict
@@ -532,18 +601,21 @@ jobs:
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' }}
     runs-on: ubuntu-latest
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
-      SCCACHE_BUCKET: turborepo-sccache
-      SCCACHE_REGION: us-east-2
-      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
+      # AWS-backed sccache is disabled.
+      # SCCACHE_BUCKET: turborepo-sccache
+      # SCCACHE_REGION: us-east-2
+      # RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
       CARGO_INCREMENTAL: 0
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -553,8 +625,8 @@ jobs:
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
 
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.6
+      # - name: Run sccache-cache
+      #   uses: mozilla-actions/sccache-action@v0.0.6
 
       - name: Build turbo binary
         run: cargo build
@@ -584,9 +656,9 @@ jobs:
           - 22
           - 24
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
+      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
     steps:
       - name: Determine fetch depth
         id: fetch-depth
@@ -594,10 +666,11 @@ jobs:
           echo "depth=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> $GITHUB_OUTPUT
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ github.ref }}
           fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
+          persist-credentials: false
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -632,6 +705,10 @@ jobs:
       - check-lockfiles
       - js_native_packages
     steps:
+      - name: Fail if change detection failed
+        if: needs.find-changes.result != 'success'
+        run: exit 1
+
       - name: Skip for release PR
         if: needs.find-changes.outputs.is-release-pr == 'true'
         run: |
@@ -684,5 +761,7 @@ jobs:
     name: Cleanup
     needs: summary
     if: always()
+    permissions:
+      actions: write
     uses: ./.github/workflows/pr-clean-caches.yml
     secrets: inherit

@@ -10,6 +10,9 @@ on:
     types:
       - completed
 
+permissions:
+  contents: read
+
 jobs:
   notify-failure:
     name: "Notify Slack on Docs Alias Failure"
@@ -23,12 +26,19 @@ jobs:
 
       - name: Get version
         id: version
+        shell: bash
         run: |
           if [ -f version.txt ]; then
-            VERSION=$(head -n 1 version.txt)
-            echo "version=${VERSION}" >> $GITHUB_OUTPUT
+            IFS= read -r VERSION < version.txt
+
+            if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+              printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning::version.txt did not contain a valid release version. Reporting unknown version."
+              echo "version=unknown" >> "$GITHUB_OUTPUT"
+            fi
           else
-            echo "version=unknown" >> $GITHUB_OUTPUT
+            echo "version=unknown" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Send failure notification to Slack
@@ -38,5 +48,5 @@ jobs:
           webhook-type: incoming-webhook
           payload: |
             {
-              "version": "${{ steps.version.outputs.version }}"
+              "version": ${{ toJSON(steps.version.outputs.version) }}
             }

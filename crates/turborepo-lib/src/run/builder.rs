@@ -7,7 +7,9 @@ use std::{
 
 use chrono::Local;
 use tracing::Instrument;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPathBuf,
+};
 use turborepo_analytics::{start_analytics, AnalyticsHandle};
 use turborepo_api_client::{APIAuth, APIClient, CacheClient, SharedHttpClient};
 use turborepo_cache::{AsyncCache, CacheScmState, LazyScmState};
@@ -33,6 +35,7 @@ use turborepo_telemetry::events::{
 use turborepo_types::UIMode;
 use turborepo_ui::ColorConfig;
 use turborepo_vercel_api::CachingStatusResponse;
+use url::Url;
 
 use crate::{
     commands::CommandBase,
@@ -284,21 +287,39 @@ impl RunBuilder {
         }
     }
 
-    fn all_package_prefixes(pkg_dep_graph: &PackageGraph) -> Vec<RelativeUnixPathBuf> {
+    fn package_prefix_for_repo_index(
+        repo_root: &AbsoluteSystemPath,
+        index_root: &AbsoluteSystemPath,
+        package_dir: &AnchoredSystemPath,
+    ) -> Result<RelativeUnixPathBuf, Error> {
+        let full_package_dir = repo_root.resolve(package_dir);
+        Ok(index_root.anchor(&full_package_dir)?.to_unix())
+    }
+
+    fn all_package_prefixes(
+        pkg_dep_graph: &PackageGraph,
+        scm: &SCM,
+    ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+        let repo_root = pkg_dep_graph.repo_root();
+        let index_root = scm.git_root().unwrap_or(repo_root);
         let mut prefixes = pkg_dep_graph
             .packages()
             .filter_map(|(name, _)| pkg_dep_graph.package_dir(name))
-            .map(|package_dir| package_dir.to_unix())
-            .collect::<Vec<_>>();
+            .map(|package_dir| {
+                Self::package_prefix_for_repo_index(repo_root, index_root, package_dir)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
-        prefixes.extend(
-            pkg_dep_graph
-                .root_internal_package_dependencies_paths()
-                .into_iter()
-                .map(|package_dir| package_dir.to_unix()),
-        );
+        let root_dependency_prefixes = pkg_dep_graph
+            .root_internal_package_dependencies_paths()
+            .into_iter()
+            .map(|package_dir| {
+                Self::package_prefix_for_repo_index(repo_root, index_root, package_dir)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        prefixes.extend(root_dependency_prefixes);
 
-        prefixes
+        Ok(prefixes)
     }
 
     /// Resolve the set of packages that should participate in this run.
@@ -493,11 +514,11 @@ impl RunBuilder {
         // parallel walk for untracked file discovery. This replaces the
         // subprocess approach (ls-tree + diff-index + ls-files race) which
         // burned ~500ms of CPU on background threads.
-        let all_prefixes = Self::all_package_prefixes(&pkg_dep_graph);
         let scm = scm_task
             .instrument(tracing::info_span!("scm_task_await"))
             .await
             .expect("detecting scm panicked");
+        let all_prefixes = Self::all_package_prefixes(&pkg_dep_graph, &scm)?;
         let repo_index_task = if all_prefixes.is_empty() {
             None
         } else {
@@ -824,7 +845,7 @@ impl RunBuilder {
                     }
                     let endpoint = otel.endpoint.as_deref().unwrap_or("");
                     let api_url = &self.opts.api_client_opts.api_url;
-                    if !hosts_match(endpoint, api_url) {
+                    if !origins_match(endpoint, api_url) {
                         tracing::warn!(
                             "use_remote_cache_token is enabled but the OTEL endpoint ({endpoint}) \
                              does not match the API URL ({api_url}). Skipping cache token \
@@ -1037,28 +1058,74 @@ impl RunBuilder {
     }
 }
 
-fn extract_host(url: &str) -> Option<&str> {
-    let after_scheme = url
-        .strip_prefix("https://")
-        .or_else(|| url.strip_prefix("http://"))?;
-    let host_and_port = after_scheme.split('/').next()?;
-    Some(host_and_port.split(':').next().unwrap_or(host_and_port))
+fn origins_match(url1: &str, url2: &str) -> bool {
+    let (Ok(url1), Ok(url2)) = (Url::parse(url1), Url::parse(url2)) else {
+        return false;
+    };
+
+    if has_userinfo(&url1) || has_userinfo(&url2) {
+        return false;
+    }
+
+    url1.origin() == url2.origin()
 }
 
-fn hosts_match(url1: &str, url2: &str) -> bool {
-    match (extract_host(url1), extract_host(url2)) {
-        (Some(h1), Some(h2)) => h1.eq_ignore_ascii_case(h2),
-        _ => false,
+fn has_userinfo(url: &Url) -> bool {
+    !url.username().is_empty() || url.password().is_some()
+}
+
+#[cfg(test)]
+mod package_prefix_tests {
+    use super::*;
+
+    #[test]
+    fn repo_index_prefixes_are_git_root_relative_for_nested_turbo_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let git_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let repo_root = git_root.join_component("downloaded-app");
+
+        let root_package = AnchoredSystemPath::new("").unwrap();
+        let workspace_package = AnchoredSystemPath::new("packages/web").unwrap();
+
+        assert_eq!(
+            RunBuilder::package_prefix_for_repo_index(&repo_root, &git_root, root_package).unwrap(),
+            RelativeUnixPathBuf::new("downloaded-app").unwrap()
+        );
+        assert_eq!(
+            RunBuilder::package_prefix_for_repo_index(&repo_root, &git_root, workspace_package)
+                .unwrap(),
+            RelativeUnixPathBuf::new("downloaded-app/packages/web").unwrap()
+        );
+    }
+
+    #[test]
+    fn repo_index_prefixes_stay_repo_relative_when_git_root_matches_turbo_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+        let root_package = AnchoredSystemPath::new("").unwrap();
+        let workspace_package = AnchoredSystemPath::new("packages/web").unwrap();
+
+        assert_eq!(
+            RunBuilder::package_prefix_for_repo_index(&repo_root, &repo_root, root_package)
+                .unwrap(),
+            RelativeUnixPathBuf::new("").unwrap()
+        );
+        assert_eq!(
+            RunBuilder::package_prefix_for_repo_index(&repo_root, &repo_root, workspace_package)
+                .unwrap(),
+            RelativeUnixPathBuf::new("packages/web").unwrap()
+        );
     }
 }
 
 #[cfg(test)]
-mod hosts_match_tests {
+mod origins_match_tests {
     use super::*;
 
     #[test]
     fn same_host_different_paths() {
-        assert!(hosts_match(
+        assert!(origins_match(
             "https://vercel.com/otel",
             "https://vercel.com/api"
         ));
@@ -1066,7 +1133,7 @@ mod hosts_match_tests {
 
     #[test]
     fn different_hosts() {
-        assert!(!hosts_match(
+        assert!(!origins_match(
             "https://third-party.com/otel",
             "https://vercel.com/api"
         ));
@@ -1074,7 +1141,7 @@ mod hosts_match_tests {
 
     #[test]
     fn case_insensitive() {
-        assert!(hosts_match(
+        assert!(origins_match(
             "https://Vercel.COM/otel",
             "https://vercel.com/api"
         ));
@@ -1082,27 +1149,67 @@ mod hosts_match_tests {
 
     #[test]
     fn with_port() {
-        assert!(hosts_match(
+        assert!(origins_match(
             "https://vercel.com:443/otel",
             "https://vercel.com/api"
         ));
     }
 
     #[test]
+    fn different_ports_do_not_match() {
+        assert!(!origins_match(
+            "https://vercel.com:4317/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn different_schemes_do_not_match() {
+        assert!(!origins_match(
+            "http://vercel.com/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
     fn different_subdomains_do_not_match() {
-        assert!(!hosts_match(
+        assert!(!origins_match(
             "https://otel.vercel.com/v1",
             "https://vercel.com/api"
         ));
     }
 
     #[test]
+    fn userinfo_host_bypass_does_not_match() {
+        assert!(!origins_match(
+            "https://api.vercel.com:443@attacker.example/otel",
+            "https://api.vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn same_origin_with_userinfo_does_not_match() {
+        assert!(!origins_match(
+            "https://token@vercel.com/otel",
+            "https://vercel.com/api"
+        ));
+    }
+
+    #[test]
+    fn api_url_with_userinfo_does_not_match() {
+        assert!(!origins_match(
+            "https://vercel.com/otel",
+            "https://token@vercel.com/api"
+        ));
+    }
+
+    #[test]
     fn missing_scheme_returns_false() {
-        assert!(!hosts_match("vercel.com/otel", "https://vercel.com/api"));
+        assert!(!origins_match("vercel.com/otel", "https://vercel.com/api"));
     }
 
     #[test]
     fn empty_url_returns_false() {
-        assert!(!hosts_match("", "https://vercel.com/api"));
+        assert!(!origins_match("", "https://vercel.com/api"));
     }
 }

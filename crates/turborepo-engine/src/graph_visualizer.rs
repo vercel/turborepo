@@ -209,12 +209,13 @@ fn render_html<T: TaskDefinitionInfo + Clone>(
     let mut graph_buffer = Vec::new();
     render_dot_graph(&mut graph_buffer, engine, single_package)?;
     let graph_string = String::from_utf8(graph_buffer).expect("graph rendering should be UTF-8");
+    let graph_json = html_safe_json_string(&graph_string);
 
     file.write_all(HTML_PREFIX.as_bytes())
         .map_err(Error::GraphOutput)?;
     write!(
         &mut file,
-        "const s = `{graph_string}`.replace(/\\_\\_\\_ROOT\\_\\_\\_/g, \
+        "const s = {graph_json}.replace(/\\_\\_\\_ROOT\\_\\_\\_/g, \
          \"Root\").replace(/\\[root\\]/g, \"\");new Viz().renderSVGElement(s).then(el => \
          document.body.appendChild(el)).catch(e => console.error(e));"
     )
@@ -222,6 +223,16 @@ fn render_html<T: TaskDefinitionInfo + Clone>(
     file.write_all(HTML_SUFFIX.as_bytes())
         .map_err(Error::GraphOutput)?;
     Ok(())
+}
+
+fn html_safe_json_string(value: &str) -> String {
+    serde_json::to_string(value)
+        .expect("serializing graph output should not fail")
+        .replace('<', "\\u003C")
+        .replace('>', "\\u003E")
+        .replace('&', "\\u0026")
+        .replace('\u{2028}', "\\u2028")
+        .replace('\u{2029}', "\\u2029")
 }
 
 fn render_svg<T: TaskDefinitionInfo + Clone>(
@@ -309,5 +320,18 @@ fn filename_and_extension(
             })?
             .join_component(&jpg_filename);
         Ok((jpg_graph_file, extension))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::html_safe_json_string;
+
+    #[test]
+    fn html_safe_json_string_escapes_script_data() {
+        assert_eq!(
+            html_safe_json_string("` ${globalThis.alert(1)} </script> & \u{2028}\u{2029}"),
+            r#""` ${globalThis.alert(1)} \u003C/script\u003E \u0026 \u2028\u2029""#
+        );
     }
 }

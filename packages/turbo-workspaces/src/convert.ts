@@ -78,6 +78,6 @@ export async function convertProject({
 
   logger.mainStep(`Cleaning up ${project.packageManager} workspaces`);
   if (project.packageManager !== convertTo.name) {
-    await MANAGERS[project.packageManager].clean({ project, logger });
+    await MANAGERS[project.packageManager].clean({ project, logger, options });
   }
 }

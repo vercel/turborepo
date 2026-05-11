@@ -6,6 +6,7 @@ import native from "./native";
 import type { Platform } from "./types";
 
 describe("generateNativePackage", () => {
+  const outputBaseDir = "/path/to";
   const outputDir = "/path/to/output";
 
   it("should generate package correctly for non-Windows platform", async (t) => {
@@ -29,6 +30,7 @@ describe("generateNativePackage", () => {
       platform,
       version,
       outputDir,
+      outputBaseDir,
       packagePrefix: "@turbo"
     });
 
@@ -103,6 +105,7 @@ describe("generateNativePackage", () => {
       platform: { os: "windows", arch: "x64" },
       version: "1.0.0",
       outputDir,
+      outputBaseDir,
       packagePrefix: "@turbo"
     });
 
@@ -132,9 +135,26 @@ describe("generateNativePackage", () => {
         platform: { os: "linux", arch: "x64" },
         version: "1.2.0",
         outputDir,
+        outputBaseDir,
         packagePrefix: "@turbo"
       }),
       { message: "Failed to remove directory" }
+    );
+  });
+
+  it("should reject output directories outside the package base", async () => {
+    await assert.rejects(
+      native.generateNativePackage({
+        platform: { os: "linux", arch: "x64" },
+        version: "1.2.0",
+        outputDir: "/path/elsewhere",
+        outputBaseDir,
+        packagePrefix: "@turbo"
+      }),
+      {
+        message:
+          "Refusing to clean output directory outside package base: /path/elsewhere"
+      }
     );
   });
 });

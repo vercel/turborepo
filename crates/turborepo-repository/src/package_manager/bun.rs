@@ -61,7 +61,7 @@ pub(crate) fn prune_patches<R: AsRef<RelativeUnixPath>>(
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, collections::BTreeMap};
+    use std::{assert_matches, collections::BTreeMap};
 
     use anyhow::Result;
     use serde_json::json;

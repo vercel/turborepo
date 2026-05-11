@@ -23,7 +23,6 @@
 #![deny(clippy::all)]
 #![allow(clippy::mutable_key_type)]
 #![allow(clippy::result_large_err)]
-#![feature(assert_matches)]
 
 use std::{fmt::Debug, future::IntoFuture, path::Path, sync::Arc, time::Duration};
 
@@ -492,7 +491,7 @@ async fn wait_for_cookie(
 
 #[cfg(test)]
 mod test {
-    use std::{assert_matches::assert_matches, sync::atomic::AtomicUsize, time::Duration};
+    use std::{assert_matches, sync::atomic::AtomicUsize, time::Duration};
 
     #[cfg(not(target_os = "windows"))]
     use notify::event::RenameMode;

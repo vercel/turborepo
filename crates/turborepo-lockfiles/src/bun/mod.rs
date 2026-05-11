@@ -445,6 +445,32 @@ impl BunLockfile {
         }
     }
 
+    fn nested_dependency_entry(
+        &self,
+        entry_key: &str,
+        dependency: &str,
+        version: &str,
+    ) -> Option<(String, &PackageEntry)> {
+        let direct_key = format!("{entry_key}/{dependency}");
+        if let Some(entry) = self.data.packages.get(&direct_key) {
+            return Some((direct_key, entry));
+        }
+
+        let mut search_key = entry_key;
+        while let Some(slash_pos) = search_key.rfind('/') {
+            search_key = &search_key[..slash_pos];
+            let ancestor_key = format!("{search_key}/{dependency}");
+            if let Some(entry) = self.data.packages.get(&ancestor_key) {
+                if self.version_satisfies_spec(entry.version(), version) {
+                    return Some((ancestor_key, entry));
+                }
+                break;
+            }
+        }
+
+        None
+    }
+
     /// Find a package version that satisfies the given version spec.
     ///
     /// Searches in order:
@@ -625,29 +651,10 @@ impl Lockfile for BunLockfile {
 
         for (dependency, version) in info.all_dependencies() {
             // Bun resolves nested dependencies by walking up the parent chain
-            // from the current package. Check the direct child first, then
-            // each ancestor level until we find a nested entry whose version
-            // matches the declared dependency version.
-            let nested_entry = {
-                let direct_key = format!("{entry_key}/{dependency}");
-                if let Some(e) = self.data.packages.get(&direct_key) {
-                    Some(e)
-                } else {
-                    let mut found = None;
-                    let mut search_key = entry_key.as_str();
-                    while let Some(slash_pos) = search_key.rfind('/') {
-                        search_key = &search_key[..slash_pos];
-                        let ancestor_key = format!("{search_key}/{dependency}");
-                        if let Some(e) = self.data.packages.get(&ancestor_key) {
-                            if e.version() == version {
-                                found = Some(e);
-                            }
-                            break;
-                        }
-                    }
-                    found
-                }
-            };
+            // from the current package.
+            let nested_entry = self
+                .nested_dependency_entry(entry_key, dependency, version)
+                .map(|(_, entry)| entry);
 
             let is_optional = info.optional_dependencies.contains_key(dependency)
                 || info.optional_peers.contains(dependency);
@@ -692,6 +699,35 @@ impl Lockfile for BunLockfile {
         // found during pruning
         let mut packages_with_workspaces: std::collections::HashSet<String> =
             packages.iter().cloned().collect();
+
+        if let Some(root_workspace) = self.data.workspaces.get("") {
+            let mut root_deps = BTreeMap::new();
+            if let Some(deps) = &root_workspace.dependencies {
+                root_deps.extend(deps.clone());
+            }
+            if let Some(dev_deps) = &root_workspace.dev_dependencies {
+                root_deps.extend(dev_deps.clone());
+            }
+            if let Some(optional_deps) = &root_workspace.optional_dependencies {
+                root_deps.extend(optional_deps.clone());
+            }
+            if let Some(peer_deps) = &root_workspace.peer_dependencies {
+                root_deps.extend(peer_deps.clone());
+            }
+
+            if !root_deps.is_empty() {
+                let root_closures = crate::all_transitive_closures(
+                    self,
+                    Some(("".to_string(), root_deps)).into_iter().collect(),
+                    true,
+                )?;
+                if let Some(root_closure) = root_closures.get("") {
+                    packages_with_workspaces
+                        .extend(root_closure.iter().map(|package| package.key.clone()));
+                }
+            }
+        }
+
         for ws_path in workspace_packages {
             if ws_path.is_empty() {
                 continue;
@@ -1391,9 +1427,11 @@ impl BunLockfile {
         let mut sorted_keys: Vec<_> = keys_to_include.iter().collect();
         sorted_keys.sort();
 
+        let mut renamed_prefixes: Vec<(String, String)> = Vec::new();
+
         for key in sorted_keys {
             if let Some(entry) = self.data.packages.get(key) {
-                let pruned_key = if should_dealias {
+                let mut pruned_key = if should_dealias {
                     let parsed_key = PackageKey::parse(key);
 
                     // Check if this is a nested key that could be dealiased
@@ -1444,6 +1482,18 @@ impl BunLockfile {
                     // Not dealiasing - keep key as-is
                     key.clone()
                 };
+
+                if let Some((old_prefix, new_prefix)) = renamed_prefixes
+                    .iter()
+                    .filter(|(old_prefix, _)| key.starts_with(old_prefix))
+                    .max_by_key(|(old_prefix, _)| old_prefix.len())
+                {
+                    pruned_key = format!("{}{}", new_prefix, &key[old_prefix.len()..]);
+                }
+
+                if pruned_key != *key {
+                    renamed_prefixes.push((format!("{key}/"), format!("{pruned_key}/")));
+                }
 
                 // Check if this is a workspace mapping entry (e.g., "storybook":
                 // ["storybook@workspace:apps/storybook"])
@@ -1506,6 +1556,20 @@ impl BunLockfile {
                 pruned_data
                     .packages
                     .insert(pruned_key.clone(), entry.clone());
+
+                if pruned_key != *key {
+                    let old_prefix = format!("{key}/");
+                    let new_prefix = format!("{pruned_key}/");
+                    for (descendant_key, descendant_entry) in &self.data.packages {
+                        if descendant_key.starts_with(&old_prefix) {
+                            let renamed_key =
+                                format!("{}{}", new_prefix, &descendant_key[old_prefix.len()..]);
+                            pruned_data
+                                .packages
+                                .insert(renamed_key, descendant_entry.clone());
+                        }
+                    }
+                }
 
                 // Check if this package references a workspace (e.g., via @workspace: in ident)
                 // and ensure that workspace is included
@@ -1761,7 +1825,13 @@ impl BunLockfile {
 
             let mut promote_target: Option<(String, String)> = None; // (pkg_name, old_key)
             for key in &sorted_pkg_keys {
-                if PackageKey::parse(key).parent().is_none() {
+                if let Some(parent) = PackageKey::parse(key).parent() {
+                    if (parent == "npm" || parent.starts_with("npm/"))
+                        && pruned_data.packages.contains_key(&parent)
+                    {
+                        continue;
+                    }
+                } else {
                     continue;
                 }
 
@@ -1898,6 +1968,89 @@ impl BunLockfile {
                     None => true,
                 }
             });
+        }
+
+        // De-aliasing can turn a workspace-scoped package key like
+        // `@repo/app/pkg` into `pkg`. Its nested resolutions need to remain
+        // addressable from the new key, otherwise bun treats required deps as
+        // missing during frozen installs.
+        loop {
+            let package_snapshot: Vec<(String, PackageEntry)> = pruned_data
+                .packages
+                .iter()
+                .map(|(key, entry)| (key.clone(), entry.clone()))
+                .collect();
+            let mut additions = Vec::new();
+
+            for (key, entry) in package_snapshot {
+                let Some(info) = &entry.info else {
+                    continue;
+                };
+
+                for (dep_name, dep_version) in info
+                    .dependencies
+                    .iter()
+                    .chain(info.optional_dependencies.iter())
+                {
+                    let nested_key = format!("{key}/{dep_name}");
+                    if pruned_data.packages.contains_key(dep_name)
+                        || pruned_data.packages.contains_key(&nested_key)
+                    {
+                        continue;
+                    }
+
+                    let exact_source = self
+                        .data
+                        .packages
+                        .get_key_value(&key)
+                        .filter(|(_, source_entry)| source_entry.ident == entry.ident)
+                        .and_then(|(source_key, _)| {
+                            self.nested_dependency_entry(source_key, dep_name, dep_version)
+                                .map(|(dep_key, dep_entry)| (dep_key, dep_entry, source_key))
+                        });
+
+                    let ident_source = || {
+                        self.data
+                            .packages
+                            .iter()
+                            .filter(|(source_key, source_entry)| {
+                                source_key.as_str() != key && source_entry.ident == entry.ident
+                            })
+                            .find_map(|(source_key, _)| {
+                                self.nested_dependency_entry(source_key, dep_name, dep_version)
+                                    .map(|(dep_key, dep_entry)| (dep_key, dep_entry, source_key))
+                            })
+                    };
+
+                    let Some((source_dep_key, source_dep_entry, source_parent_key)) =
+                        exact_source.or_else(ident_source)
+                    else {
+                        continue;
+                    };
+
+                    let source_prefix = format!("{source_parent_key}/");
+                    let pruned_dep_key =
+                        if let Some(suffix) = source_dep_key.strip_prefix(&source_prefix) {
+                            format!("{key}/{suffix}")
+                        } else {
+                            source_dep_key
+                        };
+
+                    if pruned_data.packages.contains_key(&pruned_dep_key) {
+                        continue;
+                    }
+
+                    additions.push((pruned_dep_key, source_dep_entry.clone()));
+                }
+            }
+
+            if additions.is_empty() {
+                break;
+            }
+
+            for (key, entry) in additions {
+                pruned_data.packages.insert(key, entry);
+            }
         }
 
         // Rebuild key_to_entry HashMap for the pruned lockfile
@@ -3373,6 +3526,64 @@ mod test {
             .unwrap()
             .expect("should resolve chalk");
         assert_eq!(chalk_dep.key, "chalk@2.4.2");
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/12744
+    // Bun resolves nested package dependencies from ancestor scopes too. If
+    // `npm/@npmcli/arborist` depends on `@npmcli/metavuln-calculator`, the
+    // matching entry is `npm/@npmcli/metavuln-calculator`, not
+    // `npm/@npmcli/arborist/@npmcli/metavuln-calculator`.
+    #[test]
+    fn test_subgraph_preserves_ancestor_scoped_nested_dependencies() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "configVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test-monorepo"
+                },
+                "apps/app": {
+                    "name": "app",
+                    "dependencies": {
+                        "npm": "^11.0.0"
+                    }
+                }
+            },
+            "packages": {
+                "app": ["app@workspace:apps/app"],
+                "npm": ["npm@11.0.0", "", { "dependencies": { "@npmcli/arborist": "^8.0.0", "postcss-selector-parser": "^7.0.0" } }, "sha512-npm"],
+                "npm/@npmcli/arborist": ["@npmcli/arborist@8.0.5", "", { "dependencies": { "@npmcli/metavuln-calculator": "^8.0.0" }, "bundled": true }, "sha512-arborist"],
+                "npm/@npmcli/metavuln-calculator": ["@npmcli/metavuln-calculator@8.0.1", "", {}, "sha512-metavuln"],
+                "npm/cssesc": ["cssesc@3.0.0", "", {}, "sha512-cssesc"],
+                "npm/postcss-selector-parser": ["postcss-selector-parser@7.1.1", "", { "dependencies": { "cssesc": "^3.0.0" } }, "sha512-postcss"],
+                "@oclif/plugin-plugins/npm/cssesc": ["cssesc@3.0.0", "", {}, "sha512-cssesc"],
+                "@oclif/plugin-plugins/npm/postcss-selector-parser": ["postcss-selector-parser@7.1.1", "", { "dependencies": { "cssesc": "^3.0.0" } }, "sha512-postcss"]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+        let mut app_deps = std::collections::BTreeMap::new();
+        app_deps.insert("npm".to_string(), "^11.0.0".to_string());
+
+        let closure = crate::transitive_closure(&lockfile, "apps/app", app_deps, false).unwrap();
+        let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+        let subgraph = lockfile
+            .subgraph(&["apps/app".into()], &package_idents)
+            .unwrap();
+        let subgraph_data = subgraph.lockfile().unwrap();
+
+        assert!(subgraph_data.packages.contains_key("npm/@npmcli/arborist"));
+        assert!(
+            subgraph_data
+                .packages
+                .contains_key("npm/@npmcli/metavuln-calculator"),
+            "ancestor-scoped nested dependency should remain in pruned lockfile"
+        );
+        assert!(
+            subgraph_data.packages.contains_key("npm/cssesc"),
+            "exact source key should win when duplicate idents exist in other nested scopes"
+        );
     }
 
     // Regression test for https://github.com/vercel/turborepo/issues/12156

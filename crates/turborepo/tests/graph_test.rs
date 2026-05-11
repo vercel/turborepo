@@ -2,7 +2,8 @@ mod common;
 
 use std::fs;
 
-use common::{run_turbo, setup, turbo_output_filters};
+use common::{combined_output, run_turbo, setup, turbo_output_filters};
+use serde_json::json;
 
 fn setup_topological(dir: &std::path::Path) {
     setup::setup_integration_test(dir, "task_dependencies/topological", "npm@10.5.0", true)
@@ -66,6 +67,71 @@ fn test_graph_to_html_file() {
 
     let html = fs::read_to_string(tempdir.path().join("graph.html")).unwrap();
     assert!(html.contains("DOCTYPE"), "expected HTML DOCTYPE");
+}
+
+#[test]
+fn test_graph_to_html_escapes_task_names() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_graph_escape_fixture(tempdir.path());
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "back`tick",
+            "interpolate${globalThis.alert(1)}",
+            "break</script>out",
+            "--graph=graph.html",
+        ],
+    );
+    assert!(output.status.success(), "{}", combined_output(&output));
+
+    let html = fs::read_to_string(tempdir.path().join("graph.html")).unwrap();
+    assert!(html.contains("back`tick"));
+    assert!(html.contains("interpolate${globalThis.alert(1)}"));
+    assert!(!html.contains("const s = `"));
+    assert!(!html.contains("break</script>out"));
+    assert!(html.contains(r#"break\u003C/script\u003Eout"#));
+}
+
+fn setup_graph_escape_fixture(dir: &std::path::Path) {
+    fs::create_dir_all(dir.join("apps/app")).unwrap();
+    fs::write(
+        dir.join("package.json"),
+        serde_json::to_string_pretty(&json!({
+            "name": "monorepo",
+            "packageManager": "npm@10.5.0",
+            "workspaces": ["apps/*"]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        dir.join("turbo.json"),
+        serde_json::to_string_pretty(&json!({
+            "$schema": "https://turborepo.dev/schema.json",
+            "tasks": {
+                "back`tick": {},
+                "interpolate${globalThis.alert(1)}": {},
+                "break</script>out": {}
+            }
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        dir.join("apps/app/package.json"),
+        serde_json::to_string_pretty(&json!({
+            "name": "app",
+            "scripts": {
+                "back`tick": "echo backtick",
+                "interpolate${globalThis.alert(1)}": "echo interpolate",
+                "break</script>out": "echo break"
+            }
+        }))
+        .unwrap(),
+    )
+    .unwrap();
 }
 
 #[test]

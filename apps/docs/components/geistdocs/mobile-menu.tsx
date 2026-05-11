@@ -10,13 +10,13 @@ type MobileMenuProps = {
 };
 
 export const MobileMenu = ({ className }: MobileMenuProps) => {
-  const { isOpen, setIsOpen } = useSidebarContext();
+  const { setIsOpen } = useSidebarContext();
 
   return (
     <Button
       aria-label="Toggle navigation menu"
       className={cn(className)}
-      onClick={() => setIsOpen(!isOpen)}
+      onClick={() => setIsOpen((open) => !open)}
       size="icon-sm"
       variant="ghost"
     >

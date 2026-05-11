@@ -486,7 +486,7 @@ impl GitRepo {
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, collections::HashMap, process::Command};
+    use std::{assert_matches, collections::HashMap, process::Command};
 
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 

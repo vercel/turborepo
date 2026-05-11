@@ -427,23 +427,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "axum-server"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1df331683d982a0b9492b38127151e6453639cd34926eb9c07d4cd8c6d22bfc"
-dependencies = [
- "bytes",
- "either",
- "fs-err 3.3.0",
- "http",
- "http-body",
- "hyper",
- "hyper-util",
- "tokio",
- "tower-service",
-]
-
-[[package]]
 name = "backtrace"
 version = "0.3.74"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2011,16 +1994,6 @@ name = "fs-err"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0845fa252299212f0389d64ba26f34fa32cfe41588355f21ed507c59a0f64541"
-
-[[package]]
-name = "fs-err"
-version = "3.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73fde052dbfc920003cfd2c8e2c6e6d4cc7c1091538c3a24226cec0665ab08c0"
-dependencies = [
- "autocfg",
- "tokio",
-]
 
 [[package]]
 name = "fsevent-sys"
@@ -7212,6 +7185,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "turborepo-lib",
+ "turborepo-lsp",
  "turborepo-query",
  "turborepo-query-api",
  "turborepo-signals",
@@ -7225,6 +7199,7 @@ version = "0.1.0"
 dependencies = [
  "camino",
  "clap",
+ "dunce",
  "globwalk",
  "miette",
  "oxc_allocator",
@@ -7235,6 +7210,8 @@ dependencies = [
  "oxc_span",
  "oxc_syntax",
  "serde_json",
+ "tempfile",
+ "test-case",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -7267,7 +7244,7 @@ dependencies = [
  "biome_json_parser",
  "camino",
  "dunce",
- "fs-err 2.9.0",
+ "fs-err",
  "miette",
  "path-clean",
  "serde",
@@ -7332,16 +7309,13 @@ dependencies = [
 name = "turborepo-auth"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "async-trait",
- "axum",
- "axum-server",
  "chrono",
  "hostname",
  "http",
  "httpmock",
  "insta",
  "port_scanner",
+ "rand 0.9.3",
  "reqwest",
  "serde",
  "serde_json",
@@ -7353,6 +7327,7 @@ dependencies = [
  "turborepo-ai-agents",
  "turborepo-api-client",
  "turborepo-dirs",
+ "turborepo-json-rewrite",
  "turborepo-ui",
  "turborepo-vercel-api",
  "turborepo-vercel-api-mock",
@@ -7495,6 +7470,7 @@ dependencies = [
  "http-body",
  "http-body-util",
  "hyper-util",
+ "libc",
  "miette",
  "notify",
  "pidlock",
@@ -7522,6 +7498,7 @@ dependencies = [
  "turborepo-scm",
  "turborepo-types",
  "uds_windows",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7533,12 +7510,12 @@ dependencies = [
  "ignore",
  "notify",
  "port_scanner",
+ "rand 0.9.3",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "tower-http 0.6.8",
  "tracing",
  "turbopath",
  "turborepo-filewatch",
@@ -7657,7 +7634,7 @@ dependencies = [
 name = "turborepo-fs"
 version = "0.1.0"
 dependencies = [
- "fs-err 2.9.0",
+ "fs-err",
  "ignore",
  "tempfile",
  "test-case",
@@ -7829,6 +7806,7 @@ dependencies = [
  "turborepo-vercel-api",
  "turborepo-vercel-api-mock",
  "unrs_resolver",
+ "url",
  "wax",
  "webbrowser",
  "which",
@@ -8155,6 +8133,7 @@ dependencies = [
  "turborepo-task-id",
  "turborepo-types",
  "turborepo-ui",
+ "url",
 ]
 
 [[package]]
@@ -8273,6 +8252,7 @@ dependencies = [
  "miette",
  "regex",
  "serde",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -8488,6 +8468,7 @@ dependencies = [
  "futures-util",
  "port_scanner",
  "serde",
+ "serde_json",
  "tempfile",
  "tokio",
  "turborepo-vercel-api",

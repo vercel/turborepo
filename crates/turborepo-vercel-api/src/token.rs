@@ -2,23 +2,17 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponseTokenMetadata {
-    pub id: String,
-    pub name: String,
-    #[serde(rename = "type")]
-    pub token_type: String,
     pub scopes: Vec<Scope>,
     #[serde(rename = "activeAt")]
     pub active_at: u128,
-    #[serde(rename = "createdAt")]
-    pub created_at: u128,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Scope {
     #[serde(rename = "type")]
     pub scope_type: String,
-    #[serde(rename = "createdAt")]
-    pub created_at: u128,
     #[serde(rename = "expiresAt")]
     pub expires_at: Option<u128>,
     #[serde(rename = "teamId")]

@@ -1,0 +1,37 @@
+{
+  "name": "@eventmate/metrics",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./prisma": {
+      "types": "./src/prisma.ts",
+      "default": "./src/prisma.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "bunx tsgo --noEmit"
+  },
+  "dependencies": {
+    "prom-client": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "@prisma/client": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@prisma/client": {
+      "optional": true
+    }
+  }
+}

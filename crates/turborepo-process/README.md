@@ -41,6 +41,9 @@ Process management for running task commands. Spawns and manages child processes
 
 - PTY support is inferred from terminal attachment on non-Windows platforms
 - On Windows, graceful shutdown sends KILL immediately (no SIGINT equivalent)
-- On Unix, processes are spawned in their own process group via `setsid()` to enable group signaling
+- On Unix, processes are spawned in their own process group to enable group signaling
 - `stop_tasks()` allows selective process termination without closing the manager (used for watch mode restarts)
 - Closing stdin on Windows with ConPTY immediately terminates the process, so stdin is kept open in that case
+- Graceful shutdown should be handled internally by tracking spawned process groups
+  until they exit; parent-death cleanup after Turbo crashes or is killed is a
+  separate concern

@@ -245,8 +245,8 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
         if !missing_tasks.is_empty() {
             let missing_pkgs: HashMap<_, _> = missing_tasks
-                .iter()
-                .filter_map(|(task, _)| {
+                .keys()
+                .filter_map(|task| {
                     let pkg = task.package()?;
                     let missing_pkg = self
                         .package_graph

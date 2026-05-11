@@ -795,12 +795,10 @@ impl Run {
 
                         let (bytes_per_second, bytes_uploaded, bytes_total) = {
                             let status = status.lock().unwrap();
-                            let total_bps: f64 = status
-                                .iter()
-                                .filter_map(|(_hash, task)| task.average_bps())
-                                .sum();
+                            let total_bps: f64 =
+                                status.values().filter_map(|task| task.average_bps()).sum();
                             let bytes_uploaded: usize =
-                                status.iter().filter_map(|(_hash, task)| task.bytes()).sum();
+                                status.values().filter_map(|task| task.bytes()).sum();
                             let bytes_total: usize = status
                                 .iter()
                                 .filter(|(_hash, task)| !task.done())

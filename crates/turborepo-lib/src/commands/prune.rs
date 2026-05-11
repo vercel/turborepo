@@ -1,6 +1,7 @@
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::{
+    collections::BTreeSet,
     str::FromStr,
     sync::{LazyLock, OnceLock},
 };
@@ -15,7 +16,7 @@ use turbopath::{
 use turborepo_repository::{
     package_graph::{self, PackageGraph, PackageName, PackageNode},
     package_json::PackageJson,
-    package_manager::npmrc::NpmRc,
+    package_manager::{npmrc::NpmRc, PackageManager},
 };
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::BOLD;
@@ -161,7 +162,7 @@ pub async fn prune(
 
         // We don't want to do any copying for the root workspace
         if let PackageName::Other(workspace) = workspace {
-            prune.copy_workspace(entry.package_json_path())?;
+            prune.copy_workspace(entry.package_json_path(), &entry.package_json)?;
             workspace_paths.push(
                 entry
                     .package_json_path()
@@ -226,13 +227,24 @@ pub async fn prune(
     prune.copy_turbo_json(&workspace_names)?;
     prune.copy_global_dependencies()?;
 
-    let original_patches = prune
+    let original_lockfile = prune
         .package_graph
         .lockfile()
-        .expect("lockfile presence checked earlier")
-        .patches()?;
+        .expect("lockfile presence checked earlier");
+    let package_manager = prune.package_graph.package_manager();
+    let original_patches = collect_patch_paths(
+        original_lockfile,
+        prune.package_graph.root_package_json(),
+        &prune.root,
+        package_manager,
+    )?;
     if !original_patches.is_empty() {
-        let pruned_patches = lockfile.patches()?;
+        let pruned_patches = collect_patch_paths(
+            lockfile.as_ref(),
+            prune.package_graph.root_package_json(),
+            &prune.root,
+            package_manager,
+        )?;
         trace!(
             "original patches: {:?}, pruned patches: {:?}",
             original_patches,
@@ -240,8 +252,6 @@ pub async fn prune(
         );
 
         let repo_root = &prune.root;
-        let package_manager = prune.package_graph.package_manager();
-
         let pruned_json = package_manager.prune_patched_packages(
             prune.package_graph.root_package_json(),
             &pruned_patches,
@@ -313,6 +323,69 @@ pub async fn prune(
     }
 
     Ok(())
+}
+
+fn collect_patch_paths(
+    lockfile: &dyn turborepo_lockfiles::Lockfile,
+    root_package_json: &PackageJson,
+    repo_root: &turbopath::AbsoluteSystemPath,
+    package_manager: &PackageManager,
+) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+    let mut patches = lockfile.patches()?;
+    let patch_keys = lockfile.patch_keys();
+
+    if !patch_keys.is_empty() {
+        patches.extend(package_json_patch_paths(root_package_json, &patch_keys));
+
+        if matches!(
+            package_manager,
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
+        ) {
+            let workspace_yaml_path = repo_root.join_component(
+                turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH,
+            );
+            patches.extend(
+                turborepo_repository::package_manager::pnpm::patch_paths_for_keys(
+                    &workspace_yaml_path,
+                    &patch_keys,
+                )?,
+            );
+        }
+    }
+
+    patches.sort();
+    patches.dedup();
+    Ok(patches)
+}
+
+fn package_json_patch_paths(
+    package_json: &PackageJson,
+    patch_keys: &[String],
+) -> Vec<RelativeUnixPathBuf> {
+    let patch_keys: BTreeSet<_> = patch_keys.iter().map(String::as_str).collect();
+    let mut patches = Vec::new();
+
+    if let Some(patched_dependencies) = package_json.patched_dependencies.as_ref() {
+        patches.extend(
+            patched_dependencies.iter().filter_map(|(key, path)| {
+                patch_keys.contains(key.as_str()).then_some(path.clone())
+            }),
+        );
+    }
+
+    if let Some(patched_dependencies) = package_json
+        .pnpm
+        .as_ref()
+        .and_then(|config| config.patched_dependencies.as_ref())
+    {
+        patches.extend(
+            patched_dependencies.iter().filter_map(|(key, path)| {
+                patch_keys.contains(key.as_str()).then_some(path.clone())
+            }),
+        );
+    }
+
+    patches
 }
 
 struct Prune<'a> {
@@ -487,7 +560,11 @@ impl<'a> Prune<'a> {
         Ok(())
     }
 
-    fn copy_workspace(&self, package_json_path: &AnchoredSystemPath) -> Result<(), Error> {
+    fn copy_workspace(
+        &self,
+        package_json_path: &AnchoredSystemPath,
+        workspace_package_json: &PackageJson,
+    ) -> Result<(), Error> {
         let package_json_path = self.root.resolve(package_json_path);
         let original_dir = package_json_path
             .parent()
@@ -506,6 +583,11 @@ impl<'a> Prune<'a> {
                 &package_json_path,
                 docker_workspace_dir.resolve(package_json()),
             )?;
+            self.create_docker_bin_stubs(
+                workspace_package_json,
+                original_dir,
+                &docker_workspace_dir,
+            )?;
 
             if self.uses_per_workspace_lockfiles {
                 let lockfile_name = self.package_graph.package_manager().lockfile_name();
@@ -516,6 +598,34 @@ impl<'a> Prune<'a> {
                         docker_workspace_dir.join_component(lockfile_name),
                     )?;
                 }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn create_docker_bin_stubs(
+        &self,
+        package_json: &PackageJson,
+        original_dir: &turbopath::AbsoluteSystemPath,
+        docker_workspace_dir: &turbopath::AbsoluteSystemPath,
+    ) -> Result<(), Error> {
+        for bin_path in bin_paths(package_json) {
+            let Ok(relative_bin_path) = RelativeUnixPathBuf::new(bin_path) else {
+                trace!("bin entry {bin_path} is not relative, skipping stub");
+                continue;
+            };
+
+            let original_bin_path = original_dir.join_unix_path(&relative_bin_path);
+            if !original_bin_path.starts_with(original_dir.as_std_path()) {
+                trace!("bin entry {bin_path} escapes workspace, skipping stub");
+                continue;
+            }
+
+            let docker_bin_path = docker_workspace_dir.join_unix_path(relative_bin_path);
+            if !docker_bin_path.try_exists()? {
+                docker_bin_path.ensure_dir()?;
+                docker_bin_path.create_with_contents("")?;
             }
         }
 
@@ -692,6 +802,17 @@ impl<'a> Prune<'a> {
     }
 }
 
+fn bin_paths(package_json: &PackageJson) -> Vec<&str> {
+    match package_json.other.get("bin") {
+        Some(serde_json::Value::String(path)) => vec![path.as_str()],
+        Some(serde_json::Value::Object(entries)) => entries
+            .values()
+            .filter_map(serde_json::Value::as_str)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// Merge `pruned` values into `original`, preserving the key ordering from
 /// `original`. Keys present in `original` but absent from `pruned` are dropped.
 /// Keys present in `pruned` but absent from `original` are appended.
@@ -724,8 +845,34 @@ fn merge_preserving_key_order(
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use turborepo_repository::package_json::PackageJson;
 
-    use super::{merge_preserving_key_order, ADDITIONAL_FILES};
+    use super::{bin_paths, merge_preserving_key_order, ADDITIONAL_FILES};
+
+    #[test]
+    fn bin_paths_reads_string_bin() {
+        let package_json = PackageJson::from_value(json!({
+            "name": "bin-package",
+            "bin": "cli.js"
+        }))
+        .unwrap();
+
+        assert_eq!(bin_paths(&package_json), vec!["cli.js"]);
+    }
+
+    #[test]
+    fn bin_paths_reads_object_bin() {
+        let package_json = PackageJson::from_value(json!({
+            "name": "bin-package",
+            "bin": {
+                "one": "bin/one.js",
+                "two": "bin/two.js"
+            }
+        }))
+        .unwrap();
+
+        assert_eq!(bin_paths(&package_json), vec!["bin/one.js", "bin/two.js"]);
+    }
 
     #[test]
     fn merge_preserves_key_order() {

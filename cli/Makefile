@@ -15,8 +15,8 @@ build:
 		--filter=eslint-config-turbo \
 		--filter=@turbo/types
 
-.PHONY: stage-release
-stage-release:
+.PHONY: prepare-stage-release
+prepare-stage-release:
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
 	cat $(CLI_DIR)/../version.txt
@@ -70,8 +70,20 @@ stage-release:
 	"
 
 	git checkout -b staging-$(TURBO_VERSION)
-	git commit -anm "publish $(TURBO_VERSION) to registry"
-	HUSKY=0 git push origin staging-$(TURBO_VERSION) --force
+
+.PHONY: commit-stage-release
+commit-stage-release:
+	node $(CLI_DIR)/../scripts/create-github-api-commit.mjs \
+		--branch staging-$(TURBO_VERSION) \
+		--message "publish $(TURBO_VERSION) to registry" \
+		--all-tracked
+
+.PHONY: stage-release
+stage-release: prepare-stage-release
+	node $(CLI_DIR)/../scripts/create-github-api-commit.mjs \
+		--branch staging-$(TURBO_VERSION) \
+		--message "publish $(TURBO_VERSION) to registry" \
+		--all-tracked
 
 .PHONY: create-release-tag
 create-release-tag:
@@ -146,4 +158,3 @@ fixture-%:
 	rm -rf testbed
 	mkdir -p testbed
 	../turborepo-tests/helpers/setup_integration_test.sh ./testbed $($@_FIXTURE)
-
