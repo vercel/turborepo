@@ -95,7 +95,8 @@ function lockfileValidationCommand(
         acceptsFailure(result) {
           const output = combinedOutput(result);
           return (
-            output.includes("Lockfile is up to date") &&
+            (output.includes("Lockfile is up to date") ||
+              output.includes("Already up to date")) &&
             output.includes("ERR_PNPM_NO_OFFLINE_TARBALL")
           );
         }
