@@ -29,7 +29,6 @@ runs:
         # node-version-file is the default, but can be overridden using node-version
         node-version-file: "package.json"
         node-version: ${{ inputs.node-version }}
-        cache: ${{ inputs.package-install == 'true' && 'pnpm' || '' }}
 
     - name: Upgrade corepack
       if: ${{ inputs.enable-corepack == 'true' }}
@@ -45,6 +44,21 @@ runs:
       if: ${{ inputs.enable-corepack == 'true' }}
       shell: bash
       run: corepack enable
+
+    - name: Get pnpm store path
+      if: ${{ inputs.package-install == 'true' }}
+      id: pnpm-store
+      shell: bash
+      run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache pnpm store
+      if: ${{ inputs.package-install == 'true' }}
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ${{ steps.pnpm-store.outputs.path }}
+        key: ${{ runner.os }}-${{ runner.arch }}-pnpm-${{ github.head_ref || github.ref_name }}-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-pnpm-${{ github.head_ref || github.ref_name }}-
 
     - name: pnpm install
       id: install

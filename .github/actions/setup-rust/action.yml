@@ -48,7 +48,7 @@ runs:
       if: inputs.cache == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
       uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
       with:
-        shared-key: ${{ inputs.shared-cache-key }}
-        key: ${{ inputs.cache-key }}
+        shared-key: ${{ inputs.shared-cache-key && format('{0}-{1}', github.head_ref || github.ref_name, inputs.shared-cache-key) || '' }}
+        key: ${{ inputs.cache-key && format('{0}-{1}', github.head_ref || github.ref_name, inputs.cache-key) || (github.head_ref || github.ref_name) }}
         # the cache is huge and we only get 10gb max, so we only save on master
         save-if: ${{ github.ref == 'refs/heads/main' && inputs.save-cache || 'false' }}
