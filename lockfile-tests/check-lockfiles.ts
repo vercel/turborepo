@@ -2,13 +2,13 @@
  * check-lockfiles.ts
  *
  * End-to-end validation that turborepo's lockfile pruning produces lockfiles
- * that pass frozen-lockfile installs for every supported package manager.
+ * that package managers accept without downloading packages.
  *
  * Each fixture under lockfile-tests/fixtures/ is a complete monorepo with a
- * meta.json describing the package manager, frozen install command, and which
+ * meta.json describing the package manager, lockfile, and which
  * workspaces to prune to. This script copies each fixture into a temp
- * directory, runs `turbo prune` for every target workspace, then runs the
- * frozen install to prove the pruned lockfile is valid.
+ * directory, runs `turbo prune` for every target workspace, then validates the
+ * pruned lockfile with the package manager.
  *
  * Usage:
  *   pnpm check-lockfiles                                         # All fixtures
@@ -35,9 +35,8 @@ interface FixtureMeta {
   packageManager: PackageManagerType;
   packageManagerVersion: string;
   lockfileName: string;
-  frozenInstallCommand: string[];
   pruneTargets?: string[];
-  /** Workspace names where pruning or frozen install is known to fail. */
+  /** Workspace names where pruning or lockfile validation is known to fail. */
   expectedFailures?: string[];
 }
 
@@ -210,7 +209,6 @@ function buildTestCases(
           filepath: fixture.dir,
           packageManager: fixture.meta.packageManager,
           lockfileName: fixture.meta.lockfileName,
-          frozenInstallCommand: fixture.meta.frozenInstallCommand,
           packageManagerVersion: fixture.meta.packageManagerVersion
         },
         targetWorkspace: { name: target },
@@ -367,10 +365,10 @@ async function main(): Promise<void> {
       status = "PASS";
     } else if (expectedFailures.has(r.label)) {
       status = r.pruneSuccess
-        ? "EXPECTED FAIL (install)"
+        ? "EXPECTED FAIL (validation)"
         : "EXPECTED FAIL (prune)";
     } else {
-      status = r.pruneSuccess ? "FAIL (install)" : "FAIL (prune)";
+      status = r.pruneSuccess ? "FAIL (validation)" : "FAIL (prune)";
     }
     console.log(
       `  ${status} ${r.label} (${(r.durationMs / 1000).toFixed(1)}s)`

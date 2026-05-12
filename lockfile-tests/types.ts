@@ -6,7 +6,6 @@ export interface TestCase {
     filepath: string;
     packageManager: PackageManagerType;
     lockfileName: string;
-    frozenInstallCommand: string[];
     packageManagerVersion: string;
   };
   targetWorkspace: {
@@ -20,9 +19,9 @@ export interface TestResult {
   label: string;
   success: boolean;
   pruneSuccess: boolean;
-  installSuccess: boolean;
+  validationSuccess: boolean;
   pruneOutput?: string;
-  installOutput?: string;
+  validationOutput?: string;
   error?: string;
   durationMs: number;
 }
