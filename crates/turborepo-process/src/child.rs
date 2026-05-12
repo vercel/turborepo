@@ -781,7 +781,39 @@ impl Child {
                 }
                 status = child.wait() => {
                     drop(controller);
-                    manager.handle_child_exit(status).await;
+
+                    // After the direct child exits, wait for any descendants in
+                    // the tracked process group to finish before signalling task
+                    // completion. Without this, dependent tasks can be scheduled
+                    // before subprocesses have written their declared `outputs`.
+                    // The `wait_for_process_group_after_child_exit` flag was
+                    // flipped to true in #12699, but the wait was only wired
+                    // into the graceful-shutdown path. Fixes #12786.
+                    #[cfg(unix)]
+                    let killed_during_drain = if let Some(pid) = pid {
+                        let mut command_rx_open = true;
+                        child
+                            .wait_for_process_group_exit(
+                                pid as libc::pid_t,
+                                None,
+                                &mut command_rx,
+                                &mut command_rx_open,
+                            )
+                            .await
+                            == ChildExit::Killed
+                    } else {
+                        false
+                    };
+                    #[cfg(not(unix))]
+                    let killed_during_drain = false;
+
+                    if killed_during_drain {
+                        // Kill command arrived during the drain wait; honour it
+                        // instead of reporting the child's natural exit.
+                        manager.exit_tx.send(Some(ChildExit::Killed)).ok();
+                    } else {
+                        manager.handle_child_exit(status).await;
+                    }
                 }
             }
 

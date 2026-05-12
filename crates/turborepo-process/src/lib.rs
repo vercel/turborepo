@@ -698,4 +698,63 @@ mod test {
 
         let _ = fs::remove_file(pid_file);
     }
+
+    /// On a normal task exit (no graceful shutdown), the watcher should still
+    /// wait for the tracked process group to drain before signalling
+    /// completion. Without this, a dependent task can be scheduled before a
+    /// subprocess in the same process group has written its declared outputs.
+    /// See #12786.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_normal_exit_waits_for_process_group_to_drain() {
+        let manager = ProcessManager::new(false);
+        let pid_file = std::env::temp_dir().join(format!(
+            "turbo-normal-exit-grandchild-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&pid_file);
+
+        // Parent shell records the grandchild pid, backgrounds the grandchild,
+        // then exits 0 immediately. The grandchild stays in the same process
+        // group (no setsid / setpgid) and lives for ~500ms before exiting
+        // cleanly. With the fix, `child.wait()` should block until the
+        // grandchild has exited; without it, `wait()` returns the moment the
+        // direct child exits while the grandchild is still alive.
+        let script = format!(
+            "(sleep 0.5; echo done) & echo $! > {}; exit 0",
+            pid_file.display()
+        );
+        let mut command = Command::new("sh");
+        command.args(["-c", &script]);
+        let mut child = manager
+            .spawn(command, Duration::from_secs(30), test_task_id())
+            .unwrap()
+            .unwrap();
+
+        let grandchild_pid = loop {
+            if let Ok(contents) = fs::read_to_string(&pid_file)
+                && let Ok(pid) = contents.trim().parse::<libc::pid_t>()
+                && process_exists(pid)
+            {
+                break pid;
+            }
+            sleep(Duration::from_millis(20)).await;
+        };
+
+        let start = Instant::now();
+        let exit = child.wait().await;
+        let elapsed = start.elapsed();
+
+        assert_eq!(exit, Some(ChildExit::Finished(Some(0))));
+        assert!(
+            elapsed >= Duration::from_millis(400),
+            "child.wait() should have blocked for the grandchild; only waited {elapsed:?}"
+        );
+        assert!(
+            !process_exists(grandchild_pid),
+            "grandchild should be gone when wait returns",
+        );
+
+        let _ = fs::remove_file(pid_file);
+    }
 }
