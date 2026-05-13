@@ -47,8 +47,9 @@ impl SizeInfo {
             let full_task_width = self.cols.saturating_sub(self.task_width_hint);
             full_task_width
                 .max(ratio_pane_width)
-                // We need to account for the left border of the pane
-                .saturating_sub(1)
+                // Account for the task list right border (│) and the 1-space
+                // left padding added in pane.rs to separate it from task output.
+                .saturating_sub(2)
         } else {
             // When sidebar is hidden, pane takes full width minus border
             self.cols.saturating_sub(1)

@@ -1,7 +1,7 @@
 use ratatui::{
     style::{Modifier, Style, Stylize},
     text::Line,
-    widgets::{Block, Widget},
+    widgets::{Block, Padding, Widget},
 };
 use tui_term::widget::PseudoTerminal;
 
@@ -83,13 +83,20 @@ impl<W> Widget for &TerminalPane<'_, W> {
         Self: Sized,
     {
         let screen = self.terminal_output.parser.screen();
+        // One space so the task list's │ border doesn't attach to paths/URLs in output.
+        let padding = if self.has_sidebar {
+            Padding::new(1, 0, 0, 0)
+        } else {
+            Padding::ZERO
+        };
         let block = Block::default()
             .title(
                 self.terminal_output
                     .title(self.task_name)
                     .add_modifier(Modifier::DIM),
             )
-            .title_bottom(self.footer());
+            .title_bottom(self.footer())
+            .padding(padding);
 
         let term = PseudoTerminal::new(screen).block(block);
         term.render(area, buf)
