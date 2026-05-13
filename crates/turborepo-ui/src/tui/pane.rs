@@ -1,7 +1,7 @@
 use ratatui::{
     style::{Modifier, Style, Stylize},
     text::Line,
-    widgets::{Block, Widget},
+    widgets::{Block, Padding, Widget},
 };
 use tui_term::widget::PseudoTerminal;
 
@@ -83,13 +83,20 @@ impl<W> Widget for &TerminalPane<'_, W> {
         Self: Sized,
     {
         let screen = self.terminal_output.parser.screen();
-        let block = Block::default()
+        let mut block = Block::default()
             .title(
                 self.terminal_output
                     .title(self.task_name)
                     .add_modifier(Modifier::DIM),
             )
             .title_bottom(self.footer());
+        // When the task list sidebar is visible, its right border (│) is
+        // directly adjacent to terminal content, causing IDE link parsers to
+        // absorb the pipe character into file paths or URLs. A single column
+        // of left padding creates a visual gap that prevents this.
+        if self.has_sidebar {
+            block = block.padding(Padding::left(1));
+        }
 
         let term = PseudoTerminal::new(screen).block(block);
         term.render(area, buf)
