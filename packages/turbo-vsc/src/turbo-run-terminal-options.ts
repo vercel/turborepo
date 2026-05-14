@@ -1,5 +1,4 @@
 const TASK_NAME_PATTERN = /^(?!(?:-|$))[A-Za-z0-9_:@./#-]+$/;
-const UNSAFE_TASK_NAME_PATTERN = /[\s;&|`"'$()<>\\\u0000-\u001f\u007f]/;
 
 export interface TurboRunTerminalOptions {
   name: string;
@@ -15,10 +14,7 @@ export function sanitizeTurboRunTaskName(
     return undefined;
   }
 
-  if (
-    !TASK_NAME_PATTERN.test(taskName) ||
-    UNSAFE_TASK_NAME_PATTERN.test(taskName)
-  ) {
+  if (!TASK_NAME_PATTERN.test(taskName)) {
     return undefined;
   }
 
