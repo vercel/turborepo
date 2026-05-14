@@ -38,7 +38,7 @@
     "copy-linux-x64": "cp out/artifacts/turborepo-lsp-x86_64-unknown-linux-musl/turborepo-lsp out/turborepo-lsp-linux-x64 && chmod +x out/turborepo-lsp-linux-x64",
     "copy-win32-arm64": "cp out/artifacts/turborepo-lsp-aarch64-pc-windows-msvc/turborepo-lsp.exe out/turborepo-lsp-win32-arm64.exe",
     "copy": "pnpm run copy-darwin-arm64 && pnpm run copy-darwin-x64 && pnpm run copy-win32-arm64 && pnpm run copy-win32-x64 && pnpm run copy-linux-arm64 && pnpm run copy-linux-x64",
-    "test": "pnpm run test-compile",
+    "test": "node --import tsx --test src/*.test.ts",
     "test-compile": "tsc -p ./ --noEmit"
   },
   "dependencies": {
@@ -50,7 +50,8 @@
     "@types/node": "20.10.8",
     "@types/vscode": "1.84.2",
     "@vscode/vsce": "3.9.1",
-    "esbuild": "0.27.2"
+    "esbuild": "0.27.2",
+    "tsx": "4.21.0"
   },
   "contributes": {
     "commands": [
@@ -75,12 +76,14 @@
       "properties": {
         "turbo.path": {
           "type": "string",
+          "scope": "machine",
           "required": false,
           "default": null,
           "description": "The path to your `turbo` executable, if you'd rather not rely on auto-detection. Relative paths are resolved from the workspace root."
         },
         "turbo.useLocalTurbo": {
           "type": "boolean",
+          "scope": "machine",
           "required": false,
           "default": false,
           "description": "Silence the 'install global turbo' prompt and always use local turbo."
@@ -97,6 +100,10 @@
     "vscode": "^1.84.2"
   },
   "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "The extension starts the turbo daemon and runs turbo commands for the workspace."
+    },
     "virtualWorkspaces": {
       "supported": "limited",
       "description": "The language server requires a turbo daemon to function correctly."

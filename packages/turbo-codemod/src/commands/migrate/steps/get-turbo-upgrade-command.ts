@@ -181,13 +181,17 @@ export async function getTurboUpgradeCommand({
     });
   }
 
-  const availablePackageManagers = await getAvailablePackageManagers();
+  const availablePackageManagers = await getAvailablePackageManagers({
+    projectRoot: project.paths.root
+  });
 
   const turboBinaryPathFromGlobal = exec("turbo bin", {
     cwd: project.paths.root,
     stdio: "pipe"
   });
-  const packageManagerGlobalBinaryPaths = await getPackageManagersBinPaths();
+  const packageManagerGlobalBinaryPaths = await getPackageManagersBinPaths({
+    projectRoot: project.paths.root
+  });
   const globalPackageManager = Object.keys(
     packageManagerGlobalBinaryPaths
   ).find((packageManager) => {

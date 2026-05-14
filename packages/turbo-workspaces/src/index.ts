@@ -21,7 +21,7 @@ async function convert({
   const logger = new Logger({ ...options, interactive: false });
   const [project, availablePackageManagers] = await Promise.all([
     getWorkspaceDetails({ root }),
-    getAvailablePackageManagers()
+    getAvailablePackageManagers({ projectRoot: root })
   ]);
   await convertProject({
     project,

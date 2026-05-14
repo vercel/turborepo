@@ -27,7 +27,7 @@ pub enum Error {
     CallbackTimeout,
     #[error("login callback task panicked or was cancelled")]
     CallbackTaskFailed,
-    #[error("CSRF state parameter mismatch on SSO redirect")]
+    #[error("CSRF state parameter mismatch on login callback")]
     CsrfStateMismatch,
     #[error("login callback returned an error from the remote server")]
     LoginCallbackError,

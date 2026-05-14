@@ -18,6 +18,12 @@ import {
   ServerOptions
 } from "vscode-languageclient/node";
 
+import { createTurboDaemonArgs } from "./turbo-daemon-command";
+import {
+  createTurboRunTerminalOptions,
+  sanitizeTurboRunTaskName
+} from "./turbo-run-terminal-options";
+
 let client: LanguageClient;
 
 let toolbar: StatusBarItem;
@@ -29,10 +35,17 @@ type InternalLspProbeResult =
   | { supported: false; reason: string };
 
 export function activate(context: ExtensionContext) {
+  if (!workspace.isTrusted) {
+    window.showWarningMessage(
+      "The Turborepo extension is disabled in untrusted workspaces."
+    );
+    return;
+  }
+
   const workspaceRoot = workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const options = { cwd: workspaceRoot };
+  const options: cp.ExecFileOptions = { cwd: workspaceRoot };
   const syncOptions: cp.ExecSyncOptionsWithStringEncoding = {
-    ...options,
+    cwd: workspaceRoot,
     encoding: "utf8"
   };
 
@@ -89,18 +102,23 @@ export function activate(context: ExtensionContext) {
         return;
       }
 
-      cp.exec(`${quoteCommand(daemonPath)} daemon start`, options, (err) => {
-        if (err) {
-          if (err.message.includes("command not found")) {
-            promptGlobalTurbo(useLocalTurbo);
+      cp.execFile(
+        daemonPath,
+        createTurboDaemonArgs("start"),
+        options,
+        (err) => {
+          if (err) {
+            if (isCommandNotFoundError(err)) {
+              promptGlobalTurbo(useLocalTurbo);
+            } else {
+              logs.appendLine(`unable to start turbo: ${err.message}`);
+            }
           } else {
-            logs.appendLine(`unable to start turbo: ${err.message}`);
+            updateStatusBarItem(true);
+            window.showInformationMessage("Turbo daemon started");
           }
-        } else {
-          updateStatusBarItem(true);
-          window.showInformationMessage("Turbo daemon started");
         }
-      });
+      );
     })
   );
 
@@ -111,9 +129,9 @@ export function activate(context: ExtensionContext) {
         return;
       }
 
-      cp.exec(`${quoteCommand(daemonPath)} daemon stop`, options, (err) => {
+      cp.execFile(daemonPath, createTurboDaemonArgs("stop"), options, (err) => {
         if (err) {
-          if (err.message.includes("command not found")) {
+          if (isCommandNotFoundError(err)) {
             promptGlobalTurbo(useLocalTurbo);
           } else {
             logs.appendLine(`unable to stop turbo: ${err.message}`);
@@ -133,35 +151,44 @@ export function activate(context: ExtensionContext) {
         return;
       }
 
-      cp.exec(`${quoteCommand(daemonPath)} daemon status`, options, (err) => {
-        if (err) {
-          if (err.message.includes("command not found")) {
-            promptGlobalTurbo(useLocalTurbo);
+      cp.execFile(
+        daemonPath,
+        createTurboDaemonArgs("status"),
+        options,
+        (err) => {
+          if (err) {
+            if (isCommandNotFoundError(err)) {
+              promptGlobalTurbo(useLocalTurbo);
+            } else {
+              logs.appendLine(`unable to get turbo status: ${err.message}`);
+              updateStatusBarItem(false);
+            }
           } else {
-            logs.appendLine(`unable to get turbo status: ${err.message}`);
-            updateStatusBarItem(false);
+            updateStatusBarItem(true);
+            window.showInformationMessage("Turbo daemon is running");
           }
-        } else {
-          updateStatusBarItem(true);
-          window.showInformationMessage("Turbo daemon is running");
         }
-      });
+      );
     })
   );
 
   context.subscriptions.push(
-    commands.registerCommand("turbo.run", async (args) => {
+    commands.registerCommand("turbo.run", async (args: unknown) => {
+      const taskName = sanitizeTurboRunTaskName(args);
+      if (!taskName) {
+        window.showWarningMessage("Invalid Turborepo task name.");
+        return;
+      }
+
       const turboPath = await getTurboPath();
       if (!turboPath) {
         return;
       }
 
       const terminal = window.createTerminal({
-        name: `${args}`,
-        isTransient: true,
+        ...createTurboRunTerminalOptions(turboPath, taskName),
         iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg")
       });
-      terminal.sendText(`${quoteCommand(turboPath)} run ${args}`);
       terminal.show();
     })
   );
@@ -258,6 +285,12 @@ export function deactivate(): Thenable<void> | undefined {
     return undefined;
   }
   return client.stop();
+}
+
+function isCommandNotFoundError(err: Error): boolean {
+  return (
+    err.message.includes("command not found") || err.message.includes("ENOENT")
+  );
 }
 
 function updateStatusBarItem(running: boolean) {

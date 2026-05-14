@@ -20,7 +20,9 @@ const notifyUpdate = createNotifyUpdate({
         root: process.cwd()
       });
       if (packageManager === "yarn") {
-        const available = await getAvailablePackageManagers();
+        const available = await getAvailablePackageManagers({
+          projectRoot: process.cwd()
+        });
         const yarnVersion = available.yarn;
         if (yarnVersion && gte(yarnVersion, "2.0.0")) {
           return "yarn dlx @turbo/codemod";

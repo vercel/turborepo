@@ -16,8 +16,9 @@ use super::login::{
 use crate::{
     Error, LoginOptions, Token,
     auth::{
-        ExistingTokenSource, classify_existing_vercel_token, ensure_trusted_vercel_api, is_vercel,
-        should_attempt_vercel_token_refresh, should_skip_existing_token_for_login,
+        ExistingTokenSource, classify_existing_vercel_token, ensure_trusted_vercel_api,
+        generate_csrf_state, is_vercel, should_attempt_vercel_token_refresh,
+        should_skip_existing_token_for_login,
     },
     device_flow::TokenSet,
     error, ui,
@@ -139,7 +140,8 @@ async fn classify_existing_sso_token_with_recovery<T: Client + TokenClient>(
 /// 4. Validates that the resulting token has access to the requested team.
 ///
 /// For non-Vercel (self-hosted):
-/// 1. Opens browser to `{login_url}/api/auth/sso?teamId=...&next=localhost`.
+/// 1. Opens browser to
+///    `{login_url}/api/auth/sso?teamId=...&next=localhost&state=...`.
 /// 2. Receives token via localhost redirect.
 /// 3. Verifies the SSO token with the API.
 ///
@@ -307,6 +309,7 @@ async fn sso_redirect(
         .map_err(Error::CallbackListenerFailed)?;
     let port = listener.local_addr().unwrap().port();
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{port}");
+    let state = generate_csrf_state();
 
     let mut login_url =
         Url::parse(login_url_configuration).map_err(|_| error::Error::LoginUrlCannotBeABase {
@@ -324,7 +327,8 @@ async fn sso_redirect(
         .query_pairs_mut()
         .append_pair("teamId", sso_team)
         .append_pair("mode", "login")
-        .append_pair("next", &redirect_url);
+        .append_pair("next", &redirect_url)
+        .append_pair("state", &state);
 
     println!(">>> Opening browser to {login_url}");
     let spinner = start_spinner("Waiting for your authorization...");
@@ -335,7 +339,7 @@ async fn sso_redirect(
     }
 
     let verification_token =
-        tokio::task::spawn_blocking(move || wait_for_sso_redirect(listener, None))
+        tokio::task::spawn_blocking(move || wait_for_sso_redirect(listener, &state))
             .await
             .map_err(|_| Error::CallbackTaskFailed)??;
 
@@ -348,13 +352,8 @@ async fn sso_redirect(
 /// other auxiliary requests before the real redirect arrives — looping
 /// prevents those from consuming the single-shot listener.
 ///
-/// If `expected_state` is provided, validates the CSRF state param. This is
-/// only used by tests right now; non-Vercel flows skip state validation since
-/// the remote server may not support it.
-fn wait_for_sso_redirect(
-    listener: TcpListener,
-    expected_state: Option<&str>,
-) -> Result<String, Error> {
+/// Validates the CSRF state param before accepting a callback token.
+fn wait_for_sso_redirect(listener: TcpListener, expected_state: &str) -> Result<String, Error> {
     listener
         .set_nonblocking(false)
         .map_err(Error::CallbackListenerFailed)?;
@@ -406,14 +405,11 @@ fn wait_for_sso_redirect(
             continue;
         }
 
-        // Validate CSRF state parameter if expected (Vercel flow only)
-        if let Some(expected) = expected_state {
-            match params.get("state") {
-                Some(returned_state) if returned_state == expected => {}
-                _ => {
-                    warn!("SSO redirect state parameter mismatch or missing");
-                    return Err(Error::CsrfStateMismatch);
-                }
+        match params.get("state") {
+            Some(returned_state) if returned_state == expected_state => {}
+            _ => {
+                warn!("SSO redirect state parameter mismatch or missing");
+                return Err(Error::CsrfStateMismatch);
             }
         }
 
@@ -739,13 +735,13 @@ mod tests {
             }
         });
 
-        let result = wait_for_sso_redirect(listener, Some(state));
+        let result = wait_for_sso_redirect(listener, state);
         handle.join().unwrap();
         assert_eq!(result.unwrap(), "my-sso-token");
     }
 
     #[test]
-    fn test_wait_for_sso_redirect_happy_path_without_state() {
+    fn test_wait_for_sso_redirect_rejects_missing_state() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
 
@@ -755,9 +751,9 @@ mod tests {
             stream.write_all(request.as_bytes()).unwrap();
         });
 
-        let result = wait_for_sso_redirect(listener, None);
+        let result = wait_for_sso_redirect(listener, "test-state");
         handle.join().unwrap();
-        assert_eq!(result.unwrap(), "my-sso-token");
+        assert_matches!(result, Err(Error::CsrfStateMismatch));
     }
 
     #[test]
@@ -786,7 +782,7 @@ mod tests {
             }
         });
 
-        let result = wait_for_sso_redirect(listener, Some(state));
+        let result = wait_for_sso_redirect(listener, state);
         handle.join().unwrap();
         assert_eq!(result.unwrap(), "my-sso-token");
     }
@@ -803,9 +799,9 @@ mod tests {
             stream.write_all(request.as_bytes()).unwrap();
         });
 
-        let result = wait_for_sso_redirect(listener, Some("correct-state"));
+        let result = wait_for_sso_redirect(listener, "correct-state");
         handle.join().unwrap();
-        assert!(result.is_err());
+        assert_matches!(result, Err(Error::CsrfStateMismatch));
     }
 
     #[test]
@@ -825,7 +821,7 @@ mod tests {
             }
         });
 
-        let result = wait_for_sso_redirect(listener, Some(state));
+        let result = wait_for_sso_redirect(listener, state);
         handle.join().unwrap();
         assert!(result.is_err());
     }
