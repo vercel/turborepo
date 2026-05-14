@@ -26,7 +26,6 @@ First, create a script that accounts for the hash contributors that you are inte
 #!/usr/bin/env node
 
 const { writeFileSync } = require("fs");
-const { join } = require("path");
 
 const { platform, arch } = process;
 const file = "turbo-cache-key.json";
