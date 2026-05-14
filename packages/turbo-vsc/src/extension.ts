@@ -102,18 +102,23 @@ export function activate(context: ExtensionContext) {
         return;
       }
 
-      cp.execFile(daemonPath, createTurboDaemonArgs("start"), options, (err) => {
-        if (err) {
-          if (isCommandNotFoundError(err)) {
-            promptGlobalTurbo(useLocalTurbo);
+      cp.execFile(
+        daemonPath,
+        createTurboDaemonArgs("start"),
+        options,
+        (err) => {
+          if (err) {
+            if (isCommandNotFoundError(err)) {
+              promptGlobalTurbo(useLocalTurbo);
+            } else {
+              logs.appendLine(`unable to start turbo: ${err.message}`);
+            }
           } else {
-            logs.appendLine(`unable to start turbo: ${err.message}`);
+            updateStatusBarItem(true);
+            window.showInformationMessage("Turbo daemon started");
           }
-        } else {
-          updateStatusBarItem(true);
-          window.showInformationMessage("Turbo daemon started");
         }
-      });
+      );
     })
   );
 
@@ -146,19 +151,24 @@ export function activate(context: ExtensionContext) {
         return;
       }
 
-      cp.execFile(daemonPath, createTurboDaemonArgs("status"), options, (err) => {
-        if (err) {
-          if (isCommandNotFoundError(err)) {
-            promptGlobalTurbo(useLocalTurbo);
+      cp.execFile(
+        daemonPath,
+        createTurboDaemonArgs("status"),
+        options,
+        (err) => {
+          if (err) {
+            if (isCommandNotFoundError(err)) {
+              promptGlobalTurbo(useLocalTurbo);
+            } else {
+              logs.appendLine(`unable to get turbo status: ${err.message}`);
+              updateStatusBarItem(false);
+            }
           } else {
-            logs.appendLine(`unable to get turbo status: ${err.message}`);
-            updateStatusBarItem(false);
+            updateStatusBarItem(true);
+            window.showInformationMessage("Turbo daemon is running");
           }
-        } else {
-          updateStatusBarItem(true);
-          window.showInformationMessage("Turbo daemon is running");
         }
-      });
+      );
     })
   );
 

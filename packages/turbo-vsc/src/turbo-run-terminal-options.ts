@@ -8,7 +8,9 @@ export interface TurboRunTerminalOptions {
   isTransient: true;
 }
 
-export function sanitizeTurboRunTaskName(taskName: unknown): string | undefined {
+export function sanitizeTurboRunTaskName(
+  taskName: unknown
+): string | undefined {
   if (typeof taskName !== "string") {
     return undefined;
   }
