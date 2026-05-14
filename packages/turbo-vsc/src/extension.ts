@@ -19,7 +19,10 @@ import {
 } from "vscode-languageclient/node";
 
 import { createTurboDaemonArgs } from "./turbo-daemon-command";
-import { createTurboRunTerminalOptions } from "./turbo-run-terminal-options";
+import {
+  createTurboRunTerminalOptions,
+  sanitizeTurboRunTaskName
+} from "./turbo-run-terminal-options";
 
 let client: LanguageClient;
 
@@ -42,7 +45,7 @@ export function activate(context: ExtensionContext) {
   const workspaceRoot = workspace.workspaceFolders?.[0]?.uri.fsPath;
   const options: cp.ExecFileOptions = { cwd: workspaceRoot };
   const syncOptions: cp.ExecSyncOptionsWithStringEncoding = {
-    ...options,
+    cwd: workspaceRoot,
     encoding: "utf8"
   };
 
@@ -160,14 +163,20 @@ export function activate(context: ExtensionContext) {
   );
 
   context.subscriptions.push(
-    commands.registerCommand("turbo.run", async (args: string) => {
+    commands.registerCommand("turbo.run", async (args: unknown) => {
+      const taskName = sanitizeTurboRunTaskName(args);
+      if (!taskName) {
+        window.showWarningMessage("Invalid Turborepo task name.");
+        return;
+      }
+
       const turboPath = await getTurboPath();
       if (!turboPath) {
         return;
       }
 
       const terminal = window.createTerminal({
-        ...createTurboRunTerminalOptions(turboPath, args),
+        ...createTurboRunTerminalOptions(turboPath, taskName),
         iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg")
       });
       terminal.show();
