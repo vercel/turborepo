@@ -97,7 +97,19 @@ enum ChildHandleImpl {
 
 #[cfg(unix)]
 #[derive(Debug, Clone, Copy)]
+enum GracefulInterruptTarget {
+    DirectChild,
+    ProcessGroup,
+}
+
+#[cfg(unix)]
+#[derive(Debug, Clone, Copy)]
 struct ShutdownSemantics {
+    // Who should receive the first graceful interrupt.
+    graceful_interrupt_target: GracefulInterruptTarget,
+    // Whether to signal the process group when the direct child exits before
+    // its process group finishes.
+    signal_process_group_after_child_exit: bool,
     // Whether we should keep waiting on the process group after the direct child exits.
     wait_for_process_group_after_child_exit: bool,
 }
@@ -106,6 +118,16 @@ struct ShutdownSemantics {
 impl ShutdownSemantics {
     fn process_group() -> Self {
         Self {
+            graceful_interrupt_target: GracefulInterruptTarget::ProcessGroup,
+            signal_process_group_after_child_exit: false,
+            wait_for_process_group_after_child_exit: true,
+        }
+    }
+
+    fn direct_child_then_process_group() -> Self {
+        Self {
+            graceful_interrupt_target: GracefulInterruptTarget::DirectChild,
+            signal_process_group_after_child_exit: true,
             wait_for_process_group_after_child_exit: true,
         }
     }
@@ -356,7 +378,7 @@ impl ChildHandle {
                 pid,
                 imp: ChildHandleImpl::Pty(child),
                 #[cfg(unix)]
-                shutdown_semantics: ShutdownSemantics::process_group(),
+                shutdown_semantics: ShutdownSemantics::direct_child_then_process_group(),
                 #[cfg(unix)]
                 target_identity,
                 #[cfg(windows)]
@@ -383,6 +405,21 @@ impl ChildHandle {
 
     #[cfg(unix)]
     fn send_graceful_interrupt(&self, pid: libc::pid_t) {
+        match self.shutdown_semantics.graceful_interrupt_target {
+            GracefulInterruptTarget::DirectChild => {
+                debug!("sending SIGINT to child {}", pid);
+                if unsafe { libc::kill(pid, libc::SIGINT) } == -1 {
+                    debug!("failed to send SIGINT to {pid}");
+                }
+            }
+            GracefulInterruptTarget::ProcessGroup => {
+                self.send_graceful_interrupt_to_process_group(pid)
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    fn send_graceful_interrupt_to_process_group(&self, pid: libc::pid_t) {
         let Some(process_group_id) = self.process_group_id() else {
             debug!("missing process group id for child {}", pid);
             return;
@@ -393,6 +430,12 @@ impl ChildHandle {
         if unsafe { libc::kill(target, libc::SIGINT) } == -1 {
             debug!("failed to send SIGINT to {target}");
         }
+    }
+
+    #[cfg(unix)]
+    fn should_signal_process_group_after_child_exit(&self) -> bool {
+        self.shutdown_semantics
+            .signal_process_group_after_child_exit
     }
 
     #[cfg(unix)]
@@ -736,6 +779,12 @@ impl ShutdownStyle {
                     };
 
                     if exit == ChildExit::Interrupted {
+                        if child.should_signal_process_group_after_child_exit()
+                            && child.has_running_process_group(pid as libc::pid_t)
+                        {
+                            child.send_graceful_interrupt_to_process_group(pid as libc::pid_t);
+                        }
+
                         child
                             .wait_for_process_group_exit(
                                 pid as libc::pid_t,
