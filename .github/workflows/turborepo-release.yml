@@ -5,12 +5,13 @@
 # 1. Create a staging branch (acts as a lock to prevent concurrent releases)
 # 2. Run some smoke tests on that branch
 # 3. Build the Rust binary
-# 4. Publish JS packages to npm
-# 5. Create the git tag (only after npm publish succeeds)
-# 6. Publish the VS Code extension from the release tag
-# 7. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
-# 8. Create a release branch and open a PR, even if VS Code publishing fails
-# 9. On failure, cleanup the staging branch and release tag automatically
+# 4. Sign and notarize macOS binaries
+# 5. Publish JS packages to npm
+# 6. Create the git tag (only after npm publish succeeds)
+# 7. Publish the VS Code extension from the release tag
+# 8. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
+# 9. Create a release branch and open a PR, even if VS Code publishing fails
+# 10. On failure, cleanup the staging branch and release tag automatically
 #
 # Canary releases run on an hourly schedule.
 # Manual releases are triggered via workflow_dispatch.
@@ -143,6 +144,12 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       previous-tag: ${{ steps.previous-tag.outputs.tag }}
     steps:
+      - name: Ensure release runs from default branch
+        if: ${{ github.ref_name != github.event.repository.default_branch }}
+        run: |
+          echo "::error::Release workflow must run from the default branch."
+          exit 1
+
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ inputs.sha || github.sha }}
@@ -358,7 +365,7 @@ jobs:
           - host: windows-2022
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.settings.host }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout repo
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -391,6 +398,99 @@ jobs:
 
       - name: Build
         run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo -p turbo --target ${{ matrix.settings.target }}
+
+      - name: Install rcodesign
+        if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
+        run: cargo install apple-codesign --version 0.29.0 --locked
+
+      - name: Write Apple signing certificate
+        if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
+        shell: bash
+        env:
+          APPLE_CERT_DATA: ${{ secrets.APPLE_CERT_DATA }}
+          APPLE_CERT_PATH: ${{ runner.temp }}/apple-certificate.p12
+        run: |
+          set -euo pipefail
+          umask 077
+          if [[ -z "$APPLE_CERT_DATA" ]]; then
+            echo "::error::APPLE_CERT_DATA secret is empty or unavailable"
+            exit 1
+          fi
+          printf '%s' "$APPLE_CERT_DATA" | base64 --decode > "$APPLE_CERT_PATH"
+          chmod 600 "$APPLE_CERT_PATH"
+          if [[ ! -s "$APPLE_CERT_PATH" ]]; then
+            echo "::error::Decoded Apple certificate is empty"
+            exit 1
+          fi
+          echo "APPLE_CERT_PATH=$APPLE_CERT_PATH" >> "$GITHUB_ENV"
+
+      - name: Write Apple notarization API key
+        if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
+        shell: bash
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api-key.json
+        run: |
+          set -euo pipefail
+          umask 077
+          if [[ -z "$APPLE_API_KEY" ]]; then
+            echo "::error::APPLE_API_KEY secret is empty or unavailable"
+            exit 1
+          fi
+          printf '%s' "$APPLE_API_KEY" | base64 --decode > "$APPLE_API_KEY_PATH"
+          chmod 600 "$APPLE_API_KEY_PATH"
+          if [[ ! -s "$APPLE_API_KEY_PATH" ]]; then
+            echo "::error::Decoded Apple API key is empty"
+            exit 1
+          fi
+          echo "APPLE_API_KEY_PATH=$APPLE_API_KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Sign macOS binary
+        if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
+        shell: bash
+        env:
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          TURBO_APPLE_SIGNING_IDENTIFIER: com.vercel.turbo
+        run: |
+          set -euo pipefail
+          if [[ -z "$APPLE_CERT_PASSWORD" ]]; then
+            echo "::error::APPLE_CERT_PASSWORD secret is empty or unavailable"
+            exit 1
+          fi
+          bin="target/${{ matrix.settings.target }}/release-turborepo/turbo"
+          rcodesign sign \
+            --for-notarization \
+            --binary-identifier "$TURBO_APPLE_SIGNING_IDENTIFIER" \
+            --p12-file "$APPLE_CERT_PATH" \
+            --p12-password "$APPLE_CERT_PASSWORD" \
+            "$bin"
+
+          codesign --verify --strict --verbose=2 "$bin"
+          requirement=$(codesign -dr - "$bin" 2>&1)
+          printf '%s\n' "$requirement"
+          expected_identifier="identifier \"$TURBO_APPLE_SIGNING_IDENTIFIER\""
+          if [[ "$requirement" != *"$expected_identifier"* ]]; then
+            echo "::error::Expected designated requirement to contain $expected_identifier"
+            exit 1
+          fi
+
+      - name: Notarize macOS binary
+        if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="target/${{ matrix.settings.target }}/release-turborepo/turbo"
+          zip_path="$RUNNER_TEMP/turbo-${{ matrix.settings.target }}.zip"
+          ditto -c -k --keepParent "$bin" "$zip_path"
+          rcodesign notary-submit \
+            --api-key-file "$APPLE_API_KEY_PATH" \
+            --wait \
+            "$zip_path"
+
+      - name: Remove Apple signing files
+        if: ${{ always() && contains(matrix.settings.target, 'apple-darwin') }}
+        shell: bash
+        run: rm -f "${APPLE_CERT_PATH:-}" "${APPLE_API_KEY_PATH:-}"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
