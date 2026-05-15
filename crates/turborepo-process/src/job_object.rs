@@ -6,14 +6,15 @@
 // `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, we ensure the entire process tree
 // is terminated when the job handle is closed.
 
-use std::{io, os::windows::io::RawHandle};
+use std::{collections::HashSet, io, os::windows::io::RawHandle};
 
 use tracing::debug;
 use windows_sys::Win32::{
     Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE},
     System::{
         Diagnostics::ToolHelp::{
-            CreateToolhelp32Snapshot, TH32CS_SNAPTHREAD, THREADENTRY32, Thread32First, Thread32Next,
+            CreateToolhelp32Snapshot, PROCESSENTRY32, Process32First, Process32Next,
+            TH32CS_SNAPPROCESS, TH32CS_SNAPTHREAD, THREADENTRY32, Thread32First, Thread32Next,
         },
         JobObjects::{
             AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
@@ -23,7 +24,7 @@ use windows_sys::Win32::{
         },
         Threading::{
             GetProcessId, OpenProcess, OpenThread, PROCESS_SET_QUOTA, PROCESS_TERMINATE,
-            ResumeThread, THREAD_SUSPEND_RESUME,
+            ResumeThread, THREAD_SUSPEND_RESUME, TerminateProcess,
         },
     },
 };
@@ -93,19 +94,20 @@ impl JobObject {
         }
     }
 
-    pub fn assign_suspended_process(&self, process_handle: RawHandle) -> io::Result<()> {
+    pub fn assign_suspended_process(&self, process_handle: RawHandle) -> io::Result<bool> {
         let process_handle = process_handle as HANDLE;
 
-        let assign_result = if unsafe { AssignProcessToJobObject(self.handle, process_handle) } == 0
-        {
-            Err(io::Error::last_os_error())
+        let assigned = if unsafe { AssignProcessToJobObject(self.handle, process_handle) } == 0 {
+            let err = io::Error::last_os_error();
+            debug!("failed to assign suspended process to job object: {err}");
+            false
         } else {
-            Ok(())
+            true
         };
 
         resume_threads(process_handle)?;
 
-        assign_result
+        Ok(assigned)
     }
 
     pub fn active_processes(&self) -> io::Result<u32> {
@@ -138,6 +140,28 @@ impl JobObject {
     }
 }
 
+pub fn has_descendant_processes(root_pid: u32) -> io::Result<bool> {
+    Ok(!descendant_processes(root_pid)?.is_empty())
+}
+
+pub fn terminate_descendant_processes(root_pid: u32) -> io::Result<()> {
+    let mut first_error = None;
+    let mut descendants = descendant_processes(root_pid)?;
+    descendants.reverse();
+
+    for pid in descendants {
+        if let Err(err) = terminate_process(pid) {
+            debug!("failed to terminate descendant process {pid}: {err}");
+            first_error.get_or_insert(err);
+        }
+    }
+
+    match first_error {
+        Some(err) => Err(err),
+        None => Ok(()),
+    }
+}
+
 impl Drop for JobObject {
     fn drop(&mut self) {
         unsafe {
@@ -162,6 +186,82 @@ fn resume_threads(process_handle: HANDLE) -> io::Result<()> {
         CloseHandle(snapshot);
     }
     result
+}
+
+fn descendant_processes(root_pid: u32) -> io::Result<Vec<u32>> {
+    let entries = process_entries()?;
+    let mut visited = HashSet::from([root_pid]);
+    let mut current_generation = vec![root_pid];
+    let mut descendants = Vec::new();
+
+    while !current_generation.is_empty() {
+        let mut next_generation = Vec::new();
+        for (pid, parent_pid) in &entries {
+            if current_generation.contains(parent_pid) && visited.insert(*pid) {
+                descendants.push(*pid);
+                next_generation.push(*pid);
+            }
+        }
+        current_generation = next_generation;
+    }
+
+    Ok(descendants)
+}
+
+fn process_entries() -> io::Result<Vec<(u32, u32)>> {
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    if snapshot == INVALID_HANDLE_VALUE {
+        return Err(io::Error::last_os_error());
+    }
+
+    let result = process_entries_from_snapshot(snapshot);
+    unsafe {
+        CloseHandle(snapshot);
+    }
+    result
+}
+
+fn process_entries_from_snapshot(snapshot: HANDLE) -> io::Result<Vec<(u32, u32)>> {
+    let mut entry = PROCESSENTRY32 {
+        dwSize: std::mem::size_of::<PROCESSENTRY32>() as u32,
+        cntUsage: 0,
+        th32ProcessID: 0,
+        th32DefaultHeapID: 0,
+        th32ModuleID: 0,
+        cntThreads: 0,
+        th32ParentProcessID: 0,
+        pcPriClassBase: 0,
+        dwFlags: 0,
+        szExeFile: [0; 260],
+    };
+
+    let mut entries = Vec::new();
+    let mut has_entry = unsafe { Process32First(snapshot, &mut entry) } != 0;
+    while has_entry {
+        entries.push((entry.th32ProcessID, entry.th32ParentProcessID));
+        has_entry = unsafe { Process32Next(snapshot, &mut entry) } != 0;
+    }
+
+    Ok(entries)
+}
+
+fn terminate_process(pid: u32) -> io::Result<()> {
+    let process_handle = unsafe { OpenProcess(PROCESS_TERMINATE, 0, pid) };
+    if process_handle.is_null() {
+        return Err(io::Error::last_os_error());
+    }
+
+    let terminate_result = unsafe { TerminateProcess(process_handle, 1) };
+    let close_result = unsafe { CloseHandle(process_handle) };
+
+    if terminate_result == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    if close_result == 0 {
+        return Err(io::Error::last_os_error());
+    }
+
+    Ok(())
 }
 
 fn resume_threads_from_snapshot(snapshot: HANDLE, process_id: u32) -> io::Result<()> {

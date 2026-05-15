@@ -212,9 +212,11 @@ impl ChildHandle {
         #[cfg(windows)]
         let job = job.and_then(|job| match child.raw_handle() {
             Some(handle) => match job.assign_suspended_process(handle) {
-                Ok(()) => Some(job),
+                Ok(true) => Some(job),
+                Ok(false) => None,
                 Err(err) => {
-                    debug!("failed to assign suspended process to job object: {err}");
+                    debug!("failed to resume suspended process after job assignment: {err}");
+                    child.start_kill().ok();
                     None
                 }
             },
@@ -477,25 +479,43 @@ impl ChildHandle {
 
     #[cfg(windows)]
     fn has_running_job(&self) -> bool {
-        let Some(job) = &self._job else {
-            return false;
+        let has_active_job = self
+            ._job
+            .as_ref()
+            .is_some_and(|job| match job.active_processes() {
+                Ok(active_processes) => active_processes > 0,
+                Err(err) => {
+                    debug!("failed to query job object: {err}");
+                    false
+                }
+            });
+
+        let has_descendants = match self.pid {
+            Some(pid) => match super::job_object::has_descendant_processes(pid) {
+                Ok(has_descendants) => has_descendants,
+                Err(err) => {
+                    debug!("failed to query descendant processes: {err}");
+                    false
+                }
+            },
+            None => false,
         };
 
-        match job.active_processes() {
-            Ok(active_processes) => active_processes > 0,
-            Err(err) => {
-                debug!("failed to query job object: {err}");
-                false
-            }
-        }
+        has_active_job || has_descendants
     }
 
     #[cfg(windows)]
-    fn terminate_job(&self) {
+    fn terminate_windows_process_tree(&self) {
         if let Some(job) = &self._job
             && let Err(err) = job.terminate()
         {
             debug!("failed to terminate job object: {err}");
+        }
+
+        if let Some(pid) = self.pid
+            && let Err(err) = super::job_object::terminate_descendant_processes(pid)
+        {
+            debug!("failed to terminate descendant process tree: {err}");
         }
     }
 
@@ -511,7 +531,7 @@ impl ChildHandle {
                     match command {
                         Some(ChildCommand::Kill) => {
                             debug!("process tree drain interrupted, terminating job object");
-                            self.terminate_job();
+                            self.terminate_windows_process_tree();
                             return ChildExit::Killed;
                         }
                         Some(ChildCommand::Shutdown(_)) => {}
