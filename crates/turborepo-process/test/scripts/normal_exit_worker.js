@@ -15,6 +15,7 @@ if (mode === "worker") {
   const pidPath = process.argv[3];
   const delayMs = process.argv[4];
   const worker = spawn(process.execPath, [__filename, "worker", markerPath, delayMs], {
+    detached: process.platform === "win32",
     stdio: "ignore",
   });
 
