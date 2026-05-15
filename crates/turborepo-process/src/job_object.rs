@@ -188,7 +188,7 @@ fn resume_threads(process_handle: HANDLE) -> io::Result<()> {
     result
 }
 
-fn descendant_processes(root_pid: u32) -> io::Result<Vec<u32>> {
+pub fn descendant_processes(root_pid: u32) -> io::Result<Vec<u32>> {
     let entries = process_entries()?;
     let mut visited = HashSet::from([root_pid]);
     let mut current_generation = vec![root_pid];
@@ -206,6 +206,12 @@ fn descendant_processes(root_pid: u32) -> io::Result<Vec<u32>> {
     }
 
     Ok(descendants)
+}
+
+pub fn process_exists(pid: u32) -> io::Result<bool> {
+    Ok(process_entries()?
+        .iter()
+        .any(|(entry_pid, _)| *entry_pid == pid))
 }
 
 fn process_entries() -> io::Result<Vec<(u32, u32)>> {

@@ -20,4 +20,5 @@ if (mode === "worker") {
 
   fs.writeFileSync(pidPath, `${worker.pid}\n`);
   worker.unref();
+  setTimeout(() => {}, 100);
 }

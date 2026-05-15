@@ -20,6 +20,8 @@ const POST_EXIT_OUTPUT_DRAIN_TIMEOUT: Duration = Duration::from_millis(100);
 #[cfg(any(unix, windows))]
 const PROCESS_TREE_DRAIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
+#[cfg(windows)]
+use std::collections::HashSet;
 use std::{
     fmt,
     io::{self, BufRead, Read, Write},
@@ -88,6 +90,8 @@ struct ChildHandle {
     target_identity: Option<TargetIdentity>,
     #[cfg(windows)]
     _job: Option<super::job_object::JobObject>,
+    #[cfg(windows)]
+    tracked_descendants: Arc<Mutex<HashSet<u32>>>,
 }
 
 enum ChildHandleImpl {
@@ -185,6 +189,49 @@ fn capture_target_identity(pid: Option<u32>) -> Option<TargetIdentity> {
     })
 }
 
+#[cfg(windows)]
+fn start_descendant_tracker(root_pid: u32) -> Arc<Mutex<HashSet<u32>>> {
+    let tracked = Arc::new(Mutex::new(HashSet::new()));
+    let tracked_for_task = tracked.clone();
+
+    tokio::spawn(async move {
+        let mut root_missing_ticks = 0;
+        loop {
+            if let Ok(descendants) = super::job_object::descendant_processes(root_pid) {
+                let mut lock = tracked_for_task.lock().expect("not poisoned");
+                lock.extend(descendants);
+            }
+
+            let tracked_pids = {
+                let lock = tracked_for_task.lock().expect("not poisoned");
+                lock.iter().copied().collect::<Vec<_>>()
+            };
+            let root_exists = super::job_object::process_exists(root_pid).unwrap_or(false);
+            let tracked_descendant_exists = tracked_pids
+                .iter()
+                .any(|pid| super::job_object::process_exists(*pid).unwrap_or(false));
+
+            if root_exists || tracked_descendant_exists {
+                root_missing_ticks = 0;
+            } else {
+                root_missing_ticks += 1;
+                if root_missing_ticks > 100 {
+                    break;
+                }
+            }
+
+            tokio::time::sleep(PROCESS_TREE_DRAIN_POLL_INTERVAL).await;
+        }
+    });
+
+    tracked
+}
+
+#[cfg(windows)]
+fn empty_descendant_tracker() -> Arc<Mutex<HashSet<u32>>> {
+    Arc::new(Mutex::new(HashSet::new()))
+}
+
 impl ChildHandle {
     #[tracing::instrument(skip(command))]
     pub fn spawn_normal(command: Command) -> io::Result<SpawnResult> {
@@ -205,6 +252,11 @@ impl ChildHandle {
 
         let mut child = command.spawn()?;
         let pid = child.id();
+
+        #[cfg(windows)]
+        let tracked_descendants = pid
+            .map(start_descendant_tracker)
+            .unwrap_or_else(empty_descendant_tracker);
 
         #[cfg(unix)]
         let target_identity = capture_target_identity(pid);
@@ -247,6 +299,8 @@ impl ChildHandle {
                 target_identity,
                 #[cfg(windows)]
                 _job: job,
+                #[cfg(windows)]
+                tracked_descendants,
             },
             io: ChildIO {
                 stdin,
@@ -307,6 +361,11 @@ impl ChildHandle {
 
         let pid = child.process_id();
 
+        #[cfg(windows)]
+        let tracked_descendants = pid
+            .map(start_descendant_tracker)
+            .unwrap_or_else(empty_descendant_tracker);
+
         #[cfg(unix)]
         let target_identity = capture_target_identity(pid);
 
@@ -352,6 +411,8 @@ impl ChildHandle {
                 target_identity,
                 #[cfg(windows)]
                 _job: job,
+                #[cfg(windows)]
+                tracked_descendants,
             },
             io: ChildIO {
                 stdin: stdin.map(ChildInput::Pty),
@@ -501,7 +562,15 @@ impl ChildHandle {
             None => false,
         };
 
-        has_active_job || has_descendants
+        let tracked_descendants = {
+            let lock = self.tracked_descendants.lock().expect("not poisoned");
+            lock.iter().copied().collect::<Vec<_>>()
+        };
+        let has_tracked_descendants = tracked_descendants
+            .iter()
+            .any(|pid| super::job_object::process_exists(*pid).unwrap_or(false));
+
+        has_active_job || has_descendants || has_tracked_descendants
     }
 
     #[cfg(windows)]
