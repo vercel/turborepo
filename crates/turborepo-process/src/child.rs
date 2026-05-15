@@ -19,6 +19,8 @@ const CHILD_POLL_INTERVAL: Duration = Duration::from_micros(50);
 const POST_EXIT_OUTPUT_DRAIN_TIMEOUT: Duration = Duration::from_millis(100);
 #[cfg(any(unix, windows))]
 const PROCESS_TREE_DRAIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
+#[cfg(unix)]
+const PROCESS_GROUP_INTERRUPT_FALLBACK_DELAY: Duration = Duration::from_secs(5);
 
 use std::{
     fmt,
@@ -177,6 +179,72 @@ fn process_group_matches_identity(target_pid: libc::pid_t, identity: TargetIdent
 #[cfg(unix)]
 fn signal_process_group(process_group_id: libc::pid_t, signal: libc::c_int) {
     let _ = unsafe { libc::kill(-process_group_id, signal) };
+}
+
+#[cfg(target_os = "linux")]
+fn linux_descendant_leaf_processes(root_pid: libc::pid_t) -> io::Result<Vec<libc::pid_t>> {
+    let mut processes = Vec::new();
+    for entry in std::fs::read_dir("/proc")? {
+        let entry = entry?;
+        let Some(pid) = entry
+            .file_name()
+            .to_str()
+            .and_then(|name| name.parse::<libc::pid_t>().ok())
+        else {
+            continue;
+        };
+
+        let stat = match std::fs::read_to_string(entry.path().join("stat")) {
+            Ok(stat) => stat,
+            Err(_) => continue,
+        };
+        let Some(fields) = stat.rsplit_once(") ").map(|(_, fields)| fields) else {
+            continue;
+        };
+        let Some(parent_pid) = fields
+            .split_whitespace()
+            .nth(1)
+            .and_then(|field| field.parse::<libc::pid_t>().ok())
+        else {
+            continue;
+        };
+
+        processes.push((pid, parent_pid));
+    }
+
+    let mut descendants = Vec::new();
+    let mut queue = std::collections::VecDeque::from([root_pid]);
+    while let Some(parent_pid) = queue.pop_front() {
+        for (pid, candidate_parent_pid) in &processes {
+            if *candidate_parent_pid == parent_pid {
+                descendants.push(*pid);
+                queue.push_back(*pid);
+            }
+        }
+    }
+
+    let descendants = descendants
+        .into_iter()
+        .filter(|pid| {
+            !processes
+                .iter()
+                .any(|(_, candidate_parent_pid)| candidate_parent_pid == pid)
+        })
+        .collect();
+
+    Ok(descendants)
+}
+
+#[cfg(target_os = "linux")]
+fn signal_descendant_leaf_processes(root_pid: libc::pid_t, signal: libc::c_int) {
+    match linux_descendant_leaf_processes(root_pid) {
+        Ok(descendants) => {
+            for pid in descendants {
+                let _ = unsafe { libc::kill(pid, signal) };
+            }
+        }
+        Err(err) => debug!("failed to enumerate descendants for process {root_pid}: {err}"),
+    }
 }
 
 #[cfg(unix)]
@@ -430,6 +498,32 @@ impl ChildHandle {
         if unsafe { libc::kill(target, libc::SIGINT) } == -1 {
             debug!("failed to send SIGINT to {target}");
         }
+    }
+
+    #[cfg(unix)]
+    fn send_graceful_interrupt_to_process_group_if_separate(&self, pid: libc::pid_t) {
+        let Some(process_group_id) = self.process_group_id() else {
+            debug!("missing process group id for child {}", pid);
+            return;
+        };
+
+        if process_group_id == unsafe { libc::getpgrp() } {
+            debug!("not sending SIGINT to current process group {process_group_id}");
+            return;
+        }
+
+        self.send_graceful_interrupt_to_process_group(pid);
+    }
+
+    #[cfg(target_os = "linux")]
+    fn send_graceful_interrupt_to_descendants(&self, pid: libc::pid_t) {
+        debug!("sending SIGINT to descendants of child {}", pid);
+        signal_descendant_leaf_processes(pid, libc::SIGINT);
+    }
+
+    #[cfg(all(unix, not(target_os = "linux")))]
+    fn send_graceful_interrupt_to_descendants(&self, pid: libc::pid_t) {
+        self.send_graceful_interrupt_to_process_group_if_separate(pid);
     }
 
     #[cfg(unix)]
@@ -718,6 +812,12 @@ impl ShutdownStyle {
                     debug!("waiting for child {}", pid);
 
                     let deadline = timeout.map(|timeout| tokio::time::Instant::now() + timeout);
+                    let mut fallback_interrupt_deadline = child
+                        .should_signal_process_group_after_child_exit()
+                        .then(|| {
+                            tokio::time::Instant::now() + PROCESS_GROUP_INTERRUPT_FALLBACK_DELAY
+                        });
+                    let mut sent_fallback_interrupt = false;
                     let mut command_rx_open = true;
 
                     let exit = loop {
@@ -741,6 +841,17 @@ impl ShutdownStyle {
                                             }
                                             Some(ChildCommand::Shutdown(_)) => {}
                                             None => command_rx_open = false,
+                                        }
+                                    }
+                                    _ = async {
+                                        if let Some(deadline) = fallback_interrupt_deadline {
+                                            tokio::time::sleep_until(deadline).await;
+                                        }
+                                    }, if fallback_interrupt_deadline.is_some() => {
+                                        fallback_interrupt_deadline = None;
+                                        if child.has_running_process_group(pid as libc::pid_t) {
+                                            child.send_graceful_interrupt_to_descendants(pid as libc::pid_t);
+                                            sent_fallback_interrupt = true;
                                         }
                                     }
                                     _ = tokio::time::sleep_until(deadline) => {
@@ -773,6 +884,17 @@ impl ShutdownStyle {
                                             None => command_rx_open = false,
                                         }
                                     }
+                                    _ = async {
+                                        if let Some(deadline) = fallback_interrupt_deadline {
+                                            tokio::time::sleep_until(deadline).await;
+                                        }
+                                    }, if fallback_interrupt_deadline.is_some() => {
+                                        fallback_interrupt_deadline = None;
+                                        if child.has_running_process_group(pid as libc::pid_t) {
+                                            child.send_graceful_interrupt_to_descendants(pid as libc::pid_t);
+                                            sent_fallback_interrupt = true;
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -780,9 +902,12 @@ impl ShutdownStyle {
 
                     if exit == ChildExit::Interrupted {
                         if child.should_signal_process_group_after_child_exit()
+                            && !sent_fallback_interrupt
                             && child.has_running_process_group(pid as libc::pid_t)
                         {
-                            child.send_graceful_interrupt_to_process_group(pid as libc::pid_t);
+                            child.send_graceful_interrupt_to_process_group_if_separate(
+                                pid as libc::pid_t,
+                            );
                         }
 
                         child
