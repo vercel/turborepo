@@ -195,6 +195,14 @@ impl ChildHandle {
         #[cfg(unix)]
         command.process_group(0);
 
+        #[cfg(windows)]
+        let job = super::job_object::JobObject::new().ok();
+
+        #[cfg(windows)]
+        if job.is_some() {
+            command.creation_flags(windows_sys::Win32::System::Threading::CREATE_SUSPENDED);
+        }
+
         let mut child = command.spawn()?;
         let pid = child.id();
 
@@ -202,11 +210,19 @@ impl ChildHandle {
         let target_identity = capture_target_identity(pid);
 
         #[cfg(windows)]
-        let job = pid.and_then(|pid| {
-            super::job_object::JobObject::new()
-                .and_then(|job| job.assign_pid(pid).map(|_| job))
-                .map_err(|e| debug!("failed to set up job object for process {pid}: {e}"))
-                .ok()
+        let job = job.and_then(|job| match child.raw_handle() {
+            Some(handle) => match job.assign_suspended_process(handle) {
+                Ok(()) => Some(job),
+                Err(err) => {
+                    debug!("failed to assign suspended process to job object: {err}");
+                    None
+                }
+            },
+            None => {
+                debug!("failed to get child process handle for job assignment");
+                child.start_kill().ok();
+                None
+            }
         });
 
         let stdin = child.stdin.take().map(ChildInput::Std);

@@ -6,19 +6,25 @@
 // `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, we ensure the entire process tree
 // is terminated when the job handle is closed.
 
-use std::io;
+use std::{io, os::windows::io::RawHandle};
 
 use tracing::debug;
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, HANDLE},
+    Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE},
     System::{
+        Diagnostics::ToolHelp::{
+            CreateToolhelp32Snapshot, TH32CS_SNAPTHREAD, THREADENTRY32, Thread32First, Thread32Next,
+        },
         JobObjects::{
             AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
             JOBOBJECT_BASIC_ACCOUNTING_INFORMATION, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
             JobObjectBasicAccountingInformation, JobObjectExtendedLimitInformation,
             QueryInformationJobObject, SetInformationJobObject, TerminateJobObject,
         },
-        Threading::{OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE},
+        Threading::{
+            GetProcessId, OpenProcess, OpenThread, PROCESS_SET_QUOTA, PROCESS_TERMINATE,
+            ResumeThread, THREAD_SUSPEND_RESUME,
+        },
     },
 };
 
@@ -87,6 +93,21 @@ impl JobObject {
         }
     }
 
+    pub fn assign_suspended_process(&self, process_handle: RawHandle) -> io::Result<()> {
+        let process_handle = process_handle as HANDLE;
+
+        let assign_result = if unsafe { AssignProcessToJobObject(self.handle, process_handle) } == 0
+        {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(())
+        };
+
+        resume_threads(process_handle)?;
+
+        assign_result
+    }
+
     pub fn active_processes(&self) -> io::Result<u32> {
         unsafe {
             let mut info: JOBOBJECT_BASIC_ACCOUNTING_INFORMATION = std::mem::zeroed();
@@ -123,4 +144,73 @@ impl Drop for JobObject {
             CloseHandle(self.handle);
         }
     }
+}
+
+fn resume_threads(process_handle: HANDLE) -> io::Result<()> {
+    let process_id = unsafe { GetProcessId(process_handle) };
+    if process_id == 0 {
+        return Err(io::Error::last_os_error());
+    }
+
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
+    if snapshot == INVALID_HANDLE_VALUE {
+        return Err(io::Error::last_os_error());
+    }
+
+    let result = resume_threads_from_snapshot(snapshot, process_id);
+    unsafe {
+        CloseHandle(snapshot);
+    }
+    result
+}
+
+fn resume_threads_from_snapshot(snapshot: HANDLE, process_id: u32) -> io::Result<()> {
+    let mut entry = THREADENTRY32 {
+        dwSize: std::mem::size_of::<THREADENTRY32>() as u32,
+        cntUsage: 0,
+        th32ThreadID: 0,
+        th32OwnerProcessID: 0,
+        tpBasePri: 0,
+        tpDeltaPri: 0,
+        dwFlags: 0,
+    };
+
+    let mut found_thread = false;
+    let mut has_entry = unsafe { Thread32First(snapshot, &mut entry) } != 0;
+    while has_entry {
+        if entry.th32OwnerProcessID == process_id {
+            found_thread = true;
+            resume_thread(entry.th32ThreadID)?;
+        }
+
+        has_entry = unsafe { Thread32Next(snapshot, &mut entry) } != 0;
+    }
+
+    if found_thread {
+        Ok(())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("no threads found for process {process_id}"),
+        ))
+    }
+}
+
+fn resume_thread(thread_id: u32) -> io::Result<()> {
+    let thread_handle = unsafe { OpenThread(THREAD_SUSPEND_RESUME, 0, thread_id) };
+    if thread_handle.is_null() {
+        return Err(io::Error::last_os_error());
+    }
+
+    let resume_result = unsafe { ResumeThread(thread_handle) };
+    let close_result = unsafe { CloseHandle(thread_handle) };
+
+    if resume_result == u32::MAX {
+        return Err(io::Error::last_os_error());
+    }
+    if close_result == 0 {
+        return Err(io::Error::last_os_error());
+    }
+
+    Ok(())
 }
