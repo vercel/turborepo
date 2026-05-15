@@ -19,11 +19,7 @@ const CHILD_POLL_INTERVAL: Duration = Duration::from_micros(50);
 const POST_EXIT_OUTPUT_DRAIN_TIMEOUT: Duration = Duration::from_millis(100);
 #[cfg(any(unix, windows))]
 const PROCESS_TREE_DRAIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
-#[cfg(windows)]
-const WINDOWS_DESCENDANT_TRACKER_POLL_INTERVAL: Duration = Duration::from_millis(1);
 
-#[cfg(windows)]
-use std::collections::HashSet;
 use std::{
     fmt,
     io::{self, BufRead, Read, Write},
@@ -33,8 +29,6 @@ use std::{
     },
     time::Duration,
 };
-#[cfg(windows)]
-use std::{sync::mpsc as std_mpsc, thread};
 
 use portable_pty::{Child as PtyChild, MasterPty as PtyController, native_pty_system};
 use tokio::{
@@ -94,8 +88,6 @@ struct ChildHandle {
     target_identity: Option<TargetIdentity>,
     #[cfg(windows)]
     _job: Option<super::job_object::JobObject>,
-    #[cfg(windows)]
-    tracked_descendants: Arc<Mutex<HashSet<u32>>>,
 }
 
 enum ChildHandleImpl {
@@ -193,70 +185,6 @@ fn capture_target_identity(pid: Option<u32>) -> Option<TargetIdentity> {
     })
 }
 
-#[cfg(windows)]
-fn start_descendant_tracker(root_pid: u32) -> Arc<Mutex<HashSet<u32>>> {
-    let tracked = Arc::new(Mutex::new(HashSet::new()));
-    let tracked_for_thread = tracked.clone();
-    let (ready_tx, ready_rx) = std_mpsc::channel();
-
-    thread::spawn(move || {
-        let mut root_missing_ticks = 0;
-        let mut ready_tx = Some(ready_tx);
-        let mut last_tracked = Vec::new();
-        eprintln!("[turbo-process-debug] descendant tracker starting root_pid={root_pid}");
-        loop {
-            if let Ok(descendants) = super::job_object::descendant_processes(root_pid) {
-                let mut lock = tracked_for_thread.lock().expect("not poisoned");
-                lock.extend(descendants);
-            }
-
-            if let Some(ready_tx) = ready_tx.take() {
-                ready_tx.send(()).ok();
-            }
-
-            let tracked_pids = {
-                let lock = tracked_for_thread.lock().expect("not poisoned");
-                lock.iter().copied().collect::<Vec<_>>()
-            };
-            if tracked_pids != last_tracked {
-                eprintln!(
-                    "[turbo-process-debug] descendant tracker root_pid={root_pid} \
-                     tracked={tracked_pids:?}"
-                );
-                last_tracked = tracked_pids.clone();
-            }
-            let root_exists = super::job_object::process_exists(root_pid).unwrap_or(false);
-            let tracked_descendant_exists = tracked_pids
-                .iter()
-                .any(|pid| super::job_object::process_exists(*pid).unwrap_or(false));
-
-            if root_exists || tracked_descendant_exists {
-                root_missing_ticks = 0;
-            } else {
-                root_missing_ticks += 1;
-                if root_missing_ticks > 100 {
-                    eprintln!(
-                        "[turbo-process-debug] descendant tracker exiting root_pid={root_pid} \
-                         tracked={tracked_pids:?}"
-                    );
-                    break;
-                }
-            }
-
-            thread::sleep(WINDOWS_DESCENDANT_TRACKER_POLL_INTERVAL);
-        }
-    });
-
-    ready_rx.recv().ok();
-
-    tracked
-}
-
-#[cfg(windows)]
-fn empty_descendant_tracker() -> Arc<Mutex<HashSet<u32>>> {
-    Arc::new(Mutex::new(HashSet::new()))
-}
-
 impl ChildHandle {
     #[tracing::instrument(skip(command))]
     pub fn spawn_normal(command: Command) -> io::Result<SpawnResult> {
@@ -272,12 +200,9 @@ impl ChildHandle {
 
         #[cfg(windows)]
         let job = match super::job_object::JobObject::new() {
-            Ok(job) => {
-                eprintln!("[turbo-process-debug] created Windows JobObject");
-                Some(job)
-            }
+            Ok(job) => Some(job),
             Err(err) => {
-                eprintln!("[turbo-process-debug] failed to create Windows JobObject: {err}");
+                debug!("failed to create Windows JobObject: {err}");
                 None
             }
         };
@@ -295,34 +220,17 @@ impl ChildHandle {
 
         #[cfg(windows)]
         let mut child = match command.spawn() {
-            Ok(child) => {
-                eprintln!(
-                    "[turbo-process-debug] spawned child with CREATE_BREAKAWAY_FROM_JOB pid={:?}",
-                    child.id()
-                );
-                child
-            }
+            Ok(child) => child,
             Err(err) if job.is_some() => {
-                eprintln!("[turbo-process-debug] breakaway spawn failed, falling back: {err}");
                 debug!("failed to spawn child with job breakaway: {err}");
                 let mut fallback_command = TokioCommand::from(command_for_fallback);
                 fallback_command
                     .creation_flags(windows_sys::Win32::System::Threading::CREATE_SUSPENDED);
-                let child = fallback_command.spawn()?;
-                eprintln!(
-                    "[turbo-process-debug] spawned child with CREATE_SUSPENDED fallback pid={:?}",
-                    child.id()
-                );
-                child
+                fallback_command.spawn()?
             }
             Err(err) => return Err(err),
         };
         let pid = child.id();
-
-        #[cfg(windows)]
-        let tracked_descendants = pid
-            .map(start_descendant_tracker)
-            .unwrap_or_else(empty_descendant_tracker);
 
         #[cfg(unix)]
         let target_identity = capture_target_identity(pid);
@@ -330,19 +238,9 @@ impl ChildHandle {
         #[cfg(windows)]
         let job = job.and_then(|job| match child.raw_handle() {
             Some(handle) => match job.assign_suspended_process(handle) {
-                Ok(true) => {
-                    eprintln!("[turbo-process-debug] child assigned to JobObject");
-                    Some(job)
-                }
-                Ok(false) => {
-                    eprintln!("[turbo-process-debug] child not assigned to JobObject");
-                    None
-                }
+                Ok(true) => Some(job),
+                Ok(false) => None,
                 Err(err) => {
-                    eprintln!(
-                        "[turbo-process-debug] failed to resume suspended process after job \
-                         assignment: {err}"
-                    );
                     debug!("failed to resume suspended process after job assignment: {err}");
                     child.start_kill().ok();
                     None
@@ -375,8 +273,6 @@ impl ChildHandle {
                 target_identity,
                 #[cfg(windows)]
                 _job: job,
-                #[cfg(windows)]
-                tracked_descendants,
             },
             io: ChildIO {
                 stdin,
@@ -437,11 +333,6 @@ impl ChildHandle {
 
         let pid = child.process_id();
 
-        #[cfg(windows)]
-        let tracked_descendants = pid
-            .map(start_descendant_tracker)
-            .unwrap_or_else(empty_descendant_tracker);
-
         #[cfg(unix)]
         let target_identity = capture_target_identity(pid);
 
@@ -487,8 +378,6 @@ impl ChildHandle {
                 target_identity,
                 #[cfg(windows)]
                 _job: job,
-                #[cfg(windows)]
-                tracked_descendants,
             },
             io: ChildIO {
                 stdin: stdin.map(ChildInput::Pty),
@@ -615,7 +504,7 @@ impl ChildHandle {
     }
 
     #[cfg(windows)]
-    fn has_running_job(&self) -> bool {
+    fn has_running_windows_process_tree(&self) -> bool {
         let has_active_job = self
             ._job
             .as_ref()
@@ -638,22 +527,7 @@ impl ChildHandle {
             None => false,
         };
 
-        let tracked_descendants = {
-            let lock = self.tracked_descendants.lock().expect("not poisoned");
-            lock.iter().copied().collect::<Vec<_>>()
-        };
-        let has_tracked_descendants = tracked_descendants
-            .iter()
-            .any(|pid| super::job_object::process_exists(*pid).unwrap_or(false));
-
-        eprintln!(
-            "[turbo-process-debug] wait_for_job root_pid={:?} has_active_job={has_active_job} \
-             has_descendants={has_descendants} tracked={tracked_descendants:?} \
-             has_tracked_descendants={has_tracked_descendants}",
-            self.pid
-        );
-
-        has_active_job || has_descendants || has_tracked_descendants
+        has_active_job || has_descendants
     }
 
     #[cfg(windows)]
@@ -677,7 +551,7 @@ impl ChildHandle {
         command_rx: &mut mpsc::Receiver<ChildCommand>,
         command_rx_open: &mut bool,
     ) -> ChildExit {
-        while self.has_running_job() {
+        while self.has_running_windows_process_tree() {
             tokio::select! {
                 command = command_rx.recv(), if *command_rx_open => {
                     match command {

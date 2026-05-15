@@ -731,28 +731,11 @@ mod test {
             pid_file.exists(),
             "worker pid file should have been written"
         );
-        let worker_pid = fs::read_to_string(&pid_file)
-            .ok()
-            .and_then(|contents| contents.trim().parse::<u32>().ok());
-        #[cfg(windows)]
-        let before_wait_snapshot = child
-            .pid()
-            .map(|pid| job_object::debug_process_snapshot(pid, worker_pid))
-            .unwrap_or_else(|| "missing child pid before wait".to_string());
-        #[cfg(windows)]
-        eprintln!("[turbo-process-debug] before wait: {before_wait_snapshot}");
 
         let start = Instant::now();
         let exit = child.wait().await;
         let elapsed = start.elapsed();
         let marker_existed_when_wait_returned = marker_file.exists();
-        #[cfg(windows)]
-        let after_wait_snapshot = child
-            .pid()
-            .map(|pid| job_object::debug_process_snapshot(pid, worker_pid))
-            .unwrap_or_else(|| "missing child pid after wait".to_string());
-        #[cfg(windows)]
-        eprintln!("[turbo-process-debug] after wait: {after_wait_snapshot}");
 
         if !marker_existed_when_wait_returned {
             for _ in 0..100 {
@@ -762,13 +745,6 @@ mod test {
                 sleep(Duration::from_millis(20)).await;
             }
         }
-        #[cfg(windows)]
-        let after_marker_settle_snapshot = child
-            .pid()
-            .map(|pid| job_object::debug_process_snapshot(pid, worker_pid))
-            .unwrap_or_else(|| "missing child pid after marker settle".to_string());
-        #[cfg(windows)]
-        eprintln!("[turbo-process-debug] after marker settle: {after_marker_settle_snapshot}");
 
         let _ = fs::remove_file(&marker_file);
         let _ = fs::remove_file(&pid_file);
@@ -776,23 +752,7 @@ mod test {
         assert_eq!(exit, Some(ChildExit::Finished(Some(0))));
         assert!(
             marker_existed_when_wait_returned,
-            "child.wait() returned before the worker wrote its output; exit={exit:?}; \
-             elapsed={elapsed:?}; worker_pid={worker_pid:?}; marker_exists_after_settle={};{}",
-            marker_file.exists(),
-            {
-                #[cfg(windows)]
-                {
-                    format!(
-                        " before_wait=({before_wait_snapshot}); \
-                         after_wait=({after_wait_snapshot}); \
-                         after_marker_settle=({after_marker_settle_snapshot})"
-                    )
-                }
-                #[cfg(not(windows))]
-                {
-                    String::new()
-                }
-            }
+            "child.wait() returned before the worker wrote its output"
         );
         assert!(
             elapsed >= Duration::from_millis(700),
