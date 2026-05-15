@@ -235,6 +235,9 @@ fn empty_descendant_tracker() -> Arc<Mutex<HashSet<u32>>> {
 impl ChildHandle {
     #[tracing::instrument(skip(command))]
     pub fn spawn_normal(command: Command) -> io::Result<SpawnResult> {
+        #[cfg(windows)]
+        let command_for_fallback = command.clone();
+
         let mut command = TokioCommand::from(command);
 
         // Create a new process group so we can send signals (e.g. SIGINT) to
@@ -247,10 +250,27 @@ impl ChildHandle {
 
         #[cfg(windows)]
         if job.is_some() {
-            command.creation_flags(windows_sys::Win32::System::Threading::CREATE_SUSPENDED);
+            command.creation_flags(
+                windows_sys::Win32::System::Threading::CREATE_SUSPENDED
+                    | windows_sys::Win32::System::Threading::CREATE_BREAKAWAY_FROM_JOB,
+            );
         }
 
+        #[cfg(not(windows))]
         let mut child = command.spawn()?;
+
+        #[cfg(windows)]
+        let mut child = match command.spawn() {
+            Ok(child) => child,
+            Err(err) if job.is_some() => {
+                debug!("failed to spawn child with job breakaway: {err}");
+                let mut fallback_command = TokioCommand::from(command_for_fallback);
+                fallback_command
+                    .creation_flags(windows_sys::Win32::System::Threading::CREATE_SUSPENDED);
+                fallback_command.spawn()?
+            }
+            Err(err) => return Err(err),
+        };
         let pid = child.id();
 
         #[cfg(windows)]
