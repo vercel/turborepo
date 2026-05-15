@@ -18,7 +18,7 @@
 const CHILD_POLL_INTERVAL: Duration = Duration::from_micros(50);
 const POST_EXIT_OUTPUT_DRAIN_TIMEOUT: Duration = Duration::from_millis(100);
 #[cfg(any(unix, windows))]
-const PROCESS_GROUP_DRAIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
+const PROCESS_TREE_DRAIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 use std::{
     fmt,
@@ -434,7 +434,7 @@ impl ChildHandle {
                             self.kill_process_group(pid);
                             return ChildExit::Killed;
                         }
-                        _ = tokio::time::sleep(PROCESS_GROUP_DRAIN_POLL_INTERVAL) => {}
+                        _ = tokio::time::sleep(PROCESS_TREE_DRAIN_POLL_INTERVAL) => {}
                     }
                 }
                 None => {
@@ -450,7 +450,7 @@ impl ChildHandle {
                                 None => *command_rx_open = false,
                             }
                         }
-                        _ = tokio::time::sleep(PROCESS_GROUP_DRAIN_POLL_INTERVAL) => {}
+                        _ = tokio::time::sleep(PROCESS_TREE_DRAIN_POLL_INTERVAL) => {}
                     }
                 }
             }
@@ -502,7 +502,7 @@ impl ChildHandle {
                         None => *command_rx_open = false,
                     }
                 }
-                _ = tokio::time::sleep(PROCESS_GROUP_DRAIN_POLL_INTERVAL) => {}
+                _ = tokio::time::sleep(PROCESS_TREE_DRAIN_POLL_INTERVAL) => {}
             }
         }
 
