@@ -17,7 +17,7 @@
 
 const CHILD_POLL_INTERVAL: Duration = Duration::from_micros(50);
 const POST_EXIT_OUTPUT_DRAIN_TIMEOUT: Duration = Duration::from_millis(100);
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 const PROCESS_GROUP_DRAIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 use std::{
@@ -459,6 +459,56 @@ impl ChildHandle {
         ChildExit::Interrupted
     }
 
+    #[cfg(windows)]
+    fn has_running_job(&self) -> bool {
+        let Some(job) = &self._job else {
+            return false;
+        };
+
+        match job.active_processes() {
+            Ok(active_processes) => active_processes > 0,
+            Err(err) => {
+                debug!("failed to query job object: {err}");
+                false
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    fn terminate_job(&self) {
+        if let Some(job) = &self._job
+            && let Err(err) = job.terminate()
+        {
+            debug!("failed to terminate job object: {err}");
+        }
+    }
+
+    #[cfg(windows)]
+    async fn wait_for_job_exit(
+        &mut self,
+        command_rx: &mut mpsc::Receiver<ChildCommand>,
+        command_rx_open: &mut bool,
+    ) -> ChildExit {
+        while self.has_running_job() {
+            tokio::select! {
+                command = command_rx.recv(), if *command_rx_open => {
+                    match command {
+                        Some(ChildCommand::Kill) => {
+                            debug!("process tree drain interrupted, terminating job object");
+                            self.terminate_job();
+                            return ChildExit::Killed;
+                        }
+                        Some(ChildCommand::Shutdown(_)) => {}
+                        None => *command_rx_open = false,
+                    }
+                }
+                _ = tokio::time::sleep(PROCESS_GROUP_DRAIN_POLL_INTERVAL) => {}
+            }
+        }
+
+        ChildExit::Interrupted
+    }
+
     /// Perform a `wait` syscall on the child until it exits
     pub async fn wait(&mut self) -> io::Result<Option<i32>> {
         match &mut self.imp {
@@ -781,7 +831,45 @@ impl Child {
                 }
                 status = child.wait() => {
                     drop(controller);
-                    manager.handle_child_exit(status).await;
+                    let should_drain_process_tree = matches!(&status, Ok(Some(0)));
+
+                    #[cfg(unix)]
+                    let killed_during_drain = if should_drain_process_tree
+                        && let Some(pid) = pid
+                    {
+                        let mut command_rx_open = true;
+                        child
+                            .wait_for_process_group_exit(
+                                pid as libc::pid_t,
+                                None,
+                                &mut command_rx,
+                                &mut command_rx_open,
+                            )
+                            .await
+                            == ChildExit::Killed
+                    } else {
+                        false
+                    };
+
+                    #[cfg(windows)]
+                    let killed_during_drain = if should_drain_process_tree {
+                        let mut command_rx_open = true;
+                        child
+                            .wait_for_job_exit(&mut command_rx, &mut command_rx_open)
+                            .await
+                            == ChildExit::Killed
+                    } else {
+                        false
+                    };
+
+                    #[cfg(not(any(unix, windows)))]
+                    let killed_during_drain = false;
+
+                    if killed_during_drain {
+                        manager.exit_tx.send(Some(ChildExit::Killed)).ok();
+                    } else {
+                        manager.handle_child_exit(status).await;
+                    }
                 }
             }
 

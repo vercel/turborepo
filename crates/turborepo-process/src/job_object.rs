@@ -14,8 +14,9 @@ use windows_sys::Win32::{
     System::{
         JobObjects::{
             AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-            JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
-            SetInformationJobObject,
+            JOBOBJECT_BASIC_ACCOUNTING_INFORMATION, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+            JobObjectBasicAccountingInformation, JobObjectExtendedLimitInformation,
+            QueryInformationJobObject, SetInformationJobObject, TerminateJobObject,
         },
         Threading::{OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE},
     },
@@ -80,6 +81,35 @@ impl JobObject {
                 let err = io::Error::last_os_error();
                 debug!("failed to assign process {pid} to job object: {err}");
                 return Err(err);
+            }
+
+            Ok(())
+        }
+    }
+
+    pub fn active_processes(&self) -> io::Result<u32> {
+        unsafe {
+            let mut info: JOBOBJECT_BASIC_ACCOUNTING_INFORMATION = std::mem::zeroed();
+            let result = QueryInformationJobObject(
+                self.handle,
+                JobObjectBasicAccountingInformation,
+                &mut info as *mut _ as *mut _,
+                std::mem::size_of::<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>() as u32,
+                std::ptr::null_mut(),
+            );
+
+            if result == 0 {
+                return Err(io::Error::last_os_error());
+            }
+
+            Ok(info.ActiveProcesses)
+        }
+    }
+
+    pub fn terminate(&self) -> io::Result<()> {
+        unsafe {
+            if TerminateJobObject(self.handle, 1) == 0 {
+                return Err(io::Error::last_os_error());
             }
 
             Ok(())

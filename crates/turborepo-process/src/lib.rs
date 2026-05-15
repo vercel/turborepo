@@ -698,4 +698,65 @@ mod test {
 
         let _ = fs::remove_file(pid_file);
     }
+
+    #[tokio::test]
+    async fn test_normal_exit_waits_for_worker_before_completing() {
+        let manager = ProcessManager::new(false);
+        let marker_file =
+            std::env::temp_dir().join(format!("turbo-normal-exit-marker-{}", std::process::id()));
+        let pid_file =
+            std::env::temp_dir().join(format!("turbo-normal-exit-worker-{}", std::process::id()));
+        let _ = fs::remove_file(&marker_file);
+        let _ = fs::remove_file(&pid_file);
+
+        let mut command = Command::new("node");
+        command.args([
+            std::ffi::OsString::from("./test/scripts/normal_exit_worker.js"),
+            marker_file.as_os_str().to_os_string(),
+            pid_file.as_os_str().to_os_string(),
+            std::ffi::OsString::from("800"),
+        ]);
+        let mut child = manager
+            .spawn(command, Duration::from_secs(30), test_task_id())
+            .unwrap()
+            .unwrap();
+
+        for _ in 0..50 {
+            if pid_file.exists() {
+                break;
+            }
+            sleep(Duration::from_millis(20)).await;
+        }
+        assert!(
+            pid_file.exists(),
+            "worker pid file should have been written"
+        );
+
+        let start = Instant::now();
+        let exit = child.wait().await;
+        let elapsed = start.elapsed();
+        let marker_existed_when_wait_returned = marker_file.exists();
+
+        if !marker_existed_when_wait_returned {
+            for _ in 0..100 {
+                if marker_file.exists() {
+                    break;
+                }
+                sleep(Duration::from_millis(20)).await;
+            }
+        }
+
+        let _ = fs::remove_file(&marker_file);
+        let _ = fs::remove_file(&pid_file);
+
+        assert_eq!(exit, Some(ChildExit::Finished(Some(0))));
+        assert!(
+            marker_existed_when_wait_returned,
+            "child.wait() returned before the worker wrote its output"
+        );
+        assert!(
+            elapsed >= Duration::from_millis(700),
+            "child.wait() should have blocked for the worker; only waited {elapsed:?}"
+        );
+    }
 }
