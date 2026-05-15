@@ -449,11 +449,9 @@ export class LocalRunner {
             tc.docker ? " --docker" : ""
           }`;
           log(`[${label}] ${pruneCommand}`);
-          const pruneResult = await exec(
-            pruneCommand,
-            tmpDir,
-            { PATH: fullPath }
-          );
+          const pruneResult = await exec(pruneCommand, tmpDir, {
+            PATH: fullPath
+          });
 
           result.pruneOutput = [pruneResult.stdout, pruneResult.stderr]
             .filter(Boolean)
