@@ -36,6 +36,8 @@ interface FixtureMeta {
   packageManagerVersion: string;
   lockfileName: string;
   pruneTargets?: string[];
+  /** Run `turbo prune --docker` and validate `out/json`. */
+  docker?: boolean;
   /** Workspace names where pruning or lockfile validation is known to fail. */
   expectedFailures?: string[];
 }
@@ -213,6 +215,7 @@ function buildTestCases(
         },
         targetWorkspace: { name: target },
         label,
+        docker: fixture.meta.docker,
         expectedFailure: isExpected
       });
     }

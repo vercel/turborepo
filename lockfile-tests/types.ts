@@ -12,6 +12,7 @@ export interface TestCase {
     name: string;
   };
   label: string;
+  docker?: boolean;
   expectedFailure?: boolean;
 }
 

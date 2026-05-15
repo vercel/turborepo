@@ -238,33 +238,41 @@ pub async fn prune(
         &prune.root,
         package_manager,
     )?;
-    if !original_patches.is_empty() {
-        let pruned_patches = collect_patch_paths(
+    let pruned_patches = if original_patches.is_empty() {
+        Vec::new()
+    } else {
+        collect_patch_paths(
             lockfile.as_ref(),
             prune.package_graph.root_package_json(),
             &prune.root,
             package_manager,
-        )?;
+        )?
+    };
+
+    if !original_patches.is_empty() {
         trace!(
             "original patches: {:?}, pruned patches: {:?}",
             original_patches,
             pruned_patches
         );
+    }
 
-        let repo_root = &prune.root;
-        let pruned_json = package_manager.prune_patched_packages(
-            prune.package_graph.root_package_json(),
-            &pruned_patches,
-            repo_root,
-        );
+    let original_contents = prune.root.resolve(package_json()).read_to_string()?;
+    let original_value: serde_json::Value = serde_json::from_str(&original_contents)?;
+    if !original_patches.is_empty() || original_value.get("workspaces").is_some() {
+        let pruned_json = if original_patches.is_empty() {
+            prune.package_graph.root_package_json().clone()
+        } else {
+            package_manager.prune_patched_packages(
+                prune.package_graph.root_package_json(),
+                &pruned_patches,
+                &prune.root,
+            )
+        };
 
-        // Read the original package.json as serde_json::Value to preserve key
-        // ordering. Serializing the PackageJson struct directly would sort keys
-        // alphabetically, producing a byte-different file that invalidates
-        // cache hashes. See https://github.com/vercel/turborepo/issues/12369
-        let original_contents = prune.root.resolve(package_json()).read_to_string()?;
-        let original_value: serde_json::Value = serde_json::from_str(&original_contents)?;
-        let pruned_value = serde_json::to_value(&pruned_json)?;
+        let mut pruned_value = serde_json::to_value(&pruned_json)?;
+        prune_package_json_workspaces(&mut pruned_value, &workspace_paths);
+        // Merge into the original JSON value so package.json key order stays stable.
         let merged = merge_preserving_key_order(&original_value, &pruned_value);
         let mut pruned_json_contents = serde_json::to_string_pretty(&merged)?;
         // Add trailing newline to match Go behavior
@@ -286,7 +294,11 @@ pub async fn prune(
                 prune.docker_directory().resolve(package_json()),
             )?;
         }
+    } else {
+        prune.copy_file(package_json(), Some(CopyDestination::Docker))?;
+    }
 
+    if !original_patches.is_empty() {
         for patch in &pruned_patches {
             prune.copy_file(
                 &patch.to_anchored_system_path_buf(),
@@ -318,11 +330,32 @@ pub async fn prune(
                 )?;
             }
         }
-    } else {
-        prune.copy_file(package_json(), Some(CopyDestination::Docker))?;
     }
 
     Ok(())
+}
+
+fn prune_package_json_workspaces(package_json: &mut serde_json::Value, workspace_paths: &[String]) {
+    let Some(workspaces) = package_json.get_mut("workspaces") else {
+        return;
+    };
+
+    let pruned_workspaces = || {
+        workspace_paths
+            .iter()
+            .map(|workspace| serde_json::Value::String(workspace.clone()))
+            .collect::<Vec<_>>()
+    };
+
+    match workspaces {
+        serde_json::Value::Array(packages) => *packages = pruned_workspaces(),
+        serde_json::Value::Object(config) => {
+            if let Some(packages) = config.get_mut("packages") {
+                *packages = serde_json::Value::Array(pruned_workspaces());
+            }
+        }
+        _ => {}
+    }
 }
 
 fn collect_patch_paths(
@@ -847,7 +880,9 @@ mod tests {
     use serde_json::json;
     use turborepo_repository::package_json::PackageJson;
 
-    use super::{bin_paths, merge_preserving_key_order, ADDITIONAL_FILES};
+    use super::{
+        bin_paths, merge_preserving_key_order, prune_package_json_workspaces, ADDITIONAL_FILES,
+    };
 
     #[test]
     fn bin_paths_reads_string_bin() {
@@ -910,6 +945,39 @@ mod tests {
         let merged = merge_preserving_key_order(&original, &pruned);
         let keys: Vec<_> = merged.as_object().unwrap().keys().collect();
         assert_eq!(keys, vec!["existing", "new_key"]);
+    }
+
+    #[test]
+    fn prune_workspaces_replaces_top_level_workspace_list() {
+        let mut package_json = json!({
+            "name": "repo",
+            "workspaces": ["app", "scripts", "packages/*"]
+        });
+
+        prune_package_json_workspaces(&mut package_json, &["app".into(), "packages/ui".into()]);
+
+        assert_eq!(package_json["workspaces"], json!(["app", "packages/ui"]));
+    }
+
+    #[test]
+    fn prune_workspaces_preserves_nested_workspace_metadata() {
+        let mut package_json = json!({
+            "name": "repo",
+            "workspaces": {
+                "packages": ["app", "scripts", "packages/*"],
+                "catalog": {
+                    "react": "latest"
+                }
+            }
+        });
+
+        prune_package_json_workspaces(&mut package_json, &["app".into()]);
+
+        assert_eq!(package_json["workspaces"]["packages"], json!(["app"]));
+        assert_eq!(
+            package_json["workspaces"]["catalog"],
+            json!({"react": "latest"})
+        );
     }
 
     #[test]

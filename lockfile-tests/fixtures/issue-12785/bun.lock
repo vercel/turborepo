@@ -1,0 +1,34 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "issue-12785",
+    },
+    "app": {
+      "name": "app",
+      "version": "1.0.0",
+    },
+    "packages/ui": {
+      "name": "@repo/ui",
+      "version": "1.0.0",
+    },
+    "scripts": {
+      "name": "scripts",
+      "version": "1.0.0",
+    },
+    "web-e2e-tests": {
+      "name": "web-e2e-tests",
+      "version": "1.0.0",
+    },
+  },
+  "packages": {
+    "@repo/ui": ["@repo/ui@workspace:packages/ui"],
+
+    "app": ["app@workspace:app"],
+
+    "scripts": ["scripts@workspace:scripts"],
+
+    "web-e2e-tests": ["web-e2e-tests@workspace:web-e2e-tests"],
+  }
+}
