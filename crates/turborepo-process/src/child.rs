@@ -19,6 +19,8 @@ const CHILD_POLL_INTERVAL: Duration = Duration::from_micros(50);
 const POST_EXIT_OUTPUT_DRAIN_TIMEOUT: Duration = Duration::from_millis(100);
 #[cfg(any(unix, windows))]
 const PROCESS_TREE_DRAIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
+#[cfg(windows)]
+const WINDOWS_DESCENDANT_TRACKER_POLL_INTERVAL: Duration = Duration::from_millis(1);
 
 #[cfg(windows)]
 use std::collections::HashSet;
@@ -31,6 +33,8 @@ use std::{
     },
     time::Duration,
 };
+#[cfg(windows)]
+use std::{sync::mpsc as std_mpsc, thread};
 
 use portable_pty::{Child as PtyChild, MasterPty as PtyController, native_pty_system};
 use tokio::{
@@ -192,18 +196,24 @@ fn capture_target_identity(pid: Option<u32>) -> Option<TargetIdentity> {
 #[cfg(windows)]
 fn start_descendant_tracker(root_pid: u32) -> Arc<Mutex<HashSet<u32>>> {
     let tracked = Arc::new(Mutex::new(HashSet::new()));
-    let tracked_for_task = tracked.clone();
+    let tracked_for_thread = tracked.clone();
+    let (ready_tx, ready_rx) = std_mpsc::channel();
 
-    tokio::spawn(async move {
+    thread::spawn(move || {
         let mut root_missing_ticks = 0;
+        let mut ready_tx = Some(ready_tx);
         loop {
             if let Ok(descendants) = super::job_object::descendant_processes(root_pid) {
-                let mut lock = tracked_for_task.lock().expect("not poisoned");
+                let mut lock = tracked_for_thread.lock().expect("not poisoned");
                 lock.extend(descendants);
             }
 
+            if let Some(ready_tx) = ready_tx.take() {
+                ready_tx.send(()).ok();
+            }
+
             let tracked_pids = {
-                let lock = tracked_for_task.lock().expect("not poisoned");
+                let lock = tracked_for_thread.lock().expect("not poisoned");
                 lock.iter().copied().collect::<Vec<_>>()
             };
             let root_exists = super::job_object::process_exists(root_pid).unwrap_or(false);
@@ -220,9 +230,11 @@ fn start_descendant_tracker(root_pid: u32) -> Arc<Mutex<HashSet<u32>>> {
                 }
             }
 
-            tokio::time::sleep(PROCESS_TREE_DRAIN_POLL_INTERVAL).await;
+            thread::sleep(WINDOWS_DESCENDANT_TRACKER_POLL_INTERVAL);
         }
     });
+
+    ready_rx.recv().ok();
 
     tracked
 }
