@@ -99,13 +99,16 @@ impl JobObject {
 
         let assigned = if unsafe { AssignProcessToJobObject(self.handle, process_handle) } == 0 {
             let err = io::Error::last_os_error();
+            eprintln!("[turbo-process-debug] AssignProcessToJobObject failed: {err}");
             debug!("failed to assign suspended process to job object: {err}");
             false
         } else {
+            eprintln!("[turbo-process-debug] AssignProcessToJobObject succeeded");
             true
         };
 
         resume_threads(process_handle)?;
+        eprintln!("[turbo-process-debug] resumed suspended process threads");
 
         Ok(assigned)
     }
@@ -212,6 +215,26 @@ pub fn process_exists(pid: u32) -> io::Result<bool> {
     Ok(process_entries()?
         .iter()
         .any(|(entry_pid, _)| *entry_pid == pid))
+}
+
+#[cfg(test)]
+pub fn debug_process_snapshot(root_pid: u32, worker_pid: Option<u32>) -> String {
+    match process_entries() {
+        Ok(entries) => {
+            let descendants = descendant_processes(root_pid)
+                .map(|descendants| format!("{descendants:?}"))
+                .unwrap_or_else(|err| format!("error: {err}"));
+            let root_entry = entries.iter().find(|(pid, _)| *pid == root_pid).copied();
+            let worker_entry = worker_pid
+                .and_then(|worker_pid| entries.iter().find(|(pid, _)| *pid == worker_pid).copied());
+
+            format!(
+                "root_pid={root_pid} root_entry={root_entry:?} worker_pid={worker_pid:?} \
+                 worker_entry={worker_entry:?} descendants={descendants}"
+            )
+        }
+        Err(err) => format!("process snapshot error: {err}"),
+    }
 }
 
 fn process_entries() -> io::Result<Vec<(u32, u32)>> {
