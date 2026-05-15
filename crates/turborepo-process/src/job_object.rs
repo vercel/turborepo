@@ -82,12 +82,15 @@ impl JobObject {
             }
 
             let result = AssignProcessToJobObject(self.handle, process_handle);
-            CloseHandle(process_handle);
+            let assign_error = (result == 0).then(io::Error::last_os_error);
+            let close_result = CloseHandle(process_handle);
 
-            if result == 0 {
-                let err = io::Error::last_os_error();
+            if let Some(err) = assign_error {
                 debug!("failed to assign process {pid} to job object: {err}");
                 return Err(err);
+            }
+            if close_result == 0 {
+                return Err(io::Error::last_os_error());
             }
 
             Ok(())
@@ -252,10 +255,11 @@ fn terminate_process(pid: u32) -> io::Result<()> {
     }
 
     let terminate_result = unsafe { TerminateProcess(process_handle, 1) };
+    let terminate_error = (terminate_result == 0).then(io::Error::last_os_error);
     let close_result = unsafe { CloseHandle(process_handle) };
 
-    if terminate_result == 0 {
-        return Err(io::Error::last_os_error());
+    if let Some(err) = terminate_error {
+        return Err(err);
     }
     if close_result == 0 {
         return Err(io::Error::last_os_error());
@@ -303,10 +307,11 @@ fn resume_thread(thread_id: u32) -> io::Result<()> {
     }
 
     let resume_result = unsafe { ResumeThread(thread_handle) };
+    let resume_error = (resume_result == u32::MAX).then(io::Error::last_os_error);
     let close_result = unsafe { CloseHandle(thread_handle) };
 
-    if resume_result == u32::MAX {
-        return Err(io::Error::last_os_error());
+    if let Some(err) = resume_error {
+        return Err(err);
     }
     if close_result == 0 {
         return Err(io::Error::last_os_error());
