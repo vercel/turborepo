@@ -447,7 +447,7 @@ fn path_component_cstring(component: &str) -> Result<std::ffi::CString, CacheErr
 #[cfg(unix)]
 fn create_header_from_stat(file_info: &libc::stat) -> Result<Header, CacheError> {
     let mut header = Header::new_gnu();
-    header.set_mode(file_info.st_mode as u32);
+    header.set_mode(unix_mode_to_u32(file_info.st_mode));
 
     let file_type = file_info.st_mode & libc::S_IFMT;
     if file_type == libc::S_IFLNK {
@@ -469,6 +469,26 @@ fn create_header_from_stat(file_info: &libc::stat) -> Result<Header, CacheError>
     set_consistent_header_metadata(&mut header);
 
     Ok(header)
+}
+
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "tvos",
+    target_os = "watchos"
+))]
+fn unix_mode_to_u32(mode: libc::mode_t) -> u32 {
+    u32::from(mode)
+}
+
+#[cfg(not(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "tvos",
+    target_os = "watchos"
+)))]
+fn unix_mode_to_u32(mode: libc::mode_t) -> u32 {
+    mode
 }
 
 fn set_consistent_header_metadata(header: &mut Header) {
