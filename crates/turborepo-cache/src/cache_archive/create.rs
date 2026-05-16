@@ -16,6 +16,20 @@ use crate::CacheError;
 /// Combined with PID, this guarantees uniqueness across concurrent tasks.
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+enum ArchiveSource {
+    Regular {
+        file: fs::File,
+        header: Header,
+    },
+    Symlink {
+        target: camino::Utf8PathBuf,
+        header: Header,
+    },
+    Other {
+        header: Header,
+    },
+}
+
 /// Generate a unique temporary filename in the same directory as the target.
 ///
 /// Uses process ID and an atomic counter to ensure uniqueness both across
@@ -170,28 +184,26 @@ impl<'a> CacheWriter<'a> {
         anchor: &AbsoluteSystemPath,
         file_path: &AnchoredSystemPath,
     ) -> Result<(), CacheError> {
-        // Resolve the fully-qualified path to the file to read it.
-        let source_path = anchor.resolve(file_path);
-
-        // Grab the file info to construct the header.
-        let file_info = source_path.symlink_metadata()?;
-
-        // Normalize the path within the cache
+        let source = archive_source(anchor, file_path)?;
         let mut file_path = file_path.to_unix();
-        file_path.make_canonical_for_tar(file_info.is_dir());
 
-        let mut header = Self::create_header(&file_info)?;
-
-        if matches!(header.entry_type(), EntryType::Regular) && file_info.len() > 0 {
-            let file = source_path.open()?;
-            self.append_data(&mut header, file_path.as_str(), file)?;
-        } else if matches!(header.entry_type(), EntryType::Symlink) {
-            // We convert to a Unix path because all paths in tar should be
-            // Unix-style. This will get restored to a system path.
-            let target = source_path.read_link()?.into_unix();
-            self.append_link(&mut header, file_path.as_str(), &target)?;
-        } else {
-            self.append_data(&mut header, file_path.as_str(), &mut std::io::empty())?;
+        match source {
+            ArchiveSource::Regular { file, mut header } => {
+                file_path.make_canonical_for_tar(false);
+                self.append_data(&mut header, file_path.as_str(), file)?;
+            }
+            ArchiveSource::Symlink { target, mut header } => {
+                file_path.make_canonical_for_tar(false);
+                // We convert to a Unix path because all paths in tar should be
+                // Unix-style. This will get restored to a system path.
+                let target = target.into_unix();
+                self.append_link(&mut header, file_path.as_str(), &target)?;
+            }
+            ArchiveSource::Other { mut header } => {
+                file_path
+                    .make_canonical_for_tar(matches!(header.entry_type(), EntryType::Directory));
+                self.append_data(&mut header, file_path.as_str(), &mut std::io::empty())?;
+            }
         }
 
         Ok(())
@@ -231,16 +243,244 @@ impl<'a> CacheWriter<'a> {
             return Err(CacheError::CreateUnsupportedFileType(Backtrace::capture()));
         }
 
-        // Consistent creation
-        header.set_uid(0);
-        header.set_gid(0);
-        header.as_gnu_mut().unwrap().set_atime(0);
-        header.set_mtime(0);
-        header.as_gnu_mut().unwrap().set_ctime(0);
+        set_consistent_header_metadata(&mut header);
 
         Ok(header)
     }
 }
+
+#[cfg(not(unix))]
+fn archive_source(
+    anchor: &AbsoluteSystemPath,
+    file_path: &AnchoredSystemPath,
+) -> Result<ArchiveSource, CacheError> {
+    let source_path = anchor.resolve(file_path);
+    let path_info = source_path.symlink_metadata()?;
+
+    if path_info.is_file() {
+        let (file, file_info) = open_regular_file_for_archive(&source_path)?;
+        let header = CacheWriter::create_header(&file_info)?;
+        Ok(ArchiveSource::Regular { file, header })
+    } else if path_info.is_symlink() {
+        let target = source_path.read_link()?.into_unix();
+        let header = CacheWriter::create_header(&path_info)?;
+        Ok(ArchiveSource::Symlink { target, header })
+    } else {
+        let header = CacheWriter::create_header(&path_info)?;
+        Ok(ArchiveSource::Other { header })
+    }
+}
+
+#[cfg(unix)]
+fn archive_source(
+    anchor: &AbsoluteSystemPath,
+    file_path: &AnchoredSystemPath,
+) -> Result<ArchiveSource, CacheError> {
+    use std::os::unix::io::AsRawFd;
+
+    let (parent, file_name) = open_parent_dir(anchor, file_path)?;
+    let file_info = fstatat_no_follow(parent.as_raw_fd(), &file_name)?;
+    let file_type = file_info.st_mode & libc::S_IFMT;
+
+    if file_type == libc::S_IFREG {
+        let file = open_file_at(parent.as_raw_fd(), &file_name)?;
+        let file_info = file.metadata()?;
+        if !file_info.is_file() {
+            return Err(CacheError::CreateUnsupportedFileType(Backtrace::capture()));
+        }
+
+        let header = CacheWriter::create_header(&file_info)?;
+        Ok(ArchiveSource::Regular { file, header })
+    } else if file_type == libc::S_IFLNK {
+        let target = read_link_at(parent.as_raw_fd(), &file_name)?;
+        let header = create_header_from_stat(&file_info)?;
+        Ok(ArchiveSource::Symlink { target, header })
+    } else {
+        let header = create_header_from_stat(&file_info)?;
+        Ok(ArchiveSource::Other { header })
+    }
+}
+
+#[cfg(unix)]
+fn open_parent_dir(
+    anchor: &AbsoluteSystemPath,
+    file_path: &AnchoredSystemPath,
+) -> Result<(fs::File, String), CacheError> {
+    use std::os::unix::io::AsRawFd;
+
+    let mut dir = fs::File::open(anchor.as_std_path())?;
+    let mut components = file_path.components().peekable();
+
+    while let Some(component) = components.next() {
+        let component = component.as_str();
+        if components.peek().is_none() {
+            return Ok((dir, component.to_string()));
+        }
+
+        dir = open_dir_at(dir.as_raw_fd(), component)?;
+    }
+
+    Err(CacheError::InvalidFilePath(
+        file_path.to_string(),
+        Backtrace::capture(),
+    ))
+}
+
+#[cfg(unix)]
+fn open_dir_at(parent_fd: i32, component: &str) -> Result<fs::File, CacheError> {
+    use std::os::unix::io::FromRawFd;
+
+    let component = path_component_cstring(component)?;
+    let flags = libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC;
+    let fd = unsafe { libc::openat(parent_fd, component.as_ptr(), flags) };
+    if fd == -1 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+
+    // SAFETY: openat returned a new owned file descriptor.
+    Ok(unsafe { fs::File::from_raw_fd(fd) })
+}
+
+#[cfg(unix)]
+fn open_file_at(parent_fd: i32, component: &str) -> Result<fs::File, CacheError> {
+    use std::os::unix::io::FromRawFd;
+
+    let component = path_component_cstring(component)?;
+    let flags = libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC;
+    let fd = unsafe { libc::openat(parent_fd, component.as_ptr(), flags) };
+    if fd == -1 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+
+    // SAFETY: openat returned a new owned file descriptor.
+    Ok(unsafe { fs::File::from_raw_fd(fd) })
+}
+
+#[cfg(unix)]
+fn fstatat_no_follow(parent_fd: i32, component: &str) -> Result<libc::stat, CacheError> {
+    use std::mem::MaybeUninit;
+
+    let component = path_component_cstring(component)?;
+    let mut stat = MaybeUninit::<libc::stat>::uninit();
+    let result = unsafe {
+        libc::fstatat(
+            parent_fd,
+            component.as_ptr(),
+            stat.as_mut_ptr(),
+            libc::AT_SYMLINK_NOFOLLOW,
+        )
+    };
+    if result == -1 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+
+    // SAFETY: fstatat initialized stat when it returned success.
+    Ok(unsafe { stat.assume_init() })
+}
+
+#[cfg(unix)]
+fn read_link_at(parent_fd: i32, component: &str) -> Result<camino::Utf8PathBuf, CacheError> {
+    use std::{os::unix::ffi::OsStringExt, path::PathBuf};
+
+    let component = path_component_cstring(component)?;
+    let mut buffer = vec![0; 256];
+    loop {
+        let len = unsafe {
+            libc::readlinkat(
+                parent_fd,
+                component.as_ptr(),
+                buffer.as_mut_ptr().cast(),
+                buffer.len(),
+            )
+        };
+        if len == -1 {
+            return Err(std::io::Error::last_os_error().into());
+        }
+
+        let len = len as usize;
+        if len < buffer.len() {
+            buffer.truncate(len);
+            let target = PathBuf::from(std::ffi::OsString::from_vec(buffer));
+            return Ok(camino::Utf8PathBuf::try_from(target).map_err(turbopath::PathError::from)?);
+        }
+
+        buffer.resize(buffer.len() * 2, 0);
+    }
+}
+
+#[cfg(unix)]
+fn path_component_cstring(component: &str) -> Result<std::ffi::CString, CacheError> {
+    std::ffi::CString::new(component).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("path component contains NUL byte: {component:?}"),
+        )
+        .into()
+    })
+}
+
+#[cfg(unix)]
+fn create_header_from_stat(file_info: &libc::stat) -> Result<Header, CacheError> {
+    let mut header = Header::new_gnu();
+    header.set_mode(file_info.st_mode as u32);
+
+    let file_type = file_info.st_mode & libc::S_IFMT;
+    if file_type == libc::S_IFLNK {
+        header.set_entry_type(EntryType::Symlink);
+        header.set_size(0);
+    } else if file_type == libc::S_IFDIR {
+        header.set_entry_type(EntryType::Directory);
+        header.set_size(0);
+    } else if file_type == libc::S_IFREG {
+        header.set_entry_type(EntryType::Regular);
+        header.set_size(
+            u64::try_from(file_info.st_size)
+                .map_err(|_| CacheError::CreateUnsupportedFileType(Backtrace::capture()))?,
+        );
+    } else {
+        return Err(CacheError::CreateUnsupportedFileType(Backtrace::capture()));
+    }
+
+    set_consistent_header_metadata(&mut header);
+
+    Ok(header)
+}
+
+fn set_consistent_header_metadata(header: &mut Header) {
+    header.set_uid(0);
+    header.set_gid(0);
+    header.as_gnu_mut().unwrap().set_atime(0);
+    header.set_mtime(0);
+    header.as_gnu_mut().unwrap().set_ctime(0);
+}
+
+#[cfg(not(unix))]
+fn open_regular_file_for_archive(
+    source_path: &AbsoluteSystemPath,
+) -> Result<(fs::File, fs::Metadata), CacheError> {
+    let mut options = OpenOptions::new();
+    options.read(true);
+    set_no_follow(&mut options);
+
+    let file = source_path.open_with_options(options)?;
+    let file_info = file.metadata()?;
+    if !file_info.is_file() {
+        return Err(CacheError::CreateUnsupportedFileType(Backtrace::capture()));
+    }
+
+    Ok((file, file_info))
+}
+
+#[cfg(windows)]
+fn set_no_follow(options: &mut OpenOptions) {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+}
+
+#[cfg(not(any(unix, windows)))]
+fn set_no_follow(_: &mut OpenOptions) {}
 
 #[cfg(test)]
 mod tests {
@@ -440,6 +680,29 @@ mod tests {
 
             cache_archive.finish()?;
         }
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn add_file_rejects_file_through_symlinked_parent() -> Result<()> {
+        let input_dir = tempdir()?;
+        let input_dir_path = AbsoluteSystemPathBuf::try_from(input_dir.path())?;
+        let outside_dir = tempdir()?;
+        let outside_dir_path = AbsoluteSystemPathBuf::try_from(outside_dir.path())?;
+        let archive_dir = tempdir()?;
+        let archive_path = AbsoluteSystemPathBuf::try_from(archive_dir.path().join("out.tar"))?;
+
+        let secret = outside_dir_path.join_component("secret.txt");
+        secret.create_with_contents("secret")?;
+
+        let link = input_dir_path.join_component("linked");
+        link.symlink_to_dir(outside_dir_path.as_str())?;
+
+        let mut cache_archive = CacheWriter::create(&archive_path)?;
+        let file_path = AnchoredSystemPathBuf::from_raw("linked/secret.txt")?;
+        assert!(cache_archive.add_file(&input_dir_path, &file_path).is_err());
 
         Ok(())
     }
