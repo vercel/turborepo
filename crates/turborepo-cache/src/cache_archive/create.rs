@@ -471,22 +471,28 @@ fn create_header_from_stat(file_info: &libc::stat) -> Result<Header, CacheError>
     Ok(header)
 }
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "tvos",
-    target_os = "watchos"
+#[cfg(all(
+    unix,
+    any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "tvos",
+        target_os = "watchos"
+    )
 ))]
 fn unix_mode_to_u32(mode: libc::mode_t) -> u32 {
     u32::from(mode)
 }
 
-#[cfg(not(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "tvos",
-    target_os = "watchos"
-)))]
+#[cfg(all(
+    unix,
+    not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "tvos",
+        target_os = "watchos"
+    ))
+))]
 fn unix_mode_to_u32(mode: libc::mode_t) -> u32 {
     mode
 }
