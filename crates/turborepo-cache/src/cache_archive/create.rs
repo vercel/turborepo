@@ -249,7 +249,7 @@ impl<'a> CacheWriter<'a> {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 fn archive_source(
     anchor: &AbsoluteSystemPath,
     file_path: &AnchoredSystemPath,
@@ -266,6 +266,31 @@ fn archive_source(
         let header = CacheWriter::create_header(&path_info)?;
         Ok(ArchiveSource::Symlink { target, header })
     } else {
+        let header = CacheWriter::create_header(&path_info)?;
+        Ok(ArchiveSource::Other { header })
+    }
+}
+
+#[cfg(windows)]
+fn archive_source(
+    anchor: &AbsoluteSystemPath,
+    file_path: &AnchoredSystemPath,
+) -> Result<ArchiveSource, CacheError> {
+    let source_path = anchor.resolve(file_path);
+    let path_info = source_path.symlink_metadata()?;
+
+    if path_info.is_file() {
+        let (file, file_info) = open_regular_file_for_archive(&source_path)?;
+        ensure_windows_handle_is_under_anchor(anchor, &file)?;
+        let header = CacheWriter::create_header(&file_info)?;
+        Ok(ArchiveSource::Regular { file, header })
+    } else if path_info.is_symlink() {
+        ensure_windows_parent_is_under_anchor(anchor, &source_path)?;
+        let target = source_path.read_link()?.into_unix();
+        let header = CacheWriter::create_header(&path_info)?;
+        Ok(ArchiveSource::Symlink { target, header })
+    } else {
+        ensure_windows_path_is_under_anchor(anchor, &source_path)?;
         let header = CacheWriter::create_header(&path_info)?;
         Ok(ArchiveSource::Other { header })
     }
@@ -472,10 +497,137 @@ fn open_regular_file_for_archive(
 }
 
 #[cfg(windows)]
+fn ensure_windows_handle_is_under_anchor(
+    anchor: &AbsoluteSystemPath,
+    file: &fs::File,
+) -> Result<(), CacheError> {
+    let anchor = anchor.to_realpath()?;
+    let file_path = windows_final_path(file)?;
+    if windows_path_is_under(file_path.as_path(), anchor.as_std_path()) {
+        Ok(())
+    } else {
+        Err(CacheError::LinkOutsideOfDirectory(
+            file_path.display().to_string(),
+            Backtrace::capture(),
+        ))
+    }
+}
+
+#[cfg(windows)]
+fn ensure_windows_parent_is_under_anchor(
+    anchor: &AbsoluteSystemPath,
+    source_path: &AbsoluteSystemPath,
+) -> Result<(), CacheError> {
+    let parent = source_path.parent().ok_or_else(|| {
+        CacheError::InvalidFilePath(source_path.to_string(), Backtrace::capture())
+    })?;
+    ensure_windows_path_is_under_anchor(anchor, parent)
+}
+
+#[cfg(windows)]
+fn ensure_windows_path_is_under_anchor(
+    anchor: &AbsoluteSystemPath,
+    path: &AbsoluteSystemPath,
+) -> Result<(), CacheError> {
+    let anchor = anchor.to_realpath()?;
+    let path = path.to_realpath()?;
+    if windows_path_is_under(path.as_std_path(), anchor.as_std_path()) {
+        Ok(())
+    } else {
+        Err(CacheError::LinkOutsideOfDirectory(
+            path.to_string(),
+            Backtrace::capture(),
+        ))
+    }
+}
+
+#[cfg(windows)]
+fn windows_final_path(file: &fs::File) -> Result<std::path::PathBuf, CacheError> {
+    use std::os::windows::io::AsRawHandle;
+
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_NAME_NORMALIZED, GetFinalPathNameByHandleW, VOLUME_NAME_DOS,
+    };
+
+    let mut buffer = vec![0u16; 260];
+    loop {
+        let len = unsafe {
+            GetFinalPathNameByHandleW(
+                file.as_raw_handle(),
+                buffer.as_mut_ptr(),
+                buffer.len() as u32,
+                FILE_NAME_NORMALIZED | VOLUME_NAME_DOS,
+            )
+        };
+        if len == 0 {
+            return Err(std::io::Error::last_os_error().into());
+        }
+
+        let len = len as usize;
+        if len < buffer.len() {
+            let path = String::from_utf16(&buffer[..len]).map_err(|e| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("Windows returned invalid UTF-16 path: {e}"),
+                )
+            })?;
+            return Ok(std::path::PathBuf::from(strip_windows_verbatim_prefix(
+                &path,
+            )));
+        }
+
+        buffer.resize(len + 1, 0);
+    }
+}
+
+#[cfg(windows)]
+fn strip_windows_verbatim_prefix(path: &str) -> String {
+    if let Some(rest) = path.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else if let Some(rest) = path.strip_prefix(r"\\?\") {
+        rest.to_string()
+    } else {
+        path.to_string()
+    }
+}
+
+#[cfg(windows)]
+fn windows_path_is_under(path: &std::path::Path, anchor: &std::path::Path) -> bool {
+    let path = normalize_windows_path(path);
+    let anchor = normalize_windows_path(anchor);
+    if path == anchor {
+        return true;
+    }
+
+    let prefix = if anchor.ends_with('\u{5c}') {
+        anchor
+    } else {
+        format!(r"{anchor}\")
+    };
+    path.starts_with(&prefix)
+}
+
+#[cfg(windows)]
+fn normalize_windows_path(path: &std::path::Path) -> String {
+    let raw = path.to_string_lossy().replace('/', r"\");
+    let raw = strip_windows_verbatim_prefix(&raw);
+    trim_trailing_windows_separators(raw)
+}
+
+#[cfg(windows)]
+fn trim_trailing_windows_separators(mut path: String) -> String {
+    while path.len() > 3 && path.ends_with('\u{5c}') {
+        path.pop();
+    }
+    path
+}
+
+#[cfg(windows)]
 fn set_no_follow(options: &mut OpenOptions) {
     use std::os::windows::fs::OpenOptionsExt;
 
-    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT;
+
     options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
 }
 

@@ -52,3 +52,9 @@ turborepo-api-client = { workspace = true }
 turborepo-auth = { workspace = true }
 turborepo-log = { path = "../turborepo-log" }
 zstd = { version = "0.13.3", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+] }
