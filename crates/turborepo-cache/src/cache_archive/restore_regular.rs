@@ -1,4 +1,9 @@
-use std::{fs::OpenOptions, io, io::Read, path::Path};
+use std::{
+    fs::{File, OpenOptions},
+    io,
+    io::Read,
+    path::Path,
+};
 
 use tar::Entry;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
@@ -32,20 +37,49 @@ pub fn restore_regular(
         remove_symlink(&resolved_path)?;
     }
 
+    #[cfg(unix)]
+    let mode = entry.header().mode()?;
+    #[cfg(not(unix))]
+    let mode = 0;
+
+    let mut file = open_for_restore(&resolved_path, mode)?;
+    io::copy(entry, &mut file)?;
+
+    Ok((processed_name, false))
+}
+
+fn open_for_restore(
+    path: &AbsoluteSystemPath,
+    #[cfg_attr(not(unix), allow(unused_variables))] mode: u32,
+) -> Result<File, CacheError> {
     let mut open_options = OpenOptions::new();
     open_options.write(true).truncate(true).create(true);
 
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        let header = entry.header();
-        open_options.mode(header.mode()?);
+
+        open_options.mode(mode);
+        // If a symlink appears after the pre-open check/removal, refuse to
+        // follow it instead of writing restored bytes through it.
+        open_options.custom_flags(libc::O_NOFOLLOW);
     }
 
-    let mut file = open_options.open(resolved_path.as_path())?;
-    io::copy(entry, &mut file)?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
 
-    Ok((processed_name, false))
+        use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT;
+
+        open_options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+
+    let file = path.open_with_options(open_options)?;
+    if file.metadata()?.file_type().is_symlink() {
+        return Err(io::Error::other("refusing to restore regular file through symlink").into());
+    }
+
+    Ok(file)
 }
 
 fn remove_symlink(path: &AbsoluteSystemPath) -> Result<(), CacheError> {
@@ -58,6 +92,40 @@ fn remove_symlink(path: &AbsoluteSystemPath) -> Result<(), CacheError> {
         path.remove_file().or_else(|_| path.remove_dir())?;
     }
     Ok(())
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use anyhow::Result;
+    use tempfile::tempdir;
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+
+    use super::open_for_restore;
+
+    #[test]
+    fn open_for_restore_does_not_follow_final_symlink() -> Result<()> {
+        let outside_dir = tempdir()?;
+        let outside_target = outside_dir.path().join("target.js");
+        std::fs::write(&outside_target, b"do not overwrite")?;
+        let outside_target = AbsoluteSystemPathBuf::try_from(outside_target.as_path())?;
+
+        let output_dir = tempdir()?;
+        let output_dir_path = output_dir.path().to_string_lossy();
+        let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+        let restored_file = anchor.join_component("index.js");
+        restored_file.symlink_to_file(outside_target.as_str())?;
+
+        let result = open_for_restore(&restored_file, 0o644);
+
+        assert!(result.is_err());
+        assert_eq!(
+            std::fs::read(outside_target.as_path())?,
+            b"do not overwrite"
+        );
+        assert!(restored_file.symlink_metadata()?.is_symlink());
+
+        Ok(())
+    }
 }
 
 impl CachedDirTree {
