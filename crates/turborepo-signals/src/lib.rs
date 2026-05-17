@@ -1,4 +1,5 @@
 #![deny(clippy::all)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 //! A crate for registering listeners for a given signal
 

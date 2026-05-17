@@ -13,6 +13,9 @@ categories = ["command-line-interface", "encoding"]
 license = "MIT"
 include = ["src/**/*", "LICENSE", "README.md", "CHANGELOG.md"]
 
+[lints]
+workspace = true
+
 [features]
 default = ["tui-term"]
 tui-term = ["dep:tui-term", "dep:ratatui"]

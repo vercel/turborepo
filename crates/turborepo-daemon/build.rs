@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tonic_build_result = tonic_prost_build::configure()
         .build_server(true)

@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 #![allow(unused_imports)]
 use turborepo_vt100 as vt100;
 

@@ -21,6 +21,7 @@
 //!    passed through but ignored by Turborepo
 
 #![deny(clippy::all)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 mod configv1;
 mod error;
 mod port;

@@ -6,6 +6,7 @@
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::{backtrace::Backtrace, env, future::Future, sync::LazyLock, time::Duration};
 #[cfg(feature = "rustls-tls")]

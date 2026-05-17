@@ -3,6 +3,8 @@
 //! This crate provides types and traits for tracking task execution
 //! and generating run summaries.
 
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 mod duration;
 mod execution;
 mod global_hash;

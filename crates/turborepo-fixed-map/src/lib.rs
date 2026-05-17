@@ -4,6 +4,7 @@
 //! results, and return a reference to the loaded `turbo.json`.
 
 #![deny(clippy::all)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::sync::OnceLock;
 

@@ -4,6 +4,8 @@
 //! deterministic serialization across languages and platforms, then applies
 //! xxHash64 for fast hashing.
 
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 mod oid_hash;
 mod traits;
 

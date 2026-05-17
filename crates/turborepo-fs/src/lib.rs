@@ -2,6 +2,7 @@
 //! At the moment only used for `turbo prune` to copy over package directories.
 
 #![deny(clippy::all)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::{
     fs::{DirBuilder, FileType, Metadata},

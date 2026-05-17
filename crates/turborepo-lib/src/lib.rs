@@ -6,6 +6,7 @@
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 // Clippy's needless mut lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11299
 #![allow(clippy::needless_pass_by_ref_mut)]
 #![allow(clippy::result_large_err)]

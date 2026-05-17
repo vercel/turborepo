@@ -1,4 +1,5 @@
 #![deny(clippy::all)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 //! Turborepo's path handling library.
 //! Defines distinct path types for the different uses of paths in Turborepo's

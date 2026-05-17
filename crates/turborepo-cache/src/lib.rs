@@ -9,6 +9,7 @@
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 /// A wrapper for the cache that uses a worker pool to perform cache operations
 mod async_cache;

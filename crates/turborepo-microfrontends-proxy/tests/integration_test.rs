@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+
 use std::time::Duration;
 
 use http_body_util::{BodyExt, Full};

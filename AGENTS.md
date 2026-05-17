@@ -32,6 +32,12 @@ When making changes to the codebase, check if the following docs need updates:
 - You are not allowed to use `--no-verify` when making a commit or push.
 - If you do not have dependencies available, you can download them with `pnpm install --frozen-lockfile`.
 
+### Rust panic extraction policy
+
+- Workspace Clippy lints deny `.unwrap()`, `.unwrap_err()`, `.unwrap_none()`, and `.expect()` in Rust targets covered by `cargo lint`.
+- Crates with existing implementation-code violations may temporarily allow `clippy::unwrap_used` and `clippy::expect_used` at the crate root; remove those allows as each crate is cleaned up.
+- Tests are exempt from this panic-extraction policy, but still linted by `cargo lint` with panic-extraction lints allowed under `cfg(test)`.
+
 ### PR Title Format
 
 PR titles must follow [Conventional Commits](https://www.conventionalcommits.org/). See [`.github/workflows/lint-pr-title.yml`](./.github/workflows/lint-pr-title.yml) for the enforced constraints.

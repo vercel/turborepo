@@ -4,6 +4,8 @@
 //! hashes for tasks based on their inputs (files, environment variables,
 //! dependencies) to determine cache invalidation.
 
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 pub mod global_hash;
 
 use std::{
