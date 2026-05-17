@@ -141,28 +141,38 @@ impl CachedDirTree {
             );
         }
 
-        // If we have made it here we know that it is safe to call fs::create_dir_all
-        // on the join of anchor and processed_name.
-        //
-        // This could _still_ error, but we don't care.
+        // Directory modes are only applied when creating directories. A later
+        // path-based chmod could be redirected if a checked component is swapped.
         let resolved_name = anchor.resolve(processed_name);
         let directory_exists = resolved_name.try_exists();
         if matches!(directory_exists, Ok(false)) {
-            resolved_name.create_dir_all()?;
-        }
-
-        #[cfg(unix)]
-        {
-            use std::{fs, os::unix::fs::PermissionsExt};
-
-            let metadata = resolved_name.symlink_metadata()?;
-            let mut permissions = metadata.permissions();
-            permissions.set_mode(mode);
-            fs::set_permissions(&resolved_name, permissions)?;
+            create_dir_all_with_mode(&resolved_name, mode)?;
         }
 
         Ok(())
     }
+}
+
+#[cfg(unix)]
+fn create_dir_all_with_mode(path: &AbsoluteSystemPath, mode: u32) -> io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(mode & 0o7777)
+        .create(path.as_path())
+}
+
+#[cfg(windows)]
+fn create_dir_all_with_mode(path: &AbsoluteSystemPath, _mode: u32) -> io::Result<()> {
+    // Windows restore does not apply tar modes, so there is no chmod equivalent
+    // to move to creation time.
+    path.create_dir_all()
+}
+
+#[cfg(not(any(unix, windows)))]
+fn create_dir_all_with_mode(path: &AbsoluteSystemPath, _mode: u32) -> io::Result<()> {
+    path.create_dir_all()
 }
 
 fn check_path(

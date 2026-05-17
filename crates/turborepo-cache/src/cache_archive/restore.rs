@@ -1836,6 +1836,43 @@ mod tests {
         }
 
         #[test]
+        fn test_directory_restore_does_not_chmod_through_symlink() -> Result<()> {
+            use std::os::unix::fs::PermissionsExt;
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+            let target = anchor.join_component("target");
+            target.create_dir_all()?;
+            fs::set_permissions(target.as_path(), fs::Permissions::from_mode(0o700))?;
+
+            let tar = generate_raw_tar(&[
+                RawTarEntry::Symlink {
+                    link_path: "link",
+                    link_target: "target",
+                },
+                RawTarEntry::Directory { path: "link" },
+            ]);
+
+            let mut reader = CacheReader::from_reader(&tar[..], false)?;
+            reader.restore(anchor, None)?;
+
+            let mode = target.symlink_metadata()?.permissions().mode() & 0o777;
+            assert_eq!(
+                mode, 0o700,
+                "directory restore must not chmod symlink target"
+            );
+            assert!(
+                anchor
+                    .join_component("link")
+                    .symlink_metadata()?
+                    .is_symlink()
+            );
+
+            Ok(())
+        }
+
+        #[test]
         fn test_many_concurrent_restores() -> Result<()> {
             let output_dir = tempdir()?;
             let num_threads = 10;
