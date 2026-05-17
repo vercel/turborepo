@@ -1,4 +1,5 @@
 #![allow(clippy::result_large_err)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::collections::{HashMap, HashSet};
 

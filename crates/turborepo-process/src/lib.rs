@@ -10,6 +10,7 @@
 //! must be either `wait`ed on or `stop`ped to drive state.
 
 #![deny(clippy::all)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 mod child;
 mod command;

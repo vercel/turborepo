@@ -10,6 +10,7 @@
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![allow(clippy::result_large_err)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 pub mod change_mapper;
 pub mod discovery;

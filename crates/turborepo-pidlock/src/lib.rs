@@ -3,6 +3,7 @@
 //! ability to query the owner of the pidlock.
 
 #![deny(clippy::all)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::{
     fs,

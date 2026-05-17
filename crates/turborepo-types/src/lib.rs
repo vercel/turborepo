@@ -14,6 +14,8 @@
 //! - [`HashTrackerInfo`]: Provides access to task hash information
 //! - [`GlobalHashInputs`]: Provides access to global hash inputs
 
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 pub mod secret;
 pub mod task_input_matching;
 use std::{collections::HashMap, fmt, str::FromStr, sync::Arc};

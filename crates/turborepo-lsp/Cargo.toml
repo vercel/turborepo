@@ -11,6 +11,9 @@ rustls-tls = ["turborepo-lib/rustls-tls"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lints]
+workspace = true
+
 [dependencies]
 crop = "0.4.0"
 itertools.workspace = true

@@ -32,6 +32,7 @@
     clippy::unreadable_literal,
     clippy::unused_self
 )]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 mod capture;
 mod diagnostics;

@@ -6,6 +6,7 @@ Thank you for your interest in contributing to Turborepo!
 - [Building Turborepo](#building-turborepo)
   - [TLS Implementation](#tls-implementation)
 - [Running tests](#running-tests)
+- [Running Rust checks](#running-rust-checks)
 - [Manually testing `turbo`](#manually-testing-turbo)
   - [Repositories to test with](#repositories-to-test-with)
 - [Debugging tips](#debugging-tips)
@@ -109,6 +110,16 @@ cargo test -p <module>
   ```bash
   cargo test -p turbo --test force_test
   ```
+
+## Running Rust checks
+
+Run Clippy with:
+
+```bash
+cargo lint
+```
+
+Rust program targets deny `.unwrap()`, `.unwrap_err()`, `.unwrap_none()`, and `.expect()` by default. Tests are exempt. Existing implementation-code violations are temporarily allowed at crate roots while they are removed incrementally.
 
 ## Manually testing `turbo`
 

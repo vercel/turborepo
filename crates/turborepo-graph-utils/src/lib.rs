@@ -2,6 +2,8 @@
 //! Provides transitive closure calculation and cycle detection with cut
 //! candidates to break cycles
 
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 mod walker;
 
 use std::{collections::HashSet, fmt::Display, hash::Hash};

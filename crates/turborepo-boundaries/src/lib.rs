@@ -1,4 +1,5 @@
 #![allow(clippy::sliced_string_as_bytes)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 // miette's derive macro causes false positives for these lints
 #![allow(unused_assignments)]
 

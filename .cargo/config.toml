@@ -1,5 +1,5 @@
 [alias]
-lint = "clippy --workspace --features rustls-tls --all-targets -- -D warnings"
+lint = "clippy --workspace --features rustls-tls --lib --bins --examples --benches -- -D warnings"
 
 [env]
 CARGO_WORKSPACE_DIR = { value = "", relative = true }
@@ -33,5 +33,4 @@ rustflags = [
   "-Csymbol-mangling-version=v0",
   "-Clink-arg=-fuse-ld=lld"
 ]
-
 

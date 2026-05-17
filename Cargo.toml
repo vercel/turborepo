@@ -20,7 +20,9 @@ turborepo = ["path:crates/turborepo*"]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(debug_assert)'] }
 
 [workspace.lints.clippy]
+expect_used = "deny"
 too_many_arguments = "allow"
+unwrap_used = "deny"
 
 [profile.dev]
 debug = 0

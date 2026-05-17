@@ -4,6 +4,7 @@
 //! but we do not support.
 
 #![deny(clippy::all)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::{
     borrow::Cow,

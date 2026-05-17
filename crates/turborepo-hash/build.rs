@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let capnpc_result = capnpc::CompilerCommand::new()
         .file("./src/proto.capnp")

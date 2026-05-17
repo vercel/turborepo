@@ -1,6 +1,7 @@
 //! Mock server implementation for a subset of the Vercel API.
 
 #![deny(clippy::all)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::{collections::HashMap, fs::OpenOptions, io::Write, net::SocketAddr, sync::Arc};
 
