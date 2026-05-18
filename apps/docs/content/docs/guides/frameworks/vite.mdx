@@ -166,3 +166,64 @@ export default defineConfig({
   base: "/admin",
 });
 ```
+
+### Module Federation
+
+For runtime composition with Vite, use [the `with-vite-module-federation` example](https://github.com/vercel/turborepo/tree/main/examples/with-vite-module-federation). Module Federation works with many frameworks and libraries, including React, Vue, Svelte, Solid, Preact, and many others. See the [Module Federation Vite working implementations](https://github.com/module-federation/vite/#working-implementations) for more examples.
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+
+```bash title="Terminal"
+pnpm dlx create-turbo@latest -e with-vite-module-federation
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```bash title="Terminal"
+yarn dlx create-turbo@latest -e with-vite-module-federation
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```bash title="Terminal"
+npx create-turbo@latest -e with-vite-module-federation
+```
+
+</Tab>
+
+<Tab value="bun">
+
+```bash title="Terminal"
+bunx create-turbo@latest -e with-vite-module-federation
+```
+
+</Tab>
+</PackageManagerTabs>
+
+The example includes a `react-host` Vite app, a `react-remote` Vite app, and an `@mf-vite-example/shared-ui` package. The host consumes the remote's exposed `./remote-app` module and both apps share React dependencies through [Module Federation](https://module-federation.io/).
+
+During development, run `turbo dev` from the example root. The host runs on `localhost:4173` and the remote runs on `localhost:4174`.
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "dependsOn": ["^build"]
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "*.tsbuildinfo"]
+    }
+  }
+}
+```
+
+Keep `dev` uncached and persistent for Vite servers. Use `dependsOn: ["^build"]` so shared packages are built before the host and remote start.
