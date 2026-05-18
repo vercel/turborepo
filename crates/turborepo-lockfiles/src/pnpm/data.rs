@@ -680,6 +680,26 @@ impl crate::Lockfile for PnpmLockfile {
                     pruned_packages.insert(key.clone(), entry.clone());
                 }
 
+                // Peer-dependency variants like `pkg@file:packages/pkg(peer@1)`
+                // keep their `resolution` on the *base* `packages:` entry
+                // (`pkg@file:packages/pkg`), not on the variant key. Retaining
+                // only the variant above leaves pnpm's `convertToLockfileObject`
+                // inheriting an undefined resolution, so it later crashes with
+                // `Cannot use 'in' operator to search for 'directory' in
+                // undefined` during `pnpm install --frozen-lockfile`. Strip the
+                // peer suffix to also retain the base entry — mirrors the
+                // transitive-deps handling further below.
+                if let Ok(dp) = DepPath::parse(self.version(), &key) {
+                    let base_key = self.format_key(dp.name, dp.version);
+                    if base_key != key
+                        && let Some(entry) = self.get_packages(&base_key)
+                    {
+                        pruned_packages
+                            .entry(base_key)
+                            .or_insert_with(|| entry.clone());
+                    }
+                }
+
                 if let Some(snapshots) = self.snapshots.as_ref()
                     && let Some(snapshot) = snapshots.get(&key)
                 {
@@ -1394,6 +1414,113 @@ snapshots:
 
         // prettier should NOT be in the pruned lockfile (it's root-only)
         assert!(!packages.contains_key("prettier@3.5.3"));
+    }
+
+    #[test]
+    fn test_subgraph_injected_peer_variant_retains_base_resolution() {
+        // Residual after #12073: when an injected workspace dep has peer
+        // dependencies that resolve per-consumer, pnpm writes a peer-variant
+        // snapshot key `@repo/shared@file:packages/shared(react@18.2.0)` while
+        // the `resolution` lives on the *base* `packages:` entry
+        // `@repo/shared@file:packages/shared`. #12073 only retained
+        // get_packages(variant_key) (None for the variant) so the base entry
+        // with the directory resolution was dropped, and pnpm then crashed
+        // with `Cannot use 'in' operator to search for 'directory' in
+        // undefined` on `pnpm install --frozen-lockfile`.
+        let yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+  injectWorkspacePackages: true
+
+importers:
+
+  .:
+    devDependencies:
+      prettier:
+        specifier: 3.5.3
+        version: 3.5.3
+
+  apps/my-app:
+    dependencies:
+      '@repo/shared':
+        specifier: workspace:*
+        version: file:packages/shared(react@18.2.0)
+      react:
+        specifier: 18.2.0
+        version: 18.2.0
+
+  packages/shared:
+    dependencies:
+      react:
+        specifier: 18.2.0
+        version: 18.2.0
+
+packages:
+
+  '@repo/shared@file:packages/shared':
+    resolution: {type: directory, directory: packages/shared}
+    name: '@repo/shared'
+    version: 0.0.0
+    peerDependencies:
+      react: '*'
+
+  prettier@3.5.3:
+    resolution: {integrity: sha512-jkl}
+    engines: {node: '>=14'}
+    hasBin: true
+
+  react@18.2.0:
+    resolution: {integrity: sha512-rrr}
+
+snapshots:
+
+  '@repo/shared@file:packages/shared(react@18.2.0)':
+    dependencies:
+      react: 18.2.0
+
+  prettier@3.5.3: {}
+
+  react@18.2.0: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let workspace_packages =
+            vec!["apps/my-app".to_string(), "packages/shared".to_string()];
+        let resolved_packages = vec!["react@18.2.0".to_string()];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_text = String::from_utf8(pruned_bytes.clone()).unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should have packages");
+        let snapshots = pruned_lockfile
+            .snapshots
+            .as_ref()
+            .expect("should have snapshots");
+
+        // The peer-variant snapshot is retained (already worked in #12073)…
+        assert!(
+            snapshots.contains_key("@repo/shared@file:packages/shared(react@18.2.0)"),
+            "pruned lockfile should retain the peer-variant snapshot"
+        );
+        // …and crucially the BASE packages entry that holds `resolution`
+        // (the regression this fix addresses).
+        assert!(
+            packages.contains_key("@repo/shared@file:packages/shared"),
+            "pruned lockfile must retain the base @repo/shared packages entry \
+             (it carries the directory resolution the variant inherits)"
+        );
+        assert!(
+            pruned_text.contains("directory: packages/shared"),
+            "base entry's directory resolution must survive pruning, got:\n{pruned_text}"
+        );
     }
 
     #[test]
