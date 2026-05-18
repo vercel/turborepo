@@ -2,6 +2,8 @@
 
 mod common;
 
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -92,6 +94,12 @@ fn wait_for_markers(test_dir: &Path, pkg: &str, expected: usize, timeout: Durati
 fn spawn_turbo_watch_with_tasks(test_dir: &Path, tasks: &[&str]) -> Child {
     let turbo_bin = assert_cmd::cargo::cargo_bin("turbo");
     let mut cmd = std::process::Command::new(turbo_bin);
+    #[cfg(unix)]
+    cmd.process_group(0);
+
+    let config_dir = test_dir.join(".turbo/test-config");
+    fs::create_dir_all(&config_dir).expect("failed to create isolated config dir");
+
     cmd.arg("watch");
     for task in tasks {
         cmd.arg(task);
@@ -102,11 +110,12 @@ fn spawn_turbo_watch_with_tasks(test_dir: &Path, tasks: &[&str]) -> Child {
         .env("DO_NOT_TRACK", "1")
         .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
         .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
+        .env("TURBO_CONFIG_DIR_PATH", &config_dir)
         .env_remove("CI")
         .env_remove("GITHUB_ACTIONS")
         .current_dir(test_dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn()
         .expect("failed to spawn turbo watch")
 }
@@ -124,7 +133,11 @@ fn stop_watch(mut child: Child) {
             sys::signal::{self, Signal},
             unistd::Pid,
         };
-        let _ = signal::kill(Pid::from_raw(child.id() as i32), Signal::SIGTERM);
+        let pgid = Pid::from_raw(-(child.id() as i32));
+        let _ = signal::kill(pgid, Signal::SIGTERM);
+        if !wait_for_child_exit(&mut child, Duration::from_secs(5)) {
+            let _ = signal::kill(pgid, Signal::SIGKILL);
+        }
     }
     #[cfg(windows)]
     {
@@ -134,10 +147,24 @@ fn stop_watch(mut child: Child) {
     let _ = child.wait();
 }
 
+fn wait_for_child_exit(child: &mut Child, timeout: Duration) -> bool {
+    let start = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return true,
+            Ok(None) if start.elapsed() < timeout => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Ok(None) => return false,
+            Err(_) => return true,
+        }
+    }
+}
+
 /// RAII guard that ensures `stop_watch` runs even if a test panics.
 /// Without this, a panic between `spawn_turbo_watch` and `stop_watch` would
-/// leak the turbo process and its daemon, causing socket contention for
-/// subsequent serialized tests.
+/// leak the turbo process and its descendants, causing resource contention for
+/// parallel tests.
 struct WatchGuard(Option<Child>);
 
 impl WatchGuard {
@@ -300,7 +327,7 @@ fn watch_clean_shutdown_on_sigint() {
 
     let mut child = guard.take();
     let pid = Pid::from_raw(child.id() as i32);
-    signal::kill(pid, Signal::SIGINT).expect("failed to send SIGINT");
+    signal::kill(Pid::from_raw(-pid.as_raw()), Signal::SIGINT).expect("failed to send SIGINT");
 
     // Wait for process to exit
     let start = Instant::now();
@@ -316,7 +343,7 @@ fn watch_clean_shutdown_on_sigint() {
             }
             Ok(None) => {
                 if start.elapsed() > Duration::from_secs(10) {
-                    child.kill().unwrap();
+                    stop_watch(child);
                     panic!("turbo watch did not exit within 10s after SIGINT");
                 }
                 std::thread::sleep(Duration::from_millis(100));
@@ -651,9 +678,9 @@ fn watch_rapid_edits_produce_single_rebuild() {
 
     let a_before = marker_count(&test_dir, "a");
 
-    // Fire 10 rapid edits. Using more edits widens the gap between
-    // "debouncing works" and "debouncing is broken", making the assertion
-    // resilient to CI timing variance.
+    // Fire 10 rapid edits without staging or committing each one. The watcher
+    // only needs file-system events here, and per-edit git commits can take
+    // longer than the debounce window under parallel CI load.
     let num_edits = 10;
     let src_file = test_dir.join("packages/a/src.js");
     for i in 0..num_edits {
@@ -662,18 +689,6 @@ fn watch_rapid_edits_produce_single_rebuild() {
             format!("module.exports = {{ a: 'rapid-{i}' }};\n"),
         )
         .unwrap();
-        common::git(&test_dir, &["add", "."]);
-        common::git(
-            &test_dir,
-            &[
-                "commit",
-                "-m",
-                &format!("rapid edit {i}"),
-                "--quiet",
-                "--allow-empty",
-            ],
-        );
-        std::thread::sleep(Duration::from_millis(10));
     }
 
     // Wait for at least one rebuild, then let the system fully settle.
@@ -758,7 +773,7 @@ fn watch_sigint_exits_with_zero() {
 
     let mut child = guard.take();
     let pid = Pid::from_raw(child.id() as i32);
-    signal::kill(pid, Signal::SIGINT).expect("failed to send SIGINT");
+    signal::kill(Pid::from_raw(-pid.as_raw()), Signal::SIGINT).expect("failed to send SIGINT");
 
     let start = Instant::now();
     loop {
@@ -772,7 +787,7 @@ fn watch_sigint_exits_with_zero() {
             }
             Ok(None) => {
                 if start.elapsed() > Duration::from_secs(10) {
-                    child.kill().unwrap();
+                    stop_watch(child);
                     panic!("turbo watch did not exit within 10s after SIGINT");
                 }
                 std::thread::sleep(Duration::from_millis(100));
