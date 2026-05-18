@@ -58,6 +58,8 @@ pub enum TraceError {
     },
     #[error("failed to walk files")]
     GlobError(Arc<globwalk::WalkError>),
+    #[error("trace task failed to complete: {0}")]
+    TaskJoinError(String),
 }
 
 impl TraceResult {
@@ -470,7 +472,20 @@ impl Tracer {
         let mut errors = Vec::new();
 
         while let Some(result) = futures.join_next().await {
-            let (errs, file) = result.unwrap();
+            let (errs, file) = match result {
+                Ok(result) => result,
+                Err(err) => {
+                    let reason = if err.is_panic() {
+                        "trace task panicked"
+                    } else if err.is_cancelled() {
+                        "trace task was cancelled"
+                    } else {
+                        "trace task failed"
+                    };
+                    errors.push(TraceError::TaskJoinError(format!("{reason}: {err}")));
+                    continue;
+                }
+            };
             errors.extend(errs);
 
             if let Some((path, seen_file)) = file {
