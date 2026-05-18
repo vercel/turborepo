@@ -1,7 +1,7 @@
 //! Mock server implementation for a subset of the Vercel API.
 
 #![deny(clippy::all)]
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![allow(clippy::unwrap_used)]
 
 use std::{collections::HashMap, fs::OpenOptions, io::Write, net::SocketAddr, sync::Arc};
 
@@ -145,11 +145,17 @@ pub async fn start_test_server(
                         .open(&file_path)
                         .unwrap();
 
-                    let duration = headers
+                    let Some(duration) = headers
                         .get("x-artifact-duration")
                         .and_then(|header_value| header_value.to_str().ok())
                         .and_then(|duration| duration.parse::<u32>().ok())
-                        .expect("x-artifact-duration header is missing");
+                    else {
+                        return (
+                            StatusCode::BAD_REQUEST,
+                            "x-artifact-duration header is missing",
+                        )
+                            .into_response();
+                    };
 
                     assert!(
                         headers.get(CONTENT_LENGTH).is_some(),
@@ -178,7 +184,7 @@ pub async fn start_test_server(
                         file.write_all(&chunk).unwrap();
                     }
 
-                    (StatusCode::CREATED, Json(hash))
+                    (StatusCode::CREATED, Json(hash)).into_response()
                 },
             ),
         )
