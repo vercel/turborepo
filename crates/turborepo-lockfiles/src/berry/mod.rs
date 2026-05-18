@@ -34,12 +34,19 @@ pub enum Error {
     Resolutions(#[from] resolution::Error),
     #[error("Unable to find entry for {0}")]
     MissingPackageForLocator(Locator<'static>),
+    #[error("Unable to find descriptors for patch locator {0}")]
+    MissingDescriptorsForPatchLocator(Locator<'static>),
     #[error("Unable to find any locator for {0}")]
     MissingLocator(Descriptor<'static>),
     #[error("Descriptor collision {descriptor} and {other}")]
     DescriptorCollision {
         descriptor: Descriptor<'static>,
         other: String,
+    },
+    #[error("Unable to parse patch descriptor {descriptor} for patch locator {locator}")]
+    InvalidPatchDescriptor {
+        descriptor: Box<Descriptor<'static>>,
+        locator: Box<Locator<'static>>,
     },
     #[error("Unable to parse as patch reference: {0}")]
     InvalidPatchReference(String),
@@ -348,13 +355,18 @@ impl BerryLockfile {
         for patch in patches.values() {
             let patch_descriptors = reverse_lookup
                 .get(patch)
-                .unwrap_or_else(|| panic!("Unable to find {patch} in reverse lookup"));
+                .ok_or_else(|| Error::MissingDescriptorsForPatchLocator(patch.clone()))?;
 
             // For each patch descriptor we extract the primary descriptor that each patch
             // descriptor targets and check if that descriptor is present in the
             // pruned map and add it if it is present
             for patch_descriptor in patch_descriptors {
-                let version = patch_descriptor.primary_version().unwrap();
+                let version = patch_descriptor.primary_version().ok_or_else(|| {
+                    Error::InvalidPatchDescriptor {
+                        descriptor: Box::new((*patch_descriptor).clone()),
+                        locator: Box::new(patch.clone()),
+                    }
+                })?;
                 let primary_descriptor = Descriptor {
                     ident: patch_descriptor.ident.clone(),
                     range: version.into(),
@@ -570,7 +582,7 @@ impl Lockfile for BerryLockfile {
 
         let mut map = std::collections::BTreeMap::new();
         for (name, version) in package.dependencies.iter().flatten() {
-            let mut dependency = Descriptor::new(name, version.as_ref()).unwrap();
+            let mut dependency = Descriptor::new(name, version.as_ref()).map_err(Error::from)?;
             for (resolution, reference) in &self.overrides {
                 if let Some(override_dependency) =
                     resolution.reduce_dependency(reference, &dependency, &locator)
@@ -971,6 +983,117 @@ mod test {
             "subgraph should not panic or error: {:?}",
             result.err()
         );
+    }
+
+    #[test]
+    fn test_prune_with_missing_patch_descriptor_returns_error() {
+        let yaml = r#"__metadata:
+  version: 6
+  cacheKey: 8c0
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"lodash@npm:4.17.21":
+  version: 4.17.21
+  resolution: "lodash@npm:4.17.21"
+  checksum: abc123
+  languageName: node
+  linkType: hard
+
+"lodash@patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash.patch::locator=root%40workspace%3A.":
+  version: 4.17.21
+  resolution: "lodash@patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash.patch::version=4.17.21&hash=abc123&locator=root%40workspace%3A."
+  checksum: def456
+  languageName: node
+  linkType: hard
+"#;
+
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+        let pruned = lockfile
+            .subgraph(&[], &["lodash@npm:4.17.21".to_string()])
+            .unwrap();
+
+        let err = pruned
+            .subgraph(&[], &["lodash@npm:4.17.21".to_string()])
+            .unwrap_err();
+        assert!(matches!(err, Error::MissingDescriptorsForPatchLocator(_)));
+    }
+
+    #[test]
+    fn test_prune_with_malformed_patch_descriptor_returns_error() {
+        let yaml = r#"__metadata:
+  version: 6
+  cacheKey: 8c0
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"lodash@npm:4.17.21":
+  version: 4.17.21
+  resolution: "lodash@npm:4.17.21"
+  checksum: abc123
+  languageName: node
+  linkType: hard
+
+"lodash@npm:not-a-patch-descriptor":
+  version: 4.17.21
+  resolution: "lodash@patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash.patch::version=4.17.21&hash=abc123&locator=root%40workspace%3A."
+  checksum: def456
+  languageName: node
+  linkType: hard
+"#;
+
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+
+        let err = lockfile
+            .subgraph(&[], &["lodash@npm:4.17.21".to_string()])
+            .unwrap_err();
+        assert!(matches!(err, Error::InvalidPatchDescriptor { .. }));
+    }
+
+    #[test]
+    fn test_all_dependencies_with_invalid_descriptor_returns_error() {
+        let yaml = r#"__metadata:
+  version: 6
+  cacheKey: 8c0
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"a@workspace:packages/a":
+  version: 0.0.0-use.local
+  resolution: "a@workspace:packages/a"
+  languageName: unknown
+  linkType: soft
+"#;
+
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let mut lockfile = BerryLockfile::new(data, None).unwrap();
+        let locator = Locator::try_from("a@workspace:packages/a")
+            .unwrap()
+            .as_owned();
+        let package = lockfile.locator_package.get_mut(&locator).unwrap();
+        package.dependencies = Some(Map::from([(
+            "bad/name".to_string(),
+            "npm:^1.0.0".to_string(),
+        )]));
+
+        let err = lockfile
+            .all_dependencies("a@workspace:packages/a")
+            .unwrap_err();
+        assert!(matches!(err, crate::Error::Berry(Error::Identifiers(_))));
     }
 
     #[test]
