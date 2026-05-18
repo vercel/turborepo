@@ -59,9 +59,9 @@ fn read_status<R: Read>(
     let mut reader = BufReader::with_capacity(64 * 1024, reader);
     let mut buffer = Vec::new();
     while reader.read_until(b'\0', &mut buffer)? != 0 {
-        let entry = parse_status(&buffer)?;
-        let path = require_git_path(entry.filename, "git status path")?;
-        if entry.is_delete {
+        let status_entry = parse_status(&buffer)?;
+        let path = require_git_path(status_entry.filename, "git status path")?;
+        if status_entry.is_delete {
             let path = path.strip_prefix(pkg_prefix).map_err(|_| {
                 Error::git_error(format!(
                     "'git status --untracked-files --no-renames -z -- .' run in {root_path} found \
@@ -83,12 +83,13 @@ fn read_status_raw<R: Read>(reader: R) -> Result<Vec<RepoStatusEntry>, Error> {
     let mut reader = BufReader::with_capacity(64 * 1024, reader);
     let mut buffer = Vec::new();
     while reader.read_until(b'\0', &mut buffer)? != 0 {
-        let entry = parse_status(&buffer)?;
-        let path = require_git_path(entry.filename, "git status path")?;
-        entries.push(RepoStatusEntry {
+        let status_entry = parse_status(&buffer)?;
+        let path = require_git_path(status_entry.filename, "git status path")?;
+        let repo_entry = RepoStatusEntry {
             path,
-            is_delete: entry.is_delete,
-        });
+            is_delete: status_entry.is_delete,
+        };
+        entries.push(repo_entry);
         buffer.clear();
     }
     Ok(entries)
