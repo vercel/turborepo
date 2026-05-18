@@ -668,7 +668,6 @@ impl<T> Connected for UdsWindowsStream<T> {
 mod test {
     use std::{
         assert_matches,
-        process::Command,
         sync::{atomic::AtomicBool, Arc},
     };
 
@@ -805,17 +804,9 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
         let paths = Paths::from_repo_root(&repo_root).unwrap();
 
-        #[cfg(windows)]
-        let node_bin = "node.exe";
-        #[cfg(not(windows))]
-        let node_bin = "node";
-
-        let mut child = Command::new(node_bin).spawn().unwrap();
         paths.pid_file.ensure_dir().unwrap();
-        paths
-            .pid_file
-            .create_with_contents(format!("{}", child.id()))
-            .unwrap();
+        let mut existing_lock = pidlock::Pidlock::new(paths.pid_file.as_std_path().to_owned());
+        existing_lock.acquire().unwrap();
 
         let running = Arc::new(AtomicBool::new(true));
         let result = listen_socket(&paths.pid_file, &paths.sock_file, running).await;
@@ -831,8 +822,6 @@ mod test {
             panic!("expected an error")
         }
 
-        let _ = child.kill();
-        // Make sure to wait on the child to not leave a zombie process
-        let _ = child.wait();
+        drop(existing_lock);
     }
 }
