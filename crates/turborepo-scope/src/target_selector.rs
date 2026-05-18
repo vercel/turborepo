@@ -24,10 +24,10 @@ use turbopath::AnchoredSystemPathBuf;
 /// - `(\{(?P<directory>[^}]*)\})?` - Optional directory in curly braces
 /// - `(?P<commits>(?:\.{3})?\[[^\]]*\])?` - Optional git range in square
 ///   brackets, optionally prefixed with `...` for match_dependencies
-static SELECTOR_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+static SELECTOR_REGEX: LazyLock<Result<Regex, regex::Error>> = LazyLock::new(|| {
     Regex::new(
-        r"^(?P<name>[^.](?:[^{}\[\]]*[^{}\[\].])?)?(\{(?P<directory>[^}]*)})?(?P<commits>(?:\.{3})?\[[^\]]*\])?$"
-    ).expect("selector regex is statically validated")
+        r"^(?P<name>[^.](?:[^{}\[\]]*[^{}\[\].])?)?(\{(?P<directory>[^}]*)})?(?P<commits>(?:\.{3})?\[[^\]]*\])?$",
+    )
 });
 
 #[derive(Debug, Default, PartialEq, Clone)]
@@ -103,7 +103,10 @@ impl FromStr for TargetSelector {
 
         // We explicitly allow empty git ranges so we can return a more targeted error
         // below
-        let captures = SELECTOR_REGEX.captures(selector);
+        let captures = SELECTOR_REGEX
+            .as_ref()
+            .map_err(|err| InvalidSelectorError::InvalidSelectorRegex(err.to_string()))?
+            .captures(selector);
 
         let captures = match captures {
             Some(captures) => captures,
@@ -147,7 +150,7 @@ impl FromStr for TargetSelector {
                 let clean_directory = path_clean::clean(std::path::Path::new(directory.as_str()))
                     .into_os_string()
                     .into_string()
-                    .expect("directory was valid utf8 before cleaning");
+                    .map_err(|_| InvalidSelectorError::InvalidAnchoredPath(directory.clone()))?;
                 parent_dir = Some(
                     AnchoredSystemPathBuf::try_from(clean_directory.as_str())
                         .map_err(|_| InvalidSelectorError::InvalidAnchoredPath(directory))?,
@@ -170,7 +173,7 @@ impl FromStr for TargetSelector {
             let commits_str = commits_str
                 .strip_prefix('[')
                 .and_then(|s| s.strip_suffix(']'))
-                .expect("regex guarantees square brackets");
+                .ok_or_else(|| InvalidSelectorError::InvalidGitRange(commits_str.to_string()))?;
             if commits_str.is_empty() {
                 return Err(InvalidSelectorError::InvalidGitRange(
                     commits_str.to_string(),
@@ -246,6 +249,9 @@ pub enum InvalidSelectorError {
     #[error("invalid git range selector: {0}")]
     InvalidGitRange(String),
 
+    #[error("invalid selector regex: {0}")]
+    InvalidSelectorRegex(String),
+
     #[error("selector \"{0}\" must have a reference, directory, or name pattern")]
     InvalidSelector(String),
 }
@@ -265,11 +271,11 @@ pub fn is_selector_by_location(
         let cleaned_selector = path_clean::clean(std::path::Path::new(raw_selector))
             .into_os_string()
             .into_string()
-            .expect("raw selector was valid utf8");
-        Some(
+            .map_err(|_| InvalidSelectorError::InvalidAnchoredPath(raw_selector.to_string()));
+        Some(cleaned_selector.and_then(|cleaned_selector| {
             AnchoredSystemPathBuf::try_from(cleaned_selector.as_str())
-                .map_err(|_| InvalidSelectorError::InvalidAnchoredPath(raw_selector.to_string())),
-        )
+                .map_err(|_| InvalidSelectorError::InvalidAnchoredPath(raw_selector.to_string()))
+        }))
     } else {
         None
     }
