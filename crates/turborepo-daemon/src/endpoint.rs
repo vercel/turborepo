@@ -485,9 +485,12 @@ fn secure_socket_dir(sock_path: &AbsoluteSystemPath) -> Result<(), std::io::Erro
 
 #[cfg(unix)]
 fn secure_unix_dir(socket_dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 
-    socket_dir.create_dir_all()?;
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(PRIVATE_DIR_MODE)
+        .create(socket_dir.as_std_path())?;
 
     let metadata = std::fs::symlink_metadata(socket_dir.as_std_path())?;
     if !metadata.file_type().is_dir() {
@@ -711,6 +714,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
         let paths = Paths::from_repo_root(&repo_root).unwrap();
         let socket_dir = paths.sock_file.parent().unwrap();
+        let daemon_dir = socket_dir.parent().unwrap();
         socket_dir.create_dir_all().unwrap();
         std::fs::set_permissions(
             socket_dir.as_std_path(),
@@ -727,13 +731,48 @@ mod test {
             .permissions()
             .mode()
             & 0o777;
+        let daemon_dir_mode = std::fs::metadata(daemon_dir.as_std_path())
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
         let socket_mode = std::fs::metadata(paths.sock_file.as_std_path())
             .unwrap()
             .permissions()
             .mode()
             & 0o777;
         assert_eq!(dir_mode, 0o700);
+        assert_eq!(daemon_dir_mode, 0o700);
         assert_eq!(socket_mode, 0o600);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_socket_path_directories_are_private_when_created() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        let paths = Paths::from_repo_root(&repo_root).unwrap();
+        let socket_dir = paths.sock_file.parent().unwrap();
+        let daemon_dir = socket_dir.parent().unwrap();
+
+        let running = Arc::new(AtomicBool::new(true));
+        let result = listen_socket(&paths.pid_file, &paths.sock_file, running).await;
+        assert!(result.is_ok(), "expected socket to open");
+
+        let daemon_dir_mode = std::fs::metadata(daemon_dir.as_std_path())
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        let dir_mode = std::fs::metadata(socket_dir.as_std_path())
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(daemon_dir_mode, 0o700);
+        assert_eq!(dir_mode, 0o700);
     }
 
     #[cfg(unix)]
