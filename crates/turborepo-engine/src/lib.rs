@@ -412,18 +412,13 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     }
 
     fn is_cacheable_task_node(&self, node: petgraph::graph::NodeIndex) -> bool {
-        let TaskNode::Task(task) = self
-            .task_graph
-            .node_weight(node)
-            .expect("node index should be present")
-        else {
+        let Some(TaskNode::Task(task)) = self.task_graph.node_weight(node) else {
             return false;
         };
 
         self.task_definitions
             .get(task)
-            .expect("task should have definition")
-            .cache()
+            .is_some_and(|def| def.cache())
     }
 
     /// Prunes the engine graph to only nodes in `reachable` and rebuilds all
@@ -438,19 +433,19 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         reachable: &HashSet<petgraph::graph::NodeIndex>,
         exclude_non_interruptible_persistent: bool,
     ) -> Self {
-        self.task_graph = self.task_graph.filter_map(
+        let pruned_graph = self.task_graph.filter_map(
             |node_idx, node| {
                 if !reachable.contains(&node_idx) {
                     return None;
                 }
-                if exclude_non_interruptible_persistent && let TaskNode::Task(task) = node {
-                    let def = self
+                if exclude_non_interruptible_persistent
+                    && let TaskNode::Task(task) = node
+                    && self
                         .task_definitions
                         .get(task)
-                        .expect("task should have definition");
-                    if def.persistent() && !def.interruptible() {
-                        return None;
-                    }
+                        .is_some_and(|def| def.persistent() && !def.interruptible())
+                {
+                    return None;
                 }
                 Some(node.clone())
             },
@@ -460,24 +455,24 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         // Rebuild all metadata from the pruned graph. root_index is recovered
         // during the task_lookup rebuild to avoid a separate linear scan.
         let mut new_root_index = None;
-        self.task_lookup = self
-            .task_graph
+        let task_lookup = pruned_graph
             .node_indices()
-            .filter_map(|index| {
-                match self
-                    .task_graph
-                    .node_weight(index)
-                    .expect("node index should be present")
-                {
-                    TaskNode::Root => {
-                        new_root_index = Some(index);
-                        None
-                    }
-                    TaskNode::Task(task) => Some((task.clone(), index)),
+            .filter_map(|index| match pruned_graph.node_weight(index)? {
+                TaskNode::Root => {
+                    new_root_index = Some(index);
+                    None
                 }
+                TaskNode::Task(task) => Some((task.clone(), index)),
             })
             .collect();
-        self.root_index = new_root_index.expect("root node should be present");
+        let Some(root_index) = new_root_index else {
+            tracing::debug!("skipping task graph prune because the root node was not retained");
+            return self;
+        };
+
+        self.task_graph = pruned_graph;
+        self.task_lookup = task_lookup;
+        self.root_index = root_index;
 
         self.task_definitions
             .retain(|id, _| self.task_lookup.contains_key(id));
@@ -622,11 +617,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         Some(
             self.task_graph
                 .neighbors_directed(*index, direction)
-                .map(|index| {
-                    self.task_graph
-                        .node_weight(index)
-                        .expect("node index should be present")
-                })
+                .filter_map(|index| self.task_graph.node_weight(index))
                 .collect(),
         )
     }
