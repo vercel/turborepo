@@ -2,7 +2,6 @@
 //! At the moment only used for `turbo prune` to copy over package directories.
 
 #![deny(clippy::all)]
-#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::{
     fs::{DirBuilder, FileType, Metadata},
@@ -56,9 +55,10 @@ pub fn recursive_copy(
                 Ok(entry) => {
                     let path = entry.path();
                     let path = AbsoluteSystemPath::from_std_path(path)?;
-                    let file_type = entry
-                        .file_type()
-                        .expect("all dir entries aside from stdin should have a file type");
+                    let file_type = match entry.file_type() {
+                        Some(file_type) => file_type,
+                        None => entry.metadata()?.file_type(),
+                    };
 
                     // Note that we also don't currently copy broken symlinks
                     if file_type.is_symlink() && path.stat().is_err() {
@@ -154,9 +154,10 @@ mod tests {
         let (_dst_tmp, dst_dir) = tmp_dir()?;
         let dst_file = dst_dir.join_component("dest");
 
-        let err = copy_file(src_file, dst_file).unwrap_err();
-        let Error::Path(err) = err else {
-            panic!("expected path error");
+        let err = match copy_file(src_file, dst_file) {
+            Err(Error::Path(err)) => err,
+            Err(err) => panic!("expected path error, got {err}"),
+            Ok(()) => panic!("expected path error, got success"),
         };
         assert!(err.is_io_error(io::ErrorKind::NotFound));
         Ok(())
@@ -174,7 +175,7 @@ mod tests {
         src_file.create_with_contents("src")?;
 
         copy_file(&src_file, &dst_file)?;
-        assert_file_matches(&src_file, &dst_file);
+        assert_file_matches(&src_file, &dst_file)?;
         Ok(())
     }
 
@@ -194,7 +195,7 @@ mod tests {
         src_symlink.symlink_to_file(src_target.as_path())?;
 
         copy_file(&src_symlink, &dst_file)?;
-        assert_target_matches(&dst_file, &src_target);
+        assert_target_matches(&dst_file, &src_target)?;
         Ok(())
     }
 
@@ -217,7 +218,7 @@ mod tests {
         src_symlink.symlink_to_dir(src_target.as_path())?;
 
         copy_file(&src_symlink, &dst_file)?;
-        assert_target_matches(&dst_file, &src_target);
+        assert_target_matches(&dst_file, &src_target)?;
 
         let target = dst_file.read_link()?;
         assert_eq!(target.read_dir()?.count(), 1);
@@ -238,7 +239,7 @@ mod tests {
         src_file.set_readonly()?;
 
         copy_file(&src_file, &dst_file)?;
-        assert_file_matches(&src_file, &dst_file);
+        assert_file_matches(&src_file, &dst_file)?;
         assert!(dst_file.is_readonly()?);
         Ok(())
     }
@@ -293,16 +294,16 @@ mod tests {
 
         let dst_child_path = dst_dir.join_component("child");
         let dst_a_path = dst_child_path.join_component("a");
-        assert_file_matches(&a_path, dst_a_path);
+        assert_file_matches(&a_path, dst_a_path)?;
 
         let dst_b_path = dst_dir.join_component("b");
-        assert_file_matches(&b_path, dst_b_path);
+        assert_file_matches(&b_path, dst_b_path)?;
 
         let dst_link_path = dst_child_path.join_component("link");
         assert_target_matches(
             dst_link_path,
             ["..", "b"].join(std::path::MAIN_SEPARATOR_STR),
-        );
+        )?;
 
         let dst_broken_path = dst_child_path.join_component("broken");
         assert!(!dst_broken_path.as_path().exists());
@@ -322,7 +323,7 @@ mod tests {
 
         let dst_c_path = dst_other_path.join_component("c");
 
-        assert_file_matches(&c_path, dst_c_path);
+        assert_file_matches(&c_path, dst_c_path)?;
 
         Ok(())
     }
@@ -376,17 +377,25 @@ mod tests {
         Ok(())
     }
 
-    fn assert_file_matches(a: impl AsRef<AbsoluteSystemPath>, b: impl AsRef<AbsoluteSystemPath>) {
+    fn assert_file_matches(
+        a: impl AsRef<AbsoluteSystemPath>,
+        b: impl AsRef<AbsoluteSystemPath>,
+    ) -> Result<(), Error> {
         let a = a.as_ref();
         let b = b.as_ref();
-        let a_contents = fs::read_to_string(a.as_path()).unwrap();
-        let b_contents = fs::read_to_string(b.as_path()).unwrap();
+        let a_contents = fs::read_to_string(a.as_path())?;
+        let b_contents = fs::read_to_string(b.as_path())?;
         assert_eq!(a_contents, b_contents);
+        Ok(())
     }
 
-    fn assert_target_matches(link: impl AsRef<AbsoluteSystemPath>, expected: impl AsRef<Path>) {
+    fn assert_target_matches(
+        link: impl AsRef<AbsoluteSystemPath>,
+        expected: impl AsRef<Path>,
+    ) -> Result<(), Error> {
         let link = link.as_ref();
-        let path = link.read_link().unwrap();
+        let path = link.read_link()?;
         assert_eq!(path.as_path(), expected.as_ref());
+        Ok(())
     }
 }
