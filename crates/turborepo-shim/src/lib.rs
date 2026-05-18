@@ -11,7 +11,7 @@
 //! The crate uses trait-based dependency injection to avoid circular
 //! dependencies with `turborepo-lib`.
 
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used))]
 
 mod local_turbo_config;
 mod local_turbo_state;

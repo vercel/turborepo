@@ -302,10 +302,10 @@ impl ShimArgs {
     pub fn profile_file_and_include_args(&self) -> Option<(String, bool)> {
         let resolve = |file: &str| -> String {
             if file.is_empty() {
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("system clock is before unix epoch")
-                    .as_millis();
+                let now = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+                    Ok(duration) => duration.as_millis(),
+                    Err(_) => 0,
+                };
                 format!("profile.{now}")
             } else {
                 file.to_string()
