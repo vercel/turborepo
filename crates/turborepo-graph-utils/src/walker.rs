@@ -14,7 +14,7 @@ use tracing::trace;
 pub struct Walker<N, S> {
     marker: std::marker::PhantomData<S>,
     cancel: watch::Sender<bool>,
-    node_events: Option<mpsc::Receiver<(N, oneshot::Sender<bool>)>>,
+    node_events: mpsc::Receiver<(N, oneshot::Sender<bool>)>,
     join_handles: FuturesUnordered<JoinHandle<()>>,
 }
 
@@ -54,15 +54,20 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
         let (node_tx, node_rx) = mpsc::channel(std::cmp::max(txs.len(), 1));
         let join_handles = FuturesUnordered::new();
         for node in graph.node_identifiers() {
-            let tx = txs.remove(&node).expect("should have sender for all nodes");
+            let Some(tx) = txs.remove(&node) else {
+                trace!("Graph walker node did not have a sender");
+                continue;
+            };
             let mut cancel_rx = cancel_rx.clone();
             let node_tx = node_tx.clone();
             let mut deps_rx = graph
                 .neighbors_directed(node, Direction::Outgoing)
-                .map(|dep| {
-                    rxs.get(&dep)
-                        .expect("graph should have all nodes")
-                        .resubscribe()
+                .filter_map(|dep| match rxs.get(&dep) {
+                    Some(rx) => Some(rx.resubscribe()),
+                    None => {
+                        trace!("Graph walker dependency did not have a receiver");
+                        None
+                    }
                 })
                 .collect::<Vec<_>>();
 
@@ -135,7 +140,7 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
 
         Self {
             cancel,
-            node_events: Some(node_rx),
+            node_events: node_rx,
             join_handles,
             marker: std::marker::PhantomData,
         }
@@ -148,18 +153,16 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
     pub fn walk(self) -> (Walker<N, Walking>, mpsc::Receiver<WalkMessage<N>>) {
         let Self {
             cancel,
-            mut node_events,
+            node_events,
             join_handles,
             ..
         } = self;
-        let node_events = node_events
-            .take()
-            .expect("walking graph with walker that has already been used");
+        let (_unused_tx, unused_node_events) = mpsc::channel(1);
         (
             Walker {
                 marker: std::marker::PhantomData,
                 cancel,
-                node_events: None,
+                node_events: unused_node_events,
                 join_handles,
             },
             node_events,
