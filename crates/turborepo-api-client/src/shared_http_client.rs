@@ -54,10 +54,16 @@ impl SharedHttpClient {
         let fast = self.fast_client.clone();
         tokio::task::spawn_blocking(move || {
             let _span = tracing::info_span!("http_client_init_fast").entered();
-            let _ = fast.get_or_init(|| {
-                APIClient::build_http_client_webpki_only(None)
-                    .expect("failed to build webpki HTTP client")
-            });
+            if fast.get().is_none() {
+                match APIClient::build_http_client_webpki_only(None) {
+                    Ok(client) => {
+                        let _ = fast.set(client);
+                    }
+                    Err(e) => {
+                        tracing::warn!("Fast HTTP client init failed: {e}");
+                    }
+                }
+            }
         });
 
         // Phase 2: build full client in background (native-roots, ~200ms on macOS).
@@ -97,17 +103,17 @@ impl SharedHttpClient {
 
         // Neither is ready — build the fast client synchronously as fallback
         let fast = self.fast_client.clone();
-        let client = tokio::task::spawn_blocking(move || {
+        tokio::task::spawn_blocking(move || {
             let _span = tracing::info_span!("http_client_init_fast").entered();
-            fast.get_or_init(|| {
-                APIClient::build_http_client_webpki_only(None)
-                    .expect("failed to build webpki HTTP client")
-            })
-            .clone()
+            if let Some(client) = fast.get() {
+                return Ok(client.clone());
+            }
+
+            let client = APIClient::build_http_client_webpki_only(None)?;
+            let _ = fast.set(client.clone());
+            Ok(client)
         })
         .await
-        .map_err(|_| Error::HttpClientCancelled)?;
-
-        Ok(client)
+        .map_err(|_| Error::HttpClientCancelled)?
     }
 }
