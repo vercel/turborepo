@@ -416,7 +416,7 @@ function probeInternalLsp(
 ): InternalLspProbeResult {
   try {
     const output = cp
-      .execSync(`${quoteCommand(turboPath)} __internal_lsp --probe`, {
+      .execFileSync(turboPath, ["__internal_lsp", "--probe"], {
         ...options,
         stdio: ["ignore", "pipe", "pipe"],
         timeout: 1000

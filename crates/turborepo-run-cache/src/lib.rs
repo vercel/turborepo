@@ -772,7 +772,9 @@ impl ConfigCache {
 
         let mut file_hashes: Vec<_> = hash_object.into_iter().collect();
         file_hashes.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
-        Ok(FileHashes(file_hashes).hash())
+        FileHashes(file_hashes)
+            .try_hash()
+            .map_err(|_| CacheError::ConfigCacheError)
     }
 }
 

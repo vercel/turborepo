@@ -12,7 +12,7 @@
 
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{GitHashes, RepoGitIndex, SCM, test_utils, walk_candidate_files};
+use crate::{Error, GitHashes, RepoGitIndex, SCM, test_utils, walk_candidate_files};
 
 fn path(s: &str) -> RelativeUnixPathBuf {
     RelativeUnixPathBuf::new(s).unwrap()
@@ -256,6 +256,38 @@ fn test_clean_tree_committed_files_have_correct_hashes() {
         root_hashes.len() >= 7,
         "root should see all committed files"
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_repo_index_defers_non_utf8_paths_until_matching_package_query() {
+    use std::{ffi::OsString, os::unix::ffi::OsStringExt, path::PathBuf};
+
+    let repo = TestRepo::new();
+
+    repo.create_file("apps/web/src/index.ts", "console.log('hello')");
+    repo.create_file("apps/web/package.json", "{}");
+
+    let invalid_rel = PathBuf::from(OsString::from_vec(b"outside-\xff.txt".to_vec()));
+    let invalid_abs = repo.root.as_std_path().join(invalid_rel);
+    if std::fs::write(&invalid_abs, b"bad").is_err() {
+        return;
+    }
+
+    repo.commit_all();
+
+    let index = repo.build_repo_index();
+    let web_hashes = repo.get_hashes_with_index("apps/web", &index);
+    assert_eq!(web_hashes.len(), 2);
+    assert!(web_hashes.contains_key(&path("src/index.ts")));
+    assert!(web_hashes.contains_key(&path("package.json")));
+
+    let scm = repo.scm();
+    let root_pkg = AnchoredSystemPathBuf::from_raw("").unwrap();
+    let err = scm
+        .get_package_file_hashes::<&str>(&repo.root, &root_pkg, &[], false, None, Some(&index))
+        .unwrap_err();
+    assert!(matches!(err, Error::UnsupportedGitPath { .. }));
 }
 
 #[test]

@@ -222,7 +222,7 @@ async fn find_available_port_range(
     let mut available_ports = Vec::new();
     let mut listeners = Vec::new();
 
-    for port in 3000..=9999 {
+    for port in (3000..=9999).rev() {
         if [3306, 5432, 6379].contains(&port) {
             continue;
         }
@@ -291,16 +291,14 @@ fn forwarded_host_echo_server(listener: TcpListener) -> tokio::task::JoinHandle<
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_end_to_end_proxy() {
-    let (ports, mut listeners) = find_available_port_range(3).await.unwrap();
+    let (ports, mut listeners) = find_available_port_range(2).await.unwrap();
     let web_port = ports[0];
     let docs_port = ports[1];
-    let proxy_port = ports[2];
 
     let web_listener = listeners.remove(0);
     let docs_listener = listeners.remove(0);
-    let proxy_listener = listeners.remove(0);
-
-    drop(proxy_listener);
+    let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let proxy_port = proxy_listener.local_addr().unwrap().port();
 
     let web_handle = mock_server(web_listener, "web app");
     let docs_handle = mock_server(docs_listener, "docs app");
@@ -337,9 +335,7 @@ async fn test_end_to_end_proxy() {
     server.set_shutdown_complete_tx(shutdown_complete_tx);
     let shutdown_handle = server.shutdown_handle();
 
-    tokio::spawn(async move {
-        let _ = server.run().await;
-    });
+    let server_handle = tokio::spawn(async move { server.run_with_listener(proxy_listener).await });
 
     tokio::time::sleep(Duration::from_millis(300)).await;
 
@@ -397,6 +393,11 @@ async fn test_end_to_end_proxy() {
 
     let _ = shutdown_handle.send(());
     let _ = tokio::time::timeout(Duration::from_secs(3), shutdown_complete_rx).await;
+    tokio::time::timeout(Duration::from_secs(3), server_handle)
+        .await
+        .expect("Server did not shut down")
+        .expect("Server task panicked")
+        .expect("Server returned an error");
 
     web_handle.abort();
     docs_handle.abort();
@@ -407,14 +408,12 @@ async fn test_end_to_end_proxy() {
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 async fn test_proxy_forwards_validated_host_header() {
-    let (ports, mut listeners) = find_available_port_range(2).await.unwrap();
+    let (ports, mut listeners) = find_available_port_range(1).await.unwrap();
     let web_port = ports[0];
-    let proxy_port = ports[1];
 
     let web_listener = listeners.remove(0);
-    let proxy_listener = listeners.remove(0);
-
-    drop(proxy_listener);
+    let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let proxy_port = proxy_listener.local_addr().unwrap().port();
 
     let web_handle = forwarded_host_echo_server(web_listener);
 
@@ -442,9 +441,7 @@ async fn test_proxy_forwards_validated_host_header() {
     server.set_shutdown_complete_tx(shutdown_complete_tx);
     let shutdown_handle = server.shutdown_handle();
 
-    tokio::spawn(async move {
-        let _ = server.run().await;
-    });
+    let server_handle = tokio::spawn(async move { server.run_with_listener(proxy_listener).await });
 
     tokio::time::sleep(Duration::from_millis(300)).await;
 
@@ -464,6 +461,11 @@ async fn test_proxy_forwards_validated_host_header() {
 
     let _ = shutdown_handle.send(());
     let _ = tokio::time::timeout(Duration::from_secs(3), shutdown_complete_rx).await;
+    tokio::time::timeout(Duration::from_secs(3), server_handle)
+        .await
+        .expect("Server did not shut down")
+        .expect("Server task panicked")
+        .expect("Server returned an error");
 
     web_handle.abort();
 
