@@ -1,0 +1,21 @@
+name: "Save sccache"
+description: "Uploads the local sccache directory to Vercel Blob"
+
+inputs:
+  blob-prefix:
+    description: "Vercel Blob prefix for sccache archives"
+    required: false
+    default: "sccache"
+  blob-read-write-token:
+    description: "Vercel Blob read-write token"
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Save sccache archive
+      shell: bash
+      env:
+        SCCACHE_BLOB_PREFIX: ${{ inputs.blob-prefix }}
+        SCCACHE_BLOB_READ_WRITE_TOKEN: ${{ inputs.blob-read-write-token }}
+      run: bash ./.github/scripts/sccache-blob.sh save

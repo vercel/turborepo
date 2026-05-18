@@ -63,3 +63,7 @@ docs: Update installation instructions
 - Canary VS Code extension packages use `--pre-release`.
 - Non-dry-run releases publish the VS Code extension through the `LSP` workflow using `publish=true`, `dry_run=false`, and a `VSCE_PAT` secret on the protected `vscode-marketplace` environment. This publish path must not block release PR creation or cleanup published npm release state.
 - The `Release` workflow signs and notarizes macOS `turbo` binaries during `build-rust` using static GitHub secrets and `apple-codesign`/`rcodesign`.
+
+## CI Workflow Notes
+
+- Rust test jobs restore `sccache` archives from Vercel Blob when `SCCACHE_BLOB_BASE_URL` is configured. Main-branch jobs can upload refreshed archives with the `SCCACHE_BLOB_READ_WRITE_TOKEN` secret; PR jobs must not receive the write token. Vercel Blob does not currently support direct GitHub OIDC federation, so keep restores read-only and writes trusted-branch-only.

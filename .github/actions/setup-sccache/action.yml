@@ -1,0 +1,44 @@
+name: "Setup sccache"
+description: "Installs sccache and restores a Vercel Blob-backed cache archive"
+
+inputs:
+  blob-base-url:
+    description: "Public Vercel Blob base URL used for read-only restores"
+    required: false
+  blob-prefix:
+    description: "Vercel Blob prefix for sccache archives"
+    required: false
+    default: "sccache"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install sccache
+      uses: mozilla-actions/sccache-action@1583d6b38d7be47f593cb472781bbb21cab4321e # v0.0.10
+
+    - name: Configure and restore sccache
+      shell: bash
+      env:
+        SCCACHE_BLOB_BASE_URL: ${{ inputs.blob-base-url }}
+        SCCACHE_BLOB_PREFIX: ${{ inputs.blob-prefix }}
+      run: |
+        if command -v cygpath >/dev/null 2>&1; then
+          export SCCACHE_DIR="$(cygpath -m "${RUNNER_TEMP}/sccache")"
+        else
+          export SCCACHE_DIR="${RUNNER_TEMP}/sccache"
+        fi
+        export SCCACHE_CACHE_SIZE="2G"
+        export SCCACHE_IDLE_TIMEOUT="0"
+        export CARGO_INCREMENTAL="0"
+        mkdir -p "$SCCACHE_DIR"
+
+        {
+          echo "RUSTC_WRAPPER=sccache"
+          echo "SCCACHE_DIR=$SCCACHE_DIR"
+          echo "SCCACHE_CACHE_SIZE=$SCCACHE_CACHE_SIZE"
+          echo "SCCACHE_IDLE_TIMEOUT=$SCCACHE_IDLE_TIMEOUT"
+          echo "CARGO_INCREMENTAL=$CARGO_INCREMENTAL"
+        } >> "$GITHUB_ENV"
+
+        bash ./.github/scripts/sccache-blob.sh restore
+        sccache --zero-stats || true

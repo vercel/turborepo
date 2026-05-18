@@ -374,6 +374,11 @@ jobs:
         with:
           tool: nextest
 
+      - name: Setup sccache
+        uses: ./.github/actions/setup-sccache
+        with:
+          blob-base-url: ${{ vars.SCCACHE_BLOB_BASE_URL }}
+
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
@@ -391,6 +396,12 @@ jobs:
         run: |
           cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/2
         shell: bash
+
+      - name: Save sccache
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.partition == 1 }}
+        uses: ./.github/actions/save-sccache
+        with:
+          blob-read-write-token: ${{ secrets.SCCACHE_BLOB_READ_WRITE_TOKEN }}
 
   rust_test_windows:
     strategy:
@@ -459,6 +470,11 @@ jobs:
           curl -L -o "%TEMP%\nextest.zip" "https://get.nexte.st/latest/windows"
           tar -xf "%TEMP%\nextest.zip" -C "%USERPROFILE%\.cargo\bin"
 
+      - name: Setup sccache
+        uses: ./.github/actions/setup-sccache
+        with:
+          blob-base-url: ${{ vars.SCCACHE_BLOB_BASE_URL }}
+
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
@@ -478,6 +494,12 @@ jobs:
         shell: bash
         env:
           INSTA_WORKSPACE_ROOT: ${{ github.workspace }}
+
+      - name: Save sccache
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.partition == 1 }}
+        uses: ./.github/actions/save-sccache
+        with:
+          blob-read-write-token: ${{ secrets.SCCACHE_BLOB_READ_WRITE_TOKEN }}
 
   build_rust_test_ubuntu:
     runs-on: ubuntu-latest
@@ -563,6 +585,11 @@ jobs:
         with:
           tool: nextest
 
+      - name: Setup sccache
+        uses: ./.github/actions/setup-sccache
+        with:
+          blob-base-url: ${{ vars.SCCACHE_BLOB_BASE_URL }}
+
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
@@ -580,6 +607,12 @@ jobs:
         run: |
           cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/2
         shell: bash
+
+      - name: Save sccache
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.partition == 1 }}
+        uses: ./.github/actions/save-sccache
+        with:
+          blob-read-write-token: ${{ secrets.SCCACHE_BLOB_READ_WRITE_TOKEN }}
 
   check-examples:
     name: Check examples
