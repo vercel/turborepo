@@ -20,6 +20,8 @@ use crate::{Package, PackageManager, Workspace};
 pub(crate) enum Error {
     #[error("Failed to resolve starting path from {path}: {path_error}")]
     StartingPath { path_error: PathError, path: String },
+    #[error("Failed to resolve package path: {0}")]
+    PackagePath(#[from] PathError),
     #[error(transparent)]
     Inference(#[from] inference::Error),
     #[error("Failed to resolve package manager from {path}: {error}")]
@@ -32,6 +34,8 @@ pub(crate) enum Error {
         error: package_manager::Error,
         workspace_root: AbsoluteSystemPathBuf,
     },
+    #[error("Failed to join package discovery task: {0}")]
+    PackageDiscoveryJoin(#[from] tokio::task::JoinError),
     #[error("Package directory {0} has no parent")]
     MissingParent(AbsoluteSystemPathBuf),
     #[error("Package graph error: {0}")]
@@ -113,7 +117,7 @@ impl Workspace {
         let package_json_paths =
             tokio::task::spawn(async move { package_manager.get_package_jsons(&workspace_root) })
                 .await
-                .expect("package enumeration should not crash")
+                .map_err(Error::PackageDiscoveryJoin)?
                 .map_err(|error| Error::PackageJsons {
                     error,
                     workspace_root: self.workspace_state.root.clone(),
@@ -139,7 +143,7 @@ impl Workspace {
                             name.into_inner(),
                             &self.workspace_state.root,
                             package_path,
-                        ))
+                        )?)
                     })
                     .or_else(|| Some(Err(Error::MissingParent(path.to_owned()))))
             })

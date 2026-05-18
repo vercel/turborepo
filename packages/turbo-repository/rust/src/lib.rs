@@ -1,5 +1,4 @@
 #![allow(clippy::result_large_err)]
-#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::collections::{HashMap, HashSet};
 
@@ -74,15 +73,13 @@ impl Package {
         name: String,
         workspace_path: &AbsoluteSystemPath,
         package_path: &AbsoluteSystemPath,
-    ) -> Self {
-        let relative_path = workspace_path
-            .anchor(package_path)
-            .expect("Package path is within the workspace");
-        Self {
+    ) -> Result<Self, turbopath::PathError> {
+        let relative_path = workspace_path.anchor(package_path)?;
+        Ok(Self {
             name,
             absolute_path: package_path.to_string(),
             relative_path: relative_path.to_string(),
-        }
+        })
     }
 
     fn dependents(
@@ -103,7 +100,7 @@ impl Package {
                 let name = info.package_name()?;
                 let anchored_package_path = info.package_path();
                 let package_path = workspace_path.resolve(anchored_package_path);
-                Some(Package::new(name, workspace_path, &package_path))
+                Package::new(name, workspace_path, &package_path).ok()
             })
             .collect()
     }
@@ -127,7 +124,7 @@ impl Package {
                 let name = info.package_name()?;
                 let anchored_package_path = info.package_path();
                 let package_path = workspace_path.resolve(anchored_package_path);
-                Some(Package::new(name, workspace_path, &package_path))
+                Package::new(name, workspace_path, &package_path).ok()
             })
             .collect()
     }
@@ -220,7 +217,11 @@ impl Workspace {
         from_commit: &str,
     ) -> LockfileContents {
         let lockfile_name = self.graph.package_manager().lockfile_name();
-        if changed_files.contains(AnchoredSystemPath::new(&lockfile_name).unwrap()) {
+        let Ok(lockfile_path) = AnchoredSystemPath::new(&lockfile_name) else {
+            return LockfileContents::Unchanged;
+        };
+
+        if changed_files.contains(lockfile_path) {
             let git = SCM::new(workspace_root);
             let anchored_path = workspace_root.join_component(lockfile_name);
             git.previous_content(Some(from_commit), &anchored_path)
@@ -275,9 +276,9 @@ impl Workspace {
 
         let lockfile_contents = if let Some(base) = base {
             self.get_lockfile_contents(&changed_files, workspace_root, base)
-        } else if changed_files.contains(
-            AnchoredSystemPath::new(self.graph.package_manager().lockfile_name())
-                .expect("the lockfile name will not be an absolute path"),
+        } else if matches!(
+            AnchoredSystemPath::new(self.graph.package_manager().lockfile_name()),
+            Ok(path) if changed_files.contains(path)
         ) {
             LockfileContents::UnknownChange
         } else {
@@ -311,7 +312,8 @@ impl Workspace {
                 let package_path = workspace_root.resolve(&p.path);
                 Package::new(p.name.to_string(), workspace_root, &package_path)
             })
-            .collect();
+            .collect::<Result<Vec<Package>, _>>()
+            .map_err(|e| Error::from_reason(e.to_string()))?;
 
         serializable_packages.sort_by_key(|p| p.name.clone());
 
@@ -344,11 +346,8 @@ impl Workspace {
                     Err(e) => return Err(Error::from_reason(e.to_string())),
                 };
                 let package_path = workspace_root.resolve(&package.path);
-                Ok(Package::new(
-                    package.name.to_string(),
-                    workspace_root,
-                    &package_path,
-                ))
+                Package::new(package.name.to_string(), workspace_root, &package_path)
+                    .map_err(|e| Error::from_reason(e.to_string()))
             }
         }
     }
