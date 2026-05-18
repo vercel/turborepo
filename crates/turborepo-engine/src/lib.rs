@@ -433,7 +433,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         reachable: &HashSet<petgraph::graph::NodeIndex>,
         exclude_non_interruptible_persistent: bool,
     ) -> Self {
-        self.task_graph = self.task_graph.filter_map(
+        let pruned_graph = self.task_graph.filter_map(
             |node_idx, node| {
                 if !reachable.contains(&node_idx) {
                     return None;
@@ -455,10 +455,9 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         // Rebuild all metadata from the pruned graph. root_index is recovered
         // during the task_lookup rebuild to avoid a separate linear scan.
         let mut new_root_index = None;
-        self.task_lookup = self
-            .task_graph
+        let task_lookup = pruned_graph
             .node_indices()
-            .filter_map(|index| match self.task_graph.node_weight(index)? {
+            .filter_map(|index| match pruned_graph.node_weight(index)? {
                 TaskNode::Root => {
                     new_root_index = Some(index);
                     None
@@ -466,9 +465,14 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
                 TaskNode::Task(task) => Some((task.clone(), index)),
             })
             .collect();
-        if let Some(root_index) = new_root_index {
-            self.root_index = root_index;
-        }
+        let Some(root_index) = new_root_index else {
+            tracing::debug!("skipping task graph prune because the root node was not retained");
+            return self;
+        };
+
+        self.task_graph = pruned_graph;
+        self.task_lookup = task_lookup;
+        self.root_index = root_index;
 
         self.task_definitions
             .retain(|id, _| self.task_lookup.contains_key(id));
