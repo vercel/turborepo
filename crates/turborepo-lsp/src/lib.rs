@@ -10,14 +10,13 @@
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
-#![allow(clippy::expect_used)]
 #![warn(clippy::unwrap_used)]
 
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     iter,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use itertools::{Itertools, chain};
@@ -57,10 +56,16 @@ pub struct Backend {
 }
 
 pub fn run_lsp_server() {
-    let runtime = tokio::runtime::Builder::new_multi_thread()
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .expect("failed to build tokio runtime");
+    {
+        Ok(runtime) => runtime,
+        Err(err) => {
+            eprintln!("failed to build tokio runtime: {err}");
+            return;
+        }
+    };
 
     runtime.block_on(run_lsp());
 }
@@ -90,8 +95,8 @@ impl LanguageServer for Backend {
                 .ok_or(Error::invalid_params("root is not a valid utf-8 path"))?;
 
             // convert uri file:///absolute-path to AbsoluteSystemPathBuf
-            let repo_root =
-                AbsoluteSystemPathBuf::new(repo_root).expect("file is always an absolute path");
+            let repo_root = AbsoluteSystemPathBuf::new(repo_root)
+                .map_err(|_| Error::invalid_params("root is not an absolute path"))?;
 
             // Walk up from the editor's root_uri to find the actual monorepo
             // root. In multi-root VSCode workspaces the editor can send a
@@ -102,10 +107,7 @@ impl LanguageServer for Backend {
                 Err(_) => repo_root,
             };
 
-            self.repo_root
-                .lock()
-                .expect("only fails if poisoned")
-                .replace(repo_root.clone());
+            lock_or_recover(&self.repo_root).replace(repo_root.clone());
 
             let paths = DaemonPaths::from_repo_root(&repo_root).map_err(|err| {
                 let mut error = Error::internal_error();
@@ -178,13 +180,13 @@ impl LanguageServer for Backend {
 
             self.initializer
                 .send(Some(daemon))
-                .expect("there is a receiver");
+                .map_err(|_| Error::internal_error())?;
 
             let mut lock = pidlock::Pidlock::new(paths.lsp_pid_file.as_std_path().to_owned());
 
             match lock.acquire() {
                 Ok(()) => {
-                    *self.pidlock.lock().expect("only fails if poisoned") = Some(lock);
+                    *lock_or_recover(&self.pidlock) = Some(lock);
                 }
                 Err(pidlock::PidlockError::AlreadyOwned) => {
                     // Another LSP instance (e.g., another VSCode window) already holds the lock.
@@ -279,7 +281,7 @@ impl LanguageServer for Backend {
 
         let Some(referenced_task) = ({
             let rope = {
-                let map = self.files.lock().expect("only fails if poisoned");
+                let map = lock_or_recover(&self.files);
                 match map.get(&params.text_document_position.text_document.uri) {
                     Some(files) => files,
                     None => return Ok(None),
@@ -344,11 +346,7 @@ impl LanguageServer for Backend {
             )
             .await;
 
-        let repo_root = self
-            .repo_root
-            .lock()
-            .expect("only fails if poisoned")
-            .clone();
+        let repo_root = lock_or_recover(&self.repo_root).clone();
 
         let repo_root = match repo_root {
             Some(repo_root) => repo_root,
@@ -432,10 +430,10 @@ impl LanguageServer for Backend {
             };
 
             if scripts.contains(task) {
-                let location = Location::new(
-                    Url::from_file_path(&wd.package_json).expect("only fails if path is relative"),
-                    range,
-                );
+                let Ok(uri) = Url::from_file_path(&wd.package_json) else {
+                    continue;
+                };
+                let location = Location::new(uri, range);
                 locations.push(location);
             }
         }
@@ -450,7 +448,7 @@ impl LanguageServer for Backend {
             .await;
 
         let rope = {
-            let map = self.files.lock().expect("only fails if poisoned");
+            let map = lock_or_recover(&self.files);
             match map.get(&params.text_document.uri) {
                 Some(files) => files,
                 None => return Ok(None),
@@ -597,7 +595,7 @@ impl LanguageServer for Backend {
         let rope = crop::Rope::from(document.text_document.text);
 
         {
-            let mut map = self.files.lock().expect("only fails if poisoned");
+            let mut map = lock_or_recover(&self.files);
             map.insert(document.text_document.uri.clone(), rope.clone());
         }
 
@@ -616,7 +614,7 @@ impl LanguageServer for Backend {
             .await;
 
         let updated_rope = {
-            let mut map = self.files.lock().expect("only fails if poisoned");
+            let mut map = lock_or_recover(&self.files);
             let rope = map.entry(document.text_document.uri.clone()).or_default();
 
             for change in document.content_changes {
@@ -722,12 +720,14 @@ impl Backend {
     pub async fn package_discovery(&self) -> Result<DiscoveryResponse, discovery::Error> {
         let daemon = {
             let mut daemon = self.daemon.clone();
-            let daemon = daemon.wait_for(|d| d.is_some()).await;
-            let daemon = daemon.as_ref().expect("only fails if self is dropped");
-            daemon
-                .as_ref()
-                .expect("guaranteed to be some above")
-                .clone()
+            let daemon = daemon
+                .wait_for(|d| d.is_some())
+                .await
+                .map_err(|_| discovery::Error::Unavailable)?;
+            let Some(daemon) = daemon.as_ref() else {
+                return Err(discovery::Error::Unavailable);
+            };
+            daemon.clone()
         };
 
         DaemonPackageDiscovery::new(daemon)
@@ -739,7 +739,7 @@ impl Backend {
     async fn handle_file_update(&self, uri: Url, rope: Option<crop::Rope>, version: Option<i32>) {
         let rope = match rope {
             Some(rope) => rope,
-            None => match self.files.lock().expect("only fails if poisoned").get(&uri) {
+            None => match lock_or_recover(&self.files).get(&uri) {
                 Some(files) => files,
                 None => return,
             }
@@ -748,11 +748,7 @@ impl Backend {
 
         let contents = rope.chunks().join("");
 
-        let repo_root = self
-            .repo_root
-            .lock()
-            .expect("only fails if poisoned")
-            .clone();
+        let repo_root = lock_or_recover(&self.repo_root).clone();
 
         let repo_root = match repo_root {
             Some(repo_root) => repo_root,
@@ -782,12 +778,7 @@ impl Backend {
             workspaces
                 .filter_map(|wd| {
                     let package_json = PackageJson::load(&wd.package_json).ok()?; // if we can't load a package.json, then we can't infer its tasks
-                    let package_json_name = if (&*repo_root)
-                        == wd
-                            .package_json
-                            .parent()
-                            .expect("package.json is always in a directory")
-                    {
+                    let package_json_name = if wd.package_json.parent() == Some(&repo_root) {
                         Some("//".to_string())
                     } else {
                         package_json.name.map(|name| name.into_inner())
@@ -985,6 +976,12 @@ impl Backend {
     }
 }
 
+fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 fn convert_ranges(rope: &crop::Rope, range: jsonc_parser::common::Range) -> Range {
     let start_line = rope.line_of_byte(range.start);
     let end_line = rope.line_of_byte(range.end);
@@ -1124,6 +1121,7 @@ fn report_invalid_packages_and_tasks(
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use std::{
         borrow::Cow,
