@@ -39,6 +39,8 @@ pub enum Error {
     Scm(#[from] turborepo_scm::Error),
     #[error(transparent)]
     PackageManager(#[from] turborepo_repository::package_manager::Error),
+    #[error(transparent)]
+    Path(#[from] turbopath::PathError),
 }
 
 #[derive(Debug)]
@@ -170,8 +172,8 @@ pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
 
     let global_deps_paths = global_deps
         .iter()
-        .map(|p| root_path.anchor(p).expect("path should be from root"))
-        .collect::<Vec<_>>();
+        .map(|p| root_path.anchor(p).map_err(Error::from))
+        .collect::<Result<Vec<_>, _>>()?;
 
     let global_file_hash_map = hasher
         .get_hashes_for_files(root_path, &global_deps_paths, false)?

@@ -4,7 +4,7 @@
 //! hashes for tasks based on their inputs (files, environment variables,
 //! dependencies) to determine cache invalidation.
 
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 
 pub mod global_hash;
 
@@ -142,7 +142,7 @@ impl PackageInputsHashes {
             let package_path = pkg
                 .package_json_path
                 .parent()
-                .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap());
+                .unwrap_or_else(|| AnchoredSystemPath::empty());
             let inputs = task_definition.inputs();
             task_infos.push(TaskInfo {
                 task_id: task_id.clone(),
@@ -265,7 +265,7 @@ pub struct TaskHasher<'a, R> {
     global_env_patterns: &'a [String],
     global_hash: &'a str,
     task_hash_tracker: TaskHashTracker,
-    compiled_builtins: CompiledWildcards,
+    compiled_builtins: Option<CompiledWildcards>,
     external_deps_hash_cache: HashMap<String, String>,
 }
 
@@ -283,11 +283,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             expanded_hashes,
         } = package_inputs_hashes;
 
-        let compiled_builtins = CompiledWildcards::compile(BUILTIN_PASS_THROUGH_ENV)
-            .unwrap_or_else(|_| {
-                let empty: &[&str] = &[];
-                CompiledWildcards::compile(empty).unwrap()
-            });
+        let compiled_builtins = CompiledWildcards::compile(BUILTIN_PASS_THROUGH_ENV).ok();
 
         Self {
             hashes,
@@ -515,11 +511,20 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
     ) -> Result<EnvironmentVariableMap, Error> {
         match task_env_mode {
             EnvMode::Strict => {
-                let pass_through_env_vars = self.env_at_execution_start.pass_through_env_compiled(
-                    &self.compiled_builtins,
-                    &self.global_env,
-                    task_definition.pass_through_env().unwrap_or_default(),
-                )?;
+                let pass_through_env_vars = match &self.compiled_builtins {
+                    Some(compiled_builtins) => {
+                        self.env_at_execution_start.pass_through_env_compiled(
+                            compiled_builtins,
+                            &self.global_env,
+                            task_definition.pass_through_env().unwrap_or_default(),
+                        )?
+                    }
+                    None => self.env_at_execution_start.pass_through_env(
+                        &[] as &[&str],
+                        &self.global_env,
+                        task_definition.pass_through_env().unwrap_or_default(),
+                    )?,
+                };
 
                 let tracker_env = self
                     .task_hash_tracker
