@@ -1,5 +1,8 @@
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_daemon::{proto::PackageManager, DaemonClient};
+use turborepo_daemon::{
+    proto::{DiscoverPackagesResponse, PackageFiles, PackageManager as ProtoPackageManager},
+    DaemonClient,
+};
 use turborepo_repository::discovery::{DiscoveryResponse, Error, PackageDiscovery, WorkspaceData};
 
 #[derive(Debug)]
@@ -11,6 +14,48 @@ impl<C> DaemonPackageDiscovery<C> {
     pub fn new(daemon: DaemonClient<C>) -> Self {
         Self { daemon }
     }
+}
+
+fn workspace_data_from_proto(package_files: PackageFiles) -> Result<WorkspaceData, Error> {
+    let package_json = AbsoluteSystemPathBuf::new(package_files.package_json).map_err(|err| {
+        Error::InvalidResponse(format!("daemon returned invalid package.json path: {err}"))
+    })?;
+    let turbo_json = package_files
+        .turbo_json
+        .map(|path| {
+            AbsoluteSystemPathBuf::new(path).map_err(|err| {
+                Error::InvalidResponse(format!("daemon returned invalid turbo.json path: {err}"))
+            })
+        })
+        .transpose()?;
+
+    Ok(WorkspaceData {
+        package_json,
+        turbo_json,
+    })
+}
+
+fn discovery_response_from_proto(
+    response: DiscoverPackagesResponse,
+) -> Result<DiscoveryResponse, Error> {
+    let package_manager = ProtoPackageManager::try_from(response.package_manager)
+        .map_err(|_| {
+            Error::InvalidResponse(format!(
+                "daemon returned invalid package manager: {}",
+                response.package_manager
+            ))
+        })?
+        .into();
+    let workspaces = response
+        .package_files
+        .into_iter()
+        .map(workspace_data_from_proto)
+        .collect::<Result<_, _>>()?;
+
+    Ok(DiscoveryResponse {
+        workspaces,
+        package_manager,
+    })
 }
 
 impl<C: Clone + Send + Sync> PackageDiscovery for DaemonPackageDiscovery<C> {
@@ -25,21 +70,7 @@ impl<C: Clone + Send + Sync> PackageDiscovery for DaemonPackageDiscovery<C> {
             .await
             .map_err(|e| Error::Failed(Box::new(e)))?;
 
-        Ok(DiscoveryResponse {
-            workspaces: response
-                .package_files
-                .into_iter()
-                .map(|p| WorkspaceData {
-                    package_json: AbsoluteSystemPathBuf::new(p.package_json).expect("absolute"),
-                    turbo_json: p
-                        .turbo_json
-                        .map(|t| AbsoluteSystemPathBuf::new(t).expect("absolute")),
-                })
-                .collect(),
-            package_manager: PackageManager::try_from(response.package_manager)
-                .expect("valid")
-                .into(),
-        })
+        discovery_response_from_proto(response)
     }
 
     async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
@@ -53,20 +84,6 @@ impl<C: Clone + Send + Sync> PackageDiscovery for DaemonPackageDiscovery<C> {
             .await
             .map_err(|e| Error::Failed(Box::new(e)))?;
 
-        Ok(DiscoveryResponse {
-            workspaces: response
-                .package_files
-                .into_iter()
-                .map(|p| WorkspaceData {
-                    package_json: AbsoluteSystemPathBuf::new(p.package_json).expect("absolute"),
-                    turbo_json: p
-                        .turbo_json
-                        .map(|t| AbsoluteSystemPathBuf::new(t).expect("absolute")),
-                })
-                .collect(),
-            package_manager: PackageManager::try_from(response.package_manager)
-                .expect("valid")
-                .into(),
-        })
+        discovery_response_from_proto(response)
     }
 }
