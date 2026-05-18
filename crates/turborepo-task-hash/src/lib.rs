@@ -73,6 +73,8 @@ pub enum Error {
     Regex(#[from] regex::Error),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
+    #[error(transparent)]
+    Hash(#[from] turborepo_hash::Error),
 }
 
 #[derive(Debug, Default)]
@@ -448,7 +450,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             env_mode: task_env_mode,
         };
 
-        let task_hash = task_hashable.calculate_task_hash();
+        let task_hash = task_hashable.calculate_task_hash()?;
 
         let task_hash_arc: Arc<str> = Arc::from(task_hash.as_str());
         self.task_hash_tracker.insert_hash(
@@ -590,7 +592,7 @@ pub fn get_internal_deps_hash(
 
     let mut file_hashes: Vec<_> = merged.into_iter().collect();
     file_hashes.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
-    Ok(FileHashes(file_hashes).hash())
+    Ok(FileHashes(file_hashes).try_hash()?)
 }
 
 impl TaskHashTracker {
