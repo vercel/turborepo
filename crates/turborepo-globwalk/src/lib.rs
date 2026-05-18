@@ -4,7 +4,8 @@
 //! but we do not support.
 
 #![deny(clippy::all)]
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![allow(clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::expect_used))]
 
 use std::{
     borrow::Cow,
@@ -143,9 +144,9 @@ pub fn fix_glob_pattern(pattern: &str) -> Cow<'_, str> {
         // path-slash strips trailing slashes from Windows paths, so we need to restore
         // them.
         let needs_trailing_slash = pattern.ends_with('/') || pattern.ends_with('\\');
-        let converted = Path::new(pattern)
-            .to_slash()
-            .expect("failed to roundtrip through Path");
+        let Some(converted) = Path::new(pattern).to_slash() else {
+            return Cow::Borrowed(pattern);
+        };
         if needs_trailing_slash && !converted.ends_with('/') {
             Cow::Owned(format!("{converted}/"))
         } else {
@@ -365,7 +366,13 @@ impl FromStr for ValidatedGlob {
                 // Only allocate when we actually need to clean
                 let path = Path::new(s);
                 let cleaned_path = path.clean();
-                Cow::Owned(cleaned_path.to_str().expect("valid utf-8").to_owned())
+                let Some(cleaned_str) = cleaned_path.to_str() else {
+                    return Err(GlobError {
+                        raw_input: s.to_owned(),
+                        reason: "Path contains invalid UTF-8".to_owned(),
+                    });
+                };
+                Cow::Owned(cleaned_str.to_owned())
             } else {
                 Cow::Borrowed(s)
             };
@@ -393,7 +400,12 @@ impl FromStr for ValidatedGlob {
             let processed: Cow<'_, str> = if needs_slash_conversion || needs_cleaning {
                 let path = Path::new(s);
                 let cleaned_path = path.clean();
-                let cleaned_str = cleaned_path.to_str().expect("valid utf-8");
+                let Some(cleaned_str) = cleaned_path.to_str() else {
+                    return Err(GlobError {
+                        raw_input: s.to_owned(),
+                        reason: "Path contains invalid UTF-8".to_owned(),
+                    });
+                };
                 if needs_slash_conversion || cleaned_str.contains('\\') {
                     Cow::Owned(cleaned_str.replace('\\', "/"))
                 } else {
