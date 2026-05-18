@@ -224,11 +224,13 @@ impl Workspace {
         if changed_files.contains(lockfile_path) {
             let git = SCM::new(workspace_root);
             let anchored_path = workspace_root.join_component(lockfile_name);
-            git.previous_content(Some(from_commit), &anchored_path)
-                .map(LockfileContents::Changed)
-                .inspect_err(|e| debug!("{e}"))
-                .ok()
-                .unwrap_or(LockfileContents::UnknownChange)
+            match git.previous_content(Some(from_commit), &anchored_path) {
+                Ok(contents) => LockfileContents::Changed(contents),
+                Err(e) => {
+                    debug!("{e}");
+                    LockfileContents::UnknownChange
+                }
+            }
         } else {
             LockfileContents::Unchanged
         }
@@ -245,8 +247,7 @@ impl Workspace {
         base: Option<&str>, // this is required when optimize_global_invalidations is true
         optimize_global_invalidations: Option<bool>,
     ) -> Result<Vec<Package>, Error> {
-        let base = optimize_global_invalidations
-            .unwrap_or(false)
+        let base = matches!(optimize_global_invalidations, Some(true))
             .then(|| {
                 base.ok_or_else(|| {
                     Error::from_reason("optimizeGlobalInvalidations true, but no base commit given")
