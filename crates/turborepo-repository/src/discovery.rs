@@ -34,6 +34,8 @@ pub struct DiscoveryResponse {
 pub enum Error {
     #[error("Discovery unavailable")]
     Unavailable,
+    #[error("Invalid discovery response: {0}")]
+    InvalidResponse(String),
     #[error("Discovery failed: {0}")]
     Failed(Box<dyn std::error::Error + Send + Sync>),
 }
