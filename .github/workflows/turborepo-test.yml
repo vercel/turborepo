@@ -333,16 +333,12 @@ jobs:
 
   rust_test_macos:
     runs-on: macos-latest-xlarge
-    timeout-minutes: 45
+    timeout-minutes: 90
     needs:
       - find-changes
       # - build_rust_test_macos
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        partition: [1, 2]
-    name: Rust testing on macos (partition ${{ matrix.partition }}/2)
+    name: Rust testing on macos
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -377,23 +373,19 @@ jobs:
         #   TURBO_CACHE: remote:rw
 
       - name: Run tests
-        timeout-minutes: 45
+        timeout-minutes: 90
         run: |
-          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/2
+          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast
         shell: bash
 
   rust_test_windows:
-    strategy:
-      fail-fast: false
-      matrix:
-        partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 180
     needs:
       - find-changes
       # - build_rust_test_windows
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on windows (partition ${{ matrix.partition }}/10)
+    name: Rust testing on windows
     steps:
       - name: Set git to use LF line endings
         # Ensures the turborepo source code is checked out with LF endings
@@ -443,9 +435,9 @@ jobs:
         #   TURBO_CACHE: remote:rw
 
       - name: Run tests
-        timeout-minutes: 45
+        timeout-minutes: 180
         run: |
-          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/10 --workspace-remap "$GITHUB_WORKSPACE"
+          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --workspace-remap "$GITHUB_WORKSPACE"
         shell: bash
         env:
           INSTA_WORKSPACE_ROOT: ${{ github.workspace }}
@@ -503,16 +495,12 @@ jobs:
 
   rust_test_ubuntu:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     needs:
       - find-changes
       # - build_rust_test_ubuntu
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        partition: [1, 2]
-    name: Rust testing on ubuntu (partition ${{ matrix.partition }}/2)
+    name: Rust testing on ubuntu
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -547,9 +535,9 @@ jobs:
         #   TURBO_CACHE: remote:rw
 
       - name: Run tests
-        timeout-minutes: 45
+        timeout-minutes: 90
         run: |
-          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/2
+          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast
         shell: bash
 
   check-examples:
