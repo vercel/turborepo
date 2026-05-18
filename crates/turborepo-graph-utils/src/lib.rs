@@ -32,12 +32,10 @@ pub fn transitive_closure<N: Hash + Eq + PartialEq, I: IntoIterator<Item = NodeI
     let mut visited = HashSet::new();
 
     let visitor = |event| {
-        if let petgraph::visit::DfsEvent::Discover(n, _) = event {
-            visited.insert(
-                graph
-                    .node_weight(n)
-                    .expect("node index found during dfs doesn't exist"),
-            );
+        if let petgraph::visit::DfsEvent::Discover(n, _) = event
+            && let Some(node) = graph.node_weight(n)
+        {
+            visited.insert(node);
         }
     };
 
@@ -114,12 +112,12 @@ fn edges_to_break_cycle<N: Clone + Hash + Eq, E: Clone>(
             breaking_edge_sets.push(
                 edge_set
                     .into_iter()
-                    .map(|edge| {
-                        let (src, dst) = graph.edge_endpoints(edge).unwrap();
-                        (
-                            graph.node_weight(src).unwrap().clone(),
-                            graph.node_weight(dst).unwrap().clone(),
-                        )
+                    .filter_map(|edge| {
+                        let (src, dst) = graph.edge_endpoints(edge)?;
+                        Some((
+                            graph.node_weight(src)?.clone(),
+                            graph.node_weight(dst)?.clone(),
+                        ))
                     })
                     .collect(),
             );
@@ -135,7 +133,7 @@ pub fn validate_graph<N: Display + Clone + Hash + Eq>(graph: &Graph<N, ()>) -> R
     let cycle_lines = cycles
         .into_iter()
         .map(|Cycle { nodes, cuts }| {
-            let workspaces = nodes.into_iter().map(|id| graph.node_weight(id).unwrap());
+            let workspaces = nodes.into_iter().filter_map(|id| graph.node_weight(id));
             if cuts.is_empty() {
                 format!(
                     "\t{}\n\nCheck the `dependsOn` configuration for these tasks in turbo.json. \
@@ -159,10 +157,9 @@ pub fn validate_graph<N: Display + Clone + Hash + Eq>(graph: &Graph<N, ()>) -> R
     }
 
     for edge in graph.edge_references() {
-        if edge.source() == edge.target() {
-            let node = graph
-                .node_weight(edge.source())
-                .expect("edge pointed to missing node");
+        if edge.source() == edge.target()
+            && let Some(node) = graph.node_weight(edge.source())
+        {
             return Err(Error::SelfDependency(node.to_string()));
         }
     }
