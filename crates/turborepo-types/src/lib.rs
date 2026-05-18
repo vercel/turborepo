@@ -14,8 +14,6 @@
 //! - [`HashTrackerInfo`]: Provides access to task hash information
 //! - [`GlobalHashInputs`]: Provides access to global hash inputs
 
-#![allow(clippy::expect_used, clippy::unwrap_used)]
-
 pub mod secret;
 pub mod task_input_matching;
 use std::{collections::HashMap, fmt, str::FromStr, sync::Arc};
@@ -863,8 +861,10 @@ pub fn task_log_filename(task_name: &str) -> String {
 /// assert_eq!(path.as_str(), ".turbo/turbo-build.log");
 /// ```
 pub fn sharable_workspace_relative_log_file(task_name: &str) -> RelativeUnixPathBuf {
-    let log_dir =
-        RelativeUnixPathBuf::new(LOG_DIR).expect("LOG_DIR should be a valid relative unix path");
+    let log_dir = match RelativeUnixPathBuf::new(LOG_DIR) {
+        Ok(log_dir) => log_dir,
+        Err(_) => unreachable!("LOG_DIR is a valid relative unix path"),
+    };
     log_dir.join_component(&task_log_filename(task_name))
 }
 
@@ -926,8 +926,10 @@ pub trait TaskDefinitionExt {
 
 impl TaskDefinitionExt for TaskDefinition {
     fn workspace_relative_log_file(task_name: &str) -> AnchoredSystemPathBuf {
-        let log_dir = AnchoredSystemPath::new(LOG_DIR)
-            .expect("LOG_DIR should be a valid AnchoredSystemPathBuf");
+        let log_dir = match AnchoredSystemPath::new(LOG_DIR) {
+            Ok(log_dir) => log_dir,
+            Err(_) => unreachable!("LOG_DIR is a valid anchored system path"),
+        };
         log_dir.join_component(&task_log_filename(task_name))
     }
 
