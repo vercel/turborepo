@@ -688,7 +688,7 @@ mod test {
     async fn test_stale_pid() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let paths = Paths::from_repo_root(&repo_root);
+        let paths = Paths::from_repo_root(&repo_root).unwrap();
         paths.pid_file.ensure_dir().unwrap();
         // A pid that will never be running and is guaranteed not to be us
         paths.pid_file.create_with_contents("100000").unwrap();
@@ -709,7 +709,7 @@ mod test {
 
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let paths = Paths::from_repo_root(&repo_root);
+        let paths = Paths::from_repo_root(&repo_root).unwrap();
         let socket_dir = paths.sock_file.parent().unwrap();
         socket_dir.create_dir_all().unwrap();
         std::fs::set_permissions(
@@ -750,7 +750,7 @@ mod test {
     fn test_windows_socket_path_security_accepts_current_user() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let paths = Paths::from_repo_root(&repo_root);
+        let paths = Paths::from_repo_root(&repo_root).unwrap();
 
         secure_socket_dir(&paths.sock_file).unwrap();
         validate_socket_owner(&paths.sock_file).unwrap();
@@ -764,7 +764,7 @@ mod test {
     async fn test_existing_process() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let paths = Paths::from_repo_root(&repo_root);
+        let paths = Paths::from_repo_root(&repo_root).unwrap();
 
         #[cfg(windows)]
         let node_bin = "node.exe";
