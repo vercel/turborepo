@@ -36,7 +36,7 @@ pub fn turbo_command(test_dir: &Path) -> assert_cmd::Command {
     let corepack_dir = setup::corepack_dir_for_test_dir(test_dir);
     if corepack_dir.exists() {
         cmd.env("PATH", setup::prepend_to_path(&corepack_dir))
-            .env("COREPACK_HOME", setup::corepack_home(&corepack_dir));
+            .env("COREPACK_HOME", setup::corepack_home());
     }
     cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
         .env("TURBO_GLOBAL_WARNING_DISABLED", "1")

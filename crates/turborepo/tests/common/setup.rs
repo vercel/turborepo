@@ -4,8 +4,11 @@
 use std::{
     ffi::{OsStr, OsString},
     fs,
+    io::ErrorKind,
     path::{Path, PathBuf},
     process::Command,
+    thread,
+    time::{Duration, Instant},
 };
 
 fn manifest_dir() -> PathBuf {
@@ -149,7 +152,7 @@ pub fn setup_package_manager(
     }
 
     fs::create_dir_all(corepack_dir)?;
-    let corepack_home = corepack_home(corepack_dir);
+    let corepack_home = corepack_home();
     fs::create_dir_all(&corepack_home)?;
 
     run_corepack(
@@ -167,11 +170,7 @@ pub fn setup_package_manager(
     // resolve locally without any network access. Without this, every
     // corepack-intercepted PM call can trigger a slow download that causes
     // tests to timeout in CI.
-    run_corepack(
-        target_dir,
-        &corepack_home,
-        ["prepare", package_manager, "--activate"],
-    )?;
+    prepare_corepack_package_manager(target_dir, &corepack_home, package_manager)?;
 
     Ok(())
 }
@@ -199,7 +198,7 @@ pub fn prepare_corepack_from_package_json(dir: &Path) {
 
     let corepack_dir = corepack_dir_for_test_dir(dir);
     fs::create_dir_all(&corepack_dir).expect("failed to create corepack dir");
-    let corepack_home = corepack_home(&corepack_dir);
+    let corepack_home = corepack_home();
     fs::create_dir_all(&corepack_home).expect("failed to create corepack home");
 
     run_corepack(
@@ -213,8 +212,7 @@ pub fn prepare_corepack_from_package_json(dir: &Path) {
     )
     .expect("failed to enable corepack");
 
-    run_corepack(dir, &corepack_home, ["prepare", &pm, "--activate"])
-        .expect("failed to prepare corepack");
+    prepare_corepack_package_manager(dir, &corepack_home, &pm).expect("failed to prepare corepack");
 }
 
 /// Install dependencies using the specified package manager.
@@ -230,17 +228,11 @@ pub fn install_deps(
 
     match pm_name {
         "npm" => {
-            run_cmd(
-                target_dir,
-                "npm",
-                &["install", "--offline"],
-                &path_env,
-                corepack_dir,
-            )?;
+            run_cmd(target_dir, "npm", &["install", "--offline"], &path_env)?;
             normalize_lockfile_on_windows(target_dir, "package-lock.json");
         }
         "pnpm" => {
-            run_cmd(target_dir, "pnpm", &["install"], &path_env, corepack_dir)?;
+            run_cmd(target_dir, "pnpm", &["install"], &path_env)?;
             normalize_lockfile_on_windows(target_dir, "pnpm-lock.yaml");
         }
         "yarn" => {
@@ -255,7 +247,6 @@ pub fn install_deps(
                     &format!("--cache-folder={}", cache.display()),
                 ],
                 &path_env,
-                corepack_dir,
             )?;
 
             // Ignore the cache from git
@@ -269,7 +260,7 @@ pub fn install_deps(
             normalize_lockfile_on_windows(target_dir, "yarn.lock");
         }
         "bun" => {
-            run_cmd(target_dir, "bun", &["install"], &path_env, corepack_dir)?;
+            run_cmd(target_dir, "bun", &["install"], &path_env)?;
         }
         other => anyhow::bail!("unsupported package manager: {other}"),
     }
@@ -309,17 +300,11 @@ pub fn setup_integration_test(
     Ok(())
 }
 
-fn run_cmd(
-    dir: &Path,
-    program: &str,
-    args: &[&str],
-    path_env: &str,
-    corepack_dir: &Path,
-) -> Result<(), anyhow::Error> {
+fn run_cmd(dir: &Path, program: &str, args: &[&str], path_env: &str) -> Result<(), anyhow::Error> {
     let output = cmd_with_path(program, path_env)
         .args(args)
         .current_dir(dir)
-        .env("COREPACK_HOME", corepack_home(corepack_dir))
+        .env("COREPACK_HOME", corepack_home())
         // Safety net: auto-approve any corepack download prompt in case the
         // cache is somehow cold. The setup pre-warms the cache via
         // `corepack prepare` so this should rarely be needed.
@@ -373,8 +358,11 @@ pub fn corepack_dir_for_test_dir(target_dir: &Path) -> PathBuf {
     ))
 }
 
-pub fn corepack_home(corepack_dir: &Path) -> PathBuf {
-    corepack_dir.join("home")
+pub fn corepack_home() -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "turborepo-test-corepack-{:x}",
+        stable_hash(workspace_root().as_os_str().as_encoded_bytes())
+    ))
 }
 
 pub fn prepend_to_path(dir: &Path) -> String {
@@ -415,6 +403,101 @@ where
     }
 
     Ok(())
+}
+
+fn prepare_corepack_package_manager(
+    dir: &Path,
+    corepack_home: &Path,
+    package_manager: &str,
+) -> Result<(), anyhow::Error> {
+    let marker = corepack_home
+        .join("prepared")
+        .join(safe_filename(package_manager));
+    if marker.exists() {
+        return Ok(());
+    }
+
+    with_corepack_prepare_lock(corepack_home, || {
+        if marker.exists() {
+            return Ok(());
+        }
+
+        run_corepack(
+            dir,
+            corepack_home,
+            ["prepare", package_manager, "--activate"],
+        )?;
+        if let Some(parent) = marker.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(marker, b"")?;
+
+        Ok(())
+    })
+}
+
+fn with_corepack_prepare_lock<F>(corepack_home: &Path, f: F) -> Result<(), anyhow::Error>
+where
+    F: FnOnce() -> Result<(), anyhow::Error>,
+{
+    const LOCK_TIMEOUT: Duration = Duration::from_secs(120);
+    const STALE_LOCK_AGE: Duration = Duration::from_secs(300);
+
+    let lock_dir = corepack_home.join("prepare.lock");
+    let start = Instant::now();
+    loop {
+        match fs::create_dir(&lock_dir) {
+            Ok(()) => break,
+            Err(e) if e.kind() == ErrorKind::AlreadyExists => {
+                if is_stale_lock(&lock_dir, STALE_LOCK_AGE) {
+                    let _ = fs::remove_dir_all(&lock_dir);
+                    continue;
+                }
+                if start.elapsed() > LOCK_TIMEOUT {
+                    anyhow::bail!(
+                        "timed out waiting for Corepack prepare lock: {}",
+                        lock_dir.display()
+                    );
+                }
+                thread::sleep(Duration::from_millis(100));
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
+
+    struct LockGuard(PathBuf);
+    impl Drop for LockGuard {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    let _guard = LockGuard(lock_dir);
+    f()
+}
+
+fn is_stale_lock(lock_dir: &Path, stale_after: Duration) -> bool {
+    fs::metadata(lock_dir)
+        .and_then(|metadata| metadata.modified())
+        .and_then(|modified| modified.elapsed().map_err(std::io::Error::other))
+        .map(|age| age > stale_after)
+        .unwrap_or(false)
+}
+
+fn safe_filename(value: &str) -> String {
+    value
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect()
+}
+
+fn stable_hash(bytes: &[u8]) -> u64 {
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
 }
 
 /// Create a Command for a program, resolving it via PATH (including PATHEXT on
