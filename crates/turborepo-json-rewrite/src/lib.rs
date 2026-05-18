@@ -1,5 +1,3 @@
-#![allow(clippy::expect_used, clippy::unwrap_used)]
-
 use jsonc_parser::{errors::ParseError, parse_to_ast};
 use thiserror::Error;
 
@@ -100,9 +98,12 @@ pub fn set_path(
     // Generate the serialized JSON to insert into the document.
     // We synthesize objects for missing path segments.
     let missing_path_segments = &path[closest_path.len()..];
-    let computed_object = match generate_type {
-        GenerateType::Object => generate_object(missing_path_segments, json_value),
-        GenerateType::Member => generate_member(missing_path_segments, json_value, separator),
+    let computed_object = match (generate_type, missing_path_segments) {
+        (_, []) => json_value.to_owned(),
+        (GenerateType::Object, _) => generate_object(missing_path_segments, json_value),
+        (GenerateType::Member, [key, remainder @ ..]) => {
+            generate_member(key, remainder, json_value, separator)
+        }
     };
 
     // Generate a new document!
@@ -202,8 +203,7 @@ fn generate_object(path_segments: &[&str], value: &str) -> String {
  * Given path segments, generate a JSON object member with an optional
  * trailing separator.
  */
-fn generate_member(path_segments: &[&str], value: &str, separator: &str) -> String {
-    let (key, remainder) = path_segments.split_first().unwrap();
+fn generate_member(key: &str, remainder: &[&str], value: &str, separator: &str) -> String {
     let object = generate_object(remainder, value);
     format!("\"{key}\":{object}{separator}")
 }
@@ -351,6 +351,7 @@ fn find_all_paths<'a>(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod test {
     use pretty_assertions::assert_str_eq;
 
