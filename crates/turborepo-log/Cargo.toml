@@ -9,8 +9,14 @@ description = "User-facing logging interface for Turborepo"
 workspace = true
 
 [dependencies]
+libc = "0.2"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Storage_FileSystem",
+] }
 
 [dev-dependencies]
 tempfile = { workspace = true }
