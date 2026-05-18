@@ -7,3 +7,8 @@ disallowed-methods = [
   # Instead use VecDeque::with_capacity to make it explicit or opt-out of that.
   "std::collections::VecDeque::new",
 ]
+
+# Tests can use panic-extraction helpers freely. The cargo lint alias skips
+# test targets, but this keeps #[cfg(test)] modules exempt if linted directly.
+allow-expect-in-tests = true
+allow-unwrap-in-tests = true

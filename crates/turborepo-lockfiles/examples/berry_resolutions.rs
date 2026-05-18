@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 use turborepo_lockfiles::{BerryLockfile, BerryManifest, Lockfile, LockfileData};
 
 fn main() {

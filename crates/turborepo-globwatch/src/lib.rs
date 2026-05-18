@@ -18,6 +18,7 @@
     unused_must_use,
     unsafe_code
 )]
+#![allow(clippy::expect_used)]
 
 use std::{
     collections::HashMap,

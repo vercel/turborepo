@@ -2,6 +2,8 @@
 //! Automatically identifies JavaScript frameworks and what environment
 //! variables impact it.
 
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 use std::{collections::HashMap, sync::OnceLock};
 
 use serde::Deserialize;

@@ -19,6 +19,8 @@
 //! - Cache saving on success
 //! - Error and warning collection
 
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 mod command;
 mod exec;
 mod output;

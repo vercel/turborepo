@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 use jsonc_parser::{errors::ParseError, parse_to_ast};
 use thiserror::Error;
 

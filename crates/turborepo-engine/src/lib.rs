@@ -7,6 +7,7 @@
 // Allow large error types - boxing would be a significant refactor and these
 // errors are already established patterns in the codebase
 #![allow(clippy::result_large_err)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 pub mod affected;
 mod builder;

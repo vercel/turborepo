@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+
 use turborepo_vt100 as vt100;
 
 use serde::de::Deserialize as _;

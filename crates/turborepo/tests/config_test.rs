@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+
 mod common;
 
 use common::{run_turbo, run_turbo_with_env, setup};

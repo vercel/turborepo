@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+
 mod common;
 
 use common::{git, run_turbo, setup_lockfile_test};

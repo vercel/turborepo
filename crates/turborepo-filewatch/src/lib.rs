@@ -21,6 +21,7 @@
 //! `tokio::time::interval`.
 
 #![deny(clippy::all)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 #![allow(clippy::mutable_key_type)]
 #![allow(clippy::result_large_err)]
 
