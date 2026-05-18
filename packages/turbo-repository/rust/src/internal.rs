@@ -52,19 +52,18 @@ impl From<Error> for napi::Error<Status> {
 
 impl Workspace {
     pub(crate) async fn find_internal(path: Option<String>) -> Result<Self, Error> {
-        let reference_dir = path
-            .map(|path| {
+        let reference_dir = match path {
+            Some(path) => {
                 AbsoluteSystemPathBuf::from_cwd(&path).map_err(|path_error| Error::StartingPath {
                     path: path.clone(),
                     path_error,
                 })
-            })
-            .unwrap_or_else(|| {
-                AbsoluteSystemPathBuf::cwd().map_err(|path_error| Error::StartingPath {
-                    path: "".to_string(),
-                    path_error,
-                })
-            })?;
+            }
+            None => AbsoluteSystemPathBuf::cwd().map_err(|path_error| Error::StartingPath {
+                path: "".to_string(),
+                path_error,
+            }),
+        }?;
         let workspace_state = WorkspaceState::infer(&reference_dir)?;
         let is_multi_package = workspace_state.mode == WorkspaceType::MultiPackage;
         let package_manager =
