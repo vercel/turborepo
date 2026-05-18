@@ -33,12 +33,17 @@ pub fn turbo_output_filters() -> Vec<(&'static str, &'static str)> {
 /// before calling `.output()`.
 pub fn turbo_command(test_dir: &Path) -> assert_cmd::Command {
     let mut cmd = assert_cmd::Command::cargo_bin("turbo").expect("turbo binary not found");
+    let corepack_dir = setup::corepack_dir_for_test_dir(test_dir);
+    if corepack_dir.exists() {
+        cmd.env("PATH", setup::prepend_to_path(&corepack_dir))
+            .env("COREPACK_HOME", setup::corepack_home(&corepack_dir));
+    }
     cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
         .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
         .env("DO_NOT_TRACK", "1")
         .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
-        // Corepack intercepts package manager calls (yarn, pnpm) and can
+        // Corepack intercepts package manager calls (npm, yarn, pnpm) and can
         // prompt for download confirmation, which hangs in non-interactive CI.
         // The test setup pre-warms the corepack cache via `corepack prepare`
         // so the correct version is available locally without network access.
