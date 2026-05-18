@@ -883,7 +883,7 @@ mod test {
             .unwrap();
 
         let repo_root = path.join_component("repo");
-        let paths = Paths::from_repo_root(&repo_root);
+        let paths = Paths::from_repo_root(&repo_root).unwrap();
         tracing::info!("start");
 
         let (tx, rx) = oneshot::channel::<CloseReason>();
@@ -942,7 +942,7 @@ mod test {
             .unwrap();
 
         let repo_root = path.join_component("repo");
-        let paths = Paths::from_repo_root(&repo_root);
+        let paths = Paths::from_repo_root(&repo_root).unwrap();
 
         let now = Instant::now();
         let (_tx, rx) = oneshot::channel::<CloseReason>();
@@ -1002,7 +1002,7 @@ mod test {
             .join_component("package-lock.json")
             .create_with_contents("")
             .unwrap();
-        let paths = Paths::from_repo_root(&repo_root);
+        let paths = Paths::from_repo_root(&repo_root).unwrap();
 
         let (_tx, rx) = oneshot::channel::<CloseReason>();
         let exit_signal = rx.map(|_result| CloseReason::Interrupt);

@@ -1,7 +1,7 @@
 // Bump all rust changes
 #![deny(clippy::all)]
 
-use std::{future::Future, pin::Pin, process, sync::Arc};
+use std::{ffi::OsStr, future::Future, pin::Pin, process, sync::Arc};
 
 use anyhow::Result;
 use miette::Report;
@@ -71,7 +71,7 @@ impl turborepo_query_api::QueryServer for TurboQueryServer {
 // This function should not expanded. Please add any logic to
 // `turborepo_lib::main` instead
 fn main() -> Result<()> {
-    if let Some(command) = internal_lsp_command(std::env::args()) {
+    if let Some(command) = internal_lsp_command(std::env::args_os()) {
         if command == InternalLspCommand::Probe {
             println!("turbo-lsp");
             return Ok(());
@@ -92,20 +92,26 @@ fn main() -> Result<()> {
     process::exit(exit_code)
 }
 
-fn internal_lsp_command(args: impl IntoIterator<Item = String>) -> Option<InternalLspCommand> {
+fn internal_lsp_command<T>(args: impl IntoIterator<Item = T>) -> Option<InternalLspCommand>
+where
+    T: AsRef<OsStr>,
+{
     let mut args = args.into_iter().skip(1);
     let first_arg = args.next()?;
-    let command_arg = if first_arg == "--skip-infer" {
+    let command_arg = if first_arg.as_ref() == OsStr::new("--skip-infer") {
         args.next()?
     } else {
         first_arg
     };
 
-    if command_arg != INTERNAL_LSP_COMMAND {
+    if command_arg.as_ref() != OsStr::new(INTERNAL_LSP_COMMAND) {
         return None;
     }
 
-    if args.next().as_deref() == Some("--probe") {
+    if args
+        .next()
+        .is_some_and(|arg| arg.as_ref() == OsStr::new("--probe"))
+    {
         Some(InternalLspCommand::Probe)
     } else {
         Some(InternalLspCommand::Server)
@@ -114,10 +120,12 @@ fn internal_lsp_command(args: impl IntoIterator<Item = String>) -> Option<Intern
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsString;
+
     use super::{InternalLspCommand, internal_lsp_command};
 
-    fn args(args: &[&str]) -> Vec<String> {
-        args.iter().map(|arg| arg.to_string()).collect()
+    fn args(args: &[&str]) -> Vec<OsString> {
+        args.iter().map(OsString::from).collect()
     }
 
     #[test]
@@ -153,5 +161,19 @@ mod tests {
     #[test]
     fn ignores_regular_turbo_command() {
         assert_eq!(internal_lsp_command(args(&["turbo", "run", "build"])), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ignores_non_utf8_arguments() {
+        use std::os::unix::ffi::OsStringExt;
+
+        assert_eq!(
+            internal_lsp_command(vec![
+                OsString::from("turbo"),
+                OsString::from_vec(b"run-\xFF".to_vec()),
+            ]),
+            None
+        );
     }
 }

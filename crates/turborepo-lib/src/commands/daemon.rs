@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
 use camino::Utf8PathBuf;
 use futures::FutureExt;
@@ -62,7 +62,7 @@ pub async fn daemon_client(
         can_kill_server,
         &base.repo_root,
         custom_turbo_json_path,
-    );
+    )?;
 
     match command {
         DaemonCommand::Restart => {
@@ -221,15 +221,19 @@ pub async fn daemon_client(
     Ok(())
 }
 
-async fn get_log_file_from_daemon(connector: DaemonConnector) -> Result<String, DaemonError> {
+async fn get_log_file_from_daemon(connector: DaemonConnector) -> Result<PathBuf, DaemonError> {
     let mut client = connector.connect().await?;
     let status = client.status().await?;
-    Ok(log_filename(&status.log_file)?)
+    Ok(PathBuf::from(log_filename(&status.log_file)?))
 }
 
-async fn get_log_file_from_folder(base: &CommandBase) -> Result<String, DaemonError> {
+async fn get_log_file_from_folder(base: &CommandBase) -> Result<PathBuf, DaemonError> {
     warn!("couldn't connect to daemon, looking for old log files");
     let log_folder = base.repo_root.join_components(&[".turbo", "daemon"]);
+    latest_log_file_from_dir(&log_folder)
+}
+
+fn latest_log_file_from_dir(log_folder: &AbsoluteSystemPath) -> Result<PathBuf, DaemonError> {
     let Ok(dir) = std::fs::read_dir(log_folder) else {
         return Err(DaemonError::LogFileNotFound);
     };
@@ -243,11 +247,7 @@ async fn get_log_file_from_folder(base: &CommandBase) -> Result<String, DaemonEr
         .max_by(|(_, mt1), (_, mt2)| mt1.cmp(mt2))
         .ok_or(DaemonError::LogFileNotFound)?;
 
-    Ok(latest_file
-        .path()
-        .to_str()
-        .expect("log file should be utf-8")
-        .to_string())
+    Ok(latest_file.path())
 }
 
 fn clean(pid_file: &AbsoluteSystemPath, sock_file: &AbsoluteSystemPath) -> Result<(), DaemonError> {
@@ -311,7 +311,7 @@ pub async fn daemon_server(
     turbo_json_path: Option<camino::Utf8PathBuf>,
     logging: &TurboSubscriber,
 ) -> Result<(), DaemonError> {
-    let paths = Paths::from_repo_root(&base.repo_root);
+    let paths = Paths::from_repo_root(&base.repo_root)?;
 
     tracing::trace!("logging to file: {:?}", paths.log_file);
     if let Err(e) = logging.set_daemon_logger(tracing_appender::rolling::daily(
@@ -378,4 +378,27 @@ pub struct DaemonStatus {
     pub log_file: Utf8PathBuf,
     pub pid_file: turbopath::AbsoluteSystemPathBuf,
     pub sock_file: turbopath::AbsoluteSystemPathBuf,
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    fn latest_log_file_from_dir_returns_non_utf8_path() {
+        use std::{ffi::OsString, os::unix::ffi::OsStringExt};
+
+        use turbopath::AbsoluteSystemPathBuf;
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let log_folder = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let log_file = log_folder
+            .as_std_path()
+            .join(OsString::from_vec(b"turbo-\xFF.log".to_vec()));
+        std::fs::write(&log_file, "").unwrap();
+
+        assert_eq!(
+            super::latest_log_file_from_dir(&log_folder).unwrap(),
+            log_file
+        );
+    }
 }
