@@ -34,6 +34,7 @@ pub mod worktree;
 
 #[cfg(test)]
 mod git_index_regression_tests;
+mod git_path;
 #[cfg(test)]
 mod test_utils;
 
@@ -63,6 +64,13 @@ pub enum Error {
         #[from] std::string::FromUtf8Error,
         #[backtrace] backtrace::Backtrace,
     ),
+    #[error("Git path contains non-UTF-8 bytes from {origin}: {path}")]
+    UnsupportedGitPath {
+        origin: &'static str,
+        path: String,
+        #[backtrace]
+        backtrace: backtrace::Backtrace,
+    },
     #[error("Package traversal error: {0}")]
     Ignore(#[from] ignore::Error, #[backtrace] backtrace::Backtrace),
     #[error("Invalid glob: {0}")]
@@ -122,6 +130,10 @@ impl Error {
             _ => false,
         }
     }
+
+    pub fn is_unsupported_git_path(&self) -> bool {
+        matches!(self, Error::UnsupportedGitPath { .. })
+    }
 }
 
 fn read_git_error_to_string<R: Read>(stderr: &mut R) -> Option<String> {
@@ -169,6 +181,11 @@ pub(crate) fn wait_for_success<R: Read, T>(
                 child.try_wait().ok();
             }
         };
+
+        if parse_err.is_unsupported_git_path() {
+            return Err(parse_err);
+        }
+
         let stderr_output = read_git_error_to_string(stderr);
         let stderr_text = stderr_output
             .map(|stderr| format!(" stderr: {stderr}"))
@@ -593,5 +610,26 @@ mod tests {
         // We should, however, have our injected error of "any error" in the error
         // message.
         assert!(err.to_string().contains("any error"));
+    }
+
+    #[test]
+    fn test_wait_for_success_preserves_unsupported_git_path_errors() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        let mut cmd = Command::new("git")
+            .arg("--version")
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut stderr = cmd.stderr.take().unwrap();
+        let parse_result: Result<(), super::Error> = Err(Error::UnsupportedGitPath {
+            origin: "test git path",
+            path: "bad-\\xff".to_string(),
+            backtrace: std::backtrace::Backtrace::capture(),
+        });
+
+        let err =
+            wait_for_success(cmd, &mut stderr, "git --version", &root, parse_result).unwrap_err();
+        assert_matches!(err, Error::UnsupportedGitPath { .. });
     }
 }

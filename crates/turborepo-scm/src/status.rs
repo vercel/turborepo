@@ -6,7 +6,7 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
-use crate::{Error, GitHashes, GitRepo, wait_for_success};
+use crate::{Error, GitHashes, GitRepo, git_path::require_git_path, wait_for_success};
 
 pub(crate) struct RepoStatusEntry {
     pub path: RelativeUnixPathBuf,
@@ -60,9 +60,7 @@ fn read_status<R: Read>(
     let mut buffer = Vec::new();
     while reader.read_until(b'\0', &mut buffer)? != 0 {
         let entry = parse_status(&buffer)?;
-        let filename = std::str::from_utf8(entry.filename)
-            .map_err(|e| Error::git_error(format!("invalid utf8 in git status: {e}")))?;
-        let path = RelativeUnixPathBuf::new(filename)?;
+        let path = require_git_path(entry.filename, "git status path")?;
         if entry.is_delete {
             let path = path.strip_prefix(pkg_prefix).map_err(|_| {
                 Error::git_error(format!(
@@ -86,9 +84,7 @@ fn read_status_raw<R: Read>(reader: R) -> Result<Vec<RepoStatusEntry>, Error> {
     let mut buffer = Vec::new();
     while reader.read_until(b'\0', &mut buffer)? != 0 {
         let entry = parse_status(&buffer)?;
-        let filename = std::str::from_utf8(entry.filename)
-            .map_err(|e| Error::git_error(format!("invalid utf8 in git status: {e}")))?;
-        let path = RelativeUnixPathBuf::new(filename)?;
+        let path = require_git_path(entry.filename, "git status path")?;
         entries.push(RepoStatusEntry {
             path,
             is_delete: entry.is_delete,
@@ -136,7 +132,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
     use super::read_status;
-    use crate::{GitHashes, OidHash};
+    use crate::{Error, GitHashes, OidHash};
 
     #[test]
     fn test_status() {
@@ -168,6 +164,28 @@ mod tests {
                 let expected = prefix.join(&RelativeUnixPathBuf::new(*expected_filename).unwrap());
                 assert_eq!(to_hash[0], expected);
             }
+        }
+    }
+
+    #[test]
+    fn test_status_rejects_non_utf8_filename() {
+        let root_path = AbsoluteSystemPathBuf::cwd().unwrap();
+        let prefix = RelativeUnixPathBuf::new("").unwrap();
+        let mut hashes = GitHashes::new();
+        let err = read_status(
+            b"M  bad-\xff\0".as_slice(),
+            &root_path,
+            &prefix,
+            &mut hashes,
+        )
+        .unwrap_err();
+
+        match err {
+            Error::UnsupportedGitPath { origin, path, .. } => {
+                assert_eq!(origin, "git status path");
+                assert_eq!(path, "bad-\\xff");
+            }
+            _ => panic!("expected unsupported git path error"),
         }
     }
 

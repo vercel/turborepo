@@ -72,6 +72,10 @@ impl SCM {
                             return Err(err);
                         }
 
+                        if err.is_unsupported_git_path() {
+                            return Err(err);
+                        }
+
                         debug!(
                             "git hashing failed for {:?}: {}. Falling back to manual",
                             package_path, err,

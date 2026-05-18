@@ -6,13 +6,59 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{Error, GitHashes, GitRepo, OidHash, wait_for_success};
+use crate::{
+    Error, GitHashes, GitRepo, OidHash,
+    git_path::{UnsupportedGitPath, parse_git_path, require_git_path},
+    wait_for_success,
+};
 
 /// Sorted list of (path, hash) pairs from `git ls-tree`. Uses a `Vec` instead
 /// of `BTreeMap` because git output is already sorted by pathname, giving us
 /// free insertion order with better cache locality for the `partition_point`
 /// range lookups performed in `RepoGitIndex::get_package_hashes`.
 pub(crate) type SortedGitHashes = Vec<(RelativeUnixPathBuf, OidHash)>;
+
+pub(crate) struct GitTreeState {
+    pub hashes: SortedGitHashes,
+    pub unsupported_paths: Vec<UnsupportedGitPath>,
+}
+
+impl GitTreeState {
+    fn new() -> Self {
+        Self {
+            hashes: SortedGitHashes::new(),
+            unsupported_paths: Vec::new(),
+        }
+    }
+}
+
+pub(crate) struct GitStatusState {
+    pub entries: Vec<crate::status::RepoStatusEntry>,
+    pub unsupported_paths: Vec<UnsupportedGitPath>,
+}
+
+impl GitStatusState {
+    fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+            unsupported_paths: Vec::new(),
+        }
+    }
+}
+
+pub(crate) struct GitPathList {
+    pub paths: Vec<RelativeUnixPathBuf>,
+    pub unsupported_paths: Vec<UnsupportedGitPath>,
+}
+
+impl GitPathList {
+    fn new() -> Self {
+        Self {
+            paths: Vec::new(),
+            unsupported_paths: Vec::new(),
+        }
+    }
+}
 
 impl GitRepo {
     #[tracing::instrument(skip(self))]
@@ -48,8 +94,19 @@ impl GitRepo {
 
     /// Run `git ls-tree -r HEAD -z` at the repo root, returning a sorted Vec
     /// suitable for binary-search range queries in `RepoGitIndex`.
+    #[cfg(test)]
     #[tracing::instrument(skip(self))]
     pub(crate) fn git_ls_tree_repo_root_sorted(&self) -> Result<SortedGitHashes, Error> {
+        let state = self.git_ls_tree_repo_root_sorted_with_unsupported()?;
+        if let Some(path) = state.unsupported_paths.into_iter().next() {
+            return Err(path.into_error());
+        }
+        Ok(state.hashes)
+    }
+
+    pub(crate) fn git_ls_tree_repo_root_sorted_with_unsupported(
+        &self,
+    ) -> Result<GitTreeState, Error> {
         let mut git = Command::new(self.bin.as_std_path())
             .args(["ls-tree", "-r", "-z", "HEAD"])
             .env("GIT_OPTIONAL_LOCKS", "0")
@@ -66,18 +123,29 @@ impl GitRepo {
             .stderr
             .take()
             .ok_or_else(|| Error::git_error("failed to get stderr for git ls-tree"))?;
-        let mut hashes = SortedGitHashes::new();
-        let parse_result = read_ls_tree_sorted(stdout, &mut hashes);
+        let mut state = GitTreeState::new();
+        let parse_result = read_ls_tree_sorted_with_unsupported(stdout, &mut state);
         wait_for_success(git, &mut stderr, "git ls-tree", &self.root, parse_result)?;
-        Ok(hashes)
+        Ok(state)
     }
 
     /// Run `git diff-index HEAD -z` to find modified/deleted files relative to
     /// HEAD. Returns sorted `RepoStatusEntry` entries.
+    #[cfg(test)]
     #[tracing::instrument(skip(self))]
     pub(crate) fn git_diff_index_repo_root(
         &self,
     ) -> Result<Vec<crate::status::RepoStatusEntry>, Error> {
+        let state = self.git_diff_index_repo_root_with_unsupported()?;
+        if let Some(path) = state.unsupported_paths.into_iter().next() {
+            return Err(path.into_error());
+        }
+        Ok(state.entries)
+    }
+
+    pub(crate) fn git_diff_index_repo_root_with_unsupported(
+        &self,
+    ) -> Result<GitStatusState, Error> {
         let mut git = Command::new(self.bin.as_std_path())
             .args([
                 "diff-index",
@@ -100,17 +168,26 @@ impl GitRepo {
             .stderr
             .take()
             .ok_or_else(|| Error::git_error("failed to get stderr for git diff-index"))?;
-        let mut entries = Vec::new();
-        let parse_result = read_diff_index(stdout, &mut entries);
+        let mut state = GitStatusState::new();
+        let parse_result = read_diff_index_with_unsupported(stdout, &mut state);
         wait_for_success(git, &mut stderr, "git diff-index", &self.root, parse_result)?;
-        entries.sort_by(|a, b| a.path.cmp(&b.path));
-        Ok(entries)
+        state.entries.sort_by(|a, b| a.path.cmp(&b.path));
+        Ok(state)
     }
 
     /// Run `git ls-files --others --exclude-standard -z` to find untracked
     /// files.
+    #[cfg(test)]
     #[tracing::instrument(skip(self))]
     pub(crate) fn git_ls_files_untracked(&self) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+        let state = self.git_ls_files_untracked_with_unsupported()?;
+        if let Some(path) = state.unsupported_paths.into_iter().next() {
+            return Err(path.into_error());
+        }
+        Ok(state.paths)
+    }
+
+    pub(crate) fn git_ls_files_untracked_with_unsupported(&self) -> Result<GitPathList, Error> {
         let mut git = Command::new(self.bin.as_std_path())
             .args(["ls-files", "--others", "--exclude-standard", "-z"])
             .env("GIT_OPTIONAL_LOCKS", "0")
@@ -127,10 +204,10 @@ impl GitRepo {
             .stderr
             .take()
             .ok_or_else(|| Error::git_error("failed to get stderr for git ls-files"))?;
-        let mut paths = Vec::new();
-        let parse_result = read_null_terminated_paths(stdout, &mut paths);
+        let mut state = GitPathList::new();
+        let parse_result = read_null_terminated_paths_with_unsupported(stdout, &mut state);
         wait_for_success(git, &mut stderr, "git ls-files", &self.root, parse_result)?;
-        Ok(paths)
+        Ok(state)
     }
 }
 
@@ -141,18 +218,33 @@ fn read_ls_tree<R: Read>(reader: R, hashes: &mut GitHashes) -> Result<(), Error>
         let entry = parse_ls_tree(&buffer)?;
         let hash = std::str::from_utf8(entry.hash)
             .map_err(|e| Error::git_error(format!("invalid utf8 in ls-tree hash: {e}")))?;
-        let filename = std::str::from_utf8(entry.filename)
-            .map_err(|e| Error::git_error(format!("invalid utf8 in ls-tree filename: {e}")))?;
-        let path = RelativeUnixPathBuf::new(filename)?;
+        let path = require_git_path(entry.filename, "git ls-tree filename")?;
         hashes.insert(path, OidHash::from_hex_str(hash));
         buffer.clear();
     }
     Ok(())
 }
 
+#[cfg(test)]
 pub(crate) fn read_ls_tree_sorted<R: Read>(
     reader: R,
     hashes: &mut SortedGitHashes,
+) -> Result<(), Error> {
+    let mut state = GitTreeState {
+        hashes: std::mem::take(hashes),
+        unsupported_paths: Vec::new(),
+    };
+    read_ls_tree_sorted_with_unsupported(reader, &mut state)?;
+    if let Some(path) = state.unsupported_paths.into_iter().next() {
+        return Err(path.into_error());
+    }
+    *hashes = state.hashes;
+    Ok(())
+}
+
+fn read_ls_tree_sorted_with_unsupported<R: Read>(
+    reader: R,
+    state: &mut GitTreeState,
 ) -> Result<(), Error> {
     let mut reader = BufReader::with_capacity(64 * 1024, reader);
     let mut buffer = Vec::new();
@@ -160,22 +252,22 @@ pub(crate) fn read_ls_tree_sorted<R: Read>(
         let entry = parse_ls_tree(&buffer)?;
         let hash = std::str::from_utf8(entry.hash)
             .map_err(|e| Error::git_error(format!("invalid utf8 in ls-tree hash: {e}")))?;
-        let filename = std::str::from_utf8(entry.filename)
-            .map_err(|e| Error::git_error(format!("invalid utf8 in ls-tree filename: {e}")))?;
-        let path = RelativeUnixPathBuf::new(filename)?;
-        hashes.push((path, OidHash::from_hex_str(hash)));
+        match parse_git_path(entry.filename, "git ls-tree filename")? {
+            Ok(path) => state.hashes.push((path, OidHash::from_hex_str(hash))),
+            Err(path) => state.unsupported_paths.push(path),
+        }
         buffer.clear();
     }
     debug_assert!(
-        hashes.windows(2).all(|w| w[0].0 < w[1].0),
+        state.hashes.windows(2).all(|w| w[0].0 < w[1].0),
         "git ls-tree output should be sorted by pathname"
     );
     Ok(())
 }
 
-fn read_diff_index<R: Read>(
+fn read_diff_index_with_unsupported<R: Read>(
     reader: R,
-    entries: &mut Vec<crate::status::RepoStatusEntry>,
+    state: &mut GitStatusState,
 ) -> Result<(), Error> {
     // git diff-index -z output: ":old_mode new_mode old_sha new_sha status\0path\0"
     // Each record is two null-terminated fields: the diff header and the path.
@@ -195,23 +287,26 @@ fn read_diff_index<R: Read>(
         if path_buf.last() == Some(&b'\0') {
             path_buf.pop();
         }
-        let path_str = std::str::from_utf8(&path_buf)
-            .map_err(|e| Error::git_error(format!("invalid utf8 in diff-index path: {e}")))?;
-        let path = RelativeUnixPathBuf::new(path_str)?;
+        let path = parse_git_path(&path_buf, "git diff-index path")?;
 
         // Status letter is the last non-null char in the header
         let header = header_buf.strip_suffix(b"\0").unwrap_or(&header_buf);
         let status_byte = header.last().copied().unwrap_or(b'M');
         let is_delete = status_byte == b'D';
 
-        entries.push(crate::status::RepoStatusEntry { path, is_delete });
+        match path {
+            Ok(path) => state
+                .entries
+                .push(crate::status::RepoStatusEntry { path, is_delete }),
+            Err(path) => state.unsupported_paths.push(path),
+        }
     }
     Ok(())
 }
 
-fn read_null_terminated_paths<R: Read>(
+fn read_null_terminated_paths_with_unsupported<R: Read>(
     reader: R,
-    paths: &mut Vec<RelativeUnixPathBuf>,
+    state: &mut GitPathList,
 ) -> Result<(), Error> {
     let mut reader = BufReader::with_capacity(64 * 1024, reader);
     let mut buffer = Vec::new();
@@ -224,10 +319,10 @@ fn read_null_terminated_paths<R: Read>(
             buffer.clear();
             continue;
         }
-        let path_str = std::str::from_utf8(&buffer)
-            .map_err(|e| Error::git_error(format!("invalid utf8 in path: {e}")))?;
-        let path = RelativeUnixPathBuf::new(path_str)?;
-        paths.push(path);
+        match parse_git_path(&buffer, "git ls-files path")? {
+            Ok(path) => state.paths.push(path),
+            Err(path) => state.unsupported_paths.push(path),
+        }
         buffer.clear();
     }
     Ok(())
@@ -268,7 +363,7 @@ mod tests {
 
     use turbopath::RelativeUnixPathBuf;
 
-    use crate::{GitHashes, OidHash, ls_tree::read_ls_tree};
+    use crate::{Error, GitHashes, OidHash, ls_tree::read_ls_tree};
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
         HashMap::from_iter(pairs.iter().map(|(path, hash)| {
@@ -380,6 +475,21 @@ mod tests {
             let expected = to_hash_map(expected);
             read_ls_tree(input_bytes, &mut hashes).unwrap();
             assert_eq!(hashes, expected);
+        }
+    }
+
+    #[test]
+    fn test_ls_tree_rejects_non_utf8_filename() {
+        let input = b"100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\tbad-\xff\0";
+        let mut hashes = GitHashes::new();
+        let err = read_ls_tree(&input[..], &mut hashes).unwrap_err();
+
+        match err {
+            Error::UnsupportedGitPath { origin, path, .. } => {
+                assert_eq!(origin, "git ls-tree filename");
+                assert_eq!(path, "bad-\\xff");
+            }
+            _ => panic!("expected unsupported git path error"),
         }
     }
 }
