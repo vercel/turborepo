@@ -192,7 +192,10 @@ struct BuildState<'a, S, T> {
     single: bool,
     workspaces: HashMap<PackageName, PackageInfo>,
     workspace_graph: Graph<PackageNode, ()>,
+    root_node_index: NodeIndex,
+    root_workspace_index: NodeIndex,
     node_lookup: HashMap<PackageNode, NodeIndex>,
+    root_package_json: PackageJson,
     lockfile: Option<Box<dyn Lockfile>>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     state: std::marker::PhantomData<S>,
@@ -213,13 +216,6 @@ impl<S, T> BuildState<'_, S, T> {
         let idx = self.workspace_graph.add_node(node.clone());
         self.node_lookup.insert(node, idx);
         idx
-    }
-
-    fn add_root_workspace(&mut self) {
-        let root_index = self.add_node(PackageNode::Root);
-        let root_workspace = self.add_node(PackageNode::Workspace(PackageName::Root));
-        self.workspace_graph
-            .add_edge(root_workspace, root_index, ());
     }
 }
 
@@ -246,14 +242,23 @@ where
             package_manager: _,
         } = builder;
         let mut workspaces = HashMap::new();
-        workspaces.insert(
-            PackageName::Root,
-            PackageInfo {
-                package_json: root_package_json,
-                package_json_path: AnchoredSystemPathBuf::from_raw("package.json").unwrap(),
-                ..Default::default()
-            },
-        );
+        let root_package_info = PackageInfo {
+            package_json: root_package_json,
+            package_json_path: AnchoredSystemPathBuf::from_raw("package.json").unwrap(),
+            ..Default::default()
+        };
+        let root_package_json = root_package_info.package_json.clone();
+        workspaces.insert(PackageName::Root, root_package_info);
+
+        let mut workspace_graph = Graph::new();
+        let root_node_index = workspace_graph.add_node(PackageNode::Root);
+        let root_workspace = PackageNode::Workspace(PackageName::Root);
+        let root_workspace_index = workspace_graph.add_node(root_workspace.clone());
+        workspace_graph.add_edge(root_workspace_index, root_node_index, ());
+
+        let mut node_lookup = HashMap::new();
+        node_lookup.insert(PackageNode::Root, root_node_index);
+        node_lookup.insert(root_workspace, root_workspace_index);
 
         Ok(BuildState {
             repo_root,
@@ -262,8 +267,11 @@ where
             workspaces,
             lockfile,
             package_jsons,
-            workspace_graph: Graph::new(),
-            node_lookup: HashMap::new(),
+            workspace_graph,
+            root_node_index,
+            root_workspace_index,
+            node_lookup,
+            root_package_json,
             state: std::marker::PhantomData,
             package_discovery: CachingPackageDiscovery::new(
                 package_discovery.build().map_err(Into::into)?,
@@ -313,10 +321,6 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
     // need our own type
     #[tracing::instrument(skip(self))]
     async fn parse_package_jsons(mut self) -> Result<BuildState<'a, ResolvedWorkspaces, T>, Error> {
-        // The root workspace will be present
-        // we either read from disk or just read the map
-        self.add_root_workspace();
-
         let package_jsons = match self.package_jsons.take() {
             Some(jsons) => Ok(jsons),
             None => {
@@ -365,7 +369,10 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             single,
             workspaces,
             workspace_graph,
+            root_node_index,
+            root_workspace_index,
             node_lookup,
+            root_package_json,
             lockfile,
             package_discovery,
             ..
@@ -375,7 +382,10 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             single,
             workspaces,
             workspace_graph,
+            root_node_index,
+            root_workspace_index,
             node_lookup,
+            root_package_json,
             lockfile,
             package_discovery,
             package_jsons: None,
@@ -383,13 +393,15 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
         })
     }
 
-    async fn build_single_package_graph(mut self) -> Result<PackageGraph, discovery::Error> {
-        self.add_root_workspace();
+    async fn build_single_package_graph(self) -> Result<PackageGraph, discovery::Error> {
         let Self {
             single,
             workspaces,
             workspace_graph,
+            root_node_index,
+            root_workspace_index,
             node_lookup,
+            root_package_json,
             lockfile,
             package_discovery,
             repo_root,
@@ -401,7 +413,10 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
         debug_assert!(single, "expected single package graph");
         Ok(PackageGraph {
             graph: workspace_graph,
+            root_node_index,
+            root_workspace_index,
             node_lookup,
+            root_package_json,
             packages: workspaces,
             lockfile,
             package_manager,
@@ -544,7 +559,10 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             single,
             workspaces,
             workspace_graph,
+            root_node_index,
+            root_workspace_index,
             node_lookup,
+            root_package_json,
             package_discovery,
             ..
         } = self;
@@ -553,7 +571,10 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             single,
             workspaces,
             workspace_graph,
+            root_node_index,
+            root_workspace_index,
             node_lookup,
+            root_package_json,
             lockfile,
             package_jsons: None,
             state: std::marker::PhantomData,
@@ -624,14 +645,20 @@ impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
         let Self {
             workspaces,
             workspace_graph,
+            root_node_index,
+            root_workspace_index,
             node_lookup,
+            root_package_json,
             lockfile,
             repo_root,
             ..
         } = self;
         Ok(PackageGraph {
             graph: workspace_graph,
+            root_node_index,
+            root_workspace_index,
             node_lookup,
+            root_package_json,
             packages: workspaces,
             package_manager,
             lockfile,

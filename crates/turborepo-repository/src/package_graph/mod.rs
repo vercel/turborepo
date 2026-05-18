@@ -31,9 +31,12 @@ pub const ROOT_PKG_NAME: &str = "//";
 #[derive(Debug)]
 pub struct PackageGraph {
     graph: petgraph::Graph<PackageNode, ()>,
+    root_node_index: NodeIndex,
+    root_workspace_index: NodeIndex,
     #[allow(dead_code)]
     node_lookup: HashMap<PackageNode, petgraph::graph::NodeIndex>,
     packages: HashMap<PackageName, PackageInfo>,
+    root_package_json: PackageJson,
     package_manager: PackageManager,
     lockfile: Option<Box<dyn Lockfile>>,
     repo_root: AbsoluteSystemPathBuf,
@@ -302,15 +305,11 @@ impl PackageGraph {
     }
 
     pub fn remove_package_dependencies(&mut self) {
-        let root_index = self
-            .node_lookup
-            .get(&PackageNode::Root)
-            .expect("graph should have root package node");
         self.graph.retain_edges(|graph, index| {
             let Some((_src, dst)) = graph.edge_endpoints(index) else {
                 return false;
             };
-            dst == *root_index
+            dst == self.root_node_index
         });
     }
 
@@ -355,6 +354,13 @@ impl PackageGraph {
         self.packages.get(package)
     }
 
+    fn package_dir_for_node(&self, node: &PackageNode) -> Option<&AnchoredSystemPath> {
+        match node {
+            PackageNode::Workspace(package) => self.package_dir(package),
+            PackageNode::Root => None,
+        }
+    }
+
     pub fn get_package_by_index(&self, index: NodeIndex) -> Option<&PackageNode> {
         self.graph.node_weight(index)
     }
@@ -376,8 +382,7 @@ impl PackageGraph {
     }
 
     pub fn root_package_json(&self) -> &PackageJson {
-        self.package_json(&PackageName::Root)
-            .expect("package graph was built without root package.json")
+        &self.root_package_json
     }
 
     /// Gets all the nodes that directly depend on this one, that is to say
@@ -480,11 +485,9 @@ impl PackageGraph {
         let dependencies = self.root_internal_dependencies();
         dependencies
             .into_iter()
-            .filter_map(|package| match package {
+            .filter_map(|node| match node {
                 PackageNode::Workspace(package) => {
-                    let path = self
-                        .package_dir(package)
-                        .expect("packages in graph should have info");
+                    let path = self.package_dir_for_node(node)?;
                     Some(WorkspacePackage {
                         name: package.clone(),
                         path: path.to_owned(),
@@ -499,11 +502,8 @@ impl PackageGraph {
         let dependencies = self.root_internal_dependencies();
         dependencies
             .into_iter()
-            .filter_map(|package| match package {
-                PackageNode::Workspace(package) => Some(
-                    self.package_dir(package)
-                        .expect("packages in graph should have info"),
-                ),
+            .filter_map(|node| match node {
+                PackageNode::Workspace(_) => self.package_dir_for_node(node),
                 PackageNode::Root => None,
             })
             .sorted()
@@ -519,19 +519,13 @@ impl PackageGraph {
         &self,
         package: &WorkspacePackage,
     ) -> Option<String> {
-        let from = *self
-            .node_lookup
-            .get(&PackageNode::Workspace(PackageName::Root))
-            .expect("all graphs should have a root");
+        let from = self.root_workspace_index;
         let to = *self
             .node_lookup
             .get(&PackageNode::Workspace(package.name.clone()))?;
         let (_cost, path) =
             petgraph::algo::astar(&self.graph, from, |node| node == to, |_| 1, |_| 1)?;
-        Some(
-            self.path_display(&path)
-                .expect("path should only contain valid node indices"),
-        )
+        self.path_display(&path)
     }
 
     fn path_display(&self, path: &[petgraph::graph::NodeIndex]) -> Option<String> {
@@ -550,9 +544,7 @@ impl PackageGraph {
         // as it will infinitely recurse.
         let mut dependencies = turborepo_graph_utils::transitive_closure(
             &self.graph,
-            self.node_lookup
-                .get(&PackageNode::Workspace(PackageName::Root))
-                .cloned(),
+            Some(self.root_workspace_index),
             petgraph::Direction::Outgoing,
         );
         dependencies.remove(&PackageNode::Workspace(PackageName::Root));
