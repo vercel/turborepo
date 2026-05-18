@@ -11,7 +11,10 @@ mod traits;
 
 use std::{collections::HashMap, sync::Arc};
 
-use capnp::message::{Builder, HeapAllocator};
+use capnp::{
+    message::{Builder, HeapAllocator},
+    traits::{Owned, SetterInput},
+};
 pub use oid_hash::OidHash;
 pub use traits::TurboHash;
 // Re-export for backward compatibility. New code should import from `turborepo_types`.
@@ -120,6 +123,23 @@ pub struct FileHashes(pub Vec<(turbopath::RelativeUnixPathBuf, OidHash)>);
 /// for two foreign types (TaskOutputs and Builder).
 pub struct HashableTaskOutputs(pub TaskOutputs);
 
+fn canonical_builder<T: Owned>(
+    size: capnp::Result<capnp::MessageSize>,
+    value: impl SetterInput<T>,
+) -> Builder<HeapAllocator> {
+    let size = match size {
+        Ok(size) => size.word_count + 1,
+        Err(err) => panic!("unable to calculate total size: {err}"),
+    };
+
+    let mut canon_builder = Builder::new(HeapAllocator::default().first_segment_words(size as u32));
+    if let Err(err) = canon_builder.set_root_canonical::<T>(value) {
+        panic!("unable to canonicalize Cap'n Proto message: {err}");
+    }
+
+    canon_builder
+}
+
 impl From<TaskOutputs> for HashableTaskOutputs {
     fn from(value: TaskOutputs) -> Self {
         HashableTaskOutputs(value)
@@ -175,20 +195,10 @@ impl From<LockFilePackages> for Builder<HeapAllocator> {
             }
         }
 
-        // We're okay to unwrap here because we haven't hit the nesting
-        // limit and the message will not have cycles.
-        let size = builder
-            .total_size()
-            .expect("unable to calculate total size")
-            .word_count
-            + 1; // + 1 to solve an off by one error inside capnp
-        let mut canon_builder =
-            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
-        canon_builder
-            .set_root_canonical(builder.reborrow_as_reader())
-            .expect("can't fail");
-
-        canon_builder
+        canonical_builder::<proto_capnp::lock_file_packages::Owned>(
+            builder.total_size(),
+            builder.reborrow_as_reader(),
+        )
     }
 }
 
@@ -211,20 +221,10 @@ impl<'a> From<LockFilePackagesRef<'a>> for Builder<HeapAllocator> {
             }
         }
 
-        // We're okay to unwrap here because we haven't hit the nesting
-        // limit and the message will not have cycles.
-        let size = builder
-            .total_size()
-            .expect("unable to calculate total size")
-            .word_count
-            + 1; // + 1 to solve an off by one error inside capnp
-        let mut canon_builder =
-            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
-        canon_builder
-            .set_root_canonical(builder.reborrow_as_reader())
-            .expect("can't fail");
-
-        canon_builder
+        canonical_builder::<proto_capnp::lock_file_packages::Owned>(
+            builder.total_size(),
+            builder.reborrow_as_reader(),
+        )
     }
 }
 
@@ -253,20 +253,10 @@ impl From<FileHashes> for Builder<HeapAllocator> {
             }
         }
 
-        // We're okay to unwrap here because we haven't hit the nesting
-        // limit and the message will not have cycles.
-        let size = builder
-            .total_size()
-            .expect("unable to calculate total size")
-            .word_count
-            + 1; // + 1 to solve an off by one error inside capnp
-        let mut canon_builder =
-            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
-        canon_builder
-            .set_root_canonical(builder.reborrow_as_reader())
-            .expect("can't fail");
-
-        canon_builder
+        canonical_builder::<proto_capnp::file_hashes::Owned>(
+            builder.total_size(),
+            builder.reborrow_as_reader(),
+        )
     }
 }
 
@@ -295,20 +285,10 @@ impl From<&FileHashes> for Builder<HeapAllocator> {
             }
         }
 
-        // We're okay to unwrap here because we haven't hit the nesting
-        // limit and the message will not have cycles.
-        let size = builder
-            .total_size()
-            .expect("unable to calculate total size")
-            .word_count
-            + 1; // + 1 to solve an off by one error inside capnp
-        let mut canon_builder =
-            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
-        canon_builder
-            .set_root_canonical(builder.reborrow_as_reader())
-            .expect("can't fail");
-
-        canon_builder
+        canonical_builder::<proto_capnp::file_hashes::Owned>(
+            builder.total_size(),
+            builder.reborrow_as_reader(),
+        )
     }
 }
 
@@ -381,20 +361,10 @@ impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
             }
         }
 
-        // We're okay to unwrap here because we haven't hit the nesting
-        // limit and the message will not have cycles.
-        let size = builder
-            .total_size()
-            .expect("unable to calculate total size")
-            .word_count
-            + 1; // + 1 to solve an off by one error inside capnp
-        let mut canon_builder =
-            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
-        canon_builder
-            .set_root_canonical(builder.reborrow_as_reader())
-            .expect("can't fail");
-
-        canon_builder
+        canonical_builder::<proto_capnp::task_hashable::Owned>(
+            builder.total_size(),
+            builder.reborrow_as_reader(),
+        )
     }
 }
 
@@ -484,20 +454,10 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
         builder.set_framework_inference(hashable.framework_inference);
         builder.set_global_configuration(hashable.global_configuration);
 
-        // We're okay to unwrap here because we haven't hit the nesting
-        // limit and the message will not have cycles.
-        let size = builder
-            .total_size()
-            .expect("unable to calculate total size")
-            .word_count
-            + 1; // + 1 to solve an off by one error inside capnp
-        let mut canon_builder =
-            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
-        canon_builder
-            .set_root_canonical(builder.reborrow_as_reader())
-            .expect("can't fail");
-
-        canon_builder
+        canonical_builder::<proto_capnp::global_hashable::Owned>(
+            builder.total_size(),
+            builder.reborrow_as_reader(),
+        )
     }
 }
 
