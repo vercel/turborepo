@@ -109,10 +109,10 @@ impl PackageInference {
         }
     }
 
-    pub fn apply(&self, selector: &mut TargetSelector) {
+    pub fn apply(&self, selector: &mut TargetSelector) -> Result<(), ResolutionError> {
         // if the name pattern is provided, do not attempt inference
         if !selector.name_pattern.is_empty() {
-            return;
+            return Ok(());
         };
 
         // Inject package name based on the directory filter:
@@ -135,10 +135,17 @@ impl PackageInference {
             let clean_parent_dir = path_clean::clean(Path::new(repo_relative_parent_dir.as_path()))
                 .into_os_string()
                 .into_string()
-                .expect("path was valid utf8 before cleaning");
+                .map_err(|_| {
+                    ResolutionError::InvalidSelector(InvalidSelectorError::InvalidAnchoredPath(
+                        repo_relative_parent_dir.as_str().to_string(),
+                    ))
+                })?;
             selector.parent_dir = Some(
-                AnchoredSystemPathBuf::try_from(clean_parent_dir.as_str())
-                    .expect("path wasn't absolute before cleaning"),
+                AnchoredSystemPathBuf::try_from(clean_parent_dir.as_str()).map_err(|_| {
+                    ResolutionError::InvalidSelector(InvalidSelectorError::InvalidAnchoredPath(
+                        clean_parent_dir.clone(),
+                    ))
+                })?,
             );
         } else if self.package_name.is_none() {
             // fallback: the user didn't set a parent directory and we didn't find a single
@@ -147,6 +154,8 @@ impl PackageInference {
             parent_dir.push("**");
             selector.parent_dir = Some(parent_dir);
         }
+
+        Ok(())
     }
 }
 
@@ -361,7 +370,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         selectors: Vec<TargetSelector>,
     ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError> {
         let (_prod_selectors, all_selectors) = self
-            .apply_inference(selectors)
+            .apply_inference(selectors)?
             .into_iter()
             .partition::<Vec<_>, _>(|t| t.follow_prod_deps_only);
 
@@ -372,10 +381,13 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         }
     }
 
-    fn apply_inference(&self, selectors: Vec<TargetSelector>) -> Vec<TargetSelector> {
+    fn apply_inference(
+        &self,
+        selectors: Vec<TargetSelector>,
+    ) -> Result<Vec<TargetSelector>, ResolutionError> {
         let inference = match self.inference {
             Some(ref inference) => inference,
-            None => return selectors,
+            None => return Ok(selectors),
         };
 
         // if there is no selector provided, synthesize one
@@ -386,10 +398,10 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         };
 
         for selector in &mut selectors {
-            inference.apply(selector);
+            inference.apply(selector)?;
         }
 
-        selectors
+        Ok(selectors)
     }
 
     fn filter_graph(
@@ -578,14 +590,18 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             .transpose()?;
 
         for (name, info) in self.pkg_graph.packages() {
-            if let Some(ref matcher) = parent_dir_matcher {
+            if let Some((parent_dir, matcher)) = selector
+                .parent_dir
+                .as_ref()
+                .zip(parent_dir_matcher.as_ref())
+            {
                 let matches = matcher.is_match(info.package_path().as_path());
 
                 if matches {
                     entry_packages.insert(
                         name.to_owned(),
                         PackageInclusionReason::InFilteredDirectory {
-                            directory: selector.parent_dir.as_ref().unwrap().to_owned(),
+                            directory: parent_dir.to_owned(),
                         },
                     );
                 }
@@ -667,10 +683,16 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             // TODO: it would be more proper to use
             // `AnchoredSystemPathBuf::from_system_path` but that function
             // doesn't allow leading `.` or `..`.
-            let base = AnchoredSystemPathBuf::from_raw(
-                base.to_str().expect("glob base should be valid utf8"),
-            )
-            .expect("partitioned glob gave absolute path");
+            let base = base.to_str().ok_or_else(|| {
+                ResolutionError::InvalidSelector(InvalidSelectorError::InvalidAnchoredPath(
+                    base.to_string_lossy().into_owned(),
+                ))
+            })?;
+            let base = AnchoredSystemPathBuf::from_raw(base).map_err(|_| {
+                ResolutionError::InvalidSelector(InvalidSelectorError::InvalidAnchoredPath(
+                    base.to_string(),
+                ))
+            })?;
             // need to join this with globbing's current dir :)
             let path = self.turbo_root.resolve(&base);
             if !path.exists() {
@@ -714,7 +736,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             .zip(parent_dir_globber.as_ref())
         {
             selector_valid = true;
-            if parent_dir == &*AnchoredSystemPathBuf::from_raw(".").expect("valid anchored") {
+            if parent_dir.as_str() == "." {
                 entry_packages.insert(
                     PackageName::Root,
                     PackageInclusionReason::InFilteredDirectory {
