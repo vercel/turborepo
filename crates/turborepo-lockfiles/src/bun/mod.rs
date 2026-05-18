@@ -1273,6 +1273,56 @@ impl BunLockfile {
         Some((key, entry))
     }
 
+    fn include_duplicate_alias_children(&self, pruned_data: &mut BunLockfileData) {
+        loop {
+            let mut keys_by_ident: HashMap<String, Vec<String>> = HashMap::new();
+            for (key, entry) in &pruned_data.packages {
+                if PackageIdent::parse(&entry.ident).is_workspace() {
+                    continue;
+                }
+                keys_by_ident
+                    .entry(entry.ident.clone())
+                    .or_default()
+                    .push(key.clone());
+            }
+
+            let current_keys: std::collections::HashSet<String> =
+                pruned_data.packages.keys().cloned().collect();
+            let mut additions = BTreeMap::new();
+
+            for keys in keys_by_ident.values().filter(|keys| keys.len() > 1) {
+                let mut child_suffixes = BTreeSet::new();
+                for key in keys {
+                    let prefix = format!("{key}/");
+                    child_suffixes.extend(
+                        current_keys
+                            .iter()
+                            .filter_map(|current_key| current_key.strip_prefix(&prefix))
+                            .map(ToString::to_string),
+                    );
+                }
+
+                for key in keys {
+                    for suffix in &child_suffixes {
+                        let child_key = format!("{key}/{suffix}");
+                        if current_keys.contains(&child_key) || additions.contains_key(&child_key) {
+                            continue;
+                        }
+                        if let Some(entry) = self.data.packages.get(&child_key) {
+                            additions.insert(child_key, entry.clone());
+                        }
+                    }
+                }
+            }
+
+            if additions.is_empty() {
+                break;
+            }
+
+            pruned_data.packages.extend(additions);
+        }
+    }
+
     pub fn lockfile(self) -> Result<BunLockfileData, Error> {
         Ok(self.data)
     }
@@ -2052,6 +2102,12 @@ impl BunLockfile {
                 pruned_data.packages.insert(key, entry);
             }
         }
+
+        // Alias keys can share the same package ident, e.g. `string-width` and
+        // `string-width-cjs`. Bun expects their nested dependency sets to stay in
+        // sync; keeping only one sibling makes `bun install --frozen-lockfile`
+        // rewrite the pruned lockfile.
+        self.include_duplicate_alias_children(&mut pruned_data);
 
         // Rebuild key_to_entry HashMap for the pruned lockfile
         let mut key_to_entry: HashMap<String, String> =
@@ -3992,5 +4048,83 @@ mod test {
             prev_app_a = Some(app_a_pkgs.clone());
             prev_app_b = Some(app_b_pkgs.clone());
         }
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/12816
+    // Duplicate alias keys that point at the same package need matching nested
+    // children. If pruning keeps `string-width` and `string-width-cjs` but only
+    // one `*/emoji-regex` child, Bun rewrites the pruned lockfile.
+    #[test]
+    fn test_subgraph_preserves_duplicate_alias_nested_children() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "configVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "monorepo",
+                    "devDependencies": {
+                        "root-tool": "1.0.0"
+                    }
+                },
+                "apps/api": {
+                    "name": "api",
+                    "dependencies": {
+                        "api-tool": "1.0.0"
+                    }
+                },
+                "apps/front": {
+                    "name": "front",
+                    "dependencies": {
+                        "front-tool": "1.0.0"
+                    }
+                }
+            },
+            "packages": {
+                "api": ["api@workspace:apps/api"],
+                "api-tool": ["api-tool@1.0.0", "", { "dependencies": { "string-width": "^4.2.0" } }, "sha512-api"],
+                "emoji-regex": ["emoji-regex@9.2.2", "", {}, "sha512-emoji9"],
+                "front": ["front@workspace:apps/front"],
+                "front-tool": ["front-tool@1.0.0", "", {}, "sha512-front"],
+                "root-tool": ["root-tool@1.0.0", "", { "dependencies": { "emoji-regex": "^9.2.2", "string-width-cjs": "npm:string-width@^4.2.0" } }, "sha512-root"],
+                "string-width": ["string-width@4.2.3", "", { "dependencies": { "emoji-regex": "^8.0.0" } }, "sha512-string-width"],
+                "string-width-cjs": ["string-width@4.2.3", "", { "dependencies": { "emoji-regex": "^8.0.0" } }, "sha512-string-width"],
+                "string-width/emoji-regex": ["emoji-regex@8.0.0", "", {}, "sha512-emoji8"],
+                "string-width-cjs/emoji-regex": ["emoji-regex@8.0.0", "", {}, "sha512-emoji8"]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+        let mut api_deps = std::collections::BTreeMap::new();
+        api_deps.insert("api-tool".to_string(), "1.0.0".to_string());
+
+        let closure = crate::transitive_closure(&lockfile, "apps/api", api_deps, false).unwrap();
+        let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+        let subgraph = <BunLockfile as crate::Lockfile>::subgraph(
+            &lockfile,
+            &["apps/api".into()],
+            &package_idents,
+        )
+        .unwrap();
+
+        let encoded = subgraph.encode().unwrap();
+        let encoded_str = String::from_utf8(encoded).unwrap();
+        let pruned = BunLockfile::from_str(&encoded_str).unwrap();
+
+        assert!(pruned.data.packages.contains_key("string-width"));
+        assert!(pruned.data.packages.contains_key("string-width-cjs"));
+        assert!(
+            pruned
+                .data
+                .packages
+                .contains_key("string-width/emoji-regex")
+        );
+        assert!(
+            pruned
+                .data
+                .packages
+                .contains_key("string-width-cjs/emoji-regex"),
+            "alias-specific nested child should be restored when its sibling remains"
+        );
     }
 }
