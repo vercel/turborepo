@@ -40,6 +40,81 @@ use tracing::{debug, trace};
 
 use super::{Command, PtySize};
 
+// The atomic covers `cargo test`'s in-process parallelism; flock covers
+// nextest's process-per-test parallelism.
+#[cfg(test)]
+static PTY_TEST_LOCK: AtomicBool = AtomicBool::new(false);
+
+#[cfg(test)]
+#[derive(Debug)]
+struct PtyTestGuard {
+    #[cfg(unix)]
+    file: std::fs::File,
+}
+
+#[cfg(test)]
+impl PtyTestGuard {
+    fn acquire() -> Self {
+        while PTY_TEST_LOCK
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+
+        #[cfg(unix)]
+        {
+            use std::{fs::OpenOptions, os::fd::AsRawFd};
+
+            let path = std::env::temp_dir().join("turborepo-process-pty.lock");
+            let file = match OpenOptions::new()
+                .create(true)
+                .truncate(false)
+                .read(true)
+                .write(true)
+                .open(path)
+            {
+                Ok(file) => file,
+                Err(err) => {
+                    PTY_TEST_LOCK.store(false, Ordering::Release);
+                    panic!("failed to open PTY test lock: {err}");
+                }
+            };
+            let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) };
+            if result != 0 {
+                PTY_TEST_LOCK.store(false, Ordering::Release);
+                panic!(
+                    "failed to lock PTY test lock: {}",
+                    io::Error::last_os_error()
+                );
+            }
+            Self { file }
+        }
+
+        #[cfg(not(unix))]
+        {
+            Self {}
+        }
+    }
+}
+
+#[cfg(all(test, unix))]
+impl Drop for PtyTestGuard {
+    fn drop(&mut self) {
+        use std::os::fd::AsRawFd;
+
+        let _ = unsafe { libc::flock(self.file.as_raw_fd(), libc::LOCK_UN) };
+        PTY_TEST_LOCK.store(false, Ordering::Release);
+    }
+}
+
+#[cfg(all(test, not(unix)))]
+impl Drop for PtyTestGuard {
+    fn drop(&mut self) {
+        PTY_TEST_LOCK.store(false, Ordering::Release);
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ChildExit {
     Finished(Option<i32>),
@@ -816,6 +891,8 @@ pub struct Child {
     /// Flag indicating this child is being stopped as part of a shutdown of the
     /// ProcessManager, rather than individually stopped.
     closing: Arc<AtomicBool>,
+    #[cfg(test)]
+    _pty_test_guard: Option<Arc<PtyTestGuard>>,
 }
 
 #[derive(Clone, Debug)]
@@ -854,6 +931,8 @@ impl Child {
         pty_size: Option<PtySize>,
     ) -> io::Result<Self> {
         let label = command.label();
+        #[cfg(test)]
+        let pty_test_guard = pty_size.map(|_| Arc::new(PtyTestGuard::acquire()));
         let SpawnResult {
             handle: mut child,
             io: ChildIO { stdin, output },
@@ -947,6 +1026,8 @@ impl Child {
             label,
             shutdown_style,
             closing: Arc::new(AtomicBool::new(false)),
+            #[cfg(test)]
+            _pty_test_guard: pty_test_guard,
         })
     }
 
@@ -1935,7 +2016,7 @@ mod test {
     #[tokio::test]
     async fn test_orphan_process() {
         let mut cmd = Command::new("sh");
-        cmd.args(["-c", "echo hello; sleep 120; echo done"]);
+        cmd.args(["-c", "echo hello; exec sleep 120"]);
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill, None).unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
