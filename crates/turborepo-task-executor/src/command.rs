@@ -6,7 +6,7 @@
 use std::{collections::HashSet, path::PathBuf};
 
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
+use turbopath::{AbsoluteSystemPath, PathError, RelativeUnixPath};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_process::Command;
 use turborepo_repository::{
@@ -112,6 +112,15 @@ pub enum CommandProviderError {
     MissingPackage {
         package_name: PackageName,
         task_id: TaskId<'static>,
+    },
+    #[error("Missing microfrontends config path for package {package_name}.")]
+    MissingMfeConfigPath { package_name: PackageName },
+    #[error("Invalid microfrontends config path {path} for package {package_name}.")]
+    InvalidMfeConfigPath {
+        package_name: PackageName,
+        path: String,
+        #[source]
+        source: PathError,
     },
     #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
@@ -356,11 +365,17 @@ impl<'a, T: PackageInfoProvider + Send + Sync, M: MfeConfigProvider, E: From<Com
         let mfe_config_filename = self
             .mfe_configs
             .config_filename(task_id.package())
-            .expect("every microfrontends default application should have configuration path");
-        let mfe_path = self.repo_root.join_unix_path(
-            RelativeUnixPath::new(&mfe_config_filename)
-                .expect("config_filename should return a valid relative unix path"),
-        );
+            .ok_or_else(|| CommandProviderError::MissingMfeConfigPath {
+                package_name: task_id.to_workspace_name(),
+            })?;
+        let mfe_config_path = RelativeUnixPath::new(&mfe_config_filename).map_err(|source| {
+            CommandProviderError::InvalidMfeConfigPath {
+                package_name: task_id.to_workspace_name(),
+                path: mfe_config_filename.clone(),
+                source,
+            }
+        })?;
+        let mfe_path = self.repo_root.join_unix_path(mfe_config_path);
 
         let cmd = if has_custom_proxy {
             debug!("MicroFrontendProxyProvider::command - using custom proxy script");
