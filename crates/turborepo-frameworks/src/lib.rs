@@ -2,8 +2,6 @@
 //! Automatically identifies JavaScript frameworks and what environment
 //! variables impact it.
 
-#![allow(clippy::expect_used, clippy::unwrap_used)]
-
 use std::{collections::HashMap, sync::OnceLock};
 
 use serde::Deserialize;
@@ -74,15 +72,16 @@ impl Framework {
     }
 }
 
-static FRAMEWORKS: OnceLock<Vec<Framework>> = OnceLock::new();
+static FRAMEWORKS: OnceLock<Result<Vec<Framework>, serde_json::Error>> = OnceLock::new();
 
 const FRAMEWORKS_JSON: &str =
     include_str!("../../../packages/turbo-types/src/json/frameworks.json");
 
-fn get_frameworks() -> &'static Vec<Framework> {
-    FRAMEWORKS.get_or_init(|| {
-        serde_json::from_str(FRAMEWORKS_JSON).expect("Unable to parse embedded JSON")
-    })
+fn get_frameworks() -> Result<&'static [Framework], &'static serde_json::Error> {
+    FRAMEWORKS
+        .get_or_init(|| serde_json::from_str(FRAMEWORKS_JSON))
+        .as_ref()
+        .map(Vec::as_slice)
 }
 
 impl Matcher {
@@ -124,12 +123,11 @@ impl Slug {
         &self.0
     }
 
-    pub fn framework(&self) -> &Framework {
-        let frameworks = get_frameworks();
+    pub fn framework(&self) -> Option<&Framework> {
+        let frameworks = get_frameworks().ok()?;
         frameworks
             .iter()
             .find(|framework| framework.slug.as_str() == self.as_str())
-            .expect("slug is only constructed via deserialization")
     }
 }
 
@@ -140,7 +138,7 @@ impl std::fmt::Display for Slug {
 }
 
 pub fn infer_framework(workspace: &PackageInfo, is_monorepo: bool) -> Option<&Framework> {
-    let frameworks = get_frameworks();
+    let frameworks = get_frameworks().ok()?;
 
     frameworks
         .iter()
@@ -148,6 +146,7 @@ pub fn infer_framework(workspace: &PackageInfo, is_monorepo: bool) -> Option<&Fr
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use std::collections::{BTreeMap, HashMap};
 
@@ -158,6 +157,7 @@ mod tests {
 
     fn get_framework_by_slug(slug: &str) -> &Framework {
         get_frameworks()
+            .expect("framework JSON failed to parse")
             .iter()
             .find(|framework| framework.slug.as_str() == slug)
             .expect("framework not found")
@@ -451,8 +451,8 @@ mod tests {
 
     #[test]
     fn test_framework_slug_roundtrip() {
-        for framework in get_frameworks() {
-            assert_eq!(framework, framework.slug().framework());
+        for framework in get_frameworks().expect("framework JSON failed to parse") {
+            assert_eq!(Some(framework), framework.slug().framework());
         }
     }
 }
