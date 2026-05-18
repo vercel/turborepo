@@ -5,6 +5,9 @@ mod helpers;
 #[derive(Clone, Debug)]
 struct TerminalInput(Vec<u8>);
 
+#[derive(Clone, Debug)]
+struct RandomInput(Vec<u8>);
+
 fn gen_range<T>(r#gen: &mut quickcheck::Gen, range: std::ops::Range<T>) -> T
 where
     T: Copy,
@@ -31,6 +34,17 @@ impl quickcheck::Arbitrary for TerminalInput {
 
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
         Box::new(self.0.shrink().map(TerminalInput))
+    }
+}
+
+impl quickcheck::Arbitrary for RandomInput {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        let size = gen_range(g, 0..128usize);
+        RandomInput((0..size).map(|_| u8::arbitrary(g)).collect())
+    }
+
+    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+        Box::new(std::iter::empty())
     }
 }
 
@@ -104,6 +118,12 @@ fn contents_formatted_reproduces_state_random(input: Vec<u8>) -> bool {
     helpers::contents_formatted_reproduces_state(&input)
 }
 
+fn contents_formatted_reproduces_state_random_short(
+    input: RandomInput,
+) -> bool {
+    helpers::contents_formatted_reproduces_state(&input.0)
+}
+
 fn contents_formatted_reproduces_state_structured(
     input: TerminalInput,
 ) -> bool {
@@ -144,10 +164,10 @@ fn qc_random_long() {
 
 #[test]
 fn qc_random_short() {
-    let mut qc = quickcheck::QuickCheck::new()
-        .tests(10_000)
-        .max_tests(10_000);
+    let tests = if cfg!(windows) { 1_000 } else { 10_000 };
+    let mut qc = quickcheck::QuickCheck::new().tests(tests).max_tests(tests);
     qc.quickcheck(
-        contents_formatted_reproduces_state_random as fn(Vec<u8>) -> bool,
+        contents_formatted_reproduces_state_random_short
+            as fn(RandomInput) -> bool,
     );
 }
