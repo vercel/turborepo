@@ -4,7 +4,6 @@
 //! results, and return a reference to the loaded `turbo.json`.
 
 #![deny(clippy::all)]
-#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::sync::OnceLock;
 
@@ -47,12 +46,7 @@ impl<K: Ord, V> FixedMap<K, V> {
             .binary_search_by(|(k, _)| k.cmp(key))
             .map_err(|_| UnknownKey)?;
         let (_, value_slot) = &self.inner[item_index];
-        // We do not care about if this set was successful or if another call won out.
-        // The end result is that we have a value for the key.
-        let _ = value_slot.set(value);
-        Ok(value_slot
-            .get()
-            .expect("OnceLock::set will always result in a value being present in the lock"))
+        Ok(value_slot.get_or_init(|| value))
     }
 }
 
@@ -69,13 +63,7 @@ impl<K: Ord, V> FromIterator<(K, Option<V>)> for FixedMap<K, V> {
         let mut inner = iter
             .into_iter()
             .map(|(key, value)| {
-                let value_slot = OnceLock::new();
-                if let Some(value) = value {
-                    value_slot
-                        .set(value)
-                        .map_err(|_| ())
-                        .expect("nobody else has access to this lock yet");
-                }
+                let value_slot = value.map_or_else(OnceLock::new, OnceLock::from);
                 (key, value_slot)
             })
             .collect::<Vec<_>>();
@@ -85,6 +73,7 @@ impl<K: Ord, V> FromIterator<(K, Option<V>)> for FixedMap<K, V> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod test {
     use super::*;
 

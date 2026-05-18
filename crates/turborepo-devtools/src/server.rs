@@ -246,13 +246,15 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     // Send initial state
     let init_state = state.graph_state.read().await.clone();
     let init_msg = ServerMessage::Init { data: init_state };
+    let init_msg = match serde_json::to_string(&init_msg) {
+        Ok(message) => message,
+        Err(e) => {
+            error!("Failed to serialize initial state: {}", e);
+            return;
+        }
+    };
 
-    if let Err(e) = sender
-        .send(Message::Text(
-            serde_json::to_string(&init_msg).unwrap().into(),
-        ))
-        .await
-    {
+    if let Err(e) = sender.send(Message::Text(init_msg.into())).await {
         error!("Failed to send initial state: {}", e);
         return;
     }
@@ -302,13 +304,15 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
                 let new_state = state.graph_state.read().await.clone();
                 let update_msg = ServerMessage::Update { data: new_state };
+                let update_msg = match serde_json::to_string(&update_msg) {
+                    Ok(message) => message,
+                    Err(e) => {
+                        error!("Failed to serialize graph update: {}", e);
+                        break;
+                    }
+                };
 
-                if let Err(e) = sender
-                    .send(Message::Text(
-                        serde_json::to_string(&update_msg).unwrap().into(),
-                    ))
-                    .await
-                {
+                if let Err(e) = sender.send(Message::Text(update_msg.into())).await {
                     warn!("Failed to send update: {}", e);
                     break;
                 }
@@ -367,10 +371,11 @@ mod tests {
 
     fn headers_with_origin(origin: &str) -> HeaderMap {
         let mut headers = HeaderMap::new();
-        headers.insert(
-            header::ORIGIN,
-            HeaderValue::from_str(origin).expect("origin should be a valid header value"),
-        );
+        let value = match HeaderValue::from_str(origin) {
+            Ok(value) => value,
+            Err(error) => panic!("invalid test origin {origin}: {error}"),
+        };
+        headers.insert(header::ORIGIN, value);
         headers
     }
 
