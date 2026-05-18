@@ -107,14 +107,18 @@ impl LanguageServer for Backend {
                 .expect("only fails if poisoned")
                 .replace(repo_root.clone());
 
-            let paths = DaemonPaths::from_repo_root(&repo_root);
+            let paths = DaemonPaths::from_repo_root(&repo_root).map_err(|err| {
+                let mut error = Error::internal_error();
+                error.message = format!("failed to construct daemon paths: {err}").into();
+                error
+            })?;
 
             let (_, daemon) = tokio::join!(
                 self.client
                     .log_message(MessageType::INFO, format!("root uri: {}", paths.sock_file),),
                 tokio_retry::Retry::spawn(
                     tokio_retry::strategy::FixedInterval::from_millis(100).take(5),
-                    || {
+                    || async {
                         let can_start_server = true;
                         let can_kill_server = true;
                         let connector = DaemonConnector::new(
@@ -122,8 +126,8 @@ impl LanguageServer for Backend {
                             can_kill_server,
                             &repo_root,
                             None,
-                        );
-                        connector.connect()
+                        )?;
+                        connector.connect().await
                     },
                 )
             );

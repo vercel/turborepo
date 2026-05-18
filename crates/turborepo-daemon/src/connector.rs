@@ -47,6 +47,9 @@ pub enum DaemonConnectorError {
 
     #[error("unable to use pid file: {0}")]
     PidFile(#[from] PidFileError),
+
+    #[error("unable to construct daemon paths: {0}")]
+    Path(#[from] turbopath::PathError),
 }
 
 #[derive(Error, Debug)]
@@ -77,15 +80,15 @@ impl DaemonConnector {
         can_kill_server: bool,
         repo_root: &AbsoluteSystemPath,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
-    ) -> Self {
-        let paths = Paths::from_repo_root(repo_root);
-        Self {
+    ) -> Result<Self, DaemonConnectorError> {
+        let paths = Paths::from_repo_root(repo_root)?;
+        Ok(Self {
             can_start_server,
             can_kill_server,
             paths,
             repo_root: repo_root.to_owned(),
             custom_turbo_json_path,
-        }
+        })
     }
 
     const CONNECT_RETRY_MAX: usize = 5;
@@ -473,7 +476,7 @@ mod test {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
 
-        let connector = DaemonConnector::new(false, false, &repo_root, None);
+        let connector = DaemonConnector::new(false, false, &repo_root, None).unwrap();
         connector.paths.pid_file.ensure_dir().unwrap();
         connector
             .paths
@@ -491,7 +494,7 @@ mod test {
     async fn handles_missing_server_connect() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, false, &repo_root, None);
+        let connector = DaemonConnector::new(false, false, &repo_root, None).unwrap();
 
         assert_matches!(
             connector.connect().await,
@@ -537,7 +540,7 @@ mod test {
     async fn handles_kill_dead_server_missing_pid() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, false, &repo_root, None);
+        let connector = DaemonConnector::new(false, false, &repo_root, None).unwrap();
 
         assert_matches!(
             connector.kill_dead_server(Pid::from(usize::MAX)).await,
@@ -549,7 +552,7 @@ mod test {
     async fn handles_kill_dead_server_missing_process() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, false, &repo_root, None);
+        let connector = DaemonConnector::new(false, false, &repo_root, None).unwrap();
 
         connector.paths.pid_file.ensure_dir().unwrap();
         connector
@@ -575,7 +578,7 @@ mod test {
     async fn handles_kill_dead_server_wrong_process() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, false, &repo_root, None);
+        let connector = DaemonConnector::new(false, false, &repo_root, None).unwrap();
 
         let proc = tokio::process::Command::new(NODE_EXE)
             .stdout(Stdio::null())
@@ -613,7 +616,7 @@ mod test {
     async fn handles_kill_dead_server() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, true, &repo_root, None);
+        let connector = DaemonConnector::new(false, true, &repo_root, None).unwrap();
 
         let proc = tokio::process::Command::new(NODE_EXE)
             .stdout(Stdio::null())
@@ -754,7 +757,7 @@ mod test {
 
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, false, &repo_root, None);
+        let connector = DaemonConnector::new(false, false, &repo_root, None).unwrap();
 
         let mut client = Endpoint::try_from("http://[::]:50051")
             .expect("this is a valid uri")

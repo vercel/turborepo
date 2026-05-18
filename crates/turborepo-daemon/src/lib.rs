@@ -34,14 +34,14 @@ mod default_timeout_layer;
 pub mod endpoint;
 mod server;
 
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 pub use client::{DaemonClient, DaemonError};
 pub use connector::{DaemonConnector, DaemonConnectorError};
 pub use server::{CloseReason, FileWatching, TurboGrpcService};
 use sha2::{Digest, Sha256};
 use tokio::sync::broadcast;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError};
 use turborepo_repository::package_graph::PackageName;
 
 /// Trait for watching package changes. Implemented by consumers who need
@@ -97,35 +97,37 @@ fn repo_hash(repo_root: &AbsoluteSystemPath) -> String {
 }
 
 #[cfg(unix)]
-fn daemon_file_root(repo_hash: &str) -> AbsoluteSystemPathBuf {
+fn daemon_file_root(repo_hash: &str) -> Result<AbsoluteSystemPathBuf, PathError> {
+    daemon_file_root_from_temp_dir(repo_hash, std::env::temp_dir())
+}
+
+#[cfg(unix)]
+fn daemon_file_root_from_temp_dir(
+    repo_hash: &str,
+    temp_dir: PathBuf,
+) -> Result<AbsoluteSystemPathBuf, PathError> {
     let uid = unsafe { libc::geteuid() };
-    AbsoluteSystemPathBuf::new(std::env::temp_dir().to_str().expect("UTF-8 path"))
-        .expect("temp dir is valid")
+    Ok(AbsoluteSystemPathBuf::try_from(temp_dir)?
         .join_component(format!("turbod-{uid}").as_str())
-        .join_component(repo_hash)
+        .join_component(repo_hash))
 }
 
 #[cfg(windows)]
-fn daemon_file_root(repo_hash: &str) -> AbsoluteSystemPathBuf {
-    let root = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| {
-        std::env::temp_dir()
-            .to_str()
-            .expect("UTF-8 path")
-            .to_string()
-    });
+fn daemon_file_root(repo_hash: &str) -> Result<AbsoluteSystemPathBuf, PathError> {
+    let root = std::env::var("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| std::env::temp_dir());
 
-    AbsoluteSystemPathBuf::new(&root)
-        .expect("daemon root is valid")
+    Ok(AbsoluteSystemPathBuf::try_from(root)?
         .join_component("turbod")
-        .join_component(repo_hash)
+        .join_component(repo_hash))
 }
 
 #[cfg(not(any(unix, windows)))]
-fn daemon_file_root(repo_hash: &str) -> AbsoluteSystemPathBuf {
-    AbsoluteSystemPathBuf::new(std::env::temp_dir().to_str().expect("UTF-8 path"))
-        .expect("temp dir is valid")
+fn daemon_file_root(repo_hash: &str) -> Result<AbsoluteSystemPathBuf, PathError> {
+    Ok(AbsoluteSystemPathBuf::try_from(std::env::temp_dir())?
         .join_component("turbod")
-        .join_component(repo_hash)
+        .join_component(repo_hash))
 }
 
 fn daemon_log_file_and_folder(
@@ -139,18 +141,36 @@ fn daemon_log_file_and_folder(
 }
 
 impl Paths {
-    pub fn from_repo_root(repo_root: &AbsoluteSystemPath) -> Self {
+    pub fn from_repo_root(repo_root: &AbsoluteSystemPath) -> Result<Self, PathError> {
         let repo_hash = repo_hash(repo_root);
-        let daemon_root = daemon_file_root(&repo_hash);
+        let daemon_root = daemon_file_root(&repo_hash)?;
         let (log_file, log_folder) = daemon_log_file_and_folder(repo_root, &repo_hash);
-        Self {
+        Ok(Self {
             pid_file: daemon_root.join_component("turbod.pid"),
             lock_file: daemon_root.join_component("turbod.lock"),
             sock_file: daemon_root.join_component("turbod.sock"),
             lsp_pid_file: daemon_root.join_component("lsp.pid"),
             log_file,
             log_folder,
-        }
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(unix)]
+    #[test]
+    fn daemon_file_root_rejects_non_utf8_temp_dir_without_panicking() {
+        use std::{ffi::OsString, os::unix::ffi::OsStringExt, path::PathBuf};
+
+        use turbopath::PathError;
+
+        let temp_dir = PathBuf::from(OsString::from_vec(b"/tmp/turbo-\xFF".to_vec()));
+
+        assert!(matches!(
+            super::daemon_file_root_from_temp_dir("repo-hash", temp_dir),
+            Err(PathError::FromPathBufError(_))
+        ));
     }
 }
 
