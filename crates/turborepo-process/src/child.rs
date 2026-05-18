@@ -19,6 +19,8 @@ const CHILD_POLL_INTERVAL: Duration = Duration::from_micros(50);
 const POST_EXIT_OUTPUT_DRAIN_TIMEOUT: Duration = Duration::from_millis(100);
 #[cfg(any(unix, windows))]
 const PROCESS_TREE_DRAIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
+#[cfg(windows)]
+const WINDOWS_DESCENDANT_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 
 use std::{
     fmt,
@@ -91,7 +93,7 @@ struct ChildHandle {
 }
 
 enum ChildHandleImpl {
-    Tokio(tokio::process::Child),
+    Tokio(Option<tokio::process::Child>),
     Pty(Box<dyn PtyChild + Send + Sync>),
 }
 
@@ -266,7 +268,7 @@ impl ChildHandle {
         Ok(SpawnResult {
             handle: Self {
                 pid,
-                imp: ChildHandleImpl::Tokio(child),
+                imp: ChildHandleImpl::Tokio(Some(child)),
                 #[cfg(unix)]
                 shutdown_semantics: ShutdownSemantics::process_group(),
                 #[cfg(unix)]
@@ -504,9 +506,8 @@ impl ChildHandle {
     }
 
     #[cfg(windows)]
-    fn has_running_windows_process_tree(&self) -> bool {
-        let has_active_job = self
-            ._job
+    fn has_active_windows_job(&self) -> bool {
+        self._job
             .as_ref()
             .is_some_and(|job| match job.active_processes() {
                 Ok(active_processes) => active_processes > 0,
@@ -514,9 +515,12 @@ impl ChildHandle {
                     debug!("failed to query job object: {err}");
                     false
                 }
-            });
+            })
+    }
 
-        let has_descendants = match self.pid {
+    #[cfg(windows)]
+    fn has_running_windows_descendants(&self) -> bool {
+        match self.pid {
             Some(pid) => match super::job_object::has_descendant_processes(pid) {
                 Ok(has_descendants) => has_descendants,
                 Err(err) => {
@@ -525,9 +529,7 @@ impl ChildHandle {
                 }
             },
             None => false,
-        };
-
-        has_active_job || has_descendants
+        }
     }
 
     #[cfg(windows)]
@@ -551,7 +553,22 @@ impl ChildHandle {
         command_rx: &mut mpsc::Receiver<ChildCommand>,
         command_rx_open: &mut bool,
     ) -> ChildExit {
-        while self.has_running_windows_process_tree() {
+        // PID snapshots are only a fallback for runners where Job Object
+        // assignment fails. After the parent exits they can match unrelated
+        // reused PIDs, so never let that path wait forever.
+        let descendant_drain_deadline = self
+            ._job
+            .is_none()
+            .then(|| tokio::time::Instant::now() + WINDOWS_DESCENDANT_DRAIN_TIMEOUT);
+
+        loop {
+            let has_active_job = self.has_active_windows_job();
+            let has_descendants = self._job.is_none() && self.has_running_windows_descendants();
+
+            if !has_active_job && !has_descendants {
+                break;
+            }
+
             tokio::select! {
                 command = command_rx.recv(), if *command_rx_open => {
                     match command {
@@ -564,6 +581,14 @@ impl ChildHandle {
                         None => *command_rx_open = false,
                     }
                 }
+                _ = async {
+                    if let Some(deadline) = descendant_drain_deadline {
+                        tokio::time::sleep_until(deadline).await;
+                    }
+                }, if has_descendants && descendant_drain_deadline.is_some() => {
+                    debug!("timed out waiting for Windows descendant process tree after direct child exit");
+                    break;
+                }
                 _ = tokio::time::sleep(PROCESS_TREE_DRAIN_POLL_INTERVAL) => {}
             }
         }
@@ -574,7 +599,21 @@ impl ChildHandle {
     /// Perform a `wait` syscall on the child until it exits
     pub async fn wait(&mut self) -> io::Result<Option<i32>> {
         match &mut self.imp {
-            ChildHandleImpl::Tokio(child) => child.wait().await.map(|status| status.code()),
+            ChildHandleImpl::Tokio(child) => {
+                let result = match child {
+                    Some(child) => child.wait().await.map(|status| status.code()),
+                    None => Ok(None),
+                };
+
+                #[cfg(windows)]
+                if result.is_ok() {
+                    // Drop the process handle before querying the Job Object so
+                    // the exited direct child is not counted during tree drain.
+                    child.take();
+                }
+
+                result
+            }
             ChildHandleImpl::Pty(child) => {
                 // TODO: we currently poll the child to see if it has finished yet which is less
                 // than ideal
@@ -615,7 +654,8 @@ impl ChildHandle {
         }
 
         match &mut self.imp {
-            ChildHandleImpl::Tokio(child) => child.kill().await,
+            ChildHandleImpl::Tokio(Some(child)) => child.kill().await,
+            ChildHandleImpl::Tokio(None) => Ok(()),
             ChildHandleImpl::Pty(child) => {
                 let mut killer = child.clone_killer();
                 tokio::task::spawn_blocking(move || killer.kill())
@@ -1411,7 +1451,9 @@ mod test {
 
         assert!(child.is_running());
 
-        let code = child.wait().await;
+        let code = tokio::time::timeout(Duration::from_secs(10), child.wait())
+            .await
+            .expect("child wait should not hang after process exit");
         assert_eq!(code, Some(ChildExit::Finished(Some(0))));
     }
 
