@@ -316,6 +316,7 @@ jobs:
             --exclude turborepo-lsp \
             --exclude turborepo-schema-gen \
             --exclude turborepo-napi \
+            --test-threads 16 \
             --no-fail-fast
         shell: bash
         env:
