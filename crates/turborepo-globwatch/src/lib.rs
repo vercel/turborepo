@@ -18,7 +18,6 @@
     unused_must_use,
     unsafe_code
 )]
-#![allow(clippy::expect_used)]
 
 use std::{
     collections::HashMap,
@@ -115,7 +114,15 @@ impl GlobWatcher {
         let flush_watch_path = flush_dir.clone();
         let (setup_broadcaster, setup_receiver) = watch::channel(None);
         let setup_handle = tokio::task::spawn_blocking(move || {
-            if let Err(e) = flush.lock().expect("only fails if poisoned").watch(
+            let mut flush = match flush.lock() {
+                Ok(flush) => flush,
+                Err(poisoned) => {
+                    warn!("watcher lock poisoned while watching flush dir");
+                    poisoned.into_inner()
+                }
+            };
+
+            if let Err(e) = flush.watch(
                 flush_watch_path.as_std_path(),
                 notify::RecursiveMode::Recursive,
             ) {
@@ -177,15 +184,19 @@ impl GlobWatcher {
         // events
 
         // we need to map this to the correct error type
-        let setup_stream = setup_handle.into_stream().map(|setup_result| {
-            match setup_result.expect("globwatch setup thread panicked") {
-                Ok(()) => Ok(WatcherCommand::Start),
-                Err(e) => {
+        let setup_stream = setup_handle
+            .into_stream()
+            .map(|setup_result| match setup_result {
+                Ok(Ok(())) => Ok(WatcherCommand::Start),
+                Ok(Err(e)) => {
                     error!("failed to start server: {}", e);
                     Err(ConfigError::ServerFailedToStart)
                 }
-            }
-        });
+                Err(e) => {
+                    error!("globwatch setup thread panicked: {}", e);
+                    Err(ConfigError::ServerFailedToStart)
+                }
+            });
 
         Box::pin(
             (
@@ -215,19 +226,23 @@ impl GlobWatcher {
                                 for flush_id in e
                                     .paths
                                     .extract_if(.., |p| p.starts_with(flush_dir.as_path()))
-                                    .filter_map(|p| {
-                                        get_flush_id(
-                                            p.strip_prefix(flush_dir.as_path())
-                                                .expect("confirmed above"),
-                                        )
+                                    .filter_map(|p| match p.strip_prefix(flush_dir.as_path()) {
+                                        Ok(p) => get_flush_id(p),
+                                        Err(e) => {
+                                            trace!("failed to strip flush dir prefix: {}", e);
+                                            None
+                                        }
                                     })
                                 {
                                     trace!("flushing {:?}", flush);
-                                    if let Some(tx) = flush
-                                        .lock()
-                                        .expect("only fails if holder panics")
-                                        .remove(&flush_id)
-                                    {
+                                    let mut flush = match flush.lock() {
+                                        Ok(flush) => flush,
+                                        Err(poisoned) => {
+                                            warn!("flush lock poisoned while completing flush");
+                                            poisoned.into_inner()
+                                        }
+                                    };
+                                    if let Some(tx) = flush.remove(&flush_id) {
                                         // if this fails, it just means the requester has gone away
                                         // and we can ignore it
                                         tx.send(()).ok();
@@ -253,10 +268,14 @@ impl GlobWatcher {
                                 if let Err(e) = File::create(flush_file) {
                                     warn!("failed to create flush file: {}", e);
                                 } else {
-                                    flush
-                                        .lock()
-                                        .expect("only fails if holder panics")
-                                        .insert(flush_id, tx);
+                                    let mut flush = match flush.lock() {
+                                        Ok(flush) => flush,
+                                        Err(poisoned) => {
+                                            warn!("flush lock poisoned while registering flush");
+                                            poisoned.into_inner()
+                                        }
+                                    };
+                                    flush.insert(flush_id, tx);
                                 }
                                 None
                             }
@@ -317,10 +336,14 @@ impl<T: Watcher> WatchConfig<T> {
             .map(|p| relative_to.join(p))
             .map(|p| {
                 trace!("watching {:?}", p);
-                self.watcher
-                    .lock()
-                    .expect("only fails if poisoned")
-                    .watch(&p, notify::RecursiveMode::Recursive)
+                let mut watcher = match self.watcher.lock() {
+                    Ok(watcher) => watcher,
+                    Err(poisoned) => {
+                        warn!("watcher lock poisoned while registering glob");
+                        poisoned.into_inner()
+                    }
+                };
+                watcher.watch(&p, notify::RecursiveMode::Recursive)
             })
             .map(|r| match r {
                 Ok(()) => Ok(()),
@@ -363,13 +386,22 @@ impl<T: Watcher> WatchConfig<T> {
         // we watch the parent directory instead.
         // More information at https://github.com/notify-rs/notify/issues/403
         #[cfg(windows)]
-        let watched_path = path.parent().expect("turbo is unusable at filesystem root");
+        let watched_path = path.parent().ok_or_else(|| {
+            ConfigError::WatchError(vec![notify::Error::generic(
+                "cannot watch filesystem root on Windows",
+            )])
+        })?;
         #[cfg(not(windows))]
         let watched_path = path;
 
-        self.watcher
-            .lock()
-            .expect("watcher lock poisoned")
+        let mut watcher = match self.watcher.lock() {
+            Ok(watcher) => watcher,
+            Err(poisoned) => {
+                warn!("watcher lock poisoned while registering path");
+                poisoned.into_inner()
+            }
+        };
+        watcher
             .watch(watched_path, notify::RecursiveMode::NonRecursive)
             .map_err(|e| ConfigError::WatchError(vec![e]))
     }
@@ -381,11 +413,14 @@ impl<T: Watcher> WatchConfig<T> {
 
         for p in glob_to_paths(glob).iter().map(|p| relative_to.join(p)) {
             // we don't care if this fails, it's just a best-effort
-            self.watcher
-                .lock()
-                .expect("only fails if poisoned")
-                .unwatch(&p)
-                .ok();
+            let mut watcher = match self.watcher.lock() {
+                Ok(watcher) => watcher,
+                Err(poisoned) => {
+                    warn!("watcher lock poisoned while excluding glob");
+                    poisoned.into_inner()
+                }
+            };
+            watcher.unwatch(&p).ok();
         }
     }
 }
@@ -493,12 +528,12 @@ fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
 fn symbols_to_combinations<'a, T: Iterator<Item = GlobSymbol<'a>>>(
     symbols: T,
 ) -> Option<impl Iterator<Item = String> + Clone> {
-    let mut bytes = Vec::new();
+    let mut value = String::new();
 
     for symbol in symbols {
         match symbol {
             GlobSymbol::Char(c) => {
-                bytes.extend_from_slice(c);
+                value.push_str(std::str::from_utf8(c).ok()?);
             }
             GlobSymbol::OpenBracket => return None, // todo handle brackets
             GlobSymbol::CloseBracket => return None,
@@ -512,9 +547,7 @@ fn symbols_to_combinations<'a, T: Iterator<Item = GlobSymbol<'a>>>(
         }
     }
 
-    Some(std::iter::once(
-        String::from_utf8(bytes).expect("char is always valid utf8"),
-    ))
+    Some(std::iter::once(value))
 }
 
 /// parses and escapes a glob, returning an iterator over the symbols
@@ -635,9 +668,7 @@ mod test {
             // Flush doesn't depend on watcher so we create a watcher for the unit type
             watcher: Arc::new(Mutex::new(())),
         };
-        setup_tx
-            .send(Some(false))
-            .expect("setup channel closed during testing");
+        assert!(setup_tx.send(Some(false)).is_ok());
         match tokio::time::timeout(Duration::from_millis(10), config.flush()).await {
             Err(_) => panic!("flush test timed out"),
             Ok(result) => {
