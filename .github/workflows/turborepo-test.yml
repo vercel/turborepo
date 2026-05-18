@@ -236,10 +236,20 @@ jobs:
       - name: Install git (Windows larger runners)
         shell: cmd
         run: |
+          where git >nul 2>nul
+          if not errorlevel 1 (
+            git --version
+            exit /b 0
+          )
+          if exist "%ProgramFiles%\Git\cmd\git.exe" (
+            echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
+            "%ProgramFiles%\Git\cmd\git.exe" --version
+            exit /b 0
+          )
           curl -L -o "%TEMP%\mingit.zip" "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.2/MinGit-2.47.1.2-64-bit.zip"
-          mkdir "%ProgramFiles%\Git"
+          if not exist "%ProgramFiles%\Git" mkdir "%ProgramFiles%\Git"
           tar -xf "%TEMP%\mingit.zip" -C "%ProgramFiles%\Git"
-          del "%ProgramFiles%\Git\etc\gitconfig"
+          if exist "%ProgramFiles%\Git\etc\gitconfig" del "%ProgramFiles%\Git\etc\gitconfig"
           echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
 
       - name: Set git to use LF line endings
@@ -379,7 +389,7 @@ jobs:
         shell: bash
 
   rust_test_windows:
-    runs-on: windows-latest
+    runs-on: windows-latest-8-core-oss
     timeout-minutes: 180
     needs:
       - find-changes
@@ -387,6 +397,25 @@ jobs:
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     name: Rust testing on windows
     steps:
+      - name: Install git (Windows larger runners)
+        shell: cmd
+        run: |
+          where git >nul 2>nul
+          if not errorlevel 1 (
+            git --version
+            exit /b 0
+          )
+          if exist "%ProgramFiles%\Git\cmd\git.exe" (
+            echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
+            "%ProgramFiles%\Git\cmd\git.exe" --version
+            exit /b 0
+          )
+          curl -L -o "%TEMP%\mingit.zip" "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.2/MinGit-2.47.1.2-64-bit.zip"
+          if not exist "%ProgramFiles%\Git" mkdir "%ProgramFiles%\Git"
+          tar -xf "%TEMP%\mingit.zip" -C "%ProgramFiles%\Git"
+          if exist "%ProgramFiles%\Git\etc\gitconfig" del "%ProgramFiles%\Git\etc\gitconfig"
+          echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
+
       - name: Set git to use LF line endings
         # Ensures the turborepo source code is checked out with LF endings
         # so the Rust build and test fixtures work correctly. Turbo's CRLF
