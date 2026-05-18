@@ -5,7 +5,6 @@
 //! via file watching and pushed to connected clients.
 
 #![deny(clippy::all)]
-#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 mod graph;
 mod server;
