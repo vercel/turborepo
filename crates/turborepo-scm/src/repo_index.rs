@@ -2,7 +2,10 @@ use tracing::{debug, trace};
 use turbopath::RelativeUnixPathBuf;
 
 use crate::{
-    Error, GitHashes, GitRepo, OidHash, ls_tree::SortedGitHashes, status::RepoStatusEntry,
+    Error, GitHashes, GitRepo, OidHash,
+    git_path::{UnsupportedGitPath, parse_git_path, parse_path, path_to_git_path_bytes},
+    ls_tree::{GitPathList, SortedGitHashes},
+    status::RepoStatusEntry,
 };
 
 /// Pre-computed repo-wide git index that caches file hashes and working-tree
@@ -17,6 +20,7 @@ pub struct RepoGitIndex {
     /// Sorted by path so per-package filtering can use binary-search range
     /// queries instead of linear scans.
     status_entries: Vec<RepoStatusEntry>,
+    unsupported_paths: Vec<UnsupportedGitPath>,
     untracked_entries_populated: bool,
 }
 
@@ -29,6 +33,7 @@ impl RepoGitIndex {
         Self {
             ls_tree_hashes,
             status_entries,
+            unsupported_paths: Vec::new(),
             untracked_entries_populated: true,
         }
     }
@@ -105,10 +110,10 @@ impl RepoGitIndex {
             .filter(|e| !e.mode.is_submodule())
             .map(|e| {
                 let path_bytes = e.path(&index);
-                let path_str = std::str::from_utf8(path_bytes).map_err(|err| {
-                    Error::git_error(format!("invalid utf8 in index path: {}", err))
-                })?;
-                let rel_path = RelativeUnixPathBuf::new(path_str)?;
+                let rel_path = match parse_git_path(path_bytes, "git index path")? {
+                    Ok(path) => path,
+                    Err(path) => return Ok(EntryClassification::Unsupported(path)),
+                };
                 let abs_path = git.root.join_unix_path(&rel_path);
 
                 match gix_index::fs::Metadata::from_path_no_follow(abs_path.as_std_path()) {
@@ -116,7 +121,7 @@ impl RepoGitIndex {
                         let fs_stat = gix_index::entry::Stat::from_fs(&fs_meta).map_err(|err| {
                             Error::git_error(format!(
                                 "failed to convert stat for {}: {}",
-                                path_str, err
+                                rel_path, err
                             ))
                         })?;
 
@@ -145,6 +150,7 @@ impl RepoGitIndex {
 
         let mut ls_tree_hashes = SortedGitHashes::with_capacity(num_entries);
         let mut status_entries = Vec::new();
+        let mut unsupported_paths = Vec::new();
 
         for result in classified {
             match result? {
@@ -163,6 +169,7 @@ impl RepoGitIndex {
                         is_delete: true,
                     });
                 }
+                EntryClassification::Unsupported(path) => unsupported_paths.push(path),
             }
         }
 
@@ -172,6 +179,8 @@ impl RepoGitIndex {
         // (sorted). Sort once now so find_untracked_files can binary search
         // directly on &[RepoStatusEntry] without cloning paths into Strings.
         status_entries.sort_by(|a, b| a.path.cmp(&b.path));
+        unsupported_paths.sort();
+        unsupported_paths.dedup();
 
         debug!(
             "built tracked repo git index (gix-index): clean_count={}, status_count={}",
@@ -182,6 +191,7 @@ impl RepoGitIndex {
         Ok(Self {
             ls_tree_hashes,
             status_entries,
+            unsupported_paths,
             untracked_entries_populated: false,
         })
     }
@@ -208,10 +218,10 @@ impl RepoGitIndex {
 
         enum UntrackedResult {
             /// Direct untracked file list from `git ls-files --others`
-            LsFiles(Result<Vec<RelativeUnixPathBuf>, Error>),
+            LsFiles(Result<GitPathList, Error>),
             /// All candidate files (tracked + untracked) from the walk;
             /// must be filtered against ls_tree to find untracked
-            Walk(Result<Vec<RelativeUnixPathBuf>, Error>),
+            Walk(Result<WalkedPaths, Error>),
         }
 
         let git1 = git.clone();
@@ -220,8 +230,10 @@ impl RepoGitIndex {
         let walk_root = git.root.as_std_path().to_path_buf();
         let walk_prefixes: Vec<_> = prefixes.to_vec();
 
-        let ls_tree_handle = thread::spawn(move || git1.git_ls_tree_repo_root_sorted());
-        let diff_index_handle = thread::spawn(move || git2.git_diff_index_repo_root());
+        let ls_tree_handle =
+            thread::spawn(move || git1.git_ls_tree_repo_root_sorted_with_unsupported());
+        let diff_index_handle =
+            thread::spawn(move || git2.git_diff_index_repo_root_with_unsupported());
 
         // Race: spawn both untracked discovery methods, use whichever
         // finishes first.
@@ -229,22 +241,26 @@ impl RepoGitIndex {
 
         let tx1 = untracked_tx.clone();
         let _ls_files_handle = thread::spawn(move || {
-            let result = git3.git_ls_files_untracked();
+            let result = git3.git_ls_files_untracked_with_unsupported();
             let _ = tx1.send(UntrackedResult::LsFiles(result));
         });
 
         let tx2 = untracked_tx;
         let _walk_handle = thread::spawn(move || {
-            let result = walk_candidate_files(&walk_root, Some(&walk_prefixes));
+            let result = walk_candidate_files_with_unsupported(&walk_root, Some(&walk_prefixes));
             let _ = tx2.send(UntrackedResult::Walk(result));
         });
 
-        let ls_tree_hashes = ls_tree_handle
+        let tree_state = ls_tree_handle
             .join()
             .map_err(|_| Error::git_error("git ls-tree thread panicked"))??;
-        let mut status_entries = diff_index_handle
+        let status_state = diff_index_handle
             .join()
             .map_err(|_| Error::git_error("git diff-index thread panicked"))??;
+        let ls_tree_hashes = tree_state.hashes;
+        let mut status_entries = status_state.entries;
+        let mut unsupported_paths = tree_state.unsupported_paths;
+        unsupported_paths.extend(status_state.unsupported_paths);
 
         // Use whichever untracked result arrives first.
         let untracked_winner = untracked_rx
@@ -256,9 +272,10 @@ impl RepoGitIndex {
                 let untracked_files = result?;
                 debug!(
                     "untracked race winner: git ls-files ({} files)",
-                    untracked_files.len()
+                    untracked_files.paths.len()
                 );
-                for path in untracked_files {
+                unsupported_paths.extend(untracked_files.unsupported_paths);
+                for path in untracked_files.paths {
                     status_entries.push(RepoStatusEntry {
                         path,
                         is_delete: false,
@@ -269,10 +286,14 @@ impl RepoGitIndex {
                 let candidates = result?;
                 debug!(
                     "untracked race winner: walk ({} candidates)",
-                    candidates.len()
+                    candidates.paths.len()
                 );
-                let untracked =
-                    filter_untracked_from_candidates(candidates, &ls_tree_hashes, &status_entries);
+                unsupported_paths.extend(candidates.unsupported_paths);
+                let untracked = filter_untracked_from_candidates(
+                    candidates.paths,
+                    &ls_tree_hashes,
+                    &status_entries,
+                );
                 for path in untracked {
                     status_entries.push(RepoStatusEntry {
                         path,
@@ -283,6 +304,8 @@ impl RepoGitIndex {
         }
 
         status_entries.sort_by(|a, b| a.path.cmp(&b.path));
+        unsupported_paths.sort();
+        unsupported_paths.dedup();
 
         debug!(
             "built repo git index (subprocess + walk race): clean_count={}, status_count={}",
@@ -293,6 +316,7 @@ impl RepoGitIndex {
         Ok(Self {
             ls_tree_hashes,
             status_entries,
+            unsupported_paths,
             untracked_entries_populated: true,
         })
     }
@@ -362,7 +386,10 @@ impl RepoGitIndex {
         let before_status_count = self.status_entries.len();
         let untracked =
             find_untracked_files(git, &self.ls_tree_hashes, &self.status_entries, prefixes)?;
-        for path in untracked {
+        self.unsupported_paths.extend(untracked.unsupported_paths);
+        self.unsupported_paths.sort();
+        self.unsupported_paths.dedup();
+        for path in untracked.paths {
             self.status_entries.push(RepoStatusEntry {
                 path,
                 is_delete: false,
@@ -394,6 +421,14 @@ impl RepoGitIndex {
         &self,
         pkg_prefix: &RelativeUnixPathBuf,
     ) -> Result<(GitHashes, Vec<RelativeUnixPathBuf>), Error> {
+        if let Some(path) = self
+            .unsupported_paths
+            .iter()
+            .find(|path| path.is_within_prefix(pkg_prefix))
+        {
+            return Err(path.clone().into_error());
+        }
+
         let prefix_str = pkg_prefix.as_str();
         let prefix_is_empty = prefix_str.is_empty();
 
@@ -503,6 +538,24 @@ impl RepoGitIndex {
     }
 }
 
+struct WalkedPaths {
+    paths: Vec<RelativeUnixPathBuf>,
+    unsupported_paths: Vec<UnsupportedGitPath>,
+}
+
+impl WalkedPaths {
+    fn new() -> Self {
+        Self {
+            paths: Vec::new(),
+            unsupported_paths: Vec::new(),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.paths.is_empty() && self.unsupported_paths.is_empty()
+    }
+}
+
 /// Walk the working tree to collect candidate files (all non-gitignored
 /// files within scope). This is the I/O-bound phase that can run without
 /// the git index.
@@ -518,6 +571,18 @@ pub fn walk_candidate_files(
     git_root: &std::path::Path,
     prefixes: Option<&[RelativeUnixPathBuf]>,
 ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+    let walked = walk_candidate_files_with_unsupported(git_root, prefixes)?;
+    if let Some(path) = walked.unsupported_paths.into_iter().next() {
+        return Err(path.into_error());
+    }
+
+    Ok(walked.paths)
+}
+
+fn walk_candidate_files_with_unsupported(
+    git_root: &std::path::Path,
+    prefixes: Option<&[RelativeUnixPathBuf]>,
+) -> Result<WalkedPaths, Error> {
     use std::sync::mpsc;
 
     use ignore::WalkBuilder;
@@ -525,7 +590,7 @@ pub fn walk_candidate_files(
     let root = std::sync::Arc::new(git_root.to_path_buf());
     let scope = std::sync::Arc::new(UntrackedScope::new(prefixes));
 
-    let (tx, rx) = mpsc::channel::<Vec<RelativeUnixPathBuf>>();
+    let (tx, rx) = mpsc::channel::<WalkedPaths>();
 
     let walker = WalkBuilder::new(root.as_path())
         .follow_links(false)
@@ -550,20 +615,15 @@ pub fn walk_candidate_files(
                     Ok(rel) => rel,
                     Err(_) => return false,
                 };
-                #[cfg(windows)]
-                let rel_path_owned = rel_path.to_string_lossy().replace('\\', "/");
-                #[cfg(windows)]
-                let rel_path = rel_path_owned.as_str();
-                #[cfg(not(windows))]
-                let rel_path = match rel_path.to_str() {
-                    Some(rel) => rel,
-                    None => return false,
-                };
+                let rel_path = path_to_git_path_bytes(rel_path);
 
                 if is_dir {
-                    scope.should_visit_dir(rel_path)
+                    scope.should_visit_dir_bytes(rel_path.as_ref())
                 } else {
-                    scope.should_consider_file(rel_path, entry.file_name() == ".gitignore")
+                    scope.should_consider_file_bytes(
+                        rel_path.as_ref(),
+                        entry.file_name() == ".gitignore",
+                    )
                 }
             }
         })
@@ -571,14 +631,17 @@ pub fn walk_candidate_files(
         .build_parallel();
 
     struct FlushOnDrop {
-        buf: Vec<RelativeUnixPathBuf>,
-        tx: mpsc::Sender<Vec<RelativeUnixPathBuf>>,
+        batch: WalkedPaths,
+        tx: mpsc::Sender<WalkedPaths>,
     }
 
     impl Drop for FlushOnDrop {
         fn drop(&mut self) {
-            if !self.buf.is_empty() {
-                let batch = std::mem::take(&mut self.buf);
+            if !self.batch.is_empty() {
+                let batch = WalkedPaths {
+                    paths: std::mem::take(&mut self.batch.paths),
+                    unsupported_paths: std::mem::take(&mut self.batch.unsupported_paths),
+                };
                 let _ = self.tx.send(batch);
             }
         }
@@ -587,7 +650,7 @@ pub fn walk_candidate_files(
     walker.run(|| {
         let root = root.clone();
         let mut guard = FlushOnDrop {
-            buf: Vec::new(),
+            batch: WalkedPaths::new(),
             tx: tx.clone(),
         };
 
@@ -609,18 +672,10 @@ pub fn walk_candidate_files(
                 Err(_) => return ignore::WalkState::Continue,
             };
 
-            let unix_str = match rel_path.to_str() {
-                Some(s) => s,
-                None => return ignore::WalkState::Continue,
-            };
-
-            #[cfg(windows)]
-            let unix_str_owned = unix_str.replace('\\', "/");
-            #[cfg(windows)]
-            let unix_str: &str = &unix_str_owned;
-
-            if let Ok(path) = RelativeUnixPathBuf::new(unix_str) {
-                guard.buf.push(path);
+            match parse_path(rel_path, "working tree path") {
+                Ok(Ok(path)) => guard.batch.paths.push(path),
+                Ok(Err(path)) => guard.batch.unsupported_paths.push(path),
+                Err(_) => {}
             }
 
             ignore::WalkState::Continue
@@ -628,9 +683,10 @@ pub fn walk_candidate_files(
     });
     drop(tx);
 
-    let mut candidates: Vec<RelativeUnixPathBuf> = Vec::new();
+    let mut candidates = WalkedPaths::new();
     for batch in rx.iter() {
-        candidates.extend(batch);
+        candidates.paths.extend(batch.paths);
+        candidates.unsupported_paths.extend(batch.unsupported_paths);
     }
 
     Ok(candidates)
@@ -679,7 +735,7 @@ fn find_untracked_files(
     ls_tree_hashes: &SortedGitHashes,
     status_entries: &[RepoStatusEntry],
     prefixes: Option<&[RelativeUnixPathBuf]>,
-) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+) -> Result<WalkedPaths, Error> {
     use std::sync::mpsc;
 
     use ignore::WalkBuilder;
@@ -759,7 +815,7 @@ fn find_untracked_files(
     };
     let gitignore_matchers = std::sync::Arc::new(gitignore_matchers);
 
-    let (tx, rx) = mpsc::channel::<Vec<RelativeUnixPathBuf>>();
+    let (tx, rx) = mpsc::channel::<WalkedPaths>();
 
     // Disable ALL per-directory probing. Gitignore rules are applied via
     // filter_entry using the pre-built matcher above.
@@ -786,20 +842,15 @@ fn find_untracked_files(
                     Ok(rel) => rel,
                     Err(_) => return false,
                 };
-                #[cfg(windows)]
-                let rel_path_owned = rel_path.to_string_lossy().replace('\\', "/");
-                #[cfg(windows)]
-                let rel_path = rel_path_owned.as_str();
-                #[cfg(not(windows))]
-                let rel_path = match rel_path.to_str() {
-                    Some(rel) => rel,
-                    None => return false,
-                };
+                let rel_path = path_to_git_path_bytes(rel_path);
 
                 let in_scope = if is_dir {
-                    scope.should_visit_dir(rel_path)
+                    scope.should_visit_dir_bytes(rel_path.as_ref())
                 } else {
-                    scope.should_consider_file(rel_path, entry.file_name() == ".gitignore")
+                    scope.should_consider_file_bytes(
+                        rel_path.as_ref(),
+                        entry.file_name() == ".gitignore",
+                    )
                 };
                 if !in_scope {
                     return false;
@@ -820,14 +871,17 @@ fn find_untracked_files(
         .build_parallel();
 
     struct FlushOnDrop {
-        buf: Vec<RelativeUnixPathBuf>,
-        tx: mpsc::Sender<Vec<RelativeUnixPathBuf>>,
+        batch: WalkedPaths,
+        tx: mpsc::Sender<WalkedPaths>,
     }
 
     impl Drop for FlushOnDrop {
         fn drop(&mut self) {
-            if !self.buf.is_empty() {
-                let batch = std::mem::take(&mut self.buf);
+            if !self.batch.is_empty() {
+                let batch = WalkedPaths {
+                    paths: std::mem::take(&mut self.batch.paths),
+                    unsupported_paths: std::mem::take(&mut self.batch.unsupported_paths),
+                };
                 let _ = self.tx.send(batch);
             }
         }
@@ -836,7 +890,7 @@ fn find_untracked_files(
     walker.run(|| {
         let root = root.clone();
         let mut guard = FlushOnDrop {
-            buf: Vec::new(),
+            batch: WalkedPaths::new(),
             tx: tx.clone(),
         };
 
@@ -858,16 +912,16 @@ fn find_untracked_files(
                 Err(_) => return ignore::WalkState::Continue,
             };
 
-            let unix_str = match rel_path.to_str() {
-                Some(s) => s,
-                None => return ignore::WalkState::Continue,
+            let path = match parse_path(rel_path, "working tree path") {
+                Ok(Ok(path)) => path,
+                Ok(Err(path)) => {
+                    guard.batch.unsupported_paths.push(path);
+                    return ignore::WalkState::Continue;
+                }
+                Err(_) => return ignore::WalkState::Continue,
             };
 
-            #[cfg(windows)]
-            let unix_str_owned = unix_str.replace('\\', "/");
-            #[cfg(windows)]
-            let unix_str: &str = &unix_str_owned;
-
+            let unix_str = path.as_str();
             let in_ls_tree = ls_tree_hashes
                 .binary_search_by(|(p, _)| p.as_str().cmp(unix_str))
                 .is_ok();
@@ -875,11 +929,8 @@ fn find_untracked_files(
                 .binary_search_by(|e| e.path.as_str().cmp(unix_str))
                 .is_ok();
 
-            if !in_ls_tree
-                && !in_status
-                && let Ok(path) = RelativeUnixPathBuf::new(unix_str)
-            {
-                guard.buf.push(path);
+            if !in_ls_tree && !in_status {
+                guard.batch.paths.push(path);
             }
 
             ignore::WalkState::Continue
@@ -887,15 +938,17 @@ fn find_untracked_files(
     });
     drop(tx);
 
-    let mut untracked: Vec<RelativeUnixPathBuf> = Vec::new();
+    let mut untracked = WalkedPaths::new();
     for batch in rx.iter() {
-        untracked.extend(batch);
+        untracked.paths.extend(batch.paths);
+        untracked.unsupported_paths.extend(batch.unsupported_paths);
     }
 
     // Post-filter: check for untracked .gitignore files that we couldn't
     // know about during the walk. If any exist, build per-directory matchers
     // from them and remove files that should be ignored.
     let untracked_gitignores: Vec<&RelativeUnixPathBuf> = untracked
+        .paths
         .iter()
         .filter(|p| p.as_str().ends_with(".gitignore"))
         .collect();
@@ -914,7 +967,7 @@ fn find_untracked_files(
             }
         }
         if !extra_matchers.is_empty() {
-            untracked.retain(|p| {
+            untracked.paths.retain(|p| {
                 if p.as_str().ends_with(".gitignore") {
                     return true;
                 }
@@ -976,47 +1029,67 @@ impl UntrackedScope {
         }
     }
 
+    #[cfg(test)]
     fn should_visit_dir(&self, rel_path: &str) -> bool {
+        self.should_visit_dir_bytes(rel_path.as_bytes())
+    }
+
+    fn should_visit_dir_bytes(&self, rel_path: &[u8]) -> bool {
         if self.is_full_walk || rel_path.is_empty() {
             return true;
         }
 
         self.prefixes.iter().any(|prefix| {
+            let prefix = prefix.as_bytes();
             rel_path == prefix
-                || is_nested_path(rel_path, prefix)
-                || is_nested_path(prefix, rel_path)
+                || is_nested_path_bytes(rel_path, prefix)
+                || is_nested_path_bytes(prefix, rel_path)
         })
     }
 
+    #[cfg(test)]
     fn should_consider_file(&self, rel_path: &str, is_gitignore: bool) -> bool {
-        if self.is_full_walk || self.is_within_selected_prefix(rel_path) {
+        self.should_consider_file_bytes(rel_path.as_bytes(), is_gitignore)
+    }
+
+    fn should_consider_file_bytes(&self, rel_path: &[u8], is_gitignore: bool) -> bool {
+        if self.is_full_walk || self.is_within_selected_prefix_bytes(rel_path) {
             return true;
         }
 
-        is_gitignore && self.should_visit_dir(parent_path(rel_path))
+        is_gitignore && self.should_visit_dir_bytes(parent_path_bytes(rel_path))
     }
 
+    #[cfg(test)]
     fn is_within_selected_prefix(&self, rel_path: &str) -> bool {
+        self.is_within_selected_prefix_bytes(rel_path.as_bytes())
+    }
+
+    fn is_within_selected_prefix_bytes(&self, rel_path: &[u8]) -> bool {
         if self.is_full_walk {
             return true;
         }
 
-        self.prefixes
-            .iter()
-            .any(|prefix| rel_path == prefix || is_nested_path(rel_path, prefix))
+        self.prefixes.iter().any(|prefix| {
+            let prefix = prefix.as_bytes();
+            rel_path == prefix || is_nested_path_bytes(rel_path, prefix)
+        })
     }
 }
 
 fn is_nested_path(path: &str, prefix: &str) -> bool {
-    path.len() > prefix.len()
-        && path.starts_with(prefix)
-        && path.as_bytes().get(prefix.len()) == Some(&b'/')
+    is_nested_path_bytes(path.as_bytes(), prefix.as_bytes())
 }
 
-fn parent_path(path: &str) -> &str {
-    path.rsplit_once('/')
-        .map(|(parent, _)| parent)
-        .unwrap_or("")
+fn is_nested_path_bytes(path: &[u8], prefix: &[u8]) -> bool {
+    path.len() > prefix.len() && path.starts_with(prefix) && path.get(prefix.len()) == Some(&b'/')
+}
+
+fn parent_path_bytes(path: &[u8]) -> &[u8] {
+    path.iter()
+        .rposition(|byte| *byte == b'/')
+        .map(|idx| &path[..idx])
+        .unwrap_or(b"")
 }
 
 enum EntryClassification {
@@ -1030,6 +1103,7 @@ enum EntryClassification {
     Deleted {
         path: RelativeUnixPathBuf,
     },
+    Unsupported(UnsupportedGitPath),
 }
 
 #[cfg(test)]
@@ -1065,6 +1139,7 @@ mod tests {
         RepoGitIndex {
             ls_tree_hashes,
             status_entries,
+            unsupported_paths: Vec::new(),
             untracked_entries_populated: true,
         }
     }
