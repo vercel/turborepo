@@ -299,10 +299,6 @@ function updateStatusBarItem(running: boolean) {
   toolbar.show();
 }
 
-function quoteCommand(command: string) {
-  return command.includes(" ") ? `"${command.replace(/"/g, '\\"')}"` : command;
-}
-
 function executableNames(name: string) {
   return process.platform === "win32"
     ? [`${name}.exe`, `${name}.cmd`, `${name}`]
@@ -352,6 +348,7 @@ function findExecutableOnPath(name: string) {
       return executable;
     }
   }
+  return undefined;
 }
 
 function findTurbo(
@@ -416,7 +413,7 @@ function probeInternalLsp(
 ): InternalLspProbeResult {
   try {
     const output = cp
-      .execSync(`${quoteCommand(turboPath)} __internal_lsp --probe`, {
+      .execFileSync(turboPath, ["__internal_lsp", "--probe"], {
         ...options,
         stdio: ["ignore", "pipe", "pipe"],
         timeout: 1000
@@ -547,17 +544,26 @@ function findLocalTurbo(
     },
     () => {
       logs.appendLine("attempting to find local turbo using yarn");
-      const turboBin = cp.execSync("yarn bin turbo", options);
+      const turboBin = cp.execSync("yarn bin turbo", {
+        ...options,
+        encoding: "utf8"
+      });
       return resolveTurboPath(turboBin.trim(), workspaceRoot);
     },
     () => {
       logs.appendLine("attempting to find local turbo using pnpm");
-      const binFolder = cp.execSync("pnpm bin", options).trim();
+      const binFolder = cp.execSync("pnpm bin", {
+        ...options,
+        encoding: "utf8"
+      }).trim();
       return findTurboInDirectory(binFolder);
     },
     () => {
       logs.appendLine("attempting to find local turbo using bun");
-      const binFolder = cp.execSync("bun pm bin", options).trim();
+      const binFolder = cp.execSync("bun pm bin", {
+        ...options,
+        encoding: "utf8"
+      }).trim();
       return findTurboInDirectory(binFolder);
     }
   ];
