@@ -236,10 +236,20 @@ jobs:
       - name: Install git (Windows larger runners)
         shell: cmd
         run: |
+          where git >nul 2>nul
+          if not errorlevel 1 (
+            git --version
+            exit /b 0
+          )
+          if exist "%ProgramFiles%\Git\cmd\git.exe" (
+            echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
+            "%ProgramFiles%\Git\cmd\git.exe" --version
+            exit /b 0
+          )
           curl -L -o "%TEMP%\mingit.zip" "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.2/MinGit-2.47.1.2-64-bit.zip"
-          mkdir "%ProgramFiles%\Git"
+          if not exist "%ProgramFiles%\Git" mkdir "%ProgramFiles%\Git"
           tar -xf "%TEMP%\mingit.zip" -C "%ProgramFiles%\Git"
-          del "%ProgramFiles%\Git\etc\gitconfig"
+          if exist "%ProgramFiles%\Git\etc\gitconfig" del "%ProgramFiles%\Git\etc\gitconfig"
           echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
 
       - name: Set git to use LF line endings
@@ -384,7 +394,7 @@ jobs:
 
   rust_test_windows:
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     runs-on: windows-latest-8-core-oss
@@ -398,10 +408,20 @@ jobs:
       - name: Install git (Windows larger runners)
         shell: cmd
         run: |
+          where git >nul 2>nul
+          if not errorlevel 1 (
+            git --version
+            exit /b 0
+          )
+          if exist "%ProgramFiles%\Git\cmd\git.exe" (
+            echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
+            "%ProgramFiles%\Git\cmd\git.exe" --version
+            exit /b 0
+          )
           curl -L -o "%TEMP%\mingit.zip" "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.2/MinGit-2.47.1.2-64-bit.zip"
-          mkdir "%ProgramFiles%\Git"
+          if not exist "%ProgramFiles%\Git" mkdir "%ProgramFiles%\Git"
           tar -xf "%TEMP%\mingit.zip" -C "%ProgramFiles%\Git"
-          del "%ProgramFiles%\Git\etc\gitconfig"
+          if exist "%ProgramFiles%\Git\etc\gitconfig" del "%ProgramFiles%\Git\etc\gitconfig"
           echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
 
       - name: Set git to use LF line endings
