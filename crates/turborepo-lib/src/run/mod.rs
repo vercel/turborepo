@@ -693,7 +693,10 @@ impl Run {
             let shutdown_started_emitted = self.shutdown_started_emitted.clone();
             tokio::spawn(async move {
                 info!("Proxy signal handler registered and waiting");
-                let _guard = subscriber.listen().await;
+                let Ok(_guard) = subscriber.listen().await else {
+                    debug!("proxy signal handler exited before notifying subscriber");
+                    return;
+                };
 
                 let shutdown_reason = signal_handler.shutdown_reason();
 
@@ -768,7 +771,12 @@ impl Run {
         let shutdown_started_emitted = self.shutdown_started_emitted.clone();
         let use_tui = self.opts.run_opts.ui_mode.use_tui();
         tokio::spawn(async move {
-            let _guard = subscriber.listen().await;
+            let Ok(_guard) = subscriber.listen().await else {
+                tracing::debug!(
+                    "signal handler exited before cache shutdown subscriber was notified"
+                );
+                return;
+            };
             let shutdown_reason = signal_handler.shutdown_reason();
 
             if shutdown_reason == Some(ShutdownReason::Signal) {
@@ -859,7 +867,10 @@ impl Run {
         let force_shutdown_timeout = Self::force_shutdown_timeout();
         let shutdown_started_emitted = self.shutdown_started_emitted.clone();
         tokio::spawn(async move {
-            let _guard = subscriber.listen().await;
+            let Ok(_guard) = subscriber.listen().await else {
+                debug!("signal handler exited before process manager subscriber was notified");
+                return;
+            };
             let shutdown_reason = signal_handler.shutdown_reason();
 
             if shutdown_reason != Some(ShutdownReason::Signal) {
