@@ -1,5 +1,5 @@
 #![deny(clippy::all)]
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 
 //! A crate for registering listeners for a given signal
 
@@ -50,6 +50,12 @@ struct HandlerState {
 
 pub struct SignalSubscriber(oneshot::Receiver<oneshot::Sender<Signal>>);
 
+#[derive(Debug, thiserror::Error)]
+pub enum ListenError {
+    #[error("signal handler worker exited before alerting subscriber")]
+    WorkerExited,
+}
+
 /// SubscriberGuard should be kept until a subscriber is done processing the
 /// signal
 pub struct SubscriberGuard {
@@ -84,7 +90,9 @@ impl SignalHandler {
             worker_started.notify_waiters();
 
             let mut callbacks = {
-                let mut state = worker_state.lock().expect("lock poisoned");
+                let mut state = worker_state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 // Mark ourselves as closing to prevent any additional subscribers from being
                 // added
                 state.is_closing = true;
@@ -118,7 +126,7 @@ impl SignalHandler {
     pub fn subscribe(&self) -> Option<SignalSubscriber> {
         self.state
             .lock()
-            .expect("poisoned lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .add_subscriber()
             .map(SignalSubscriber)
     }
@@ -181,12 +189,9 @@ impl SignalHandler {
 
 impl SignalSubscriber {
     /// Wait until signal is received by the signal handler
-    pub async fn listen(self) -> SubscriberGuard {
-        let _guard = self
-            .0
-            .await
-            .expect("signal handler worker thread exited without alerting subscribers");
-        SubscriberGuard { _guard }
+    pub async fn listen(self) -> Result<SubscriberGuard, ListenError> {
+        let _guard = self.0.await.map_err(|_| ListenError::WorkerExited)?;
+        Ok(SubscriberGuard { _guard })
     }
 }
 
