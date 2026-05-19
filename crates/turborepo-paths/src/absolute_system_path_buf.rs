@@ -83,14 +83,17 @@ impl AbsoluteSystemPathBuf {
         if unknown.is_absolute() {
             Self(unknown)
         } else {
-            Self(
-                base.as_path()
-                    .join(unknown)
-                    .as_std_path()
-                    .clean()
-                    .try_into()
-                    .expect("clean should produce valid UTF-8"),
-            )
+            let path = match base
+                .as_path()
+                .join(unknown)
+                .as_std_path()
+                .clean()
+                .try_into()
+            {
+                Ok(path) => path,
+                Err(err) => panic!("clean should produce valid UTF-8: {err:?}"),
+            };
+            Self(path)
         }
     }
 

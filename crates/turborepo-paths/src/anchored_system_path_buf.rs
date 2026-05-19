@@ -131,9 +131,10 @@ impl AnchoredSystemPathBuf {
             .chain(other_components.into_iter().skip(prefix_len))
             .collect::<Utf8PathBuf>();
 
-        let path: Utf8PathBuf = path_clean::clean(path)
-            .try_into()
-            .expect("clean should preserve utf8");
+        let path: Utf8PathBuf = match path_clean::clean(path).try_into() {
+            Ok(path) => path,
+            Err(err) => panic!("clean should preserve utf8: {err:?}"),
+        };
 
         Self(path)
     }
