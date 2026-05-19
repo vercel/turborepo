@@ -444,7 +444,7 @@ impl RawTurboJson {
     /// This is a convenience helper for constructing RawTurboJson from
     /// serde_json::json! macro in tests.
     pub fn parse_from_serde(value: serde_json::Value) -> Result<RawTurboJson, crate::error::Error> {
-        let json_string = serde_json::to_string(&value).expect("should be able to serialize");
+        let json_string = serde_json::to_string(&value)?;
         let raw_root = RawRootTurboJson::parse(&json_string, "turbo.json")?;
         raw_root.try_into()
     }
