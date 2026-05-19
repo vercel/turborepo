@@ -179,7 +179,8 @@ mod tests {
         select,
         sync::{mpsc, mpsc::UnboundedReceiver},
     };
-    use turborepo_api_client::{APIAuth, SecretString, analytics::AnalyticsClient};
+    use turborepo_api_client::{APIAuth, analytics::AnalyticsClient};
+    use turborepo_types::SecretString;
     use turborepo_vercel_api::{AnalyticsEvent, CacheEvent, CacheSource};
     use uuid::Uuid;
 

@@ -11,8 +11,6 @@ pub use turborepo_engine::{
 };
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_types::{TaskDefinition, UIMode};
-// Keep backward compatibility type alias
-pub type Error = BuilderError;
 
 /// Type alias for Engine specialized with TaskDefinition.
 /// This allows existing code to continue using `Engine` without type

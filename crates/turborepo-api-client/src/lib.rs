@@ -19,7 +19,7 @@ use reqwest::{Body, Method, RequestBuilder, StatusCode};
 use rustls_pemfile::{self, Item};
 use serde::Deserialize;
 use turborepo_ci::{Vendor, is_ci};
-pub use turborepo_types::SecretString;
+use turborepo_types::SecretString;
 use turborepo_vercel_api::{
     APIError, CachingStatus, CachingStatusResponse, PreflightResponse, Team, TeamsResponse, User,
     UserResponse, VerificationResponse, VerifiedSsoUser,

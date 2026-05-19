@@ -1,13 +1,6 @@
 //! Task hashing module - delegates to turborepo-task-hash crate.
 //!
-//! This module re-exports types from turborepo-task-hash and provides
-//! trait implementations for turborepo-lib types.
-
-// Re-export all public types from turborepo-task-hash
-pub use turborepo_task_hash::{
-    collect_global_file_hash_inputs, get_external_deps_hash, get_internal_deps_hash, global_hash,
-    Error, GlobalHashableInputs, PackageInputsHashes, TaskHashTracker, TaskHashTrackerState,
-};
+//! This module provides trait implementations for turborepo-lib types.
 
 use crate::opts::RunOpts;
 
@@ -31,6 +24,8 @@ pub type TaskHasher<'a> = turborepo_task_hash::TaskHasher<'a, RunOpts>;
 
 #[cfg(test)]
 mod test {
+    use turborepo_task_hash::TaskHashTracker;
+
     use super::*;
 
     #[test]

@@ -24,6 +24,8 @@ use turborepo_repository::{
 };
 use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
+use turborepo_scope::filter::ResolutionError;
+use turborepo_shim::TurboState;
 use turborepo_signals::SignalHandler;
 use turborepo_task_id::TaskName;
 use turborepo_telemetry::events::{
@@ -32,7 +34,7 @@ use turborepo_telemetry::events::{
     repo::{RepoEventBuilder, RepoType},
     EventBuilder, TrackedErrors,
 };
-use turborepo_types::UIMode;
+use turborepo_types::{FilterMode, UIMode};
 use turborepo_ui::ColorConfig;
 use turborepo_vercel_api::CachingStatusResponse;
 use url::Url;
@@ -46,7 +48,6 @@ use crate::{
         scope, task_access::TaskAccess, Error, RemoteCacheStatus, RemoteCacheUnavailableReason,
         Run, RunCache,
     },
-    shim::TurboState,
     turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
 };
 
@@ -354,9 +355,9 @@ impl RunBuilder {
         )?;
 
         let should_include_root_tasks = match filter_mode {
-            scope::FilterMode::AllPackages => true,
-            scope::FilterMode::ExcludeOnly { root_excluded } => !root_excluded,
-            scope::FilterMode::ExplicitSelection => false,
+            FilterMode::AllPackages => true,
+            FilterMode::ExcludeOnly { root_excluded } => !root_excluded,
+            FilterMode::ExplicitSelection => false,
         };
 
         if should_include_root_tasks {
@@ -378,7 +379,7 @@ impl RunBuilder {
             }
         }
 
-        if matches!(filter_mode, scope::FilterMode::AllPackages) {
+        if matches!(filter_mode, FilterMode::AllPackages) {
             // When all tasks use package#task syntax, we can narrow the package
             // set to only the referenced packages rather than the entire monorepo.
             let task_names: Vec<TaskName> = opts
@@ -760,7 +761,7 @@ impl RunBuilder {
                 .iter()
                 .map(|p| p.parse())
                 .collect::<Result<_, _>>()
-                .map_err(turborepo_scope::ResolutionError::from)?;
+                .map_err(ResolutionError::from)?;
 
             let affected_constraint =
                 if let Some(affected_range) = &self.opts.scope_opts.affected_range {

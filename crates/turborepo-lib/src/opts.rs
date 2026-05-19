@@ -5,16 +5,10 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
-// Re-export RunCacheOpts from turborepo-run-cache
-pub use turborepo_run_cache::RunCacheOpts;
-use turborepo_run_summary::RunOptsInfo;
-// Re-export ScopeOpts from turborepo-scope to avoid duplication
-pub use turborepo_scope::ScopeOpts;
-// Re-export opts types from turborepo-types
-pub use turborepo_types::{APIClientOpts, RepoOpts, TuiOpts};
 use turborepo_types::{
-    ContinueMode, DryRunMode, EnvMode, GraphOpts, LogOrder, LogPrefix, ResolvedLogOrder,
-    ResolvedLogPrefix, TaskArgs, UIMode,
+    APIClientOpts, ContinueMode, DryRunMode, EnvMode, GraphOpts, LogOrder, LogPrefix, RepoOpts,
+    ResolvedLogOrder, ResolvedLogPrefix, RunCacheOpts, RunOptsInfo, ScopeOpts, TaskArgs, TuiOpts,
+    UIMode,
 };
 
 use crate::{

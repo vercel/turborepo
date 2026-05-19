@@ -5,8 +5,7 @@ use tokio::sync::{Semaphore, mpsc, oneshot};
 use tracing::debug;
 use turborepo_graph_utils::Walker;
 use turborepo_task_id::TaskId;
-// Re-export StopExecution from turborepo-types for backwards compatibility
-pub use turborepo_types::StopExecution;
+use turborepo_types::StopExecution;
 
 use super::{Built, Engine, TaskDefinitionInfo, TaskNode};
 

@@ -3,9 +3,11 @@ use thiserror::Error;
 use turborepo_daemon::{DaemonConnectorError, DaemonError};
 use turborepo_engine::GraphVisualizerError;
 use turborepo_repository::package_graph;
+use turborepo_scope::filter::ResolutionError;
+use turborepo_task_hash::{global_hash, Error as TaskHashError};
 use turborepo_ui::tui;
 
-use crate::{config, engine, engine::ValidateError, opts, run::scope, task_graph, task_hash};
+use crate::{config, engine, engine::ValidateError, opts, task_graph};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -39,11 +41,11 @@ pub enum Error {
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
-    Scope(#[from] scope::ResolutionError),
+    Scope(#[from] ResolutionError),
     #[error(transparent)]
-    GlobalHash(#[from] task_hash::global_hash::Error),
+    GlobalHash(#[from] global_hash::Error),
     #[error(transparent)]
-    TaskHash(#[from] task_hash::Error),
+    TaskHash(#[from] TaskHashError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Visitor(#[from] task_graph::VisitorError),

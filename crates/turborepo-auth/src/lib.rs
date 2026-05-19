@@ -16,8 +16,9 @@ pub use device_flow::TokenSet;
 pub use error::Error;
 use serde::Deserialize;
 use turbopath::AbsoluteSystemPath;
-use turborepo_api_client::{CacheClient, Client, SecretString, TokenClient};
+use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_json_rewrite::{set_path, unset_path};
+use turborepo_types::SecretString;
 use turborepo_vercel_api::{User, token::ResponseTokenMetadata};
 
 pub struct TeamInfo<'a> {

@@ -38,8 +38,6 @@ pub use output::{StdWriter, TaskOutput};
 use serde::Serialize;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_task_id::TaskId;
-// Re-export StopExecution from turborepo-types for convenience
-pub use turborepo_types::StopExecution;
 use turborepo_types::{ContinueMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, UIMode};
 pub use visitor::{
     EngineExecutor, EngineMessage, EngineProvider, TaskCallback, TaskHashProvider, turbo_regex,

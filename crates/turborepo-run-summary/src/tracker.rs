@@ -17,11 +17,11 @@ use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
-use turborepo_types::{DryRunMode, EnvMode};
+use turborepo_types::{DryRunMode, EngineInfo, EnvMode, HashTrackerInfo, RunOptsInfo};
 use turborepo_ui::{BOLD, BOLD_CYAN, ColorConfig, GREY, color, cprintln, cwriteln};
 
 use crate::{
-    EngineInfo, GlobalHashSummary, HashTrackerInfo, RunOptsInfo, SCMState, TaskTracker,
+    GlobalHashSummary, SCMState, TaskTracker,
     execution::{ExecutionSummary, ExecutionTracker, TaskState},
     observability::Handle as ObservabilityHandle,
     task::{SinglePackageTaskSummary, TaskSummary},

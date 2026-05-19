@@ -7,6 +7,7 @@ use std::{
 pub use error::Error;
 use tracing::warn;
 use turborepo_api_client::{Client, TokenClient};
+use turborepo_types::SecretString;
 use turborepo_ui::{BOLD, ColorConfig, start_spinner};
 use url::Url;
 
@@ -280,7 +281,7 @@ pub(super) async fn login_vercel_device_flow<T: Client>(
 
     spinner.finish_and_clear();
 
-    let secret_token = turborepo_api_client::SecretString::new(token_set.access_token.clone());
+    let secret_token = SecretString::new(token_set.access_token.clone());
 
     let user_response = api_client
         .get_user(&secret_token)
@@ -364,7 +365,7 @@ async fn login_redirect<T: Client>(
 
     spinner.finish_and_clear();
 
-    let secret_token = turborepo_api_client::SecretString::new(token_string.clone());
+    let secret_token = SecretString::new(token_string.clone());
 
     let user_response = api_client
         .get_user(&secret_token)
@@ -517,7 +518,7 @@ mod tests {
     impl Client for MockApiClient {
         async fn get_user(
             &self,
-            token: &turborepo_api_client::SecretString,
+            token: &SecretString,
         ) -> turborepo_api_client::Result<UserResponse> {
             if token.expose().is_empty() {
                 return Err(MockApiError::EmptyToken.into());
@@ -534,7 +535,7 @@ mod tests {
         }
         async fn get_teams(
             &self,
-            token: &turborepo_api_client::SecretString,
+            token: &SecretString,
         ) -> turborepo_api_client::Result<TeamsResponse> {
             if token.expose().is_empty() {
                 return Err(MockApiError::EmptyToken.into());
@@ -553,7 +554,7 @@ mod tests {
         }
         async fn get_team(
             &self,
-            _token: &turborepo_api_client::SecretString,
+            _token: &SecretString,
             _team_id: &str,
         ) -> turborepo_api_client::Result<Option<Team>> {
             unimplemented!("get_team")
@@ -563,7 +564,7 @@ mod tests {
         }
         async fn verify_sso_token(
             &self,
-            token: &turborepo_api_client::SecretString,
+            token: &SecretString,
             _: &str,
         ) -> turborepo_api_client::Result<VerifiedSsoUser> {
             Ok(VerifiedSsoUser {
@@ -584,7 +585,7 @@ mod tests {
     impl TokenClient for MockApiClient {
         async fn get_metadata(
             &self,
-            token: &turborepo_api_client::SecretString,
+            token: &SecretString,
         ) -> turborepo_api_client::Result<turborepo_vercel_api::token::ResponseTokenMetadata>
         {
             if token.expose().is_empty() {
@@ -617,10 +618,7 @@ mod tests {
                 client_id: None,
             })
         }
-        async fn delete_token(
-            &self,
-            _token: &turborepo_api_client::SecretString,
-        ) -> turborepo_api_client::Result<()> {
+        async fn delete_token(&self, _token: &SecretString) -> turborepo_api_client::Result<()> {
             Ok(())
         }
     }

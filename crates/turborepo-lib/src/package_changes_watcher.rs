@@ -10,9 +10,7 @@ use notify::Event;
 use radix_trie::{Trie, TrieCommon};
 use tokio::sync::{broadcast, oneshot, Mutex};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
-// Re-export the PackageChangeEvent from turborepo-daemon
-pub use turborepo_daemon::PackageChangeEvent;
-use turborepo_daemon::PackageChangesWatcher as PackageChangesWatcherTrait;
+use turborepo_daemon::{PackageChangeEvent, PackageChangesWatcher as PackageChangesWatcherTrait};
 use turborepo_filewatch::{
     hash_watcher::{HashSpec, HashWatcher, InputGlobs},
     NotifyError, OptionalWatch,

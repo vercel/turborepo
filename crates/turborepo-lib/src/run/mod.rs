@@ -38,6 +38,10 @@ pub use turborepo_run_cache::{ConfigCache, RunCache, TaskCache};
 use turborepo_run_summary::{ObservabilityHandle, RunTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_signals::{listeners::get_signal, ShutdownReason, SignalHandler};
+use turborepo_task_hash::{
+    collect_global_file_hash_inputs, get_external_deps_hash, get_internal_deps_hash,
+    global_hash::GLOBAL_CACHE_KEY, GlobalHashableInputs, PackageInputsHashes,
+};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_types::{EnvMode, UIMode};
 use turborepo_ui::{sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig};
@@ -49,10 +53,6 @@ use crate::{
     opts::{Opts, RemoteCacheDisabledReason},
     run::task_access::TaskAccess,
     task_graph::Visitor,
-    task_hash::{
-        collect_global_file_hash_inputs, get_external_deps_hash, get_internal_deps_hash,
-        global_hash::GLOBAL_CACHE_KEY, GlobalHashableInputs, PackageInputsHashes,
-    },
     turbo_json::{TurboJson, UnifiedTurboJsonLoader},
 };
 

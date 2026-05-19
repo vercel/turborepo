@@ -11,6 +11,7 @@ use turbopath::AbsoluteSystemPath;
 #[cfg(test)]
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{Client, TokenClient};
+use turborepo_types::SecretString;
 use turborepo_ui::ColorConfig;
 use url::Url;
 
@@ -226,7 +227,7 @@ pub(crate) fn classify_existing_vercel_token(token: &str) -> Result<ExistingToke
 }
 
 fn load_legacy_auth_tokens(
-    expected_token: Option<&turborepo_api_client::SecretString>,
+    expected_token: Option<&SecretString>,
 ) -> Result<crate::AuthTokens, Error> {
     use crate::Token;
 
@@ -260,9 +261,9 @@ fn load_legacy_auth_tokens(
 async fn exchange_legacy_auth_token(
     turbo_auth_path: &AbsoluteSystemPath,
     turbo_config_path: &AbsoluteSystemPath,
-    expected_token: Option<&turborepo_api_client::SecretString>,
+    expected_token: Option<&SecretString>,
     allow_legacy_token_fallback: bool,
-) -> Result<Option<turborepo_api_client::SecretString>, Error> {
+) -> Result<Option<SecretString>, Error> {
     let legacy_auth_tokens = load_legacy_auth_tokens(expected_token)?;
     exchange_auth_tokens(
         &legacy_auth_tokens,
@@ -309,7 +310,7 @@ async fn exchange_auth_tokens(
     turbo_config_path: &AbsoluteSystemPath,
     allow_token_fallback: bool,
     source_label: &str,
-) -> Result<Option<turborepo_api_client::SecretString>, Error> {
+) -> Result<Option<SecretString>, Error> {
     let Some(stored_token) = auth_tokens.token.clone() else {
         return Ok(None);
     };
@@ -376,7 +377,7 @@ async fn refresh_and_persist_turbo_token(
     auth_tokens: &crate::AuthTokens,
     turbo_auth_path: &AbsoluteSystemPath,
     turbo_config_path: &AbsoluteSystemPath,
-) -> Option<turborepo_api_client::SecretString> {
+) -> Option<SecretString> {
     if !can_refresh_token(auth_tokens) {
         return None;
     }
@@ -413,7 +414,7 @@ fn persist_turbo_oauth_tokens(
 async fn get_token_with_refresh_inner(
     allow_legacy_token_fallback: bool,
     allow_turbo_config_token_fallback: bool,
-) -> Result<Option<turborepo_api_client::SecretString>, Error> {
+) -> Result<Option<SecretString>, Error> {
     use crate::{TURBO_AUTH_FILE, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE};
 
     let turbo_config_dir = match turborepo_dirs::config_dir()? {
@@ -477,15 +478,14 @@ async fn get_token_with_refresh_inner(
 }
 
 /// Attempts to get a valid token with automatic refresh if expired.
-pub async fn get_token_with_refresh() -> Result<Option<turborepo_api_client::SecretString>, Error> {
+pub async fn get_token_with_refresh() -> Result<Option<SecretString>, Error> {
     get_token_with_refresh_inner(true, true).await
 }
 
 /// Login prefers upgrading legacy/config tokens into Turbo OAuth sessions. If
 /// that upgrade fails, callers should fall through to a fresh login instead of
 /// silently reusing the old token.
-pub async fn get_token_with_refresh_for_login()
--> Result<Option<turborepo_api_client::SecretString>, Error> {
+pub async fn get_token_with_refresh_for_login() -> Result<Option<SecretString>, Error> {
     get_token_with_refresh_inner(false, false).await
 }
 
@@ -493,8 +493,8 @@ pub async fn get_token_with_refresh_for_login()
 /// by the server. Unlike `get_token_with_refresh`, this never falls back to the
 /// same stored token.
 pub async fn recover_token_after_forbidden(
-    current_token: &turborepo_api_client::SecretString,
-) -> Result<Option<turborepo_api_client::SecretString>, Error> {
+    current_token: &SecretString,
+) -> Result<Option<SecretString>, Error> {
     use crate::{TURBO_AUTH_FILE, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE};
 
     let turbo_config_dir = match turborepo_dirs::config_dir()? {
@@ -974,11 +974,10 @@ mod tests {
             env::set_var("VERCEL_CONFIG_DIR_PATH", vercel_config_dir.as_path());
         }
 
-        let recovered = recover_token_after_forbidden(&turborepo_api_client::SecretString::new(
-            "other-token".to_string(),
-        ))
-        .await
-        .unwrap();
+        let recovered =
+            recover_token_after_forbidden(&SecretString::new("other-token".to_string()))
+                .await
+                .unwrap();
 
         assert!(recovered.is_none());
 
@@ -1155,10 +1154,8 @@ mod tests {
     async fn test_refreshability_depends_on_refresh_token_not_access_token_prefix() {
         for token in ["vca_token", "legacy_token", "corrupted!!!", ""] {
             let auth_tokens = AuthTokens {
-                token: Some(turborepo_api_client::SecretString::new(token.to_string())),
-                refresh_token: Some(turborepo_api_client::SecretString::new(
-                    "refresh_token".to_string(),
-                )),
+                token: Some(SecretString::new(token.to_string())),
+                refresh_token: Some(SecretString::new("refresh_token".to_string())),
                 expires_at: Some(current_unix_time_secs() - 3600),
             };
 
@@ -1169,9 +1166,7 @@ mod tests {
         }
 
         let auth_tokens = AuthTokens {
-            token: Some(turborepo_api_client::SecretString::new(
-                "vca_token".to_string(),
-            )),
+            token: Some(SecretString::new("vca_token".to_string())),
             refresh_token: None,
             expires_at: Some(current_unix_time_secs() - 3600),
         };

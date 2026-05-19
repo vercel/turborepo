@@ -23,8 +23,10 @@ use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker, TaskTracker};
 use turborepo_scm::SCM;
-// Re-export output types and shared functions from turborepo-task-executor
-pub use turborepo_task_executor::{turbo_regex, TaskOutput};
+use turborepo_task_executor::{turbo_regex, TaskOutput};
+use turborepo_task_hash::{
+    Error as TaskHashError, GlobalHashableInputs, PackageInputsHashes, TaskHashTrackerState,
+};
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
@@ -37,9 +39,7 @@ use crate::{
     microfrontends::MicrofrontendsConfigs,
     opts::RunOpts,
     run::{task_access::TaskAccess, RunCache},
-    task_hash::{
-        self, GlobalHashableInputs, PackageInputsHashes, TaskHashTrackerState, TaskHasher,
-    },
+    task_hash::TaskHasher,
 };
 
 // This holds the whole world
@@ -100,7 +100,7 @@ pub enum Error {
     #[error("Error while executing engine: {0}")]
     Engine(#[from] crate::engine::ExecuteError),
     #[error(transparent)]
-    TaskHash(#[from] task_hash::Error),
+    TaskHash(#[from] TaskHashError),
     #[error(transparent)]
     RunSummary(#[from] summary::Error),
     #[error("Internal errors encountered: {0}")]

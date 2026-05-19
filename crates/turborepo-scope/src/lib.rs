@@ -31,7 +31,7 @@ use turborepo_repository::{
     package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
-pub use turborepo_types::{FilterMode, ScopeOpts};
+use turborepo_types::{FilterMode, ScopeOpts};
 
 /// Resolve which packages should be included in the run based on scope options.
 ///
