@@ -26,8 +26,6 @@ pub type TaskHasher<'a> = turborepo_task_hash::TaskHasher<'a, RunOpts>;
 mod test {
     use turborepo_task_hash::TaskHashTracker;
 
-    use super::*;
-
     #[test]
     fn test_hash_tracker_is_send_and_sync() {
         // We need the tracker to implement these traits as multiple tasks will query
