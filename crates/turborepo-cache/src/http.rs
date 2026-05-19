@@ -467,6 +467,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_analytics::start_analytics;
     use turborepo_api_client::{APIClient, analytics};
+    use turborepo_types::SecretString;
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{

@@ -561,6 +561,7 @@ mod tests {
     use tempfile::tempdir;
     use tokio::sync::Mutex;
     use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_types::SecretString;
 
     use super::{
         ExistingTokenSource, can_refresh_token, classify_existing_vercel_token,
