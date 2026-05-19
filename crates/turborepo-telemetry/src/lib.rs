@@ -6,7 +6,7 @@
 #![feature(error_generic_member_access)]
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 
 pub mod config;
 pub mod errors;
@@ -125,7 +125,9 @@ pub fn init_telemetry(
     }
     let config = TelemetryConfig::with_default_config_path()?;
     let (handle, sender, enabled) = init(config, client, color_config)?;
-    SENDER_INSTANCE.set(sender).unwrap();
+    SENDER_INSTANCE
+        .set(sender)
+        .map_err(|_| Box::new(Error::AlreadyInitialized()) as Box<dyn std::error::Error>)?;
     Ok((handle, enabled))
 }
 
