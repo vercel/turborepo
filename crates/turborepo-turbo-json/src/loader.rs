@@ -358,9 +358,10 @@ impl TurboJsonLoader<NoOpUpdater> {
                 .map(|(key, value)| (key, Some(value))),
         );
         // This never gets read from so we populate it with root
-        let repo_root = AbsoluteSystemPath::new(if cfg!(windows) { "C:\\" } else { "/" })
-            .expect("wasn't able to create absolute system path")
-            .to_owned();
+        let repo_root = match AbsoluteSystemPath::new(if cfg!(windows) { "C:\\" } else { "/" }) {
+            Ok(path) => path.to_owned(),
+            Err(_) => unreachable!("platform root path should be absolute"),
+        };
         Self {
             reader: TurboJsonReader::new(repo_root),
             cache,
