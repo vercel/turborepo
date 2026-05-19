@@ -448,20 +448,28 @@ where
     loop {
         match fs::create_dir(&lock_dir) {
             Ok(()) => break,
-            Err(e) if e.kind() == ErrorKind::AlreadyExists => {
-                if is_stale_lock(&lock_dir, STALE_LOCK_AGE) {
+            Err(e) => {
+                let lock_exists = e.kind() == ErrorKind::AlreadyExists;
+                // Windows can report access denied while another test process is
+                // removing the directory lock. Treat it as contention and retry.
+                let access_denied_during_lock_transition =
+                    cfg!(windows) && e.kind() == ErrorKind::PermissionDenied;
+                if !lock_exists && !access_denied_during_lock_transition {
+                    return Err(e.into());
+                }
+
+                if lock_exists && is_stale_lock(&lock_dir, STALE_LOCK_AGE) {
                     let _ = fs::remove_dir_all(&lock_dir);
                     continue;
                 }
                 if start.elapsed() > LOCK_TIMEOUT {
                     anyhow::bail!(
-                        "timed out waiting for Corepack prepare lock: {}",
-                        lock_dir.display()
+                        "timed out waiting for Corepack prepare lock: {} ({e})",
+                        lock_dir.display(),
                     );
                 }
                 thread::sleep(Duration::from_millis(100));
             }
-            Err(e) => return Err(e.into()),
         }
     }
 
