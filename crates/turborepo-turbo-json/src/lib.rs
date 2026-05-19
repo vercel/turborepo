@@ -13,8 +13,7 @@
 // This is intentional for rich error reporting. Boxing would add indirection overhead
 // for error paths that are not performance-critical.
 #![allow(clippy::result_large_err)]
-#![allow(clippy::unwrap_used)]
-#![cfg_attr(test, allow(clippy::expect_used))]
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 
 use std::{collections::HashSet, sync::Arc};
 

@@ -8,10 +8,9 @@
 
 use std::backtrace;
 
-use convert_case::{Case, Casing};
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use thiserror::Error;
-use turborepo_errors::{ParseDiagnostic, TURBO_SITE};
+use turborepo_errors::ParseDiagnostic;
 
 /// Error type for turbo.json parsing failures
 #[derive(Debug, Error, Diagnostic)]
@@ -39,7 +38,7 @@ impl ParseError {
 #[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
 #[diagnostic(
     code(invalid_env_prefix),
-    url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
+    url("https://turborepo.dev/messages/invalid-env-prefix")
 )]
 pub struct InvalidEnvPrefixError {
     /// The invalid value that was found
@@ -58,7 +57,7 @@ pub struct InvalidEnvPrefixError {
 #[derive(Debug, Error, Diagnostic)]
 #[diagnostic(
     code(unnecessary_package_task_syntax),
-    url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
+    url("https://turborepo.dev/messages/unnecessary-package-task-syntax")
 )]
 #[error("\"{actual}\". Use \"{wanted}\" instead.")]
 pub struct UnnecessaryPackageTaskSyntaxError {
@@ -114,7 +113,10 @@ pub enum Error {
         "Package tasks (<package>#<task>) are not allowed in single-package repositories: found \
          {task_id}"
     )]
-    #[diagnostic(code(package_task_in_single_package_mode), url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)))]
+    #[diagnostic(
+        code(package_task_in_single_package_mode),
+        url("https://turborepo.dev/messages/package-task-in-single-package-mode")
+    )]
     PackageTaskInSinglePackageMode {
         task_id: String,
         #[source_code]
