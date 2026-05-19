@@ -438,7 +438,8 @@ mod test {
     use tempfile::tempdir;
     use turbopath::AnchoredSystemPath;
     use turborepo_analytics::start_analytics;
-    use turborepo_api_client::{APIAuth, APIClient, SecretString};
+    use turborepo_api_client::{APIAuth, APIClient};
+    use turborepo_types::SecretString;
     use turborepo_vercel_api_mock::start_test_server;
 
     use super::*;

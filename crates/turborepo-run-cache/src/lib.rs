@@ -31,10 +31,8 @@ use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{TrackedErrors, task::PackageTaskEventBuilder};
-// Re-export for backwards compatibility
-pub use turborepo_types::RunCacheOpts;
 use turborepo_types::{
-    OutputLogsMode, TaskDefinition, TaskDefinitionExt, TaskOutputs, TaskOutputsExt,
+    OutputLogsMode, RunCacheOpts, TaskDefinition, TaskDefinitionExt, TaskOutputs, TaskOutputsExt,
 };
 use turborepo_ui::{ColorConfig, GREY, LogWriter, color, tui::event::CacheResult};
 

@@ -22,8 +22,7 @@ use turbopath::{
     AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf,
 };
 use turborepo_cache::CacheHitMetadata;
-// Re-export turborepo_engine::TaskNode for convenience
-pub use turborepo_engine::TaskNode;
+use turborepo_engine::TaskNode;
 use turborepo_env::{
     BUILTIN_PASS_THROUGH_ENV, BySource, CompiledWildcards, DetailedMap, EnvironmentVariableMap,
 };

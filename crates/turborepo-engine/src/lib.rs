@@ -33,7 +33,7 @@ pub use builder_errors::{
     CyclicExtends, InvalidTaskNameError, MissingPackageFromTaskError, MissingPackageTaskError,
     MissingRootTaskInTurboJsonError, MissingTaskError, MissingTurboJsonExtends,
 };
-pub use execute::{ExecuteError, ExecutionOptions, Message, StopExecution};
+pub use execute::{ExecuteError, ExecutionOptions, Message};
 pub use graph_visualizer::{
     ChildProcess, ChildSpawner, Error as GraphVisualizerError, GraphvizWarningFn, NoOpChild,
     NoOpSpawner, write_graph,

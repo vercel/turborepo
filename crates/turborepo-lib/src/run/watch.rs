@@ -23,6 +23,7 @@ use turborepo_filewatch::{
 use turborepo_repository::package_graph::PackageName;
 use turborepo_run_cache::{OutputWatcher, OutputWatcherError};
 use turborepo_scm::SCM;
+use turborepo_scope::target_selector::InvalidSelectorError;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{sender::UISender, LogSinks};
@@ -33,7 +34,7 @@ use crate::{
     engine::{EngineExt, TaskNode},
     get_version, opts,
     package_changes_watcher::PackageChangesWatcher,
-    run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
+    run::{self, builder::RunBuilder, Run},
 };
 
 #[derive(Debug)]

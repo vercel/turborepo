@@ -6,6 +6,7 @@ use std::{
 
 use tracing::warn;
 use turborepo_api_client::{Client, TokenClient};
+use turborepo_types::SecretString;
 use turborepo_ui::{ColorConfig, start_spinner};
 use url::Url;
 
@@ -277,8 +278,7 @@ pub async fn sso_login<T: Client + TokenClient>(
     let verification_token = sso_redirect(login_url_configuration, sso_team, port).await?;
 
     // Verify the SSO token with the API
-    let secret_verification_token =
-        turborepo_api_client::SecretString::new(verification_token.clone());
+    let secret_verification_token = SecretString::new(verification_token.clone());
 
     let token_name = make_token_name()?;
 
@@ -507,7 +507,7 @@ mod tests {
     impl Client for MockApiClient {
         async fn get_user(
             &self,
-            token: &turborepo_api_client::SecretString,
+            token: &SecretString,
         ) -> turborepo_api_client::Result<UserResponse> {
             if token.expose().is_empty() {
                 return Err(MockApiError::EmptyToken.into());
@@ -524,7 +524,7 @@ mod tests {
         }
         async fn get_teams(
             &self,
-            token: &turborepo_api_client::SecretString,
+            token: &SecretString,
         ) -> turborepo_api_client::Result<TeamsResponse> {
             if token.expose().is_empty() {
                 return Err(MockApiError::EmptyToken.into());
@@ -543,7 +543,7 @@ mod tests {
         }
         async fn get_team(
             &self,
-            token: &turborepo_api_client::SecretString,
+            token: &SecretString,
             team_id: &str,
         ) -> turborepo_api_client::Result<Option<Team>> {
             if token.expose() == "needs-sso-token" || team_id == "needs-sso-team" {
@@ -564,7 +564,7 @@ mod tests {
         }
         async fn verify_sso_token(
             &self,
-            token: &turborepo_api_client::SecretString,
+            token: &SecretString,
             _: &str,
         ) -> turborepo_api_client::Result<VerifiedSsoUser> {
             Ok(VerifiedSsoUser {
@@ -585,7 +585,7 @@ mod tests {
     impl TokenClient for MockApiClient {
         async fn get_metadata(
             &self,
-            token: &turborepo_api_client::SecretString,
+            token: &SecretString,
         ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
             if token.expose() == "stale-token" {
                 return Err(turborepo_api_client::Error::InvalidToken {
@@ -605,10 +605,7 @@ mod tests {
                 client_id: None,
             })
         }
-        async fn delete_token(
-            &self,
-            _token: &turborepo_api_client::SecretString,
-        ) -> turborepo_api_client::Result<()> {
+        async fn delete_token(&self, _token: &SecretString) -> turborepo_api_client::Result<()> {
             Ok(())
         }
     }

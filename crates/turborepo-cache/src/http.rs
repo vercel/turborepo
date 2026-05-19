@@ -12,6 +12,7 @@ use turborepo_api_client::{
     APIAuth, APIClient, CacheClient, Response,
     analytics::{self, AnalyticsEvent},
 };
+use turborepo_types::SecretString;
 
 use crate::{
     CacheError, CacheHitMetadata, CacheOpts, CacheSource, LazyScmState,
@@ -22,10 +23,7 @@ use crate::{
 
 pub type UploadMap = HashMap<String, UploadProgressQuery<10, 100>>;
 
-fn replace_api_auth_token(
-    api_auth: &mut APIAuth,
-    token: turborepo_api_client::SecretString,
-) -> bool {
+fn replace_api_auth_token(api_auth: &mut APIAuth, token: SecretString) -> bool {
     if api_auth.token.expose() == token.expose() {
         return false;
     }
@@ -468,7 +466,8 @@ mod test {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_analytics::start_analytics;
-    use turborepo_api_client::{APIClient, SecretString, analytics};
+    use turborepo_api_client::{APIClient, analytics};
+    use turborepo_types::SecretString;
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{

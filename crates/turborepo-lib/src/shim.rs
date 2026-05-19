@@ -1,8 +1,7 @@
 //! Shim module for turborepo-lib.
 //!
 //! This module provides the integration between the `turborepo-shim` crate and
-//! `turborepo-lib`. It implements the traits required by the shim and
-//! re-exports types for backward compatibility.
+//! `turborepo-lib`. It implements the traits required by the shim.
 
 use std::sync::Arc;
 
@@ -11,13 +10,9 @@ use shared_child::SharedChild;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::inference::RepoState;
-// Re-export types from turborepo-shim for backward compatibility.
-// These exports are used by other parts of turborepo-lib and external code.
-#[allow(unused_imports)]
-pub use turborepo_shim::{turbo_version_has_shim, ShimArgs, TurboState, INVOCATION_DIR_ENV_VAR};
 use turborepo_shim::{
-    ChildSpawner, ConfigProvider, ShimConfigurationOptions, ShimResult, ShimRuntime, TurboRunner,
-    VersionProvider,
+    ChildSpawner, ConfigProvider, ShimArgs, ShimConfigurationOptions, ShimResult, ShimRuntime,
+    TurboRunner, VersionProvider,
 };
 use turborepo_ui::ColorConfig;
 

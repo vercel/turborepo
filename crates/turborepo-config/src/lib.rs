@@ -49,8 +49,8 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_cache::CacheConfig;
 use turborepo_repository::package_graph::PackageName;
 use turborepo_scm::WorktreeInfo;
-pub use turborepo_turbo_json::FutureFlags;
-pub use turborepo_types::{EnvMode, LogOrder, UIMode};
+use turborepo_turbo_json::FutureFlags;
+use turborepo_types::{EnvMode, LogOrder, UIMode};
 
 pub const CONFIG_FILE: &str = "turbo.json";
 pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";

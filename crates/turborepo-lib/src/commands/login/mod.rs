@@ -7,6 +7,7 @@ use turborepo_auth::{
     TURBO_AUTH_FILE, TURBO_TOKEN_DIR,
 };
 use turborepo_telemetry::events::command::{CommandEventBuilder, LoginMethod};
+use turborepo_types::SecretString;
 
 use crate::commands::CommandBase;
 
@@ -147,7 +148,7 @@ fn write_token(
                 refresh_token: ts
                     .refresh_token
                     .as_ref()
-                    .map(|rt| turborepo_api_client::SecretString::new(rt.clone())),
+                    .map(|rt| SecretString::new(rt.clone())),
                 expires_at: Some(now_secs + ts.expires_in),
             }
         }
@@ -212,12 +213,8 @@ mod tests {
 
         let turbo_auth_path = config_root.join_components(&[TURBO_TOKEN_DIR, TURBO_AUTH_FILE]);
         AuthTokens {
-            token: Some(turborepo_api_client::SecretString::new(
-                "vca_stale_token".to_owned(),
-            )),
-            refresh_token: Some(turborepo_api_client::SecretString::new(
-                "stale_refresh_token".to_owned(),
-            )),
+            token: Some(SecretString::new("vca_stale_token".to_owned())),
+            refresh_token: Some(SecretString::new("stale_refresh_token".to_owned())),
             expires_at: Some(4_102_444_800),
         }
         .write_to_config_file(&turbo_auth_path)

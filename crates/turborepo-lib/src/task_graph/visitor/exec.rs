@@ -10,6 +10,7 @@ use turborepo_engine::{TaskError, TaskErrorCollectorWrapper, TaskWarningCollecto
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_process::ProcessManager;
 use turborepo_task_executor::{DryRunExecutor, TaskExecutor};
+use turborepo_task_hash::TaskHashTracker;
 use turborepo_task_id::TaskId;
 
 use super::{
@@ -19,7 +20,6 @@ use super::{
 use crate::{
     engine::Engine,
     run::{task_access::TaskAccess, TaskCache},
-    task_hash::TaskHashTracker,
 };
 
 /// Type alias for the concrete TaskExecutor used in turborepo-lib.

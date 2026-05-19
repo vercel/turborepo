@@ -237,7 +237,8 @@ mod tests {
     use futures::future::try_join_all;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_api_client::{APIAuth, APIClient, SecretString};
+    use turborepo_api_client::{APIAuth, APIClient};
+    use turborepo_types::SecretString;
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{

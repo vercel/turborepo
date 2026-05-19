@@ -17,17 +17,7 @@ use capnp::{
 };
 pub use oid_hash::OidHash;
 pub use traits::TurboHash;
-// Re-export for backward compatibility. New code should import from `turborepo_types`.
-#[deprecated(
-    since = "2.4.0",
-    note = "Import `EnvMode` directly from `turborepo_types` instead"
-)]
-pub use turborepo_types::EnvMode;
-#[deprecated(
-    since = "2.4.0",
-    note = "Import `TaskOutputs` directly from `turborepo_types` instead"
-)]
-pub use turborepo_types::TaskOutputs;
+use turborepo_types::{EnvMode, TaskOutputs};
 
 #[allow(dead_code)]
 mod proto_capnp {

@@ -12,8 +12,7 @@ use turborepo_cache::AsyncCache;
 use turborepo_gitignore::ensure_turbo_is_gitignored;
 use turborepo_scm::SCM;
 use turborepo_task_executor::TaskAccessProvider;
-// Re-export from turborepo-turbo-json
-pub use turborepo_turbo_json::TASK_ACCESS_CONFIG_PATH;
+use turborepo_turbo_json::TASK_ACCESS_CONFIG_PATH;
 use turborepo_unescape::UnescapedString;
 
 use super::ConfigCache;

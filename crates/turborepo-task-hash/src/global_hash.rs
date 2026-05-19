@@ -16,11 +16,9 @@ use turborepo_repository::{
     package_graph::PackageInfo,
     package_manager::{self, PackageManager},
 };
-use turborepo_run_summary::{
-    GlobalEnvVarSummary, GlobalHashInputs as GlobalHashInputsTrait, GlobalHashSummary,
-};
+use turborepo_run_summary::{GlobalEnvVarSummary, GlobalHashSummary};
 use turborepo_scm::SCM;
-use turborepo_types::EnvMode;
+use turborepo_types::{EnvMode, GlobalHashInputs as GlobalHashInputsTrait};
 
 #[allow(dead_code)]
 static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
