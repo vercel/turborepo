@@ -270,18 +270,10 @@ impl AbsoluteSystemPath {
 
     pub fn join_unix_path(&self, unix_path: impl AsRef<RelativeUnixPath>) -> AbsoluteSystemPathBuf {
         let tail = unix_path.as_ref().to_system_path_buf();
-        AbsoluteSystemPathBuf(
-            self.0
-                .join(tail)
-                .as_std_path()
-                .clean()
-                // The unwrap here should never panic as `try_into` will only panic if
-                // - path isn't absolute: self is already absolute, appending to it won't change
-                //   that
-                // - path isn't valid utf8: self and unix_path are both utf8 already
-                .try_into()
-                .expect("joined path is absolute and valid utf8"),
-        )
+        AbsoluteSystemPathBuf(match self.0.join(tail).as_std_path().clean().try_into() {
+            Ok(path) => path,
+            Err(err) => panic!("joined path is absolute and valid utf8: {err:?}"),
+        })
     }
 
     /// Note: This does not handle resolutions, so `../` in a path won't
@@ -394,8 +386,10 @@ impl AbsoluteSystemPath {
             "expected absolute path to start with root/prefix"
         );
 
-        AbsoluteSystemPathBuf::new(stack.into_iter().collect::<Utf8PathBuf>())
-            .expect("collapsed path should be absolute")
+        match AbsoluteSystemPathBuf::new(stack.into_iter().collect::<Utf8PathBuf>()) {
+            Ok(path) => path,
+            Err(err) => panic!("collapsed path should be absolute: {err:?}"),
+        }
     }
 
     // TODO: consider consolidating with `relation_to_path` below
