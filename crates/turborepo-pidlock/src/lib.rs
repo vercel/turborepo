@@ -3,7 +3,6 @@
 //! ability to query the owner of the pidlock.
 
 #![deny(clippy::all)]
-#![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::{
     fs,
@@ -39,13 +38,17 @@ pub enum PidlockError {
 pub enum PidFileError {
     #[error("Error reading pid file {1}: {0}")]
     IO(io::Error, String),
+    #[error("Error opening pid file {1}: {0}")]
+    Open(io::Error, String),
+    #[error("Error writing pid file {1}: {0}")]
+    Write(io::Error, String),
     #[error("Invalid pid {contents} in file {file}: {error}")]
     Invalid {
         error: String,
         contents: String,
         file: String,
     },
-    #[error("Failed to remove stale pid file {1}: {0}")]
+    #[error("Failed to remove pid file {1}: {0}")]
     FailedDelete(io::Error, String),
 }
 
@@ -133,8 +136,8 @@ impl Pidlock {
         }
 
         if let Some(p) = self.path.parent() {
-            // even if this fails, the next call might not
-            std::fs::create_dir_all(p).ok();
+            fs::create_dir_all(p)
+                .map_err(|e| PidFileError::Open(e, self.path.display().to_string()))?;
         }
 
         let mut file = match fs::OpenOptions::new()
@@ -143,12 +146,13 @@ impl Pidlock {
             .open(self.path.clone())
         {
             Ok(file) => file,
-            Err(_) => {
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
                 return Err(PidlockError::LockExists(self.path.clone()));
             }
+            Err(e) => return Err(PidFileError::Open(e, self.path.display().to_string()).into()),
         };
         file.write_all(&format!("{}", self.pid).into_bytes()[..])
-            .unwrap();
+            .map_err(|e| PidFileError::Write(e, self.path.display().to_string()))?;
 
         self.state = PidlockState::Acquired;
         Ok(())
@@ -168,7 +172,8 @@ impl Pidlock {
             }
         }
 
-        fs::remove_file(self.path.clone()).unwrap();
+        fs::remove_file(&self.path)
+            .map_err(|e| PidFileError::FailedDelete(e, self.path.display().to_string()))?;
 
         self.state = PidlockState::Released;
         Ok(())
@@ -243,6 +248,8 @@ impl Drop for Pidlock {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::expect_used, clippy::unwrap_used)]
+
     use std::{assert_matches, fs, io::Write, path::PathBuf};
 
     use rand::{
@@ -335,6 +342,19 @@ mod tests {
                 panic!("Test failed");
             }
         }
+    }
+
+    #[test]
+    fn test_release_missing_file_returns_error() {
+        let (_tmp, pid_path) = make_pid_path();
+        let mut pidfile = Pidlock::new(pid_path.clone());
+        pidfile.acquire().unwrap();
+        fs::remove_file(pid_path).unwrap();
+
+        assert_matches!(
+            pidfile.release(),
+            Err(PidlockError::File(PidFileError::FailedDelete(..)))
+        );
     }
 
     #[test]
