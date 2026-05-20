@@ -10,7 +10,6 @@
 //! must be either `wait`ed on or `stop`ped to drive state.
 
 #![deny(clippy::all)]
-#![allow(clippy::expect_used)]
 
 mod child;
 mod command;
@@ -20,7 +19,7 @@ mod job_object;
 use std::{
     collections::HashMap,
     io::{self, IsTerminal},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, MutexGuard},
     time::Duration,
 };
 
@@ -63,6 +62,12 @@ pub struct PtySize {
 }
 
 impl ProcessManager {
+    fn lock_state(&self) -> MutexGuard<'_, ProcessManagerInner> {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     pub fn new(use_pty: bool) -> Self {
         debug!("spawning children with pty: {use_pty}");
         Self {
@@ -84,7 +89,7 @@ impl ProcessManager {
     }
 
     pub fn running_task_ids(&self) -> Vec<String> {
-        let lock = self.state.lock().expect("lock poisoned");
+        let lock = self.lock_state();
         let mut task_ids = lock
             .children
             .iter()
@@ -179,7 +184,7 @@ impl ProcessManager {
     /// the entire process manager.
     pub async fn stop_tasks(&self, task_ids: &[TaskId<'static>]) {
         let children_to_stop: Vec<_> = {
-            let mut lock = self.state.lock().expect("not poisoned");
+            let mut lock = self.lock_state();
 
             // If we're closing, return early - close() will stop all children and they
             // should report Shutdown. By checking is_closing under the lock, we ensure
@@ -233,7 +238,7 @@ impl ProcessManager {
         let mut set = JoinSet::new();
 
         {
-            let mut lock = self.state.lock().expect("not poisoned");
+            let mut lock = self.lock_state();
             lock.is_closing = true;
 
             for child in lock.children.values().flatten() {
@@ -264,17 +269,17 @@ impl ProcessManager {
         }
 
         {
-            let mut lock = self.state.lock().expect("not poisoned");
+            let mut lock = self.lock_state();
             lock.children.clear();
         }
     }
 
     pub fn set_pty_size(&self, rows: u16, cols: u16) {
-        self.state.lock().expect("not poisoned").size = Some(PtySize { rows, cols });
+        self.lock_state().size = Some(PtySize { rows, cols });
     }
 
     pub fn is_closing(&self) -> bool {
-        self.state.lock().expect("not poisoned").is_closing
+        self.lock_state().is_closing
     }
 }
 
