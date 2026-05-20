@@ -157,7 +157,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let turbo_json_loader = self
             .turbo_json_loader
             .take()
-            .expect("engine builder cannot be constructed without TurboJsonLoader");
+            .ok_or(BuilderError::MissingTurboJsonLoader)?;
         let mut missing_tasks: HashMap<&TaskName<'_>, Spanned<()>> =
             HashMap::from_iter(self.tasks.iter().map(|spanned| spanned.as_ref().split()));
         let mut traversal_queue = VecDeque::with_capacity(1);
@@ -746,10 +746,8 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // Normal inheritance path
         let mut turbo_json_chain = turbo_json_chain.into_iter();
 
-        if let Some(root_definition) = turbo_json_chain
-            .next()
-            .expect("root turbo.json is always in chain")
-            .task(task_id, task_name)?
+        if let Some(root_turbo_json) = turbo_json_chain.next()
+            && let Some(root_definition) = root_turbo_json.task(task_id, task_name)?
         {
             task_definitions.push(root_definition)
         }

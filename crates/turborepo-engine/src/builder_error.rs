@@ -57,6 +57,8 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     InvalidTaskName(Box<InvalidTaskNameError>),
+    #[error("Engine builder cannot be constructed without a turbo.json loader")]
+    MissingTurboJsonLoader,
 }
 
 impl From<ValidateError> for Error {
