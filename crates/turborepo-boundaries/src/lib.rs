@@ -1,5 +1,4 @@
 #![allow(clippy::sliced_string_as_bytes)]
-#![allow(clippy::unwrap_used)]
 // miette's derive macro causes false positives for these lints
 #![allow(unused_assignments)]
 
@@ -11,16 +10,14 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs::OpenOptions,
     io::Write,
-    sync::LazyLock,
 };
 
 pub use config::{BoundariesConfig, Permissions, Rule, RulesMap};
-use globwalk::Settings;
+use globwalk::{Settings, ValidatedGlob};
 use indicatif::ProgressBar;
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
 use oxc_ast::ast::Comment;
 use rayon::prelude::*;
-use regex::Regex;
 pub use tags::{ProcessedPermissions, ProcessedRule, ProcessedRulesMap};
 use thiserror::Error;
 use tracing::{debug_span, info_span};
@@ -215,6 +212,8 @@ pub enum Error {
     #[error(transparent)]
     Lockfiles(#[from] turborepo_lockfiles::Error),
     #[error(transparent)]
+    Glob(#[from] globwalk::GlobError),
+    #[error(transparent)]
     GlobWalk(#[from] globwalk::WalkError),
     #[error("failed to read file: {0}")]
     FileNotFound(AbsoluteSystemPathBuf),
@@ -234,9 +233,28 @@ impl BoundariesDiagnostic {
     }
 }
 
-static PACKAGE_NAME_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$").unwrap()
-});
+fn is_valid_package_name_segment(segment: &str) -> bool {
+    let Some((first, rest)) = segment.as_bytes().split_first() else {
+        return false;
+    };
+
+    matches!(*first, b'a'..=b'z' | b'0'..=b'9' | b'-' | b'~')
+        && rest
+            .iter()
+            .all(|byte| matches!(byte, b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~'))
+}
+
+fn is_valid_package_name(package_name: &str) -> bool {
+    if let Some(scoped_name) = package_name.strip_prefix('@') {
+        let Some((scope, name)) = scoped_name.split_once('/') else {
+            return false;
+        };
+
+        is_valid_package_name_segment(scope) && is_valid_package_name_segment(name)
+    } else {
+        is_valid_package_name_segment(package_name)
+    }
+}
 
 /// Maximum number of warnings to show
 const MAX_WARNINGS: usize = 16;
@@ -364,7 +382,7 @@ impl BoundariesChecker {
     /// against declared dependencies.
     fn is_potential_package_name(import: &str) -> bool {
         let base = imports::get_package_name(import);
-        PACKAGE_NAME_REGEX.is_match(base)
+        is_valid_package_name(base)
     }
 
     /// Patch a file with boundaries-ignore comments
@@ -569,19 +587,22 @@ impl BoundariesChecker {
 
         let files = {
             let _span = info_span!("globwalk", package = %package_name).entered();
+            let include_patterns: [ValidatedGlob; 8] = [
+                "**/*.js".parse()?,
+                "**/*.jsx".parse()?,
+                "**/*.ts".parse()?,
+                "**/*.tsx".parse()?,
+                "**/*.cjs".parse()?,
+                "**/*.mjs".parse()?,
+                "**/*.svelte".parse()?,
+                "**/*.vue".parse()?,
+            ];
+            let exclude_patterns: [ValidatedGlob; 1] = ["**/node_modules/**".parse()?];
+
             globwalk::globwalk_with_settings(
                 &package_root,
-                &[
-                    "**/*.js".parse().unwrap(),
-                    "**/*.jsx".parse().unwrap(),
-                    "**/*.ts".parse().unwrap(),
-                    "**/*.tsx".parse().unwrap(),
-                    "**/*.cjs".parse().unwrap(),
-                    "**/*.mjs".parse().unwrap(),
-                    "**/*.svelte".parse().unwrap(),
-                    "**/*.vue".parse().unwrap(),
-                ],
-                &["**/node_modules/**".parse().unwrap()],
+                &include_patterns,
+                &exclude_patterns,
                 globwalk::WalkType::Files,
                 Settings::default().ignore_nested_packages(),
             )?
@@ -710,7 +731,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_package_name_regex() {
+    fn test_potential_package_name() {
         assert!(BoundariesChecker::is_potential_package_name("lodash"));
         assert!(BoundariesChecker::is_potential_package_name(
             "@scope/package"
