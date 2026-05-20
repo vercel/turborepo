@@ -735,7 +735,7 @@ impl ChildHandle {
                 let mut killer = child.clone_killer();
                 tokio::task::spawn_blocking(move || killer.kill())
                     .await
-                    .unwrap()
+                    .map_err(|err| io::Error::other(format!("pty kill task failed: {err}")))?
             }
         }
     }
@@ -1111,11 +1111,17 @@ impl Child {
     }
 
     fn stdin_inner(&mut self) -> Option<ChildInput> {
-        self.stdin.lock().unwrap().take()
+        self.stdin
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
     }
 
     fn outputs(&self) -> Option<ChildOutput> {
-        self.output.lock().unwrap().take()
+        self.output
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
     }
 
     pub fn stdin(&mut self) -> Option<Box<dyn Write + Send>> {

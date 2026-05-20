@@ -10,7 +10,7 @@
 //! must be either `wait`ed on or `stop`ped to drive state.
 
 #![deny(clippy::all)]
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
 
 mod child;
 mod command;
@@ -131,7 +131,10 @@ impl ProcessManager {
             .then(|| command.label())
             .unwrap_or_default();
         trace!("acquiring lock for spawning {label}");
-        let mut lock = self.state.lock().unwrap();
+        let mut lock = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         trace!("acquired lock for spawning {label}");
         if lock.is_closing {
             debug!("process manager closing");
