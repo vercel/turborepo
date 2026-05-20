@@ -494,7 +494,7 @@ impl FsEventWatcher {
             }
 
             // Wait for the thread to shut down.
-            thread_handle.join().expect("thread to shut down");
+            let _ = thread_handle.join();
         }
     }
 
@@ -668,9 +668,7 @@ impl FsEventWatcher {
 
                     // the calling to CFRunLoopRun will be terminated by CFRunLoopStop call in
                     // drop()
-                    rl_tx
-                        .send(CFSendWrapper(cur_runloop))
-                        .expect("Unable to send runloop to watcher");
+                    let _ = rl_tx.send(CFSendWrapper(cur_runloop));
 
                     cf::CFRunLoopRun();
                     fs::FSEventStreamStop(stream);
@@ -685,8 +683,7 @@ impl FsEventWatcher {
     }
 
     fn configure_raw_mode(&mut self, _config: Config, tx: Sender<Result<bool>>) {
-        tx.send(Ok(false))
-            .expect("configuration channel disconnect");
+        let _ = tx.send(Ok(false));
     }
 }
 
@@ -777,7 +774,9 @@ unsafe fn callback_impl(
         for ev in translate_flags(flag, true).into_iter() {
             // TODO: precise
             let ev = ev.add_path(path.clone());
-            let mut event_handler = event_handler.lock().expect("lock not to be poisoned");
+            let mut event_handler = event_handler
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             event_handler.handle_event(Ok(ev));
         }
     }

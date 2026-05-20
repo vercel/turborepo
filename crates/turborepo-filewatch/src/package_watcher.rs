@@ -357,7 +357,7 @@ impl Subscriber {
             &file_event
                 .paths
                 .iter()
-                .map(|p| AbsoluteSystemPath::from_std_path(p).expect("these paths are absolute"))
+                .filter_map(|p| AbsoluteSystemPath::from_std_path(p).ok())
                 .collect::<Vec<_>>(),
         );
     }
@@ -418,13 +418,15 @@ impl Subscriber {
             .iter()
             .filter_map(|p| p.as_os_str().to_str())
         {
-            let path_file = AbsoluteSystemPathBuf::new(path).expect("watched paths are absolute");
+            let Ok(path_file) = AbsoluteSystemPathBuf::new(path) else {
+                continue;
+            };
             let path_workspace: &AbsoluteSystemPath =
                 if path_file.file_name() == Some("package.json") {
                     // The file event is for a package.json file. Check if the parent is a workspace
-                    let path_parent = path_file
-                        .parent()
-                        .expect("watched paths will not be at the root");
+                    let Some(path_parent) = path_file.parent() else {
+                        continue;
+                    };
                     if filter
                         .target_is_workspace(&self.repo_root, path_parent)
                         .unwrap_or(false)
@@ -559,7 +561,10 @@ async fn discover_packages(repo_root: AbsoluteSystemPathBuf) -> PackageState {
     let workspaces = initial_discovery
         .workspaces
         .into_iter()
-        .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
+        .filter_map(|p| {
+            let parent = p.package_json.parent()?.to_owned();
+            Some((parent, p))
+        })
         .collect::<HashMap<_, _>>();
     PackageState::ValidWorkspaces {
         package_manager: initial_discovery.package_manager,
