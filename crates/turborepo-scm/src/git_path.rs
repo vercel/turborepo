@@ -90,7 +90,9 @@ fn escape_bytes(bytes: &[u8]) -> String {
             b'\t' => escaped.push_str("\\t"),
             b'\0' => escaped.push_str("\\0"),
             0x20..=0x7e => escaped.push(*byte as char),
-            _ => write!(escaped, "\\x{byte:02x}").expect("writing to String cannot fail"),
+            _ => {
+                let _ = write!(escaped, "\\x{byte:02x}");
+            }
         }
     }
     escaped
