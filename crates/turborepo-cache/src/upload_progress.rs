@@ -59,7 +59,10 @@ where
                     let r#gen = (this.start.elapsed().as_millis() as usize) / INTERVAL;
                     (r#gen, r#gen % BUCKETS)
                 };
-                let mut state = this.state.lock().unwrap();
+                let mut state = this
+                    .state
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 let (r#gen, value) = &mut state.1[index];
                 if *r#gen != curr_gen {
                     *r#gen = curr_gen;
@@ -128,7 +131,9 @@ impl<const BUCKETS: usize, const INTERVAL: usize> UploadProgressQuery<BUCKETS, I
     ///
     /// Returns `None` if the `UploadProgress` has been dropped.
     pub fn bytes(&self) -> Option<usize> {
-        self.state.upgrade().map(|s| s.lock().unwrap().0)
+        self.state
+            .upgrade()
+            .map(|s| s.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).0)
     }
 
     pub fn size(&self) -> Option<usize> {
@@ -146,7 +151,7 @@ impl<const BUCKETS: usize, const INTERVAL: usize> UploadProgressQuery<BUCKETS, I
         let curr_gen = self.curr_gen();
         let min_gen = curr_gen.saturating_sub(BUCKETS);
         self.state.upgrade().map(|s| {
-            let s = s.lock().unwrap();
+            let s = s.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
             let total_bytes =
                 s.1.iter()
                     .filter(|(r#gen, _)| *r#gen >= min_gen)

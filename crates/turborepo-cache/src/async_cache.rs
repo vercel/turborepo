@@ -74,7 +74,9 @@ impl AsyncCache {
                         duration,
                         files,
                     } => {
-                        let permit = semaphore.clone().acquire_owned().await.unwrap();
+                        let Ok(permit) = semaphore.clone().acquire_owned().await else {
+                            break;
+                        };
                         let real_cache = real_cache.clone();
                         let warnings = warnings.clone();
                         let worker_span = tracing::span!(Level::TRACE, "cache worker: cache PUT");
