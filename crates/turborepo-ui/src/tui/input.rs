@@ -205,10 +205,8 @@ fn encode_key(key: KeyEvent) -> Vec<u8> {
     };
 
     match code {
-        Char(c) if mods.contains(KeyModifiers::CONTROL) => {
-            let Some(c) = ctrl_mapping(c) else {
-                return Vec::new();
-            };
+        Char(c) if mods.contains(KeyModifiers::CONTROL) && ctrl_mapping(c).is_some() => {
+            let c = ctrl_mapping(c).unwrap();
             if mods.contains(KeyModifiers::ALT) {
                 buf.push(0x1b as char);
             }
