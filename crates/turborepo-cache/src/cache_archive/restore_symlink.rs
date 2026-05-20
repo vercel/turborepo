@@ -98,7 +98,9 @@ fn actually_restore_symlink<'a>(
 
     _ = symlink_from.remove();
 
-    let link_name = entry.link_name()?.expect("have linkname");
+    let link_name = entry
+        .link_name()?
+        .ok_or_else(|| CacheError::MalformedTar(Backtrace::capture()))?;
     let symlink_to = link_name.to_str().ok_or_else(|| {
         CacheError::PathError(
             PathError::InvalidUnicode(link_name.to_string_lossy().to_string()),
@@ -177,11 +179,13 @@ pub fn canonicalize_linkname(
         // a link target.
         UnknownPathType::Anchored(cleaned_linkname) => {
             let source = anchor.resolve(processed_name);
-            let canonicalized = source
-                .parent()
-                .expect("expected parent for file")
-                .resolve(&cleaned_linkname)
-                .clean()?;
+            let Some(parent) = source.parent() else {
+                return Err(CacheError::InvalidFilePath(
+                    source.to_string(),
+                    Backtrace::capture(),
+                ));
+            };
+            let canonicalized = parent.resolve(&cleaned_linkname).clean()?;
 
             Ok(canonicalized)
         }
