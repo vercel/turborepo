@@ -7,7 +7,6 @@
 // Allow large error types - boxing would be a significant refactor and these
 // errors are already established patterns in the codebase
 #![allow(clippy::result_large_err)]
-#![allow(clippy::expect_used)]
 
 pub mod affected;
 mod builder;
@@ -1187,14 +1186,14 @@ impl turborepo_task_executor::TaskErrorCollector for TaskErrorCollectorWrapper {
     fn push_spawn_error(&self, task_id: String, error: std::io::Error) {
         self.0
             .lock()
-            .expect("lock poisoned")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .push(TaskError::from_spawn(task_id, error));
     }
 
     fn push_execution_error(&self, task_id: String, command: String, exit_code: i32) {
         self.0
             .lock()
-            .expect("lock poisoned")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .push(TaskError::from_execution(task_id, command, exit_code));
     }
 }
@@ -1227,7 +1226,10 @@ impl Default for TaskWarningCollectorWrapper {
 impl turborepo_task_executor::TaskWarningCollector for TaskWarningCollectorWrapper {
     fn push_platform_env_warning(&self, task_id: &str, missing_vars: Vec<String>) {
         if let Some(warning) = TaskWarning::new(task_id, missing_vars) {
-            self.0.lock().expect("lock poisoned").push(warning);
+            self.0
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .push(warning);
         }
     }
 }

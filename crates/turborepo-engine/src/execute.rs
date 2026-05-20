@@ -38,6 +38,8 @@ impl ExecutionOptions {
 pub enum ExecuteError {
     #[error("Semaphore closed before all tasks finished")]
     Semaphore(#[from] tokio::sync::AcquireError),
+    #[error("Task worker failed: {0}")]
+    Join(#[from] tokio::task::JoinError),
     #[error("Engine visitor closed channel before walk finished")]
     Visitor,
     #[error(
@@ -96,7 +98,7 @@ impl<T: TaskDefinitionInfo + Clone + Send + Sync + 'static> Engine<Built, T> {
                 let TaskNode::Task(task_id) = this
                     .task_graph
                     .node_weight(node_id)
-                    .expect("node id should be present")
+                    .unwrap_or(&TaskNode::Root)
                 else {
                     // Root task has nothing to do so we don't emit any event for it
                     if done.send(true).is_err() {
@@ -110,10 +112,7 @@ impl<T: TaskDefinitionInfo + Clone + Send + Sync + 'static> Engine<Built, T> {
 
                 // Acquire the semaphore unless parallel
                 let _permit = match parallel {
-                    false => Some(sema.acquire().await.expect(
-                        "Graph concurrency semaphore closed while tasks are still attempting to \
-                         acquire permits",
-                    )),
+                    false => Some(sema.acquire().await?),
                     true => None,
                 };
 
@@ -131,7 +130,7 @@ impl<T: TaskDefinitionInfo + Clone + Send + Sync + 'static> Engine<Built, T> {
                     Err(StopExecution::AllTasks)
                         if walker
                             .lock()
-                            .expect("Walker mutex poisoned")
+                            .unwrap_or_else(|poisoned| poisoned.into_inner())
                             .cancel()
                             .is_err() =>
                     {
@@ -150,7 +149,7 @@ impl<T: TaskDefinitionInfo + Clone + Send + Sync + 'static> Engine<Built, T> {
         }
 
         while let Some(res) = tasks.next().await {
-            res.expect("unable to join task")?;
+            res??;
         }
 
         Ok(())
