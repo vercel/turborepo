@@ -23,7 +23,7 @@ use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker, TaskTracker};
 use turborepo_scm::SCM;
-use turborepo_task_executor::{turbo_regex, TaskOutput};
+use turborepo_task_executor::{command_invokes_turbo, TaskOutput};
 use turborepo_task_hash::{
     Error as TaskHashError, GlobalHashableInputs, PackageInputsHashes, TaskHashTrackerState,
 };
@@ -376,7 +376,9 @@ impl<'a> Visitor<'a> {
             let command = workspace_info.package_json.scripts.get(info.task());
 
             match command {
-                Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(cmd) => {
+                Some(cmd)
+                    if info.package() == ROOT_PKG_NAME && command_invokes_turbo(cmd.as_str()) =>
+                {
                     let package_task_event =
                         PackageTaskEventBuilder::new(info.package(), info.task())
                             .with_parent(telemetry);
