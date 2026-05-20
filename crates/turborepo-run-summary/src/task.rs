@@ -543,7 +543,11 @@ mod test {
         })
         ; "resolved task definition"
     )]
-    fn test_serialization(value: impl serde::Serialize, expected: serde_json::Value) {
-        assert_eq!(serde_json::to_value(value).unwrap(), expected);
+    fn test_serialization(
+        value: impl serde::Serialize,
+        expected: serde_json::Value,
+    ) -> Result<(), serde_json::Error> {
+        assert_eq!(serde_json::to_value(value)?, expected);
+        Ok(())
     }
 }
