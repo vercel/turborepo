@@ -352,7 +352,7 @@ impl TurboSubscriber {
         self.daemon_update.reload(Some(layer))?;
         self.daemon_guard
             .lock()
-            .expect("not poisoned")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .replace(guard);
 
         Ok(())
@@ -377,11 +377,11 @@ impl TurboSubscriber {
         self.chrome_update.reload(Some(layer))?;
         self.chrome_guard
             .lock()
-            .expect("not poisoned")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .replace(guard);
         self.chrome_tracing_file
             .lock()
-            .expect("not poisoned")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .replace(file_path);
 
         Ok(())
@@ -392,7 +392,7 @@ impl TurboSubscriber {
     pub fn chrome_tracing_file(&self) -> Option<String> {
         self.chrome_tracing_file
             .lock()
-            .expect("not poisoned")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone()
     }
 
@@ -403,7 +403,10 @@ impl TurboSubscriber {
         // Disable the layer by replacing it with None
         self.chrome_update.reload(None)?;
         // Drop the flush guard to finalize the file
-        self.chrome_guard.lock().expect("not poisoned").take();
+        self.chrome_guard
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take();
         Ok(())
     }
 }

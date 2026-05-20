@@ -143,8 +143,7 @@ fn write_token(
         Some(ts) => {
             let now_secs = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .expect("Time went backwards")
-                .as_secs();
+                .map_or(0, |duration| duration.as_secs());
             AuthTokens {
                 token: Some(token),
                 refresh_token: ts

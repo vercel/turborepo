@@ -406,7 +406,9 @@ impl WatchClient {
             loop {
                 notify_run.notified().await;
                 let some_changed_packages = {
-                    let mut guard = pending_changes.lock().expect("poisoned lock");
+                    let mut guard = pending_changes
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
                     (!guard.is_empty()).then(|| std::mem::take(guard.deref_mut()))
                 };
 
@@ -486,7 +488,11 @@ impl WatchClient {
             PackageChangeEvent::Package {
                 name,
                 changed_files: files,
-            } => match changed_packages.lock().expect("poisoned lock").deref_mut() {
+            } => match changed_packages
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .deref_mut()
+            {
                 ChangedPackages::All => {
                     // Already rediscovering everything, ignore
                 }
@@ -499,7 +505,9 @@ impl WatchClient {
                 }
             },
             PackageChangeEvent::Rediscover => {
-                *changed_packages.lock().expect("poisoned lock") = ChangedPackages::All;
+                *changed_packages
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = ChangedPackages::All;
             }
         }
     }

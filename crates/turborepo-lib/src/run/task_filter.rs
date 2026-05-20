@@ -238,8 +238,7 @@ fn find_matching_packages(
     if let Some(parent_dir) = &selector.parent_dir {
         let parent_dir_unix = parent_dir.to_unix();
         if let Ok(globber) = wax::Glob::new(parent_dir_unix.as_str()) {
-            let root_anchor = AnchoredSystemPathBuf::from_raw(".").expect("valid anchored");
-            if parent_dir == &root_anchor {
+            if parent_dir.as_str() == "." {
                 packages.insert(PackageName::Root);
             } else {
                 for (name, info) in pkg_dep_graph.packages() {

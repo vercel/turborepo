@@ -1228,8 +1228,7 @@ impl RunArgs {
             if file.is_empty() {
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .expect("system clock is before unix epoch")
-                    .as_millis();
+                    .map_or(0, |duration| duration.as_millis());
                 format!("profile.{now}")
             } else {
                 file.to_string()
@@ -1460,7 +1459,7 @@ pub fn run(
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .expect("failed to build tokio runtime");
+        .map_err(Error::Runtime)?;
 
     runtime.block_on(run_main(repo_state, logger, color_config, query_server))
 }

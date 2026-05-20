@@ -424,7 +424,7 @@ impl RunBuilder {
     ) -> Result<(Run, Option<AnalyticsHandle>), Error> {
         tracing::trace!(
             platform = %TurboState::platform_name(),
-            start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
+            start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |duration| duration.as_micros()),
             turbo_version = %TurboState::version(),
             numcpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),
             "performing run on {:?}",
@@ -517,8 +517,7 @@ impl RunBuilder {
         // burned ~500ms of CPU on background threads.
         let scm = scm_task
             .instrument(tracing::info_span!("scm_task_await"))
-            .await
-            .expect("detecting scm panicked");
+            .await?;
         let all_prefixes = Self::all_package_prefixes(&pkg_dep_graph, &scm)?;
         let repo_index_task = if all_prefixes.is_empty() {
             None
@@ -578,11 +577,10 @@ impl RunBuilder {
             .api_auth
             .as_ref()
             .filter(|auth| auth.is_linked())
-            .map(|auth| {
-                let api_client = api_client
+            .and_then(|auth| {
+                api_client
                     .clone()
-                    .expect("linked analytics require a resolved API client");
-                start_analytics(auth.clone(), api_client)
+                    .map(|api_client| start_analytics(auth.clone(), api_client))
             })
             .unzip();
 
@@ -859,10 +857,11 @@ impl RunBuilder {
                 observability::Handle::try_init(opts, token)
             });
         let repo_index = Arc::new(match repo_index_task {
-            Some(repo_index_task) => repo_index_task
-                .instrument(tracing::info_span!("repo_index_untracked_await"))
-                .await
-                .expect("scoping repo index panicked"),
+            Some(repo_index_task) => {
+                repo_index_task
+                    .instrument(tracing::info_span!("repo_index_untracked_await"))
+                    .await?
+            }
             None => None,
         });
         Ok((
@@ -919,7 +918,7 @@ impl RunBuilder {
             .scope_opts
             .affected_range
             .as_ref()
-            .expect("caller verified affected_range is Some");
+            .ok_or(Error::MissingAffectedRange)?;
         let maybe_changed_files = scm.changed_files(
             &self.repo_root,
             from_ref.as_deref(),
