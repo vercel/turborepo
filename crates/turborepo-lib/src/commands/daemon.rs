@@ -357,6 +357,7 @@ pub async fn daemon_server(
             warn!("daemon already running");
         }
         CloseReason::SocketOpenError(e) => return Err(e.into()),
+        CloseReason::WatcherSetupError(e) => return Err(e.into()),
         CloseReason::Interrupt
         | CloseReason::ServerClosed
         | CloseReason::WatcherClosed

@@ -48,6 +48,7 @@ pub enum CloseReason {
     Timeout,
     Shutdown,
     WatcherClosed,
+    WatcherSetupError(WatchError),
     ServerClosed,
     Interrupt,
     SocketOpenError(SocketOpenError),
@@ -267,13 +268,16 @@ where
         let (trigger_shutdown, mut shutdown_signal) = mpsc::channel::<()>(1);
 
         let factory = package_changes_watcher_factory.clone();
-        let (service, exit_root_watch, watch_root_handle) = TurboGrpcServiceInner::new(
+        let (service, exit_root_watch, watch_root_handle) = match TurboGrpcServiceInner::new(
             repo_root.clone(),
             trigger_shutdown,
             paths.log_file,
             custom_turbo_json_path,
             move |args| (factory)(args),
-        );
+        ) {
+            Ok(inner) => inner,
+            Err(err) => return Ok(CloseReason::WatcherSetupError(err)),
+        };
 
         let running = Arc::new(AtomicBool::new(true));
         let (_pid_lock, stream) =
@@ -341,6 +345,15 @@ struct TurboGrpcServiceInner<W: PackageChangesWatcher + 'static> {
     package_watcher: Arc<PackageWatcher>,
 }
 
+type TurboGrpcServiceInnerInit<W> = Result<
+    (
+        TurboGrpcServiceInner<W>,
+        oneshot::Sender<()>,
+        JoinHandle<Result<(), WatchError>>,
+    ),
+    WatchError,
+>;
+
 // we have a grpc service that uses watching package discovery, and where the
 // watching package hasher also uses watching package discovery as well as
 // falling back to a local package hasher
@@ -351,11 +364,7 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
         log_file: AbsoluteSystemPathBuf,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         package_changes_watcher_factory: F,
-    ) -> (
-        Self,
-        oneshot::Sender<()>,
-        JoinHandle<Result<(), WatchError>>,
-    )
+    ) -> TurboGrpcServiceInnerInit<W>
     where
         F: Fn(PackageChangesWatcherArgs) -> W + Send + Sync + 'static,
     {
@@ -363,8 +372,7 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
             repo_root.clone(),
             custom_turbo_json_path,
             package_changes_watcher_factory,
-        )
-        .unwrap();
+        )?;
 
         tracing::debug!("initing package discovery");
         // Note that we're cloning the Arc, not the package watcher itself
@@ -381,7 +389,7 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
             root_watch_exit_signal,
         ));
 
-        (
+        Ok((
             TurboGrpcServiceInner {
                 package_watcher,
                 shutdown: trigger_shutdown,
@@ -392,7 +400,7 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
             },
             exit_root_watch,
             watch_root_handle,
-        )
+        ))
     }
 
     async fn trigger_shutdown(&self) {

@@ -247,6 +247,9 @@ pub enum DaemonError {
     #[error("failed to determine package manager: {0}")]
     PackageManager(#[from] turborepo_repository::package_manager::Error),
 
+    #[error("failed to setup file watching: {0}")]
+    WatcherSetup(#[from] turborepo_filewatch::WatchError),
+
     #[error("`tail` is not installed. Please install it to use this feature.")]
     TailNotInstalled,
 
