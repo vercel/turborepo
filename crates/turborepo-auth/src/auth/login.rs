@@ -319,7 +319,10 @@ async fn login_redirect<T: Client>(
 ) -> Result<(Token, Option<TokenSet>), Error> {
     let listener = TcpListener::bind(format!("{DEFAULT_HOST_NAME}:{port}"))
         .map_err(error::Error::CallbackListenerFailed)?;
-    let port = listener.local_addr().unwrap().port();
+    let port = listener
+        .local_addr()
+        .map_err(error::Error::CallbackListenerFailed)?
+        .port();
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{port}");
     let state = generate_csrf_state();
 
