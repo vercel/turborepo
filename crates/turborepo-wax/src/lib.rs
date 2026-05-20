@@ -32,8 +32,6 @@
     clippy::unreadable_literal,
     clippy::unused_self
 )]
-#![allow(clippy::expect_used)]
-
 mod capture;
 mod diagnostics;
 mod encode;
@@ -696,11 +694,19 @@ impl<'t> Glob<'t> {
     /// [`RuleError`]: crate::RuleError
     /// [`walk`]: crate::Glob::walk
     pub fn partition(self) -> (PathBuf, Self) {
-        let Glob { tree, .. } = self;
+        let Glob { tree, program } = self;
+        let original = tree.clone();
         let (prefix, tree) = tree.partition();
-        let program =
-            Glob::compile(tree.as_ref().tokens()).expect("failed to compile partitioned glob");
-        (prefix, Glob { tree, program })
+        match Glob::compile(tree.as_ref().tokens()) {
+            Ok(program) => (prefix, Glob { tree, program }),
+            Err(_) => (
+                PathBuf::new(),
+                Glob {
+                    tree: original,
+                    program,
+                },
+            ),
+        }
     }
 
     /// Clones any borrowed data into an owning instance.

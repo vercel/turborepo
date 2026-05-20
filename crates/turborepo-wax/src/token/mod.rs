@@ -8,7 +8,7 @@ use std::{
     mem,
     ops::Deref,
     path::{MAIN_SEPARATOR, PathBuf},
-    slice, str,
+    slice,
 };
 
 use itertools::Itertools as _;
@@ -71,8 +71,13 @@ impl<'t> Tokenized<'t, Annotation> {
     pub fn partition(self) -> (PathBuf, Self) {
         fn pop_expression_bytes(expression: &str, n: usize) -> &str {
             let n = cmp::min(expression.len(), n);
-            str::from_utf8(&expression.as_bytes()[n..])
-                .expect("span offset split UTF-8 byte sequence")
+            expression.get(n..).unwrap_or_else(|| {
+                match ((n + 1)..=expression.len()).find(|index| expression.is_char_boundary(*index))
+                {
+                    Some(index) => &expression[index..],
+                    None => "",
+                }
+            })
         }
 
         let Tokenized {

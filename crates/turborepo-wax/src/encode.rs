@@ -132,8 +132,9 @@ impl Grouping {
 }
 
 pub fn case_folded_eq(left: &str, right: &str) -> bool {
-    let regex = Regex::new(&format!("(?i){}", regex::escape(left)))
-        .expect("failed to compile literal regular expression");
+    let Ok(regex) = Regex::new(&format!("(?i){}", regex::escape(left))) else {
+        return false;
+    };
     if let Some(matched) = regex.find(right) {
         matched.start() == 0 && matched.end() == right.len()
     } else {

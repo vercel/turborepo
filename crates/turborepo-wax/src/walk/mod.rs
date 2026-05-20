@@ -128,10 +128,10 @@ trait SplitAtDepth {
 impl SplitAtDepth for Path {
     fn split_at_depth(&self, depth: usize) -> (&Path, &Path) {
         let ancestor = self.ancestors().nth(depth).unwrap_or(Path::new(""));
-        let descendant = self
-            .strip_prefix(ancestor)
-            .expect("path ancestor is not a prefix");
-        (ancestor, descendant)
+        match self.strip_prefix(ancestor) {
+            Ok(descendant) => (ancestor, descendant),
+            Err(_) => (Path::new(""), self),
+        }
     }
 }
 
@@ -148,9 +148,7 @@ impl JoinAndGetDepth for Path {
             // If `path` is absolute, then it replaces `self` (`joined` and `path` are the
             // same). In this case, the depth of the join is the depth of
             // `joined` (there is no root sub-path).
-            depth
-                .checked_add(1)
-                .expect("overflow determining join depth")
+            depth.saturating_add(1)
         } else if path.has_root() {
             depth
         } else {
@@ -191,23 +189,18 @@ impl From<walkdir::Error> for WalkError {
     fn from(error: walkdir::Error) -> Self {
         let depth = error.depth();
         let path = error.path().map(From::from);
-        if error.io_error().is_some() {
+        let root = error.loop_ancestor().map(From::from);
+        if let Some(error) = error.into_io_error() {
             WalkError {
                 depth,
-                kind: WalkErrorKind::Io {
-                    path,
-                    error: error.into_io_error().expect("incongruent error kind"),
-                },
+                kind: WalkErrorKind::Io { path, error },
             }
         } else {
             WalkError {
                 depth,
                 kind: WalkErrorKind::LinkCycle {
-                    root: error
-                        .loop_ancestor()
-                        .expect("incongruent error kind")
-                        .into(),
-                    leaf: path.expect("incongruent error kind"),
+                    root: root.unwrap_or_default(),
+                    leaf: path.unwrap_or_default(),
                 },
             }
         }
@@ -542,7 +535,9 @@ impl TryFrom<walkdir::Error> for WaxDirEntry {
             .filter(|e| e.kind() == ErrorKind::NotFound)
             .is_some()
         {
-            let path = error.path().expect("not found errors always have paths");
+            let Some(path) = error.path() else {
+                return Err(error);
+            };
 
             if let Some(symlink_meta) = std::fs::symlink_metadata(path)
                 .ok()
@@ -616,11 +611,8 @@ impl Entry for TreeEntry {
     }
 
     fn root_relative_paths(&self) -> (&Path, &Path) {
-        self.path().split_at_depth(
-            self.depth()
-                .checked_add(self.prefix)
-                .expect("overflow determining root-relative paths"),
-        )
+        self.path()
+            .split_at_depth(self.depth().saturating_add(self.prefix))
     }
 
     fn metadata(&self) -> Result<Metadata, WalkError> {
