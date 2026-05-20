@@ -51,7 +51,7 @@ impl<'a> EntireScreen<'a> {
         grid.all_rows().take(rows).enumerate().map(move |(i, row)| {
             // number of rows in a grid is stored in a u16 (see Size), so
             // visible_rows can never return enough rows to overflow here
-            let i = i.try_into().unwrap();
+            let i = u16::try_from(i).unwrap_or(u16::MAX);
             let mut contents = vec![];
             // We don't need final cursor position as long as CRLF is used and not just LF
             let (_pos, attrs) = row.write_contents_formatted(
