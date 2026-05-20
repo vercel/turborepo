@@ -298,7 +298,9 @@ impl<'a> Visitor<'a> {
                 })
                 .collect();
 
-            let mut map = results.lock().expect("precompute lock poisoned");
+            let mut map = results
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             for result in wave_results {
                 if let Some((task_id, hash, env)) = result? {
                     map.insert(task_id, (hash, env));
@@ -306,10 +308,14 @@ impl<'a> Visitor<'a> {
             }
         }
 
-        Ok(Arc::try_unwrap(results)
-            .expect("all wave references dropped")
-            .into_inner()
-            .expect("mutex not poisoned"))
+        match Arc::try_unwrap(results) {
+            Ok(mutex) => Ok(mutex
+                .into_inner()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())),
+            Err(arc) => Ok(std::mem::take(
+                &mut *arc.lock().unwrap_or_else(|poisoned| poisoned.into_inner()),
+            )),
+        }
     }
 
     #[tracing::instrument(skip_all)]
@@ -535,7 +541,9 @@ impl<'a> Visitor<'a> {
         // Always wait for the engine, even after a dispatch error. If we broke
         // early the engine will see the closed channel and return
         // Err(ExecuteError::Visitor), which is expected — not a real error.
-        let engine_result = engine_handle.await.expect("engine execution panicked");
+        let engine_result = engine_handle
+            .await
+            .map_err(|err| Error::InternalErrors(format!("engine execution panicked: {err}")))?;
 
         // Always drain spawned tasks so every TaskTracker is consumed before
         // the ExecutionTracker is dropped.
@@ -570,11 +578,13 @@ impl<'a> Visitor<'a> {
         self.task_access.save().await;
 
         let errors = match Arc::try_unwrap(errors) {
-            Ok(mutex) => mutex.into_inner().expect("mutex poisoned"),
+            Ok(mutex) => mutex
+                .into_inner()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
             Err(arc) => {
                 // In watch mode, fire-and-forget persistent tasks may still
                 // hold references. Drain the collected errors from the mutex.
-                std::mem::take(&mut *arc.lock().expect("mutex poisoned"))
+                std::mem::take(&mut *arc.lock().unwrap_or_else(|poisoned| poisoned.into_inner()))
             }
         };
 

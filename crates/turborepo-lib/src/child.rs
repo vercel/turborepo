@@ -22,7 +22,7 @@ pub fn spawn_child(mut command: Command) -> Result<Arc<SharedChild>, io::Error> 
             libc::kill(handler_shared_child.id() as i32, libc::SIGTERM);
         }
     })
-    .expect("handler set");
+    .map_err(io::Error::other)?;
 
     Ok(shared_child)
 }

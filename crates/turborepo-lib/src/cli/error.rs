@@ -79,6 +79,8 @@ pub enum Error {
     SignalListener(#[from] turborepo_signals::listeners::Error),
     #[error(transparent)]
     Dialoguer(#[from] dialoguer::Error),
+    #[error("Failed to build Tokio runtime: {0}")]
+    Runtime(#[source] std::io::Error),
 }
 
 const MAX_CHARS_PER_TASK_LINE: usize = 100;

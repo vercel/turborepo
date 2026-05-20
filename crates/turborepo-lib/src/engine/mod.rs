@@ -101,11 +101,10 @@ impl EngineExt for Engine<Built> {
             .task_graph()
             .node_indices()
             .map(|node_index| {
-                let TaskNode::Task(task_id) = self
-                    .task_graph()
-                    .node_weight(node_index)
-                    .expect("graph should contain weight for node index")
-                else {
+                let Some(task_node) = self.task_graph().node_weight(node_index) else {
+                    return Ok(false);
+                };
+                let TaskNode::Task(task_id) = task_node else {
                     // No need to check the root node if that's where we are.
                     return Ok(false);
                 };
@@ -114,11 +113,10 @@ impl EngineExt for Engine<Built> {
                     .task_graph()
                     .neighbors_directed(node_index, petgraph::Direction::Outgoing)
                 {
-                    let TaskNode::Task(dep_id) = self
-                        .task_graph()
-                        .node_weight(dep_index)
-                        .expect("index comes from iterating the graph and must be present")
-                    else {
+                    let Some(dep_node) = self.task_graph().node_weight(dep_index) else {
+                        continue;
+                    };
+                    let TaskNode::Task(dep_id) = dep_node else {
                         // No need to check the root node
                         continue;
                     };
@@ -154,9 +152,12 @@ impl EngineExt for Engine<Built> {
                 }
 
                 // check if the package for the task has that task in its package.json
-                let info = package_graph
-                    .package_info(&PackageName::from(task_id.package().to_string()))
-                    .expect("package graph should contain workspace info for task package");
+                let package_name = PackageName::from(task_id.package().to_string());
+                let info = package_graph.package_info(&package_name).ok_or_else(|| {
+                    ValidateError::MissingPackageJson {
+                        package: task_id.package().to_string(),
+                    }
+                })?;
 
                 let package_has_task = info
                     .package_json

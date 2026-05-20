@@ -946,7 +946,7 @@ impl Run {
         let root_workspace = self
             .pkg_dep_graph
             .package_info(&PackageName::Root)
-            .expect("must have root workspace");
+            .ok_or(Error::MissingRootWorkspace)?;
 
         let is_monorepo = !self.opts.run_opts.single_package;
 
@@ -1023,11 +1023,11 @@ impl Run {
 
         let _setup_span = tracing::debug_span!("post_hashing_setup").entered();
 
-        let package_inputs_hashes = file_hash_result.expect("file hash task did not complete")?;
+        let package_inputs_hashes = file_hash_result.ok_or(Error::FileHashTaskIncomplete)??;
         let root_internal_dependencies_hash =
-            internal_deps_result.expect("internal deps task did not complete")?;
+            internal_deps_result.ok_or(Error::InternalDepsTaskIncomplete)??;
         let global_file_inputs =
-            global_file_result.expect("global file hash task did not complete")?;
+            global_file_result.ok_or(Error::GlobalFileHashTaskIncomplete)??;
 
         let root_external_dependencies_hash =
             is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));

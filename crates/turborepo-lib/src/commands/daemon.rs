@@ -185,11 +185,13 @@ pub async fn daemon_client(
 
             let tail = which("tail").map_err(|_| DaemonError::TailNotInstalled)?;
 
-            std::process::Command::new(tail)
+            if let Err(err) = std::process::Command::new(tail)
                 .arg("-f")
                 .arg(log_file)
                 .status()
-                .expect("failed to execute tail");
+            {
+                tracing::error!("failed to execute tail: {err}");
+            }
         }
         DaemonCommand::Clean {
             clean_logs: should_clean_logs,

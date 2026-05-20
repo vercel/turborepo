@@ -6,7 +6,7 @@
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![allow(clippy::unwrap_used)]
 // Clippy's needless mut lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11299
 #![allow(clippy::needless_pass_by_ref_mut)]
 #![allow(clippy::result_large_err)]
@@ -45,8 +45,7 @@ pub use crate::{child::spawn_child, cli::Args, panic_handler::panic_handler};
 pub fn get_version() -> &'static str {
     include_str!("../../../version.txt")
         .split_once('\n')
-        .expect("Failed to read version from version.txt")
-        .0
+        .map_or(include_str!("../../../version.txt"), |(version, _)| version)
         // On windows we still have a trailing \r
         .trim_end()
 }

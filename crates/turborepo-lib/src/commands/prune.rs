@@ -184,7 +184,7 @@ pub async fn prune(
     let lockfile = prune
         .package_graph
         .lockfile()
-        .expect("Lockfile presence already checked")
+        .ok_or(Error::MissingLockfile)?
         .subgraph(&workspace_paths, &lockfile_keys)?;
 
     let lockfile_name = prune.package_graph.package_manager().lockfile_name();
@@ -230,7 +230,7 @@ pub async fn prune(
     let original_lockfile = prune
         .package_graph
         .lockfile()
-        .expect("lockfile presence checked earlier");
+        .ok_or(Error::MissingLockfile)?;
     let package_manager = prune.package_graph.package_manager();
     let original_patches = collect_patch_paths(
         original_lockfile,

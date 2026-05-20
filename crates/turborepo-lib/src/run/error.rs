@@ -65,4 +65,16 @@ pub enum Error {
     ApiClient(#[from] turborepo_api_client::Error),
     #[error(transparent)]
     Scm(#[from] turborepo_scm::Error),
+    #[error("Background task failed: {0}")]
+    Join(#[from] tokio::task::JoinError),
+    #[error("Missing root workspace")]
+    MissingRootWorkspace,
+    #[error("File hash task did not complete")]
+    FileHashTaskIncomplete,
+    #[error("Internal dependency hash task did not complete")]
+    InternalDepsTaskIncomplete,
+    #[error("Global file hash task did not complete")]
+    GlobalFileHashTaskIncomplete,
+    #[error("Affected range was not configured")]
+    MissingAffectedRange,
 }

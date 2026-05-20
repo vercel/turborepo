@@ -169,8 +169,10 @@ pub async fn run(
         }
 
         if let Some(handle) = handle {
-            if let Err(e) = handle.await.expect("render thread panicked") {
-                error!("error encountered rendering tui: {e}");
+            match handle.await {
+                Ok(Err(e)) => error!("error encountered rendering tui: {e}"),
+                Err(e) => error!("render thread panicked: {e}"),
+                Ok(Ok(())) => {}
             }
         }
 
