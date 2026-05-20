@@ -137,7 +137,11 @@ impl RepoGitIndex {
                         }
 
                         let mut hex_buf = [0u8; 40];
-                        hex::encode_to_slice(e.id.as_bytes(), &mut hex_buf).unwrap();
+                        hex::encode_to_slice(e.id.as_bytes(), &mut hex_buf).map_err(|err| {
+                            Error::git_error(format!(
+                                "failed to encode object id for {rel_path}: {err}"
+                            ))
+                        })?;
                         Ok(EntryClassification::Clean {
                             path: rel_path,
                             oid: OidHash::from_hex_buf(hex_buf),

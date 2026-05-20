@@ -344,7 +344,7 @@ impl BlobHasher for ManualBlobHasher {
     fn finalize(self) -> Result<OidHash, std::io::Error> {
         let result = self.0.finalize();
         let mut hex_buf = [0u8; 40];
-        hex::encode_to_slice(result, &mut hex_buf).unwrap();
+        hex::encode_to_slice(result, &mut hex_buf).map_err(std::io::Error::other)?;
         Ok(OidHash::from_hex_buf(hex_buf))
     }
 }
