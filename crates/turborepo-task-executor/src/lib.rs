@@ -19,8 +19,6 @@
 //! - Cache saving on success
 //! - Error and warning collection
 
-#![allow(clippy::unwrap_used)]
-
 mod command;
 mod exec;
 mod output;
@@ -40,7 +38,8 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_task_id::TaskId;
 use turborepo_types::{ContinueMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, UIMode};
 pub use visitor::{
-    EngineExecutor, EngineMessage, EngineProvider, TaskCallback, TaskHashProvider, turbo_regex,
+    EngineExecutor, EngineMessage, EngineProvider, TaskCallback, TaskHashProvider,
+    command_invokes_turbo,
 };
 
 /// Configuration for task execution.

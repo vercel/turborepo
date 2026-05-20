@@ -4,9 +4,6 @@
 //! visitor. The concrete `Visitor` implementation remains in `turborepo-lib`,
 //! but these abstractions allow for decoupling and testing.
 
-use std::sync::OnceLock;
-
-use regex::Regex;
 use tokio::sync::mpsc;
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_task_id::TaskId;
@@ -75,10 +72,9 @@ pub trait EngineExecutor: Send {
     ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send;
 }
 
-/// Check if a command invokes turbo (which would create a recursive loop).
-pub fn turbo_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"(?:^|\s)turbo(?:$|\s)").unwrap())
+/// Check if a command invokes turbo, which would create a recursive loop.
+pub fn command_invokes_turbo(command: &str) -> bool {
+    command.split_whitespace().any(|part| part == "turbo")
 }
 
 #[cfg(test)]
@@ -86,12 +82,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_turbo_regex() {
-        let re = turbo_regex();
-        assert!(re.is_match("turbo"));
-        assert!(re.is_match("turbo build"));
-        assert!(re.is_match("npx turbo build"));
-        assert!(!re.is_match("turbopack"));
-        assert!(!re.is_match("myturbo"));
+    fn test_command_invokes_turbo() {
+        assert!(command_invokes_turbo("turbo"));
+        assert!(command_invokes_turbo("turbo build"));
+        assert!(command_invokes_turbo("npx turbo build"));
+        assert!(!command_invokes_turbo("turbopack"));
+        assert!(!command_invokes_turbo("myturbo"));
     }
 }
