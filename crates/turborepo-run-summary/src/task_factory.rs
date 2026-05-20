@@ -32,6 +32,16 @@ pub enum Error {
     MissingWorkspace(String),
     #[error("No task definition found for {0}")]
     MissingTask(TaskId<'static>),
+    #[error("No task hash found for {0}")]
+    MissingHash(TaskId<'static>),
+    #[error("No expanded inputs found for {0}")]
+    MissingExpandedInputs(TaskId<'static>),
+    #[error("No environment variables found for {0}")]
+    MissingEnvVars(TaskId<'static>),
+    #[error(transparent)]
+    Env(#[from] turborepo_env::Error),
+    #[error(transparent)]
+    Path(#[from] turbopath::PathError),
 }
 
 impl<'a, E, H, R> TaskSummaryFactory<'a, E, H, R>
@@ -123,29 +133,31 @@ where
         let hash = self
             .hash_tracker
             .hash(task_id)
-            .unwrap_or_else(|| panic!("hash not found for {task_id}"));
+            .ok_or_else(|| Error::MissingHash(task_id.clone()))?;
 
         let expanded_inputs: std::collections::BTreeMap<_, _> = self
             .hash_tracker
             .expanded_inputs(task_id)
-            .expect("inputs not found")
+            .ok_or_else(|| Error::MissingExpandedInputs(task_id.clone()))?
             .into_iter()
             .collect();
 
         let env_vars = self
             .hash_tracker
             .env_vars(task_id)
-            .expect("env var map is inserted at the same time as hash");
+            .ok_or_else(|| Error::MissingEnvVars(task_id.clone()))?;
 
         let cache_summary = TaskCacheSummary::from(self.hash_tracker.cache_status(task_id));
 
         let (dependencies, dependents) = self.dependencies_and_dependents(task_id, display_task);
 
-        let log_file = task_definition.cache.then(|| {
+        let log_file = if task_definition.cache {
             let path = workspace_info.package_path().to_owned();
-            let relative_log_file = workspace_relative_log_file(task_id.task());
-            path.join(&relative_log_file).to_string()
-        });
+            let relative_log_file = workspace_relative_log_file(task_id.task())?;
+            Some(path.join(&relative_log_file).to_string())
+        } else {
+            None
+        };
 
         let with = task_definition
             .with
@@ -189,8 +201,7 @@ where
                 task_definition,
                 env_vars,
                 self.env_at_start,
-            )
-            .expect("invalid glob in task definition should have been caught earlier"),
+            )?,
             execution,
         })
     }
@@ -224,10 +235,11 @@ where
 }
 
 /// Get the workspace-relative path to the log file for a task.
-fn workspace_relative_log_file(task_name: &str) -> turbopath::AnchoredSystemPathBuf {
-    let log_dir =
-        AnchoredSystemPath::new(LOG_DIR).expect("LOG_DIR should be a valid AnchoredSystemPath");
-    log_dir.join_component(&task_log_filename(task_name))
+fn workspace_relative_log_file(
+    task_name: &str,
+) -> Result<turbopath::AnchoredSystemPathBuf, turbopath::PathError> {
+    let log_dir = AnchoredSystemPath::new(LOG_DIR)?;
+    Ok(log_dir.join_component(&task_log_filename(task_name)))
 }
 
 /// Computes a hash of external dependencies from transitive dependencies.
