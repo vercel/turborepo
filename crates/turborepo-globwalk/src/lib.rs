@@ -4,7 +4,6 @@
 //! but we do not support.
 
 #![deny(clippy::all)]
-#![allow(clippy::unwrap_used)]
 #![cfg_attr(test, allow(clippy::expect_used))]
 
 use std::{
@@ -60,13 +59,17 @@ fn join_unix_like_paths(a: &str, b: &str) -> String {
     [a.trim_end_matches('/'), "/", b.trim_start_matches('/')].concat()
 }
 
-fn glob_literals() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").unwrap())
+fn glob_literals() -> Option<&'static Regex> {
+    static RE: OnceLock<Option<Regex>> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").ok())
+        .as_ref()
 }
 
 fn escape_glob_literals(literal_glob: &str) -> Cow<'_, str> {
-    glob_literals().replace_all(literal_glob, "\\$literal")
+    let Some(glob_literals) = glob_literals() else {
+        return Cow::Borrowed(literal_glob);
+    };
+    glob_literals.replace_all(literal_glob, "\\$literal")
 }
 
 #[tracing::instrument(skip(include, exclude))]
@@ -118,19 +121,22 @@ fn preprocess_paths_and_globs<S: AsRef<str>>(
     Ok((base_path, include_paths, exclude_paths))
 }
 
-fn double_doublestar() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"\*\*(?:/\*\*)+").unwrap())
+fn double_doublestar() -> Option<&'static Regex> {
+    static RE: OnceLock<Option<Regex>> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"\*\*(?:/\*\*)+").ok())
+        .as_ref()
 }
 
-fn leading_doublestar() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"\*\*(?P<suffix>[^*/]+)").unwrap())
+fn leading_doublestar() -> Option<&'static Regex> {
+    static RE: OnceLock<Option<Regex>> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"\*\*(?P<suffix>[^*/]+)").ok())
+        .as_ref()
 }
 
-fn trailing_doublestar() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"(?P<prefix>[^*/]+)\*\*").unwrap())
+fn trailing_doublestar() -> Option<&'static Regex> {
+    static RE: OnceLock<Option<Regex>> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?P<prefix>[^*/]+)\*\*").ok())
+        .as_ref()
 }
 
 pub fn fix_glob_pattern(pattern: &str) -> Cow<'_, str> {
@@ -158,9 +164,18 @@ pub fn fix_glob_pattern(pattern: &str) -> Cow<'_, str> {
     // - If no match, replace() returns Cow::Borrowed pointing to the input
     // - If match, replace() returns Cow::Owned with the replacement
     // This avoids allocations when patterns don't need modification.
-    let p1 = double_doublestar().replace(&p0, "**");
-    let p2 = leading_doublestar().replace(&p1, "**/*$suffix");
-    let p3 = trailing_doublestar().replace(&p2, "$prefix*/**");
+    let p1 = match double_doublestar() {
+        Some(regex) => regex.replace(&p0, "**"),
+        None => Cow::Borrowed(p0.as_ref()),
+    };
+    let p2 = match leading_doublestar() {
+        Some(regex) => regex.replace(&p1, "**/*$suffix"),
+        None => Cow::Borrowed(p1.as_ref()),
+    };
+    let p3 = match trailing_doublestar() {
+        Some(regex) => regex.replace(&p2, "$prefix*/**"),
+        None => Cow::Borrowed(p2.as_ref()),
+    };
 
     // Determine if we can return a borrowed reference to the original pattern.
     // On Unix, if no regex matched, all Cows in the chain are Borrowed and
@@ -252,7 +267,7 @@ fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
 fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String) {
     // If the glob has a glob literal in it e.g. *
     // then skip trying to read it as a file path.
-    if glob_literals().is_match(&*glob) {
+    if glob_literals().is_some_and(|glob_literals| glob_literals.is_match(&*glob)) {
         return;
     }
 
