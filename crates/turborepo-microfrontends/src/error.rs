@@ -26,6 +26,8 @@ pub enum Error {
          package root (no subdirectories or path traversal)."
     )]
     InvalidCustomConfigPath(String),
+    #[error("Invalid microfrontends configuration path: {0}")]
+    InvalidConfigPath(String),
 }
 
 impl Error {

@@ -5,12 +5,12 @@ const PORT_RANGE: u16 = MAX_PORT - MIN_PORT;
 pub fn generate_port_from_name(name: &str) -> u16 {
     let mut hash: i32 = 0;
     for c in name.chars() {
-        let code = i32::try_from(u32::from(c)).expect("char::MAX is less than 2^31");
+        let code = u32::from(c) as i32;
         hash = (hash << 5).overflowing_sub(hash).0.overflowing_add(code).0;
     }
     let hash = hash.abs_diff(0);
     let port = hash % u32::from(PORT_RANGE);
-    MIN_PORT + u16::try_from(port).expect("u32 modulo a u16 number will be a valid u16")
+    MIN_PORT + port as u16
 }
 
 pub fn parse_port_from_host(host: &str) -> Option<u16> {
