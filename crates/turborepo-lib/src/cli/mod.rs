@@ -274,7 +274,9 @@ fn get_run_args_options() -> Vec<String> {
         .get_arguments()
         .filter(|arg| arg.get_long().is_some())
         .map(|arg| {
-            let long = arg.get_long().unwrap();
+            let Some(long) = arg.get_long() else {
+                return String::new();
+            };
             let value_names: Vec<_> = arg.get_value_names().unwrap_or_default().to_vec();
 
             if value_names.is_empty() {
@@ -426,11 +428,10 @@ impl Args {
             }
             if let Some(graph) = &run_args.graph {
                 match Utf8Path::new(graph).extension() {
-                    Some("png" | "jpg" | "pdf") => {
+                    Some(ext @ ("png" | "jpg" | "pdf")) => {
                         warn!(
                             "--graph with .{ext} output is deprecated and will be removed in \
                              version 3.0. Use .svg, .html, .mermaid, or .dot instead.",
-                            ext = Utf8Path::new(graph).extension().unwrap()
                         );
                     }
                     Some("json") => {
@@ -1541,7 +1542,11 @@ async fn run_main(
     // track args
     cli_args.track(&root_telemetry);
 
-    let cli_result = match cli_args.command.as_ref().unwrap() {
+    let Some(command) = cli_args.command.as_ref() else {
+        return Err(Error::NoCommand);
+    };
+
+    let cli_result = match command {
         Command::Bin => {
             CommandEventBuilder::new("bin")
                 .with_parent(&root_telemetry)

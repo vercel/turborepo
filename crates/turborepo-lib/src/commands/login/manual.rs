@@ -156,7 +156,7 @@ fn write_remote(
     let with_api_url = set_path(
         &turbo_json_before,
         &["remoteCache", "apiUrl"],
-        &serde_json::to_string(api_url).unwrap(),
+        &serde_json::to_string(api_url)?,
     )?;
     let (key, value) = match team_id {
         TeamIdentifier::Id(id) => ("teamId", id),
@@ -165,7 +165,7 @@ fn write_remote(
     let with_team = set_path(
         &with_api_url,
         &["remoteCache", key],
-        &serde_json::to_string(&value).unwrap(),
+        &serde_json::to_string(&value)?,
     )?;
     root_turbo_json.ensure_dir()?;
     root_turbo_json.create_with_contents(with_team)?;

@@ -314,8 +314,13 @@ impl TaskAccess {
         }
 
         if let Some(config_cache) = &self.config_cache {
-            let traced_config =
-                RawTurboJson::from_task_access_trace(&self.trace_by_task.lock().unwrap());
+            let traced_config = {
+                let trace_by_task = self
+                    .trace_by_task
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                RawTurboJson::from_task_access_trace(&trace_by_task)
+            };
             if traced_config.is_some() {
                 // convert the traced_config to json and write the file to disk
                 let traced_config_json = serde_json::to_string_pretty(&traced_config)?;
