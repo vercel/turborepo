@@ -74,9 +74,9 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_package_manager_and_lockfile() {
-        let tmpdir = TempDir::with_prefix("local_config").unwrap();
-        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+    fn test_package_manager_and_lockfile() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = TempDir::with_prefix("local_config")?;
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
         let repo = RepoState {
             root: root.to_owned(),
             mode: RepoMode::MultiPackage,
@@ -84,11 +84,9 @@ mod test {
             package_manager: Ok(PackageManager::Npm),
         };
         let lockfile = root.join_component("package-lock.json");
-        lockfile
-            .create_with_contents(include_bytes!(
-                "../fixtures/local_config/turbov2.package-lock.json"
-            ))
-            .unwrap();
+        lockfile.create_with_contents(include_bytes!(
+            "../fixtures/local_config/turbov2.package-lock.json"
+        ))?;
 
         assert_eq!(
             LocalTurboConfig::infer_internal(&repo, Some(true)),
@@ -96,12 +94,13 @@ mod test {
                 turbo_version: "2.0.3".into()
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn test_just_lockfile() {
-        let tmpdir = TempDir::with_prefix("local_config").unwrap();
-        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+    fn test_just_lockfile() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = TempDir::with_prefix("local_config")?;
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
         let repo = RepoState {
             root: root.to_owned(),
             mode: RepoMode::MultiPackage,
@@ -109,11 +108,9 @@ mod test {
             package_manager: Err(Error::MissingPackageManager),
         };
         let lockfile = root.join_component("package-lock.json");
-        lockfile
-            .create_with_contents(include_bytes!(
-                "../fixtures/local_config/turbov2.package-lock.json"
-            ))
-            .unwrap();
+        lockfile.create_with_contents(include_bytes!(
+            "../fixtures/local_config/turbov2.package-lock.json"
+        ))?;
 
         assert_eq!(
             LocalTurboConfig::infer_internal(&repo, Some(true)),
@@ -121,12 +118,13 @@ mod test {
                 turbo_version: "2.0.3".into()
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn test_package_json_dep() {
-        let tmpdir = TempDir::with_prefix("local_config").unwrap();
-        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+    fn test_package_json_dep() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = TempDir::with_prefix("local_config")?;
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
         let repo = RepoState {
             root: root.to_owned(),
             mode: RepoMode::MultiPackage,
@@ -142,12 +140,13 @@ mod test {
         };
 
         assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None,);
+        Ok(())
     }
 
     #[test]
-    fn test_package_json_dev_dep() {
-        let tmpdir = TempDir::with_prefix("local_config").unwrap();
-        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+    fn test_package_json_dev_dep() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = TempDir::with_prefix("local_config")?;
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
         let repo = RepoState {
             root: root.to_owned(),
             mode: RepoMode::MultiPackage,
@@ -163,12 +162,13 @@ mod test {
         };
 
         assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None);
+        Ok(())
     }
 
     #[test]
-    fn test_v1_schema() {
-        let tmpdir = TempDir::with_prefix("local_config").unwrap();
-        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+    fn test_v1_schema() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = TempDir::with_prefix("local_config")?;
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
         let repo = RepoState {
             root: root.to_owned(),
             mode: RepoMode::MultiPackage,
@@ -177,15 +177,15 @@ mod test {
         };
         let turbo_json = root.join_component("turbo.json");
         turbo_json
-            .create_with_contents(include_bytes!("../fixtures/local_config/turbo.v1.json"))
-            .unwrap();
+            .create_with_contents(include_bytes!("../fixtures/local_config/turbo.v1.json"))?;
         assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None);
+        Ok(())
     }
 
     #[test]
-    fn test_v2_schema() {
-        let tmpdir = TempDir::with_prefix("local_config").unwrap();
-        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+    fn test_v2_schema() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = TempDir::with_prefix("local_config")?;
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
         let repo = RepoState {
             root: root.to_owned(),
             mode: RepoMode::MultiPackage,
@@ -194,15 +194,15 @@ mod test {
         };
         let turbo_json = root.join_component("turbo.json");
         turbo_json
-            .create_with_contents(include_bytes!("../fixtures/local_config/turbo.v2.json"))
-            .unwrap();
+            .create_with_contents(include_bytes!("../fixtures/local_config/turbo.v2.json"))?;
         assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None,);
+        Ok(())
     }
 
     #[test]
-    fn nothing() {
-        let tmpdir = TempDir::with_prefix("local_config").unwrap();
-        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+    fn nothing() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = TempDir::with_prefix("local_config")?;
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
         let repo = RepoState {
             root: root.to_owned(),
             mode: RepoMode::MultiPackage,
@@ -210,5 +210,6 @@ mod test {
             package_manager: Err(Error::MissingPackageManager),
         };
         assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None,);
+        Ok(())
     }
 }
