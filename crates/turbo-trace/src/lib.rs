@@ -5,7 +5,6 @@
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
-#![allow(clippy::expect_used)]
 mod import_finder;
 mod tracer;
 
