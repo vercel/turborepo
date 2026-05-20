@@ -2,7 +2,6 @@
 //! logging sinks, and the TUI. Includes a `ColorSelector` that lets multiple
 //! concurrent resources get an assigned color.
 #![feature(deadline_api)]
-#![allow(clippy::unwrap_used)]
 
 mod color_selector;
 mod log_sinks;
