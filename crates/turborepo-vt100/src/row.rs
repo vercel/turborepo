@@ -15,11 +15,8 @@ impl Row {
     }
 
     fn cols(&self) -> u16 {
-        self.cells
-            .len()
-            .try_into()
-            // we limit the number of cols to a u16 (see Size)
-            .unwrap()
+        // we limit the number of cols to a u16 (see Size)
+        u16::try_from(self.cells.len()).unwrap_or(u16::MAX)
     }
 
     pub fn clear(&mut self, attrs: crate::attrs::Attrs) {
@@ -128,7 +125,7 @@ impl Row {
             prev_was_wide = cell.is_wide();
 
             // we limit the number of cols to a u16 (see Size)
-            let col: u16 = col.try_into().unwrap();
+            let col = u16::try_from(col).unwrap_or(u16::MAX);
             if cell.has_contents() {
                 for _ in 0..(col - prev_col) {
                     contents.push(' ');
@@ -196,7 +193,7 @@ impl Row {
             prev_was_wide = cell.is_wide();
 
             // we limit the number of cols to a u16 (see Size)
-            let col: u16 = col.try_into().unwrap();
+            let col = u16::try_from(col).unwrap_or(u16::MAX);
             let pos = crate::grid::Pos { row, col };
 
             if let Some((prev_col, attrs)) = erase
@@ -352,7 +349,7 @@ impl Row {
             prev_was_wide = cell.is_wide();
 
             // we limit the number of cols to a u16 (see Size)
-            let col: u16 = col.try_into().unwrap();
+            let col = u16::try_from(col).unwrap_or(u16::MAX);
             let pos = crate::grid::Pos { row, col };
 
             if let Some((prev_col, attrs)) = erase

@@ -70,18 +70,15 @@ pub enum Error {
 static ADDITIONAL_FILES: LazyLock<Vec<(&'static RelativeUnixPath, Option<CopyDestination>)>> =
     LazyLock::new(|| {
         vec![
-            (RelativeUnixPath::new(".gitattributes").unwrap(), None),
-            (RelativeUnixPath::new(".gitignore").unwrap(), None),
+            (relative_unix_path(".gitattributes"), None),
+            (relative_unix_path(".gitignore"), None),
+            (relative_unix_path(".npmrc"), Some(CopyDestination::Docker)),
             (
-                RelativeUnixPath::new(".npmrc").unwrap(),
+                relative_unix_path(".yarnrc.yml"),
                 Some(CopyDestination::Docker),
             ),
             (
-                RelativeUnixPath::new(".yarnrc.yml").unwrap(),
-                Some(CopyDestination::Docker),
-            ),
-            (
-                RelativeUnixPath::new("bunfig.toml").unwrap(),
+                relative_unix_path("bunfig.toml"),
                 Some(CopyDestination::Docker),
             ),
         ]
@@ -90,29 +87,43 @@ static ADDITIONAL_DIRECTORIES: LazyLock<Vec<(&'static RelativeUnixPath, Option<C
     LazyLock::new(|| {
         vec![
             (
-                RelativeUnixPath::new(".yarn/plugins").unwrap(),
+                relative_unix_path(".yarn/plugins"),
                 Some(CopyDestination::Docker),
             ),
             (
-                RelativeUnixPath::new(".yarn/releases").unwrap(),
+                relative_unix_path(".yarn/releases"),
                 Some(CopyDestination::Docker),
             ),
         ]
     });
 
+fn relative_unix_path(path: &'static str) -> &'static RelativeUnixPath {
+    match RelativeUnixPath::new(path) {
+        Ok(path) => path,
+        Err(_) => unreachable!("static relative Unix path should be valid"),
+    }
+}
+
+fn anchored_path(path: &'static str) -> &'static AnchoredSystemPath {
+    match AnchoredSystemPath::new(path) {
+        Ok(path) => path,
+        Err(_) => unreachable!("static anchored path should be valid"),
+    }
+}
+
 fn package_json() -> &'static AnchoredSystemPath {
     static PATH: OnceLock<&'static AnchoredSystemPath> = OnceLock::new();
-    PATH.get_or_init(|| AnchoredSystemPath::new("package.json").unwrap())
+    PATH.get_or_init(|| anchored_path("package.json"))
 }
 
 fn turbo_json() -> &'static AnchoredSystemPath {
     static PATH: OnceLock<&'static AnchoredSystemPath> = OnceLock::new();
-    PATH.get_or_init(|| AnchoredSystemPath::new(CONFIG_FILE).unwrap())
+    PATH.get_or_init(|| anchored_path(CONFIG_FILE))
 }
 
 fn turbo_jsonc() -> &'static AnchoredSystemPath {
     static PATH: OnceLock<&'static AnchoredSystemPath> = OnceLock::new();
-    PATH.get_or_init(|| AnchoredSystemPath::new(CONFIG_FILE_JSONC).unwrap())
+    PATH.get_or_init(|| anchored_path(CONFIG_FILE_JSONC))
 }
 
 pub async fn prune(
@@ -163,14 +174,9 @@ pub async fn prune(
         // We don't want to do any copying for the root workspace
         if let PackageName::Other(workspace) = workspace {
             prune.copy_workspace(entry.package_json_path(), &entry.package_json)?;
-            workspace_paths.push(
-                entry
-                    .package_json_path()
-                    .parent()
-                    .unwrap()
-                    .to_unix()
-                    .to_string(),
-            );
+            if let Some(parent) = entry.package_json_path().parent() {
+                workspace_paths.push(parent.to_unix().to_string());
+            }
 
             println!(" - Added {workspace}");
             workspace_names.push(workspace);

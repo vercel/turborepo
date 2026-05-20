@@ -73,7 +73,11 @@ pub struct Visitor<'a> {
     code(recursive_turbo_invocations),
     url(
             "{}/messages/{}",
-            TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)
+            TURBO_SITE,
+            self.code().map_or_else(
+                || "recursive-turbo-invocations".to_string(),
+                |code| code.to_string().to_case(Case::Kebab),
+            )
     )
 )]
 pub struct RecursiveTurboError {

@@ -227,9 +227,9 @@ impl Grid {
     }
 
     pub fn current_row_mut(&mut self) -> &mut crate::row::Row {
+        // we assume self.pos.row is always valid
         self.drawing_row_mut(self.pos.row)
-            // we assume self.pos.row is always valid
-            .unwrap()
+            .unwrap_or_else(|| unreachable!("current row should be valid"))
     }
 
     pub fn visible_cell(&self, pos: Pos) -> Option<&crate::Cell> {
@@ -407,7 +407,7 @@ impl Grid {
         for (i, row) in self.visible_rows().enumerate() {
             // we limit the number of cols to a u16 (see Size), so
             // visible_rows() can never return more rows than will fit
-            let i = i.try_into().unwrap();
+            let i = u16::try_from(i).unwrap_or(u16::MAX);
             let (new_pos, new_attrs) = row.write_contents_formatted(
                 contents,
                 0,
@@ -445,7 +445,7 @@ impl Grid {
         {
             // we limit the number of cols to a u16 (see Size), so
             // visible_rows() can never return more rows than will fit
-            let i = i.try_into().unwrap();
+            let i = u16::try_from(i).unwrap_or(u16::MAX);
             let (new_pos, new_attrs) = row.write_contents_diff(
                 contents,
                 prev_row,
@@ -491,21 +491,13 @@ impl Grid {
             };
             if self
                 .drawing_cell(pos)
-                // we assume self.pos.row is always valid, and self.size.cols
-                // - 1 is always a valid column
-                .unwrap()
-                .is_wide_continuation()
+                .is_some_and(crate::Cell::is_wide_continuation)
             {
                 pos.col = self.size.cols - 2;
             }
-            let cell =
-                // we assume self.pos.row is always valid, and self.size.cols
-                // - 2 must be a valid column because self.size.cols - 1 is
-                // always valid and we just checked that the cell at
-                // self.size.cols - 1 is a wide continuation character, which
-                // means that the first half of the wide character must be
-                // before it
-                self.drawing_cell(pos).unwrap();
+            let Some(cell) = self.drawing_cell(pos) else {
+                return;
+            };
             if cell.has_contents() {
                 if let Some(prev_pos) = prev_pos {
                     crate::term::MoveFromTo::new(prev_pos, pos)
@@ -531,25 +523,13 @@ impl Grid {
                     pos.col = self.size.cols - 1;
                     if self
                         .drawing_cell(pos)
-                        // i is always less than self.pos.row, which we assume
-                        // to be always valid, so it must also be valid.
-                        // self.size.cols - 1 is always a valid col.
-                        .unwrap()
-                        .is_wide_continuation()
+                        .is_some_and(crate::Cell::is_wide_continuation)
                     {
                         pos.col = self.size.cols - 2;
                     }
-                    let cell = self
-                        .drawing_cell(pos)
-                        // i is always less than self.pos.row, which we assume
-                        // to be always valid, so it must also be valid.
-                        // self.size.cols - 2 is valid because self.size.cols
-                        // - 1 is always valid, and col gets set to
-                        // self.size.cols - 2 when the cell at self.size.cols
-                        // - 1 is a wide continuation character, meaning that
-                        // the first half of the wide character must be before
-                        // it
-                        .unwrap();
+                    let Some(cell) = self.drawing_cell(pos) else {
+                        continue;
+                    };
                     if cell.has_contents() {
                         if let Some(prev_pos) = prev_pos {
                             if prev_pos.row != i
@@ -608,11 +588,9 @@ impl Grid {
                     contents.push(b' ');
                     // we know that the cell has no contents, but it still may
                     // have drawing attributes (background color, etc)
-                    let end_cell = self
-                        .drawing_cell(pos)
-                        // we assume self.pos.row is always valid, and
-                        // self.size.cols - 1 is always a valid column
-                        .unwrap();
+                    let Some(end_cell) = self.drawing_cell(pos) else {
+                        return;
+                    };
                     end_cell
                         .attrs()
                         .write_escape_code_diff(contents, &prev_attrs);
@@ -684,19 +662,15 @@ impl Grid {
         let wide = pos.col < size.cols
             && self
                 .drawing_cell(pos)
-                // we assume self.pos.row is always valid, and we know we are
-                // not off the end of a row because we just checked pos.col <
-                // size.cols
-                .unwrap()
-                .is_wide_continuation();
+                .is_some_and(crate::Cell::is_wide_continuation);
         let row = self.current_row_mut();
         for _ in 0..count {
-            if wide {
-                row.get_mut(pos.col).unwrap().set_wide_continuation(false);
+            if wide && let Some(cell) = row.get_mut(pos.col) {
+                cell.set_wide_continuation(false);
             }
             row.insert(pos.col, crate::Cell::new());
-            if wide {
-                row.get_mut(pos.col).unwrap().set_wide_continuation(true);
+            if wide && let Some(cell) = row.get_mut(pos.col) {
+                cell.set_wide_continuation(true);
             }
         }
         row.truncate(size.cols);

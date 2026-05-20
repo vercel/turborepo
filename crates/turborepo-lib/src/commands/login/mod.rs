@@ -26,6 +26,8 @@ pub enum Error {
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
+    SerdeJson(#[from] serde_json::Error),
+    #[error(transparent)]
     TurboJsonParse(#[from] crate::turbo_json::parser::Error),
 }
 

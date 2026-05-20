@@ -802,7 +802,9 @@ impl Run {
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
                         let (bytes_per_second, bytes_uploaded, bytes_total) = {
-                            let status = status.lock().unwrap();
+                            let status = status
+                                .lock()
+                                .unwrap_or_else(|poisoned| poisoned.into_inner());
                             let total_bps: f64 =
                                 status.values().filter_map(|task| task.average_bps()).sum();
                             let bytes_uploaded: usize =

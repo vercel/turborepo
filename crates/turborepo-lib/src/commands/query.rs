@@ -97,7 +97,7 @@ pub(crate) fn escape_graphql_string(s: &str) -> String {
             '\u{0008}' => out.push_str("\\b"),
             '\u{000C}' => out.push_str("\\f"),
             c if c.is_control() => {
-                write!(out, "\\u{:04X}", c as u32).unwrap();
+                let _ = write!(out, "\\u{:04X}", c as u32);
             }
             c => out.push(c),
         }
@@ -136,7 +136,7 @@ impl AffectedArgs {
         self.push_package_filter(&mut args);
         if !args.is_empty() {
             let joined = args.join(", ");
-            write!(query, "({joined})").unwrap();
+            let _ = write!(query, "({joined})");
         }
         query.push_str(" { items { name path reason { __typename } } length } }");
         query
@@ -156,7 +156,7 @@ impl AffectedArgs {
         self.push_package_filter(&mut args);
         if !args.is_empty() {
             let joined = args.join(", ");
-            write!(query, "({joined})").unwrap();
+            let _ = write!(query, "({joined})");
         }
         query.push_str(
             " { items { name fullName package { name } reason { __typename } } length } }",
