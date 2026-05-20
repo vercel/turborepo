@@ -418,23 +418,21 @@ fn wait_for_sso_redirect(listener: TcpListener, expected_state: &str) -> Result<
 
         // Determine redirect location (matching vc's getNotificationUrl behavior)
         let redirect_location = if params.contains_key("loginError") {
-            let mut redirect_url =
-                Url::parse("https://vercel.com/notifications/cli-login-failed").expect("valid URL");
+            let mut redirect_url = Url::parse("https://vercel.com/notifications/cli-login-failed")?;
             for (k, v) in &params {
                 redirect_url.query_pairs_mut().append_pair(k, v);
             }
             redirect_url.to_string()
         } else if params.contains_key("ssoEmail") {
             let mut redirect_url =
-                Url::parse("https://vercel.com/notifications/cli-login-incomplete")
-                    .expect("valid URL");
+                Url::parse("https://vercel.com/notifications/cli-login-incomplete")?;
             for (k, v) in &params {
                 redirect_url.query_pairs_mut().append_pair(k, v);
             }
             redirect_url.to_string()
         } else {
-            let mut redirect_url = Url::parse("https://vercel.com/notifications/cli-login-success")
-                .expect("valid URL");
+            let mut redirect_url =
+                Url::parse("https://vercel.com/notifications/cli-login-success")?;
             if let Some(email) = params.get("email") {
                 redirect_url.query_pairs_mut().append_pair("email", email);
             }

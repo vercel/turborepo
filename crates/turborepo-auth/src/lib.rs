@@ -2,7 +2,6 @@
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
-#![allow(clippy::expect_used)]
 //! Turborepo's library for authenticating with the Vercel API.
 //! Handles logging into Vercel, verifying SSO, and storing the token.
 
@@ -356,16 +355,14 @@ fn current_unix_time() -> u128 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_millis()
+        .map_or(0, |duration| duration.as_millis())
 }
 
 pub(crate) fn current_unix_time_secs() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_secs()
+        .map_or(0, |duration| duration.as_secs())
 }
 
 // As of the time of writing, this should always be true, since a token that
