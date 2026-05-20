@@ -50,9 +50,9 @@ pub struct AffectedTask {
 ///    is returned immediately with the corresponding reason.
 ///
 /// 2. **Direct input matching**: For each affected package, each task's
-///    `inputs` globs are checked against the changed files. Only tasks whose
-///    inputs actually match a changed file are marked affected. Tasks without a
-///    definition are conservatively included.
+///    `inputs` globs are checked against the changed files. Packages whose
+///    lockfile-derived external dependency closure changed seed their own tasks
+///    directly, even when no package-local file changed.
 ///
 /// 3. **Graph propagation**: BFS from directly affected tasks through the task
 ///    dependency graph in O(V + E). If task A depends on task B and B is
@@ -140,6 +140,27 @@ pub fn calculate_affected_tasks(
         .into_iter()
         .map(|(task_id, file_path)| (task_id, TaskChangeReason::FileChanged { file_path }))
         .collect();
+
+    let lockfile_changed_packages: HashSet<&str> = affected_packages
+        .iter()
+        .filter_map(|(package_name, reason)| match reason {
+            PackageInclusionReason::ConservativeRootLockfileChanged
+            | PackageInclusionReason::LockfileChanged { .. } => Some(package_name.as_str()),
+            _ => None,
+        })
+        .collect();
+
+    if !lockfile_changed_packages.is_empty() {
+        for task_id in engine.task_ids() {
+            if lockfile_changed_packages.contains(task_id.package()) {
+                affected.entry(task_id.clone()).or_insert_with(|| {
+                    TaskChangeReason::PackageDependencyChanged {
+                        package_name: task_id.package().to_string(),
+                    }
+                });
+            }
+        }
+    }
 
     // Phase 2: Propagate through the task dependency graph via BFS.
     // If task B depends on task A and A is affected, B is also affected.
@@ -384,6 +405,64 @@ mod tests {
             affected_ids.contains(&b_build),
             "lib-b#build should be affected ($TURBO_ROOT$ input config.txt changed), but the \
              query path only visited tasks in affected packages and missed it"
+        );
+    }
+
+    #[tokio::test]
+    async fn lockfile_changed_package_seeds_own_tasks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a", "lib-b"]).await;
+
+        let a_typecheck = TaskId::new("lib-a", "typecheck");
+        let b_typecheck = TaskId::new("lib-b", "typecheck");
+
+        let engine = make_engine(&[
+            (a_typecheck.clone(), TaskDefinition::default()),
+            (b_typecheck.clone(), TaskDefinition::default()),
+        ]);
+
+        let mut affected_packages = HashMap::new();
+        affected_packages.insert(
+            PackageName::from("lib-b"),
+            PackageInclusionReason::LockfileChanged {
+                added: Vec::new(),
+                removed: Vec::new(),
+            },
+        );
+
+        let changed_files =
+            HashSet::from([AnchoredSystemPathBuf::from_raw("pnpm-lock.yaml").unwrap()]);
+
+        let mock: Arc<dyn QueryRun> = Arc::new(MockQueryRun {
+            engine,
+            pkg_dep_graph: pkg_graph,
+            affected_packages,
+            changed_files,
+            repo_root: root.to_owned(),
+        });
+
+        let result = calculate_affected_tasks(&mock, None, None).unwrap();
+        let affected_ids: HashSet<_> = result.iter().map(|at| at.task_id.clone()).collect();
+
+        assert!(
+            !affected_ids.contains(&a_typecheck),
+            "lib-a should not be affected by lib-b's lockfile closure change"
+        );
+        assert!(
+            affected_ids.contains(&b_typecheck),
+            "lib-b#typecheck should be affected when lib-b's lockfile closure changes"
+        );
+
+        let b_task = result.iter().find(|at| at.task_id == b_typecheck).unwrap();
+        assert!(
+            matches!(
+                &b_task.reason,
+                TaskChangeReason::PackageDependencyChanged { package_name }
+                    if package_name == "lib-b"
+            ),
+            "expected package dependency reason, got {:?}",
+            b_task.reason
         );
     }
 }
