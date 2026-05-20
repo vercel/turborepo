@@ -1,5 +1,3 @@
-#![allow(clippy::expect_used)]
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tonic_build_result = tonic_prost_build::configure()
         .build_server(true)
@@ -13,9 +11,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         return Ok(());
-    } else {
-        tonic_build_result.expect("tonic_build command");
     }
+
+    tonic_build_result?;
 
     Ok(())
 }

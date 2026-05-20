@@ -152,9 +152,10 @@ pub async fn listen_socket(
                     };
                 });
 
-                let result = task
-                    .await
-                    .expect("no panic")?
+                let Some(accepted) = task.await.ok().flatten() else {
+                    return None;
+                };
+                let result = accepted
                     .map(|(stream, _)| stream)
                     .map(SafeUnixStream)
                     .and_then(async_io::Async::new)
