@@ -1,5 +1,4 @@
 #![deny(clippy::all)]
-#![allow(clippy::unwrap_used)]
 
 mod error;
 mod headers;
