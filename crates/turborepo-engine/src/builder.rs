@@ -1141,11 +1141,10 @@ impl<'a, L: TurboJsonLoader> TaskInheritanceResolver<'a, L> {
         // Validate that the task exists in the extends chain (only at entry point)
         if self.validation_mode == ValidationMode::Validate && !inherited_tasks.contains(task_name)
         {
-            let (span, text) = task_def
-                .extends
-                .as_ref()
-                .unwrap()
-                .span_and_text("turbo.json");
+            let Some(extends) = task_def.extends.as_ref() else {
+                return Ok(());
+            };
+            let (span, text) = extends.span_and_text("turbo.json");
             let extends_chain = Self::format_extends_chain(turbo_json, inherited_tasks);
             return Err(BuilderError::TurboJson(
                 turborepo_turbo_json::Error::TaskNotInExtendsChain {
