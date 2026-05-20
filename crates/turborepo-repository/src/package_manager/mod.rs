@@ -604,6 +604,11 @@ impl PackageManager {
             }
         }
 
+        // get_package_jsons returns paths from a HashSet, so iteration order is
+        // random. merge_per_workspace_lockfiles is first-wins for shared keys —
+        // sort to make the merged lockfile bytes (and the resulting hashes) stable.
+        workspace_lockfile_data.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
         let refs: Vec<(&str, &[u8])> = workspace_lockfile_data
             .iter()
             .map(|(path, bytes)| (path.as_str(), bytes.as_slice()))
@@ -1039,6 +1044,79 @@ mod tests {
         assert!(
             actual,
             "all package managers without a special implementation should use workspace packages"
+        );
+    }
+
+    // Regression test: when shared-workspace-lockfile=false, per-workspace
+    // lockfiles are discovered via get_package_jsons, which returns paths from
+    // a HashSet. Merge is first-wins, so divergent shared keys would resolve to
+    // different bytes per run with HashSet iteration randomness. The merged
+    // lockfile must be byte-stable across runs so hashOfExternalDependencies
+    // (and therefore task cache hits) are deterministic.
+    #[test]
+    fn test_per_workspace_lockfile_merge_is_deterministic() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+
+        root.join_component(".npmrc")
+            .create_with_contents("shared-workspace-lockfile=false\n")
+            .unwrap();
+        root.join_component("pnpm-workspace.yaml")
+            .create_with_contents("packages:\n  - 'pkgs/*'\n")
+            .unwrap();
+        root.join_component("package.json")
+            .create_with_contents(r#"{"name":"root","private":true}"#)
+            .unwrap();
+        root.join_component("pnpm-lock.yaml")
+            .create_with_contents("lockfileVersion: '9.0'\nimporters:\n  .: {}\n")
+            .unwrap();
+
+        // Many workspaces sharing `lodash@4.17.21` but with divergent body —
+        // emulating pnpm resolving the same package differently per workspace
+        // context, which is the situation that triggers the bug in real repos.
+        let workspaces = ["a", "b", "c", "d", "e", "f", "g", "h"];
+        for (i, name) in workspaces.iter().enumerate() {
+            let dir = root.join_components(&["pkgs", name]);
+            dir.create_dir_all().unwrap();
+            dir.join_component("package.json")
+                .create_with_contents(format!(r#"{{"name":"{name}","private":true}}"#).as_bytes())
+                .unwrap();
+            let lockfile_yaml = format!(
+                r#"lockfileVersion: '9.0'
+importers:
+  .:
+    dependencies:
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.21
+packages:
+  lodash@4.17.21:
+    resolution: {{integrity: sha512-marker{i}}}
+snapshots:
+  lodash@4.17.21: {{}}
+"#
+            );
+            dir.join_component("pnpm-lock.yaml")
+                .create_with_contents(lockfile_yaml.as_bytes())
+                .unwrap();
+        }
+
+        let pm = PackageManager::Pnpm;
+        let root_pkg = PackageJson::load(&root.join_component("package.json")).unwrap();
+
+        // With 8 workspaces sharing one divergent key, the chance that 20 random
+        // HashSet orderings all happen to pick the same first-write is (1/8)^19,
+        // i.e. effectively zero. 20 iterations is plenty to catch a regression.
+        let mut encoded = HashSet::new();
+        for _ in 0..20 {
+            let lockfile = pm.read_lockfile(root, &root_pkg).unwrap();
+            encoded.insert(lockfile.encode().unwrap());
+        }
+        assert_eq!(
+            encoded.len(),
+            1,
+            "merged lockfile bytes should be identical across runs; got {} variants",
+            encoded.len()
         );
     }
 }
