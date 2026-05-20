@@ -6,13 +6,11 @@
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
-#![allow(clippy::unwrap_used)]
 
-use std::{backtrace::Backtrace, env, future::Future, sync::LazyLock, time::Duration};
+use std::{backtrace::Backtrace, env, future::Future, time::Duration};
 #[cfg(feature = "rustls-tls")]
 use std::{io::Cursor, path::Path};
 
-use regex::Regex;
 pub use reqwest::Response;
 use reqwest::{Body, Method, RequestBuilder, StatusCode};
 #[cfg(feature = "rustls-tls")]
@@ -39,8 +37,23 @@ pub use bytes::Bytes;
 pub use shared_http_client::SharedHttpClient;
 pub use tokio_stream::Stream;
 
-static AUTHORIZATION_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)(?:^|,) *authorization *(?:,|$)").unwrap());
+fn allows_authorization_header(allowed_headers: &str) -> bool {
+    allowed_headers == "*"
+        || allowed_headers
+            .split(',')
+            .any(|header| header.trim().eq_ignore_ascii_case("authorization"))
+}
+
+fn response_error(response: Response, status: StatusCode) -> Error {
+    match response.error_for_status() {
+        Ok(response) => Error::UnknownStatus {
+            code: status.to_string(),
+            message: format!("request to {} returned unexpected status", response.url()),
+            backtrace: Backtrace::capture(),
+        },
+        Err(err) => err.into(),
+    }
+}
 
 pub trait Client {
     fn get_user(&self, token: &SecretString) -> impl Future<Output = Result<UserResponse>> + Send;
@@ -531,7 +544,7 @@ impl TokenClient for APIClient {
                     url: self.make_url(endpoint)?.to_string(),
                 })
             }
-            _ => Err(response.error_for_status().unwrap_err().into()),
+            _ => Err(response_error(response, status)),
         }
     }
 
@@ -590,7 +603,7 @@ impl TokenClient for APIClient {
                     url: self.make_url(endpoint)?.to_string(),
                 })
             }
-            _ => Err(response.error_for_status().unwrap_err().into()),
+            _ => Err(response_error(response, status)),
         }
     }
 }
@@ -875,7 +888,7 @@ impl APIClient {
             .get("Access-Control-Allow-Headers")
             .map_or("", |h| h.to_str().unwrap_or(""));
 
-        let allow_auth = allowed_headers == "*" || AUTHORIZATION_REGEX.is_match(allowed_headers);
+        let allow_auth = allows_authorization_header(allowed_headers);
 
         Ok(PreflightResponse {
             location,
