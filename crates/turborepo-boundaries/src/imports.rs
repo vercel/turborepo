@@ -111,7 +111,9 @@ fn check_import_as_tsconfig_path_alias(
         return Ok((false, None));
     }
 
-    let dir = file_path.parent().expect("file_path must have a parent");
+    let dir = file_path
+        .parent()
+        .ok_or_else(|| Error::NoParentDir(file_path.to_owned()))?;
 
     match resolver.resolve(dir, import) {
         Ok(resolution) => {
@@ -395,7 +397,7 @@ pub(crate) fn check_package_import(
         });
     }
     let package_node = PackageNode::Workspace(PackageName::Other(package_name.to_string()));
-    let folder = file_path.parent().expect("file_path should have a parent");
+    let folder = file_path.parent()?;
     let is_valid_dependency = dependency_locations.is_dependency(&package_node);
 
     if !is_valid_dependency
