@@ -30,7 +30,11 @@ impl<'t> From<BorrowedText<'t>> for OwnedText {
 
 impl<'m, 't> From<&'m BorrowedText<'t>> for OwnedText {
     fn from(captures: &'m BorrowedText<'t>) -> Self {
-        let matched = captures.get(0).unwrap().as_str().into();
+        let matched = captures
+            .get(0)
+            .expect("captures have no complete text")
+            .as_str()
+            .into();
         let ranges = captures
             .iter()
             .skip(1)

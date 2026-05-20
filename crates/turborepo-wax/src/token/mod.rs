@@ -919,14 +919,9 @@ impl<'i, 't> LiteralSequence<'i, 't> {
     }
 
     pub fn text(&self) -> Cow<'t, str> {
-        if self.literals().len() == 1 {
-            self.literals().first().unwrap().text.clone()
-        } else {
-            self.literals()
-                .iter()
-                .map(|literal| &literal.text)
-                .join("")
-                .into()
+        match self.literals() {
+            [literal] => literal.text.clone(),
+            literals => literals.iter().map(|literal| &literal.text).join("").into(),
         }
     }
 

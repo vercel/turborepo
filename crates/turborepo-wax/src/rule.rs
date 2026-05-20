@@ -140,13 +140,10 @@ trait SliceExt<T> {
 
 impl<T> SliceExt<T> for [T] {
     fn terminals(&self) -> Option<Terminals<&T>> {
-        match self.len() {
-            0 => None,
-            1 => Some(Terminals::Only(self.first().unwrap())),
-            _ => Some(Terminals::StartEnd(
-                self.first().unwrap(),
-                self.last().unwrap(),
-            )),
+        match self {
+            [] => None,
+            [only] => Some(Terminals::Only(only)),
+            [first, .., last] => Some(Terminals::StartEnd(first, last)),
         }
     }
 }
