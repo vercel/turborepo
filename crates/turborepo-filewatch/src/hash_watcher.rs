@@ -453,7 +453,7 @@ impl Subscriber {
                 if let Some(state) = hashes.get_mut(&spec) {
                     match state {
                         HashState::Hashes(hashes) => {
-                            tx.send(Ok(Arc::clone(hashes))).unwrap();
+                            let _ = tx.send(Ok(Arc::clone(hashes)));
                         }
                         HashState::Pending { txs, .. } => {
                             txs.push(tx);
