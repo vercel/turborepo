@@ -1264,20 +1264,21 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
     };
     let [table, pane] = horizontal.areas(f.area());
 
-    let active_task = app.active_task().unwrap().to_string();
-
-    let output_logs = app.tasks.get(&active_task).unwrap();
-    let pane_to_render: TerminalPane<W> = TerminalPane::new(
-        output_logs,
-        &active_task,
-        &app.section_focus,
-        app.preferences.is_task_list_visible(),
-    );
-
     let table_to_render = TaskTable::new(&app.tasks_by_status, &app.section_focus);
-
     f.render_stateful_widget(&table_to_render, table, &mut app.task_list_scroll);
-    f.render_widget(&pane_to_render, pane);
+
+    if let Ok(active_task) = app.active_task() {
+        let active_task = active_task.to_string();
+        if let Some(output_logs) = app.tasks.get(&active_task) {
+            let pane_to_render: TerminalPane<W> = TerminalPane::new(
+                output_logs,
+                &active_task,
+                &app.section_focus,
+                app.preferences.is_task_list_visible(),
+            );
+            f.render_widget(&pane_to_render, pane);
+        }
+    }
 
     if app.showing_help_popup {
         let area = popup_area(*f.buffer_mut().area());

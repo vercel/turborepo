@@ -205,12 +205,20 @@ fn encode_key(key: KeyEvent) -> Vec<u8> {
     };
 
     match code {
-        Char(c) if mods.contains(KeyModifiers::CONTROL) && ctrl_mapping(c).is_some() => {
-            let c = ctrl_mapping(c).unwrap();
-            if mods.contains(KeyModifiers::ALT) {
+        Char(c) if mods.contains(KeyModifiers::CONTROL) => {
+            if let Some(c) = ctrl_mapping(c) {
+                if mods.contains(KeyModifiers::ALT) {
+                    buf.push(0x1b as char);
+                }
+                buf.push(c);
+            } else if (c.is_ascii_alphanumeric() || c.is_ascii_punctuation())
+                && mods.contains(KeyModifiers::ALT)
+            {
                 buf.push(0x1b as char);
+                buf.push(c);
+            } else {
+                buf.push(c);
             }
-            buf.push(c);
         }
 
         // When alt is pressed, send escape first to indicate to the peer that

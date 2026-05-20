@@ -49,21 +49,27 @@ impl Subscriber {
                 );
             }
             WebUIEvent::TaskOutput { task, output } => {
-                state.tasks.get_mut(&task).unwrap().output.extend(output);
+                if let Some(task) = state.tasks.get_mut(&task) {
+                    task.output.extend(output);
+                }
             }
             WebUIEvent::EndTask { task, result } => {
-                state.tasks.get_mut(&task).unwrap().status = TaskStatus::from(result);
+                if let Some(task) = state.tasks.get_mut(&task) {
+                    task.status = TaskStatus::from(result);
+                }
             }
             WebUIEvent::CacheStatus {
                 task,
                 result,
                 message,
             } => {
-                if result == CacheResult::Hit {
-                    state.tasks.get_mut(&task).unwrap().status = TaskStatus::Cached;
+                if let Some(task) = state.tasks.get_mut(&task) {
+                    if result == CacheResult::Hit {
+                        task.status = TaskStatus::Cached;
+                    }
+                    task.cache_result = Some(result);
+                    task.cache_message = Some(message);
                 }
-                state.tasks.get_mut(&task).unwrap().cache_result = Some(result);
-                state.tasks.get_mut(&task).unwrap().cache_message = Some(message);
             }
             WebUIEvent::Stop => {
                 // TODO: stop watching

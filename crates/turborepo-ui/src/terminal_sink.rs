@@ -118,7 +118,10 @@ impl TerminalSink {
     /// writes `prefix + line` to stdout. Handles `\r` for progress
     /// bars by rewriting the prefix at the start of the line.
     fn write_task_output(&self, task: &str, bytes: &[u8]) {
-        let mut tasks = self.tasks.lock().unwrap();
+        let mut tasks = self
+            .tasks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let Some(state) = tasks.get_mut(task) else {
             // Task not registered — write raw bytes as fallback
             let stdout = io::stdout();
@@ -205,7 +208,10 @@ impl LogSink for TerminalSink {
     fn register_task(&self, task: &str, prefix: &str) {
         let styled = self.color_selector.prefix_with_color(task, prefix);
         let formatted = self.color_config.apply(styled).to_string();
-        let mut tasks = self.tasks.lock().unwrap();
+        let mut tasks = self
+            .tasks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         tasks.entry(task.to_string()).or_insert(TaskRenderState {
             prefix: formatted,
             line_buffer: Vec::with_capacity(512),

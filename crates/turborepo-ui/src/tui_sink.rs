@@ -74,7 +74,10 @@ impl TuiSink {
     /// events and task output through the sender, then forwards
     /// directly from here on.
     pub fn connect(&self, sender: TuiSender) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let SinkState::Buffering {
             events,
             task_output,
@@ -93,7 +96,10 @@ impl TuiSink {
 
 impl LogSink for TuiSink {
     fn emit(&self, event: &LogEvent) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         match &mut *state {
             SinkState::Buffering { events, .. } => events.push(event.clone()),
             SinkState::Connected(sender) => {
@@ -111,7 +117,10 @@ impl LogSink for TuiSink {
     }
 
     fn task_output(&self, task: &str, _channel: OutputChannel, bytes: &[u8]) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let normalized = normalize_newlines(bytes);
         match &mut *state {
             SinkState::Buffering { task_output, .. } => {
