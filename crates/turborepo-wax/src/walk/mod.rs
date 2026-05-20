@@ -128,7 +128,9 @@ trait SplitAtDepth {
 impl SplitAtDepth for Path {
     fn split_at_depth(&self, depth: usize) -> (&Path, &Path) {
         let ancestor = self.ancestors().nth(depth).unwrap_or(Path::new(""));
-        let descendant = self.strip_prefix(ancestor).unwrap();
+        let descendant = self
+            .strip_prefix(ancestor)
+            .expect("path ancestor is not a prefix");
         (ancestor, descendant)
     }
 }
