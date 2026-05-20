@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt, sync::Arc};
 
 use camino::{Utf8Path, Utf8PathBuf};
-use globwalk::WalkType;
+use globwalk::{ValidatedGlob, WalkType};
 use miette::{Diagnostic, Report, SourceSpan};
 use oxc_allocator::Allocator;
 use oxc_estree::{CompactTSSerializer, ESTree};
@@ -58,6 +58,8 @@ pub enum TraceError {
     },
     #[error("failed to walk files")]
     GlobError(Arc<globwalk::WalkError>),
+    #[error("failed to parse trace glob: {0}")]
+    InvalidTraceGlob(String),
     #[error("trace task failed to complete: {0}")]
     TaskJoinError(String),
 }
@@ -394,29 +396,49 @@ impl Tracer {
         }
     }
 
+    fn parse_trace_globs(patterns: &[&str]) -> Result<Vec<ValidatedGlob>, TraceError> {
+        patterns
+            .iter()
+            .map(|pattern| {
+                pattern
+                    .parse::<ValidatedGlob>()
+                    .map_err(|err| TraceError::InvalidTraceGlob(err.to_string()))
+            })
+            .collect()
+    }
+
     pub async fn reverse_trace(self) -> TraceResult {
-        let files = match globwalk::globwalk(
-            &self.cwd,
-            &[
-                "**/*.js".parse().expect("valid glob"),
-                "**/*.jsx".parse().expect("valid glob"),
-                "**/*.ts".parse().expect("valid glob"),
-                "**/*.tsx".parse().expect("valid glob"),
-            ],
-            &[
-                "**/node_modules/**".parse().expect("valid glob"),
-                "**/.next/**".parse().expect("valid glob"),
-            ],
-            WalkType::Files,
-        ) {
-            Ok(files) => files,
-            Err(e) => {
+        let include_globs =
+            match Self::parse_trace_globs(&["**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx"]) {
+                Ok(globs) => globs,
+                Err(error) => {
+                    return TraceResult {
+                        files: HashMap::new(),
+                        errors: vec![error],
+                    };
+                }
+            };
+
+        let exclude_globs = match Self::parse_trace_globs(&["**/node_modules/**", "**/.next/**"]) {
+            Ok(globs) => globs,
+            Err(error) => {
                 return TraceResult {
                     files: HashMap::new(),
-                    errors: vec![TraceError::GlobError(Arc::new(e))],
+                    errors: vec![error],
                 };
             }
         };
+
+        let files =
+            match globwalk::globwalk(&self.cwd, &include_globs, &exclude_globs, WalkType::Files) {
+                Ok(files) => files,
+                Err(e) => {
+                    return TraceResult {
+                        files: HashMap::new(),
+                        errors: vec![TraceError::GlobError(Arc::new(e))],
+                    };
+                }
+            };
 
         let mut futures = JoinSet::new();
 
