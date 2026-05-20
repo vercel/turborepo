@@ -475,7 +475,7 @@ mod test {
     use super::*;
 
     #[tokio::test]
-    async fn test_multiple_tasks() {
+    async fn test_multiple_tasks() -> Result<(), Box<dyn std::error::Error>> {
         let summary = ExecutionTracker::new();
         let foo = TaskId::new("foo", "build");
         let bar = TaskId::new("bar", "build");
@@ -511,42 +511,72 @@ mod test {
             }));
         }
         for task in tasks {
-            task.await.unwrap();
+            task.await?;
         }
 
-        let state = summary.finish().await.unwrap();
+        let state = summary.finish().await?;
         assert_eq!(state.attempted, 4);
         assert_eq!(state.cached, 1);
         assert_eq!(state.failed, 1);
         assert_eq!(state.success, 1);
-        let foo_state = state.tasks.iter().find(|task| task.task_id == foo).unwrap();
-        assert_eq!(foo_state.execution.as_ref().unwrap().exit_code, Some(0));
-        let bar_state = state.tasks.iter().find(|task| task.task_id == bar).unwrap();
-        assert_eq!(bar_state.execution.as_ref().unwrap().exit_code, Some(0));
-        let baz_state = state.tasks.iter().find(|task| task.task_id == baz).unwrap();
-        assert_eq!(baz_state.execution.as_ref().unwrap().exit_code, Some(1));
+        let Some(foo_state) = state.tasks.iter().find(|task| task.task_id == foo) else {
+            panic!("foo task should be present");
+        };
+        assert_eq!(
+            foo_state
+                .execution
+                .as_ref()
+                .map(|execution| execution.exit_code),
+            Some(Some(0))
+        );
+        let Some(bar_state) = state.tasks.iter().find(|task| task.task_id == bar) else {
+            panic!("bar task should be present");
+        };
+        assert_eq!(
+            bar_state
+                .execution
+                .as_ref()
+                .map(|execution| execution.exit_code),
+            Some(Some(0))
+        );
+        let Some(baz_state) = state.tasks.iter().find(|task| task.task_id == baz) else {
+            panic!("baz task should be present");
+        };
+        assert_eq!(
+            baz_state
+                .execution
+                .as_ref()
+                .map(|execution| execution.exit_code),
+            Some(Some(1))
+        );
         let boo_state = state.tasks.iter().find(|task| task.task_id == boo);
         assert!(
             boo_state.is_none(),
             "canceling doesn't produce execution data"
         );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_timing() {
+    async fn test_timing() -> Result<(), Box<dyn std::error::Error>> {
         let summary = ExecutionTracker::new();
         let tracker = summary.task_tracker(TaskId::new("foo", "build"));
         let post_construction_time = Local::now().timestamp_millis();
         let sleep_duration = Duration::milliseconds(5);
-        tokio::time::sleep(sleep_duration.to_std().unwrap()).await;
+        tokio::time::sleep(sleep_duration.to_std()?).await;
 
         let tracker = tracker.start().await;
 
-        tokio::time::sleep(sleep_duration.to_std().unwrap()).await;
+        tokio::time::sleep(sleep_duration.to_std()?).await;
         tracker.build_succeeded(0).await;
-        let mut state = summary.finish().await.unwrap();
+        let mut state = summary.finish().await?;
         assert_eq!(state.tasks.len(), 1);
-        let summary = state.tasks.pop().unwrap().execution.unwrap();
+        let Some(task_state) = state.tasks.pop() else {
+            panic!("task state should exist");
+        };
+        let Some(summary) = task_state.execution else {
+            panic!("task execution should exist");
+        };
         assert!(
             post_construction_time < summary.start_time,
             "tracker start time should start when start is called"
@@ -555,6 +585,7 @@ mod test {
             summary.start_time + sleep_duration.num_milliseconds() <= summary.end_time,
             "tracker end should be at least as long as the time between calls"
         );
+        Ok(())
     }
 
     #[test_case(
@@ -577,15 +608,20 @@ mod test {
         json!({ "startTime": 123, "endTime": 234, "exitCode": 1, "error": "cannot find anything" })
         ; "failure"
     )]
-    fn test_serialization(value: impl serde::Serialize, expected: serde_json::Value) {
-        assert_eq!(serde_json::to_value(value).unwrap(), expected);
+    fn test_serialization(
+        value: impl serde::Serialize,
+        expected: serde_json::Value,
+    ) -> Result<(), serde_json::Error> {
+        assert_eq!(serde_json::to_value(value)?, expected);
+        Ok(())
     }
 
     // Verifies that failed tasks can be identified directly from TaskState,
     // without needing the full TaskSummary machinery. This is the data path
     // the optimized (non-summary) finish will use.
     #[tokio::test]
-    async fn test_failed_tasks_identifiable_from_task_state() {
+    async fn test_failed_tasks_identifiable_from_task_state()
+    -> Result<(), Box<dyn std::error::Error>> {
         let summary = ExecutionTracker::new();
         let success_task = TaskId::new("app", "build");
         let fail_task = TaskId::new("lib", "build");
@@ -611,10 +647,10 @@ mod test {
             }));
         }
         for h in handles {
-            h.await.unwrap();
+            h.await?;
         }
 
-        let state = summary.finish().await.unwrap();
+        let state = summary.finish().await?;
 
         // TaskState.execution carries enough info to identify failures
         let failed: Vec<&TaskState> = state
@@ -630,6 +666,7 @@ mod test {
         assert_eq!(state.failed, 1);
         assert_eq!(state.success, 1);
         assert_eq!(state.cached, 1);
+        Ok(())
     }
 
     // Verifies ExecutionSummary computes successful() correctly from SummaryState
