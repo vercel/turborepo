@@ -500,9 +500,13 @@ fn unix_mode_to_u32(mode: libc::mode_t) -> u32 {
 fn set_consistent_header_metadata(header: &mut Header) {
     header.set_uid(0);
     header.set_gid(0);
-    header.as_gnu_mut().unwrap().set_atime(0);
+    if let Some(header) = header.as_gnu_mut() {
+        header.set_atime(0);
+    }
     header.set_mtime(0);
-    header.as_gnu_mut().unwrap().set_ctime(0);
+    if let Some(header) = header.as_gnu_mut() {
+        header.set_ctime(0);
+    }
 }
 
 #[cfg(not(unix))]

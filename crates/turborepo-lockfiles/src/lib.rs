@@ -9,7 +9,6 @@
 //! prone than deserialization and analysis.
 
 #![deny(clippy::all)]
-#![allow(clippy::expect_used)]
 // the pest proc macro adds an empty doc comment.
 #![allow(clippy::empty_docs)]
 

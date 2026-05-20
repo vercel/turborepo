@@ -137,8 +137,7 @@ impl CachedDirTree {
         let parent = processed_name.as_path().parent();
         // Handles ./foo and foo
         let is_root_file = parent == Some(Path::new(".")) || parent == Some(Path::new(""));
-        if !is_root_file {
-            let dir = processed_name.parent().unwrap();
+        if !is_root_file && let Some(dir) = processed_name.parent() {
             self.safe_mkdir_all(anchor, dir, 0o755)?;
         }
 

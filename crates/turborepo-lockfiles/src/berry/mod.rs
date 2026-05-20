@@ -632,7 +632,7 @@ impl Lockfile for BerryLockfile {
     }
 
     fn turbo_version(&self) -> Option<String> {
-        let turbo_ident = Ident::try_from("turbo").expect("'turbo' is valid identifier");
+        let turbo_ident = Ident::try_from("turbo").ok()?;
         let key = self
             .locator_package
             .keys()

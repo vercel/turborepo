@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::BufWriter, time::UNIX_EPOCH};
+use std::{backtrace::Backtrace, collections::HashMap, io::BufWriter, time::UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use turbopath::AbsoluteSystemPath;
@@ -159,10 +159,14 @@ impl RestoreManifest {
     }
 
     pub fn write_atomic(&self, path: &AbsoluteSystemPath) -> Result<(), CacheError> {
-        let tmp_path = path
-            .parent()
-            .unwrap()
-            .join_component(&format!("{}.tmp", path.file_name().unwrap_or("manifest")));
+        let Some(parent) = path.parent() else {
+            return Err(CacheError::InvalidFilePath(
+                path.to_string(),
+                Backtrace::capture(),
+            ));
+        };
+        let tmp_path =
+            parent.join_component(&format!("{}.tmp", path.file_name().unwrap_or("manifest")));
         let file = std::fs::File::create(tmp_path.as_path())?;
         let writer = BufWriter::new(file);
         serde_json::to_writer(writer, self)
