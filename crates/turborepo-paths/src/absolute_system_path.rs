@@ -20,6 +20,13 @@ use crate::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPath,
 };
 
+fn clean_utf8_path(path: Utf8PathBuf) -> Utf8PathBuf {
+    match Utf8PathBuf::from_path_buf(path.as_std_path().clean()) {
+        Ok(cleaned) => cleaned,
+        Err(_) => path,
+    }
+}
+
 /// Models how two paths relate to each other
 #[derive(Debug, PartialEq, Eq)]
 pub enum PathRelation {
@@ -237,14 +244,7 @@ impl AbsoluteSystemPath {
     /// Intended for joining literals or obviously single-token strings
     pub fn join_component(&self, segment: &str) -> AbsoluteSystemPathBuf {
         debug_assert!(!segment.contains(std::path::MAIN_SEPARATOR));
-        AbsoluteSystemPathBuf(
-            self.0
-                .join(segment)
-                .as_std_path()
-                .clean()
-                .try_into()
-                .unwrap(),
-        )
+        AbsoluteSystemPathBuf(clean_utf8_path(self.0.join(segment)))
     }
 
     /// Intended for joining a path composed of literals
@@ -254,14 +254,9 @@ impl AbsoluteSystemPath {
                 .iter()
                 .any(|segment| segment.contains(std::path::MAIN_SEPARATOR))
         );
-        AbsoluteSystemPathBuf(
-            self.0
-                .join(segments.join(std::path::MAIN_SEPARATOR_STR))
-                .as_std_path()
-                .clean()
-                .try_into()
-                .unwrap(),
-        )
+        AbsoluteSystemPathBuf(clean_utf8_path(
+            self.0.join(segments.join(std::path::MAIN_SEPARATOR_STR)),
+        ))
     }
 
     pub fn as_str(&self) -> &str {

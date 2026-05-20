@@ -2,7 +2,7 @@
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
 //! Turborepo's library for authenticating with the Vercel API.
 //! Handles logging into Vercel, verifying SSO, and storing the token.
 
