@@ -13,9 +13,9 @@ use regex::Regex;
 use serde_json::Value;
 
 // regex for trimming spaces from start and end
-fn pseudostring_replace() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"^ *| *$").unwrap())
+fn pseudostring_replace() -> Option<&'static Regex> {
+    static RE: OnceLock<Option<Regex>> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"^ *| *$").ok()).as_ref()
 }
 
 pub fn parse_syml(input: &str) -> Result<Value, super::Error> {
@@ -177,7 +177,9 @@ fn pseudostring(i: &str) -> IResult<&str, String> {
     let (i, pseudo) = recognize(pseudostring_inner)(i)?;
     Ok((
         i,
-        pseudostring_replace().replace_all(pseudo, "").into_owned(),
+        pseudostring_replace()
+            .map(|re| re.replace_all(pseudo, "").into_owned())
+            .unwrap_or_else(|| pseudo.to_string()),
     ))
 }
 
@@ -189,8 +191,10 @@ fn pseudostring_inner(i: &str) -> IResult<&str, ()> {
 
 fn pseudostring_legacy(i: &str) -> IResult<&str, String> {
     let (i, pseudo) = recognize(pseudostring_legacy_inner)(i)?;
-    let replaced = pseudostring_replace().replace_all(pseudo, "");
-    Ok((i, replaced.to_string()))
+    let replaced = pseudostring_replace()
+        .map(|re| re.replace_all(pseudo, "").into_owned())
+        .unwrap_or_else(|| pseudo.to_string());
+    Ok((i, replaced))
 }
 
 fn pseudostring_legacy_inner(i: &str) -> IResult<&str, ()> {

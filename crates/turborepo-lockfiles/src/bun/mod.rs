@@ -213,7 +213,7 @@ impl<'de> Deserialize<'de> for Negatable {
                     // Strip '!' prefix to extract the blocked platforms
                     let negated_platforms: Vec<String> = platforms
                         .into_iter()
-                        .map(|p| p.strip_prefix('!').unwrap().to_string())
+                        .filter_map(|p| p.strip_prefix('!').map(str::to_string))
                         .collect();
                     Ok(Negatable::Negated(negated_platforms))
                 } else {
@@ -875,7 +875,7 @@ impl BunLockfile {
     /// Add trailing commas to JSON values before closing brackets/braces
     /// Handles strings, numbers, booleans, nulls, and nested structures
     fn add_trailing_commas(json: &str) -> String {
-        static TRAILING_COMMA_RE: OnceLock<regex::Regex> = OnceLock::new();
+        static TRAILING_COMMA_RE: OnceLock<Option<regex::Regex>> = OnceLock::new();
         // Match: any JSON value (string, number, boolean, null, ] or }) followed by
         // newline+whitespace and then a closing bracket/brace
         // Pattern covers:
@@ -884,9 +884,12 @@ impl BunLockfile {
         // - Booleans: true, false
         // - Null: null
         // - Nested closings: ] or }
-        let re = TRAILING_COMMA_RE.get_or_init(|| {
-            regex::Regex::new(r#"("|true|false|null|\d|[\]}])\n(\s*)([\]}])"#).unwrap()
-        });
+        let Some(re) = TRAILING_COMMA_RE
+            .get_or_init(|| regex::Regex::new(r#"("|true|false|null|\d|[\]}])\n(\s*)([\]}])"#).ok())
+            .as_ref()
+        else {
+            return json.to_string();
+        };
         // Run multiple passes until no more changes (handles deeply nested structures)
         let mut result = json.to_string();
         loop {
@@ -966,9 +969,8 @@ impl BunLockfile {
                 // when there are dependencies. Bun omits the info object
                 // entirely for workspace mappings with no dependencies.
                 let ident_json = serde_json::to_string(&entry.ident)?;
-                let has_info = entry.info.as_ref().is_some_and(|i| !i.is_empty());
-                if has_info {
-                    let info_json = serde_json::to_string(&entry.info.as_ref().unwrap())?;
+                if let Some(info) = entry.info.as_ref().filter(|info| !info.is_empty()) {
+                    let info_json = serde_json::to_string(info)?;
                     let info_json_spaced = self.format_info_json(&info_json);
                     output.push_str(&format!(
                         "    \"{key}\": [{ident_json}, {info_json_spaced}],"
@@ -2181,7 +2183,9 @@ impl FromStr for BunLockfile {
 
         let mut key_to_entry: HashMap<String, String> = HashMap::with_capacity(data.packages.len());
         for path in sorted_keys {
-            let info = data.packages.get(path).unwrap();
+            let Some(info) = data.packages.get(path) else {
+                continue;
+            };
 
             if let Some(prev_path) = key_to_entry.get(&info.ident) {
                 let prev_info = data

@@ -326,7 +326,10 @@ impl NpmLockfile {
             .into_iter()
             .filter_map(|(hoisted_key, nested_keys)| {
                 if nested_keys.len() == 1 {
-                    Some((nested_keys.into_iter().next().unwrap(), hoisted_key))
+                    nested_keys
+                        .into_iter()
+                        .next()
+                        .map(|nested_key| (nested_key, hoisted_key))
                 } else {
                     None
                 }
