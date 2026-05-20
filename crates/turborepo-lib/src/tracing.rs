@@ -58,7 +58,10 @@ impl Write for SwitchableOutput {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match &self.target {
             WriterTarget::Stderr => io::stderr().write(buf),
-            WriterTarget::File(f) => f.lock().unwrap().write(buf),
+            WriterTarget::File(f) => f
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .write(buf),
             WriterTarget::Null => Ok(buf.len()),
         }
     }
@@ -66,7 +69,10 @@ impl Write for SwitchableOutput {
     fn flush(&mut self) -> io::Result<()> {
         match &self.target {
             WriterTarget::Stderr => io::stderr().flush(),
-            WriterTarget::File(f) => f.lock().unwrap().flush(),
+            WriterTarget::File(f) => f
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .flush(),
             WriterTarget::Null => Ok(()),
         }
     }
@@ -92,7 +98,11 @@ impl<'a> MakeWriter<'a> for SwitchableWriter {
 
     fn make_writer(&'a self) -> Self::Writer {
         SwitchableOutput {
-            target: self.target.lock().unwrap().clone(),
+            target: self
+                .target
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clone(),
         }
     }
 }
@@ -107,25 +117,50 @@ pub struct SwitchableWriterHandle {
 
 impl SwitchableWriterHandle {
     pub fn is_stderr(&self) -> bool {
-        matches!(*self.target.lock().unwrap(), WriterTarget::Stderr)
+        matches!(
+            *self
+                .target
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+            WriterTarget::Stderr
+        )
     }
 
     pub fn suppress(&self) {
-        *self.target.lock().unwrap() = WriterTarget::Null;
+        *self
+            .target
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = WriterTarget::Null;
     }
 
     pub fn redirect_to_file(&self, writer: Box<dyn Write + Send>, path: String) {
-        *self.target.lock().unwrap() = WriterTarget::File(Arc::new(Mutex::new(writer)));
-        *self.redirect_path.lock().unwrap() = Some(path);
+        *self
+            .target
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+            WriterTarget::File(Arc::new(Mutex::new(writer)));
+        *self
+            .redirect_path
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(path);
     }
 
     pub fn redirect_path(&self) -> Option<String> {
-        self.redirect_path.lock().unwrap().clone()
+        self.redirect_path
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
 
     pub fn restore(&self) {
-        *self.target.lock().unwrap() = WriterTarget::Stderr;
-        *self.redirect_path.lock().unwrap() = None;
+        *self
+            .target
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = WriterTarget::Stderr;
+        *self
+            .redirect_path
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
     }
 }
 
@@ -207,14 +242,16 @@ impl TurboSubscriber {
         };
 
         let env_filter = |level: LevelFilter| {
-            let filter = EnvFilter::builder()
+            let mut filter = EnvFilter::builder()
                 .with_default_directive(level.into())
                 .with_env_var("TURBO_LOG_VERBOSITY")
-                .from_env_lossy()
-                .add_directive("reqwest=error".parse().unwrap())
-                .add_directive("rustls=error".parse().unwrap())
-                .add_directive("hyper=warn".parse().unwrap())
-                .add_directive("h2=warn".parse().unwrap());
+                .from_env_lossy();
+
+            for directive in ["reqwest=error", "rustls=error", "hyper=warn", "h2=warn"] {
+                if let Ok(directive) = directive.parse() {
+                    filter = filter.add_directive(directive);
+                }
+            }
 
             if let Some(max_level) = level_override {
                 filter.add_directive(max_level.into())
