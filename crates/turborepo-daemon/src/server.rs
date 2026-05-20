@@ -421,7 +421,10 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
             .watch_globs(hash.clone(), glob_set, REQUEST_TIMEOUT)
             .await?;
         {
-            let mut times_saved = self.times_saved.lock().expect("times saved lock poisoned");
+            let mut times_saved = self
+                .times_saved
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             times_saved.insert(hash, time_saved);
         }
         Ok(())
@@ -433,7 +436,10 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
         candidates: HashSet<String>,
     ) -> Result<(HashSet<String>, u64), RpcError> {
         let time_saved = {
-            let times_saved = self.times_saved.lock().expect("times saved lock poisoned");
+            let times_saved = self
+                .times_saved
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             times_saved.get(hash.as_str()).copied().unwrap_or_default()
         };
         let changed_globs = self

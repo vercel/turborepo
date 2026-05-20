@@ -22,7 +22,6 @@
 
 #![feature(impl_trait_in_assoc_type)]
 #![deny(clippy::all)]
-#![allow(clippy::expect_used)]
 #![allow(clippy::needless_lifetimes)]
 #![allow(clippy::uninlined_format_args)]
 

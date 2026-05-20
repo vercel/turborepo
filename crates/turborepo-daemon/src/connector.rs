@@ -248,8 +248,7 @@ impl DaemonConnector {
 
         // note, this endpoint is just a placeholder. the actual path is passed in via
         // make_service
-        Endpoint::try_from("http://[::]:50051")
-            .expect("this is a valid uri")
+        Endpoint::from_static("http://[::]:50051")
             .timeout(Self::CONNECT_TIMEOUT)
             .connect_with_connector(tower::service_fn(make_service))
             .await
@@ -433,7 +432,7 @@ async fn wait_for_file(
     // this can only fail if the channel has been closed, which will
     // always happen either after this call ends, or after this future
     // is cancelled
-    rx.recv().await.expect("will receive a message");
+    let _ = rx.recv().await;
 
     Ok(())
 }
