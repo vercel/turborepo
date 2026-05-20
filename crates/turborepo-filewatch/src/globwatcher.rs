@@ -391,8 +391,9 @@ impl GlobTracker {
             Ok(Err(error)) => self.on_error(error.into()),
             Ok(Ok(file_event)) => {
                 for path in file_event.paths {
-                    let path = AbsoluteSystemPathBuf::try_from(path)
-                        .expect("filewatching should produce absolute paths");
+                    let Ok(path) = AbsoluteSystemPathBuf::try_from(path) else {
+                        continue;
+                    };
                     if let Some(queries) = self
                         .cookie_watcher
                         .pop_ready_requests(file_event.kind, &path)

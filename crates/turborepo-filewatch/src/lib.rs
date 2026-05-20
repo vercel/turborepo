@@ -21,7 +21,7 @@
 //! `tokio::time::interval`.
 
 #![deny(clippy::all)]
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![allow(clippy::unwrap_used)]
 #![allow(clippy::mutable_key_type)]
 #![allow(clippy::result_large_err)]
 
@@ -308,10 +308,9 @@ fn filter_relevant(root: &AbsoluteSystemPath, event: &mut Event) {
     let is_modify_existing = matches!(event.kind, EventKind::Remove(_) | EventKind::Modify(_));
 
     event.paths.retain_mut(|path| {
-        let abs_path: &AbsoluteSystemPath = path
-            .as_path()
-            .try_into()
-            .expect("Non-absolute path from filewatching");
+        let Ok(abs_path) = <&AbsoluteSystemPath>::try_from(path.as_path()) else {
+            return false;
+        };
         match root.relation_to_path(abs_path) {
             // An irrelevant path, probably from a non-recursive watch of a parent directory
             PathRelation::Divergent => false,

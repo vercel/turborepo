@@ -212,11 +212,13 @@ impl FileHashes {
         // number of packages, on top of the trie internals.
         let keys = previous.keys().map(|k| k.to_owned()).collect::<Vec<_>>();
         for key in keys {
-            let previous_value = previous
-                .remove(&key)
-                .expect("this key was pulled from previous");
-            let path_key =
-                AnchoredSystemPath::new(&key).expect("keys are valid AnchoredSystemPaths");
+            let Some(previous_value) = previous.remove(&key) else {
+                continue;
+            };
+            let Ok(path_key) = AnchoredSystemPath::new(&key) else {
+                self.0.insert(key, previous_value);
+                continue;
+            };
             if !f(path_key) {
                 // keep it, we didn't match the key.
                 self.0.insert(key, previous_value);
@@ -239,8 +241,9 @@ impl FileHashes {
             .and_then(|subtrie| subtrie.key().map(|key| (key, subtrie)))
             // convert key to AnchoredSystemPath, and verify we have a value
             .and_then(|(package_path, subtrie)| {
-                let package_path = AnchoredSystemPath::new(package_path)
-                    .expect("keys are valid AnchoredSystemPaths");
+                let Ok(package_path) = AnchoredSystemPath::new(package_path) else {
+                    return None;
+                };
                 // handle scenarios where even though we've found an ancestor, it might be a
                 // sibling file or directory that starts with the same prefix,
                 // e,g an update to apps/foo_decoy when the package path is
@@ -606,11 +609,12 @@ impl Subscriber {
     ) {
         let mut changed_specs: HashSet<HashSpec> = HashSet::new();
         for path in event.paths {
-            let path = AbsoluteSystemPathBuf::try_from(path).expect("event path is a valid path");
-            let repo_relative_change_path = self
-                .repo_root
-                .anchor(&path)
-                .expect("event path is in the repository");
+            let Ok(path) = AbsoluteSystemPathBuf::try_from(path) else {
+                continue;
+            };
+            let Ok(repo_relative_change_path) = self.repo_root.anchor(&path) else {
+                continue;
+            };
             // If this change is not relevant to a package, ignore it
             trace!("file change at {:?}", repo_relative_change_path);
             let changed_specs_for_path = hashes.get_changed_specs(&repo_relative_change_path);
@@ -689,14 +693,9 @@ impl Subscriber {
         match package_data {
             Some(Ok(data)) => {
                 let package_paths: HashSet<AnchoredSystemPathBuf> =
-                    HashSet::from_iter(data.workspaces.iter().map(|ws| {
-                        self.repo_root
-                            .anchor(
-                                ws.package_json
-                                    .parent()
-                                    .expect("package.json is in a directory"),
-                            )
-                            .expect("package is in the repository")
+                    HashSet::from_iter(data.workspaces.iter().filter_map(|ws| {
+                        let package_dir = ws.package_json.parent()?;
+                        self.repo_root.anchor(package_dir).ok()
                     }));
                 // We have new package data. Drop any packages we don't need anymore, add any
                 // new ones
