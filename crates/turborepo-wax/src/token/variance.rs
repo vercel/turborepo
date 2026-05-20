@@ -213,11 +213,7 @@ impl Mul<usize> for InvariantSize {
     type Output = Self;
 
     fn mul(self, n: usize) -> Self::Output {
-        InvariantSize(
-            self.0
-                .checked_mul(n)
-                .expect("overflow determining invariant size"),
-        )
+        InvariantSize(self.0.saturating_mul(n))
     }
 }
 
@@ -260,9 +256,7 @@ impl<'t> InvariantText<'t> {
             self
         } else {
             let InvariantText { fragments } = self;
-            let n = (n - 1)
-                .checked_mul(fragments.len())
-                .expect("overflow determining invariant text");
+            let n = (n - 1).saturating_mul(fragments.len());
             let first = fragments.clone();
             InvariantText {
                 fragments: first
