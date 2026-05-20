@@ -114,7 +114,9 @@ impl CachedDirTree {
             // replaced with a real directory. Symlinks restored during the
             // current operation are preserved (they were intentionally placed
             // by the same tar archive).
-            let current = current_anchored.as_ref().unwrap();
+            let Some(current) = current_anchored.as_ref() else {
+                continue;
+            };
             let literal_path = anchor.resolve(AnchoredSystemPath::new(current.as_str())?);
             if let Ok(metadata) = literal_path.symlink_metadata()
                 && metadata.is_symlink()

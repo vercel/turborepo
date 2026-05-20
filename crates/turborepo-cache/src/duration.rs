@@ -38,7 +38,9 @@ pub fn parse_human_duration(input: &str) -> Result<Duration, DurationParseError>
         return Ok(Duration::ZERO);
     }
 
-    let last = input.chars().last().unwrap();
+    let Some((unit_start, last)) = input.char_indices().last() else {
+        return Err(DurationParseError::Empty);
+    };
 
     if last.is_ascii_digit() {
         // Plain integer — treat as days
@@ -51,8 +53,8 @@ pub fn parse_human_duration(input: &str) -> Result<Duration, DurationParseError>
         return Ok(Duration::from_secs(secs));
     }
 
-    let (num_part, unit) = input.split_at(input.len() - 1);
-    let unit_char = unit.chars().next().unwrap();
+    let num_part = &input[..unit_start];
+    let unit_char = last;
 
     let n: u64 = num_part
         .parse()
