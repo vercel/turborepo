@@ -40,7 +40,7 @@ fn generate_temp_path(final_path: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf 
     let temp_name = format!(".{}.{}.{}.tmp", file_name, std::process::id(), unique_id);
     final_path
         .parent()
-        .expect("cache path must have parent")
+        .unwrap_or(final_path)
         .join_component(&temp_name)
 }
 

@@ -43,7 +43,7 @@ impl AsyncCache {
         analytics_recorder: Option<AnalyticsSender>,
         scm_state: LazyScmState,
     ) -> Result<AsyncCache, CacheError> {
-        let max_workers = opts.workers.try_into().expect("usize is smaller than u32");
+        let max_workers = usize::try_from(opts.workers).unwrap_or(usize::MAX);
         let real_cache = Arc::new(CacheMultiplexer::new(
             opts,
             repo_root,
