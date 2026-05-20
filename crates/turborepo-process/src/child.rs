@@ -334,11 +334,11 @@ impl ChildHandle {
         let stdout = child
             .stdout
             .take()
-            .expect("child process must be started with piped stdout");
+            .ok_or_else(|| io::Error::other("child process must be started with piped stdout"))?;
         let stderr = child
             .stderr
             .take()
-            .expect("child process must be started with piped stderr");
+            .ok_or_else(|| io::Error::other("child process must be started with piped stderr"))?;
 
         Ok(SpawnResult {
             handle: Self {
