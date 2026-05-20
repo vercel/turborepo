@@ -55,9 +55,7 @@ impl<'de> Deserialize<'de> for PackageEntry {
         if key.ends_with("@root:") {
             let root = vals.pop_front().and_then(|val| {
                 serde_json::from_value::<RootInfo>(match val {
-                    Vals::Info(info) => {
-                        serde_json::to_value(info.other).expect("failed to convert info to value")
-                    }
+                    Vals::Info(info) => serde_json::to_value(info.other).ok()?,
                     _ => return None,
                 })
                 .ok()

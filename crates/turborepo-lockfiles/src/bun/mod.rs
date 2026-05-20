@@ -2114,10 +2114,9 @@ impl BunLockfile {
             HashMap::with_capacity(pruned_data.packages.len());
         for (path, entry) in pruned_data.packages.iter() {
             if let Some(prev_path) = key_to_entry.insert(entry.ident.clone(), path.clone()) {
-                let prev_entry = pruned_data
-                    .packages
-                    .get(&prev_path)
-                    .expect("we just got this path from the packages list");
+                let Some(prev_entry) = pruned_data.packages.get(&prev_path) else {
+                    continue;
+                };
 
                 // Verify checksums match for duplicate idents
                 if prev_entry.checksum != entry.checksum {
@@ -2184,10 +2183,9 @@ impl FromStr for BunLockfile {
             let info = data.packages.get(path).unwrap();
 
             if let Some(prev_path) = key_to_entry.get(&info.ident) {
-                let prev_info = data
-                    .packages
-                    .get(prev_path)
-                    .expect("we just got this path from the packages list");
+                let Some(prev_info) = data.packages.get(prev_path) else {
+                    continue;
+                };
 
                 // Verify checksums match for duplicate idents
                 if prev_info.checksum != info.checksum {
