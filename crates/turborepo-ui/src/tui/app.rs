@@ -406,7 +406,9 @@ impl<W> App<W> {
         {
             let new_selection = result.to_owned();
             self.is_task_selection_pinned = true;
-            self.select_task(&new_selection).expect("todo");
+            if let Err(error) = self.select_task(&new_selection) {
+                debug!("failed to select search result: {error}");
+            }
         }
     }
 
@@ -879,7 +881,9 @@ async fn run_app_inner(
             let term = startup(color_config)?;
             *terminal = Some(term);
             // Render initial state to paint the screen
-            terminal.as_mut().unwrap().draw(|f| view(app, f))?;
+            if let Some(terminal) = terminal.as_mut() {
+                terminal.draw(|f| view(app, f))?;
+            }
             last_render = Instant::now();
         }
 
@@ -891,12 +895,10 @@ async fn run_app_inner(
 
         let mut event = Some(event);
         let mut resize_event = None;
-        if matches!(event, Some(Event::Resize { .. })) {
-            resize_event = resize_debouncer.update(
-                event
-                    .take()
-                    .expect("we just matched against a present value"),
-            );
+        if matches!(event, Some(Event::Resize { .. }))
+            && let Some(event) = event.take()
+        {
+            resize_event = resize_debouncer.update(event);
         }
         if let Some(resize) = resize_event.take().or_else(|| resize_debouncer.query()) {
             // If we got a resize event, make sure to update ratatui backend.

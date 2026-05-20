@@ -118,7 +118,10 @@ impl TaskSender {
 
     fn finish(&self, result: TaskResult) -> Vec<u8> {
         self.handle.end_task(self.name.clone(), result);
-        self.logs.lock().expect("logs lock poisoned").clone()
+        self.logs
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
 
     pub fn set_stdin(&self, stdin: Box<dyn std::io::Write + Send>) {
@@ -140,7 +143,7 @@ impl std::io::Write for TaskSender {
         {
             self.logs
                 .lock()
-                .expect("log lock poisoned")
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .extend_from_slice(buf);
         }
 
