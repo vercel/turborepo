@@ -633,15 +633,18 @@ mod test {
         }
         ; "root turbo json absolute path"
     )]
-    fn test_shim_parsing(args: &[&str], expected: ExpectedArgs) {
+    fn test_shim_parsing(
+        args: &[&str],
+        expected: ExpectedArgs,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let cwd = AbsoluteSystemPathBuf::new(if cfg!(windows) {
             "Z:\\some\\dir"
         } else {
             "/some/dir"
-        })
-        .unwrap();
+        })?;
         let expected = expected.build(&cwd);
-        let actual = ShimArgs::parse_from_iter(cwd, args.iter().map(|s| s.to_string())).unwrap();
+        let actual = ShimArgs::parse_from_iter(cwd, args.iter().map(|s| s.to_string()))?;
         assert_eq!(expected, actual);
+        Ok(())
     }
 }
