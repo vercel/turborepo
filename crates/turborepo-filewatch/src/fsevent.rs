@@ -569,7 +569,9 @@ impl FsEventWatcher {
             // First path - create device context
             let ctx = DeviceContext::new(path)?;
             self.device_context = Some(ctx);
-            self.device_context.as_ref().unwrap()
+            self.device_context
+                .as_ref()
+                .ok_or_else(|| Error::generic("missing device context"))?
         };
 
         // Use DeviceContext to convert path to device-relative format
@@ -677,7 +679,11 @@ impl FsEventWatcher {
                 }
             })?;
         // block until runloop has been sent
-        self.runloop = Some((rl_rx.recv().unwrap().0, thread_handle));
+        let Ok(runloop) = rl_rx.recv() else {
+            let _ = thread_handle.join();
+            return Err(Error::generic("runloop channel disconnected"));
+        };
+        self.runloop = Some((runloop.0, thread_handle));
 
         Ok(())
     }
