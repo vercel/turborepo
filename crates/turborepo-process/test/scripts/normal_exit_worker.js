@@ -5,11 +5,16 @@ const mode = process.argv[2];
 
 if (mode === "worker") {
   const markerPath = process.argv[3];
-  const delayMs = Number(process.argv[4]);
 
-  setTimeout(() => {
-    fs.writeFileSync(markerPath, "done\n");
-  }, delayMs);
+  if (process.argv[4] === "never") {
+    setInterval(() => {}, 1000);
+  } else {
+    const delayMs = Number(process.argv[4]);
+
+    setTimeout(() => {
+      fs.writeFileSync(markerPath, "done\n");
+    }, delayMs);
+  }
 } else {
   const markerPath = process.argv[2];
   const pidPath = process.argv[3];

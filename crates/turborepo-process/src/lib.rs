@@ -708,13 +708,18 @@ mod test {
         let _ = fs::remove_file(pid_file);
     }
 
+    #[cfg(unix)]
     #[tokio::test]
-    async fn test_normal_exit_waits_for_worker_before_completing() {
+    async fn test_successful_task_cleans_up_long_lived_worker_after_output_drain() {
         let manager = ProcessManager::new(false);
-        let marker_file =
-            std::env::temp_dir().join(format!("turbo-normal-exit-marker-{}", std::process::id()));
-        let pid_file =
-            std::env::temp_dir().join(format!("turbo-normal-exit-worker-{}", std::process::id()));
+        let marker_file = std::env::temp_dir().join(format!(
+            "turbo-normal-exit-marker-never-{}",
+            std::process::id()
+        ));
+        let pid_file = std::env::temp_dir().join(format!(
+            "turbo-normal-exit-worker-never-{}",
+            std::process::id()
+        ));
         let _ = fs::remove_file(&marker_file);
         let _ = fs::remove_file(&pid_file);
 
@@ -723,49 +728,43 @@ mod test {
             std::ffi::OsString::from("./test/scripts/normal_exit_worker.js"),
             marker_file.as_os_str().to_os_string(),
             pid_file.as_os_str().to_os_string(),
-            std::ffi::OsString::from("800"),
+            std::ffi::OsString::from("never"),
         ]);
         let mut child = manager
             .spawn(command, Duration::from_secs(30), test_task_id())
             .unwrap()
             .unwrap();
 
+        let mut worker_pid = None;
         for _ in 0..50 {
-            if pid_file.exists() {
+            if let Ok(contents) = fs::read_to_string(&pid_file)
+                && let Ok(pid) = contents.trim().parse::<libc::pid_t>()
+            {
+                worker_pid = Some(pid);
                 break;
             }
             sleep(Duration::from_millis(20)).await;
         }
+        let worker_pid = worker_pid.expect("worker pid file should have been written");
+
         assert!(
-            pid_file.exists(),
-            "worker pid file should have been written"
+            process_exists(worker_pid),
+            "worker process {worker_pid} should be alive before output drain"
         );
 
-        let start = Instant::now();
-        let exit = child.wait().await;
-        let elapsed = start.elapsed();
-        let marker_existed_when_wait_returned = marker_file.exists();
-
-        if !marker_existed_when_wait_returned {
-            for _ in 0..100 {
-                if marker_file.exists() {
-                    break;
-                }
-                sleep(Duration::from_millis(20)).await;
-            }
-        }
+        let mut output = Vec::new();
+        let exit = tokio::time::timeout(
+            Duration::from_secs(5),
+            child.wait_with_piped_outputs(&mut output),
+        )
+        .await
+        .expect("successful output drain should not hang on a long-lived worker")
+        .expect("output drain should succeed");
 
         let _ = fs::remove_file(&marker_file);
         let _ = fs::remove_file(&pid_file);
 
         assert_eq!(exit, Some(ChildExit::Finished(Some(0))));
-        assert!(
-            marker_existed_when_wait_returned,
-            "child.wait() returned before the worker wrote its output"
-        );
-        assert!(
-            elapsed >= Duration::from_millis(700),
-            "child.wait() should have blocked for the worker; only waited {elapsed:?}"
-        );
+        wait_for_process_to_exit(worker_pid).await;
     }
 }

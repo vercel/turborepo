@@ -922,6 +922,8 @@ struct ChildStateManager {
 #[derive(Clone, Debug)]
 pub struct Child {
     pid: Option<u32>,
+    #[cfg(unix)]
+    target_identity: Option<TargetIdentity>,
     command_channel: ChildCommandChannel,
     exit_channel: watch::Receiver<Option<ChildExit>>,
     stdin: Arc<Mutex<Option<ChildInput>>>,
@@ -984,6 +986,8 @@ impl Child {
         }?;
 
         let pid = child.pid();
+        #[cfg(unix)]
+        let target_identity = child.target_identity;
 
         let (command_tx, mut command_rx) = ChildCommandChannel::new();
 
@@ -1012,45 +1016,7 @@ impl Child {
                 }
                 status = child.wait() => {
                     drop(controller);
-                    let should_drain_process_tree = matches!(&status, Ok(Some(0)));
-
-                    #[cfg(unix)]
-                    let killed_during_drain = if should_drain_process_tree
-                        && let Some(pid) = pid
-                    {
-                        let mut command_rx_open = true;
-                        child
-                            .wait_for_process_group_exit(
-                                pid as libc::pid_t,
-                                None,
-                                &mut command_rx,
-                                &mut command_rx_open,
-                            )
-                            .await
-                            == ChildExit::Killed
-                    } else {
-                        false
-                    };
-
-                    #[cfg(windows)]
-                    let killed_during_drain = if should_drain_process_tree {
-                        let mut command_rx_open = true;
-                        child
-                            .wait_for_job_exit(&mut command_rx, &mut command_rx_open)
-                            .await
-                            == ChildExit::Killed
-                    } else {
-                        false
-                    };
-
-                    #[cfg(not(any(unix, windows)))]
-                    let killed_during_drain = false;
-
-                    if killed_during_drain {
-                        manager.exit_tx.send(Some(ChildExit::Killed)).ok();
-                    } else {
-                        manager.handle_child_exit(status).await;
-                    }
+                    manager.handle_child_exit(status).await;
                 }
             }
 
@@ -1059,6 +1025,8 @@ impl Child {
 
         Ok(Self {
             pid,
+            #[cfg(unix)]
+            target_identity,
             command_channel: command_tx,
             exit_channel: exit_rx,
             stdin: Arc::new(Mutex::new(stdin)),
@@ -1104,6 +1072,45 @@ impl Child {
 
     pub fn pid(&self) -> Option<u32> {
         self.pid
+    }
+
+    #[cfg(unix)]
+    fn cleanup_process_scope_after_success(&self) {
+        let Some(identity) = self.target_identity else {
+            return;
+        };
+
+        let Some(pid) = self.pid else {
+            return;
+        };
+
+        if process_group_matches_identity(pid as libc::pid_t, identity) {
+            debug!(
+                "cleaning up remaining process group after successful task: {}",
+                identity.process_group_id
+            );
+            signal_process_group(identity.process_group_id, libc::SIGKILL);
+        }
+    }
+
+    #[cfg(windows)]
+    fn cleanup_process_scope_after_success(&self) {
+        let Some(pid) = self.pid else {
+            return;
+        };
+
+        if let Err(err) = super::job_object::terminate_descendant_processes(pid) {
+            debug!("failed to clean up descendants after successful task {pid}: {err}");
+        }
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    fn cleanup_process_scope_after_success(&self) {}
+
+    fn cleanup_if_successful(&self, status: Option<ChildExit>) {
+        if status == Some(ChildExit::Finished(Some(0))) {
+            self.cleanup_process_scope_after_success();
+        }
     }
 
     pub(crate) fn has_exited(&self) -> bool {
@@ -1216,6 +1223,7 @@ impl Child {
 
         let (status, write_result) = tokio::join!(self.wait(), writer_fut);
         write_result?;
+        self.cleanup_if_successful(status);
 
         Ok(status)
     }
@@ -1324,7 +1332,9 @@ impl Child {
         debug_assert!(stdout_buffer.is_empty(), "buffer should be empty");
         debug_assert!(stderr_buffer.is_empty(), "buffer should be empty");
 
-        Ok(exit_status.or(self.wait().await))
+        let status = exit_status.or(self.wait().await);
+        self.cleanup_if_successful(status);
+        Ok(status)
     }
 
     pub fn label(&self) -> &str {
