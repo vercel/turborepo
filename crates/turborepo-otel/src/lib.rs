@@ -526,10 +526,24 @@ fn default_temporality() -> Temporality {
     Temporality::Delta
 }
 
+/// Explicit histogram bucket boundaries (milliseconds) for run and task
+/// duration metrics.
+///
+/// The OpenTelemetry SDK default buckets top out at 10s, which puts most
+/// real build and task durations in the `+Inf` bucket and makes percentile
+/// or heatmap queries effectively unusable. These boundaries span 50ms to
+/// 1 hour on a roughly logarithmic scale so realistic build durations land
+/// in meaningful buckets.
+const DURATION_HISTOGRAM_BOUNDARIES_MS: &[f64] = &[
+    50.0, 100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 10000.0, 30000.0, 60000.0, 300000.0,
+    600000.0, 1800000.0, 3600000.0,
+];
+
 fn create_instruments(meter: &Meter) -> Instruments {
     let run_duration = meter
         .f64_histogram("turbo.run.duration_ms")
         .with_description("Turborepo run duration in milliseconds")
+        .with_boundaries(DURATION_HISTOGRAM_BOUNDARIES_MS.to_vec())
         .build();
     let run_attempted = meter
         .u64_counter("turbo.run.tasks.attempted")
@@ -546,6 +560,7 @@ fn create_instruments(meter: &Meter) -> Instruments {
     let task_duration = meter
         .f64_histogram("turbo.task.duration_ms")
         .with_description("Task execution duration in milliseconds")
+        .with_boundaries(DURATION_HISTOGRAM_BOUNDARIES_MS.to_vec())
         .build();
     let task_cache = meter
         .u64_counter("turbo.task.cache.events")
@@ -820,6 +835,48 @@ mod tests {
         );
         assert!(attrs.iter().any(|(k, v)| *k == "env" && *v == "production"));
         assert!(attrs.iter().any(|(k, v)| *k == "version" && *v == "1.0.0"));
+    }
+
+    #[test]
+    fn test_duration_histogram_boundaries_are_sorted_and_finite() {
+        // Boundaries must be strictly increasing, positive, and finite, both for
+        // OpenTelemetry conformance and so that histogram_quantile() works
+        // correctly against the exported series.
+        let bounds = DURATION_HISTOGRAM_BOUNDARIES_MS;
+        assert!(!bounds.is_empty(), "boundaries must not be empty");
+        for window in bounds.windows(2) {
+            assert!(
+                window[0] < window[1],
+                "boundaries must be strictly increasing: {} >= {}",
+                window[0],
+                window[1]
+            );
+        }
+        for &boundary in bounds {
+            assert!(boundary.is_finite(), "boundary {boundary} is not finite");
+            assert!(boundary > 0.0, "boundary {boundary} must be positive");
+        }
+    }
+
+    #[test]
+    fn test_duration_histogram_boundaries_cover_realistic_build_durations() {
+        // The motivation for explicit boundaries (issue #12922) is that the
+        // SDK default buckets cap at 10s, leaving anything longer in the +Inf
+        // bucket. Verify our boundaries extend well past the typical build
+        // range (tens of seconds to several minutes) and into the hour range.
+        let bounds = DURATION_HISTOGRAM_BOUNDARIES_MS;
+        let max = bounds.last().copied().unwrap_or(0.0);
+        let min = bounds.first().copied().unwrap_or(f64::MAX);
+        // Buckets should reach at least an hour so long CI builds are bounded.
+        assert!(
+            max >= 3_600_000.0,
+            "top bucket should cover 1 hour, got {max}ms"
+        );
+        // And start small enough that fast tasks aren't all in bucket 0.
+        assert!(
+            min <= 100.0,
+            "bottom bucket should cover sub-100ms tasks, got {min}ms"
+        );
     }
 
     #[test]
