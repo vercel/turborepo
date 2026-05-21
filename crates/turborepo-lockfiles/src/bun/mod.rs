@@ -728,6 +728,37 @@ impl Lockfile for BunLockfile {
             }
         }
 
+        let workspace_deps: HashMap<String, BTreeMap<String, String>> = workspace_packages
+            .iter()
+            .filter(|ws_path| !ws_path.is_empty())
+            .filter_map(|ws_path| {
+                let workspace_entry = self.data.workspaces.get(ws_path.as_str())?;
+                let mut deps = BTreeMap::new();
+                if let Some(d) = &workspace_entry.dependencies {
+                    deps.extend(d.clone());
+                }
+                if let Some(dd) = &workspace_entry.dev_dependencies {
+                    deps.extend(dd.clone());
+                }
+                if let Some(od) = &workspace_entry.optional_dependencies {
+                    deps.extend(od.clone());
+                }
+                if let Some(pd) = &workspace_entry.peer_dependencies {
+                    deps.extend(pd.clone());
+                }
+                (!deps.is_empty()).then(|| (ws_path.clone(), deps))
+            })
+            .collect();
+
+        if !workspace_deps.is_empty() {
+            let workspace_closures = crate::all_transitive_closures(self, workspace_deps, true)?;
+            packages_with_workspaces.extend(
+                workspace_closures
+                    .values()
+                    .flat_map(|closure| closure.iter().map(|package| package.key.clone())),
+            );
+        }
+
         for ws_path in workspace_packages {
             if ws_path.is_empty() {
                 continue;
@@ -1457,12 +1488,18 @@ impl BunLockfile {
                         if let Some(dealiased_key) = parsed_key.dealias() {
                             let dealiased_str = dealiased_key.to_string();
 
-                            // Check if dealiasing would conflict with an existing workspace mapping
+                            // Check if dealiasing would conflict with an existing package.
+                            // If the top-level key points at a different ident, keep the
+                            // nested key so both versions remain addressable.
                             let would_conflict = if let Some(existing_entry) =
                                 self.data.packages.get(&dealiased_str)
                             {
                                 let ident = PackageIdent::parse(&existing_entry.ident);
+                                let current_entry = self.data.packages.get(key);
                                 ident.is_workspace()
+                                    || current_entry
+                                        .map(|entry| entry.ident != existing_entry.ident)
+                                        .unwrap_or(false)
                             } else {
                                 false
                             };
@@ -1495,14 +1532,13 @@ impl BunLockfile {
                             if let Some(dealiased_key) = parsed_key.dealias() {
                                 let dealiased_str = dealiased_key.to_string();
 
-                                // Check if dealiasing would conflict with an existing workspace
-                                // mapping
+                                // Check if dealiasing would conflict with an existing package.
+                                // Different idents must keep distinct keys.
                                 if let Some(existing_entry) = self.data.packages.get(&dealiased_str)
                                 {
                                     let ident = PackageIdent::parse(&existing_entry.ident);
-                                    if ident.is_workspace() {
-                                        // This would conflict with a workspace mapping - keep full
-                                        // key
+                                    if ident.is_workspace() || entry.ident != existing_entry.ident {
+                                        // This would conflict with another package - keep full key.
                                         key.clone()
                                     } else {
                                         // No conflict - safe to dealias
@@ -1812,6 +1848,12 @@ impl BunLockfile {
                     })
                     .collect();
 
+                let pruned_workspace_names: HashSet<String> = pruned_data
+                    .workspaces
+                    .values()
+                    .map(|workspace| workspace.name.clone())
+                    .collect();
+
                 pruned_data.packages.retain(|key, entry| {
                     if entry.ident.contains("@workspace:") {
                         return true;
@@ -1820,7 +1862,8 @@ impl BunLockfile {
                     let parsed = PackageKey::parse(key);
                     if let Some(parent) = parsed.parent() {
                         reachable_idents.contains(&entry.ident)
-                            && reachable_lockfile_keys.contains(&parent)
+                            && (reachable_lockfile_keys.contains(&parent)
+                                || pruned_workspace_names.contains(&parent))
                     } else {
                         reachable_idents.contains(&entry.ident)
                     }
@@ -4128,5 +4171,61 @@ mod test {
                 .contains_key("string-width-cjs/emoji-regex"),
             "alias-specific nested child should be restored when its sibling remains"
         );
+    }
+
+    #[test]
+    fn test_subgraph_preserves_nested_workspace_dependency_version() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "configVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "root"
+                },
+                "packages/a": {
+                    "name": "a",
+                    "version": "0.0.1",
+                    "dependencies": {
+                        "b": "*"
+                    },
+                    "devDependencies": {
+                        "b": "workspace:*",
+                        "is-number": "^7.0.0"
+                    }
+                },
+                "packages/b": {
+                    "name": "b",
+                    "version": "0.0.1",
+                    "devDependencies": {
+                        "is-number": "6.0.0"
+                    },
+                    "peerDependencies": {
+                        "is-number": "6.0.0"
+                    }
+                }
+            },
+            "packages": {
+                "a": ["a@workspace:packages/a"],
+                "b": ["b@workspace:packages/b"],
+                "is-number": ["is-number@7.0.0", "", {}, "sha512-7"],
+                "b/is-number": ["is-number@6.0.0", "", {}, "sha512-6"]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+        let subgraph = <BunLockfile as crate::Lockfile>::subgraph(
+            &lockfile,
+            &["packages/a".into(), "packages/b".into()],
+            &["is-number@7.0.0".into()],
+        )
+        .unwrap();
+
+        let encoded = subgraph.encode().unwrap();
+        let encoded_str = String::from_utf8(encoded).unwrap();
+        let pruned = BunLockfile::from_str(&encoded_str).unwrap();
+
+        assert_eq!(pruned.data.packages["is-number"].ident, "is-number@7.0.0");
+        assert_eq!(pruned.data.packages["b/is-number"].ident, "is-number@6.0.0");
     }
 }
