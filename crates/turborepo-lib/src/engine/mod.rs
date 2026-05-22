@@ -88,6 +88,7 @@ impl EngineExt for Engine<Built> {
             .collect()
     }
 
+    #[allow(clippy::expect_used)]
     fn validate(
         &self,
         package_graph: &PackageGraph,
@@ -101,9 +102,10 @@ impl EngineExt for Engine<Built> {
             .task_graph()
             .node_indices()
             .map(|node_index| {
-                let Some(task_node) = self.task_graph().node_weight(node_index) else {
-                    unreachable!("graph should contain weight for node index");
-                };
+                let task_node = self
+                    .task_graph()
+                    .node_weight(node_index)
+                    .expect("graph should contain weight for node index");
                 let TaskNode::Task(task_id) = task_node else {
                     // No need to check the root node if that's where we are.
                     return Ok(false);
@@ -113,9 +115,10 @@ impl EngineExt for Engine<Built> {
                     .task_graph()
                     .neighbors_directed(node_index, petgraph::Direction::Outgoing)
                 {
-                    let Some(dep_node) = self.task_graph().node_weight(dep_index) else {
-                        unreachable!("index comes from iterating the graph and must be present");
-                    };
+                    let dep_node = self
+                        .task_graph()
+                        .node_weight(dep_index)
+                        .expect("index comes from iterating the graph and must be present");
                     let TaskNode::Task(dep_id) = dep_node else {
                         // No need to check the root node
                         continue;
