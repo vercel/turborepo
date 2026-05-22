@@ -106,6 +106,13 @@ pub trait HasConfigBeyondExtends {
     fn has_config_beyond_extends(&self) -> bool;
 }
 
+#[derive(Serialize, Debug, PartialEq, Clone)]
+#[serde(untagged)]
+pub enum RawExperimentalCIConfig {
+    Enabled(bool),
+    Options(serde_json::Map<String, serde_json::Value>),
+}
+
 /// Configuration options that control how turbo interfaces with the remote
 /// cache.
 ///
@@ -827,7 +834,7 @@ pub struct RawTaskDefinition {
     #[deserializable(rename = "experimentalCI")]
     #[schemars(skip)]
     #[ts(skip)]
-    pub experimental_ci: Option<Spanned<bool>>,
+    pub experimental_ci: Option<Spanned<RawExperimentalCIConfig>>,
 
     /// Incremental cache partitions for tool-specific incremental artifacts.
     ///

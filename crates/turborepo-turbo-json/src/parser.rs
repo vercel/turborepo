@@ -22,8 +22,8 @@ use turborepo_task_id::TaskName;
 use turborepo_unescape::UnescapedString;
 
 use crate::raw::{
-    Pipeline, RawExperimentalObservability, RawGlobalConfig, RawObservabilityOtel,
-    RawObservabilityOtelMetrics, RawObservabilityOtelRunAttributes,
+    Pipeline, RawExperimentalCIConfig, RawExperimentalObservability, RawGlobalConfig,
+    RawObservabilityOtel, RawObservabilityOtelMetrics, RawObservabilityOtelRunAttributes,
     RawObservabilityOtelTaskAttributes, RawPackageTurboJson, RawRemoteCacheOptions,
     RawRootTurboJson, RawTaskDefinition, RawTurboJson,
 };
@@ -132,6 +132,53 @@ impl WithMetadata for Pipeline {
             entry.add_path(path.clone());
             entry.value.add_path(path.clone());
         }
+    }
+}
+
+impl Deserializable for RawExperimentalCIConfig {
+    fn deserialize(
+        value: &impl DeserializableValue,
+        name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self> {
+        value.deserialize(RawExperimentalCIConfigVisitor, name, diagnostics)
+    }
+}
+
+struct RawExperimentalCIConfigVisitor;
+
+impl DeserializationVisitor for RawExperimentalCIConfigVisitor {
+    type Output = RawExperimentalCIConfig;
+
+    const EXPECTED_TYPE: VisitableType = VisitableType::BOOL.union(VisitableType::MAP);
+
+    fn visit_bool(
+        self,
+        value: bool,
+        _range: TextRange,
+        _name: &str,
+        _diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        Some(RawExperimentalCIConfig::Enabled(value))
+    }
+
+    fn visit_map(
+        self,
+        members: impl Iterator<Item = Option<(impl DeserializableValue, impl DeserializableValue)>>,
+        _range: TextRange,
+        _name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        let entries = members
+            .filter_map(|entry| {
+                let (key, value) = entry?;
+                let key = String::deserialize(&key, "", diagnostics)?;
+                let value = serde_json::Value::deserialize(&value, "", diagnostics)?;
+                Some((key, value))
+            })
+            .collect();
+
+        Some(RawExperimentalCIConfig::Options(entries))
     }
 }
 
@@ -573,6 +620,61 @@ mod tests {
             result.is_err(),
             "expected parsing to fail due to unknown key 'lol' in task definition, but got: {:?}",
             result
+        );
+    }
+
+    #[test]
+    fn test_experimental_ci_accepts_boolean() {
+        let json = r#"{"tasks": {"build": {"experimentalCI": true}}}"#;
+        let result = RawRootTurboJson::parse(json, "turbo.json").unwrap();
+        let task = result
+            .tasks
+            .as_ref()
+            .unwrap()
+            .get(&TaskName::from("build"))
+            .unwrap();
+
+        assert_eq!(
+            task.experimental_ci.as_ref().map(|v| v.as_inner()),
+            Some(&RawExperimentalCIConfig::Enabled(true))
+        );
+    }
+
+    #[test]
+    fn test_experimental_ci_accepts_object_with_arbitrary_keys() {
+        let json = r#"{
+            "tasks": {
+                "build": {
+                    "experimentalCI": {
+                        "provider": "github",
+                        "enabled": true,
+                        "attempts": 3,
+                        "nested": { "key": ["value"] }
+                    }
+                }
+            }
+        }"#;
+        let result = RawRootTurboJson::parse(json, "turbo.json").unwrap();
+        let task = result
+            .tasks
+            .as_ref()
+            .unwrap()
+            .get(&TaskName::from("build"))
+            .unwrap();
+
+        assert_eq!(
+            task.experimental_ci.as_ref().map(|v| v.as_inner()),
+            Some(&RawExperimentalCIConfig::Options(
+                serde_json::json!({
+                    "provider": "github",
+                    "enabled": true,
+                    "attempts": 3,
+                    "nested": { "key": ["value"] }
+                })
+                .as_object()
+                .unwrap()
+                .clone()
+            ))
         );
     }
 }
