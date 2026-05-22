@@ -8,7 +8,9 @@ license = "MIT"
 workspace = true
 
 [dependencies]
-opentelemetry = { version = "0.31", features = ["metrics"] }
+opentelemetry = { version = "0.31", default-features = false, features = [
+  "metrics",
+] }
 opentelemetry-otlp = { version = "0.31", default-features = false, features = [
   "grpc-tonic",
   "http-proto",
@@ -16,7 +18,7 @@ opentelemetry-otlp = { version = "0.31", default-features = false, features = [
   "reqwest-client",
 ] }
 opentelemetry-semantic-conventions = "0.31"
-opentelemetry_sdk = { version = "0.31", features = [
+opentelemetry_sdk = { version = "0.31", default-features = false, features = [
   "metrics",
   "rt-tokio",
   "experimental_async_runtime",
@@ -25,5 +27,5 @@ opentelemetry_sdk = { version = "0.31", features = [
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-tonic = "0.14"
+tonic = { version = "0.14", default-features = false }
 tracing = { workspace = true }
