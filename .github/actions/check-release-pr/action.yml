@@ -1,11 +1,12 @@
 name: Check Release PR
 description: |
   Detects automated release PRs created by github-actions[bot] with title
-  matching "release(turborepo):*". These PRs only contain version bumps and
-  can skip full test suites.
+  matching "release(turborepo):*". These PRs only contain generated release
+  updates and can skip full test suites.
 
   This action also validates that release PRs only modify expected files
-  (version.txt, package.json, Cargo.toml, Cargo.lock, CHANGELOG).
+  (version.txt, package.json, Cargo.toml, Cargo.lock, CHANGELOG,
+  pnpm-lock.yaml, and Turborepo skill Markdown files).
 
 outputs:
   is-release-pr:
@@ -58,7 +59,7 @@ runs:
         echo "$CHANGED_FILES"
 
         # Validate each file matches expected release patterns
-        ALLOWED_PATTERN="^(version\.txt|.*/package\.json|package\.json|Cargo\.toml|Cargo\.lock|.*/Cargo\.toml|CHANGELOG.*|pnpm-lock\.yaml)$"
+        ALLOWED_PATTERN="^(version\.txt|.*/package\.json|package\.json|Cargo\.toml|Cargo\.lock|.*/Cargo\.toml|CHANGELOG.*|pnpm-lock\.yaml|skills/turborepo/.*\.md)$"
 
         INVALID_FILES=""
         while IFS= read -r file; do
@@ -68,10 +69,10 @@ runs:
         done <<< "$CHANGED_FILES"
 
         if [[ -n "$INVALID_FILES" ]]; then
-          echo "::error::Release PR contains unexpected files that are not version-related:"
+          echo "::error::Release PR contains unexpected files that are not generated release updates:"
           echo "$INVALID_FILES"
-          echo "::error::Release PRs should only modify version.txt, package.json, Cargo.toml, Cargo.lock, CHANGELOG, or pnpm-lock.yaml"
+          echo "::error::Release PRs should only modify version.txt, package.json, Cargo.toml, Cargo.lock, CHANGELOG, pnpm-lock.yaml, or Turborepo skill Markdown files"
           exit 1
         fi
 
-        echo "Release PR content validation passed - only version-related files changed"
+        echo "Release PR content validation passed - only generated release files changed"

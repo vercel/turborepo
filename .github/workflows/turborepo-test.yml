@@ -26,9 +26,9 @@ jobs:
       rust: ${{ steps.filter.outputs.rust }}
       native-lib: ${{ steps.filter.outputs.native-lib }}
     steps:
-      # Detect automated release PRs which only contain version bumps.
+      # Detect automated release PRs which only contain generated release updates.
       # These PRs are created by the release workflow after code has already
-      # been tested on main. Skipping tests on version-only changes saves CI time.
+      # been tested on main. Skipping tests on generated release lets us auto-merge release PRs.
       - name: Check if automated release PR
         id: check-release
         shell: bash
@@ -63,7 +63,7 @@ jobs:
           echo "Changed files in release PR:"
           printf '%s\n' "$CHANGED_FILES"
 
-          ALLOWED_PATTERN="^(version\.txt|.*/package\.json|package\.json|Cargo\.toml|Cargo\.lock|.*/Cargo\.toml|CHANGELOG.*|pnpm-lock\.yaml)$"
+          ALLOWED_PATTERN="^(version\.txt|.*/package\.json|package\.json|Cargo\.toml|Cargo\.lock|.*/Cargo\.toml|CHANGELOG.*|pnpm-lock\.yaml|skills/turborepo/.*\.md)$"
           INVALID_FILES=""
           while IFS= read -r file; do
             if [[ -n "$file" && ! "$file" =~ $ALLOWED_PATTERN ]]; then
@@ -72,14 +72,14 @@ jobs:
           done <<< "$CHANGED_FILES"
 
           if [[ -n "$INVALID_FILES" ]]; then
-            echo "::error::Release PR contains unexpected files that are not version-related:"
+            echo "::error::Release PR contains unexpected files that are not generated release updates:"
             printf '%s\n' "$INVALID_FILES"
-            echo "::error::Release PRs should only modify version.txt, package.json, Cargo.toml, Cargo.lock, CHANGELOG, or pnpm-lock.yaml"
+            echo "::error::Release PRs should only modify version.txt, package.json, Cargo.toml, Cargo.lock, CHANGELOG, pnpm-lock.yaml, or Turborepo skill Markdown files"
             exit 1
           fi
 
           echo "is-release-pr=true" >> "$GITHUB_OUTPUT"
-          echo "Release PR content validation passed - only version-related files changed"
+          echo "Release PR content validation passed - only generated release files changed"
 
       - name: Checkout
         if: steps.check-release.outputs.is-release-pr != 'true'
