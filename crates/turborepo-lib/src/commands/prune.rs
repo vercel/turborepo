@@ -174,9 +174,10 @@ pub async fn prune(
         // We don't want to do any copying for the root workspace
         if let PackageName::Other(workspace) = workspace {
             prune.copy_workspace(entry.package_json_path(), &entry.package_json)?;
-            if let Some(parent) = entry.package_json_path().parent() {
-                workspace_paths.push(parent.to_unix().to_string());
-            }
+            let Some(parent) = entry.package_json_path().parent() else {
+                unreachable!("workspace package.json path should have a parent");
+            };
+            workspace_paths.push(parent.to_unix().to_string());
 
             println!(" - Added {workspace}");
             workspace_names.push(workspace);

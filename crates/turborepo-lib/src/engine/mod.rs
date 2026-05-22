@@ -102,7 +102,7 @@ impl EngineExt for Engine<Built> {
             .node_indices()
             .map(|node_index| {
                 let Some(task_node) = self.task_graph().node_weight(node_index) else {
-                    return Ok(false);
+                    unreachable!("graph should contain weight for node index");
                 };
                 let TaskNode::Task(task_id) = task_node else {
                     // No need to check the root node if that's where we are.
@@ -114,7 +114,7 @@ impl EngineExt for Engine<Built> {
                     .neighbors_directed(node_index, petgraph::Direction::Outgoing)
                 {
                     let Some(dep_node) = self.task_graph().node_weight(dep_index) else {
-                        continue;
+                        unreachable!("index comes from iterating the graph and must be present");
                     };
                     let TaskNode::Task(dep_id) = dep_node else {
                         // No need to check the root node
