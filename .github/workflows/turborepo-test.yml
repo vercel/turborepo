@@ -220,6 +220,8 @@ jobs:
   rust_test_macos:
     runs-on: macos-latest-xlarge
     timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: 0
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
@@ -258,6 +260,8 @@ jobs:
   rust_test_windows:
     runs-on: windows-latest-8-core-oss
     timeout-minutes: 180
+    env:
+      CARGO_INCREMENTAL: 0
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
@@ -332,6 +336,8 @@ jobs:
   rust_test_ubuntu:
     runs-on: ubuntu-latest-8-core-oss
     timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: 0
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
