@@ -740,7 +740,7 @@ fn find_untracked_files(
     status_entries: &[RepoStatusEntry],
     prefixes: Option<&[RelativeUnixPathBuf]>,
 ) -> Result<WalkedPaths, Error> {
-    use std::sync::mpsc;
+    use std::{collections::HashMap, sync::mpsc};
 
     use ignore::WalkBuilder;
 
@@ -752,7 +752,8 @@ fn find_untracked_files(
     // directory so patterns are scoped correctly (e.g., `dist/` in
     // `packages/ui/.gitignore` only matches under `packages/ui/`).
     let gitignore_matchers = {
-        let mut matchers: Vec<ignore::gitignore::Gitignore> = Vec::new();
+        let mut matchers: HashMap<std::path::PathBuf, ignore::gitignore::Gitignore> =
+            HashMap::new();
 
         // Global gitignore + .git/info/exclude are rooted at the repo root
         let mut root_builder = ignore::gitignore::GitignoreBuilder::new(root.as_path());
@@ -803,7 +804,7 @@ fn find_untracked_files(
                 if let Ok(gi) = builder.build()
                     && !gi.is_empty()
                 {
-                    matchers.push(gi);
+                    matchers.insert(gi_dir.to_path_buf(), gi);
                 }
             }
         }
@@ -812,7 +813,7 @@ fn find_untracked_files(
             && let Ok(gi) = root_builder.build()
             && !gi.is_empty()
         {
-            matchers.insert(0, gi);
+            matchers.insert(root.as_path().to_path_buf(), gi);
         }
 
         matchers
@@ -860,15 +861,8 @@ fn find_untracked_files(
                     return false;
                 }
 
-                // Check against all pre-built gitignore matchers. For
-                // directories, returning false prunes the entire subtree.
-                // Only check matchers whose root is a prefix of the entry
-                // path — a matcher scoped to packages/ui/ can't affect
-                // files under apps/web/.
-                !matchers.iter().any(|gi| {
-                    path.starts_with(gi.path())
-                        && gi.matched_path_or_any_parents(path, is_dir).is_ignore()
-                })
+                // Only ancestor .gitignore files can affect this entry.
+                !is_ignored_by_indexed_gitignore_matchers(&matchers, root.as_path(), path, is_dir)
             }
         })
         .threads(rayon::current_num_threads().min(8))
@@ -958,7 +952,8 @@ fn find_untracked_files(
         .collect();
 
     if !untracked_gitignores.is_empty() {
-        let mut extra_matchers: Vec<ignore::gitignore::Gitignore> = Vec::new();
+        let mut extra_matchers: HashMap<std::path::PathBuf, ignore::gitignore::Gitignore> =
+            HashMap::new();
         for gi_path in &untracked_gitignores {
             let abs = root.join(gi_path.as_str());
             let gi_dir = abs.parent().unwrap_or(root.as_path());
@@ -967,7 +962,7 @@ fn find_untracked_files(
             if let Ok(gi) = builder.build()
                 && !gi.is_empty()
             {
-                extra_matchers.push(gi);
+                extra_matchers.insert(gi_dir.to_path_buf(), gi);
             }
         }
         if !extra_matchers.is_empty() {
@@ -976,10 +971,12 @@ fn find_untracked_files(
                     return true;
                 }
                 let abs = root.join(p.as_str());
-                !extra_matchers.iter().any(|gi| {
-                    abs.starts_with(gi.path())
-                        && gi.matched_path_or_any_parents(&abs, false).is_ignore()
-                })
+                !is_ignored_by_indexed_gitignore_matchers(
+                    &extra_matchers,
+                    root.as_path(),
+                    &abs,
+                    false,
+                )
             });
         }
     }
@@ -1089,6 +1086,40 @@ fn is_nested_path_bytes(path: &[u8], prefix: &[u8]) -> bool {
     path.len() > prefix.len() && path.starts_with(prefix) && path.get(prefix.len()) == Some(&b'/')
 }
 
+fn is_ignored_by_indexed_gitignore_matchers(
+    matchers: &std::collections::HashMap<std::path::PathBuf, ignore::gitignore::Gitignore>,
+    root: &std::path::Path,
+    path: &std::path::Path,
+    is_dir: bool,
+) -> bool {
+    let mut matcher_dir = if is_dir {
+        path
+    } else {
+        path.parent().unwrap_or(root)
+    };
+
+    loop {
+        if let Some(matcher) = matchers.get(matcher_dir)
+            && matcher
+                .matched_path_or_any_parents(path, is_dir)
+                .is_ignore()
+        {
+            return true;
+        }
+
+        if matcher_dir == root {
+            break;
+        }
+
+        let Some(parent) = matcher_dir.parent() else {
+            break;
+        };
+        matcher_dir = parent;
+    }
+
+    false
+}
+
 fn parent_path_bytes(path: &[u8]) -> &[u8] {
     path.iter()
         .rposition(|byte| *byte == b'/')
@@ -1112,8 +1143,9 @@ enum EntryClassification {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashMap};
 
+    use tempfile::TempDir;
     use turbopath::RelativeUnixPathBuf;
 
     use super::*;
@@ -1146,6 +1178,22 @@ mod tests {
             unsupported_paths: Vec::new(),
             untracked_entries_populated: true,
         }
+    }
+
+    fn add_gitignore(
+        root: &std::path::Path,
+        dir: &str,
+        patterns: &str,
+        matchers: &mut HashMap<std::path::PathBuf, ignore::gitignore::Gitignore>,
+    ) {
+        let dir = root.join(dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let gitignore = dir.join(".gitignore");
+        std::fs::write(&gitignore, patterns).unwrap();
+
+        let mut builder = ignore::gitignore::GitignoreBuilder::new(&dir);
+        builder.add(&gitignore);
+        matchers.insert(dir, builder.build().unwrap());
     }
 
     #[test]
@@ -1335,6 +1383,36 @@ mod tests {
         assert_eq!(hashes.len(), 3);
         assert_eq!(*hashes.get(&path("a.ts")).unwrap(), *pad_hex("111"));
         assert!(to_hash.is_empty());
+    }
+
+    #[test]
+    fn test_indexed_gitignore_matchers_consult_ancestors_only() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        let mut matchers = HashMap::new();
+
+        add_gitignore(root, "", "root-ignore\n", &mut matchers);
+        add_gitignore(root, "packages/ui", "dist/\n", &mut matchers);
+        add_gitignore(root, "apps/web", "dist/\n", &mut matchers);
+
+        assert!(is_ignored_by_indexed_gitignore_matchers(
+            &matchers,
+            root,
+            &root.join("root-ignore"),
+            false,
+        ));
+        assert!(is_ignored_by_indexed_gitignore_matchers(
+            &matchers,
+            root,
+            &root.join("packages/ui/dist/index.js"),
+            false,
+        ));
+        assert!(!is_ignored_by_indexed_gitignore_matchers(
+            &matchers,
+            root,
+            &root.join("packages/core/dist/index.js"),
+            false,
+        ));
     }
 
     #[test]
