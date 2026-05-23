@@ -1777,6 +1777,7 @@ async fn run_main(
 
             if execution_args.tasks.is_empty() {
                 print_potential_tasks(base, event).await?;
+                finalize_chrome_profile(logger, version);
                 return Ok(1);
             }
 
@@ -1799,23 +1800,7 @@ async fn run_main(
 
             // Chrome tracing is enabled early in shim::run(). Here we just
             // flush and generate the markdown summary.
-            if let Some(file_path) = logger.chrome_tracing_file() {
-                let _ = logger.flush_chrome_tracing();
-
-                if let Err(e) =
-                    crate::tracing::inject_trace_metadata(std::path::Path::new(&file_path), version)
-                {
-                    warn!("Failed to inject trace metadata: {e}");
-                }
-
-                let md_path = format!("{file_path}.md");
-                if let Err(e) = turborepo_profile_md::trace_to_markdown(
-                    std::path::Path::new(&file_path),
-                    std::path::Path::new(&md_path),
-                ) {
-                    warn!("Failed to generate profile markdown: {e}");
-                }
-            }
+            finalize_chrome_profile(logger, version);
 
             Ok(exit_code)
         }
@@ -1939,6 +1924,27 @@ async fn run_main(
     }
 
     cli_result
+}
+
+fn finalize_chrome_profile(logger: &TurboSubscriber, version: &str) {
+    let Some(file_path) = logger.chrome_tracing_file() else {
+        return;
+    };
+
+    let _ = logger.flush_chrome_tracing();
+
+    if let Err(e) = crate::tracing::inject_trace_metadata(std::path::Path::new(&file_path), version)
+    {
+        warn!("Failed to inject trace metadata: {e}");
+    }
+
+    let md_path = format!("{file_path}.md");
+    if let Err(e) = turborepo_profile_md::trace_to_markdown(
+        std::path::Path::new(&file_path),
+        std::path::Path::new(&md_path),
+    ) {
+        warn!("Failed to generate profile markdown: {e}");
+    }
 }
 
 #[cfg(test)]

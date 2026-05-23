@@ -185,6 +185,7 @@ impl RunBuilder {
         )
     }
 
+    #[tracing::instrument(skip_all)]
     async fn resolve_remote_cache_status(
         &self,
         preflight_handle: Option<
@@ -561,11 +562,14 @@ impl RunBuilder {
                 let token = auth.token.clone();
                 let team_id = auth.team_id.clone();
                 let team_slug = auth.team_slug.clone();
-                Some(tokio::spawn(async move {
-                    client
-                        .get_caching_status(&token, team_id.as_deref(), team_slug.as_deref())
-                        .await
-                }))
+                Some(tokio::spawn(
+                    async move {
+                        client
+                            .get_caching_status(&token, team_id.as_deref(), team_slug.as_deref())
+                            .await
+                    }
+                    .instrument(tracing::info_span!("remote_cache_preflight")),
+                ))
             } else {
                 None
             }
