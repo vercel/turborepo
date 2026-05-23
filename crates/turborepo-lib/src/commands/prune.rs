@@ -126,6 +126,7 @@ fn turbo_jsonc() -> &'static AnchoredSystemPath {
     PATH.get_or_init(|| anchored_path(CONFIG_FILE_JSONC))
 }
 
+#[allow(clippy::expect_used)]
 pub async fn prune(
     base: &CommandBase,
     scope: &[String],
@@ -174,9 +175,11 @@ pub async fn prune(
         // We don't want to do any copying for the root workspace
         if let PackageName::Other(workspace) = workspace {
             prune.copy_workspace(entry.package_json_path(), &entry.package_json)?;
-            if let Some(parent) = entry.package_json_path().parent() {
-                workspace_paths.push(parent.to_unix().to_string());
-            }
+            let parent = entry
+                .package_json_path()
+                .parent()
+                .expect("workspace package.json path should have a parent");
+            workspace_paths.push(parent.to_unix().to_string());
 
             println!(" - Added {workspace}");
             workspace_names.push(workspace);

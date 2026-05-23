@@ -855,6 +855,7 @@ impl Screen {
 }
 
 impl Screen {
+    #[allow(clippy::expect_used)]
     pub(crate) fn text(&mut self, c: char) {
         let pos = self.grid().pos();
         let size = self.grid().size();
@@ -878,13 +879,14 @@ impl Screen {
         // cells, which i really don't want to do).
         let mut wrap = false;
         if pos.col > size.cols - width {
-            let last_cell = self.grid().drawing_cell(crate::grid::Pos {
-                row: pos.row,
-                col: size.cols - 1,
-            });
-            if last_cell.is_some_and(|cell| {
-                cell.has_contents() || cell.is_wide_continuation()
-            }) {
+            let last_cell = self
+                .grid()
+                .drawing_cell(crate::grid::Pos {
+                    row: pos.row,
+                    col: size.cols - 1,
+                })
+                .expect("cursor row and final column should be valid");
+            if last_cell.has_contents() || last_cell.is_wide_continuation() {
                 wrap = true;
             }
         }
@@ -893,119 +895,121 @@ impl Screen {
 
         if width == 0 {
             if pos.col > 0 {
-                let Some(mut prev_cell) =
-                    self.grid_mut().drawing_cell_mut(crate::grid::Pos {
+                let mut prev_cell = self
+                    .grid_mut()
+                    .drawing_cell_mut(crate::grid::Pos {
                         row: pos.row,
                         col: pos.col - 1,
                     })
-                else {
-                    return;
-                };
+                    .expect("previous cell should be valid when cursor column is nonzero");
                 if prev_cell.is_wide_continuation() {
-                    let Some(cell) =
-                        self.grid_mut().drawing_cell_mut(crate::grid::Pos {
+                    let prev_wide_col = pos.col.checked_sub(2).expect(
+                        "wide continuation should have a leading cell",
+                    );
+                    prev_cell = self
+                        .grid_mut()
+                        .drawing_cell_mut(crate::grid::Pos {
                             row: pos.row,
-                            col: pos.col - 2,
+                            col: prev_wide_col,
                         })
-                    else {
-                        return;
-                    };
-                    prev_cell = cell;
+                        .expect(
+                            "wide continuation should have a leading cell",
+                        );
                 }
                 prev_cell.append(c);
-            } else if pos.row > 0
-                && self
-                    .grid()
-                    .drawing_row(pos.row - 1)
-                    .is_some_and(crate::row::Row::wrapped)
-            {
-                let Some(mut prev_cell) =
-                    self.grid_mut().drawing_cell_mut(crate::grid::Pos {
-                        row: pos.row - 1,
-                        col: size.cols - 1,
-                    })
-                else {
-                    return;
-                };
-                if prev_cell.is_wide_continuation() {
-                    let Some(cell) =
-                        self.grid_mut().drawing_cell_mut(crate::grid::Pos {
+            } else if pos.row > 0 {
+                let prev_row = self.grid().drawing_row(pos.row - 1).expect(
+                    "previous row should be valid when cursor row is nonzero",
+                );
+                if prev_row.wrapped() {
+                    let mut prev_cell = self
+                        .grid_mut()
+                        .drawing_cell_mut(crate::grid::Pos {
                             row: pos.row - 1,
-                            col: size.cols - 2,
+                            col: size.cols - 1,
                         })
-                    else {
-                        return;
-                    };
-                    prev_cell = cell;
+                        .expect("previous row final cell should be valid");
+                    if prev_cell.is_wide_continuation() {
+                        let prev_wide_col = size.cols.checked_sub(2).expect(
+                            "wide continuation should have a leading cell",
+                        );
+                        prev_cell = self
+                            .grid_mut()
+                            .drawing_cell_mut(crate::grid::Pos {
+                                row: pos.row - 1,
+                                col: prev_wide_col,
+                            })
+                            .expect("wide continuation should have a leading cell");
+                    }
+                    prev_cell.append(c);
                 }
-                prev_cell.append(c);
             }
         } else {
-            if self
+            let current_cell = self
                 .grid()
                 .drawing_cell(pos)
-                .is_some_and(crate::Cell::is_wide_continuation)
-            {
-                let Some(prev_cell) =
-                    self.grid_mut().drawing_cell_mut(crate::grid::Pos {
+                .expect("cursor position should be valid after wrapping");
+            if current_cell.is_wide_continuation() {
+                let prev_col = pos
+                    .col
+                    .checked_sub(1)
+                    .expect("wide continuation should have a leading cell");
+                let prev_cell = self
+                    .grid_mut()
+                    .drawing_cell_mut(crate::grid::Pos {
                         row: pos.row,
-                        col: pos.col - 1,
+                        col: prev_col,
                     })
-                else {
-                    return;
-                };
+                    .expect("wide continuation should have a leading cell");
                 prev_cell.clear(attrs);
             }
 
-            if self
-                .grid()
-                .drawing_cell(pos)
-                .is_some_and(crate::Cell::is_wide)
-            {
-                let Some(next_cell) =
-                    self.grid_mut().drawing_cell_mut(crate::grid::Pos {
+            let current_cell = self.grid().drawing_cell(pos).expect(
+                "cursor position should be valid after clearing leading cell",
+            );
+            if current_cell.is_wide() {
+                let next_cell = self
+                    .grid_mut()
+                    .drawing_cell_mut(crate::grid::Pos {
                         row: pos.row,
                         col: pos.col + 1,
                     })
-                else {
-                    return;
-                };
+                    .expect("wide cell should have a continuation cell");
                 next_cell.set(' ', attrs);
             }
 
-            let Some(cell) = self.grid_mut().drawing_cell_mut(pos) else {
-                return;
-            };
+            let cell = self
+                .grid_mut()
+                .drawing_cell_mut(pos)
+                .expect("cursor position should be valid before drawing");
             cell.set(c, attrs);
             self.grid_mut().col_inc(1);
             if width > 1 {
                 let pos = self.grid().pos();
-                if self
-                    .grid()
-                    .drawing_cell(pos)
-                    .is_some_and(crate::Cell::is_wide)
-                {
+                let current_cell = self.grid().drawing_cell(pos).expect(
+                    "cursor position should be valid after wide char advance",
+                );
+                if current_cell.is_wide() {
                     let next_next_pos = crate::grid::Pos {
                         row: pos.row,
                         col: pos.col + 1,
                     };
-                    let Some(next_next_cell) =
-                        self.grid_mut().drawing_cell_mut(next_next_pos)
-                    else {
-                        return;
-                    };
+                    let next_next_cell = self
+                        .grid_mut()
+                        .drawing_cell_mut(next_next_pos)
+                        .expect("wide cell should have a continuation cell");
                     next_next_cell.clear(attrs);
-                    if next_next_pos.col == size.cols - 1
-                        && let Some(row) =
-                            self.grid_mut().drawing_row_mut(pos.row)
-                    {
+                    if next_next_pos.col == size.cols - 1 {
+                        let row = self
+                            .grid_mut()
+                            .drawing_row_mut(pos.row)
+                            .expect("cursor row should be valid");
                         row.wrap(false);
                     }
                 }
-                let Some(next_cell) = self.grid_mut().drawing_cell_mut(pos)
-                else {
-                    return;
-                };
+                let next_cell = self.grid_mut().drawing_cell_mut(pos).expect(
+                    "wide character continuation cell should be valid",
+                );
                 next_cell.clear(crate::attrs::Attrs::default());
                 next_cell.set_wide_continuation(true);
                 self.grid_mut().col_inc(1);
