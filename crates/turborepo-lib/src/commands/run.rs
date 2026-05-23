@@ -1,6 +1,6 @@
 use std::{env, future::Future, sync::Arc};
 
-use tracing::error;
+use tracing::{error, Instrument};
 use turborepo_api_client::SharedHttpClient;
 use turborepo_log::StructuredLogSink;
 use turborepo_query_api::QueryServer;
@@ -29,13 +29,17 @@ where
             // Keep the run future alive so the TUI can continue rendering task
             // output until shutdown drains and the UI closes cleanly.
             let result = (&mut run_fut).await;
-            let _span = tracing::info_span!("signal_handler_done").entered();
-            handler.done().await;
+            handler
+                .done()
+                .instrument(tracing::info_span!("signal_handler_done"))
+                .await;
             RunOutcome::Interrupted(result)
         }
         result = &mut run_fut => {
-            let _span = tracing::info_span!("signal_handler_close").entered();
-            handler.close().await;
+            handler
+                .close()
+                .instrument(tracing::info_span!("signal_handler_close"))
+                .await;
             RunOutcome::Completed(result)
         }
     }
