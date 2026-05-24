@@ -1,0 +1,154 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+  injectWorkspacePackages: true
+
+importers:
+
+  .:
+    devDependencies:
+      turbo:
+        specifier: 2.9.15-canary.3
+        version: 2.9.15-canary.3
+
+  apps/app2:
+    dependencies:
+      '@repo/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      react:
+        specifier: 18.2.0
+        version: 18.2.0
+    dependenciesMeta:
+      '@repo/shared':
+        injected: true
+
+  apps/my-app:
+    dependencies:
+      '@repo/shared':
+        specifier: workspace:*
+        version: file:packages/shared(react@17.0.2)
+      react:
+        specifier: 17.0.2
+        version: 17.0.2
+    dependenciesMeta:
+      '@repo/shared':
+        injected: true
+
+  packages/shared:
+    dependencies:
+      react:
+        specifier: '*'
+        version: 18.2.0
+
+packages:
+
+  '@repo/shared@file:packages/shared':
+    resolution: {directory: packages/shared, type: directory}
+    peerDependencies:
+      react: '*'
+
+  '@turbo/darwin-64@2.9.15-canary.3':
+    resolution: {integrity: sha512-HayC5ffZGMmzw5Ope6WXmodkdSqxNWCld3FTuriChrzTpCHgczcYhpwxFKg5hoCbXUkKLt33ciHTrGVWdHa8QA==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@turbo/darwin-arm64@2.9.15-canary.3':
+    resolution: {integrity: sha512-0iETVMcy0juHZgCZ56eoYsl7dVjDK34OAqAzkCDepvN8zovS2jQCl2YOMIbhm8kiZzBUAjuGCJ9kjqZC2UiqZA==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@turbo/linux-64@2.9.15-canary.3':
+    resolution: {integrity: sha512-cKgpaZWQYwssEEir154GWMUD3W71M1MMu9AKaQekavgJnN30jmMc0Ne/kQmUfTD+ynu2nkTHhZRnw7yVGW1tog==}
+    cpu: [x64]
+    os: [linux]
+
+  '@turbo/linux-arm64@2.9.15-canary.3':
+    resolution: {integrity: sha512-wpqupVQG9M0eDrrOFkRvWDOMxDMQVhZrV82+/c3A7k1poNAlCGMVTar4nLysDPAggbzI/R5CIdo1fCJHY3IkKA==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@turbo/windows-64@2.9.15-canary.3':
+    resolution: {integrity: sha512-hFgW7xOrFrfgJvVP8n04QgKgxSiPL3gT0zyBxymI1D5X+WE2WAgPALJHuEMgYrWPlH0R43DJmUyzSRpq2eX0nQ==}
+    cpu: [x64]
+    os: [win32]
+
+  '@turbo/windows-arm64@2.9.15-canary.3':
+    resolution: {integrity: sha512-cljTbKLy7YWrOv6S15Dv29g3aBJqfbzL1rzjeHsrFxerWaWmjf+EXe+7NOICUTgBG48FaKNniGS06sj8TbkvAA==}
+    cpu: [arm64]
+    os: [win32]
+
+  js-tokens@4.0.0:
+    resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
+
+  loose-envify@1.4.0:
+    resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
+    hasBin: true
+
+  object-assign@4.1.1:
+    resolution: {integrity: sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==}
+    engines: {node: '>=0.10.0'}
+
+  react@17.0.2:
+    resolution: {integrity: sha512-gnhPt75i/dq/z3/6q/0asP78D0u592D5L1pd7M8P+dck6Fu/jJeL6iVVK23fptSUZj8Vjf++7wXA8UNclGQcbA==}
+    engines: {node: '>=0.10.0'}
+
+  react@18.2.0:
+    resolution: {integrity: sha512-/3IjMdb2L9QbBdWiW5e3P2/npwMBaU9mHCSCUzNln0ZCYbcfTsGbTJrU/kGemdH2IWmB2ioZ+zkxtmq6g09fGQ==}
+    engines: {node: '>=0.10.0'}
+
+  turbo@2.9.15-canary.3:
+    resolution: {integrity: sha512-7nN/khMvGpZQzjSv2UknaaoZ+34mpI/Y3HTjzRkMuII07O2ijAWdE+vB2h9Uw/cJSGQklGwCnrnOxwnET2sTZg==}
+    hasBin: true
+
+snapshots:
+
+  '@repo/shared@file:packages/shared(react@17.0.2)':
+    dependencies:
+      react: 17.0.2
+
+  '@turbo/darwin-64@2.9.15-canary.3':
+    optional: true
+
+  '@turbo/darwin-arm64@2.9.15-canary.3':
+    optional: true
+
+  '@turbo/linux-64@2.9.15-canary.3':
+    optional: true
+
+  '@turbo/linux-arm64@2.9.15-canary.3':
+    optional: true
+
+  '@turbo/windows-64@2.9.15-canary.3':
+    optional: true
+
+  '@turbo/windows-arm64@2.9.15-canary.3':
+    optional: true
+
+  js-tokens@4.0.0: {}
+
+  loose-envify@1.4.0:
+    dependencies:
+      js-tokens: 4.0.0
+
+  object-assign@4.1.1: {}
+
+  react@17.0.2:
+    dependencies:
+      loose-envify: 1.4.0
+      object-assign: 4.1.1
+
+  react@18.2.0:
+    dependencies:
+      loose-envify: 1.4.0
+
+  turbo@2.9.15-canary.3:
+    optionalDependencies:
+      '@turbo/darwin-64': 2.9.15-canary.3
+      '@turbo/darwin-arm64': 2.9.15-canary.3
+      '@turbo/linux-64': 2.9.15-canary.3
+      '@turbo/linux-arm64': 2.9.15-canary.3
+      '@turbo/windows-64': 2.9.15-canary.3
+      '@turbo/windows-arm64': 2.9.15-canary.3

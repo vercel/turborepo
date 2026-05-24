@@ -325,6 +325,11 @@ impl PnpmLockfile {
             .and_then(|packages| packages.get(key))
     }
 
+    fn package_key_for_snapshot(&self, snapshot_key: &str) -> Result<String, crate::Error> {
+        let dp = DepPath::parse(self.version(), snapshot_key).map_err(Error::from)?;
+        Ok(self.format_key(dp.name, dp.version))
+    }
+
     fn has_package(&self, key: &str) -> bool {
         match self.version() {
             SupportedLockfileVersion::V5 | SupportedLockfileVersion::V6 => {
@@ -519,9 +524,7 @@ impl PnpmLockfile {
                     .ok_or_else(|| crate::Error::MissingPackage(package.clone()))?;
                 pruned_snapshots.insert(package.clone(), entry.clone());
 
-                // Remove peer suffix to find the key for the package entry
-                let dp = DepPath::parse(self.version(), package.as_str()).map_err(Error::from)?;
-                let package_key = self.format_key(dp.name, dp.version);
+                let package_key = self.package_key_for_snapshot(package.as_str())?;
                 let entry = self
                     .get_packages(&package_key)
                     .ok_or_else(|| crate::Error::MissingPackage(package_key.clone()))?;
@@ -675,9 +678,14 @@ impl crate::Lockfile for PnpmLockfile {
                 }
 
                 let key = self.format_key(dependency, version);
+                let package_key = if self.snapshots.is_some() {
+                    self.package_key_for_snapshot(&key)?
+                } else {
+                    key.clone()
+                };
 
-                if let Some(entry) = self.get_packages(&key) {
-                    pruned_packages.insert(key.clone(), entry.clone());
+                if let Some(entry) = self.get_packages(&package_key) {
+                    pruned_packages.insert(package_key, entry.clone());
                 }
 
                 if let Some(snapshots) = self.snapshots.as_ref()
@@ -1501,6 +1509,79 @@ snapshots:
             packages.contains_key("is-odd@3.0.1"),
             "pruned should have is-odd in packages via transitive deps"
         );
+    }
+
+    #[test]
+    fn test_subgraph_with_injected_workspace_peer_variant() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+  injectWorkspacePackages: true
+
+importers:
+
+  .: {}
+
+  apps/my-app:
+    dependencies:
+      '@repo/shared':
+        specifier: workspace:*
+        version: file:packages/shared(react@17.0.2)
+      react:
+        specifier: 17.0.2
+        version: 17.0.2
+    dependenciesMeta:
+      '@repo/shared':
+        injected: true
+
+  packages/shared:
+    dependencies:
+      react:
+        specifier: '*'
+        version: 17.0.2
+
+packages:
+
+  '@repo/shared@file:packages/shared':
+    resolution: {directory: packages/shared, type: directory}
+    peerDependencies:
+      react: '*'
+
+  react@17.0.2:
+    resolution: {integrity: sha512-abc}
+
+snapshots:
+
+  '@repo/shared@file:packages/shared(react@17.0.2)':
+    dependencies:
+      react: 17.0.2
+
+  react@17.0.2: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/my-app".to_string(), "packages/shared".to_string()];
+        let resolved_packages = vec!["react@17.0.2".to_string()];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should have packages");
+        let snapshots = pruned_lockfile
+            .snapshots
+            .as_ref()
+            .expect("should have snapshots");
+
+        assert!(packages.contains_key("@repo/shared@file:packages/shared"));
+        assert!(snapshots.contains_key("@repo/shared@file:packages/shared(react@17.0.2)"));
     }
 
     #[test]
