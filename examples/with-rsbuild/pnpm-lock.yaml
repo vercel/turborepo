@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@repo/rslint-config':
+        specifier: workspace:*
+        version: link:packages/rslint-config
       '@rslint/core':
         specifier: ^0.5.3
         version: 0.5.3(jiti@2.7.0)
@@ -33,6 +36,9 @@ importers:
         specifier: ^19.2.4
         version: 19.2.6(react@19.2.6)
     devDependencies:
+      '@repo/rslint-config':
+        specifier: workspace:*
+        version: link:../../packages/rslint-config
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
@@ -52,6 +58,12 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  packages/rslint-config:
+    dependencies:
+      '@rslint/core':
+        specifier: ^0.5.3
+        version: 0.5.3(jiti@2.7.0)
+
   packages/typescript-config: {}
 
   packages/ui:
@@ -63,6 +75,9 @@ importers:
         specifier: ^19.2.4
         version: 19.2.6(react@19.2.6)
     devDependencies:
+      '@repo/rslint-config':
+        specifier: workspace:*
+        version: link:../rslint-config
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config

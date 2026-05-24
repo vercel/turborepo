@@ -5,7 +5,7 @@ import { dependencies } from "./package.json";
 
 export default defineConfig({
   html: {
-    favicon: "./public/rsbuild-favicon.png",
+    favicon: "./public/favicon.ico",
   },
   plugins: [
     pluginReact(),
