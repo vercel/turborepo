@@ -579,6 +579,8 @@ Configuration can also be set via environment variables (`TURBO_EXPERIMENTAL_OTE
 - `turbo.task.duration_ms` - Per-task duration histogram (when `taskDetails` enabled)
 - `turbo.task.cache.events` - Per-task cache events (when `taskDetails` enabled)
 
+Duration histograms use custom millisecond buckets sized for build and task durations, rather than the OpenTelemetry SDK's default latency buckets.
+
 Attributes with unbounded cardinality (unique run IDs, Git SHAs, content hashes) are gated behind `runAttributes` and `taskAttributes` config flags, all defaulting to `false`. See the `Metric Attributes and Cardinality` section in `crates/turborepo-otel/src/lib.rs` for the full attribute inventory.
 
 #### Data Flow
