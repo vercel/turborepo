@@ -4,6 +4,9 @@ import { pluginReact } from "@rsbuild/plugin-react";
 import { dependencies } from "./package.json";
 
 export default defineConfig({
+  html: {
+    favicon: "./public/rsbuild-favicon.png",
+  },
   server: {
     port: 3001,
   },
