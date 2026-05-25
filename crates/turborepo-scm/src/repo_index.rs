@@ -114,7 +114,9 @@ impl RepoGitIndex {
                     Ok(path) => path,
                     Err(path) => return Ok(EntryClassification::Unsupported(path)),
                 };
-                let abs_path = git.root.join_unix_path(&rel_path);
+                // Git index paths are normalized repo-relative paths, so avoid
+                // per-entry path_clean normalization before stat calls.
+                let abs_path = git.root.join_unix_path_unchecked(&rel_path);
 
                 match gix_index::fs::Metadata::from_path_no_follow(abs_path.as_std_path()) {
                     Ok(fs_meta) => {
