@@ -33,6 +33,13 @@ use crate::{
 mod error;
 mod observability;
 
+fn exit_with_heap_profile(code: i32) -> ! {
+    #[cfg(feature = "heap-dhat")]
+    crate::heap_profile::finish_global();
+
+    process::exit(code);
+}
+
 // Global turbo sets this environment variable to its cwd so that local
 // turbo can use it for package inference.
 pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
@@ -362,7 +369,7 @@ impl Args {
                 ) =>
             {
                 let _ = e.print();
-                process::exit(1);
+                exit_with_heap_profile(1);
             }
             Err(e) if e.use_stderr() => {
                 let err_str = format_error_message(e.to_string());
@@ -373,19 +380,19 @@ impl Args {
                     "{}",
                     err_str.strip_prefix("error: ").unwrap_or(err_str.as_str())
                 );
-                process::exit(1);
+                exit_with_heap_profile(1);
             }
             // If the clap error shouldn't be printed to stderr it indicates help text
             Err(e) => {
                 let _ = e.print();
-                process::exit(0);
+                exit_with_heap_profile(0);
             }
         };
         // We have to override the --version flag because we use `get_version`
         // instead of a hard-coded version or the crate version
         if clap_args.version {
             println!("{}", get_version());
-            process::exit(0);
+            exit_with_heap_profile(0);
         }
 
         if let Some(run_args) = clap_args.run_args() {
@@ -1407,7 +1414,7 @@ fn default_to_run_command(cli_args: &Args) -> Result<Command, Error> {
     if execution_args.tasks.is_empty() {
         let mut cmd = <Args as CommandFactory>::command();
         let _ = cmd.print_help();
-        process::exit(1);
+        exit_with_heap_profile(1);
     }
 
     Ok(Command::Run {

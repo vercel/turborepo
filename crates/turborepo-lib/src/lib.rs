@@ -17,6 +17,8 @@ mod commands;
 mod config;
 pub mod devtools;
 mod engine;
+#[cfg(feature = "heap-dhat")]
+mod heap_profile;
 
 mod boundaries;
 mod microfrontends;
@@ -40,6 +42,14 @@ pub use turborepo_daemon::{
 pub use turborepo_query_api::QueryServer;
 
 pub use crate::{child::spawn_child, cli::Args, panic_handler::panic_handler};
+
+#[cfg(feature = "heap-dhat")]
+pub fn finish_heap_profile() {
+    heap_profile::finish_global();
+}
+
+#[cfg(not(feature = "heap-dhat"))]
+pub fn finish_heap_profile() {}
 
 pub fn get_version() -> &'static str {
     include_str!("../../../version.txt")

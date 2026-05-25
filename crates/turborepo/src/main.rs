@@ -8,6 +8,10 @@ use miette::Report;
 
 const INTERNAL_LSP_COMMAND: &str = "__internal_lsp";
 
+#[cfg(feature = "heap-dhat")]
+#[global_allocator]
+static ALLOC: dhat::Alloc = dhat::Alloc;
+
 #[derive(Debug, PartialEq)]
 enum InternalLspCommand {
     Probe,
@@ -89,6 +93,7 @@ fn main() -> Result<()> {
         1
     });
 
+    turborepo_lib::finish_heap_profile();
     process::exit(exit_code)
 }
 
