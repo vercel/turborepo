@@ -86,6 +86,8 @@ pub struct ShimArgs {
     /// Raw value from `--anon-profile` (Some("") means flag present with no
     /// value).
     pub anon_profile: Option<String>,
+    /// Raw value from `--heap` (Some("") means flag present with no value).
+    pub heap: Option<String>,
 }
 
 impl ShimArgs {
@@ -113,8 +115,10 @@ impl ShimArgs {
         let mut root_turbo_json = None;
         let mut profile: Option<String> = None;
         let mut anon_profile: Option<String> = None;
+        let mut heap: Option<String> = None;
         let mut found_profile_flag = false;
         let mut found_anon_profile_flag = false;
+        let mut found_heap_flag = false;
 
         let args = args.skip(1);
         for (idx, arg) in args.enumerate() {
@@ -201,6 +205,15 @@ impl ShimArgs {
                     anon_profile = Some(arg.clone());
                     remaining_turbo_args.push(arg);
                 }
+            } else if found_heap_flag {
+                found_heap_flag = false;
+                if arg.starts_with('-') {
+                    heap = Some(String::new());
+                    remaining_turbo_args.push(arg);
+                } else {
+                    heap = Some(arg.clone());
+                    remaining_turbo_args.push(arg);
+                }
             } else if arg == "--profile" {
                 remaining_turbo_args.push(arg);
                 found_profile_flag = true;
@@ -212,6 +225,12 @@ impl ShimArgs {
                 found_anon_profile_flag = true;
             } else if let Some(value) = arg.strip_prefix("--anon-profile=") {
                 anon_profile = Some(value.to_string());
+                remaining_turbo_args.push(arg);
+            } else if arg == "--heap" {
+                remaining_turbo_args.push(arg);
+                found_heap_flag = true;
+            } else if let Some(value) = arg.strip_prefix("--heap=") {
+                heap = Some(value.to_string());
                 remaining_turbo_args.push(arg);
             } else if arg == "--debug" {
                 return Err(Error::UnsupportedFlag {
@@ -238,6 +257,9 @@ impl ShimArgs {
         }
         if found_anon_profile_flag {
             anon_profile = Some(String::new());
+        }
+        if found_heap_flag {
+            heap = Some(String::new());
         }
 
         if let Some(idx) = cwd_flag_idx {
@@ -294,6 +316,7 @@ impl ShimArgs {
             root_turbo_json,
             profile,
             anon_profile,
+            heap,
         })
     }
 
@@ -318,6 +341,20 @@ impl ShimArgs {
             // Both set should be caught by clap later; just ignore here.
             _ => None,
         }
+    }
+
+    pub fn heap_profile_file(&self) -> Option<String> {
+        self.heap.as_deref().map(|file| {
+            if file.is_empty() {
+                let now = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+                    Ok(duration) => duration.as_millis(),
+                    Err(_) => 0,
+                };
+                format!("heap.{now}.json")
+            } else {
+                file.to_string()
+            }
+        })
     }
 
     /// Takes a list of indices into a Vec of arguments, i.e. ["--graph", "foo",
@@ -444,6 +481,7 @@ mod test {
         pub no_color: bool,
         pub relative_cwd: Option<&'static [&'static str]>,
         pub relative_root_turbo_json: Option<&'static str>,
+        pub heap: Option<&'static str>,
     }
 
     impl ExpectedArgs {
@@ -458,6 +496,7 @@ mod test {
                 no_color,
                 relative_cwd,
                 relative_root_turbo_json,
+                heap,
             } = self;
             ShimArgs {
                 cwd: relative_cwd.map_or_else(
@@ -479,6 +518,7 @@ mod test {
                     .map(|path| AbsoluteSystemPathBuf::from_unknown(invocation_dir, path)),
                 profile: None,
                 anon_profile: None,
+                heap: heap.map(str::to_string),
             }
         }
     }
@@ -632,6 +672,24 @@ mod test {
             ..Default::default()
         }
         ; "root turbo json absolute path"
+    )]
+    #[test_case(
+        &["turbo", "--heap", "heap.json", "run", "build"],
+        ExpectedArgs {
+            heap: Some("heap.json"),
+            remaining_turbo_args: &["--heap", "heap.json", "run", "build"],
+            ..Default::default()
+        }
+        ; "heap value"
+    )]
+    #[test_case(
+        &["turbo", "--heap=heap.json", "run", "build"],
+        ExpectedArgs {
+            heap: Some("heap.json"),
+            remaining_turbo_args: &["--heap=heap.json", "run", "build"],
+            ..Default::default()
+        }
+        ; "heap equals"
     )]
     fn test_shim_parsing(
         args: &[&str],
