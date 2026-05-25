@@ -10,6 +10,7 @@ license = "MIT"
 default = ["rustls-tls"]
 native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls"]
 rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
+heap-dhat = ["dep:dhat"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
@@ -40,6 +41,7 @@ console = { workspace = true }
 convert_case = "0.6.0"
 ctrlc = { version = "3.4.0", features = ["termination"] }
 dialoguer = { workspace = true, features = ["fuzzy-select", "password"] }
+dhat = { workspace = true, optional = true }
 dirs-next = "2.0.0"
 either = { workspace = true }
 futures = { workspace = true }

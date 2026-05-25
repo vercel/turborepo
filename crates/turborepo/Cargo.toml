@@ -12,6 +12,7 @@ default = ["rustls-tls"]
 native-tls = ["turborepo-lib/native-tls", "turborepo-lsp/native-tls"]
 rustls-tls = ["turborepo-lib/rustls-tls", "turborepo-lsp/rustls-tls"]
 pprof = ["turborepo-lib/pprof"]
+heap-dhat = ["dep:dhat", "turborepo-lib/heap-dhat"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [build-dependencies]
@@ -39,6 +40,7 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
+dhat = { workspace = true, optional = true }
 miette.workspace = true
 turborepo-lib = { workspace = true, default-features = false }
 turborepo-lsp = { workspace = true, default-features = false }

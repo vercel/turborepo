@@ -207,6 +207,17 @@ pub fn run(query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>) -> R
 
     // Parse args to get verbosity and color config for the subscriber
     let args = ShimArgs::parse().map_err(turborepo_shim::Error::from)?;
+
+    #[cfg(feature = "heap-dhat")]
+    if let Some(heap_profile_file) = args.heap_profile_file() {
+        crate::heap_profile::start_global(heap_profile_file);
+    }
+
+    #[cfg(not(feature = "heap-dhat"))]
+    if args.heap_profile_file().is_some() {
+        eprintln!("turbo: --heap requires a binary built with the heap-dhat feature");
+    }
+
     let color_config = args.color_config();
     let subscriber = TurboSubscriber::new_with_verbosity(args.verbosity, &color_config);
 
