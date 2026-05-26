@@ -238,6 +238,49 @@ fn test_prune_does_not_overmatch_root_gitignore_entries() {
     );
 }
 
+#[test]
+fn test_prune_respects_root_gitignore_in_workspaces() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    fs::write(tempdir.path().join(".gitignore"), "node_modules\n").unwrap();
+
+    let nested_node_modules = tempdir.path().join("packages/shared/node_modules/dep");
+    fs::create_dir_all(&nested_node_modules).unwrap();
+    fs::write(
+        nested_node_modules.join("index.js"),
+        "module.exports = {};\n",
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !tempdir
+            .path()
+            .join("out/full/packages/shared/node_modules")
+            .exists(),
+        "root node_modules ignore should apply to copied workspace package"
+    );
+    assert!(
+        tempdir
+            .path()
+            .join("out/full/packages/shared/package.json")
+            .exists(),
+        "workspace package contents should still be copied"
+    );
+}
+
 // --- produces-valid-turbo-json.t ---
 
 #[test]
