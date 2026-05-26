@@ -163,6 +163,12 @@ fn is_blocked_ipv4(addr: Ipv4Addr) -> bool {
 }
 
 fn is_blocked_ipv6(addr: Ipv6Addr) -> bool {
+    // IPv4-mapped IPv6 addresses (::ffff:x.x.x.x) must be checked against IPv4 rules
+    // to prevent SSRF bypass via e.g. [::ffff:169.254.169.254] or [::ffff:127.0.0.1].
+    if let Some(mapped) = addr.to_ipv4_mapped() {
+        return is_blocked_ipv4(mapped);
+    }
+
     let segments = addr.segments();
     let first = segments[0];
 
@@ -425,6 +431,12 @@ mod tests {
             "https://[fe80::1]:4318",
             "https://[ff02::1]:4318",
             "https://[2001:db8::1]:4318",
+            // IPv4-mapped IPv6 bypass vectors
+            "https://[::ffff:169.254.169.254]/latest/meta-data/",
+            "https://[::ffff:127.0.0.1]:4318",
+            "https://[::ffff:10.0.0.1]:4318",
+            "https://[::ffff:192.168.1.1]:4318",
+            "https://[::ffff:100.100.100.200]:4318",
         ];
 
         for endpoint in blocked {
