@@ -163,8 +163,9 @@ fn is_blocked_ipv4(addr: Ipv4Addr) -> bool {
 }
 
 fn is_blocked_ipv6(addr: Ipv6Addr) -> bool {
-    // IPv4-mapped IPv6 addresses (::ffff:x.x.x.x) must be checked against IPv4 rules
-    // to prevent SSRF bypass via e.g. [::ffff:169.254.169.254] or [::ffff:127.0.0.1].
+    // IPv4-mapped IPv6 addresses (::ffff:x.x.x.x) must be checked against IPv4
+    // rules to prevent SSRF bypass via e.g. [::ffff:169.254.169.254] or
+    // [::ffff:127.0.0.1].
     if let Some(mapped) = addr.to_ipv4_mapped() {
         return is_blocked_ipv4(mapped);
     }
