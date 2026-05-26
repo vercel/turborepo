@@ -2,7 +2,7 @@ import path from "node:path";
 import fs from "fs-extra";
 import type { Transformer } from "../types";
 
-// transforms/ is a sibling when built in in dist/
+// transforms/ is a sibling when built in dist/
 export const transformerDirectory =
   process.env.NODE_ENV === "test"
     ? path.join(__dirname, "../transforms")
