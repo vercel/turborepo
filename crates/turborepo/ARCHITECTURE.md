@@ -570,6 +570,8 @@ Observability is configured via `experimentalObservability.otel` in `turbo.json`
 
 Configuration can also be set via environment variables (`TURBO_EXPERIMENTAL_OTEL_*`) or CLI flags (`--experimental-otel-*`).
 
+OTEL endpoints must be HTTPS URLs without userinfo. Literal private, loopback, link-local, multicast, documentation, carrier-grade NAT, and known metadata-service IP endpoints are rejected; use `localhost` by name for local collectors.
+
 #### Metrics Emitted
 
 - `turbo.run.duration_ms` - Run duration histogram
