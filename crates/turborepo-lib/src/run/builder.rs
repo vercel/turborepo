@@ -716,8 +716,30 @@ impl RunBuilder {
         } else {
             Vec::new()
         };
+
+        // `add_all_tasks` (used by `turbo query` and devtools) wants the full
+        // task graph, which includes root tasks declared as `//#task` in the
+        // root turbo.json. Package scope resolution only ever returns named
+        // workspaces, so the root package must be added explicitly or the
+        // engine builder skips every root task. See the affected-tasks query,
+        // which would otherwise never see a changed root task.
+        let add_root_workspace = self.add_all_tasks
+            && !needs_all_packages
+            && !filtered_pkgs.contains_key(&PackageName::Root);
+        let filtered_engine_pkgs: Vec<PackageName> = if add_root_workspace {
+            filtered_pkgs
+                .keys()
+                .cloned()
+                .chain(std::iter::once(PackageName::Root))
+                .collect()
+        } else {
+            Vec::new()
+        };
+
         let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if needs_all_packages {
             Box::new(all_pkgs.iter())
+        } else if add_root_workspace {
+            Box::new(filtered_engine_pkgs.iter())
         } else {
             Box::new(filtered_pkgs.keys())
         };
@@ -743,6 +765,8 @@ impl RunBuilder {
             pkg_dep_graph.remove_package_dependencies();
             let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if needs_all_packages {
                 Box::new(all_pkgs.iter())
+            } else if add_root_workspace {
+                Box::new(filtered_engine_pkgs.iter())
             } else {
                 Box::new(filtered_pkgs.keys())
             };

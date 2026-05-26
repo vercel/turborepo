@@ -656,8 +656,16 @@ impl RepositoryQuery {
             .into_iter()
             .filter(|ct| {
                 let has_script = ct.task.script.is_some();
+                // A requested task name may be bare (`deploy`) or fully
+                // qualified (`web#build`, `//#deploy`). Match against both so
+                // root tasks declared as `//#task` in turbo.json can be
+                // selected by their canonical name.
+                let full_name = format!("{}#{}", ct.task.package.get_name(), ct.task.name);
                 let task_ok = tasks.as_ref().is_none_or(|names| {
-                    names.is_empty() || names.iter().any(|n| n.as_str() == ct.task.name)
+                    names.is_empty()
+                        || names
+                            .iter()
+                            .any(|n| n.as_str() == ct.task.name || n.as_str() == full_name)
                 });
                 let package_ok = filter.as_ref().is_none_or(|f| f.check(&ct.task.package));
                 has_script && task_ok && package_ok
