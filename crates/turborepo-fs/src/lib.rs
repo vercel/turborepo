@@ -27,61 +27,96 @@ pub fn recursive_copy(
     src: impl AsRef<AbsoluteSystemPath>,
     dst: impl AsRef<AbsoluteSystemPath>,
     use_gitignore: bool,
+    gitignore_root: Option<&AbsoluteSystemPath>,
 ) -> Result<(), Error> {
     let src = src.as_ref();
     let dst = dst.as_ref();
     let src_metadata = src.symlink_metadata()?;
 
-    if src_metadata.is_dir() {
-        let walker = WalkBuilder::new(src.as_path())
-            .hidden(false)
-            .parents(false)
-            .git_ignore(use_gitignore)
-            .git_global(false)
-            .git_exclude(use_gitignore)
-            .build();
+    if !src_metadata.is_dir() {
+        return copy_file_with_type(src, src_metadata.file_type(), dst);
+    }
 
-        for entry in walker {
-            match entry {
-                Err(e) => {
-                    if e.io_error().is_some() {
-                        // Matches go behavior where we translate path errors
-                        // into skipping the path we're currently walking
-                        continue;
-                    } else {
-                        return Err(e.into());
-                    }
-                }
-                Ok(entry) => {
-                    let path = entry.path();
-                    let path = AbsoluteSystemPath::from_std_path(path)?;
-                    let file_type = match entry.file_type() {
-                        Some(file_type) => file_type,
-                        None => entry.metadata()?.file_type(),
-                    };
+    // Parent .gitignore files need to be evaluated from their own directory so
+    // rooted patterns keep the same meaning they have to git.
+    let walk_root = match gitignore_root {
+        Some(root)
+            if use_gitignore
+                && src != root
+                && src.as_std_path().starts_with(root.as_std_path()) =>
+        {
+            root
+        }
+        _ => src,
+    };
+    let walk_from_root = walk_root != src;
 
-                    // Note that we also don't currently copy broken symlinks
-                    if file_type.is_symlink() && path.stat().is_err() {
-                        // If we have a broken link, skip this entry
-                        continue;
-                    }
+    let mut builder = WalkBuilder::new(walk_root.as_path());
+    builder
+        .hidden(false)
+        .parents(false)
+        .git_ignore(use_gitignore)
+        .git_global(false)
+        .git_exclude(use_gitignore);
 
-                    let suffix = AnchoredSystemPathBuf::new(src, path)?;
-                    let target = dst.resolve(&suffix);
-                    if file_type.is_dir() {
-                        let src_metadata = entry.metadata()?;
-                        make_dir_copy(&target, &src_metadata)?;
-                    } else if file_type.is_file() || file_type.is_symlink() {
-                        copy_file_with_type(path, file_type, &target)?;
-                    }
-                    // Skip special files (sockets, FIFOs, device nodes)
+    if walk_from_root {
+        let src_std_path = src.as_std_path().to_path_buf();
+        builder.filter_entry(move |entry| {
+            let path = entry.path();
+            if entry
+                .file_type()
+                .is_some_and(|file_type| file_type.is_dir())
+            {
+                path.starts_with(&src_std_path) || src_std_path.starts_with(path)
+            } else {
+                path.starts_with(&src_std_path)
+            }
+        });
+    }
+
+    for entry in builder.build() {
+        match entry {
+            Err(e) => {
+                if e.io_error().is_some() {
+                    // Matches go behavior where we translate path errors
+                    // into skipping the path we're currently walking
+                    continue;
+                } else {
+                    return Err(e.into());
                 }
             }
+            Ok(entry) => {
+                let path = entry.path();
+                let path = AbsoluteSystemPath::from_std_path(path)?;
+                if path != src && !path.as_std_path().starts_with(src.as_std_path()) {
+                    continue;
+                }
+
+                let file_type = match entry.file_type() {
+                    Some(file_type) => file_type,
+                    None => entry.metadata()?.file_type(),
+                };
+
+                // Note that we also don't currently copy broken symlinks
+                if file_type.is_symlink() && path.stat().is_err() {
+                    // If we have a broken link, skip this entry
+                    continue;
+                }
+
+                let suffix = AnchoredSystemPathBuf::new(src, path)?;
+                let target = dst.resolve(&suffix);
+                if file_type.is_dir() {
+                    let src_metadata = entry.metadata()?;
+                    make_dir_copy(&target, &src_metadata)?;
+                } else if file_type.is_file() || file_type.is_symlink() {
+                    copy_file_with_type(path, file_type, &target)?;
+                }
+                // Skip special files (sockets, FIFOs, device nodes)
+            }
         }
-        Ok(())
-    } else {
-        Ok(copy_file_with_type(src, src_metadata.file_type(), dst)?)
     }
+
+    Ok(())
 }
 
 fn make_dir_copy(
@@ -287,10 +322,10 @@ mod tests {
 
         let (_dst_tmp, dst_dir) = tmp_dir()?;
 
-        recursive_copy(&src_dir, &dst_dir, true)?;
+        recursive_copy(&src_dir, &dst_dir, true, None)?;
 
         // Ensure double copy doesn't error
-        recursive_copy(&src_dir, &dst_dir, true)?;
+        recursive_copy(&src_dir, &dst_dir, true, None)?;
 
         let dst_child_path = dst_dir.join_component("child");
         let dst_a_path = dst_child_path.join_component("a");
@@ -362,7 +397,7 @@ mod tests {
         hidden.create_with_contents("polo")?;
 
         let (_dst_tmp, dst_dir) = tmp_dir()?;
-        recursive_copy(&src_dir, &dst_dir, use_gitignore)?;
+        recursive_copy(&src_dir, &dst_dir, use_gitignore, None)?;
 
         assert!(dst_dir.join_component(".gitignore").exists());
         assert_eq!(
@@ -373,6 +408,81 @@ mod tests {
         assert!(dst_dir.join_component("child").exists());
         assert!(dst_dir.join_components(&["child", "seen.txt"]).exists());
         assert!(dst_dir.join_components(&["child", ".hidden"]).exists());
+
+        Ok(())
+    }
+
+    #[test_case(true)]
+    #[test_case(false)]
+    fn test_recursive_copy_respects_repo_gitignore(use_gitignore: bool) -> Result<(), Error> {
+        let (_root_tmp, root) = tmp_dir()?;
+        root.join_component(".git").create_dir_all()?;
+        root.join_component(".gitignore")
+            .create_with_contents("node_modules\n/apps/web/coverage\n*.log\n")?;
+
+        let web = root.join_components(&["apps", "web"]);
+        web.create_dir_all()?;
+        web.join_component("package.json")
+            .create_with_contents("{}")?;
+
+        let node_modules = web.join_components(&["node_modules", "dep", "index.js"]);
+        node_modules.ensure_dir()?;
+        node_modules.create_with_contents("dep")?;
+
+        let coverage = web.join_components(&["coverage", "report.txt"]);
+        coverage.ensure_dir()?;
+        coverage.create_with_contents("report")?;
+
+        let nested_coverage = web.join_components(&["src", "api", "coverage", "keep.js"]);
+        nested_coverage.ensure_dir()?;
+        nested_coverage.create_with_contents("keep")?;
+
+        web.join_components(&["src", "api", ".gitignore"])
+            .create_with_contents("ignored.js\n")?;
+        web.join_components(&["src", "api", "ignored.js"])
+            .create_with_contents("ignored")?;
+
+        let keep_log = web.join_components(&["logs", "keep.log"]);
+        keep_log.ensure_dir()?;
+        web.join_components(&["logs", ".gitignore"])
+            .create_with_contents("!keep.log\n")?;
+        keep_log.create_with_contents("keep")?;
+        web.join_components(&["logs", "drop.log"])
+            .create_with_contents("drop")?;
+
+        let (_dst_tmp, dst_dir) = tmp_dir()?;
+        recursive_copy(&web, &dst_dir, use_gitignore, Some(&root))?;
+
+        assert!(dst_dir.join_component("package.json").exists());
+        assert!(
+            dst_dir
+                .join_components(&["src", "api", "coverage", "keep.js"])
+                .exists()
+        );
+
+        assert_eq!(
+            !dst_dir
+                .join_components(&["node_modules", "dep", "index.js"])
+                .exists(),
+            use_gitignore
+        );
+        assert_eq!(
+            !dst_dir
+                .join_components(&["coverage", "report.txt"])
+                .exists(),
+            use_gitignore
+        );
+        assert_eq!(
+            !dst_dir
+                .join_components(&["src", "api", "ignored.js"])
+                .exists(),
+            use_gitignore
+        );
+        assert!(dst_dir.join_components(&["logs", "keep.log"]).exists());
+        assert_eq!(
+            !dst_dir.join_components(&["logs", "drop.log"]).exists(),
+            use_gitignore
+        );
 
         Ok(())
     }
