@@ -1,8 +1,12 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    net::{Ipv4Addr, Ipv6Addr},
+    sync::Arc,
+    time::Duration,
+};
 
 use turborepo_config::{ExperimentalOtelMetricsOptions, ExperimentalOtelOptions};
 use turborepo_otel::{RunMetricsPayload, TaskCacheStatus, TaskMetricsPayload};
-use url::Url;
+use url::{Host, Url};
 
 use super::{Handle, RunObserver};
 use crate::{
@@ -62,7 +66,7 @@ fn config_from_options(
     if !is_valid_https_endpoint(endpoint) {
         tracing::warn!(
             "Ignoring experimentalObservability.otel endpoint because it must be a valid HTTPS \
-             URL without userinfo."
+             URL without userinfo, private IPs, or metadata endpoints."
         );
         return None;
     }
@@ -113,11 +117,68 @@ fn is_valid_https_endpoint(endpoint: &str) -> bool {
         return false;
     };
 
-    url.scheme() == "https" && url.host_str().is_some() && !has_userinfo(&url)
+    if url.scheme() != "https" || has_userinfo(&url) {
+        return false;
+    }
+
+    let Some(host) = url.host() else {
+        return false;
+    };
+
+    !is_blocked_otel_host(host)
 }
 
 fn has_userinfo(url: &Url) -> bool {
     !url.username().is_empty() || url.password().is_some()
+}
+
+fn is_blocked_otel_host(host: Host<&str>) -> bool {
+    match host {
+        Host::Domain(domain) => is_metadata_domain(domain),
+        Host::Ipv4(addr) => is_blocked_ipv4(addr),
+        Host::Ipv6(addr) => is_blocked_ipv6(addr),
+    }
+}
+
+fn is_metadata_domain(domain: &str) -> bool {
+    domain.eq_ignore_ascii_case("metadata.google.internal")
+        || domain.eq_ignore_ascii_case("metadata.google.internal.")
+        || domain.eq_ignore_ascii_case("metadata.azure.net")
+        || domain.to_ascii_lowercase().ends_with(".metadata.azure.net")
+}
+
+fn is_blocked_ipv4(addr: Ipv4Addr) -> bool {
+    let octets = addr.octets();
+
+    addr.is_private()
+        || addr.is_loopback()
+        || addr.is_link_local()
+        || addr.is_unspecified()
+        || addr.is_broadcast()
+        || addr.is_documentation()
+        || addr.is_multicast()
+        || octets[0] == 0
+        || (octets[0] == 100 && (64..=127).contains(&octets[1]))
+        || addr == Ipv4Addr::new(100, 100, 100, 200)
+}
+
+fn is_blocked_ipv6(addr: Ipv6Addr) -> bool {
+    // IPv4-mapped IPv6 addresses (::ffff:x.x.x.x) must be checked against IPv4
+    // rules to prevent SSRF bypass via e.g. [::ffff:169.254.169.254] or
+    // [::ffff:127.0.0.1].
+    if let Some(mapped) = addr.to_ipv4_mapped() {
+        return is_blocked_ipv4(mapped);
+    }
+
+    let segments = addr.segments();
+    let first = segments[0];
+
+    addr.is_loopback()
+        || addr.is_unspecified()
+        || (first & 0xfe00) == 0xfc00
+        || (first & 0xffc0) == 0xfe80
+        || (first & 0xff00) == 0xff00
+        || (first == 0x2001 && segments[1] == 0x0db8)
 }
 
 fn metrics_config(
@@ -299,6 +360,50 @@ mod tests {
                     ..Default::default()
                 },
             ),
+            (
+                "loopback IPv4 endpoint",
+                ExperimentalOtelOptions {
+                    endpoint: Some("https://127.0.0.1:4318".to_string()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "private IPv4 endpoint",
+                ExperimentalOtelOptions {
+                    endpoint: Some("https://10.0.0.1:4318".to_string()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "link-local metadata endpoint",
+                ExperimentalOtelOptions {
+                    endpoint: Some("https://169.254.169.254/latest/meta-data/".to_string()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "loopback IPv6 endpoint",
+                ExperimentalOtelOptions {
+                    endpoint: Some("https://[::1]:4318".to_string()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "GCP metadata hostname",
+                ExperimentalOtelOptions {
+                    endpoint: Some(
+                        "https://metadata.google.internal/computeMetadata/v1".to_string(),
+                    ),
+                    ..Default::default()
+                },
+            ),
+            (
+                "Azure metadata hostname",
+                ExperimentalOtelOptions {
+                    endpoint: Some("https://instance.metadata.azure.net/metadata".to_string()),
+                    ..Default::default()
+                },
+            ),
         ];
 
         for (name, options) in cases {
@@ -308,6 +413,44 @@ mod tests {
                 name
             );
         }
+    }
+
+    #[test]
+    fn endpoint_validation_rejects_blocked_ip_ranges() {
+        let blocked = [
+            "https://0.0.0.1:4318",
+            "https://10.0.0.1:4318",
+            "https://172.16.0.1:4318",
+            "https://172.31.255.255:4318",
+            "https://192.168.0.1:4318",
+            "https://100.64.0.1:4318",
+            "https://100.100.100.200:4318",
+            "https://169.254.170.2:4318",
+            "https://224.0.0.1:4318",
+            "https://255.255.255.255:4318",
+            "https://[fc00::1]:4318",
+            "https://[fe80::1]:4318",
+            "https://[ff02::1]:4318",
+            "https://[2001:db8::1]:4318",
+            // IPv4-mapped IPv6 bypass vectors
+            "https://[::ffff:169.254.169.254]/latest/meta-data/",
+            "https://[::ffff:127.0.0.1]:4318",
+            "https://[::ffff:10.0.0.1]:4318",
+            "https://[::ffff:192.168.1.1]:4318",
+            "https://[::ffff:100.100.100.200]:4318",
+        ];
+
+        for endpoint in blocked {
+            assert!(
+                !is_valid_https_endpoint(endpoint),
+                "expected blocked endpoint: {endpoint}"
+            );
+        }
+    }
+
+    #[test]
+    fn endpoint_validation_allows_localhost_domain_for_local_collectors() {
+        assert!(is_valid_https_endpoint("https://localhost:4318"));
     }
 
     #[test]
