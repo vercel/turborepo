@@ -23,65 +23,121 @@ pub enum Error {
     Walk(#[from] ignore::Error),
 }
 
+/// Recursively copy the contents of `src` into `dst`.
+///
+/// When `use_gitignore` is true, files matched by `.gitignore` rules are
+/// skipped. `gitignore_root` declares the directory that anchors gitignore
+/// resolution, which matters when `src` is a workspace package nested inside a
+/// monorepo. `.gitignore` files between `gitignore_root` and `src` are honored,
+/// and their patterns are anchored relative to where each file lives, exactly
+/// as git does. Pass `None` (or `src` itself) when there is no enclosing
+/// repository to consider.
 pub fn recursive_copy(
     src: impl AsRef<AbsoluteSystemPath>,
     dst: impl AsRef<AbsoluteSystemPath>,
     use_gitignore: bool,
+    gitignore_root: Option<&AbsoluteSystemPath>,
 ) -> Result<(), Error> {
     let src = src.as_ref();
     let dst = dst.as_ref();
     let src_metadata = src.symlink_metadata()?;
 
-    if src_metadata.is_dir() {
-        let walker = WalkBuilder::new(src.as_path())
-            .hidden(false)
-            .parents(false)
-            .git_ignore(use_gitignore)
-            .git_global(false)
-            .git_exclude(use_gitignore)
-            .build();
+    if !src_metadata.is_dir() {
+        return copy_file_with_type(src, src_metadata.file_type(), dst);
+    }
 
-        for entry in walker {
-            match entry {
-                Err(e) => {
-                    if e.io_error().is_some() {
-                        // Matches go behavior where we translate path errors
-                        // into skipping the path we're currently walking
-                        continue;
-                    } else {
-                        return Err(e.into());
-                    }
-                }
-                Ok(entry) => {
-                    let path = entry.path();
-                    let path = AbsoluteSystemPath::from_std_path(path)?;
-                    let file_type = match entry.file_type() {
-                        Some(file_type) => file_type,
-                        None => entry.metadata()?.file_type(),
-                    };
+    // The `ignore` crate mis-anchors `.gitignore` patterns from parent
+    // directories when the walk starts inside a subdirectory: a root-anchored
+    // entry such as `/apps/web/coverage` ends up matching a nested
+    // `apps/web/src/coverage`, and unanchored entries like `node_modules` from
+    // a parent `.gitignore` are dropped entirely. To match git, we root the
+    // walk at the enclosing repository when one is provided and only descend
+    // into the directories that lead to (or live under) `src`. Patterns and
+    // negations across the whole `.gitignore` chain then resolve through the
+    // crate's single matcher, which gets the anchoring right. When no
+    // enclosing repository is provided, or it does not actually contain `src`,
+    // we fall back to walking `src` directly.
+    let walk_root = match gitignore_root {
+        Some(root)
+            if use_gitignore
+                && src != root
+                && src.as_std_path().starts_with(root.as_std_path()) =>
+        {
+            root
+        }
+        _ => src,
+    };
+    let walk_from_root = walk_root != src;
 
-                    // Note that we also don't currently copy broken symlinks
-                    if file_type.is_symlink() && path.stat().is_err() {
-                        // If we have a broken link, skip this entry
-                        continue;
-                    }
+    let mut builder = WalkBuilder::new(walk_root.as_path());
+    builder
+        .hidden(false)
+        .parents(false)
+        .git_ignore(use_gitignore)
+        .git_global(false)
+        .git_exclude(use_gitignore);
 
-                    let suffix = AnchoredSystemPathBuf::new(src, path)?;
-                    let target = dst.resolve(&suffix);
-                    if file_type.is_dir() {
-                        let src_metadata = entry.metadata()?;
-                        make_dir_copy(&target, &src_metadata)?;
-                    } else if file_type.is_file() || file_type.is_symlink() {
-                        copy_file_with_type(path, file_type, &target)?;
-                    }
-                    // Skip special files (sockets, FIFOs, device nodes)
+    if walk_from_root {
+        let src_std = src.as_std_path().to_path_buf();
+        builder.filter_entry(move |entry| {
+            let path = entry.path();
+            let is_dir = entry
+                .file_type()
+                .is_some_and(|file_type| file_type.is_dir());
+            if is_dir {
+                // Descend only into ancestors of `src` and directories inside
+                // `src`, skipping sibling trees we are not copying.
+                path.starts_with(&src_std) || src_std.starts_with(path)
+            } else {
+                path.starts_with(&src_std)
+            }
+        });
+    }
+
+    for entry in builder.build() {
+        let entry = match entry {
+            Err(e) => {
+                if e.io_error().is_some() {
+                    // Matches go behavior where we translate path errors
+                    // into skipping the path we're currently walking
+                    continue;
+                } else {
+                    return Err(e.into());
                 }
             }
+            Ok(entry) => entry,
+        };
+        let path = entry.path();
+        let path = AbsoluteSystemPath::from_std_path(path)?;
+
+        // When walking from the repository root, the root and the ancestors of
+        // `src` are yielded too. Only copy entries that live within `src`.
+        if path != src && !path.as_std_path().starts_with(src.as_std_path()) {
+            continue;
         }
-        Ok(())
-    } else {
-        Ok(copy_file_with_type(src, src_metadata.file_type(), dst)?)
+
+        let file_type = match entry.file_type() {
+            Some(file_type) => file_type,
+            None => entry.metadata()?.file_type(),
+        };
+
+        // Note that we also don't currently copy broken symlinks
+        if file_type.is_symlink() && path.stat().is_err() {
+            // If we have a broken link, skip this entry
+            continue;
+        }
+
+        let suffix = AnchoredSystemPathBuf::new(src, path)?;
+        let target = dst.resolve(&suffix);
+        if file_type.is_dir() {
+            let src_metadata = entry.metadata()?;
+            make_dir_copy(&target, &src_metadata)?;
+        } else if file_type.is_file() || file_type.is_symlink() {
+            copy_file_with_type(path, file_type, &target)?;
+        }
+        // Skip special files (sockets, FIFOs, device nodes)
     }
+    Ok(())
 }
 
 fn make_dir_copy(
@@ -287,10 +343,10 @@ mod tests {
 
         let (_dst_tmp, dst_dir) = tmp_dir()?;
 
-        recursive_copy(&src_dir, &dst_dir, true)?;
+        recursive_copy(&src_dir, &dst_dir, true, None)?;
 
         // Ensure double copy doesn't error
-        recursive_copy(&src_dir, &dst_dir, true)?;
+        recursive_copy(&src_dir, &dst_dir, true, None)?;
 
         let dst_child_path = dst_dir.join_component("child");
         let dst_a_path = dst_child_path.join_component("a");
@@ -362,7 +418,7 @@ mod tests {
         hidden.create_with_contents("polo")?;
 
         let (_dst_tmp, dst_dir) = tmp_dir()?;
-        recursive_copy(&src_dir, &dst_dir, use_gitignore)?;
+        recursive_copy(&src_dir, &dst_dir, use_gitignore, None)?;
 
         assert!(dst_dir.join_component(".gitignore").exists());
         assert_eq!(
@@ -373,6 +429,105 @@ mod tests {
         assert!(dst_dir.join_component("child").exists());
         assert!(dst_dir.join_components(&["child", "seen.txt"]).exists());
         assert!(dst_dir.join_components(&["child", ".hidden"]).exists());
+
+        Ok(())
+    }
+
+    #[test_case(true)]
+    #[test_case(false)]
+    fn test_recursive_copy_respects_repo_gitignore(use_gitignore: bool) -> Result<(), Error> {
+        // A workspace package nested inside a monorepo. The root `.gitignore`
+        // must apply to the copied package, and its anchored entries must not
+        // overmatch nested directories that happen to share a name. Layout:
+        //
+        // <root>/
+        //   .git/
+        //   .gitignore             <- node_modules, /apps/web/coverage, *.log
+        //   apps/web/              <- the package we copy
+        //     package.json
+        //     node_modules/dep/index.js   <- ignored via root rule
+        //     coverage/report.txt         <- ignored via /apps/web/coverage
+        //     src/api/coverage/keep.js     <- kept, anchored rule must not match
+        //     src/api/.gitignore           <- nested: ignored.js
+        //     src/api/ignored.js           <- ignored via nested rule
+        //     logs/.gitignore              <- nested negation: !keep.log
+        //     logs/keep.log                <- kept despite root *.log
+        //     logs/drop.log                <- ignored via root *.log
+        let (_root_tmp, root) = tmp_dir()?;
+        root.join_component(".git").create_dir_all()?;
+        root.join_component(".gitignore")
+            .create_with_contents("node_modules\n/apps/web/coverage\n*.log\n")?;
+
+        let web = root.join_components(&["apps", "web"]);
+        web.create_dir_all()?;
+        web.join_component("package.json")
+            .create_with_contents("{}")?;
+        let nm = web.join_components(&["node_modules", "dep", "index.js"]);
+        nm.ensure_dir()?;
+        nm.create_with_contents("dep")?;
+        let coverage = web.join_components(&["coverage", "report.txt"]);
+        coverage.ensure_dir()?;
+        coverage.create_with_contents("report")?;
+        let nested_coverage = web.join_components(&["src", "api", "coverage", "keep.js"]);
+        nested_coverage.ensure_dir()?;
+        nested_coverage.create_with_contents("keep")?;
+        web.join_components(&["src", "api", ".gitignore"])
+            .create_with_contents("ignored.js\n")?;
+        web.join_components(&["src", "api", "ignored.js"])
+            .create_with_contents("ignored")?;
+        let logs_keep = web.join_components(&["logs", "keep.log"]);
+        logs_keep.ensure_dir()?;
+        web.join_components(&["logs", ".gitignore"])
+            .create_with_contents("!keep.log\n")?;
+        logs_keep.create_with_contents("keep")?;
+        web.join_components(&["logs", "drop.log"])
+            .create_with_contents("drop")?;
+
+        let (_dst_tmp, dst_dir) = tmp_dir()?;
+        recursive_copy(&web, &dst_dir, use_gitignore, Some(&root))?;
+
+        // Always copied regardless of gitignore handling.
+        assert!(dst_dir.join_component("package.json").exists());
+        assert!(
+            dst_dir
+                .join_components(&["src", "api", "coverage", "keep.js"])
+                .exists()
+        );
+
+        let node_modules = dst_dir.join_components(&["node_modules", "dep", "index.js"]);
+        let real_coverage = dst_dir.join_components(&["coverage", "report.txt"]);
+        let nested_ignored = dst_dir.join_components(&["src", "api", "ignored.js"]);
+        let kept_log = dst_dir.join_components(&["logs", "keep.log"]);
+        let dropped_log = dst_dir.join_components(&["logs", "drop.log"]);
+
+        if use_gitignore {
+            // Root rule applies to the nested package.
+            assert!(
+                !node_modules.exists(),
+                "root node_modules rule should apply"
+            );
+            // Anchored root rule matches the real coverage dir.
+            assert!(
+                !real_coverage.exists(),
+                "anchored /apps/web/coverage should be ignored"
+            );
+            // Anchored root rule must not overmatch the nested coverage dir.
+            // (covered by the unconditional assert above)
+            // Nested .gitignore is still respected.
+            assert!(!nested_ignored.exists(), "nested ignore rule should apply");
+            // Nested negation re-includes a root-ignored file.
+            assert!(
+                kept_log.exists(),
+                "nested negation should re-include keep.log"
+            );
+            assert!(!dropped_log.exists(), "root *.log should ignore drop.log");
+        } else {
+            assert!(node_modules.exists());
+            assert!(real_coverage.exists());
+            assert!(nested_ignored.exists());
+            assert!(kept_log.exists());
+            assert!(dropped_log.exists());
+        }
 
         Ok(())
     }
