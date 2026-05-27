@@ -599,7 +599,7 @@ while true; do sleep 0.2 || true; done
         let task_child_pid = wait_for_pid_file(&child_pid_file, START_TIMEOUT);
 
         child.send_ctrl_c();
-        thread::sleep(Duration::from_millis(3500));
+        thread::sleep(Duration::from_millis(500));
         child.send_ctrl_c();
 
         let transcript = child.finish(Duration::from_secs(5));
