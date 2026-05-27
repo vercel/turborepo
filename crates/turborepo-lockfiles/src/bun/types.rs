@@ -31,39 +31,34 @@ pub enum PackageKey {
 impl PackageKey {
     /// Parse a package key string into its structured form.
     pub fn parse(s: &str) -> Self {
-        if s.starts_with('@') {
-            // Scoped package or scoped nested
+        let slash_count = s.bytes().filter(|b| *b == b'/').count();
+        if s.starts_with('@') && slash_count == 1 {
             if let Some(first_slash) = s.find('/') {
-                let scope = s[1..first_slash].to_string(); // Skip '@'
-                let after_scope = &s[first_slash + 1..];
-
-                if let Some(second_slash) = after_scope.find('/') {
-                    // ScopedNested: @scope/parent/name
-                    let parent = after_scope[..second_slash].to_string();
-                    let name = after_scope[second_slash + 1..].to_string();
-                    Self::ScopedNested {
-                        scope,
-                        parent,
-                        name,
-                    }
-                } else {
-                    // Scoped: @scope/name
-                    Self::Scoped {
-                        scope,
-                        name: after_scope.to_string(),
-                    }
-                }
-            } else {
-                // Malformed scoped package, treat as simple
-                Self::Simple(s.to_string())
+                return Self::Scoped {
+                    scope: s[1..first_slash].to_string(),
+                    name: s[first_slash + 1..].to_string(),
+                };
             }
-        } else if let Some(slash_pos) = s.find('/') {
-            // Nested: parent/name
-            let parent = s[..slash_pos].to_string();
-            let name = s[slash_pos + 1..].to_string();
-            Self::Nested { parent, name }
+
+            return Self::Simple(s.to_string());
+        }
+
+        if let Some((parent, name)) = split_nested_key(s) {
+            if let Some(stripped_parent) = parent.strip_prefix('@')
+                && let Some(first_slash) = stripped_parent.find('/')
+            {
+                return Self::ScopedNested {
+                    scope: stripped_parent[..first_slash].to_string(),
+                    parent: stripped_parent[first_slash + 1..].to_string(),
+                    name: name.to_string(),
+                };
+            }
+
+            Self::Nested {
+                parent: parent.to_string(),
+                name: name.to_string(),
+            }
         } else {
-            // Simple: name
             Self::Simple(s.to_string())
         }
     }
@@ -118,6 +113,18 @@ impl PackageKey {
             _ => None,
         }
     }
+}
+
+fn split_nested_key(s: &str) -> Option<(&str, &str)> {
+    if let Some(scoped_child_pos) = s.rfind("/@") {
+        let child = &s[scoped_child_pos + 1..];
+        if child[1..].contains('/') {
+            return Some((&s[..scoped_child_pos], child));
+        }
+    }
+
+    let slash_pos = s.rfind('/')?;
+    Some((&s[..slash_pos], &s[slash_pos + 1..]))
 }
 
 impl fmt::Display for PackageKey {
@@ -467,6 +474,14 @@ mod tests {
         assert_eq!(key.name(), "dep");
         assert_eq!(key.to_string(), "parent/dep");
         assert_eq!(key.parent(), Some("parent".to_string()));
+
+        let key = PackageKey::parse("grandparent/parent/dep");
+        assert_eq!(key.name(), "dep");
+        assert_eq!(key.parent(), Some("grandparent/parent".to_string()));
+
+        let key = PackageKey::parse("parent/@scope/dep");
+        assert_eq!(key.name(), "@scope/dep");
+        assert_eq!(key.parent(), Some("parent".to_string()));
     }
 
     #[test]
@@ -483,6 +498,14 @@ mod tests {
         assert_eq!(key.name(), "dep");
         assert_eq!(key.to_string(), "@scope/parent/dep");
         assert_eq!(key.parent(), Some("@scope/parent".to_string()));
+
+        let key = PackageKey::parse("@scope/workspace/parent/dep");
+        assert_eq!(key.name(), "dep");
+        assert_eq!(key.parent(), Some("@scope/workspace/parent".to_string()));
+
+        let key = PackageKey::parse("@babel/core/@babel/traverse");
+        assert_eq!(key.name(), "@babel/traverse");
+        assert_eq!(key.parent(), Some("@babel/core".to_string()));
     }
 
     #[test]
