@@ -44,14 +44,14 @@ impl PackageKey {
         }
 
         if let Some((parent, name)) = split_nested_key(s) {
-            if let Some(stripped_parent) = parent.strip_prefix('@') {
-                if let Some(first_slash) = stripped_parent.find('/') {
-                    return Self::ScopedNested {
-                        scope: stripped_parent[..first_slash].to_string(),
-                        parent: stripped_parent[first_slash + 1..].to_string(),
-                        name: name.to_string(),
-                    };
-                }
+            if let Some(stripped_parent) = parent.strip_prefix('@')
+                && let Some(first_slash) = stripped_parent.find('/')
+            {
+                return Self::ScopedNested {
+                    scope: stripped_parent[..first_slash].to_string(),
+                    parent: stripped_parent[first_slash + 1..].to_string(),
+                    name: name.to_string(),
+                };
             }
 
             Self::Nested {
