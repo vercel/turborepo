@@ -18,7 +18,7 @@
 const CHILD_POLL_INTERVAL: Duration = Duration::from_micros(50);
 const POST_EXIT_OUTPUT_DRAIN_TIMEOUT: Duration = Duration::from_millis(100);
 #[cfg(unix)]
-const PTY_PROCESS_GROUP_SIGINT_DELAY: Duration = Duration::from_millis(500);
+const PTY_PROCESS_GROUP_SIGINT_DELAY: Duration = Duration::from_secs(1);
 #[cfg(any(unix, windows))]
 const PROCESS_TREE_DRAIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
 #[cfg(windows)]
