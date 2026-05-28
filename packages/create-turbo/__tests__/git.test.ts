@@ -4,11 +4,7 @@ import type { SpawnSyncReturns } from "node:child_process";
 import fs from "node:fs";
 import { setupTestFixtures } from "@turbo/test-utils";
 import { describe, it, expect, jest } from "@jest/globals";
-import {
-  DEFAULT_IGNORE,
-  tryGitInit,
-  removeGitDirectory
-} from "../src/utils/git";
+import { DEFAULT_IGNORE, tryGitInit } from "../src/utils/git";
 
 function spawnResult(status: number): SpawnSyncReturns<Buffer> {
   return {
@@ -253,43 +249,6 @@ describe("git", () => {
           "Directory path contains potentially unsafe characters"
         );
       }
-    });
-  });
-
-  describe("removeGitDirectory", () => {
-    const { useFixture } = setupTestFixtures({
-      directory: path.join(__dirname, "../"),
-      options: { emptyFixture: true }
-    });
-
-    it("attempts to remove .git directory", async () => {
-      const { root } = useFixture({ fixture: `remove-git` });
-      const mockRmSync = jest.spyOn(fs, "rmSync").mockReturnValue(undefined);
-
-      const result = removeGitDirectory(root);
-      expect(result).toBe(true);
-
-      expect(mockRmSync).toHaveBeenCalledWith(path.join(root, ".git"), {
-        recursive: true,
-        force: true
-      });
-      mockRmSync.mockRestore();
-    });
-
-    it("returns false on error", async () => {
-      const { root } = useFixture({ fixture: `remove-git-error` });
-      const mockRmSync = jest.spyOn(fs, "rmSync").mockImplementation(() => {
-        throw new Error("Permission denied");
-      });
-
-      const result = removeGitDirectory(root);
-      expect(result).toBe(false);
-
-      expect(mockRmSync).toHaveBeenCalledWith(path.join(root, ".git"), {
-        recursive: true,
-        force: true
-      });
-      mockRmSync.mockRestore();
     });
   });
 });
