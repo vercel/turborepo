@@ -788,6 +788,26 @@ enum ChildInput {
     Std(tokio::process::ChildStdin),
     Pty(Box<dyn Write + Send>),
 }
+
+#[derive(Debug)]
+pub struct ChildStdinGuard {
+    _stdin: ChildInput,
+}
+
+pub enum ChildStdin {
+    Writable(Box<dyn Write + Send>),
+    Guard(ChildStdinGuard),
+}
+
+impl fmt::Debug for ChildStdin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Writable(_) => f.debug_tuple("Writable").finish(),
+            Self::Guard(guard) => f.debug_tuple("Guard").field(guard).finish(),
+        }
+    }
+}
+
 enum ChildOutput {
     Std {
         stdout: tokio::process::ChildStdout,
@@ -1182,6 +1202,16 @@ impl Child {
         }
     }
 
+    pub fn take_stdin(&mut self) -> Option<ChildStdin> {
+        let stdin = self.stdin_inner()?;
+        match stdin {
+            ChildInput::Std(stdin) => Some(ChildStdin::Guard(ChildStdinGuard {
+                _stdin: ChildInput::Std(stdin),
+            })),
+            ChildInput::Pty(stdin) => Some(ChildStdin::Writable(stdin)),
+        }
+    }
+
     /// Wait for the `Child` to exit and pipe any stdout and stderr to the
     /// provided writer.
     #[tracing::instrument(skip_all)]
@@ -1480,7 +1510,7 @@ mod test {
     use tracing_test::traced_test;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use super::{Child, ChildInput, ChildOutput, Command};
+    use super::{Child, ChildInput, ChildOutput, ChildStdin, Command};
     use crate::{
         PtySize,
         child::{ChildExit, ShutdownStyle},
@@ -2378,10 +2408,7 @@ mod test {
     /// is held by `_stdin_guard` instead of being passed to
     /// `TaskOutput::set_stdin()` which would drop it.
     ///
-    /// PTY-only: `child.stdin()` returns `None` for non-PTY children
-    /// (`ChildInput::Std` is filtered out), so the guard mechanism only
-    /// applies to PTY-spawned processes — which is the production path
-    /// for persistent tasks on Unix.
+    /// This covers the writable PTY path used for interactive input.
     #[tokio::test]
     async fn test_held_stdin_keeps_persistent_child_alive() {
         if !TEST_PTY {
@@ -2417,6 +2444,36 @@ mod test {
             .await
             .expect("child should exit after stdin guard is dropped");
 
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    #[tokio::test]
+    async fn test_non_pty_stdin_guard_keeps_persistent_child_alive() {
+        let script = find_script_dir().join_component("persistent_server.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, None).unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let stdin_guard = child.take_stdin();
+        assert!(
+            matches!(stdin_guard, Some(ChildStdin::Guard(_))),
+            "non-PTY child should return a stdin guard"
+        );
+
+        let result = tokio::time::timeout(Duration::from_secs(2), child.wait()).await;
+        assert!(
+            result.is_err(),
+            "child should still be alive while stdin is held"
+        );
+
+        drop(stdin_guard);
+
+        let exit = tokio::time::timeout(Duration::from_secs(5), child.wait())
+            .await
+            .expect("child should exit after stdin guard is dropped");
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
