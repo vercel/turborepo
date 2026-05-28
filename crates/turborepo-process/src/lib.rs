@@ -28,7 +28,7 @@ use tokio::task::JoinSet;
 use tracing::{debug, trace};
 use turborepo_task_id::TaskId;
 
-pub use self::child::{Child, ChildExit};
+pub use self::child::{Child, ChildExit, ChildStdin};
 
 /// A process manager that is responsible for spawning and managing child
 /// processes. When the manager is Open, new child processes can be spawned

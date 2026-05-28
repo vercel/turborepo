@@ -18,7 +18,7 @@ use tracing::{Instrument, error};
 use turbopath::AnchoredSystemPathBuf;
 use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{EnvironmentVariableMap, platform::PlatformEnv};
-use turborepo_process::{ChildExit, Command, ProcessManager};
+use turborepo_process::{ChildExit, ChildStdin, Command, ProcessManager};
 use turborepo_run_cache::TaskCache;
 use turborepo_run_summary::TaskTracker;
 use turborepo_task_id::TaskId;
@@ -441,23 +441,22 @@ where
         // For persistent/interactive tasks, keep stdin alive so tools like
         // Vite that exit on EOF don't terminate prematurely.
         //
-        // In TUI mode, forward stdin to the TaskSender for interactive display.
-        // In stream mode (no TUI sender), hold stdin in a guard that lives
-        // until the process exits — process.stdin() uses .take(), so only the
-        // first call returns Some.
+        // In TUI mode, forward writable PTY stdin to the TaskSender for
+        // interactive display. Otherwise, hold stdin in a guard that lives
+        // until the process exits.
         let _stdin_guard = if self.takes_input {
-            let stdin = process.stdin();
-            if let Some(stdin) = stdin {
-                if task_output.sender().is_some() {
+            match process.take_stdin() {
+                Some(ChildStdin::Writable(stdin)) if task_output.sender().is_some() => {
                     task_output.set_stdin(stdin);
                     // TUI sender now owns stdin, no guard needed.
                     None
-                } else {
-                    // Stream mode: hold stdin open via the guard.
+                }
+                Some(stdin) => {
+                    // Non-interactive tasks still need stdin held open so dev
+                    // servers do not exit on EOF immediately after spawn.
                     Some(stdin)
                 }
-            } else {
-                None
+                None => None,
             }
         } else {
             None
