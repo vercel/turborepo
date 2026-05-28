@@ -1022,7 +1022,10 @@ mod test {
         }
 
         let err = result.err().expect("expected an error for short key");
-        assert_snapshot!(err.to_string(), @"artifact signature error");
+        assert_snapshot!(
+            err.to_string(),
+            @"artifact signature error: TURBO_REMOTE_CACHE_SIGNATURE_KEY is too short (5 bytes). A minimum of 32 bytes is required for cryptographic strength."
+        );
 
         // Verify the source chain carries the detail
         let source = std::error::Error::source(&err).expect("should have a source error");

@@ -66,7 +66,7 @@ pub enum CacheError {
     TimeoutError(String),
     #[error("could not connect to the cache")]
     ConnectError,
-    #[error("artifact signature error")]
+    #[error("artifact signature error: {0}")]
     SignatureError(#[from] SignatureError, #[backtrace] Backtrace),
     #[error("invalid duration")]
     InvalidDuration(#[backtrace] Backtrace),
@@ -317,5 +317,21 @@ impl RemoteCacheOpts {
 
     pub fn enforce_signature_key_length(&self) -> bool {
         self.enforce_signature_key_length
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CacheError, signature_authentication::SignatureError};
+
+    #[test]
+    fn test_signature_error_display_includes_source_message() {
+        let err = CacheError::from(SignatureError::NoSignatureSecretKey);
+
+        assert_eq!(
+            err.to_string(),
+            "artifact signature error: signature secret key not found. You must specify a secret \
+             key in the TURBO_REMOTE_CACHE_SIGNATURE_KEY environment variable"
+        );
     }
 }
