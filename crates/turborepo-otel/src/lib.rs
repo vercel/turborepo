@@ -70,16 +70,23 @@
 //! series in backends like Datadog that charge per unique series.
 //!
 //! **Always attached** (bounded cardinality):
-//! - `turbo.run.exit_code`, `turbo.version`, `turbo.scm.branch`
+//! - `turbo.run.exit_code`, `turbo.version`
 //! - `turbo.task.name`, `turbo.task.package`, `turbo.task.command`
-//! - `turbo.task.cache_status`, `turbo.task.cache_source`,
-//!   `turbo.task.exit_code`
+//! - `turbo.task.cache_status`
 //!
-//! **Gated by `run_attributes`** (unbounded — opt-in):
-//! - `turbo.run.id` — unique KSUID per invocation
-//! - `turbo.scm.revision` — full Git SHA, unique per commit
+//! **Attached when available** (bounded cardinality, omitted when the
+//! underlying value is missing):
+//! - `turbo.scm.branch`: omitted when SCM branch detection fails
+//! - `turbo.task.cache_source`: omitted on cache misses
+//! - `turbo.task.exit_code`: omitted when the task did not execute (for
+//!   example, on a cache hit)
 //!
-//! **Gated by `task_attributes`** (unbounded — opt-in):
+//! **Gated by `run_attributes`** (unbounded, opt-in):
+//! - `turbo.run.id`: unique KSUID per invocation
+//! - `turbo.scm.revision`: full Git SHA, unique per commit (also omitted when
+//!   SCM revision detection fails)
+//!
+//! **Gated by `task_attributes`** (unbounded, opt-in):
 //! - `turbo.task.id`, `turbo.task.hash`, `turbo.task.external_inputs_hash`
 
 use std::{

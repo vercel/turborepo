@@ -17,6 +17,8 @@
 
 const CHILD_POLL_INTERVAL: Duration = Duration::from_micros(50);
 const POST_EXIT_OUTPUT_DRAIN_TIMEOUT: Duration = Duration::from_millis(100);
+#[cfg(unix)]
+const PTY_PROCESS_GROUP_SIGINT_DELAY: Duration = Duration::from_secs(1);
 #[cfg(any(unix, windows))]
 const PROCESS_TREE_DRAIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
 #[cfg(windows)]
@@ -163,6 +165,8 @@ struct ChildHandle {
     shutdown_semantics: ShutdownSemantics,
     #[cfg(unix)]
     target_identity: Option<TargetIdentity>,
+    #[cfg(unix)]
+    pty_controller_fd: Option<libc::c_int>,
     #[cfg(windows)]
     _job: Option<super::job_object::JobObject>,
 }
@@ -175,7 +179,7 @@ enum ChildHandleImpl {
 #[cfg(unix)]
 #[derive(Debug, Clone, Copy)]
 enum GracefulInterruptTarget {
-    DirectChild,
+    DirectChildWithProcessGroupFallback,
     ProcessGroup,
 }
 
@@ -197,9 +201,9 @@ impl ShutdownSemantics {
         }
     }
 
-    fn direct_child_then_wait_for_process_group() -> Self {
+    fn direct_child_with_process_group_fallback() -> Self {
         Self {
-            graceful_interrupt_target: GracefulInterruptTarget::DirectChild,
+            graceful_interrupt_target: GracefulInterruptTarget::DirectChildWithProcessGroupFallback,
             wait_for_process_group_after_child_exit: true,
         }
     }
@@ -348,6 +352,8 @@ impl ChildHandle {
                 shutdown_semantics: ShutdownSemantics::process_group(),
                 #[cfg(unix)]
                 target_identity,
+                #[cfg(unix)]
+                pty_controller_fd: None,
                 #[cfg(windows)]
                 _job: job,
             },
@@ -421,6 +427,9 @@ impl ChildHandle {
                 .ok()
         });
 
+        #[cfg(unix)]
+        let pty_controller_fd = controller.as_raw_fd();
+
         let mut stdin = controller.take_writer().ok();
         let output = controller.try_clone_reader().ok().map(ChildOutput::Pty);
 
@@ -450,9 +459,11 @@ impl ChildHandle {
                 pid,
                 imp: ChildHandleImpl::Pty(child),
                 #[cfg(unix)]
-                shutdown_semantics: ShutdownSemantics::direct_child_then_wait_for_process_group(),
+                shutdown_semantics: ShutdownSemantics::direct_child_with_process_group_fallback(),
                 #[cfg(unix)]
                 target_identity,
+                #[cfg(unix)]
+                pty_controller_fd,
                 #[cfg(windows)]
                 _job: job,
             },
@@ -476,25 +487,46 @@ impl ChildHandle {
     }
 
     #[cfg(unix)]
-    fn send_graceful_interrupt(&self, pid: libc::pid_t) {
-        let target = match self.shutdown_semantics.graceful_interrupt_target {
-            GracefulInterruptTarget::DirectChild => {
-                debug!("sending SIGINT to child {}", pid);
-                pid
-            }
-            GracefulInterruptTarget::ProcessGroup => {
-                let Some(process_group_id) = self.process_group_id() else {
-                    debug!("missing process group id for child {}", pid);
-                    return;
-                };
-                debug!("sending SIGINT to process group -{}", process_group_id);
-                -process_group_id
-            }
+    fn graceful_process_group_id(&self) -> Option<libc::pid_t> {
+        self.pty_controller_fd
+            .and_then(|fd| match unsafe { libc::tcgetpgrp(fd) } {
+                process_group_id if process_group_id > 0 => Some(process_group_id),
+                _ => None,
+            })
+            .or_else(|| self.process_group_id())
+    }
+
+    #[cfg(unix)]
+    fn send_signal_to_process_group(&self, pid: libc::pid_t, signal: libc::c_int) {
+        let Some(process_group_id) = self.graceful_process_group_id() else {
+            debug!("missing process group id for child {pid}");
+            return;
         };
 
-        if unsafe { libc::kill(target, libc::SIGINT) } == -1 {
-            debug!("failed to send SIGINT to {target}");
+        debug!("sending signal {signal} to process group -{process_group_id}");
+        signal_process_group(process_group_id, signal);
+    }
+
+    #[cfg(unix)]
+    fn send_graceful_interrupt(&self, pid: libc::pid_t) -> bool {
+        match self.shutdown_semantics.graceful_interrupt_target {
+            GracefulInterruptTarget::DirectChildWithProcessGroupFallback => {
+                debug!("sending SIGINT to child {pid}");
+                if unsafe { libc::kill(pid, libc::SIGINT) } == -1 {
+                    debug!("failed to send SIGINT to {pid}");
+                }
+                false
+            }
+            GracefulInterruptTarget::ProcessGroup => {
+                self.send_signal_to_process_group(pid, libc::SIGINT);
+                true
+            }
         }
+    }
+
+    #[cfg(unix)]
+    fn send_fallback_graceful_interrupt(&self, pid: libc::pid_t) {
+        self.send_signal_to_process_group(pid, libc::SIGINT);
     }
 
     #[cfg(unix)]
@@ -756,6 +788,26 @@ enum ChildInput {
     Std(tokio::process::ChildStdin),
     Pty(Box<dyn Write + Send>),
 }
+
+#[derive(Debug)]
+pub struct ChildStdinGuard {
+    _stdin: ChildInput,
+}
+
+pub enum ChildStdin {
+    Writable(Box<dyn Write + Send>),
+    Guard(ChildStdinGuard),
+}
+
+impl fmt::Debug for ChildStdin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Writable(_) => f.debug_tuple("Writable").finish(),
+            Self::Guard(guard) => f.debug_tuple("Guard").field(guard).finish(),
+        }
+    }
+}
+
 enum ChildOutput {
     Std {
         stdout: tokio::process::ChildStdout,
@@ -811,7 +863,10 @@ impl ShutdownStyle {
                         return ChildExit::Interrupted;
                     };
 
-                    child.send_graceful_interrupt(pid as libc::pid_t);
+                    let pid = pid as libc::pid_t;
+                    let mut process_group_interrupt_sent = child.send_graceful_interrupt(pid);
+                    let process_group_interrupt_deadline =
+                        tokio::time::Instant::now() + PTY_PROCESS_GROUP_SIGINT_DELAY;
                     debug!("waiting for child {}", pid);
 
                     let deadline = timeout.map(|timeout| tokio::time::Instant::now() + timeout);
@@ -826,6 +881,10 @@ impl ShutdownStyle {
                                             Ok(_exit_code) => ChildExit::Interrupted,
                                             Err(_) => ChildExit::Failed,
                                         };
+                                    }
+                                    _ = tokio::time::sleep_until(process_group_interrupt_deadline), if !process_group_interrupt_sent => {
+                                        child.send_fallback_graceful_interrupt(pid);
+                                        process_group_interrupt_sent = true;
                                     }
                                     command = command_rx.recv(), if command_rx_open => {
                                         match command {
@@ -857,6 +916,10 @@ impl ShutdownStyle {
                                             Err(_) => ChildExit::Failed,
                                         };
                                     }
+                                    _ = tokio::time::sleep_until(process_group_interrupt_deadline), if !process_group_interrupt_sent => {
+                                        child.send_fallback_graceful_interrupt(pid);
+                                        process_group_interrupt_sent = true;
+                                    }
                                     command = command_rx.recv(), if command_rx_open => {
                                         match command {
                                             Some(ChildCommand::Kill) => {
@@ -878,7 +941,7 @@ impl ShutdownStyle {
                     if exit == ChildExit::Interrupted {
                         child
                             .wait_for_process_group_exit(
-                                pid as libc::pid_t,
+                                pid,
                                 deadline,
                                 command_rx,
                                 &mut command_rx_open,
@@ -1136,6 +1199,16 @@ impl Child {
         match stdin {
             ChildInput::Std(_) => None,
             ChildInput::Pty(stdin) => Some(stdin),
+        }
+    }
+
+    pub fn take_stdin(&mut self) -> Option<ChildStdin> {
+        let stdin = self.stdin_inner()?;
+        match stdin {
+            ChildInput::Std(stdin) => Some(ChildStdin::Guard(ChildStdinGuard {
+                _stdin: ChildInput::Std(stdin),
+            })),
+            ChildInput::Pty(stdin) => Some(ChildStdin::Writable(stdin)),
         }
     }
 
@@ -1423,7 +1496,7 @@ impl Child {
 #[cfg(test)]
 mod test {
     use std::{
-        assert_matches, io,
+        assert_matches, fs, io,
         sync::{Arc, Mutex},
         time::Duration,
     };
@@ -1437,7 +1510,7 @@ mod test {
     use tracing_test::traced_test;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use super::{Child, ChildInput, ChildOutput, Command};
+    use super::{Child, ChildInput, ChildOutput, ChildStdin, Command};
     use crate::{
         PtySize,
         child::{ChildExit, ShutdownStyle},
@@ -2058,11 +2131,7 @@ mod test {
         let exit = child.stop().await;
 
         // On Unix, shell scripts may not respond to SIGINT and will timeout,
-        // resulting in being killed rather than interrupted. For non-PTY
-        // children, SIGINT goes to the process group but shells may still
-        // continue their loop. For PTY children, SIGINT goes only to the
-        // direct child to avoid double delivery through package managers,
-        // which also means the shell may not exit gracefully.
+        // resulting in being killed rather than interrupted.
         if cfg!(unix) {
             assert_matches!(exit, Some(ChildExit::Killed) | Some(ChildExit::Interrupted));
         } else {
@@ -2339,10 +2408,7 @@ mod test {
     /// is held by `_stdin_guard` instead of being passed to
     /// `TaskOutput::set_stdin()` which would drop it.
     ///
-    /// PTY-only: `child.stdin()` returns `None` for non-PTY children
-    /// (`ChildInput::Std` is filtered out), so the guard mechanism only
-    /// applies to PTY-spawned processes — which is the production path
-    /// for persistent tasks on Unix.
+    /// This covers the writable PTY path used for interactive input.
     #[tokio::test]
     async fn test_held_stdin_keeps_persistent_child_alive() {
         if !TEST_PTY {
@@ -2378,6 +2444,36 @@ mod test {
             .await
             .expect("child should exit after stdin guard is dropped");
 
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    #[tokio::test]
+    async fn test_non_pty_stdin_guard_keeps_persistent_child_alive() {
+        let script = find_script_dir().join_component("persistent_server.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, None).unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let stdin_guard = child.take_stdin();
+        assert!(
+            matches!(stdin_guard, Some(ChildStdin::Guard(_))),
+            "non-PTY child should return a stdin guard"
+        );
+
+        let result = tokio::time::timeout(Duration::from_secs(2), child.wait()).await;
+        assert!(
+            result.is_err(),
+            "child should still be alive while stdin is held"
+        );
+
+        drop(stdin_guard);
+
+        let exit = tokio::time::timeout(Duration::from_secs(5), child.wait())
+            .await
+            .expect("child should exit after stdin guard is dropped");
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
@@ -2626,6 +2722,65 @@ mod test {
         child.stop().await;
         // Give OS time to clean up
         tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_pty_graceful_shutdown_signals_process_group() {
+        let marker_file = std::env::temp_dir().join(format!(
+            "turbo-pty-process-group-sigint-{}",
+            std::process::id()
+        ));
+        let ready_file = std::env::temp_dir().join(format!(
+            "turbo-pty-process-group-ready-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&marker_file);
+        let _ = fs::remove_file(&ready_file);
+        let marker_file = marker_file.to_string_lossy().into_owned();
+        let ready_file = ready_file.to_string_lossy().into_owned();
+
+        let script = r#"
+const { spawn } = require("child_process");
+process.on("SIGINT", () => {});
+const child = spawn(process.execPath, [
+  "-e",
+  "process.on('SIGINT', () => { require('fs').writeFileSync(process.argv[1], 'interrupted'); process.exit(0); }); require('fs').writeFileSync(process.argv[2], 'ready'); setInterval(() => {}, 1000);",
+  process.argv[1],
+  process.argv[2],
+], { stdio: "inherit" });
+child.on("exit", () => process.exit(0));
+"#;
+        let mut cmd = Command::new("node");
+        cmd.args(["-e", script, marker_file.as_str(), ready_file.as_str()]);
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Some(Duration::from_secs(2))),
+            Some(PtySize::default()),
+        )
+        .unwrap();
+
+        for _ in 0..50 {
+            if fs::metadata(&ready_file).is_ok() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        assert!(
+            fs::metadata(&ready_file).is_ok(),
+            "node child should become ready before shutdown"
+        );
+
+        let exit = child.stop().await;
+
+        assert_eq!(exit, Some(ChildExit::Interrupted));
+        assert!(
+            fs::metadata(&marker_file).is_ok(),
+            "node child should receive SIGINT from PTY process-group shutdown"
+        );
+
+        let _ = fs::remove_file(marker_file);
+        let _ = fs::remove_file(ready_file);
     }
 
     #[cfg(unix)]

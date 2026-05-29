@@ -137,17 +137,44 @@ ifneq ($(SKIP_PUBLISH),--skip-publish)
 	fi
 
 	# Publish the remaining JS packages in order to avoid race conditions.
-	cd $(CLI_DIR)/../
 	npm --version
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-workspaces-$(TURBO_VERSION).tgz
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-gen-$(TURBO_VERSION).tgz
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../eslint-plugin-turbo-$(TURBO_VERSION).tgz
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../eslint-config-turbo-$(TURBO_VERSION).tgz
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-types-$(TURBO_VERSION).tgz
+	publish_with_retries() { \
+		package="$$1"; \
+		tarball="$$2"; \
+		attempt=1; \
+		max_attempts=3; \
+		while true; do \
+			log_file="$$(mktemp)"; \
+			echo "Publishing $$package@$(TURBO_VERSION) (attempt $$attempt/$$max_attempts)"; \
+			npm publish -ddd --tag $(TURBO_TAG) "$$tarball" >"$$log_file" 2>&1; \
+			publish_status=$$?; \
+			if [ "$$publish_status" -eq 0 ]; then \
+				cat "$$log_file"; \
+				rm -f "$$log_file"; \
+				break; \
+			fi; \
+			cat "$$log_file"; \
+			if grep -Eq "TLOG_CREATE_ENTRY_ERROR|error creating tlog entry" "$$log_file" && [ "$$attempt" -lt "$$max_attempts" ]; then \
+				sleep_seconds=$$((attempt * 10)); \
+				rm -f "$$log_file"; \
+				echo "Retrying $$package after npm provenance tlog failure in $$sleep_seconds seconds..."; \
+				sleep "$$sleep_seconds"; \
+				attempt=$$((attempt + 1)); \
+			else \
+				rm -f "$$log_file"; \
+				exit "$$publish_status"; \
+			fi; \
+		done; \
+	}; \
+	publish_with_retries "turbo" "$(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz"; \
+	publish_with_retries "create-turbo" "$(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz"; \
+	publish_with_retries "@turbo/codemod" "$(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz"; \
+	publish_with_retries "turbo-ignore" "$(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz"; \
+	publish_with_retries "@turbo/workspaces" "$(CLI_DIR)/../turbo-workspaces-$(TURBO_VERSION).tgz"; \
+	publish_with_retries "@turbo/gen" "$(CLI_DIR)/../turbo-gen-$(TURBO_VERSION).tgz"; \
+	publish_with_retries "eslint-plugin-turbo" "$(CLI_DIR)/../eslint-plugin-turbo-$(TURBO_VERSION).tgz"; \
+	publish_with_retries "eslint-config-turbo" "$(CLI_DIR)/../eslint-config-turbo-$(TURBO_VERSION).tgz"; \
+	publish_with_retries "@turbo/types" "$(CLI_DIR)/../turbo-types-$(TURBO_VERSION).tgz"
 endif
 
 # use target fixture-<some directory under turborepo-tests/integration/fixtures> to set up the testbed directory

@@ -292,7 +292,7 @@ describe("create-turbo", () => {
     mockSpawnSync.mockRestore();
   });
 
-  it("does not initialize git and removes .git directory when --no-git flag is used", async () => {
+  it("does not initialize git or remove .git directory when --no-git flag is used", async () => {
     const { root } = useFixture({ fixture: "create-turbo-no-git" });
     const packageManager = "npm";
 
@@ -333,13 +333,7 @@ describe("create-turbo", () => {
         signal: null
       });
 
-    const mockTryGitInit = jest
-      .spyOn(gitUtils, "tryGitInit")
-      .mockReturnValue(true);
-
-    const mockRemoveGitDirectory = jest
-      .spyOn(gitUtils, "removeGitDirectory")
-      .mockReturnValue(true);
+    const mockTryGitInit = jest.spyOn(gitUtils, "tryGitInit");
 
     await create(root as CreateCommandArgument, {
       packageManager,
@@ -350,17 +344,16 @@ describe("create-turbo", () => {
     });
 
     expect(mockTryGitInit).not.toHaveBeenCalled();
-    expect(mockRemoveGitDirectory).toHaveBeenCalledWith(root);
+    expect(mockSpawnSync).not.toHaveBeenCalled();
 
     mockAvailablePackageManagers.mockRestore();
     mockCreateProject.mockRestore();
     mockGetWorkspaceDetails.mockRestore();
     mockSpawnSync.mockRestore();
     mockTryGitInit.mockRestore();
-    mockRemoveGitDirectory.mockRestore();
   });
 
-  it("initializes git and does not remove .git directory when --no-git flag is not used", async () => {
+  it("initializes git when --no-git flag is not used", async () => {
     const { root } = useFixture({ fixture: "create-turbo-with-git" });
     const packageManager = "npm";
 
@@ -405,10 +398,6 @@ describe("create-turbo", () => {
       .spyOn(gitUtils, "tryGitInit")
       .mockReturnValue(true);
 
-    const mockRemoveGitDirectory = jest
-      .spyOn(gitUtils, "removeGitDirectory")
-      .mockReturnValue(true);
-
     await create(root as CreateCommandArgument, {
       packageManager,
       skipInstall: true,
@@ -418,13 +407,11 @@ describe("create-turbo", () => {
     });
 
     expect(mockTryGitInit).toHaveBeenCalledWith(root);
-    expect(mockRemoveGitDirectory).not.toHaveBeenCalled();
 
     mockAvailablePackageManagers.mockRestore();
     mockCreateProject.mockRestore();
     mockGetWorkspaceDetails.mockRestore();
     mockSpawnSync.mockRestore();
     mockTryGitInit.mockRestore();
-    mockRemoveGitDirectory.mockRestore();
   });
 });
