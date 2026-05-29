@@ -241,7 +241,7 @@ pub(super) async fn login_vercel_device_flow<T: Client>(
     color_config: &ColorConfig,
     login_url: &str,
 ) -> Result<(Token, Option<TokenSet>), Error> {
-    let http_client = reqwest::Client::new();
+    let http_client = crate::build_auth_http_client()?;
 
     let metadata = device_flow::discover(&http_client, login_url).await?;
     let device_auth = device_flow::device_authorization_request(&http_client, &metadata).await?;
