@@ -44,7 +44,9 @@ use turborepo_task_hash::{
 };
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_types::{EnvMode, UIMode};
-use turborepo_ui::{sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig};
+use turborepo_ui::{
+    sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig, TerminalSink,
+};
 
 pub use crate::run::error::Error;
 use crate::{
@@ -515,10 +517,10 @@ impl Run {
             && tui::terminal_big_enough()?)
     }
 
-    pub fn start_ui(self: &Arc<Self>) -> UIResult<UISender> {
+    pub fn start_ui(self: &Arc<Self>, terminal_sink: Arc<TerminalSink>) -> UIResult<UISender> {
         match self.opts.run_opts.ui_mode {
             UIMode::Tui => self
-                .start_terminal_ui()
+                .start_terminal_ui(terminal_sink)
                 .map(|res| res.map(|(sender, handle)| (UISender::Tui(sender), handle))),
             UIMode::Stream | UIMode::StreamWithTimestamps => Ok(None),
             UIMode::Web => self
@@ -539,7 +541,7 @@ impl Run {
     }
 
     #[allow(clippy::type_complexity)]
-    fn start_terminal_ui(&self) -> TuiResult {
+    fn start_terminal_ui(&self, terminal_sink: Arc<TerminalSink>) -> TuiResult {
         if !self.should_start_ui()? {
             return Ok(None);
         }
@@ -561,6 +563,7 @@ impl Run {
                 color_config,
                 &repo_root,
                 scrollback_len,
+                terminal_sink,
             )
             .await?)
         });

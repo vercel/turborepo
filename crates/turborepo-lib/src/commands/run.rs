@@ -139,7 +139,9 @@ pub async fn run(
 
         let (sender, handle) = {
             let _span = tracing::info_span!("start_ui").entered();
-            run.start_ui()?.unzip()
+            // The TUI needs a handle to the terminal sink so it can re-enable
+            // streamed output when the user toggles out of the alternate screen.
+            run.start_ui(sinks.terminal.clone())?.unzip()
         };
 
         if let Some(UISender::Tui(ref tui_sender)) = sender {

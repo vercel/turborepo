@@ -6,8 +6,10 @@ use crate::tui::TuiSender;
 
 /// Normalize lone `\n` to `\r\n` for the TUI's VT100 terminal emulator.
 ///
-/// Already-correct `\r\n` sequences are left as-is.
-fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
+/// Already-correct `\r\n` sequences are left as-is. Also reused by
+/// [`TerminalSink`](crate::TerminalSink) when streaming under raw mode,
+/// where a lone `\n` would otherwise staircase the output.
+pub(crate) fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
     let mut result = Vec::with_capacity(bytes.len());
     let mut prev_cr = false;
     for &b in bytes {

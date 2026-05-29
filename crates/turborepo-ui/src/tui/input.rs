@@ -7,7 +7,7 @@ use tracing::debug;
 
 use super::{
     app::LayoutSections,
-    event::{Direction, Event},
+    event::{Direction, Event, StreamScope},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -126,7 +126,16 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         }
         // Fall through if we aren't in interactive mode
         KeyCode::Char('l') => Some(Event::ToggleLogPanel),
-        KeyCode::Char('h') => Some(Event::ToggleSidebar),
+        // `h` streams the selected task's logs (toggle); `s` streams all
+        // tasks. Pressing the same key again returns to the TUI.
+        KeyCode::Char('h') => Some(Event::ToggleStream {
+            scope: StreamScope::SelectedTask,
+        }),
+        KeyCode::Char('s') => Some(Event::ToggleStream {
+            scope: StreamScope::All,
+        }),
+        // Sidebar toggle moved to Shift+H to free up `h` for streaming.
+        KeyCode::Char('H') => Some(Event::ToggleSidebar),
         KeyCode::Char('u') => Some(Event::ScrollUp),
         KeyCode::Char('d') => Some(Event::ScrollDown),
         KeyCode::PageUp | KeyCode::Char('U') => Some(Event::PageUp),
@@ -480,9 +489,24 @@ mod test {
         }
     }
 
+    fn in_list() -> InputOptions<'static> {
+        static LIST: OnceLock<LayoutSections> = OnceLock::new();
+        InputOptions {
+            focus: LIST.get_or_init(|| LayoutSections::TaskList),
+            has_selection: false,
+            is_help_popup_open: false,
+            is_log_panel_open: false,
+        }
+    }
+
     const H: KeyEvent = KeyEvent::new(KeyCode::Char('h'), KeyModifiers::empty());
+    const SHIFT_H: KeyEvent = KeyEvent::new(KeyCode::Char('H'), KeyModifiers::SHIFT);
+    const S: KeyEvent = KeyEvent::new(KeyCode::Char('s'), KeyModifiers::empty());
 
     #[test_case(in_find(), H, Some(Event::SearchEnterChar('h')) ; "h while searching")]
+    #[test_case(in_list(), H, Some(Event::ToggleStream { scope: StreamScope::SelectedTask }) ; "h streams selected task")]
+    #[test_case(in_list(), S, Some(Event::ToggleStream { scope: StreamScope::All }) ; "s streams all tasks")]
+    #[test_case(in_list(), SHIFT_H, Some(Event::ToggleSidebar) ; "shift+h toggles sidebar")]
     // Note: This only checks event variants not any data contained in the variant
     fn test_translate_key_event_variant(
         opts: InputOptions,
