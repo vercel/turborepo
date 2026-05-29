@@ -49,10 +49,10 @@ pub struct AffectedTask {
 ///    change (lockfile, global dep, missing git ref), every task in the engine
 ///    is returned immediately with the corresponding reason.
 ///
-/// 2. **Direct input matching**: For each affected package, each task's
-///    `inputs` globs are checked against the changed files. Packages whose
-///    lockfile-derived external dependency closure changed seed their own tasks
-///    directly, even when no package-local file changed.
+/// 2. **Direct input matching**: Each task's `inputs` globs are checked against
+///    the changed files. Packages whose lockfile-derived external dependency
+///    closure changed seed their own tasks directly, even when no package-local
+///    file changed.
 ///
 /// 3. **Graph propagation**: BFS from directly affected tasks through the task
 ///    dependency graph in O(V + E). If task A depends on task B and B is
@@ -63,10 +63,6 @@ pub fn calculate_affected_tasks(
     head: Option<String>,
 ) -> Result<Vec<AffectedTask>, Error> {
     let affected_packages = run.calculate_affected_packages(base.clone(), head.clone())?;
-
-    if affected_packages.is_empty() {
-        return Ok(Vec::new());
-    }
 
     // Check if this is an "all packages changed" scenario
     let all_packages_reason = affected_packages.values().find_map(|reason| match reason {

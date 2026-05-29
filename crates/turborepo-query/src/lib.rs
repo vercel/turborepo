@@ -657,7 +657,14 @@ impl RepositoryQuery {
             .filter(|ct| {
                 let has_script = ct.task.script.is_some();
                 let task_ok = tasks.as_ref().is_none_or(|names| {
-                    names.is_empty() || names.iter().any(|n| n.as_str() == ct.task.name)
+                    if names.is_empty() {
+                        true
+                    } else {
+                        let full_name = format!("{}#{}", ct.task.package.get_name(), ct.task.name);
+                        names
+                            .iter()
+                            .any(|n| n.as_str() == ct.task.name || n == &full_name)
+                    }
                 });
                 let package_ok = filter.as_ref().is_none_or(|f| f.check(&ct.task.package));
                 has_script && task_ok && package_ok
