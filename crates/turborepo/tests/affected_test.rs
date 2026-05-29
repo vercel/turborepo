@@ -11,6 +11,76 @@ fn setup_affected(dir: &std::path::Path) {
     git(dir, &["checkout", "-b", "my-branch"]);
 }
 
+fn setup_nonsense_root_task_affected(dir: &Path) {
+    fs::create_dir_all(dir.join("flarble")).unwrap();
+    fs::create_dir_all(dir.join("packages/blorbo")).unwrap();
+
+    fs::write(
+        dir.join("package.json"),
+        r#"{
+  "name": "glorp",
+  "private": true,
+  "packageManager": "npm@10.5.0",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "zibble:zonk": "echo zibble"
+  }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.com/schema.json",
+  "tasks": {
+    "//#zibble:zonk": {
+      "cache": false,
+      "inputs": ["flarble/**"]
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("packages/blorbo/package.json"),
+        r#"{
+  "name": "blorbo",
+  "version": "1.0.0"
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("package-lock.json"),
+        r#"{
+  "name": "glorp",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "glorp",
+      "workspaces": ["packages/*"]
+    },
+    "node_modules/blorbo": {
+      "resolved": "packages/blorbo",
+      "link": true
+    },
+    "packages/blorbo": {
+      "name": "blorbo",
+      "version": "1.0.0"
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    setup::setup_git(dir).unwrap();
+    git(dir, &["checkout", "-b", "my-branch"]);
+}
+
 fn setup_berry_catalog_affected(dir: &Path) {
     fs::create_dir_all(dir.join("packages/pkg-a")).unwrap();
     fs::create_dir_all(dir.join("packages/pkg-b")).unwrap();
@@ -1672,6 +1742,39 @@ fn test_query_affected_shorthand_with_tasks() {
         names.iter().any(|n| n.contains("my-app")),
         "my-app#build should be in affected tasks: {names:?}"
     );
+}
+
+#[test]
+fn test_query_affected_shorthand_with_root_task() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_nonsense_root_task_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("flarble/wibble.ts"), "// test").unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "affected",
+            "--tasks",
+            "//#zibble:zonk",
+            "--exit-code",
+        ],
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "root task should be affected by its inputs\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1, "expected one affected root task: {json}");
+    assert_eq!(items[0]["name"], "zibble:zonk");
+    assert_eq!(items[0]["fullName"], "//#zibble:zonk");
+    assert_eq!(items[0]["package"]["name"], "//");
 }
 
 #[test]

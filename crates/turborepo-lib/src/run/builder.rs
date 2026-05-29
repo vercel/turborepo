@@ -702,12 +702,13 @@ impl RunBuilder {
             && self.opts.scope_opts.affected_range.is_some()
             && self.opts.future_flags.affected_using_task_inputs;
 
-        let needs_all_packages = use_task_level_affected || use_task_level_filter;
+        let needs_all_packages =
+            use_task_level_affected || use_task_level_filter || self.add_all_tasks;
 
-        // When task-level filtering is active, the engine must contain tasks
-        // for ALL packages so that $TURBO_ROOT$ inputs in packages not flagged
-        // by the package-level scope resolution are still matched.
-        // The task-level filter (below) does the pruning.
+        // When task-level filtering or add_all_tasks is active, the engine must
+        // contain tasks for ALL packages so that $TURBO_ROOT$ inputs in packages
+        // not flagged by the package-level scope resolution are still matched.
+        // The task-level filter (below) does the pruning when needed.
         let all_pkgs: Vec<PackageName> = if needs_all_packages {
             pkg_dep_graph
                 .packages()
