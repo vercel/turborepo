@@ -10,6 +10,8 @@ pub(crate) mod device_flow;
 mod error;
 mod ui;
 
+use std::time::Duration;
+
 pub use auth::*;
 pub use device_flow::TokenSet;
 pub use error::Error;
@@ -36,6 +38,8 @@ const VERCEL_OAUTH_INTROSPECT_URL: &str = "https://api.vercel.com/login/oauth/to
 const DEFAULT_TOKEN_EXPIRY_SECS: u64 = 8 * 60 * 60; // 8 hours
 const TOKEN_EXCHANGE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:token-exchange";
 const ACCESS_TOKEN_SUBJECT_TYPE: &str = "urn:ietf:params:oauth:token-type:access_token";
+const AUTH_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const AUTH_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Default)]
 pub struct AuthTokens {
@@ -65,6 +69,20 @@ fn auth_tokens_from_oauth_response(
                     .unwrap_or(DEFAULT_TOKEN_EXPIRY_SECS),
         ),
     }
+}
+
+pub(crate) fn build_auth_http_client() -> Result<reqwest::Client, Error> {
+    build_auth_http_client_with_timeout(AUTH_CONNECT_TIMEOUT, AUTH_REQUEST_TIMEOUT)
+}
+
+fn build_auth_http_client_with_timeout(
+    connect_timeout: Duration,
+    request_timeout: Duration,
+) -> Result<reqwest::Client, Error> {
+    Ok(reqwest::Client::builder()
+        .connect_timeout(connect_timeout)
+        .timeout(request_timeout)
+        .build()?)
 }
 
 /// Token.
@@ -453,7 +471,7 @@ impl AuthTokens {
             .as_ref()
             .ok_or_else(|| Error::TokenNotFound)?;
 
-        let client = reqwest::Client::new();
+        let client = build_auth_http_client()?;
 
         // Introspect the refresh token to discover its client_id
         let client_id = Self::introspect_client_id(&client, refresh_token).await?;
@@ -494,7 +512,7 @@ impl AuthTokens {
 
     async fn exchange_token_with_url(&self, token_url: &str) -> Result<AuthTokens, Error> {
         let subject_token = self.token.as_ref().ok_or(Error::TokenNotFound)?;
-        let client = reqwest::Client::new();
+        let client = build_auth_http_client()?;
         let params = [
             ("grant_type", TOKEN_EXCHANGE_GRANT_TYPE),
             ("client_id", crate::device_flow::TURBOREPO_CLIENT_ID),
@@ -572,7 +590,7 @@ impl AuthTokens {
 
 #[cfg(test)]
 mod tests {
-    use std::backtrace::Backtrace;
+    use std::{backtrace::Backtrace, time::Duration};
 
     use httpmock::prelude::*;
     use insta::assert_snapshot;
@@ -586,6 +604,29 @@ mod tests {
     use url::Url;
 
     use super::*;
+
+    #[tokio::test]
+    async fn test_auth_http_client_times_out_stalled_response() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (_socket, _) = listener.accept().await.unwrap();
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        });
+
+        let client =
+            build_auth_http_client_with_timeout(Duration::from_secs(5), Duration::from_millis(50))
+                .unwrap();
+
+        let err = client
+            .get(format!("http://{addr}"))
+            .send()
+            .await
+            .expect_err("stalled response should time out");
+
+        server.abort();
+        assert!(err.is_timeout(), "expected timeout error, got {err}");
+    }
 
     // Shared mock client that can be reused across tests
     struct MockUserClient {
