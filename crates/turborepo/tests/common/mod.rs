@@ -351,21 +351,24 @@ pub fn setup_fixture(
     fixture: &str,
     package_manager: &str,
     test_dir: &Path,
+    install: bool,
 ) -> Result<(), anyhow::Error> {
-    setup::setup_integration_test(test_dir, fixture, package_manager, true)
+    setup::setup_integration_test(test_dir, fixture, package_manager, install)
 }
 
 /// Executes a command and snapshots the output as JSON.
 ///
 /// Takes fixture, package manager, and command, and sets of arguments.
 /// Creates a snapshot file for each set of arguments.
-/// Note that the command must return valid JSON
+/// Note that the command must return valid JSON.
+/// Defaults to skipping dependency installation; use `@install` when module
+/// resolution requires `node_modules`.
 #[macro_export]
 macro_rules! check_json_output {
-    ($fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?],)*) => {
+    (@with_install $install:expr, $fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?],)*) => {
         {
             let tempdir = tempfile::tempdir()?;
-            $crate::common::setup_fixture($fixture, $package_manager, tempdir.path())?;
+            $crate::common::setup_fixture($fixture, $package_manager, tempdir.path(), $install)?;
             $(
                 let mut command = $crate::common::turbo_command(tempdir.path());
                 command
@@ -399,5 +402,11 @@ macro_rules! check_json_output {
                 });
             )*
         }
+    };
+    (@install $fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?],)*) => {
+        $crate::check_json_output!(@with_install true, $fixture, $package_manager, $command, $($name => [$($query),*],)*)
+    };
+    ($fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?],)*) => {
+        $crate::check_json_output!(@with_install false, $fixture, $package_manager, $command, $($name => [$($query),*],)*)
     }
 }
