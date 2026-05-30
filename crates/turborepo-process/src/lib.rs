@@ -161,9 +161,10 @@ impl ProcessManager {
         Some(child)
     }
 
-    /// Stop the process manager, closing all child processes. On posix
-    /// systems this will send a SIGINT, and on windows it will just kill
-    /// the process immediately.
+    /// Stop the process manager, closing all child processes. On posix systems
+    /// this will send SIGINT. On Windows, Turbo waits for the child stop
+    /// timeout before force killing because it cannot send a process
+    /// signal.
     pub async fn stop(&self) {
         self.close(CloseMode::Stop).await
     }
