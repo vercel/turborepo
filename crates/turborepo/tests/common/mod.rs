@@ -45,9 +45,8 @@ pub fn turbo_command(test_dir: &Path) -> assert_cmd::Command {
         .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
         // Corepack intercepts package manager calls (npm, yarn, pnpm) and can
         // prompt for download confirmation, which hangs in non-interactive CI.
-        // The test setup pre-warms the corepack cache via `corepack prepare`
-        // so the correct version is available locally without network access.
-        // DOWNLOAD_PROMPT=0 is a safety net in case the cache is somehow cold.
+        // Tests that need Corepack pre-warm its cache during setup. This env
+        // var is a safety net in case the cache is somehow cold.
         .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
         .env_remove("CI")
         .env_remove("GITHUB_ACTIONS")
