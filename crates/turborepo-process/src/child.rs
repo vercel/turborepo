@@ -2170,6 +2170,7 @@ mod test {
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
+    #[cfg(unix)]
     #[test_case(false)]
     #[test_case(TEST_PTY)]
     #[tokio::test]
