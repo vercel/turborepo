@@ -9,7 +9,7 @@ use common::{git, run_turbo, setup, turbo_output_filters};
 #[test]
 fn test_single_package_dry_run() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--dry"]);
     assert!(output.status.success());
@@ -23,7 +23,7 @@ fn test_single_package_dry_run() {
 #[test]
 fn test_single_package_dry_run_pnpm() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "single_package", "pnpm@8.0.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "single_package", "pnpm@8.0.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--dry=json"]);
     assert!(
@@ -42,7 +42,7 @@ fn test_single_package_dry_run_pnpm() {
 #[test]
 fn test_single_package_no_config_dry_run() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false).unwrap();
 
     fs::remove_file(tempdir.path().join("turbo.json")).unwrap();
     git(
@@ -62,7 +62,7 @@ fn test_single_package_no_config_dry_run() {
 #[test]
 fn test_single_package_no_config_graph() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false).unwrap();
 
     fs::remove_file(tempdir.path().join("turbo.json")).unwrap();
     git(
@@ -81,7 +81,7 @@ fn test_single_package_no_config_graph() {
 #[test]
 fn test_single_package_no_config_run_bypasses_cache() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false).unwrap();
 
     fs::remove_file(tempdir.path().join("turbo.json")).unwrap();
     git(

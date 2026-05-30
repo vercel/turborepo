@@ -175,7 +175,7 @@ fn test_monorepo_no_changes_packages() -> Result<(), anyhow::Error> {
 #[test]
 fn test_single_package_dry_json() -> Result<(), anyhow::Error> {
     let tempdir = tempfile::tempdir()?;
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true)?;
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false)?;
     let json = turbo_dry_json(tempdir.path(), &["run", "build", "--dry=json"])?;
 
     insta::with_settings!({ filters => vec![(r"\\\\", "/")] }, {
@@ -214,7 +214,7 @@ fn test_single_package_no_change() -> Result<(), anyhow::Error> {
 #[test]
 fn test_single_package_no_config() -> Result<(), anyhow::Error> {
     let tempdir = tempfile::tempdir()?;
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true)?;
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false)?;
 
     // Remove turbo.json and commit
     std::fs::remove_file(tempdir.path().join("turbo.json"))?;
@@ -246,7 +246,7 @@ fn test_single_package_no_config() -> Result<(), anyhow::Error> {
 #[test]
 fn test_single_package_with_deps() -> Result<(), anyhow::Error> {
     let tempdir = tempfile::tempdir()?;
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true)?;
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false)?;
     let json = turbo_dry_json(tempdir.path(), &["run", "test", "--dry=json"])?;
 
     insta::with_settings!({ filters => vec![(r"\\\\", "/")] }, {
