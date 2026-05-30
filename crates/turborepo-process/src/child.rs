@@ -122,7 +122,7 @@ impl Drop for PtyTestGuard {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ChildExit {
     Finished(Option<i32>),
-    /// The child process was sent an interrupt and shut down on it's own
+    /// The child process exited during graceful shutdown.
     Interrupted,
     /// The child process was killed, it could either be explicitly killed or it
     /// did not respond to an interrupt and was killed as a result
@@ -136,8 +136,9 @@ pub enum ChildExit {
 
 #[derive(Debug, Clone, Copy)]
 pub enum ShutdownStyle {
-    /// On Windows this immediately kills the process. On Unix it sends SIGINT
-    /// to the process group.
+    /// On Unix this sends SIGINT to the process group. On Windows, Turbo cannot
+    /// send a signal directly, so it waits for an externally delivered console
+    /// event or for the timeout/explicit kill.
     ///
     /// `Graceful(Some(timeout))` escalates to `Kill` after `timeout` elapses.
     /// `Graceful(None)` waits indefinitely until an explicit `Kill` command
@@ -657,6 +658,7 @@ impl ChildHandle {
     #[cfg(windows)]
     async fn wait_for_job_exit(
         &mut self,
+        deadline: Option<tokio::time::Instant>,
         command_rx: &mut mpsc::Receiver<ChildCommand>,
         command_rx_open: &mut bool,
     ) -> ChildExit {
@@ -687,6 +689,15 @@ impl ChildHandle {
                         Some(ChildCommand::Shutdown(_)) => {}
                         None => *command_rx_open = false,
                     }
+                }
+                _ = async {
+                    if let Some(deadline) = deadline {
+                        tokio::time::sleep_until(deadline).await;
+                    }
+                }, if deadline.is_some() => {
+                    debug!("graceful shutdown timed out, terminating Windows process tree");
+                    self.terminate_windows_process_tree();
+                    return ChildExit::Killed;
                 }
                 _ = async {
                     if let Some(deadline) = descendant_drain_deadline {
@@ -848,12 +859,7 @@ impl ShutdownStyle {
         child: &mut ChildHandle,
         command_rx: &mut mpsc::Receiver<ChildCommand>,
     ) -> ChildExit {
-        #[cfg(windows)]
-        let _ = &command_rx;
-
         match self {
-            // Windows doesn't give the ability to send a signal to a process so we
-            // can't make use of the graceful shutdown timeout.
             #[allow(unused)]
             ShutdownStyle::Graceful(timeout) => {
                 // try ro run the command for the given timeout
@@ -954,10 +960,76 @@ impl ShutdownStyle {
 
                 #[cfg(windows)]
                 {
-                    debug!("timeout not supported on windows, killing");
-                    match child.kill().await {
-                        Ok(_) => ChildExit::Killed,
-                        Err(_) => ChildExit::Failed,
+                    // Windows consoles deliver Ctrl+C to attached child processes.
+                    // Turbo can't send a targeted signal, so graceful shutdown waits
+                    // for that external event to finish before force killing.
+                    let deadline = timeout.map(|timeout| tokio::time::Instant::now() + timeout);
+                    let mut command_rx_open = true;
+
+                    let exit = loop {
+                        match deadline {
+                            Some(deadline) => {
+                                tokio::select! {
+                                    result = child.wait() => {
+                                        break match result {
+                                            Ok(_exit_code) => ChildExit::Interrupted,
+                                            Err(_) => ChildExit::Failed,
+                                        };
+                                    }
+                                    command = command_rx.recv(), if command_rx_open => {
+                                        match command {
+                                            Some(ChildCommand::Kill) => {
+                                                debug!("graceful shutdown interrupted, killing child");
+                                                break match child.kill().await {
+                                                    Ok(_) => ChildExit::Killed,
+                                                    Err(_) => ChildExit::Failed,
+                                                };
+                                            }
+                                            Some(ChildCommand::Shutdown(_)) => {}
+                                            None => command_rx_open = false,
+                                        }
+                                    }
+                                    _ = tokio::time::sleep_until(deadline) => {
+                                        debug!("graceful shutdown timed out, killing child");
+                                        break match child.kill().await {
+                                            Ok(_) => ChildExit::Killed,
+                                            Err(_) => ChildExit::Failed,
+                                        };
+                                    }
+                                }
+                            }
+                            None => {
+                                tokio::select! {
+                                    result = child.wait() => {
+                                        break match result {
+                                            Ok(_exit_code) => ChildExit::Interrupted,
+                                            Err(_) => ChildExit::Failed,
+                                        };
+                                    }
+                                    command = command_rx.recv(), if command_rx_open => {
+                                        match command {
+                                            Some(ChildCommand::Kill) => {
+                                                debug!("graceful shutdown interrupted, killing child");
+                                                break match child.kill().await {
+                                                    Ok(_) => ChildExit::Killed,
+                                                    Err(_) => ChildExit::Failed,
+                                                };
+                                            }
+                                            Some(ChildCommand::Shutdown(_)) => {}
+                                            None => command_rx_open = false,
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    };
+
+                    if exit == ChildExit::Interrupted {
+                        child
+                            .wait_for_job_exit(deadline, command_rx, &mut command_rx_open)
+                            .await
+                    } else {
+                        exit
                     }
                 }
             }
@@ -2171,14 +2243,14 @@ mod test {
         }
     }
 
-    #[cfg(unix)]
     #[test_case(false)]
     #[test_case(TEST_PTY)]
     #[tokio::test]
     #[traced_test]
     async fn test_graceful_shutdown_waits_for_force_kill(use_pty: bool) {
-        let mut cmd = Command::new("sh");
-        cmd.args(["-c", "trap '' INT; while true; do sleep 0.2; done"]);
+        let script = find_script_dir().join_component("sleep_5_ignore.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
         let mut child = Child::spawn(
             cmd,
             ShutdownStyle::Graceful(Some(Duration::from_secs(5))),
@@ -2186,7 +2258,15 @@ mod test {
         )
         .unwrap();
 
-        tokio::time::sleep(STARTUP_DELAY).await;
+        let mut buf = vec![0; 4];
+        match child.outputs().unwrap() {
+            ChildOutput::Std { mut stdout, .. } => {
+                stdout.read_exact(&mut buf).await.unwrap();
+            }
+            ChildOutput::Pty(mut stdout) => {
+                stdout.read_exact(&mut buf).unwrap();
+            }
+        };
 
         let mut shutdown_child = child.clone();
         let shutdown =
