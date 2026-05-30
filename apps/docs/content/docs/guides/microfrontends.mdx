@@ -8,6 +8,7 @@ related:
   - /docs/guides/frameworks
   - /docs/guides/frameworks/nextjs
   - /docs/guides/frameworks/vite
+  - /docs/guides/frameworks/rsbuild
 ---
 
 Microfrontends are an architectural pattern where a web application is decomposed into smaller, independently developed and deployed applications that work together.
@@ -161,6 +162,16 @@ When you run `turbo dev`, Turborepo will:
 1. **Route incoming requests** based on path patterns to the appropriate application
 
 Now you can access all of your microfrontends applications at `http://localhost:3024`.
+
+<Callout type="info">
+  Turborepo's microfrontends proxy and Module Federation solve different parts
+  of local development. The proxy composes independently running applications by
+  route. Module Federation composes JavaScript modules at runtime inside an
+  application. For Module Federation examples, use
+  [`with-vite-module-federation`](https://github.com/vercel/turborepo/tree/main/examples/with-vite-module-federation)
+  or
+  [`with-rsbuild-module-federation`](https://github.com/vercel/turborepo/tree/main/examples/with-rsbuild-module-federation).
+</Callout>
 
 ## Configuration
 
