@@ -458,6 +458,25 @@ mod tests {
         assert!(q.contains(r#"head: "HEAD""#), "{q}");
     }
 
+    #[test]
+    fn ref_arg_uses_env_when_cli_missing() {
+        assert_eq!(AffectedArgs::ref_arg(None, Some("main")), Some("main"));
+    }
+
+    #[test]
+    fn ref_arg_ignores_empty_env() {
+        assert_eq!(AffectedArgs::ref_arg(None, Some("")), None);
+    }
+
+    #[test]
+    fn ref_arg_prefers_cli_over_env() {
+        let cli = "HEAD".to_string();
+        assert_eq!(
+            AffectedArgs::ref_arg(Some(&cli), Some("main")),
+            Some("HEAD")
+        );
+    }
+
     // -- escaping in context --
 
     #[test]
