@@ -9,7 +9,7 @@ use common::{run_turbo, setup};
 #[test]
 fn test_query_from_file() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     fs::write(
         tempdir.path().join("query.gql"),
@@ -36,7 +36,7 @@ fn test_query_from_file() {
 #[test]
 fn test_query_inline() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["query", "query { version }"]);
     assert!(output.status.success());

@@ -7,7 +7,7 @@ use std::fs;
 use common::{run_turbo_with_env, setup};
 
 fn setup_otel_fixture(dir: &std::path::Path) {
-    setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     // Enable experimentalObservability by inserting futureFlags after the opening
     // brace

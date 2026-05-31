@@ -9,7 +9,7 @@ use common::{run_turbo, run_turbo_with_env, setup};
 #[test]
 fn test_fails_without_turbo_json() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     // Rename turbo.json so it can't be found
     fs::rename(
@@ -30,7 +30,7 @@ fn test_fails_without_turbo_json() {
 #[test]
 fn test_root_turbo_json_flag() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     fs::rename(
         tempdir.path().join("turbo.json"),
@@ -57,7 +57,7 @@ fn test_root_turbo_json_flag() {
 #[test]
 fn test_root_turbo_json_env_var_with_cache_hit() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     fs::rename(
         tempdir.path().join("turbo.json"),

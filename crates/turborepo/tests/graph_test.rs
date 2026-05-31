@@ -8,7 +8,7 @@ use common::{combined_output, run_turbo, setup, turbo_output_filters};
 use serde_json::json;
 
 fn setup_topological(dir: &std::path::Path) {
-    setup::setup_integration_test(dir, "task_dependencies/topological", "npm@10.5.0", true)
+    setup::setup_integration_test(dir, "task_dependencies/topological", "npm@10.5.0", false)
         .unwrap();
 }
 

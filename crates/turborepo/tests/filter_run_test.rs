@@ -11,7 +11,7 @@ use common::{git, run_turbo, setup};
 /// triggers recursion detection. This replaces it with a simple echo so we
 /// can test root task scoping via `--dry=json` without side effects.
 fn setup_root_task_fixture(dir: &Path) {
-    setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let pkg_json = r#"{
   "name": "monorepo",
@@ -32,7 +32,7 @@ fn setup_root_task_fixture(dir: &Path) {
 #[test]
 fn test_filter_git_range_no_changes() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--filter=[main]"]);
     assert!(output.status.success());
@@ -43,7 +43,7 @@ fn test_filter_git_range_no_changes() {
 #[test]
 fn test_filter_git_range_with_unstaged() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     fs::write(tempdir.path().join("bar.txt"), "new file contents\n").unwrap();
 
@@ -56,7 +56,7 @@ fn test_filter_git_range_with_unstaged() {
 #[test]
 fn test_filter_git_range_committed_change() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let foo_path = tempdir.path().join("foo.txt");
     let mut contents = fs::read_to_string(&foo_path).unwrap_or_default();
@@ -82,7 +82,7 @@ fn test_filter_git_range_committed_change() {
 #[test]
 fn test_filter_git_range_two_dot_committed_change() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let foo_path = tempdir.path().join("foo.txt");
     let mut contents = fs::read_to_string(&foo_path).unwrap_or_default();
@@ -114,7 +114,7 @@ fn test_filter_git_range_two_dot_committed_change() {
 #[test]
 fn test_filter_nonexistent_package_errors() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(
         tempdir.path(),

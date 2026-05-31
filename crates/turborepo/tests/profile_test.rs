@@ -8,7 +8,7 @@ use common::{run_turbo, setup};
 
 fn setup_and_run(args: &[&str]) -> (tempfile::TempDir, std::process::Output) {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
     let output = run_turbo(tempdir.path(), args);
     assert!(output.status.success());
     (tempdir, output)
@@ -103,7 +103,7 @@ fn test_anon_profile_default_filename() {
 #[test]
 fn test_profile_no_tasks_generates_markdown() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
     let output = run_turbo(tempdir.path(), &["run", "--profile=no-tasks.trace"]);
     assert_eq!(output.status.code(), Some(1));
 

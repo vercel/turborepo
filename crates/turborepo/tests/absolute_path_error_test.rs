@@ -31,7 +31,7 @@ fn global_deps_config() -> &'static str {
 #[test]
 fn test_absolute_path_in_inputs() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
     replace_turbo_json(tempdir.path(), inputs_config());
 
     let output = run_turbo(tempdir.path(), &["build"]);
@@ -51,7 +51,7 @@ fn test_absolute_path_in_inputs() {
 #[test]
 fn test_absolute_path_in_outputs() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
     replace_turbo_json(tempdir.path(), outputs_config());
 
     let output = run_turbo(tempdir.path(), &["build"]);
@@ -71,7 +71,7 @@ fn test_absolute_path_in_outputs() {
 #[test]
 fn test_absolute_path_in_global_deps() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
     replace_turbo_json(tempdir.path(), global_deps_config());
 
     let output = run_turbo(tempdir.path(), &["build"]);

@@ -9,7 +9,7 @@ use common::{run_turbo, setup};
 #[test]
 fn log_file_produces_valid_json() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     let log_path = tempdir.path().join("structured.json");
     let output = run_turbo(
@@ -54,7 +54,7 @@ fn log_file_produces_valid_json() {
 #[test]
 fn json_flag_produces_ndjson() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--force", "--json"]);
 
@@ -79,7 +79,7 @@ fn json_flag_produces_ndjson() {
 #[test]
 fn structured_log_strips_ansi() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     let log_path = tempdir.path().join("ansi_test.json");
     let output = run_turbo(
@@ -110,7 +110,7 @@ fn structured_log_strips_ansi() {
 #[test]
 fn log_file_rejects_path_traversal() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     // Attempt to write outside the repo root.
     let output = run_turbo(
