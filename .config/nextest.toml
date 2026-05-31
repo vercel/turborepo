@@ -5,7 +5,17 @@
 failure-output = "immediate-final"
 
 [test-groups]
+windows-turbo-integration = { max-threads = 4 }
 windows-scm = { max-threads = 1 }
+
+[[profile.default.overrides]]
+# Windows runners can fail subprocess-heavy `turbo` integration tests under
+# high nextest fanout. Keep full coverage, but cap the binary integration test
+# fanout so tests that spawn git/turbo child processes do not stampede process
+# startup.
+filter = 'package(turbo)'
+platform = 'cfg(windows)'
+test-group = 'windows-turbo-integration'
 
 [[profile.default.overrides]]
 # Windows runners sporadically fail to start many turborepo-scm test processes
