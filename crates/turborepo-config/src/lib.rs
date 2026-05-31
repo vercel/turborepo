@@ -745,6 +745,7 @@ mod test {
 
     use tempfile::TempDir;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+    use turborepo_types::LogOrder;
 
     use crate::{
         CONFIG_FILE, CONFIG_FILE_JSONC, ConfigurationOptions, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
@@ -818,6 +819,32 @@ mod test {
         let config = builder.build().unwrap();
         assert_eq!(config.team_id().unwrap(), turbo_teamid);
         assert_eq!(config.token().unwrap(), turbo_token);
+    }
+
+    #[test]
+    fn test_override_config_precedes_environment_log_order() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(r#"{}"#)
+            .unwrap();
+
+        let mut env: HashMap<OsString, OsString> = HashMap::new();
+        env.insert("turbo_log_order".into(), "grouped".into());
+
+        let builder = TurborepoConfigBuilder {
+            repo_root,
+            override_config: ConfigurationOptions {
+                log_order: Some(LogOrder::Stream),
+                ..Default::default()
+            },
+            global_config_path: None,
+            environment: Some(env),
+        };
+
+        let config = builder.build().unwrap();
+        assert_eq!(config.log_order(), LogOrder::Stream);
     }
 
     #[test]
