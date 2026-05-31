@@ -31,7 +31,7 @@ fn file_paths(json: &serde_json::Value) -> Vec<String> {
 #[test]
 fn test_file_path_query() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", false).unwrap();
 
     let json = query(
         tempdir.path(),
@@ -43,7 +43,7 @@ fn test_file_path_query() {
 #[test]
 fn test_file_dependencies() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", false).unwrap();
 
     let json = query(
         tempdir.path(),
@@ -66,7 +66,7 @@ fn test_file_dependencies() {
 #[test]
 fn test_button_dependencies() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", false).unwrap();
 
     let json = query(
         tempdir.path(),
@@ -79,7 +79,7 @@ fn test_button_dependencies() {
 #[test]
 fn test_circular_dependencies() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", false).unwrap();
 
     let json = query(
         tempdir.path(),
@@ -92,7 +92,7 @@ fn test_circular_dependencies() {
 #[test]
 fn test_invalid_import_reports_error() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", false).unwrap();
 
     let json = query(
         tempdir.path(),
@@ -115,7 +115,7 @@ fn test_invalid_import_reports_error() {
 #[test]
 fn test_ast_query() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", false).unwrap();
 
     let json = query(
         tempdir.path(),
@@ -134,7 +134,7 @@ fn test_ast_query() {
 #[test]
 fn test_require_dependencies() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", false).unwrap();
 
     let json = query(
         tempdir.path(),
@@ -147,7 +147,7 @@ fn test_require_dependencies() {
 #[test]
 fn test_dependencies_with_depth() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", false).unwrap();
 
     let json = query(
         tempdir.path(),

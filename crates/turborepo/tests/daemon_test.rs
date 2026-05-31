@@ -31,7 +31,7 @@ fn run_daemon_status(dir: &std::path::Path, env_val: &str, extra_args: &[&str]) 
 #[test]
 fn test_log_verbosity_debug() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_daemon_status(tempdir.path(), "debug", &[]);
     assert!(output.contains("[DEBUG]"), "expected [DEBUG] in output");
@@ -44,7 +44,7 @@ fn test_log_verbosity_debug() {
 #[test]
 fn test_v_flag_overrides_global_log_verbosity() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_daemon_status(tempdir.path(), "debug", &["-v"]);
     assert!(
@@ -60,7 +60,7 @@ fn test_v_flag_overrides_global_log_verbosity() {
 #[test]
 fn test_package_specific_verbosity_preserved_with_v_flag() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_daemon_status(tempdir.path(), "turborepo_daemon=debug", &["-v"]);
     assert!(
