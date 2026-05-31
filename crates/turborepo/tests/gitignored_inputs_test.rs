@@ -9,7 +9,7 @@ use common::{git, replace_turbo_json, run_turbo, setup};
 #[test]
 fn test_gitignored_file_in_explicit_inputs() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
     replace_turbo_json(tempdir.path(), "gitignored-inputs.json");
 
     fs::write(

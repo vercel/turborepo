@@ -45,7 +45,7 @@ fn get_task(summary: &serde_json::Value, task_id: &str) -> serde_json::Value {
 #[test]
 fn test_run_summary_discovery() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
     let _ = fs::remove_dir_all(tempdir.path().join(".turbo/runs"));
 
     let output = run_turbo(
@@ -63,7 +63,7 @@ fn test_run_summary_discovery() {
 #[test]
 fn test_run_summary_enable_matrix() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     struct Case {
         env_val: Option<&'static str>,
@@ -173,7 +173,7 @@ fn test_run_summary_enable_matrix() {
 #[test]
 fn test_run_summary_sorting_deps() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "with-pkg-deps", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "with-pkg-deps", "npm@10.5.0", false).unwrap();
     let _ = fs::remove_dir_all(tempdir.path().join(".turbo/runs"));
 
     // Need a fresh commit for the filter to work
@@ -203,7 +203,7 @@ fn test_run_summary_sorting_deps() {
 #[test]
 fn test_run_summary_single_package() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false).unwrap();
 
     run_turbo(tempdir.path(), &["run", "build", "--summarize"]);
 
@@ -279,7 +279,7 @@ fn test_run_summary_single_package() {
 #[test]
 fn test_run_summary_monorepo() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
     let _ = fs::remove_dir_all(tempdir.path().join(".turbo/runs"));
 
     // First run (cache miss)
@@ -348,7 +348,7 @@ fn test_run_summary_monorepo() {
 #[test]
 fn test_run_summary_error() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
     let _ = fs::remove_dir_all(tempdir.path().join(".turbo/runs"));
 
     // Run failing task with summarize

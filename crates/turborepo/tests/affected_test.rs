@@ -7,7 +7,7 @@ use std::{fs, path::Path};
 use common::{git, run_turbo, run_turbo_with_env, setup, turbo_output_filters};
 
 fn setup_affected(dir: &std::path::Path) {
-    setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", false).unwrap();
     git(dir, &["checkout", "-b", "my-branch"]);
 }
 
@@ -615,7 +615,7 @@ fn test_affected_tasks_file_change() {
 fn test_affected_tasks_input_exclusion() {
     let tempdir = tempfile::tempdir().unwrap();
     // Use a special fixture that has task input exclusions
-    setup::setup_integration_test(tempdir.path(), "affected_tasks_inputs", "npm@10.5.0", true)
+    setup::setup_integration_test(tempdir.path(), "affected_tasks_inputs", "npm@10.5.0", false)
         .unwrap();
     git(tempdir.path(), &["checkout", "-b", "my-branch"]);
 
@@ -693,7 +693,7 @@ fn test_affected_tasks_global_dep_change() {
 }
 
 fn setup_affected_tasks_fixture(dir: &std::path::Path) {
-    setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", false).unwrap();
     git(dir, &["checkout", "-b", "my-branch"]);
 }
 
@@ -1174,7 +1174,7 @@ const TURBO_JSON_WITH_TASK_INPUTS_FLAG: &str = r#"{
 /// Sets up the `affected_tasks_inputs` fixture with the
 /// `affectedUsingTaskInputs` future flag enabled.
 fn setup_task_level_affected(dir: &Path) {
-    setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", false).unwrap();
     // Enable the future flag before branching so it's on main.
     fs::write(dir.join("turbo.json"), TURBO_JSON_WITH_TASK_INPUTS_FLAG).unwrap();
     git(dir, &["add", "."]);
@@ -1479,7 +1479,7 @@ fn test_task_level_affected_turbo_root_input() {
     let tempdir = tempfile::tempdir().unwrap();
     let dir = tempdir.path();
 
-    setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", false).unwrap();
 
     // Create a root-level config file that tasks will reference.
     fs::write(dir.join("rootconfig.txt"), "v1").unwrap();
@@ -1555,7 +1555,7 @@ fn test_task_level_affected_different_turbo_root_inputs_are_isolated() {
     let tempdir = tempfile::tempdir().unwrap();
     let dir = tempdir.path();
 
-    setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", false).unwrap();
 
     // Create two distinct root-level config files.
     fs::write(dir.join("build-config.txt"), "v1").unwrap();
