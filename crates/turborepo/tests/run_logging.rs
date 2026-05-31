@@ -10,7 +10,7 @@ use common::{run_turbo, run_turbo_with_env, setup, turbo_output_filters};
 #[test]
 fn test_log_order_stream_flag() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -24,7 +24,7 @@ fn test_log_order_stream_flag() {
 #[test]
 fn test_log_order_stream_env_var() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo_with_env(
         tempdir.path(),
@@ -38,7 +38,7 @@ fn test_log_order_stream_env_var() {
 #[test]
 fn test_log_order_stream_flag_wins_over_env() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo_with_env(
         tempdir.path(),
@@ -55,7 +55,7 @@ fn test_log_order_stream_flag_wins_over_env() {
 #[test]
 fn test_log_order_grouped_flag() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -70,7 +70,7 @@ fn test_log_order_grouped_flag() {
 #[test]
 fn test_log_order_grouped_env_var() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo_with_env(
         tempdir.path(),
@@ -86,7 +86,7 @@ fn test_log_order_grouped_env_var() {
 #[test]
 fn test_log_order_grouped_flag_wins_over_env() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo_with_env(
         tempdir.path(),
@@ -105,7 +105,7 @@ fn test_log_order_grouped_flag_wins_over_env() {
 #[test]
 fn test_log_order_github_actions() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo_with_env(
         tempdir.path(),
@@ -123,7 +123,7 @@ fn test_log_order_github_actions() {
 #[test]
 fn test_log_order_github_actions_with_task_prefix() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo_with_env(
         tempdir.path(),
@@ -146,7 +146,7 @@ fn test_log_order_github_actions_with_task_prefix() {
 #[test]
 fn test_log_order_github_actions_error() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo_with_env(tempdir.path(), &["run", "fail"], &[("GITHUB_ACTIONS", "1")]);
 
@@ -162,7 +162,7 @@ fn test_log_order_github_actions_error() {
 #[test]
 fn test_log_prefix_none_cache_miss() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--log-prefix=none"]);
     assert!(output.status.success());
@@ -176,7 +176,7 @@ fn test_log_prefix_none_cache_miss() {
 #[test]
 fn test_log_prefix_none_cached_log_file() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     // First run to populate cache
     run_turbo(tempdir.path(), &["run", "build", "--log-prefix=none"]);
@@ -190,7 +190,7 @@ fn test_log_prefix_none_cached_log_file() {
 #[test]
 fn test_log_prefix_none_cache_hit() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     // First run
     run_turbo(tempdir.path(), &["run", "build", "--log-prefix=none"]);
@@ -206,7 +206,7 @@ fn test_log_prefix_none_cache_hit() {
 #[test]
 fn test_log_prefix_default_shows_prefixes() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     // Warm cache
     run_turbo(tempdir.path(), &["run", "build", "--log-prefix=none"]);
@@ -221,7 +221,7 @@ fn test_log_prefix_default_shows_prefixes() {
 #[test]
 fn test_log_prefix_bogus_value() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--log-prefix=blah"]);
     assert!(!output.status.success());
@@ -232,7 +232,7 @@ fn test_log_prefix_bogus_value() {
 #[test]
 fn test_log_prefix_missing_value() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--log-prefix"]);
     assert!(!output.status.success());
@@ -245,7 +245,7 @@ fn test_log_prefix_missing_value() {
 #[test]
 fn test_verbosity_v_flag() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["build", "-v", "--filter=util", "--force"]);
     assert!(output.status.success());
@@ -257,7 +257,7 @@ fn test_verbosity_v_flag() {
 #[test]
 fn test_verbosity_1_flag() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -271,7 +271,7 @@ fn test_verbosity_1_flag() {
 #[test]
 fn test_verbosity_vv_has_debug() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -288,7 +288,7 @@ fn test_verbosity_vv_has_debug() {
 #[test]
 fn test_verbosity_2_has_debug() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -305,7 +305,7 @@ fn test_verbosity_2_has_debug() {
 #[test]
 fn test_verbosity_v_and_verbosity_conflict() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["build", "-v", "--verbosity=1"]);
     assert!(!output.status.success());
@@ -318,7 +318,7 @@ fn test_verbosity_v_and_verbosity_conflict() {
 #[test]
 fn test_no_cache_and_no_output_logs() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -341,7 +341,7 @@ fn test_no_cache_and_no_output_logs() {
 #[test]
 fn test_errors_only_flag_success() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -357,7 +357,7 @@ fn test_errors_only_flag_success() {
 #[test]
 fn test_errors_only_turbo_json_success() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     // buildsuccess has outputLogs: "errors-only" in turbo.json
     let output = run_turbo(tempdir.path(), &["run", "buildsuccess"]);
@@ -370,7 +370,7 @@ fn test_errors_only_turbo_json_success() {
 #[test]
 fn test_errors_only_flag_error() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -386,7 +386,7 @@ fn test_errors_only_flag_error() {
 #[test]
 fn test_errors_only_turbo_json_error() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     // builderror2 has outputLogs: "errors-only" in turbo.json
     let output = run_turbo(tempdir.path(), &["run", "builderror2"]);
@@ -401,7 +401,7 @@ fn test_errors_only_turbo_json_error() {
 #[test]
 fn test_errors_only_no_cache_success() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     // nocachebuild has cache:false in turbo.json
     let output = run_turbo(
@@ -418,7 +418,7 @@ fn test_errors_only_no_cache_success() {
 #[test]
 fn test_errors_only_no_cache_error() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     // nocachebuilderror has cache:false in turbo.json and exits 1
     let output = run_turbo(
@@ -441,7 +441,7 @@ fn test_errors_only_show_hash_cache_miss() {
         tempdir.path(),
         "run_logging_errors_only_show_hash",
         "npm@10.5.0",
-        true,
+        false,
     )
     .unwrap();
 
@@ -462,7 +462,7 @@ fn test_errors_only_show_hash_cache_hit() {
         tempdir.path(),
         "run_logging_errors_only_show_hash",
         "npm@10.5.0",
-        true,
+        false,
     )
     .unwrap();
 
@@ -489,7 +489,7 @@ fn test_errors_only_show_hash_error_shows_full_logs() {
         tempdir.path(),
         "run_logging_errors_only_show_hash",
         "npm@10.5.0",
-        true,
+        false,
     )
     .unwrap();
 
@@ -505,7 +505,7 @@ fn test_errors_only_show_hash_error_shows_full_logs() {
 #[test]
 fn test_full_cache_hit_output() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     // Warm cache
     run_turbo(tempdir.path(), &["run", "build", "--output-logs=none"]);
@@ -548,7 +548,7 @@ fn test_full_cache_hit_output() {
 #[test]
 fn test_prelude_appears_in_stream_mode() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--output-logs=none"]);
     assert!(output.status.success());
@@ -575,7 +575,7 @@ fn test_prelude_absent_from_graph_stdout() {
         tempdir.path(),
         "task_dependencies/topological",
         "npm@10.5.0",
-        true,
+        false,
     )
     .unwrap();
 
@@ -623,7 +623,7 @@ fn test_prelude_absent_from_dry_json_stdout() {
 #[test]
 fn test_prelude_appears_in_dry_text_mode() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--dry"]);
     assert!(output.status.success());
@@ -642,7 +642,7 @@ fn test_prelude_appears_in_dry_text_mode() {
 #[test]
 fn test_prelude_single_package_format() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--output-logs=none"]);
     assert!(output.status.success());
@@ -661,7 +661,7 @@ fn test_prelude_single_package_format() {
 #[test]
 fn test_github_actions_error_annotation_on_stderr() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo_with_env(tempdir.path(), &["run", "fail"], &[("GITHUB_ACTIONS", "1")]);
 

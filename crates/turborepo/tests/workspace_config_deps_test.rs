@@ -10,7 +10,8 @@ use common::{run_turbo, setup};
 #[test]
 fn test_missing_workspace_config_deps_retained() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -42,7 +43,8 @@ fn test_missing_workspace_config_deps_retained() {
 #[test]
 fn test_omit_keys_deps_retained() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -67,7 +69,8 @@ fn test_omit_keys_deps_retained() {
 #[test]
 fn test_override_values_deps_empty() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -90,7 +93,8 @@ fn test_override_values_deps_empty() {
 #[test]
 fn test_override_values_deps_resolved_definition() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -124,7 +128,8 @@ fn test_override_values_deps_resolved_definition() {
 #[test]
 fn test_override_values_deps_2_topo_only() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -160,7 +165,8 @@ fn test_override_values_deps_2_topo_only() {
 #[test]
 fn test_cross_workspace_dependency() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -178,7 +184,8 @@ fn test_cross_workspace_dependency() {
 #[test]
 fn test_cross_workspace_task_id_syntax() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     // Prime cache
     run_turbo(

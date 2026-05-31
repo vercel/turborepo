@@ -11,7 +11,8 @@ use common::{run_turbo, setup};
 #[test]
 fn test_persistent_inherited_from_root_blocks_parent() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     // persistent-task-1 is persistent:true in root, not overridden in workspace
     let output = run_turbo(
@@ -29,7 +30,8 @@ fn test_persistent_inherited_from_root_blocks_parent() {
 #[test]
 fn test_persistent_overridden_to_false() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     // persistent-task-2 is overridden to persistent:false in workspace
     let output = run_turbo(
@@ -44,7 +46,8 @@ fn test_persistent_overridden_to_false() {
 #[test]
 fn test_persistent_workspace_omits_flag_inherits_true() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     // persistent-task-3 is persistent:true in root, workspace defines task but
     // doesn't touch persistent
@@ -63,7 +66,8 @@ fn test_persistent_workspace_omits_flag_inherits_true() {
 #[test]
 fn test_persistent_added_in_workspace() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     // persistent-task-4 has no persistent in root, workspace adds persistent:true
     let output = run_turbo(
@@ -83,7 +87,8 @@ fn test_persistent_added_in_workspace() {
 #[test]
 fn test_cache_false_in_root_override_true_in_workspace() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "cached-task-1", "--filter=cached"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -97,7 +102,8 @@ fn test_cache_false_in_root_override_true_in_workspace() {
 #[test]
 fn test_cache_true_in_root_override_false_in_workspace() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "cached-task-2", "--filter=cached"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -110,7 +116,8 @@ fn test_cache_true_in_root_override_false_in_workspace() {
 #[test]
 fn test_no_cache_in_root_false_in_workspace() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "cached-task-3", "--filter=cached"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -125,7 +132,8 @@ fn test_no_cache_in_root_false_in_workspace() {
 #[test]
 fn test_config_change_causes_hash_change() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     // Get initial hash
     let output1 = run_turbo(
@@ -180,7 +188,7 @@ fn test_config_change_causes_hash_change() {
 #[test]
 fn test_task_extends_build_inherited() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "task_extends", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "task_extends", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -194,7 +202,7 @@ fn test_task_extends_build_inherited() {
 #[test]
 fn test_task_extends_test_inherited() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "task_extends", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "task_extends", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -208,7 +216,7 @@ fn test_task_extends_test_inherited() {
 #[test]
 fn test_task_extends_false_excludes_task() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "task_extends", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "task_extends", "npm@10.5.0", false).unwrap();
 
     // lint has extends: false, so it should be excluded
     let output = run_turbo(
@@ -228,7 +236,8 @@ fn test_task_extends_false_excludes_task() {
 #[test]
 fn test_invalid_config_errors() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--filter=invalid-config"]);
     assert!(!output.status.success());
@@ -251,7 +260,8 @@ fn test_invalid_config_errors() {
 #[test]
 fn test_invalid_config_errors_on_valid_task_too() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     // Even running a valid task in the package should error
     let output = run_turbo(
@@ -276,7 +286,8 @@ fn test_invalid_config_errors_on_valid_task_too() {
 #[test]
 fn test_bad_json_errors() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     // Write malformed JSON
     fs::write(

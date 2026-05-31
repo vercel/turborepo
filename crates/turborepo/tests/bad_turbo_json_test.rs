@@ -7,7 +7,7 @@ use common::{replace_turbo_json, run_turbo, setup};
 #[test]
 fn test_package_task_syntax_in_workspace_config() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let app_dir = tempdir.path().join("apps/my-app");
     replace_turbo_json(&app_dir, "package-task.json");
@@ -24,7 +24,7 @@ fn test_package_task_syntax_in_workspace_config() {
 #[test]
 fn test_invalid_env_var_prefix() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
     replace_turbo_json(tempdir.path(), "invalid-env-var.json");
 
     let output = run_turbo(tempdir.path(), &["build"]);
@@ -43,7 +43,7 @@ fn test_invalid_env_var_prefix() {
 #[test]
 fn test_package_task_in_single_package_mode() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
     replace_turbo_json(tempdir.path(), "invalid-env-var.json");
 
     let output = run_turbo(tempdir.path(), &["build", "--single-package"]);
@@ -58,7 +58,7 @@ fn test_package_task_in_single_package_mode() {
 #[test]
 fn test_interruptible_but_not_persistent() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
     replace_turbo_json(tempdir.path(), "interruptible-but-not-persistent.json");
 
     let output = run_turbo(tempdir.path(), &["run", "build"]);
@@ -73,7 +73,7 @@ fn test_interruptible_but_not_persistent() {
 #[test]
 fn test_syntax_error_in_turbo_json() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
     replace_turbo_json(tempdir.path(), "syntax-error.json");
 
     let output = run_turbo(tempdir.path(), &["build"]);

@@ -9,7 +9,7 @@ use common::{run_turbo, setup};
 #[test]
 fn test_single_package_graph_to_stdout() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--graph"]);
     assert!(output.status.success());
@@ -22,7 +22,7 @@ fn test_single_package_graph_to_stdout() {
 #[test]
 fn test_single_package_graph_to_dot_file() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["build", "--graph=graph.dot"]);
     assert!(output.status.success());
@@ -34,7 +34,7 @@ fn test_single_package_graph_to_dot_file() {
 #[test]
 fn test_single_package_with_deps_graph() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "test", "--graph"]);
     assert!(output.status.success());

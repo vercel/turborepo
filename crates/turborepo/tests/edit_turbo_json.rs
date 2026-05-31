@@ -65,7 +65,7 @@ fn global_cache_inputs(dir: &Path) -> String {
 #[test]
 fn test_global_hash_changes() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     // Baseline
     replace_turbo_json(tempdir.path(), "1-baseline.json");
@@ -115,7 +115,7 @@ fn test_global_hash_changes() {
 #[test]
 fn test_task_hash_changes() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     replace_turbo_json(tempdir.path(), "a-baseline.json");
     insta::assert_snapshot!("task_hashes_baseline", task_hash_snapshot(tempdir.path()));

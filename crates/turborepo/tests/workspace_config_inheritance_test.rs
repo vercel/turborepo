@@ -12,7 +12,8 @@ use common::{run_turbo, run_turbo_with_env, setup};
 #[test]
 fn test_missing_workspace_config_outputs_cached() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     // First run: cache miss
     let output = run_turbo(
@@ -47,7 +48,8 @@ fn test_missing_workspace_config_outputs_cached() {
 #[test]
 fn test_missing_workspace_config_inputs_cause_cache_miss() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     // Prime cache
     run_turbo(
@@ -85,7 +87,8 @@ fn test_missing_workspace_config_inputs_cause_cache_miss() {
 #[test]
 fn test_missing_workspace_config_non_input_no_cache_miss() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     // Prime cache (two runs to get past initial miss + input change)
     run_turbo(
@@ -123,7 +126,8 @@ fn test_missing_workspace_config_non_input_no_cache_miss() {
 #[test]
 fn test_missing_workspace_config_env_causes_cache_miss() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     // Prime cache
     run_turbo(
@@ -154,7 +158,8 @@ fn test_missing_workspace_config_env_causes_cache_miss() {
 #[test]
 fn test_missing_workspace_config_cache_false_not_cached() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -173,7 +178,8 @@ fn test_missing_workspace_config_cache_false_not_cached() {
 #[test]
 fn test_omit_keys_outputs_cached() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -198,7 +204,8 @@ fn test_omit_keys_outputs_cached() {
 #[test]
 fn test_omit_keys_inputs_cause_cache_miss() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     run_turbo(
         tempdir.path(),
@@ -224,7 +231,8 @@ fn test_omit_keys_inputs_cause_cache_miss() {
 #[test]
 fn test_omit_keys_non_input_no_cache_miss() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     run_turbo(
         tempdir.path(),
@@ -250,7 +258,8 @@ fn test_omit_keys_non_input_no_cache_miss() {
 #[test]
 fn test_omit_keys_env_causes_cache_miss() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     run_turbo(
         tempdir.path(),

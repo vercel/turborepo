@@ -10,7 +10,7 @@ use common::{run_turbo, setup};
 #[test]
 fn test_package_inference_from_subdirectory() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let util_dir = tempdir.path().join("packages/util");
     let output = run_turbo(&util_dir, &["build"]);

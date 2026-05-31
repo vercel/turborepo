@@ -7,7 +7,7 @@ use common::{git, run_turbo, run_turbo_with_env, setup};
 #[test]
 fn test_dry_run_packages_in_scope() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--dry"]);
     assert!(output.status.success());
@@ -22,7 +22,7 @@ fn test_dry_run_packages_in_scope() {
 #[test]
 fn test_dry_run_global_hash_inputs() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--dry"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -35,7 +35,7 @@ fn test_dry_run_global_hash_inputs() {
 #[test]
 fn test_dry_run_task_details() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--dry"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -53,7 +53,7 @@ fn test_dry_run_task_details() {
 #[test]
 fn test_dry_run_env_var_not_in_output() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     // Set NODE_ENV and verify it doesn't leak into the output as "Environment
     // Variables"
@@ -76,7 +76,7 @@ fn test_dry_run_cache_hit_after_real_run() {
     // Regression test for https://github.com/vercel/turborepo/issues/9044
     // After a real run populates the cache, --dry=json should report HIT.
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     // First: real run to populate cache
     let output = run_turbo(tempdir.path(), &["run", "build"]);
@@ -110,7 +110,7 @@ fn test_dry_run_respects_cache_false() {
     // When a task has cache:false, --dry=json should report MISS,
     // matching what a normal run would do (cache bypass).
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     // Replace turbo.json with a config that disables caching for build
     std::fs::write(

@@ -12,7 +12,8 @@ use common::{run_turbo, run_turbo_with_env, setup};
 #[test]
 fn test_override_values_outputs() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -42,7 +43,8 @@ fn test_override_values_outputs() {
 #[test]
 fn test_override_values_inputs() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     run_turbo(
         tempdir.path(),
@@ -68,7 +70,8 @@ fn test_override_values_inputs() {
 #[test]
 fn test_override_values_root_input_no_miss() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     run_turbo(
         tempdir.path(),
@@ -96,7 +99,8 @@ fn test_override_values_root_input_no_miss() {
 #[test]
 fn test_override_values_env() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     run_turbo(
         tempdir.path(),
@@ -121,7 +125,8 @@ fn test_override_values_env() {
 #[test]
 fn test_add_keys_deps_and_outputs() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -140,7 +145,8 @@ fn test_add_keys_deps_and_outputs() {
 #[test]
 fn test_add_keys_cache_and_output_logs() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     // Prime cache
     run_turbo(
@@ -168,7 +174,8 @@ fn test_add_keys_cache_and_output_logs() {
 #[test]
 fn test_add_keys_input_change() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     run_turbo(
         tempdir.path(),
@@ -194,7 +201,8 @@ fn test_add_keys_input_change() {
 #[test]
 fn test_add_keys_env_change() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     run_turbo(
         tempdir.path(),
@@ -218,7 +226,8 @@ fn test_add_keys_env_change() {
 #[test]
 fn test_add_tasks() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "added-task", "--filter=add-tasks"]);
     assert!(output.status.success());

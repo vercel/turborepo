@@ -7,8 +7,13 @@ use common::{run_turbo, run_turbo_with_env, setup};
 #[test]
 fn test_fails_without_turbo_json() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "monorepo_no_turbo_json", "npm@10.5.0", true)
-        .unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_no_turbo_json",
+        "npm@10.5.0",
+        false,
+    )
+    .unwrap();
 
     let output = run_turbo(tempdir.path(), &["test"]);
     assert!(!output.status.success());
@@ -22,8 +27,13 @@ fn test_fails_without_turbo_json() {
 #[test]
 fn test_allow_no_turbo_json_flag_runs_tasks() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "monorepo_no_turbo_json", "npm@10.5.0", true)
-        .unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_no_turbo_json",
+        "npm@10.5.0",
+        false,
+    )
+    .unwrap();
 
     let output = run_turbo_with_env(
         tempdir.path(),
@@ -42,8 +52,13 @@ fn test_allow_no_turbo_json_flag_runs_tasks() {
 #[test]
 fn test_allow_no_turbo_json_caching_disabled() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "monorepo_no_turbo_json", "npm@10.5.0", true)
-        .unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_no_turbo_json",
+        "npm@10.5.0",
+        false,
+    )
+    .unwrap();
 
     // First run
     run_turbo_with_env(
@@ -69,8 +84,13 @@ fn test_allow_no_turbo_json_caching_disabled() {
 #[test]
 fn test_allow_no_turbo_json_env_var_discovers_tasks() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "monorepo_no_turbo_json", "npm@10.5.0", true)
-        .unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_no_turbo_json",
+        "npm@10.5.0",
+        false,
+    )
+    .unwrap();
 
     let output = run_turbo_with_env(
         tempdir.path(),

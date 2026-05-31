@@ -5,7 +5,7 @@ mod common;
 use common::{run_turbo, run_turbo_with_env, setup};
 
 fn setup_and_prime_cache(dir: &std::path::Path) {
-    setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", false).unwrap();
     // Baseline run to populate the cache
     let output = run_turbo(
         dir,

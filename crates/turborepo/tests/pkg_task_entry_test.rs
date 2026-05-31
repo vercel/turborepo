@@ -5,7 +5,7 @@ mod common;
 use common::{combined_output, run_turbo, setup};
 
 fn setup_fixture(dir: &std::path::Path) {
-    setup::setup_integration_test(dir, "pkg_task_entry", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(dir, "pkg_task_entry", "npm@10.5.0", false).unwrap();
 }
 
 fn dry_run_tasks(dir: &std::path::Path, args: &[&str]) -> Vec<String> {
