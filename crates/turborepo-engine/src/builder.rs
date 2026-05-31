@@ -1705,6 +1705,43 @@ mod test {
     }
 
     #[test]
+    fn test_root_task_depends_on_workspace_task() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "lib-a" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "//#mytask": { "dependsOn": ["lib-a#build"] },
+                    "build": {}
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("mytask"))))
+            .with_workspaces(vec![PackageName::Root, PackageName::from("lib-a")])
+            .with_root_tasks(vec![TaskName::from("//#mytask")])
+            .build()
+            .unwrap();
+
+        let expected = deps! {
+            "//#mytask" => ["lib-a#build"],
+            "lib-a#build" => ["___ROOT___"]
+        };
+        assert_eq!(all_dependencies(&engine), expected);
+    }
+
+    #[test]
     fn test_depend_on_missing_task() {
         let repo_root_dir = TempDir::with_prefix("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
@@ -1734,9 +1771,86 @@ mod test {
             .with_root_tasks(vec![TaskName::from("libA#build"), TaskName::from("build")])
             .build();
 
+        let err = engine.unwrap_err();
+        assert!(matches!(err, BuilderError::MissingRootTaskInTurboJson(_)));
+        let message = err.to_string();
         assert!(
-            matches!(engine, Err(BuilderError::MissingRootTaskInTurboJson(_))),
-            "Expected MissingRootTaskInTurboJson error"
+            message.contains("//#root-task requires an entry in turbo.json")
+                && message.contains("because it is a task declared in the root package.json"),
+            "unexpected missing root task message: {message}"
+        );
+    }
+
+    #[test]
+    fn test_depend_on_missing_package_task_errors() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app-a" => [],
+                "app-b" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build2": { "dependsOn": ["app-a#custom"] }
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+        let result = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("build2"))))
+            .with_workspaces(vec![PackageName::from("app-b")])
+            .build();
+
+        let err = result.unwrap_err();
+        assert!(matches!(err, BuilderError::MissingPackageTask(_)));
+        assert!(
+            err.to_string()
+                .contains("Could not find \"app-a#custom\" in root turbo.json"),
+            "unexpected missing package task error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_depend_on_missing_package_errors() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app-b" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build3": { "dependsOn": ["unknown#custom"] }
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+        let result = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("build3"))))
+            .with_workspaces(vec![PackageName::from("app-b")])
+            .build();
+
+        let err = result.unwrap_err();
+        assert!(matches!(err, BuilderError::MissingPackageFromTask(_)));
+        assert!(
+            err.to_string()
+                .contains("Could not find package \"unknown\" referenced by task"),
+            "unexpected missing package error: {err}"
         );
     }
 
@@ -1784,6 +1898,86 @@ mod test {
             "libA#build" => ["app1#compile", "app1#test"]
         };
         assert_eq!(all_dependencies(&engine), expected);
+    }
+
+    #[test]
+    fn test_package_specific_task_overrides_depends_on() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "workspace-a" => [],
+                "workspace-b" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build": { "dependsOn": ["generate"] },
+                    "generate": {},
+                    "workspace-b#build": { "dependsOn": [] }
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("build"))))
+            .with_workspaces(vec![
+                PackageName::from("workspace-a"),
+                PackageName::from("workspace-b"),
+            ])
+            .build()
+            .unwrap();
+
+        let expected = deps! {
+            "workspace-a#build" => ["workspace-a#generate"],
+            "workspace-a#generate" => ["___ROOT___"],
+            "workspace-b#build" => ["___ROOT___"]
+        };
+        assert_eq!(all_dependencies(&engine), expected);
+    }
+
+    #[test]
+    fn test_explicit_task_self_dependency_errors() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build4": { "dependsOn": ["build4"] }
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+        let result = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("build4"))))
+            .with_workspaces(vec![PackageName::from("app")])
+            .build();
+
+        assert!(
+            matches!(
+                result,
+                Err(BuilderError::Graph(
+                    turborepo_graph_utils::Error::SelfDependency(ref task)
+                )) if task == "app#build4"
+            ),
+            "expected explicit task self-dependency error, got: {result:?}"
+        );
     }
 
     #[test]
@@ -4801,6 +4995,43 @@ mod test {
                 "a#lint" => ["___ROOT___"],
                 "b#build" => ["b#lint"],
                 "b#lint" => ["___ROOT___"]
+            }
+        );
+    }
+
+    #[test]
+    fn test_cyclic_package_graph_filtered_workspace_succeeds() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "pkg-a" => ["pkg-b"],
+                "pkg-b" => ["pkg-a"]
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "lint": {}
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("lint"))))
+            .with_workspaces(vec![PackageName::from("pkg-a")])
+            .build()
+            .unwrap();
+
+        assert_eq!(
+            all_dependencies(&engine),
+            deps! {
+                "pkg-a#lint" => ["___ROOT___"]
             }
         );
     }
