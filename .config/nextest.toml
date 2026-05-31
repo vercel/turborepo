@@ -5,22 +5,23 @@
 failure-output = "immediate-final"
 
 [test-groups]
-windows-turbo-integration = { max-threads = 4 }
-windows-scm = { max-threads = 1 }
+windows-turbo-subprocess-heavy = { max-threads = 2 }
+windows-scm = { max-threads = 2 }
 
 [[profile.default.overrides]]
-# Windows runners can fail subprocess-heavy `turbo` integration tests under
-# high nextest fanout. Keep full coverage, but cap the binary integration test
-# fanout so tests that spawn git/turbo child processes do not stampede process
-# startup.
-filter = 'package(turbo)'
+# Windows runners can fail subprocess-heavy `turbo` integration tests under high
+# nextest fanout. Keep full coverage, but cap the integration files that create
+# many git repos, run package managers, or spawn child `turbo` processes so they
+# do not stampede process startup while the rest of the package still runs at
+# normal concurrency.
+filter = 'package(turbo) and (binary(run_summary) or binary(workspace_config_deps_test) or binary(lockfile_aware_caching_test) or binary(one_script_error_test) or binary(inference_test))'
 platform = 'cfg(windows)'
-test-group = 'windows-turbo-integration'
+test-group = 'windows-turbo-subprocess-heavy'
 
 [[profile.default.overrides]]
 # Windows runners sporadically fail to start many turborepo-scm test processes
-# at once with DLL initialization error 0xc0000142. Keep full coverage, but run
-# this crate serially on Windows so process startup has breathing room.
+# at once with DLL initialization error 0xc0000142. Keep full coverage, but cap
+# this crate's Windows fanout so process startup has breathing room.
 filter = 'package(turborepo-scm)'
 platform = 'cfg(windows)'
 test-group = 'windows-scm'
