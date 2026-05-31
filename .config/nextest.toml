@@ -4,28 +4,6 @@
 [profile.default]
 failure-output = "immediate-final"
 
-[test-groups]
-windows-turbo-subprocess-heavy = { max-threads = 2 }
-windows-scm = { max-threads = 2 }
-
-[[profile.default.overrides]]
-# Windows runners can fail subprocess-heavy `turbo` integration tests under high
-# nextest fanout. Keep full coverage, but cap the integration files that create
-# many git repos, run package managers, or spawn child `turbo` processes so they
-# do not stampede process startup while the rest of the package still runs at
-# normal concurrency.
-filter = 'package(turbo) and (binary(run_summary) or binary(workspace_config_deps_test) or binary(lockfile_aware_caching_test) or binary(one_script_error_test) or binary(inference_test))'
-platform = 'cfg(windows)'
-test-group = 'windows-turbo-subprocess-heavy'
-
-[[profile.default.overrides]]
-# Windows runners sporadically fail to start many turborepo-scm test processes
-# at once with DLL initialization error 0xc0000142. Keep full coverage, but cap
-# this crate's Windows fanout so process startup has breathing room.
-filter = 'package(turborepo-scm)'
-platform = 'cfg(windows)'
-test-group = 'windows-scm'
-
 [[profile.default.overrides]]
 # These tests run package installs from the network during setup, which can
 # take 20-60s+ on cold CI runners. Give them extra time instead of retries.
