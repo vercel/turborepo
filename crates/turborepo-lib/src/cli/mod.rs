@@ -2892,11 +2892,36 @@ mod test {
         "unexpected argument '--no-deps' found" ;
         "no-deps without filter or scope"
     )]
+    #[test_case::test_case(
+        &["turbo", "run", "build", "--log-prefix=blah"],
+        "invalid value 'blah' for '--log-prefix" ;
+        "invalid log prefix"
+    )]
+    #[test_case::test_case(
+        &["turbo", "run", "build", "--log-prefix"],
+        "a value is required for '--log-prefix" ;
+        "missing log prefix value"
+    )]
+    #[test_case::test_case(
+        &["turbo", "run", "build", "-v", "--verbosity=1"],
+        "cannot be used with" ;
+        "verbosity flags conflict"
+    )]
     fn test_parse_run_failures(args: &[&str], expected: &str) {
         assert_matches!(
             Args::try_parse_from(args),
             Err(err) if err.to_string().contains(expected)
         );
+    }
+
+    #[test_case::test_case(&["turbo", "run", "build", "-v"], 1 ; "short once")]
+    #[test_case::test_case(&["turbo", "run", "build", "-vv"], 2 ; "short twice")]
+    #[test_case::test_case(&["turbo", "run", "build", "--verbosity=1"], 1 ; "long one")]
+    #[test_case::test_case(&["turbo", "run", "build", "--verbosity=2"], 2 ; "long two")]
+    fn test_parse_verbosity(args: &[&str], expected: u8) {
+        let args = Args::try_parse_from(args).unwrap();
+
+        assert_eq!(u8::from(args.verbosity), expected);
     }
 
     #[test]

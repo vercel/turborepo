@@ -463,6 +463,19 @@ mod test {
     }
 
     #[test]
+    fn test_log_order_stream_env_setting() {
+        let mut env: HashMap<OsString, OsString> = HashMap::new();
+        env.insert("turbo_log_order".into(), "stream".into());
+
+        let config = EnvVars::new(&env)
+            .unwrap()
+            .get_configuration_options(&ConfigurationOptions::default())
+            .unwrap();
+
+        assert_eq!(config.log_order(), LogOrder::Stream);
+    }
+
+    #[test]
     fn test_empty_env_setting() {
         let mut env: HashMap<OsString, OsString> = HashMap::new();
         env.insert("turbo_api".into(), "".into());
