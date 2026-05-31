@@ -2498,6 +2498,21 @@ mod test {
         "no cache"
 	)]
     #[test_case::test_case(
+		&["turbo", "run", "build", "--only"],
+        Args {
+            command: Some(Command::Run {
+                execution_args: Box::new(ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    only: true,
+                    ..get_default_execution_args()
+                }),
+                run_args: Box::new(get_default_run_args())
+            }),
+            ..Args::default()
+        } ;
+        "only"
+	)]
+    #[test_case::test_case(
 		&["turbo", "run", "build", "--no-daemon"],
         Args {
             command: Some(Command::Run {

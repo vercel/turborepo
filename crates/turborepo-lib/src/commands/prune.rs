@@ -896,12 +896,41 @@ fn merge_preserving_key_order(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{BTreeMap, HashMap};
+
     use serde_json::json;
-    use turborepo_repository::package_json::PackageJson;
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_errors::Spanned;
+    use turborepo_repository::{
+        discovery::{DiscoveryResponse, PackageDiscovery},
+        package_graph::{PackageGraph, PackageName},
+        package_json::PackageJson,
+        package_manager::PackageManager,
+    };
 
     use super::{
-        bin_paths, merge_preserving_key_order, prune_package_json_workspaces, ADDITIONAL_FILES,
+        bin_paths, merge_preserving_key_order, prune_package_json_workspaces, Prune,
+        ADDITIONAL_FILES,
     };
+
+    struct MockDiscovery;
+
+    impl PackageDiscovery for MockDiscovery {
+        async fn discover_packages(
+            &self,
+        ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+            Ok(DiscoveryResponse {
+                package_manager: PackageManager::Npm,
+                workspaces: vec![],
+            })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+            self.discover_packages().await
+        }
+    }
 
     #[test]
     fn bin_paths_reads_string_bin() {
@@ -996,6 +1025,63 @@ mod tests {
         assert_eq!(
             package_json["workspaces"]["catalog"],
             json!({"react": "latest"})
+        );
+    }
+
+    #[tokio::test]
+    async fn internal_dependencies_includes_all_cycle_members() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let package_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({
+                "name": "repo",
+                "packageManager": "npm@10.5.0"
+            }))
+            .unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(HashMap::from([
+            (
+                root.join_components(&["packages", "pkg-a", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("pkg-a".to_string())),
+                    dependencies: Some(BTreeMap::from([("pkg-b".to_string(), "*".to_string())])),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["packages", "pkg-b", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("pkg-b".to_string())),
+                    dependencies: Some(BTreeMap::from([("pkg-a".to_string(), "*".to_string())])),
+                    ..Default::default()
+                },
+            ),
+        ])))
+        .build()
+        .await
+        .unwrap();
+        let scope = vec!["pkg-a".to_string()];
+        let out_directory = root.join_component("out");
+        let prune = Prune {
+            package_graph,
+            root: root.clone(),
+            out_directory: out_directory.clone(),
+            full_directory: out_directory,
+            docker: false,
+            scope: &scope,
+            use_gitignore: false,
+            uses_per_workspace_lockfiles: false,
+        };
+
+        assert_eq!(
+            prune.internal_dependencies(),
+            vec![
+                PackageName::Root,
+                PackageName::from("pkg-a"),
+                PackageName::from("pkg-b")
+            ]
         );
     }
 
