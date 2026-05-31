@@ -1,0 +1,26 @@
+---
+source: crates/turborepo/tests/final_hash_contract.rs
+expression: contract
+---
+[global-dependencies-initial]
+app-a#build hash=80ecacacd90c8cfb external= framework= envMode=strict
+app-b#build hash=fad2d6410413eb42 external= framework= envMode=strict
+shared-lib#build hash=bd2586f6448d39d1 external= framework= envMode=strict
+
+[global-dependencies-changed]
+app-a#build hash=77d86f9fc5b7f74b external= framework= envMode=strict
+app-b#build hash=bcdcabcbdf74f731 external= framework= envMode=strict
+shared-lib#build hash=08c0240d6ae90d63 external= framework= envMode=strict
+
+[global-inputs-initial]
+app-a#build hash=f8879a2a7f15b144 external= framework= envMode=strict
+app-b#build hash=03bf8a9691253f67 external= framework= envMode=strict
+shared-lib#build hash=41c7057300281e60 external= framework= envMode=strict
+
+[global-inputs-changed]
+app-a#build hash=6387e62aac94a489 external= framework= envMode=strict
+app-b#build hash=03bf8a9691253f67 external= framework= envMode=strict
+shared-lib#build hash=41c7057300281e60 external= framework= envMode=strict
+
+[global-inputs-package-changed]
+app-a#build hash=32fddfac0f9f8228 external= framework= envMode=strict
