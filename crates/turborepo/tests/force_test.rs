@@ -51,98 +51,30 @@ fn run_force_test(
     }
 }
 
-// env var=true, missing flag: bypass
 #[test]
-fn test_force_env_true_no_flag() {
+fn test_force_env_and_flag_precedence() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_and_prime_cache(tempdir.path());
-    run_force_test(tempdir.path(), Some("true"), None, true);
-}
 
-// env var=true, --force=true: bypass
-#[test]
-fn test_force_env_true_flag_true() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_and_prime_cache(tempdir.path());
-    run_force_test(tempdir.path(), Some("true"), Some("--force=true"), true);
-}
+    let cases = [
+        // env var=true
+        (Some("true"), None, true),
+        (Some("true"), Some("--force=true"), true),
+        (Some("true"), Some("--force=false"), false),
+        (Some("true"), Some("--force"), true),
+        // env var=false
+        (Some("false"), None, false),
+        (Some("false"), Some("--force=true"), true),
+        (Some("false"), Some("--force=false"), false),
+        (Some("false"), Some("--force"), true),
+        // missing env var
+        (None, None, false),
+        (None, Some("--force=true"), true),
+        (None, Some("--force=false"), false),
+        (None, Some("--force"), true),
+    ];
 
-// env var=true, --force=false: cache hit (flag wins)
-#[test]
-fn test_force_env_true_flag_false() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_and_prime_cache(tempdir.path());
-    run_force_test(tempdir.path(), Some("true"), Some("--force=false"), false);
-}
-
-// env var=true, --force (no value): bypass
-#[test]
-fn test_force_env_true_flag_no_value() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_and_prime_cache(tempdir.path());
-    run_force_test(tempdir.path(), Some("true"), Some("--force"), true);
-}
-
-// env var=false, missing flag: cache hit
-#[test]
-fn test_force_env_false_no_flag() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_and_prime_cache(tempdir.path());
-    run_force_test(tempdir.path(), Some("false"), None, false);
-}
-
-// env var=false, --force=true: bypass
-#[test]
-fn test_force_env_false_flag_true() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_and_prime_cache(tempdir.path());
-    run_force_test(tempdir.path(), Some("false"), Some("--force=true"), true);
-}
-
-// env var=false, --force=false: cache hit
-#[test]
-fn test_force_env_false_flag_false() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_and_prime_cache(tempdir.path());
-    run_force_test(tempdir.path(), Some("false"), Some("--force=false"), false);
-}
-
-// env var=false, --force (no value): bypass
-#[test]
-fn test_force_env_false_flag_no_value() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_and_prime_cache(tempdir.path());
-    run_force_test(tempdir.path(), Some("false"), Some("--force"), true);
-}
-
-// missing env var, missing flag: cache hit
-#[test]
-fn test_force_no_env_no_flag() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_and_prime_cache(tempdir.path());
-    run_force_test(tempdir.path(), None, None, false);
-}
-
-// missing env var, --force=true: bypass
-#[test]
-fn test_force_no_env_flag_true() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_and_prime_cache(tempdir.path());
-    run_force_test(tempdir.path(), None, Some("--force=true"), true);
-}
-
-// missing env var, --force=false: cache hit
-#[test]
-fn test_force_no_env_flag_false() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_and_prime_cache(tempdir.path());
-    run_force_test(tempdir.path(), None, Some("--force=false"), false);
-}
-
-// missing env var, --force (no value): bypass
-#[test]
-fn test_force_no_env_flag_no_value() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_and_prime_cache(tempdir.path());
-    run_force_test(tempdir.path(), None, Some("--force"), true);
+    for (env_force, flag, expect_bypass) in cases {
+        run_force_test(tempdir.path(), env_force, flag, expect_bypass);
+    }
 }

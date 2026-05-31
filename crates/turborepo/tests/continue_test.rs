@@ -5,7 +5,7 @@ mod common;
 use common::{run_turbo, setup};
 
 #[test]
-fn test_without_continue_stops_on_error() {
+fn test_continue_modes() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(
         tempdir.path(),
@@ -36,24 +36,6 @@ fn test_without_continue_stops_on_error() {
         !stdout.contains("my-app:build"),
         "my-app should not run when dependency fails, got: {stdout}"
     );
-}
-
-#[test]
-fn test_without_continue_errors_only() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(
-        tempdir.path(),
-        "monorepo_dependency_error",
-        "npm@10.5.0",
-        true,
-    )
-    .unwrap();
-
-    // Prime base-lib cache
-    run_turbo(
-        tempdir.path(),
-        &["build", "--filter", "my-app...", "--log-order", "grouped"],
-    );
 
     let output = run_turbo(
         tempdir.path(),
@@ -72,24 +54,6 @@ fn test_without_continue_errors_only() {
     // Only error output should appear
     assert!(stdout.contains("some-lib:build"));
     assert!(stdout.contains("Failed:"));
-}
-
-#[test]
-fn test_with_continue_runs_independent_tasks() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(
-        tempdir.path(),
-        "monorepo_dependency_error",
-        "npm@10.5.0",
-        true,
-    )
-    .unwrap();
-
-    // Prime base-lib cache
-    run_turbo(
-        tempdir.path(),
-        &["build", "--filter", "my-app...", "--log-order", "grouped"],
-    );
 
     let output = run_turbo(
         tempdir.path(),
@@ -111,18 +75,6 @@ fn test_with_continue_runs_independent_tasks() {
         stdout.contains("2 successful, 3 total"),
         "expected 2 successes with --continue, got: {stdout}"
     );
-}
-
-#[test]
-fn test_continue_dependencies_successful() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(
-        tempdir.path(),
-        "monorepo_dependency_error",
-        "npm@10.5.0",
-        true,
-    )
-    .unwrap();
 
     let output = run_turbo(
         tempdir.path(),

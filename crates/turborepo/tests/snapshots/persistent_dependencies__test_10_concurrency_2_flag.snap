@@ -1,6 +1,6 @@
 ---
 source: crates/turborepo/tests/persistent_dependencies.rs
-expression: stderr.to_string()
+expression: String::from_utf8_lossy(&output.stderr).to_string()
 ---
   x Invalid task configuration
   `->   x You have 2 persistent tasks but `turbo` is configured for

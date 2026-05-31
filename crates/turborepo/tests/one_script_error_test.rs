@@ -5,7 +5,7 @@ mod common;
 use common::{run_turbo, setup};
 
 #[test]
-fn test_script_error_reported_with_exit_code() {
+fn test_script_error_behavior() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(
         tempdir.path(),
@@ -31,21 +31,6 @@ fn test_script_error_reported_with_exit_code() {
         stdout.contains("Failed:"),
         "expected Failed summary, got: {stdout}"
     );
-}
-
-#[test]
-fn test_script_error_not_cached() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(
-        tempdir.path(),
-        "monorepo_one_script_error",
-        "npm@10.5.0",
-        true,
-    )
-    .unwrap();
-
-    // First run
-    run_turbo(tempdir.path(), &["error"]);
 
     // Second run: error should not be cached, but okay should be
     let output = run_turbo(tempdir.path(), &["error"]);
@@ -59,18 +44,6 @@ fn test_script_error_not_cached() {
         stdout.contains("my-app:error: cache miss"),
         "error task should not be cached, got: {stdout}"
     );
-}
-
-#[test]
-fn test_continue_preserves_error_exit_code() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(
-        tempdir.path(),
-        "monorepo_one_script_error",
-        "npm@10.5.0",
-        true,
-    )
-    .unwrap();
 
     let output = run_turbo(tempdir.path(), &["okay2", "--continue"]);
     assert!(
