@@ -269,11 +269,23 @@ mod tests {
     fn make_engine(
         tasks: &[(TaskId<'static>, TaskDefinition)],
     ) -> turborepo_engine::Engine<turborepo_engine::Built, TaskDefinition> {
+        make_engine_with_edges(tasks, &[])
+    }
+
+    fn make_engine_with_edges(
+        tasks: &[(TaskId<'static>, TaskDefinition)],
+        edges: &[(TaskId<'static>, TaskId<'static>)],
+    ) -> turborepo_engine::Engine<turborepo_engine::Built, TaskDefinition> {
         let mut engine: turborepo_engine::Engine<Building, TaskDefinition> =
             turborepo_engine::Engine::new();
         for (task_id, def) in tasks {
             engine.get_index(task_id);
             engine.add_definition(task_id.clone(), def.clone());
+        }
+        for (from, to) in edges {
+            let from_idx = engine.get_index(from);
+            let to_idx = engine.get_index(to);
+            engine.task_graph_mut().add_edge(from_idx, to_idx, ());
         }
         engine.seal()
     }
@@ -459,6 +471,67 @@ mod tests {
             ),
             "expected package dependency reason, got {:?}",
             b_task.reason
+        );
+    }
+
+    #[tokio::test]
+    async fn directly_affected_task_propagates_to_task_dependents() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a", "app-a"]).await;
+
+        let lib_build = TaskId::new("lib-a", "build");
+        let app_test = TaskId::new("app-a", "test");
+        let app_lint = TaskId::new("app-a", "lint");
+
+        let engine = make_engine_with_edges(
+            &[
+                (lib_build.clone(), TaskDefinition::default()),
+                (app_test.clone(), TaskDefinition::default()),
+                (app_lint.clone(), TaskDefinition::default()),
+            ],
+            &[(app_test.clone(), lib_build.clone())],
+        );
+
+        let mut affected_packages = HashMap::new();
+        affected_packages.insert(
+            PackageName::from("lib-a"),
+            PackageInclusionReason::FileChanged {
+                file: AnchoredSystemPathBuf::from_raw("packages/lib-a/index.ts").unwrap(),
+            },
+        );
+        let changed_files =
+            HashSet::from([AnchoredSystemPathBuf::from_raw("packages/lib-a/index.ts").unwrap()]);
+
+        let mock: Arc<dyn QueryRun> = Arc::new(MockQueryRun {
+            engine,
+            pkg_dep_graph: pkg_graph,
+            affected_packages,
+            changed_files,
+            repo_root: root.to_owned(),
+        });
+
+        let result = calculate_affected_tasks(&mock, None, None).unwrap();
+        let reasons: HashMap<_, _> = result
+            .iter()
+            .map(|task| (task.task_id.clone(), &task.reason))
+            .collect();
+
+        assert!(matches!(
+            reasons.get(&lib_build),
+            Some(TaskChangeReason::FileChanged { file_path })
+                if file_path == "packages/lib-a/index.ts"
+        ));
+        assert!(matches!(
+            reasons.get(&app_test),
+            Some(TaskChangeReason::DependencyTaskChanged {
+                task_name,
+                package_name,
+            }) if task_name == "build" && package_name == "lib-a"
+        ));
+        assert!(
+            !reasons.contains_key(&app_lint),
+            "unrelated app task should not be affected: {reasons:?}"
         );
     }
 }
