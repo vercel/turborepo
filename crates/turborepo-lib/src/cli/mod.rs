@@ -1405,7 +1405,7 @@ fn inferred_package_root(
     repo_root: &AbsoluteSystemPath,
 ) -> Option<String> {
     let relative_path = invocation_path.strip_prefix(repo_root).ok()?;
-    (!relative_path.as_str().is_empty()).then(|| relative_path.to_string())
+    (!relative_path.as_str().is_empty()).then(|| relative_path.to_string().replace('\\', "/"))
 }
 
 fn default_to_run_command(cli_args: &Args) -> Result<Command, Error> {
