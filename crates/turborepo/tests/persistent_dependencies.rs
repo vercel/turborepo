@@ -2,7 +2,7 @@
 
 mod common;
 
-use common::{run_turbo, setup, turbo_output_filters};
+use common::{run_turbo, run_turbo_with_env, setup, turbo_output_filters};
 
 fn setup_persistent_deps(fixture_suffix: &str) -> tempfile::TempDir {
     let tempdir = tempfile::tempdir().unwrap();
@@ -82,102 +82,61 @@ fn test_6_topological_unimplemented() {
 // Test 10: concurrency checks — persistent tasks require enough concurrency
 // slots
 #[test]
-fn test_10_too_many_concurrency_1_flag() {
+fn test_10_too_many_concurrency() {
     let tempdir = setup_persistent_deps("10-too-many");
+
     let output = run_turbo(tempdir.path(), &["run", "build", "--concurrency=1"]);
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    insta::assert_snapshot!("test_10_concurrency_1_flag", stderr.to_string());
-}
-
-#[test]
-fn test_10_too_many_concurrency_1_env() {
-    let tempdir = setup_persistent_deps("10-too-many");
-    let config_dir = tempfile::tempdir().unwrap();
-    let mut cmd = assert_cmd::Command::cargo_bin("turbo").unwrap();
-    let output = cmd
-        .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-        .env("TURBO_PRINT_VERSION_DISABLED", "1")
-        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-        .env("DO_NOT_TRACK", "1")
-        .env("TURBO_CONCURRENCY", "1")
-        .env_remove("CI")
-        .env_remove("GITHUB_ACTIONS")
-        .args(["run", "build"])
-        .current_dir(tempdir.path())
-        .output()
-        .unwrap();
-
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    insta::assert_snapshot!("test_10_concurrency_1_env", stderr.to_string());
-}
-
-#[test]
-fn test_10_too_many_concurrency_2_flag() {
-    let tempdir = setup_persistent_deps("10-too-many");
-    let output = run_turbo(tempdir.path(), &["run", "build", "--concurrency=2"]);
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    insta::assert_snapshot!("test_10_concurrency_2_flag", stderr.to_string());
-}
-
-#[test]
-fn test_10_too_many_concurrency_2_env() {
-    let tempdir = setup_persistent_deps("10-too-many");
-    let config_dir = tempfile::tempdir().unwrap();
-    let mut cmd = assert_cmd::Command::cargo_bin("turbo").unwrap();
-    let output = cmd
-        .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-        .env("TURBO_PRINT_VERSION_DISABLED", "1")
-        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-        .env("DO_NOT_TRACK", "1")
-        .env("TURBO_CONCURRENCY", "2")
-        .env_remove("CI")
-        .env_remove("GITHUB_ACTIONS")
-        .args(["run", "build"])
-        .current_dir(tempdir.path())
-        .output()
-        .unwrap();
-
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    insta::assert_snapshot!("test_10_concurrency_2_env", stderr.to_string());
-}
-
-#[test]
-fn test_10_too_many_concurrency_3_flag() {
-    let tempdir = setup_persistent_deps("10-too-many");
-    let output = run_turbo(tempdir.path(), &["run", "build", "--concurrency=3"]);
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("2 successful, 2 total"),
-        "expected output to contain '2 successful, 2 total', got:\n{stdout}"
+    assert_concurrency_error(&output);
+    insta::assert_snapshot!(
+        "test_10_concurrency_1_flag",
+        String::from_utf8_lossy(&output.stderr).to_string()
     );
+
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &["run", "build"],
+        &[("TURBO_CONCURRENCY", "1")],
+    );
+    assert_concurrency_error(&output);
+    insta::assert_snapshot!(
+        "test_10_concurrency_1_env",
+        String::from_utf8_lossy(&output.stderr).to_string()
+    );
+
+    let output = run_turbo(tempdir.path(), &["run", "build", "--concurrency=2"]);
+    assert_concurrency_error(&output);
+    insta::assert_snapshot!(
+        "test_10_concurrency_2_flag",
+        String::from_utf8_lossy(&output.stderr).to_string()
+    );
+
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &["run", "build"],
+        &[("TURBO_CONCURRENCY", "2")],
+    );
+    assert_concurrency_error(&output);
+    insta::assert_snapshot!(
+        "test_10_concurrency_2_env",
+        String::from_utf8_lossy(&output.stderr).to_string()
+    );
+
+    let output = run_turbo(tempdir.path(), &["run", "build", "--concurrency=3"]);
+    assert_concurrency_success(&output);
+
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &["run", "build"],
+        &[("TURBO_CONCURRENCY", "3")],
+    );
+    assert_concurrency_success(&output);
 }
 
-#[test]
-fn test_10_too_many_concurrency_3_env() {
-    let tempdir = setup_persistent_deps("10-too-many");
-    let config_dir = tempfile::tempdir().unwrap();
-    let mut cmd = assert_cmd::Command::cargo_bin("turbo").unwrap();
-    let output = cmd
-        .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-        .env("TURBO_PRINT_VERSION_DISABLED", "1")
-        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-        .env("DO_NOT_TRACK", "1")
-        .env("TURBO_CONCURRENCY", "3")
-        .env_remove("CI")
-        .env_remove("GITHUB_ACTIONS")
-        .args(["run", "build"])
-        .current_dir(tempdir.path())
-        .output()
-        .unwrap();
+fn assert_concurrency_error(output: &std::process::Output) {
+    assert!(!output.status.success());
+}
 
+fn assert_concurrency_success(output: &std::process::Output) {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
