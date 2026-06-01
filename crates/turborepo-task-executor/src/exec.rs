@@ -278,7 +278,7 @@ where
 
         // Cache save runs after the callback so dependent tasks can start
         // while we walk the filesystem and write to cache.
-        if let Ok(ExecOutcome::Success(SuccessOutcome::Run)) = &result
+        if should_save_outputs_after_execute(&result)
             && self
                 .task_access
                 .can_cache(&self.task_hash, &self.task_id_for_display)
@@ -609,6 +609,10 @@ fn stop_execution_for_task_error(continue_on_error: ContinueMode) -> Result<(), 
     }
 }
 
+fn should_save_outputs_after_execute(result: &Result<ExecOutcome, InternalError>) -> bool {
+    matches!(result, Ok(ExecOutcome::Success(SuccessOutcome::Run)))
+}
+
 /// Execution context for dry runs.
 ///
 /// A simplified executor for dry run mode that only checks cache status.
@@ -645,5 +649,26 @@ mod tests {
             stop_execution_for_task_error(ContinueMode::Never),
             Err(StopExecution::AllTasks)
         );
+    }
+
+    #[test]
+    fn only_successful_task_runs_save_outputs() {
+        assert!(should_save_outputs_after_execute(&Ok(
+            ExecOutcome::Success(SuccessOutcome::Run)
+        )));
+
+        for result in [
+            Ok(ExecOutcome::Success(SuccessOutcome::CacheHit)),
+            Ok(ExecOutcome::Success(SuccessOutcome::RunOutputError)),
+            Ok(ExecOutcome::Task {
+                exit_code: Some(1),
+                message: "failed".to_string(),
+            }),
+            Ok(ExecOutcome::Shutdown),
+            Ok(ExecOutcome::Restarted),
+            Err(InternalError::UnknownChildExit),
+        ] {
+            assert!(!should_save_outputs_after_execute(&result));
+        }
     }
 }
