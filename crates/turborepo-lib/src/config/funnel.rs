@@ -145,6 +145,21 @@ mod tests {
     }
 
     #[test]
+    fn test_cli_force_override_parses_optional_boolean() {
+        for (args, expected) in [
+            (vec!["turbo", "run", "build"], None),
+            (vec!["turbo", "run", "build", "--force"], Some(true)),
+            (vec!["turbo", "run", "build", "--force=true"], Some(true)),
+            (vec!["turbo", "run", "build", "--force=false"], Some(false)),
+        ] {
+            let args = parse_args(&args);
+            let overrides = cli_overrides_from_args(&args).unwrap();
+
+            assert_eq!(overrides.force, expected);
+        }
+    }
+
+    #[test]
     fn test_turbo_json_no_update_notifier_propagates_through_shim_config() {
         let tmp_dir = TempDir::new().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
@@ -202,5 +217,27 @@ mod tests {
         .unwrap();
 
         assert_eq!(merged.log_order(), LogOrder::Stream);
+    }
+
+    #[test]
+    fn test_cli_force_overrides_lower_precedence_config() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        fs::create_dir_all(repo_root.join_component(".turbo").as_std_path()).unwrap();
+        repo_root
+            .join_components(&[".turbo", "config.json"])
+            .create_with_contents(r#"{"force": true}"#)
+            .unwrap();
+
+        let merged = resolve_configuration_with_overrides(
+            &repo_root,
+            ConfigurationOptions {
+                force: Some(false),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert!(!merged.force());
     }
 }
