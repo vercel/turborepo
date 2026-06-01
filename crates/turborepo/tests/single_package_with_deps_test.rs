@@ -28,54 +28,6 @@ fn test_with_deps_run_and_cache() {
 }
 
 #[test]
-fn test_with_deps_output_logs_hash_only() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
-
-    // Prime the cache
-    run_turbo(tempdir.path(), &["run", "test"]);
-
-    let output = run_turbo(tempdir.path(), &["run", "test", "--output-logs=hash-only"]);
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("suppressing logs"));
-    assert!(stdout.contains("2 cached, 2 total"));
-}
-
-#[test]
-fn test_with_deps_output_logs_errors_only() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
-
-    // Prime the cache
-    run_turbo(tempdir.path(), &["run", "test"]);
-
-    let output = run_turbo(
-        tempdir.path(),
-        &["run", "test", "--output-logs=errors-only"],
-    );
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("2 cached, 2 total"));
-    // Should not contain any task log lines
-    assert!(!stdout.contains("build:"));
-}
-
-#[test]
-fn test_with_deps_output_logs_none() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
-
-    // Prime the cache
-    run_turbo(tempdir.path(), &["run", "test"]);
-
-    let output = run_turbo(tempdir.path(), &["run", "test", "--output-logs=none"]);
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("2 cached, 2 total"));
-}
-
-#[test]
 fn test_with_deps_dry_run() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();

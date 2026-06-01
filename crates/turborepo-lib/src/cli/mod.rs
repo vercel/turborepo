@@ -2005,6 +2005,19 @@ mod test {
         );
     }
 
+    #[test_case::test_case(vec!["turbo", "run", "build"], None ; "missing")]
+    #[test_case::test_case(vec!["turbo", "run", "build", "--summarize"], Some(true) ; "bare flag")]
+    #[test_case::test_case(vec!["turbo", "run", "build", "--summarize=true"], Some(true) ; "enabled")]
+    #[test_case::test_case(vec!["turbo", "run", "build", "--summarize=false"], Some(false) ; "disabled")]
+    fn run_args_summarize_parses_optional_boolean(args: Vec<&str>, expected: Option<bool>) {
+        let args = Args::try_parse_from(args).unwrap();
+        let Command::Run { run_args, .. } = args.command.unwrap() else {
+            panic!("expected run command");
+        };
+
+        assert_eq!(run_args.summarize(), expected);
+    }
+
     #[test]
     fn turbo_short_help() {
         let mut cmd = Args::command();
