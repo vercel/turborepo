@@ -9,7 +9,7 @@ use common::{run_turbo, setup};
 // persistent tests
 
 #[test]
-fn test_persistent_inherited_from_root_blocks_parent() {
+fn test_persistent_and_cache_workspace_config() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
         .unwrap();
@@ -25,13 +25,6 @@ fn test_persistent_inherited_from_root_blocks_parent() {
         stderr.contains("is a persistent task"),
         "expected persistent dependency error: {stderr}"
     );
-}
-
-#[test]
-fn test_persistent_overridden_to_false() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
-        .unwrap();
 
     // persistent-task-2 is overridden to persistent:false in workspace
     let output = run_turbo(
@@ -41,13 +34,6 @@ fn test_persistent_overridden_to_false() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("2 successful, 2 total"));
-}
-
-#[test]
-fn test_persistent_workspace_omits_flag_inherits_true() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
-        .unwrap();
 
     // persistent-task-3 is persistent:true in root, workspace defines task but
     // doesn't touch persistent
@@ -61,13 +47,6 @@ fn test_persistent_workspace_omits_flag_inherits_true() {
         stderr.contains("is a persistent task"),
         "inherited persistent should block parent: {stderr}"
     );
-}
-
-#[test]
-fn test_persistent_added_in_workspace() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
-        .unwrap();
 
     // persistent-task-4 has no persistent in root, workspace adds persistent:true
     let output = run_turbo(
@@ -80,15 +59,6 @@ fn test_persistent_added_in_workspace() {
         stderr.contains("is a persistent task"),
         "workspace-added persistent should block parent: {stderr}"
     );
-}
-
-// cache override tests
-
-#[test]
-fn test_cache_false_in_root_override_true_in_workspace() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
-        .unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "cached-task-1", "--filter=cached"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -97,13 +67,6 @@ fn test_cache_false_in_root_override_true_in_workspace() {
         stdout.contains("cache miss"),
         "cache:true override should cache: {stdout}"
     );
-}
-
-#[test]
-fn test_cache_true_in_root_override_false_in_workspace() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
-        .unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "cached-task-2", "--filter=cached"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -111,13 +74,6 @@ fn test_cache_true_in_root_override_false_in_workspace() {
         stdout.contains("cache bypass"),
         "cache:false override should bypass: {stdout}"
     );
-}
-
-#[test]
-fn test_no_cache_in_root_false_in_workspace() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
-        .unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "cached-task-3", "--filter=cached"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -186,7 +142,7 @@ fn test_config_change_causes_hash_change() {
 // task-extends tests
 
 #[test]
-fn test_task_extends_build_inherited() {
+fn test_task_extends_inheritance_and_exclusion() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "task_extends", "npm@10.5.0", false).unwrap();
 
@@ -197,12 +153,6 @@ fn test_task_extends_build_inherited() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("1 successful, 1 total"));
-}
-
-#[test]
-fn test_task_extends_test_inherited() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "task_extends", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -211,12 +161,6 @@ fn test_task_extends_test_inherited() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("1 successful, 1 total"));
-}
-
-#[test]
-fn test_task_extends_false_excludes_task() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "task_extends", "npm@10.5.0", false).unwrap();
 
     // lint has extends: false, so it should be excluded
     let output = run_turbo(
@@ -255,13 +199,6 @@ fn test_invalid_config_errors() {
         combined.contains("No \"extends\" key found"),
         "expected extends key error: {combined}"
     );
-}
-
-#[test]
-fn test_invalid_config_errors_on_valid_task_too() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
-        .unwrap();
 
     // Even running a valid task in the package should error
     let output = run_turbo(
@@ -279,15 +216,6 @@ fn test_invalid_config_errors_on_valid_task_too() {
         combined.contains("No \"extends\" key found"),
         "expected extends error even for valid task: {combined}"
     );
-}
-
-// bad-json tests
-
-#[test]
-fn test_bad_json_errors() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
-        .unwrap();
 
     // Write malformed JSON
     fs::write(
