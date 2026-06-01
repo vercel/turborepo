@@ -8,7 +8,7 @@ use common::{run_turbo, setup};
 // when workspace has no turbo.json.
 
 #[test]
-fn test_missing_workspace_config_deps_retained() {
+fn test_workspace_config_dependency_inheritance_and_overrides() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
         .unwrap();
@@ -35,16 +35,6 @@ fn test_missing_workspace_config_deps_retained() {
         "topo dep should run: {stdout}"
     );
     assert!(stdout.contains("3 successful, 3 total"));
-}
-
-// Tests that dependsOn from root config is retained when workspace defines
-// the task but omits dependsOn.
-
-#[test]
-fn test_omit_keys_deps_retained() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
-        .unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -62,15 +52,6 @@ fn test_omit_keys_deps_retained() {
         "topo dep should run: {stdout}"
     );
     assert!(stdout.contains("3 successful, 3 total"));
-}
-
-// Tests that workspace can override dependsOn to empty, removing root deps.
-
-#[test]
-fn test_override_values_deps_empty() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
-        .unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -88,13 +69,6 @@ fn test_override_values_deps_empty() {
         stdout.contains("1 successful, 1 total"),
         "only the task itself should run: {stdout}"
     );
-}
-
-#[test]
-fn test_override_values_deps_resolved_definition() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
-        .unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -123,13 +97,6 @@ fn test_override_values_deps_resolved_definition() {
         serde_json::json!([]),
         "dependsOn should be overridden to empty"
     );
-}
-
-#[test]
-fn test_override_values_deps_2_topo_only() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
-        .unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -158,16 +125,6 @@ fn test_override_values_deps_2_topo_only() {
         serde_json::json!([]),
         "topo-only dependsOn should be overridden to empty"
     );
-}
-
-// Tests cross-workspace task dependencies.
-
-#[test]
-fn test_cross_workspace_dependency() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
-        .unwrap();
-
     let output = run_turbo(
         tempdir.path(),
         &["run", "cross-workspace-task", "--filter=cross-workspace"],
@@ -179,13 +136,6 @@ fn test_cross_workspace_dependency() {
         "cross-workspace dep should run: {stdout}"
     );
     assert!(stdout.contains("2 successful, 2 total"));
-}
-
-#[test]
-fn test_cross_workspace_task_id_syntax() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
-        .unwrap();
 
     // Prime cache
     run_turbo(

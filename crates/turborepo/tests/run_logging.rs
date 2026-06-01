@@ -18,7 +18,7 @@ fn assert_contains_in_order(output: &str, lines: &[&str]) {
 // Stream output is non-deterministic in ordering, so we check key lines.
 
 #[test]
-fn test_log_order_stream_flag() {
+fn test_ordered_logging_modes() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", false).unwrap();
 
@@ -29,15 +29,6 @@ fn test_log_order_stream_flag() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("2 successful, 2 total"));
     assert!(stdout.contains("0 cached, 2 total"));
-}
-
-// --- log-order-grouped.t ---
-// Grouped output IS deterministic.
-
-#[test]
-fn test_log_order_grouped_flag() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -67,15 +58,6 @@ fn test_log_order_grouped_flag() {
     );
     assert!(stdout.contains("2 successful, 2 total"));
     assert!(stdout.contains("0 cached, 2 total"));
-}
-
-// --- log-order-github.t ---
-// Tests ::group::/::endgroup:: output when GITHUB_ACTIONS=1
-
-#[test]
-fn test_log_order_github_actions() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo_with_env(
         tempdir.path(),
@@ -88,12 +70,6 @@ fn test_log_order_github_actions() {
     assert!(stdout.contains("::endgroup::"));
     assert!(stdout.contains("::group::util:build"));
     assert!(stdout.contains("2 successful, 2 total"));
-}
-
-#[test]
-fn test_log_order_github_actions_with_task_prefix() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo_with_env(
         tempdir.path(),
@@ -111,12 +87,23 @@ fn test_log_order_github_actions_with_task_prefix() {
     assert!(stdout.contains("::group::util:build"));
     assert!(stdout.contains("util:build: cache bypass"));
     assert!(stdout.contains("::endgroup::"));
+
+    let output = run_turbo_with_env(tempdir.path(), &["run", "fail"], &[("GITHUB_ACTIONS", "1")]);
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        stderr.contains("::error::"),
+        "stderr should contain ::error:: annotation for GitHub Actions, got: {}",
+        &stderr[..stderr.len().min(500)]
+    );
 }
 
 // --- log-prefix.t ---
 
 #[test]
-fn test_log_prefix_none_cached_log_file() {
+fn test_log_prefix_modes() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
@@ -136,15 +123,6 @@ fn test_log_prefix_none_cached_log_file() {
     assert!(stdout.contains("cache hit, replaying logs"));
     assert!(stdout.contains("FULL TURBO"));
     assert!(!stdout.contains("app-a:build:"));
-}
-
-#[test]
-fn test_log_prefix_default_shows_prefixes() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
-
-    // Warm cache
-    run_turbo(tempdir.path(), &["run", "build", "--log-prefix=none"]);
 
     // Default prefix: should show prefixes
     let output = run_turbo(tempdir.path(), &["run", "build"]);
@@ -156,7 +134,7 @@ fn test_log_prefix_default_shows_prefixes() {
 // --- verbosity.t ---
 
 #[test]
-fn test_verbosity_v_flag() {
+fn test_verbosity_flags() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
@@ -165,12 +143,6 @@ fn test_verbosity_v_flag() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("util:build: cache bypass, force executing bf1798d3e46e1b48"));
     assert!(stdout.contains("util:build: building"));
-}
-
-#[test]
-fn test_verbosity_vv_has_debug() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -210,7 +182,7 @@ fn test_no_cache_and_no_output_logs() {
 // --- errors-only.t ---
 
 #[test]
-fn test_errors_only_flag_success() {
+fn test_errors_only_modes() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
@@ -223,12 +195,6 @@ fn test_errors_only_flag_success() {
     // Success: no task output shown
     assert!(!stdout.contains("build-app-a"));
     assert!(stdout.contains("1 successful, 1 total"));
-}
-
-#[test]
-fn test_errors_only_flag_error() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -239,12 +205,6 @@ fn test_errors_only_flag_error() {
     // Error: full output shown
     assert!(stdout.contains("error-builderror-app-a"));
     assert!(stdout.contains("Failed:    app-a#builderror"));
-}
-
-#[test]
-fn test_errors_only_turbo_json() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     // buildsuccess has outputLogs: "errors-only" in turbo.json
     let output = run_turbo(tempdir.path(), &["run", "buildsuccess"]);
@@ -259,14 +219,6 @@ fn test_errors_only_turbo_json() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("error-builderror2-app-a"));
     assert!(stdout.contains("Failed:    app-a#builderror2"));
-}
-
-// --- errors-only-no-cache.t ---
-
-#[test]
-fn test_errors_only_no_cache_success() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     // nocachebuild has cache:false in turbo.json
     let output = run_turbo(
@@ -278,12 +230,6 @@ fn test_errors_only_no_cache_success() {
     // Success with errors-only: task output should be suppressed
     assert!(!stdout.contains("nocachebuild-app-a"));
     assert!(stdout.contains("1 successful, 1 total"));
-}
-
-#[test]
-fn test_errors_only_no_cache_error() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", false).unwrap();
 
     // nocachebuilderror has cache:false in turbo.json and exits 1
     let output = run_turbo(
@@ -300,7 +246,7 @@ fn test_errors_only_no_cache_error() {
 // --- errors-only-show-hash.t ---
 
 #[test]
-fn test_errors_only_show_hash_cache_hit() {
+fn test_errors_only_show_hash_modes() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(
         tempdir.path(),
@@ -328,18 +274,6 @@ fn test_errors_only_show_hash_cache_hit() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("cache hit, replaying logs (no errors)"));
-}
-
-#[test]
-fn test_errors_only_show_hash_error_shows_full_logs() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(
-        tempdir.path(),
-        "run_logging_errors_only_show_hash",
-        "npm@10.5.0",
-        false,
-    )
-    .unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "builderror"]);
     assert!(!output.status.success());
@@ -351,7 +285,7 @@ fn test_errors_only_show_hash_error_shows_full_logs() {
 // --- full-cache-hit-output.t ---
 
 #[test]
-fn test_full_cache_hit_output() {
+fn test_basic_monorepo_output_modes() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
@@ -386,17 +320,6 @@ fn test_full_cache_hit_output() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("2 cached, 2 total"));
     assert!(stdout.contains("FULL TURBO"));
-}
-
-// --- run-prelude.t ---
-// The run prelude (packages in scope, tasks, remote cache status) must appear
-// on stdout in stream mode but stay off stdout in structured output modes
-// (--graph, --dry=json) where stdout carries machine-readable data.
-
-#[test]
-fn test_prelude_appears_in_stream_mode() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--output-logs=none"]);
     assert!(output.status.success());
@@ -426,6 +349,23 @@ fn test_prelude_appears_in_stream_mode() {
     assert!(
         stdout.contains("Remote caching"),
         "remote cache status should appear in --dry text mode"
+    );
+
+    let output = run_turbo(tempdir.path(), &["run", "build", "--dry=json"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // stdout must be valid JSON — no prelude text mixed in.
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&stdout);
+    assert!(
+        parsed.is_ok(),
+        "stdout should be valid JSON, got parse error: {:?}\nstdout: {}",
+        parsed.err(),
+        &stdout[..stdout.len().min(200)]
+    );
+    assert!(
+        !stdout.contains("Packages in scope"),
+        "prelude must not appear on stdout in --dry=json mode"
     );
 }
 
@@ -459,29 +399,6 @@ fn test_prelude_absent_from_graph_stdout() {
 }
 
 #[test]
-fn test_prelude_absent_from_dry_json_stdout() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
-
-    let output = run_turbo(tempdir.path(), &["run", "build", "--dry=json"]);
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
-    // stdout must be valid JSON — no prelude text mixed in.
-    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&stdout);
-    assert!(
-        parsed.is_ok(),
-        "stdout should be valid JSON, got parse error: {:?}\nstdout: {}",
-        parsed.err(),
-        &stdout[..stdout.len().min(200)]
-    );
-    assert!(
-        !stdout.contains("Packages in scope"),
-        "prelude must not appear on stdout in --dry=json mode"
-    );
-}
-
-#[test]
 fn test_prelude_single_package_format() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false).unwrap();
@@ -497,22 +414,5 @@ fn test_prelude_single_package_format() {
     assert!(
         !stdout.contains("Packages in scope"),
         "single-package prelude must not show 'Packages in scope'"
-    );
-}
-
-#[test]
-fn test_github_actions_error_annotation_on_stderr() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", false).unwrap();
-
-    let output = run_turbo_with_env(tempdir.path(), &["run", "fail"], &[("GITHUB_ACTIONS", "1")]);
-
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    assert!(
-        stderr.contains("::error::"),
-        "stderr should contain ::error:: annotation for GitHub Actions, got: {}",
-        &stderr[..stderr.len().min(500)]
     );
 }
