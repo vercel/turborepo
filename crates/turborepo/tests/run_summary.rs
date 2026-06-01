@@ -41,7 +41,7 @@ fn get_task(summary: &serde_json::Value, task_id: &str) -> serde_json::Value {
 }
 
 #[test]
-fn test_run_summary_basic_monorepo_behaviors() {
+fn test_run_summary_discovery() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
@@ -55,6 +55,12 @@ fn test_run_summary_basic_monorepo_behaviors() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Summary:"));
     assert!(stdout.contains(".turbo"));
+}
+
+#[test]
+fn test_run_summary_enable_matrix() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     struct Case {
         env_val: Option<&'static str>,
@@ -157,6 +163,12 @@ fn test_run_summary_basic_monorepo_behaviors() {
             case.env_val, case.flag, case.expect_summary, has_summary
         );
     }
+}
+
+#[test]
+fn test_run_summary_monorepo() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let _ = fs::remove_dir_all(tempdir.path().join(".turbo/runs"));
 
@@ -219,6 +231,12 @@ fn test_run_summary_basic_monorepo_behaviors() {
     // another#build not present (no build script)
     let another = get_task(first, "another#build");
     assert!(another.is_null());
+}
+
+#[test]
+fn test_run_summary_error() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let _ = fs::remove_dir_all(tempdir.path().join(".turbo/runs"));
 
