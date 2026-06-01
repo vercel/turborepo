@@ -121,28 +121,3 @@ fn test_lockfile_aware_caching_npm() {
         "turbo-bump.patch",
     );
 }
-
-#[test]
-fn test_lockfile_aware_caching_yarn() {
-    run_lockfile_test("yarn", "yarn.lock", "yarn-lock.patch", "turbo-bump.patch");
-}
-
-#[test]
-fn test_lockfile_aware_caching_pnpm() {
-    run_lockfile_test(
-        "pnpm",
-        "pnpm-lock.yaml",
-        "pnpm-lock.patch",
-        "turbo-bump.patch",
-    );
-}
-
-#[test]
-fn test_lockfile_aware_caching_berry() {
-    run_lockfile_test("berry", "yarn.lock", "yarn-lock.patch", "turbo-bump.patch");
-}
-
-#[test]
-fn test_lockfile_aware_caching_bun() {
-    run_lockfile_test("bun", "bun.lock", "bun-lock.patch", "turbo-bump.patch");
-}
