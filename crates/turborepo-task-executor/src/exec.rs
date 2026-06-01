@@ -265,11 +265,7 @@ where
             }
             Ok(ExecOutcome::Task { .. }) => {
                 callback
-                    .send(match self.continue_on_error {
-                        ContinueMode::Always => Ok(()),
-                        ContinueMode::DependenciesSuccessful => Err(StopExecution::DependentTasks),
-                        ContinueMode::Never => Err(StopExecution::AllTasks),
-                    })
+                    .send(stop_execution_for_task_error(self.continue_on_error))
                     .ok();
             }
             Ok(ExecOutcome::Shutdown) | Err(_) => {
@@ -605,6 +601,14 @@ where
     }
 }
 
+fn stop_execution_for_task_error(continue_on_error: ContinueMode) -> Result<(), StopExecution> {
+    match continue_on_error {
+        ContinueMode::Always => Ok(()),
+        ContinueMode::DependenciesSuccessful => Err(StopExecution::DependentTasks),
+        ContinueMode::Never => Err(StopExecution::AllTasks),
+    }
+}
+
 /// Execution context for dry runs.
 ///
 /// A simplified executor for dry run mode that only checks cache status.
@@ -623,5 +627,23 @@ impl<H: HashTrackerProvider> DryRunExecutor<H> {
         }
         tracker.dry_run().await;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn task_error_stop_signal_matches_continue_mode() {
+        assert_eq!(stop_execution_for_task_error(ContinueMode::Always), Ok(()));
+        assert_eq!(
+            stop_execution_for_task_error(ContinueMode::DependenciesSuccessful),
+            Err(StopExecution::DependentTasks)
+        );
+        assert_eq!(
+            stop_execution_for_task_error(ContinueMode::Never),
+            Err(StopExecution::AllTasks)
+        );
     }
 }

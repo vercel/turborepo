@@ -162,3 +162,105 @@ impl<T, U> Message<T, U> {
         (Self { info, callback }, receiver)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, sync::Arc};
+
+    use tokio::sync::mpsc;
+    use turborepo_types::StopExecution;
+
+    use super::*;
+    use crate::{Building, TaskInfo};
+
+    fn chain_engine() -> Arc<Engine<Built, TaskInfo>> {
+        let mut engine: Engine<Building, TaskInfo> = Engine::new();
+        let lib = TaskId::new("lib", "build");
+        let app = TaskId::new("app", "build");
+
+        let lib_idx = engine.get_index(&lib);
+        let app_idx = engine.get_index(&app);
+
+        engine.add_definition(lib.clone(), TaskInfo::default());
+        engine.add_definition(app.clone(), TaskInfo::default());
+
+        engine.task_graph_mut().add_edge(app_idx, lib_idx, ());
+        engine.connect_to_root(&lib);
+
+        Arc::new(engine.seal())
+    }
+
+    fn branch_engine() -> Arc<Engine<Built, TaskInfo>> {
+        let mut engine: Engine<Building, TaskInfo> = Engine::new();
+        let lib = TaskId::new("lib", "build");
+        let app = TaskId::new("app", "build");
+        let other = TaskId::new("other", "build");
+
+        let lib_idx = engine.get_index(&lib);
+        let app_idx = engine.get_index(&app);
+
+        engine.add_definition(lib.clone(), TaskInfo::default());
+        engine.add_definition(app.clone(), TaskInfo::default());
+        engine.add_definition(other.clone(), TaskInfo::default());
+
+        engine.task_graph_mut().add_edge(app_idx, lib_idx, ());
+        engine.connect_to_root(&lib);
+        engine.connect_to_root(&other);
+
+        Arc::new(engine.seal())
+    }
+
+    async fn execute_with_results(
+        engine: Arc<Engine<Built, TaskInfo>>,
+        results: HashMap<TaskId<'static>, Result<(), StopExecution>>,
+    ) -> Vec<TaskId<'static>> {
+        let (tx, mut rx) = mpsc::channel(16);
+        let execution = tokio::spawn(engine.execute(ExecutionOptions::new(false, 1), tx));
+        let mut visited = Vec::new();
+
+        while let Some(message) = rx.recv().await {
+            visited.push(message.info.clone());
+            let result = results.get(&message.info).copied().unwrap_or(Ok(()));
+            message.callback.send(result).ok();
+        }
+
+        execution.await.unwrap().unwrap();
+        visited
+    }
+
+    #[tokio::test]
+    async fn execute_continues_dependents_after_success() {
+        let visited = execute_with_results(chain_engine(), HashMap::new()).await;
+
+        assert!(visited.contains(&TaskId::new("lib", "build")));
+        assert!(visited.contains(&TaskId::new("app", "build")));
+    }
+
+    #[tokio::test]
+    async fn execute_skips_dependents_after_dependent_tasks_stop() {
+        let visited = execute_with_results(
+            branch_engine(),
+            HashMap::from([(
+                TaskId::new("lib", "build"),
+                Err(StopExecution::DependentTasks),
+            )]),
+        )
+        .await;
+
+        assert!(visited.contains(&TaskId::new("lib", "build")));
+        assert!(visited.contains(&TaskId::new("other", "build")));
+        assert!(!visited.contains(&TaskId::new("app", "build")));
+    }
+
+    #[tokio::test]
+    async fn execute_skips_dependents_after_all_tasks_stop() {
+        let visited = execute_with_results(
+            chain_engine(),
+            HashMap::from([(TaskId::new("lib", "build"), Err(StopExecution::AllTasks))]),
+        )
+        .await;
+
+        assert!(visited.contains(&TaskId::new("lib", "build")));
+        assert!(!visited.contains(&TaskId::new("app", "build")));
+    }
+}
