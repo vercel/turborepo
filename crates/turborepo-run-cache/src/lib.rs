@@ -794,6 +794,7 @@ fn format_sha_context(meta: Option<&CacheHitMetadata>) -> Option<String> {
 mod test {
     use std::{
         collections::HashSet,
+        io::Write,
         sync::{
             Arc, Mutex,
             atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -804,6 +805,7 @@ mod test {
     use tempfile::tempdir;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
     use turborepo_cache::{AsyncCache, CacheActions, CacheConfig, CacheOpts, LazyScmState};
+    use turborepo_log::{LogSink, Logger, OutputChannel, grouping::GroupingLayer};
     use turborepo_task_id::TaskId;
     use turborepo_telemetry::events::task::PackageTaskEventBuilder;
     use turborepo_types::{OutputLogsMode, TaskOutputs};
@@ -829,6 +831,15 @@ mod test {
         repo_root: &AbsoluteSystemPathBuf,
         outputs: Vec<String>,
     ) -> TaskCache {
+        task_cache_for_outputs_with_mode(repo_root, outputs, OutputLogsMode::None, false)
+    }
+
+    fn task_cache_for_outputs_with_mode(
+        repo_root: &AbsoluteSystemPathBuf,
+        outputs: Vec<String>,
+        task_output_logs: OutputLogsMode,
+        errors_only_show_hash: bool,
+    ) -> TaskCache {
         let cache_opts = local_cache_opts(repo_root);
         let cache = AsyncCache::new(
             &cache_opts,
@@ -850,7 +861,7 @@ mod test {
             repo_root: repo_root.to_owned(),
             output_watcher: None,
             ui,
-            errors_only_show_hash: false,
+            errors_only_show_hash,
             remote_only: false,
         });
 
@@ -863,15 +874,42 @@ mod test {
             },
             hash: "test-hash".to_string(),
             task_id: TaskId::new("pkg", "build"),
-            task_output_logs: OutputLogsMode::None,
+            task_output_logs,
             caching_disabled: false,
             log_file_path: repo_root.join_components(&["pkg", ".turbo", "turbo-build.log"]),
             output_watcher: None,
             ui,
             warnings,
-            errors_only_show_hash: false,
+            errors_only_show_hash,
             incremental_cache: None,
         }
+    }
+
+    #[derive(Default)]
+    struct RecordingSink {
+        output: Mutex<Vec<u8>>,
+    }
+
+    impl RecordingSink {
+        fn output_string(&self) -> String {
+            String::from_utf8_lossy(&self.output.lock().unwrap()).into_owned()
+        }
+    }
+
+    impl LogSink for RecordingSink {
+        fn emit(&self, _event: &turborepo_log::LogEvent) {}
+
+        fn task_output(&self, _task: &str, _channel: OutputChannel, bytes: &[u8]) {
+            self.output.lock().unwrap().extend_from_slice(bytes);
+        }
+    }
+
+    fn recording_task_handle() -> (Arc<RecordingSink>, turborepo_log::grouping::TaskHandle) {
+        let sink = Arc::new(RecordingSink::default());
+        let logger = Arc::new(Logger::new(vec![Box::new(sink.clone())]));
+        let layer = GroupingLayer::new(logger, turborepo_log::grouping::GroupingMode::Passthrough);
+        let handle = layer.task("pkg#build");
+        (sink, handle)
     }
 
     /// Mock OutputWatcher that records calls and returns configurable results.
@@ -1099,6 +1137,204 @@ mod test {
         // OutputWatcherError must be Send + Sync for use across async boundaries
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<OutputWatcherError>();
+    }
+
+    #[tokio::test]
+    async fn output_writer_respects_output_log_modes() {
+        let temp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+
+        for (mode, forwards_to_terminal, writes_log_file) in [
+            (OutputLogsMode::Full, true, true),
+            (OutputLogsMode::NewOnly, true, true),
+            (OutputLogsMode::HashOnly, false, true),
+            (OutputLogsMode::None, false, true),
+            (OutputLogsMode::ErrorsOnly, false, true),
+        ] {
+            let task_cache = task_cache_for_outputs_with_mode(
+                &repo_root,
+                vec!["pkg/.turbo/turbo-build.log".to_string()],
+                mode,
+                false,
+            );
+            let _ = task_cache.log_file_path.remove_file();
+
+            let mut terminal = Vec::new();
+            {
+                let mut writer = task_cache.output_writer(&mut terminal).unwrap();
+                writer.write_all(b"task-output\n").unwrap();
+            }
+
+            assert_eq!(
+                String::from_utf8_lossy(&terminal).contains("task-output"),
+                forwards_to_terminal,
+                "{mode:?} terminal forwarding"
+            );
+            assert_eq!(
+                task_cache.log_file_path.exists(),
+                writes_log_file,
+                "{mode:?} log file creation"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn cache_miss_status_respects_output_log_modes() {
+        let temp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let telemetry = PackageTaskEventBuilder::new("pkg", "build");
+
+        for (mode, errors_only_show_hash, expected, unexpected) in [
+            (
+                OutputLogsMode::Full,
+                false,
+                Some("cache miss, executing test-hash"),
+                None,
+            ),
+            (
+                OutputLogsMode::NewOnly,
+                false,
+                Some("cache miss, executing test-hash"),
+                None,
+            ),
+            (
+                OutputLogsMode::HashOnly,
+                false,
+                Some("cache miss, executing test-hash"),
+                None,
+            ),
+            (OutputLogsMode::None, false, None, Some("cache miss")),
+            (OutputLogsMode::ErrorsOnly, false, None, Some("cache miss")),
+            (
+                OutputLogsMode::ErrorsOnly,
+                true,
+                Some("cache miss, executing test-hash (only logging errors)"),
+                None,
+            ),
+        ] {
+            let mut task_cache = task_cache_for_outputs_with_mode(
+                &repo_root,
+                vec!["pkg/.turbo/turbo-build.log".to_string()],
+                mode,
+                errors_only_show_hash,
+            );
+            let (sink, mut handle) = recording_task_handle();
+
+            let result = task_cache
+                .restore_outputs(&mut handle, None, &telemetry)
+                .await
+                .unwrap();
+            assert!(result.is_none());
+
+            let output = sink.output_string();
+            if let Some(expected) = expected {
+                assert!(output.contains(expected), "{mode:?}: {output}");
+            }
+            if let Some(unexpected) = unexpected {
+                assert!(!output.contains(unexpected), "{mode:?}: {output}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn cache_hit_status_respects_output_log_modes() {
+        let temp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let log_file = repo_root.join_components(&["pkg", ".turbo", "turbo-build.log"]);
+        log_file.ensure_dir().unwrap();
+        log_file.create_with_contents("cached-output\n").unwrap();
+
+        let telemetry = PackageTaskEventBuilder::new("pkg", "build");
+        let mut warmer = task_cache_for_outputs_with_mode(
+            &repo_root,
+            vec!["pkg/.turbo/turbo-build.log".to_string()],
+            OutputLogsMode::Full,
+            false,
+        );
+        warmer
+            .save_outputs(Duration::from_millis(10), &telemetry)
+            .await
+            .unwrap();
+        warmer.run_cache.cache.wait().await.unwrap();
+        log_file.remove_file().unwrap();
+
+        for (mode, errors_only_show_hash, expected, replays_cached_output) in [
+            (
+                OutputLogsMode::Full,
+                false,
+                Some("cache hit, replaying logs test-hash"),
+                true,
+            ),
+            (
+                OutputLogsMode::NewOnly,
+                false,
+                Some("cache hit, suppressing logs test-hash"),
+                false,
+            ),
+            (
+                OutputLogsMode::HashOnly,
+                false,
+                Some("cache hit, suppressing logs test-hash"),
+                false,
+            ),
+            (OutputLogsMode::None, false, None, false),
+            (OutputLogsMode::ErrorsOnly, false, None, false),
+            (
+                OutputLogsMode::ErrorsOnly,
+                true,
+                Some("cache hit, replaying logs (no errors) test-hash"),
+                false,
+            ),
+        ] {
+            let mut task_cache = task_cache_for_outputs_with_mode(
+                &repo_root,
+                vec!["pkg/.turbo/turbo-build.log".to_string()],
+                mode,
+                errors_only_show_hash,
+            );
+            let (sink, mut handle) = recording_task_handle();
+
+            let result = task_cache
+                .restore_outputs(&mut handle, None, &telemetry)
+                .await
+                .unwrap();
+            assert!(result.is_some());
+
+            let output = sink.output_string();
+            if let Some(expected) = expected {
+                assert!(output.contains(expected), "{mode:?}: {output}");
+            } else {
+                assert!(output.is_empty(), "{mode:?}: {output}");
+            }
+            assert_eq!(
+                output.contains("cached-output"),
+                replays_cached_output,
+                "{mode:?}: {output}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn errors_only_replays_log_file_on_error() {
+        let temp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let log_file = repo_root.join_components(&["pkg", ".turbo", "turbo-build.log"]);
+        log_file.ensure_dir().unwrap();
+        log_file.create_with_contents("error-output\n").unwrap();
+
+        let task_cache = task_cache_for_outputs_with_mode(
+            &repo_root,
+            vec!["pkg/.turbo/turbo-build.log".to_string()],
+            OutputLogsMode::ErrorsOnly,
+            false,
+        );
+        let (sink, mut handle) = recording_task_handle();
+
+        task_cache.on_error(&mut handle, None).unwrap();
+
+        let output = sink.output_string();
+        assert!(output.contains("cache miss, executing test-hash"));
+        assert!(output.contains("error-output"));
     }
 
     #[tokio::test]
