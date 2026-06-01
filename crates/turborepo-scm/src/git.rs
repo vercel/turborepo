@@ -369,16 +369,7 @@ impl GitRepo {
             };
         }
 
-        let main_result = self.execute_git_command(&["rev-parse", "main"], "");
-        if main_result.is_ok() {
-            return Ok("main".to_string());
-        }
-
-        let master_result = self.execute_git_command(&["rev-parse", "master"], "");
-        if master_result.is_ok() {
-            return Ok("master".to_string());
-        }
-        Err(Error::UnableToResolveRef)
+        default_base_ref(|branch| self.execute_git_command(&["rev-parse", branch], "").is_ok())
     }
 
     fn changed_files(
@@ -504,6 +495,18 @@ impl GitRepo {
     }
 }
 
+fn default_base_ref(mut branch_exists: impl FnMut(&str) -> bool) -> Result<String, Error> {
+    if branch_exists("main") {
+        return Ok("main".to_string());
+    }
+
+    if branch_exists("master") {
+        return Ok("master".to_string());
+    }
+
+    Err(Error::UnableToResolveRef)
+}
+
 /// Finds the content of a file at a previous commit. Assumes file is in a git
 /// repository
 ///
@@ -548,7 +551,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
     use which::which;
 
-    use super::{CIEnv, InvalidRange, previous_content};
+    use super::{CIEnv, InvalidRange, default_base_ref, previous_content};
     use crate::{
         Error, GitRepo, SCM,
         git::{GitHubCommit, GitHubEvent},
@@ -1110,43 +1113,36 @@ mod tests {
         Ok(())
     }
 
-    #[test_case(vec!["main"],                      None,            Some("main"))]
-    #[test_case(vec!["master"],                    None,            Some("master"))]
-    #[test_case(vec!["ziltoid"],                   None,            None)]
-    #[test_case(vec!["ziltoid", "main"],           Some("ziltoid"), Some("ziltoid"))]
-    #[test_case(vec!["ziltoid", "main"],           Some("main"),    Some("main"))]
-    #[test_case(vec!["ziltoid", "main"],           None,            Some("main"))]
-    #[test_case(vec!["ziltoid", "master"],         Some("ziltoid"), Some("ziltoid"))]
-    #[test_case(vec!["ziltoid", "master"],         Some("master"),  Some("master"))]
-    #[test_case(vec!["ziltoid", "master"],         None,            Some("master"))]
-    #[test_case(vec!["ziltoid", "master", "main"], Some("ziltoid"), Some("ziltoid"))]
-    #[test_case(vec!["ziltoid", "master", "main"], Some("master"),  Some("master"))]
-    #[test_case(vec!["ziltoid", "master", "main"], Some("main"),    Some("main"))]
-    #[test_case(vec!["ziltoid", "master", "main"], None,            Some("main"))]
-    fn test_base_resolution(
-        branches_to_create: Vec<&str>,
-        target_branch: Option<&str>,
-        expected: Option<&str>,
-    ) -> Result<(), Error> {
-        let (first_branch, remaining_branches) = branches_to_create.split_first().unwrap();
+    #[test]
+    fn test_default_base_ref_resolution() {
+        for (branches, expected) in [
+            (vec!["main"], Some("main")),
+            (vec!["master"], Some("master")),
+            (vec!["ziltoid"], None),
+            (vec!["ziltoid", "main"], Some("main")),
+            (vec!["ziltoid", "master"], Some("master")),
+            (vec!["ziltoid", "master", "main"], Some("main")),
+        ] {
+            let branches = HashSet::<&str>::from_iter(branches);
+            let actual = default_base_ref(|branch| branches.contains(branch)).ok();
 
-        let (repo_root, repo_path) = setup_repository(Some(first_branch))?;
+            assert_eq!(actual.as_deref(), expected);
+        }
+    }
+
+    #[test]
+    fn test_base_resolution_uses_override_before_default_branches() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(Some("main"))?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
-        // WARNING:
-        // if you do not make a commit, git will show you that you have no branches.
         let file = root.join_component("todo.txt");
         file.create_with_contents("1. make async Rust good")?;
-        let first_commit_sha = commit_file(&repo_path, Path::new("todo.txt"), None);
+        commit_file(&repo_path, Path::new("todo.txt"), None);
 
-        for branch in remaining_branches {
-            run_git(&repo_path, &["branch", branch, &first_commit_sha]);
-        }
+        let git = GitRepo::find(&root).unwrap();
+        let actual = git.resolve_base(Some("ziltoid"), CIEnv::none())?;
 
-        let thing = GitRepo::find(&root).unwrap();
-        let actual = thing.resolve_base(target_branch, CIEnv::none()).ok();
-
-        assert_eq!(actual.as_deref(), expected);
+        assert_eq!(actual, "ziltoid");
 
         Ok(())
     }
