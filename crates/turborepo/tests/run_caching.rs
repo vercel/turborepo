@@ -18,10 +18,8 @@ fn extract_hash<'a>(output: &'a str, prefix: &str) -> &'a str {
         .expect("could not find hash in output")
 }
 
-// --- global-deps.t ---
-
 #[test]
-fn test_global_deps_caching() {
+fn test_basic_monorepo_cache_behaviors() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
 
@@ -51,9 +49,51 @@ fn test_global_deps_caching() {
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("0 cached, 1 total"));
-}
 
-// --- root-deps.t ---
+    // Warm cache
+    run_turbo(tempdir.path(), &["run", "build", "--output-logs=none"]);
+
+    // Dry run to get cache state
+    let output = run_turbo(tempdir.path(), &["run", "build", "--dry=json"]);
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+
+    // Get my-app#build hash and check cache meta
+    let my_app_task = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["taskId"] == "my-app#build")
+        .unwrap();
+
+    let hash = my_app_task["hash"].as_str().unwrap();
+
+    // Read cache meta file
+    let meta_path = tempdir
+        .path()
+        .join(format!(".turbo/cache/{hash}-meta.json"));
+    let meta_contents = fs::read_to_string(&meta_path).unwrap();
+    let meta: serde_json::Value = serde_json::from_str(&meta_contents).unwrap();
+    let duration = meta["duration"].as_u64().unwrap();
+    assert!(duration > 0, "cache duration should be > 0, got {duration}");
+
+    // Validate cache state in dry run
+    let cache = &my_app_task["cache"];
+    assert_eq!(cache["local"], true);
+    assert_eq!(cache["remote"], false);
+    assert_eq!(cache["status"], "HIT");
+    assert_eq!(cache["source"], "LOCAL");
+
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &["run", "build", "--output-logs=none"],
+        &[("TURBO_CACHE", "remote:rw")],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Remote caching disabled (remote cache requested"),
+        "Expected 'remote cache requested' message, got:\n{stdout}"
+    );
+}
 
 #[test]
 fn test_root_deps_caching() {
@@ -228,65 +268,6 @@ fn test_remote_caching_enable() {
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Remote caching disabled (in configuration)"));
-}
-
-#[test]
-fn test_remote_cache_requested_without_credentials() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
-
-    // TURBO_CACHE=remote:rw without TURBO_TOKEN or TURBO_TEAM
-    let output = run_turbo_with_env(
-        tempdir.path(),
-        &["run", "build", "--output-logs=none"],
-        &[("TURBO_CACHE", "remote:rw")],
-    );
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("Remote caching disabled (remote cache requested"),
-        "Expected 'remote cache requested' message, got:\n{stdout}"
-    );
-}
-
-// --- cache-state.t ---
-
-#[test]
-fn test_cache_state() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
-
-    // Warm cache
-    run_turbo(tempdir.path(), &["run", "build", "--output-logs=none"]);
-
-    // Dry run to get cache state
-    let output = run_turbo(tempdir.path(), &["run", "build", "--dry=json"]);
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-
-    // Get my-app#build hash and check cache meta
-    let my_app_task = json["tasks"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|t| t["taskId"] == "my-app#build")
-        .unwrap();
-
-    let hash = my_app_task["hash"].as_str().unwrap();
-
-    // Read cache meta file
-    let meta_path = tempdir
-        .path()
-        .join(format!(".turbo/cache/{hash}-meta.json"));
-    let meta_contents = fs::read_to_string(&meta_path).unwrap();
-    let meta: serde_json::Value = serde_json::from_str(&meta_contents).unwrap();
-    let duration = meta["duration"].as_u64().unwrap();
-    assert!(duration > 0, "cache duration should be > 0, got {duration}");
-
-    // Validate cache state in dry run
-    let cache = &my_app_task["cache"];
-    assert_eq!(cache["local"], true);
-    assert_eq!(cache["remote"], false);
-    assert_eq!(cache["status"], "HIT");
-    assert_eq!(cache["source"], "LOCAL");
 }
 
 // --- excluded-inputs.t ---

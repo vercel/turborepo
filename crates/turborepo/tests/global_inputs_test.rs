@@ -103,7 +103,7 @@ fn test_global_dependencies_cannot_be_excluded_by_task_inputs() {
 /// folded into the global hash. This means task-level negation globs
 /// can successfully exclude them.
 #[test]
-fn test_global_inputs_can_be_excluded_by_task_inputs() {
+fn test_global_inputs_can_be_excluded_and_affect_tasks() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_fixture(tempdir.path(), TURBO_JSON_GLOBAL_INPUTS);
 
@@ -124,6 +124,20 @@ fn test_global_inputs_can_be_excluded_by_task_inputs() {
         stdout.contains("FULL TURBO"),
         "expected full cache hit on second run, got: {stdout}"
     );
+
+    // Record the base commit before changing the global input so the affected
+    // assertion below exercises the same transition as the cache assertion.
+    let base_sha = String::from_utf8(
+        std::process::Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(tempdir.path())
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap()
+    .trim()
+    .to_string();
 
     // Modify the global input file
     fs::write(tempdir.path().join("config.txt"), "changed value").unwrap();
@@ -147,6 +161,30 @@ fn test_global_inputs_can_be_excluded_by_task_inputs() {
     assert!(
         combined.contains("app-b:build") && combined.contains("cache hit"),
         "expected app-b cache hit (negation glob works with global.inputs), got: {combined}"
+    );
+
+    git(tempdir.path(), &["add", "."]);
+    git(
+        tempdir.path(),
+        &["commit", "-m", "change config", "--quiet"],
+    );
+
+    // --affected should detect both tasks.
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &["build", "--affected", "--output-logs=hash-only"],
+        &[("TURBO_SCM_BASE", &base_sha), ("TURBO_SCM_HEAD", "HEAD")],
+    );
+    assert!(output.status.success());
+    let combined = combined_output(&output);
+
+    assert!(
+        combined.contains("app-a:build"),
+        "expected app-a:build to be affected by global input change, got: {combined}"
+    );
+    assert!(
+        combined.contains("app-b:build"),
+        "expected app-b:build to be affected by global input change, got: {combined}"
     );
 }
 
@@ -199,54 +237,6 @@ fn test_global_inputs_preserves_default_package_file_hashing() {
     assert!(
         stdout.contains("cache miss"),
         "expected cache miss after package file change (default hashing preserved), got: {stdout}"
-    );
-}
-
-/// `--affected` should detect that tasks are affected when a
-/// `global.inputs` file changes, even though the file is no longer
-/// in the global hash.
-#[test]
-fn test_global_inputs_affected_detects_changes() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_fixture(tempdir.path(), TURBO_JSON_GLOBAL_INPUTS);
-
-    // Record the base commit before any changes.
-    let base_sha = String::from_utf8(
-        std::process::Command::new("git")
-            .args(["rev-parse", "HEAD"])
-            .current_dir(tempdir.path())
-            .output()
-            .unwrap()
-            .stdout,
-    )
-    .unwrap()
-    .trim()
-    .to_string();
-
-    // Modify the global input file and commit.
-    fs::write(tempdir.path().join("config.txt"), "changed value").unwrap();
-    git(tempdir.path(), &["add", "."]);
-    git(
-        tempdir.path(),
-        &["commit", "-m", "change config", "--quiet"],
-    );
-
-    // --affected should detect both tasks.
-    let output = run_turbo_with_env(
-        tempdir.path(),
-        &["build", "--affected", "--output-logs=hash-only"],
-        &[("TURBO_SCM_BASE", &base_sha), ("TURBO_SCM_HEAD", "HEAD")],
-    );
-    assert!(output.status.success());
-    let combined = combined_output(&output);
-
-    assert!(
-        combined.contains("app-a:build"),
-        "expected app-a:build to be affected by global input change, got: {combined}"
-    );
-    assert!(
-        combined.contains("app-b:build"),
-        "expected app-b:build to be affected by global input change, got: {combined}"
     );
 }
 
