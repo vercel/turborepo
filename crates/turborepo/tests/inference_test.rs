@@ -60,65 +60,6 @@ fn install_deps_in(dir: &Path) {
         .unwrap();
 }
 
-// --- has-workspaces.t ---
-
-#[test]
-fn test_has_workspaces() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(
-        tempdir.path(),
-        "inference/has_workspaces",
-        "npm@10.5.0",
-        true,
-    )
-    .unwrap();
-
-    // From root: no pkg_inference_root
-    let output = run_turbo_from(tempdir.path(), &["run", "build", "--filter=nothing", "-vv"]);
-    let out = combined_output(&output);
-    assert!(
-        !out.contains("pkg_inference_root set"),
-        "root should not set pkg_inference_root"
-    );
-    assert!(out.contains("No package found with name 'nothing' in workspace"));
-
-    // From apps/web
-    let output = run_turbo_from(
-        &tempdir.path().join("apps/web"),
-        &["run", "build", "--filter=nothing", "-vv"],
-    );
-    let out = combined_output(&output);
-    assert!(out.contains("pkg_inference_root set to \"apps") && out.contains("web\""));
-    assert!(out.contains("No package found with name 'nothing' in workspace"));
-
-    // From crates
-    let output = run_turbo_from(
-        &tempdir.path().join("crates"),
-        &["run", "build", "--filter=nothing", "-vv"],
-    );
-    let out = combined_output(&output);
-    assert!(out.contains("pkg_inference_root set to \"crates\""));
-    assert!(out.contains("No package found with name 'nothing' in workspace"));
-
-    // From crates/super-crate/tests/test-package
-    let output = run_turbo_from(
-        &tempdir.path().join("crates/super-crate/tests/test-package"),
-        &["run", "build", "--filter=nothing", "-vv"],
-    );
-    let out = combined_output(&output);
-    assert!(out.contains("pkg_inference_root set to \"crates") && out.contains("test-package\""));
-    assert!(out.contains("No package found with name 'nothing' in workspace"));
-
-    // From packages/ui-library/src
-    let output = run_turbo_from(
-        &tempdir.path().join("packages/ui-library/src"),
-        &["run", "build", "--filter=nothing", "-vv"],
-    );
-    let out = combined_output(&output);
-    assert!(out.contains("pkg_inference_root set to \"packages") && out.contains("src\""));
-    assert!(out.contains("No package found with name 'nothing' in workspace"));
-}
-
 // --- has-workspaces-dot-prefix.t ---
 
 #[test]

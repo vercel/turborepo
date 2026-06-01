@@ -6,7 +6,7 @@ use clap_complete::{generate, Shell};
 pub use error::Error;
 use serde::Serialize;
 use tracing::{debug, error, log::warn};
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::SharedHttpClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_shim::TurboState;
@@ -1386,11 +1386,9 @@ fn set_run_flags<'a>(
                     // package inference based on the repo root
                     let this_dir = AbsoluteSystemPathBuf::cwd()?;
                     let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
-                    if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
-                        if !relative_path.as_str().is_empty() {
-                            debug!("pkg_inference_root set to \"{}\"", relative_path);
-                            execution_args.pkg_inference_root = Some(relative_path.to_string());
-                        }
+                    if let Some(relative_path) = inferred_package_root(invocation_path, repo_root) {
+                        debug!("pkg_inference_root set to \"{}\"", relative_path);
+                        execution_args.pkg_inference_root = Some(relative_path);
                     }
                 } else {
                     debug!("{} not set", INVOCATION_DIR_ENV_VAR);
@@ -1400,6 +1398,14 @@ fn set_run_flags<'a>(
         _ => {}
     }
     Ok(command)
+}
+
+fn inferred_package_root(
+    invocation_path: &Utf8Path,
+    repo_root: &AbsoluteSystemPath,
+) -> Option<String> {
+    let relative_path = invocation_path.strip_prefix(repo_root).ok()?;
+    (!relative_path.as_str().is_empty()).then(|| relative_path.to_string().replace('\\', "/"))
 }
 
 fn default_to_run_command(cli_args: &Args) -> Result<Command, Error> {
@@ -1971,6 +1977,32 @@ mod test {
             .find_subcommand(name)
             .unwrap_or_else(|| panic!("subcommand '{name}' not found"))
             .clone()
+    }
+
+    #[test_case::test_case("", None ; "root")]
+    #[test_case::test_case("apps/web", Some("apps/web") ; "workspace")]
+    #[test_case::test_case("crates", Some("crates") ; "plain directory")]
+    #[test_case::test_case("crates/super-crate/tests/test-package", Some("crates/super-crate/tests/test-package") ; "nested package")]
+    #[test_case::test_case("packages/ui-library/src", Some("packages/ui-library/src") ; "nested source directory")]
+    fn inferred_package_root_returns_repo_relative_invocation_path(
+        invocation_suffix: &str,
+        expected: Option<&str>,
+    ) {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let invocation_path = if invocation_suffix.is_empty() {
+            repo_root.clone()
+        } else {
+            repo_root
+                .join_unix_path(turbopath::RelativeUnixPathBuf::new(invocation_suffix).unwrap())
+        };
+        invocation_path.ensure_dir().unwrap();
+        let invocation_path = camino::Utf8Path::from_path(invocation_path.as_std_path()).unwrap();
+
+        assert_eq!(
+            super::inferred_package_root(invocation_path, &repo_root),
+            expected.map(str::to_string)
+        );
     }
 
     #[test]
