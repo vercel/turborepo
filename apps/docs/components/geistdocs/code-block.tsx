@@ -2,7 +2,7 @@
 
 import { CheckIcon, CopyIcon } from "lucide-react";
 import {
-  type CSSProperties,
+  type ComponentProps,
   type ReactNode,
   useCallback,
   useRef,
@@ -13,12 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-type CodeBlockProps = {
-  children: ReactNode;
-  className?: string;
+type CodeBlockProps = ComponentProps<"pre"> & {
   icon?: ReactNode;
-  style?: CSSProperties;
-  tabIndex?: number;
   title?: string;
   "data-line-numbers"?: string;
   "data-line-highlighting"?: string;
@@ -35,7 +31,11 @@ export const CodeBlock = ({
 }: CodeBlockProps) => {
   const ref = useRef<HTMLPreElement>(null);
   const [isCopied, setIsCopied] = useState(false);
-  const { "data-line-numbers": lineNumbers } = rest;
+  const {
+    "data-line-numbers": lineNumbers,
+    "data-line-highlighting": _lineHighlighting,
+    ...preProps
+  } = rest;
 
   const copyToClipboard = useCallback(async () => {
     if (typeof window === "undefined" || !navigator?.clipboard?.writeText) {
@@ -72,6 +72,7 @@ export const CodeBlock = ({
           className,
           props.className
         )}
+        {...preProps}
         ref={ref}
         style={style}
         tabIndex={tabIndex}
