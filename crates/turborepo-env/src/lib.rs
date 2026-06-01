@@ -578,6 +578,32 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
+    #[test]
+    fn global_hashable_env_vars_match_basic_monorepo_contract() {
+        let env_at_start = EnvironmentVariableMap(
+            vec![
+                ("SOME_ENV_VAR", "hi"),
+                ("VERCEL_ANALYTICS_ID", "analytics"),
+                ("SOMETHING_THASH_YES", "ignored"),
+            ]
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect(),
+        );
+        let actual =
+            get_global_hashable_env_vars(&env_at_start, &["SOME_ENV_VAR".to_string()]).unwrap();
+
+        assert_eq!(
+            actual.all.names(),
+            vec!["SOME_ENV_VAR", "VERCEL_ANALYTICS_ID"]
+        );
+        assert_eq!(actual.by_source.explicit.names(), vec!["SOME_ENV_VAR"]);
+        assert_eq!(
+            actual.by_source.matching.names(),
+            vec!["VERCEL_ANALYTICS_ID"]
+        );
+    }
+
     #[test_case(&["FOO*"], &["BAR"], &["BAR", "FOO", "FOOBAR", "FOOD"] ; "wildcard")]
     #[test_case(&["FOO*", "!FOOBAR"], &["BAR"], &["BAR", "FOO", "FOOD"] ; "omit wild")]
     #[test_case(&["FOO*"], &["!FOOBAR"], &["FOO", "FOOD"] ; "omit task")]
