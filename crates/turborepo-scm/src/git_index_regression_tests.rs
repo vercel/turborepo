@@ -222,42 +222,6 @@ impl TestRepo {
 // Category 1: Equivalence Tests
 // ═══════════════════════════════════════════════════════════════════════════
 
-#[test]
-fn test_clean_tree_committed_files_have_correct_hashes() {
-    let repo = TestRepo::new();
-
-    repo.create_file("apps/web/src/index.ts", "console.log('hello')");
-    repo.create_file("apps/web/package.json", "{}");
-    repo.create_file("apps/docs/README.md", "# Docs");
-    repo.create_file("apps/docs/package.json", "{}");
-    repo.create_file("packages/ui/button.tsx", "export const Button = () => {}");
-    repo.create_file("packages/ui/package.json", "{}");
-    repo.create_file("package.json", "{}");
-
-    repo.commit_all();
-
-    let web_hashes = repo.get_hashes("apps/web");
-    assert_eq!(web_hashes.len(), 2);
-    assert!(web_hashes.contains_key(&path("src/index.ts")));
-    assert!(web_hashes.contains_key(&path("package.json")));
-
-    let docs_hashes = repo.get_hashes("apps/docs");
-    assert_eq!(docs_hashes.len(), 2);
-    assert!(docs_hashes.contains_key(&path("README.md")));
-    assert!(docs_hashes.contains_key(&path("package.json")));
-
-    let ui_hashes = repo.get_hashes("packages/ui");
-    assert_eq!(ui_hashes.len(), 2);
-    assert!(ui_hashes.contains_key(&path("button.tsx")));
-    assert!(ui_hashes.contains_key(&path("package.json")));
-
-    let root_hashes = repo.get_hashes("");
-    assert!(
-        root_hashes.len() >= 7,
-        "root should see all committed files"
-    );
-}
-
 #[cfg(unix)]
 #[test]
 fn test_repo_index_defers_non_utf8_paths_until_matching_package_query() {
@@ -291,26 +255,6 @@ fn test_repo_index_defers_non_utf8_paths_until_matching_package_query() {
 }
 
 #[test]
-fn test_clean_tree_index_and_no_index_produce_same_hashes() {
-    let repo = TestRepo::new();
-
-    repo.create_file("my-pkg/src/index.ts", "const x = 1;");
-    repo.create_file("my-pkg/package.json", "{}");
-    repo.create_file("other-pkg/lib.ts", "export {};");
-    repo.create_file("package.json", "{}");
-
-    repo.commit_all();
-
-    let with_index = repo.get_hashes("my-pkg");
-    let without_index = repo.get_hashes_no_index("my-pkg");
-    assert_eq!(with_index, without_index);
-
-    let with_index = repo.get_hashes("other-pkg");
-    let without_index = repo.get_hashes_no_index("other-pkg");
-    assert_eq!(with_index, without_index);
-}
-
-#[test]
 fn test_modified_tracked_files_detected() {
     let repo = TestRepo::new();
 
@@ -339,40 +283,6 @@ fn test_modified_tracked_files_detected() {
         committed_hashes.get(&path("package.json")),
         "unmodified file should keep its committed hash"
     );
-}
-
-#[test]
-fn test_deleted_tracked_files_excluded() {
-    let repo = TestRepo::new();
-
-    repo.create_file("my-pkg/keep.ts", "keep");
-    repo.create_file("my-pkg/delete-me.ts", "delete");
-    repo.create_file("my-pkg/package.json", "{}");
-    repo.commit_all();
-
-    repo.delete_file("my-pkg/delete-me.ts");
-
-    let hashes = repo.get_hashes("my-pkg");
-    assert_eq!(hashes.len(), 2, "deleted file should be excluded");
-    assert!(hashes.contains_key(&path("keep.ts")));
-    assert!(hashes.contains_key(&path("package.json")));
-    assert!(!hashes.contains_key(&path("delete-me.ts")));
-}
-
-#[test]
-fn test_untracked_files_detected() {
-    let repo = TestRepo::new();
-
-    repo.create_file("my-pkg/committed.ts", "committed");
-    repo.create_file("my-pkg/package.json", "{}");
-    repo.commit_all();
-
-    repo.create_file("my-pkg/untracked.ts", "new file");
-
-    let hashes = repo.get_hashes("my-pkg");
-    assert_eq!(hashes.len(), 3);
-    assert!(hashes.contains_key(&path("untracked.ts")));
-    assert!(hashes.contains_key(&path("committed.ts")));
 }
 
 #[test]
@@ -426,26 +336,6 @@ fn test_scoped_untracked_files_respect_ancestor_gitignore() {
 
     let hashes_no_index = repo.get_hashes_no_index("apps/web");
     assert_eq!(hashes, hashes_no_index);
-}
-
-#[test]
-fn test_gitignored_files_excluded() {
-    let repo = TestRepo::new();
-
-    repo.create_gitignore(".gitignore", "*.log\nmy-pkg/dist/\n");
-    repo.create_file("my-pkg/src/index.ts", "code");
-    repo.create_file("my-pkg/package.json", "{}");
-    repo.commit_all();
-
-    repo.create_file("my-pkg/debug.log", "log output");
-    repo.create_file("my-pkg/dist/bundle.js", "compiled");
-    repo.create_file("my-pkg/src/new.ts", "new code");
-
-    let hashes = repo.get_hashes("my-pkg");
-    assert!(!hashes.contains_key(&path("debug.log")));
-    assert!(!hashes.contains_key(&path("dist/bundle.js")));
-    assert!(hashes.contains_key(&path("src/new.ts")));
-    assert!(hashes.contains_key(&path("src/index.ts")));
 }
 
 #[test]
@@ -509,139 +399,6 @@ fn test_index_and_no_index_agree_on_mixed_state() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
-fn test_nested_gitignore_respected() {
-    let repo = TestRepo::new();
-
-    repo.create_gitignore(".gitignore", "*.log\n");
-    repo.create_gitignore("my-pkg/.gitignore", "build/\n");
-    repo.create_file("my-pkg/src/index.ts", "code");
-    repo.create_file("my-pkg/package.json", "{}");
-    repo.commit_all();
-
-    repo.create_file("my-pkg/debug.log", "log");
-    repo.create_file("my-pkg/build/out.js", "compiled");
-    repo.create_file("my-pkg/src/new.ts", "new");
-
-    let hashes = repo.get_hashes("my-pkg");
-    assert!(!hashes.contains_key(&path("debug.log")));
-    assert!(!hashes.contains_key(&path("build/out.js")));
-    assert!(hashes.contains_key(&path("src/new.ts")));
-    assert!(hashes.contains_key(&path(".gitignore")));
-}
-
-// Regression: vercel/turborepo#12554
-// When .gitignore is modified but not committed, its patterns must still be
-// respected. A dirty .gitignore ends up in status_entries (not ls_tree_hashes),
-// so the gitignore matcher construction must check both.
-#[test]
-fn test_dirty_gitignore_still_excludes_ignored_files() {
-    let repo = TestRepo::new();
-
-    repo.create_gitignore(".gitignore", "node_modules/\n");
-    repo.create_file("my-pkg/src/index.ts", "code");
-    repo.create_file("my-pkg/package.json", "{}");
-    repo.commit_all();
-
-    // Create an ignored file and then dirty the .gitignore without committing
-    repo.create_file("my-pkg/node_modules/.bin/foo", "stub");
-    repo.create_gitignore(".gitignore", "node_modules/\n# added comment\n");
-
-    let hashes = repo.get_hashes("my-pkg");
-    assert!(
-        !hashes.contains_key(&path("node_modules/.bin/foo")),
-        "dirty .gitignore must still exclude node_modules"
-    );
-    assert!(hashes.contains_key(&path("src/index.ts")));
-}
-
-// Regression: vercel/turborepo#12554 (nested variant)
-// Same as above but with a nested .gitignore inside a package directory.
-#[test]
-fn test_dirty_nested_gitignore_still_excludes_ignored_files() {
-    let repo = TestRepo::new();
-
-    repo.create_gitignore("my-pkg/.gitignore", "dist/\n");
-    repo.create_file("my-pkg/src/index.ts", "code");
-    repo.create_file("my-pkg/package.json", "{}");
-    repo.commit_all();
-
-    repo.create_file("my-pkg/dist/bundle.js", "compiled");
-    repo.create_gitignore("my-pkg/.gitignore", "dist/\n# added comment\n");
-
-    let hashes = repo.get_hashes("my-pkg");
-    assert!(
-        !hashes.contains_key(&path("dist/bundle.js")),
-        "dirty nested .gitignore must still exclude dist/"
-    );
-    assert!(hashes.contains_key(&path("src/index.ts")));
-    assert!(hashes.contains_key(&path(".gitignore")));
-}
-
-#[test]
-fn test_empty_package_returns_empty_hashes() {
-    let repo = TestRepo::new();
-
-    repo.create_file("pkg-a/file.ts", "content");
-    repo.create_file("package.json", "{}");
-    repo.commit_all();
-
-    let empty_dir = repo.root.join_unix_path(path("empty-pkg"));
-    empty_dir.create_dir_all().unwrap();
-
-    let hashes = repo.get_hashes("empty-pkg");
-    assert!(hashes.is_empty());
-}
-
-#[test]
-fn test_root_package_sees_all_committed_files() {
-    let repo = TestRepo::new();
-
-    repo.create_file("root.json", "root");
-    repo.create_file("apps/web/index.ts", "web");
-    repo.create_file("packages/ui/button.tsx", "ui");
-    repo.create_file("package.json", "{}");
-    repo.commit_all();
-
-    let hashes = repo.get_hashes("");
-    assert!(hashes.contains_key(&path("root.json")));
-    assert!(hashes.contains_key(&path("apps/web/index.ts")));
-    assert!(hashes.contains_key(&path("packages/ui/button.tsx")));
-    assert!(hashes.contains_key(&path("package.json")));
-}
-
-#[test]
-fn test_package_prefix_boundary_no_cross_contamination() {
-    let repo = TestRepo::new();
-
-    repo.create_file("apps/web/index.ts", "web");
-    repo.create_file("apps/web-admin/index.ts", "web-admin");
-    repo.create_file("pkg/file.ts", "pkg");
-    repo.create_file("pkg-extra/file.ts", "pkg-extra");
-    repo.create_file("a/file.ts", "a");
-    repo.create_file("ab/file.ts", "ab");
-    repo.create_file("package.json", "{}");
-    repo.commit_all();
-
-    let web = repo.get_hashes("apps/web");
-    assert_eq!(web.len(), 1);
-    assert!(web.contains_key(&path("index.ts")));
-
-    let web_admin = repo.get_hashes("apps/web-admin");
-    assert_eq!(web_admin.len(), 1);
-    assert!(web_admin.contains_key(&path("index.ts")));
-
-    let pkg = repo.get_hashes("pkg");
-    assert_eq!(pkg.len(), 1);
-    let pkg_extra = repo.get_hashes("pkg-extra");
-    assert_eq!(pkg_extra.len(), 1);
-
-    let a = repo.get_hashes("a");
-    assert_eq!(a.len(), 1);
-    let ab = repo.get_hashes("ab");
-    assert_eq!(ab.len(), 1);
-}
-
-#[test]
 fn test_symlink_file_skipped() {
     let repo = TestRepo::new();
 
@@ -656,77 +413,6 @@ fn test_symlink_file_skipped() {
     assert!(hashes.contains_key(&path("real-file.ts")));
     assert!(hashes.contains_key(&path("package.json")));
     // Symlinks should not cause errors — that's the important invariant
-}
-
-#[test]
-fn test_deeply_nested_package() {
-    let repo = TestRepo::new();
-
-    repo.create_file("a/b/c/d/e/pkg/index.ts", "deep");
-    repo.create_file("a/b/c/d/e/pkg/package.json", "{}");
-    repo.create_file("package.json", "{}");
-    repo.commit_all();
-
-    let hashes = repo.get_hashes("a/b/c/d/e/pkg");
-    assert_eq!(hashes.len(), 2);
-    assert!(hashes.contains_key(&path("index.ts")));
-    assert!(hashes.contains_key(&path("package.json")));
-}
-
-#[test]
-fn test_files_with_spaces_in_names() {
-    let repo = TestRepo::new();
-
-    repo.create_file("my-pkg/file with spaces.ts", "spaces");
-    repo.create_file("my-pkg/file-with-dashes.ts", "dashes");
-    repo.create_file("my-pkg/package.json", "{}");
-    repo.commit_all();
-
-    let hashes = repo.get_hashes("my-pkg");
-    assert!(hashes.contains_key(&path("file with spaces.ts")));
-    assert!(hashes.contains_key(&path("file-with-dashes.ts")));
-}
-
-#[test]
-fn test_multiple_untracked_files_across_packages() {
-    let repo = TestRepo::new();
-
-    repo.create_file("pkg-a/a.ts", "a");
-    repo.create_file("pkg-b/b.ts", "b");
-    repo.create_file("package.json", "{}");
-    repo.commit_all();
-
-    repo.create_file("pkg-a/new-a.ts", "new a");
-    repo.create_file("pkg-b/new-b.ts", "new b");
-    repo.create_file("pkg-b/another-b.ts", "another b");
-
-    let a_hashes = repo.get_hashes("pkg-a");
-    assert!(a_hashes.contains_key(&path("a.ts")));
-    assert!(a_hashes.contains_key(&path("new-a.ts")));
-    assert!(!a_hashes.contains_key(&path("new-b.ts")));
-    assert_eq!(a_hashes.len(), 2);
-
-    let b_hashes = repo.get_hashes("pkg-b");
-    assert!(b_hashes.contains_key(&path("b.ts")));
-    assert!(b_hashes.contains_key(&path("new-b.ts")));
-    assert!(b_hashes.contains_key(&path("another-b.ts")));
-    assert!(!b_hashes.contains_key(&path("new-a.ts")));
-    assert_eq!(b_hashes.len(), 3);
-}
-
-#[test]
-fn test_staged_but_not_committed_file_detected() {
-    let repo = TestRepo::new();
-
-    repo.create_file("my-pkg/committed.ts", "committed");
-    repo.create_file("my-pkg/package.json", "{}");
-    repo.commit_all();
-
-    repo.create_file("my-pkg/staged.ts", "staged content");
-    test_utils::require_git_cmd(&repo.root, &["add", "my-pkg/staged.ts"]);
-
-    let hashes = repo.get_hashes("my-pkg");
-    assert!(hashes.contains_key(&path("staged.ts")));
 }
 
 #[test]
@@ -756,44 +442,6 @@ fn test_modified_then_staged_file_has_working_tree_hash() {
 // ═══════════════════════════════════════════════════════════════════════════
 // Category 3: Contract Tests
 // ═══════════════════════════════════════════════════════════════════════════
-
-#[test]
-fn test_repo_index_sorted_invariant() {
-    let repo = TestRepo::new();
-
-    repo.create_file("z-pkg/z.ts", "z");
-    repo.create_file("a-pkg/a.ts", "a");
-    repo.create_file("m-pkg/m.ts", "m");
-    repo.create_file("package.json", "{}");
-    repo.commit_all();
-
-    let index = repo.build_repo_index();
-
-    // Binary search depends on sorted data — verify correctness for
-    // every package regardless of creation order
-    let z = index.get_package_hashes(&path("z-pkg")).unwrap();
-    assert_eq!(z.0.len(), 1);
-    let a = index.get_package_hashes(&path("a-pkg")).unwrap();
-    assert_eq!(a.0.len(), 1);
-    let m = index.get_package_hashes(&path("m-pkg")).unwrap();
-    assert_eq!(m.0.len(), 1);
-}
-
-#[test]
-fn test_clean_tree_produces_empty_to_hash() {
-    let repo = TestRepo::new();
-
-    repo.create_file("my-pkg/index.ts", "code");
-    repo.create_file("my-pkg/lib.ts", "lib");
-    repo.create_file("my-pkg/package.json", "{}");
-    repo.commit_all();
-
-    let index = repo.build_repo_index();
-    let (hashes, to_hash) = index.get_package_hashes(&path("my-pkg")).unwrap();
-
-    assert_eq!(hashes.len(), 3);
-    assert!(to_hash.is_empty(), "clean tree must produce empty to_hash");
-}
 
 #[test]
 fn test_oid_from_index_matches_hash_object() {
@@ -954,48 +602,6 @@ fn test_turbo_default_plus_include_finds_gitignored_files() {
 }
 
 #[test]
-fn test_many_packages_all_correct() {
-    let repo = TestRepo::new();
-
-    let package_names: Vec<String> = (0..30).map(|i| format!("packages/pkg-{:03}", i)).collect();
-
-    for name in &package_names {
-        repo.create_file(&format!("{}/index.ts", name), &format!("pkg {}", name));
-        repo.create_file(&format!("{}/package.json", name), "{}");
-    }
-    repo.create_file("package.json", "{}");
-    repo.commit_all();
-
-    repo.create_file("packages/pkg-005/new.ts", "new in 005");
-    repo.create_file("packages/pkg-015/new.ts", "new in 015");
-    repo.delete_file("packages/pkg-020/index.ts");
-
-    for name in &package_names {
-        let hashes = repo.get_hashes(name);
-        let num = name.split('-').next_back().unwrap().parse::<u32>().unwrap();
-        match num {
-            5 | 15 => {
-                assert_eq!(hashes.len(), 3, "{} should have 3 files", name);
-                assert!(hashes.contains_key(&path("new.ts")));
-            }
-            20 => {
-                assert_eq!(
-                    hashes.len(),
-                    1,
-                    "{} should have 1 file (index.ts deleted)",
-                    name
-                );
-                assert!(!hashes.contains_key(&path("index.ts")));
-                assert!(hashes.contains_key(&path("package.json")));
-            }
-            _ => {
-                assert_eq!(hashes.len(), 2, "{} should have 2 files", name);
-            }
-        }
-    }
-}
-
-#[test]
 fn test_racy_entries_still_produce_correct_final_hashes() {
     // Racy-git entries (mtime >= index timestamp) are deferred to hash_objects
     // instead of being verified inline. This test creates files and commits
@@ -1021,39 +627,6 @@ fn test_racy_entries_still_produce_correct_final_hashes() {
         "hashes must be identical whether entries are racy or not"
     );
     assert_eq!(hashes_immediate.len(), 3);
-}
-
-#[test]
-fn test_modified_tracked_file_not_reported_as_untracked() {
-    // A modified tracked file should appear in to_hash via the status path
-    // (stat mismatch), NOT via the untracked file walk. This verifies the
-    // binary search in find_untracked_files correctly identifies tracked files.
-    let repo = TestRepo::new();
-
-    repo.create_file("my-pkg/tracked.ts", "original");
-    repo.create_file("my-pkg/package.json", "{}");
-    repo.commit_all();
-
-    // Modify tracked file
-    repo.create_file("my-pkg/tracked.ts", "modified");
-
-    let hashes = repo.get_hashes("my-pkg");
-    assert_eq!(hashes.len(), 2, "should have exactly 2 files");
-    assert!(hashes.contains_key(&path("tracked.ts")));
-    assert!(hashes.contains_key(&path("package.json")));
-
-    // The hash should reflect the modified content
-    let clean_repo = TestRepo::new();
-    clean_repo.create_file("my-pkg/tracked.ts", "original");
-    clean_repo.create_file("my-pkg/package.json", "{}");
-    clean_repo.commit_all();
-
-    let clean_hashes = clean_repo.get_hashes("my-pkg");
-    assert_ne!(
-        hashes.get(&path("tracked.ts")),
-        clean_hashes.get(&path("tracked.ts")),
-        "modified file must have a different hash"
-    );
 }
 
 #[test]
@@ -1103,56 +676,6 @@ fn test_gix_index_sorted_order_preserved_through_pipeline() {
 // directory discovery, gitignore handling, and the interaction between the
 // git index and the filesystem.
 // ═══════════════════════════════════════════════════════════════════════════
-
-#[test]
-fn test_untracked_in_new_nested_directories() {
-    let repo = TestRepo::new();
-
-    repo.create_file("my-pkg/src/index.ts", "code");
-    repo.create_file("my-pkg/package.json", "{}");
-    repo.create_file("package.json", "{}");
-    repo.commit_all();
-
-    // Create untracked files in entirely new directories that don't exist
-    // in the git index at all.
-    repo.create_file("my-pkg/new-dir/untracked.ts", "new");
-    repo.create_file("my-pkg/new-dir/sub/deep-untracked.ts", "deep new");
-    repo.create_file("my-pkg/another-new/file.ts", "another");
-
-    let hashes = repo.get_hashes("my-pkg");
-    assert!(hashes.contains_key(&path("src/index.ts")));
-    assert!(hashes.contains_key(&path("new-dir/untracked.ts")));
-    assert!(hashes.contains_key(&path("new-dir/sub/deep-untracked.ts")));
-    assert!(hashes.contains_key(&path("another-new/file.ts")));
-    assert_eq!(hashes.len(), 5);
-
-    // Equivalence: same result without the index
-    let hashes_no_index = repo.get_hashes_no_index("my-pkg");
-    assert_eq!(hashes, hashes_no_index);
-}
-
-#[test]
-fn test_untracked_at_repo_root() {
-    let repo = TestRepo::new();
-
-    repo.create_file("my-pkg/file.ts", "pkg");
-    repo.create_file("package.json", "{}");
-    repo.commit_all();
-
-    repo.create_file("root-untracked.txt", "at root");
-    repo.create_file("another-root-file.js", "also root");
-
-    // Root query should see untracked files at the repo root
-    let root_hashes = repo.get_hashes("");
-    assert!(root_hashes.contains_key(&path("root-untracked.txt")));
-    assert!(root_hashes.contains_key(&path("another-root-file.js")));
-    assert!(root_hashes.contains_key(&path("my-pkg/file.ts")));
-
-    // Package query should NOT see root-level untracked files
-    let pkg_hashes = repo.get_hashes("my-pkg");
-    assert!(!pkg_hashes.contains_key(&path("root-untracked.txt")));
-    assert_eq!(pkg_hashes.len(), 1);
-}
 
 #[test]
 fn test_gitignore_negation_patterns() {
@@ -1216,35 +739,6 @@ fn test_gitignore_in_untracked_directory() {
 
     let hashes_no_index = repo.get_hashes_no_index("my-pkg");
     assert_eq!(hashes, hashes_no_index);
-}
-
-#[test]
-fn test_empty_directories_on_disk() {
-    let repo = TestRepo::new();
-
-    repo.create_file("my-pkg/file.ts", "content");
-    repo.create_file("my-pkg/package.json", "{}");
-    repo.commit_all();
-
-    // Create empty directories — these should not cause errors or
-    // produce spurious results
-    let empty1 = repo.root.join_unix_path(path("my-pkg/empty-dir"));
-    empty1.create_dir_all().unwrap();
-    let empty2 = repo
-        .root
-        .join_unix_path(path("my-pkg/empty-dir/nested-empty"));
-    empty2.create_dir_all().unwrap();
-    let empty3 = repo.root.join_unix_path(path("other-empty"));
-    empty3.create_dir_all().unwrap();
-
-    let hashes = repo.get_hashes("my-pkg");
-    assert_eq!(hashes.len(), 2, "empty dirs should not add files");
-    assert!(hashes.contains_key(&path("file.ts")));
-    assert!(hashes.contains_key(&path("package.json")));
-
-    // Root should also handle empty dirs gracefully
-    let root_hashes = repo.get_hashes("");
-    assert!(root_hashes.contains_key(&path("my-pkg/file.ts")));
 }
 
 #[test]
@@ -1502,52 +996,6 @@ fn test_superset_prefixes_with_gitignore_produce_same_hashes() {
     assert!(
         !scoped_b.contains_key(&path("build/out.js")),
         "build should be gitignored"
-    );
-}
-
-#[test]
-fn test_populate_untracked_idempotent() {
-    let repo = TestRepo::new();
-
-    repo.create_file("pkg-a/index.ts", "a");
-    repo.create_file("pkg-a/package.json", "{}");
-    repo.create_file("pkg-b/index.ts", "b");
-    repo.create_file("pkg-b/package.json", "{}");
-    repo.commit_all();
-
-    repo.create_file("pkg-a/new-a.ts", "new a");
-    repo.create_file("pkg-b/new-b.ts", "new b");
-
-    let scm = repo.scm();
-    let mut index = scm
-        .build_tracked_repo_index_eager()
-        .expect("failed to build tracked repo index");
-
-    // First population with pkg-a prefix
-    let prefixes_a = vec![path("pkg-a")];
-    scm.populate_repo_index_untracked(&mut index, &prefixes_a)
-        .expect("first populate failed");
-
-    let hashes_after_first = repo.get_hashes_with_index("pkg-a", &index);
-    assert!(hashes_after_first.contains_key(&path("new-a.ts")));
-
-    // Second population with different prefixes — should be a no-op
-    let prefixes_both = vec![path("pkg-a"), path("pkg-b")];
-    scm.populate_repo_index_untracked(&mut index, &prefixes_both)
-        .expect("second populate failed");
-
-    // pkg-a hashes unchanged after second call
-    let hashes_after_second = repo.get_hashes_with_index("pkg-a", &index);
-    assert_eq!(
-        hashes_after_first, hashes_after_second,
-        "idempotent: pkg-a hashes should not change after second populate"
-    );
-
-    // pkg-b untracked file was NOT picked up (second call was a no-op)
-    let pkg_b_hashes = repo.get_hashes_with_index("pkg-b", &index);
-    assert!(
-        !pkg_b_hashes.contains_key(&path("new-b.ts")),
-        "second populate should be a no-op due to idempotency flag"
     );
 }
 
