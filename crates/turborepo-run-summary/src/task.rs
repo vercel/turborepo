@@ -464,8 +464,14 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
 
 #[cfg(test)]
 mod test {
+    use std::collections::{BTreeMap, HashMap};
+
     use serde_json::json;
     use test_case::test_case;
+    use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
+    use turborepo_cache::CacheHitMetadata;
+    use turborepo_env::EnvironmentVariableMap;
+    use turborepo_types::{EnvMode, HashTrackerDetailedMap, OutputLogsMode};
 
     use super::*;
 
@@ -549,5 +555,141 @@ mod test {
     ) -> Result<(), serde_json::Error> {
         assert_eq!(serde_json::to_value(value)?, expected);
         Ok(())
+    }
+
+    #[test]
+    fn task_env_var_summary_preserves_passthrough_states() {
+        let env_at_start = EnvironmentVariableMap::from(HashMap::from([
+            ("GLOBAL_VAR_PT".to_string(), "higlobalpt".to_string()),
+            ("LOCAL_VAR_PT".to_string(), "hilocalpt".to_string()),
+        ]));
+        let env_vars = HashTrackerDetailedMap {
+            explicit: vec!["LOCAL_VAR_DEP=hash".to_string()],
+            matching: vec!["NEXT_PUBLIC_MATCHED=hash".to_string()],
+        };
+
+        let no_passthrough = TaskEnvVarSummary::from_hash_tracker(
+            &TaskDefinition::default(),
+            env_vars.clone(),
+            &env_at_start,
+        )
+        .unwrap();
+        assert!(no_passthrough.pass_through.is_none());
+
+        let empty_passthrough = TaskEnvVarSummary::from_hash_tracker(
+            &TaskDefinition {
+                pass_through_env: Some(vec![]),
+                ..Default::default()
+            },
+            env_vars.clone(),
+            &env_at_start,
+        )
+        .unwrap();
+        assert_eq!(empty_passthrough.pass_through, Some(vec![]));
+
+        let value_passthrough = TaskEnvVarSummary::from_hash_tracker(
+            &TaskDefinition {
+                pass_through_env: Some(vec!["LOCAL_VAR_PT".to_string()]),
+                ..Default::default()
+            },
+            env_vars,
+            &env_at_start,
+        )
+        .unwrap();
+        let pass_through = value_passthrough.pass_through.unwrap();
+        assert_eq!(pass_through.len(), 1);
+        assert!(pass_through[0].starts_with("LOCAL_VAR_PT="));
+        assert_ne!(pass_through[0], "LOCAL_VAR_PT=hilocalpt");
+    }
+
+    #[test]
+    fn resolved_task_definition_sorts_hash_relevant_fields() {
+        let definition = TaskDefinition {
+            outputs: TaskOutputs {
+                inclusions: vec!["z-output".into(), "a-output".into()],
+                exclusions: vec!["z-exclude".into(), "a-exclude".into()],
+            },
+            env: vec!["Z_VAR".into(), "A_VAR".into()],
+            inputs: turborepo_types::TaskInputs::new(vec!["z-input".into(), "a-input".into()]),
+            output_logs: OutputLogsMode::HashOnly,
+            ..Default::default()
+        };
+
+        let summary = TaskSummaryTaskDefinition::from(definition);
+
+        assert_eq!(
+            serde_json::to_value(summary).unwrap(),
+            json!({
+                "outputs": ["!a-exclude", "!z-exclude", "a-output", "z-output"],
+                "cache": true,
+                "dependsOn": [],
+                "inputs": ["a-input", "z-input"],
+                "outputLogs": "hash-only",
+                "persistent": false,
+                "interruptible": false,
+                "interactive": false,
+                "env": ["A_VAR", "Z_VAR"],
+                "passThroughEnv": null,
+            })
+        );
+    }
+
+    #[test]
+    fn single_package_task_summary_projects_task_ids_to_task_names() {
+        let task_summary = TaskSummary {
+            task_id: TaskId::new("pkg", "test"),
+            task: "test".to_string(),
+            package: "pkg".to_string(),
+            shared: SharedTaskSummary {
+                hash: Arc::from("hash"),
+                inputs: BTreeMap::from([(
+                    RelativeUnixPathBuf::new("src/input.ts").unwrap(),
+                    "abc".into(),
+                )]),
+                hash_of_external_dependencies: "external".to_string(),
+                cache: TaskCacheSummary::from(Some(CacheHitMetadata {
+                    source: turborepo_cache::CacheSource::Local,
+                    time_saved: 10,
+                    sha: None,
+                    dirty_hash: None,
+                })),
+                command: "npm test".to_string(),
+                cli_arguments: vec!["--watch=false".to_string()],
+                outputs: Some(vec!["dist/**".to_string()]),
+                excluded_outputs: None,
+                log_file: Some("pkg/.turbo/turbo-test.log".to_string()),
+                directory: Some("pkg".to_string()),
+                dependencies: vec![TaskId::new("pkg", "build")],
+                dependents: vec![TaskId::new("pkg", "lint")],
+                with: vec!["dev".to_string()],
+                resolved_task_definition: TaskSummaryTaskDefinition::default(),
+                expanded_outputs: vec![AnchoredSystemPathBuf::from_raw("dist/output.js").unwrap()],
+                framework: "next".to_string(),
+                env_mode: EnvMode::Strict,
+                environment_variables: TaskEnvVarSummary {
+                    specified: TaskEnvConfiguration {
+                        env: vec![],
+                        pass_through_env: None,
+                    },
+                    configured: vec![],
+                    inferred: vec![],
+                    pass_through: None,
+                },
+                execution: Some(TaskExecutionSummary {
+                    start_time: 1,
+                    end_time: 2,
+                    error: None,
+                    exit_code: Some(0),
+                }),
+            },
+        };
+
+        let single = SinglePackageTaskSummary::from(task_summary);
+
+        assert_eq!(single.task_id, "test");
+        assert_eq!(single.task, "test");
+        assert_eq!(single.shared.dependencies, vec!["build"]);
+        assert_eq!(single.shared.dependents, vec!["lint"]);
+        assert!(single.shared.directory.is_none());
     }
 }
