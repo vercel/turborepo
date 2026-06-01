@@ -226,6 +226,7 @@ pub fn validate_no_task_extends_in_root(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{RawPackageTurboJson, RawTurboJson};
 
     #[test]
     fn test_validator_new() {
@@ -248,5 +249,36 @@ mod tests {
     #[test]
     fn test_topological_delimiter_constant() {
         assert_eq!(TOPOLOGICAL_PIPELINE_DELIMITER, "^");
+    }
+
+    #[test]
+    fn test_package_turbo_json_without_extends_errors() {
+        let raw = RawPackageTurboJson::parse(
+            r#"{"tasks":{"build":{"outputs":["out/**"]}}}"#,
+            "apps/web/turbo.json",
+        )
+        .unwrap();
+        let turbo_json = TurboJson::try_from(RawTurboJson::from(raw)).unwrap();
+
+        let errors = Validator::new().validate_turbo_json(&PackageName::from("web"), &turbo_json);
+
+        assert!(matches!(errors.as_slice(), [Error::NoExtends { .. }]));
+    }
+
+    #[test]
+    fn test_package_turbo_json_rejects_package_task_syntax() {
+        let raw = RawPackageTurboJson::parse(
+            r#"{"extends":["//"],"tasks":{"web#build":{"outputs":["out/**"]}}}"#,
+            "apps/web/turbo.json",
+        )
+        .unwrap();
+        let turbo_json = TurboJson::try_from(RawTurboJson::from(raw)).unwrap();
+
+        let errors = Validator::new().validate_turbo_json(&PackageName::from("web"), &turbo_json);
+
+        assert!(matches!(
+            errors.as_slice(),
+            [Error::UnnecessaryPackageTaskSyntax(_)]
+        ));
     }
 }
