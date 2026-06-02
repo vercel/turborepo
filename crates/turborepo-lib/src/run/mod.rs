@@ -123,6 +123,60 @@ enum CacheShutdownOutcome {
 
 const SLOW_SHUTDOWN_WARNING_DELAY: Duration = Duration::from_secs(3);
 
+fn remote_cache_status_message(status: RemoteCacheStatus, api_url: &str) -> (String, bool) {
+    match status {
+        RemoteCacheStatus::Enabled => ("Remote caching enabled".to_string(), false),
+        RemoteCacheStatus::Disabled(reason) => {
+            let msg = match reason {
+                RemoteCacheDisabledReason::NotLinked => "Remote caching disabled".to_string(),
+                RemoteCacheDisabledReason::TokenWithoutTeam => {
+                    "Remote caching disabled (TURBO_TOKEN set without TURBO_TEAM)".to_string()
+                }
+                RemoteCacheDisabledReason::InConfig => {
+                    "Remote caching disabled (in configuration)".to_string()
+                }
+                RemoteCacheDisabledReason::InEnvVar => {
+                    "Remote caching disabled (by TURBO_REMOTE_CACHE_ENABLED)".to_string()
+                }
+                RemoteCacheDisabledReason::ByFlags => {
+                    "Remote caching disabled (by flags)".to_string()
+                }
+                RemoteCacheDisabledReason::RequestedWithoutCredentials => {
+                    "Remote caching disabled (remote cache requested \u{2014} set TURBO_TOKEN and \
+                     TURBO_TEAM, or run \"turbo login\" and \"turbo link\")"
+                        .to_string()
+                }
+            };
+            (msg, false)
+        }
+        RemoteCacheStatus::Unavailable(reason) => {
+            let msg = match reason {
+                RemoteCacheUnavailableReason::CouldNotConnect => {
+                    format!("Remote caching unavailable (Could not connect to \"{api_url}\")")
+                }
+                RemoteCacheUnavailableReason::AuthenticationFailed => {
+                    "Remote caching unavailable (Authentication failed \u{2014} check TURBO_TOKEN \
+                     or run \"turbo login\")"
+                        .to_string()
+                }
+                RemoteCacheUnavailableReason::UsageLimitExceeded => {
+                    "Remote caching unavailable (Usage limit exceeded)".to_string()
+                }
+                RemoteCacheUnavailableReason::SpendingPaused => {
+                    "Remote caching unavailable (Spending paused)".to_string()
+                }
+                RemoteCacheUnavailableReason::DisabledForTeam => {
+                    "Remote caching unavailable (Disabled for this team)".to_string()
+                }
+                RemoteCacheUnavailableReason::UnexpectedServerError => {
+                    format!("Remote caching unavailable (Unexpected server error at \"{api_url}\")")
+                }
+            };
+            (msg, true)
+        }
+    }
+}
+
 impl Run {
     fn shutdown_started_message(force_shutdown_timeout: Option<Duration>) -> &'static str {
         #[cfg(windows)]
@@ -350,60 +404,10 @@ impl Run {
             .emit();
         }
 
-        let api_url = &self.opts.api_client_opts.api_url;
-        let (base_msg, is_warning) = match self.remote_cache_status {
-            RemoteCacheStatus::Enabled => ("Remote caching enabled".to_string(), false),
-            RemoteCacheStatus::Disabled(reason) => {
-                let msg = match reason {
-                    RemoteCacheDisabledReason::NotLinked => "Remote caching disabled".to_string(),
-                    RemoteCacheDisabledReason::TokenWithoutTeam => {
-                        "Remote caching disabled (TURBO_TOKEN set without TURBO_TEAM)".to_string()
-                    }
-                    RemoteCacheDisabledReason::InConfig => {
-                        "Remote caching disabled (in configuration)".to_string()
-                    }
-                    RemoteCacheDisabledReason::InEnvVar => {
-                        "Remote caching disabled (by TURBO_REMOTE_CACHE_ENABLED)".to_string()
-                    }
-                    RemoteCacheDisabledReason::ByFlags => {
-                        "Remote caching disabled (by flags)".to_string()
-                    }
-                    RemoteCacheDisabledReason::RequestedWithoutCredentials => {
-                        "Remote caching disabled (remote cache requested \u{2014} set TURBO_TOKEN \
-                         and TURBO_TEAM, or run \"turbo login\" and \"turbo link\")"
-                            .to_string()
-                    }
-                };
-                (msg, false)
-            }
-            RemoteCacheStatus::Unavailable(reason) => {
-                let msg = match reason {
-                    RemoteCacheUnavailableReason::CouldNotConnect => {
-                        format!("Remote caching unavailable (Could not connect to \"{api_url}\")")
-                    }
-                    RemoteCacheUnavailableReason::AuthenticationFailed => {
-                        "Remote caching unavailable (Authentication failed \u{2014} check \
-                         TURBO_TOKEN or run \"turbo login\")"
-                            .to_string()
-                    }
-                    RemoteCacheUnavailableReason::UsageLimitExceeded => {
-                        "Remote caching unavailable (Usage limit exceeded)".to_string()
-                    }
-                    RemoteCacheUnavailableReason::SpendingPaused => {
-                        "Remote caching unavailable (Spending paused)".to_string()
-                    }
-                    RemoteCacheUnavailableReason::DisabledForTeam => {
-                        "Remote caching unavailable (Disabled for this team)".to_string()
-                    }
-                    RemoteCacheUnavailableReason::UnexpectedServerError => {
-                        format!(
-                            "Remote caching unavailable (Unexpected server error at \"{api_url}\")"
-                        )
-                    }
-                };
-                (msg, true)
-            }
-        };
+        let (base_msg, is_warning) = remote_cache_status_message(
+            self.remote_cache_status,
+            &self.opts.api_client_opts.api_url,
+        );
 
         let cache_status = if self.opts.run_opts.is_shared_worktree_cache {
             format!("{pad}• {base_msg}, using shared worktree cache")
@@ -1345,7 +1349,52 @@ mod tests {
 
     use turborepo_signals::ShutdownReason;
 
-    use super::{CacheShutdownOutcome, Run};
+    use super::{
+        remote_cache_status_message, CacheShutdownOutcome, RemoteCacheStatus,
+        RemoteCacheUnavailableReason, Run,
+    };
+    use crate::opts::RemoteCacheDisabledReason;
+
+    #[test]
+    fn remote_cache_status_messages_match_prelude_contract() {
+        assert_eq!(
+            remote_cache_status_message(RemoteCacheStatus::Enabled, "https://cache.example.com"),
+            ("Remote caching enabled".to_string(), false)
+        );
+        assert_eq!(
+            remote_cache_status_message(
+                RemoteCacheStatus::Disabled(RemoteCacheDisabledReason::InConfig),
+                "https://cache.example.com",
+            ),
+            (
+                "Remote caching disabled (in configuration)".to_string(),
+                false
+            )
+        );
+        assert_eq!(
+            remote_cache_status_message(
+                RemoteCacheStatus::Disabled(RemoteCacheDisabledReason::RequestedWithoutCredentials),
+                "https://cache.example.com",
+            ),
+            (
+                "Remote caching disabled (remote cache requested — set TURBO_TOKEN and \
+                 TURBO_TEAM, or run \"turbo login\" and \"turbo link\")"
+                    .to_string(),
+                false,
+            )
+        );
+        assert_eq!(
+            remote_cache_status_message(
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::CouldNotConnect),
+                "https://cache.example.com",
+            ),
+            (
+                "Remote caching unavailable (Could not connect to \"https://cache.example.com\")"
+                    .to_string(),
+                true,
+            )
+        );
+    }
 
     #[tokio::test]
     async fn cache_shutdown_close_does_not_arm_force_timeout() {
