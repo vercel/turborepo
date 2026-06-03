@@ -13,7 +13,7 @@
         "UPSTASH_REDIS_REST_TOKEN"
       ],
       "inputs": ["$TURBO_DEFAULT$", "content/**"],
-      "outputs": [".next/**", "!.next/cache/**"],
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"],
       "dependsOn": ["^build", "schema", "collect-examples-data"]
     },
     "dev": {

@@ -321,7 +321,7 @@ Add the artifacts for the new `@repo/math` library to the `outputs` for the `bui
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", "dist/**"]
     }
   }
 }

@@ -549,7 +549,7 @@ Don't use relative paths like `../` to reference files outside the package. Use 
 
 Common outputs by framework:
 
-- Next.js: `[".next/**", "!.next/cache/**"]`
+- Next.js: `[".next/**", "!.next/cache/**", "!.next/dev/**"]`
 - Vite/Rollup: `["dist/**"]`
 - tsc: `["dist/**"]` or custom `outDir`
 
@@ -744,7 +744,7 @@ import { Button } from "@repo/ui/button";
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "dev": {
       "cache": false,

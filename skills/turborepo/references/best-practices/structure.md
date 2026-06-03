@@ -99,7 +99,7 @@ Package tasks enable Turborepo to:
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "lint": {},
     "test": {
@@ -126,7 +126,7 @@ With `futureFlags.globalConfiguration`, global settings move under a `global` ke
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "lint": {},
     "test": {

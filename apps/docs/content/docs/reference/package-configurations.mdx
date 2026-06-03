@@ -107,7 +107,7 @@ Extend from any package by using its `name` from `package.json` in your `extends
   "extends": ["//"],
   "tasks": {
     "build": {
-      "outputs": [".next/**", "!.next/cache/**"],
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"],
     },
     "dev": {
       "cache": false,
@@ -284,7 +284,7 @@ with a single `turbo.json` at the root like this:
 {
   "tasks": {
     "build": {
-      "outputs": [".next/**", "!.next/cache/**", ".svelte-kit/**"],
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", ".svelte-kit/**"],
     },
   },
 }
@@ -314,8 +314,8 @@ and remove the SvelteKit-specific [`outputs`](/docs/reference/configuration#outp
 {
   "tasks": {
     "build": {
--      "outputs": [".next/**", "!.next/cache/**", ".svelte-kit/**"]
-+      "outputs": [".next/**", "!.next/cache/**"]
+-      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", ".svelte-kit/**"]
++      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
     }
   }
 }
