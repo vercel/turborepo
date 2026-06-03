@@ -50,7 +50,7 @@ impl BunLockfile {
     ///
     /// Returns true if the version satisfies the spec, false otherwise.
     /// For non-semver specs (tags, catalogs, workspaces), returns true.
-    fn version_satisfies_spec(&self, version: &str, version_spec: &str) -> bool {
+    pub(super) fn version_satisfies_spec(&self, version: &str, version_spec: &str) -> bool {
         let spec = VersionSpec::parse(version_spec);
 
         match spec {
