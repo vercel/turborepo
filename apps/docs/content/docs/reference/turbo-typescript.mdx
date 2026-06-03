@@ -1,0 +1,207 @@
+---
+title: "@turbo/typescript"
+description: Synchronize TypeScript Project References with your Turborepo package graph.
+product: turborepo
+type: reference
+summary: Reference for the `@turbo/typescript` package that helps large Turborepo workspaces adopt TypeScript Project References incrementally.
+---
+
+`@turbo/typescript` keeps TypeScript Project References synchronized with your workspace package graph. It is intended for large monorepos that have decided to adopt Project References and want an opinionated migration path with small, deterministic diffs.
+
+The package provides the `turbo-typescript` CLI. It reads your workspace packages, computes the maximum valid Project References graph, updates owned `tsconfig.json` fields, and records migration state in your root `turbo.json` or `turbo.jsonc`.
+
+## When to use it
+
+Use `@turbo/typescript` when you need TypeScript Project References and want the repo configuration to follow the package graph automatically.
+
+Project References are not required for most Turborepo workspaces. If you do not need them, keeping each package's TypeScript configuration independent is usually simpler.
+
+## Installation
+
+Install `@turbo/typescript` and `typescript` in the workspace root:
+
+```bash title="Terminal"
+pnpm add -D @turbo/typescript typescript
+```
+
+The CLI resolves `typescript` from the target workspace root. If `typescript` is not installed there, the command fails with install guidance.
+
+## Commands
+
+All commands use this namespace:
+
+```bash title="Terminal"
+turbo-typescript project-references <command>
+```
+
+### `init`
+
+Initializes Project References management for the workspace.
+
+```bash title="Terminal"
+turbo-typescript project-references init
+```
+
+`init` requires an existing root `turbo.json` or `turbo.jsonc` and an existing root `tsconfig.json`. It detects packages already referenced by the root `tsconfig.json`, writes `typescriptProjectReferences` to the root Turbo config, and starts all other eligible packages in `excluded`.
+
+Use `--dry-run` to preview changes:
+
+```bash title="Terminal"
+turbo-typescript project-references init --dry-run
+```
+
+Use `--force` to recompute the initial state from current root references while preserving existing `ignored` entries:
+
+```bash title="Terminal"
+turbo-typescript project-references init --force
+```
+
+### `write`
+
+Converges the workspace to the maximum valid Project References state.
+
+```bash title="Terminal"
+turbo-typescript project-references write
+```
+
+`write` updates the root Turbo config, the root `tsconfig.json`, and participating package `tsconfig.json` files. It never creates package-level `tsconfig.json` files and never edits excluded or ignored package configs.
+
+Run `write` after packages become ready for Project References. The command removes packages from `excluded` when they can safely participate and adds packages to `excluded` when needed to keep the generated references valid.
+
+### `check`
+
+Checks that the repository is already synchronized.
+
+```bash title="Terminal"
+turbo-typescript project-references check
+```
+
+Use `check` in CI. It never modifies files and exits `1` when the root Turbo config, root `tsconfig.json`, or owned package `tsconfig.json` fields differ from the desired state.
+
+### `candidates`
+
+Lists excluded packages that can now participate safely.
+
+```bash title="Terminal"
+turbo-typescript project-references candidates
+```
+
+`candidates` is read-only. It reports packages that can be migrated by running `write`, newly discovered packages, and blockers such as cycles or dependencies that are still excluded.
+
+## Global options
+
+### `--json`
+
+Prints a stable JSON payload with `version: 1`.
+
+```bash title="Terminal"
+turbo-typescript project-references check --json
+```
+
+Normal JSON output uses workspace-relative paths.
+
+### `--verbose`
+
+Prints additional graph and config decision details.
+
+```bash title="Terminal"
+turbo-typescript project-references candidates --verbose
+```
+
+### `--dry-run`
+
+Previews edits for mutating commands without writing files.
+
+```bash title="Terminal"
+turbo-typescript project-references write --dry-run
+```
+
+## Configuration
+
+Configuration lives in the root `turbo.json` or `turbo.jsonc` under `typescriptProjectReferences`.
+
+```jsonc title="turbo.json"
+{
+  "typescriptProjectReferences": true
+}
+```
+
+You can also provide explicit migration state:
+
+```jsonc title="turbo.json"
+{
+  "typescriptProjectReferences": {
+    "excluded": ["packages/not-ready"],
+    "ignored": ["tooling/config-only"]
+  }
+}
+```
+
+`excluded` contains TypeScript-capable packages that cannot currently participate without creating invalid references. The tool may add or remove entries as the graph changes.
+
+`ignored` contains packages outside Project References enforcement. Dependencies on ignored packages do not create references and do not block inclusion. Ignored entries are sticky until you edit the config.
+
+Mutating commands normalize this config by sorting paths, removing duplicates, omitting empty arrays, and writing `typescriptProjectReferences: true` when both lists are empty.
+
+## What the tool owns
+
+For the root `tsconfig.json`, `write` owns the solution-shape fields:
+
+```json title="tsconfig.json"
+{
+  "files": [],
+  "references": [{ "path": "packages/ui" }]
+}
+```
+
+It removes root `include`, syncs root `references` to the computed valid package set, and preserves unrelated fields such as `extends`, `compilerOptions`, and `exclude`.
+
+For participating package `tsconfig.json` files, `write` owns `references` and `compilerOptions.composite`:
+
+```json title="packages/web/tsconfig.json"
+{
+  "compilerOptions": {
+    "composite": true
+  },
+  "references": [{ "path": "../ui" }]
+}
+```
+
+The command syncs package references to direct valid workspace dependencies only. It adds local `compilerOptions.composite: true` only when the effective TypeScript config does not already provide it through `extends`.
+
+## Graph rules
+
+`@turbo/typescript` builds references from declared workspace dependencies. It does not scan TypeScript imports.
+
+The generated graph uses `dependencies` and `devDependencies`. It ignores `optionalDependencies` and `peerDependencies`.
+
+Ignored packages are terminal. Dependencies on ignored packages do not create references and do not block inclusion.
+
+TypeScript Project References cannot be cyclic, so packages in cycles and their dependents stay excluded until the cycle is broken or relevant packages are ignored.
+
+## Workspace support
+
+The CLI supports JavaScript package-manager workspace formats:
+
+- `pnpm-workspace.yaml` with `packages`
+- root `package.json` with `workspaces: string[]`
+- root `package.json` with `workspaces.packages`
+
+The root package itself is not a Project References participant.
+
+## Programmatic API
+
+The package exposes a small experimental API for automation:
+
+```ts title="sync.ts"
+import {
+  checkProjectReferences,
+  getProjectReferenceCandidates,
+  initProjectReferences,
+  writeProjectReferences
+} from "@turbo/typescript";
+
+await writeProjectReferences({ cwd: process.cwd(), dryRun: true });
+```
+
+These APIs return structured results compatible with `--json` output.

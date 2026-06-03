@@ -102,6 +102,10 @@ function printResult(result: ProjectReferencesResult, flags: CliFlags) {
     process.stdout.write(
       `${result.command}: ${changed} ${result.changedFiles.length} file(s).\n`
     );
+    process.stdout.write(result.dryRun ? "Files to update:\n" : "Updated files:\n");
+    for (const file of result.changedFiles) {
+      process.stdout.write(`  ${file}\n`);
+    }
   } else {
     process.stdout.write(
       `${result.command}: Project References are up to date.\n`

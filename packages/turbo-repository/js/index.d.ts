@@ -65,7 +65,7 @@ export class Workspace {
   affectedPackages(
     files: Array<string>,
     base?: string | undefined | null,
-    optimizeGlobalInvalidations?: boolean | undefined | null
+    optimizeGlobalInvalidations?: boolean | undefined | null,
   ): Promise<Array<Package>>;
   /**
    * Given a path (relative to the workspace root), returns the

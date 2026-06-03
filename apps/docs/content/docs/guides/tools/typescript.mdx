@@ -378,6 +378,8 @@ However, this practice is also discouraged since any changes in the Workspace ro
 
 We don't recommend using TypeScript Project References as they introduce both another point of configuration as well as another caching layer to your workspace. Both of these can cause problems in your repository with little benefit, so we suggest avoiding them when using Turborepo.
 
+If your workspace has decided to adopt Project References anyway, use [`@turbo/typescript`](/docs/reference/turbo-typescript) to keep the root and package references synchronized with your package graph.
+
 ## Limitations
 
 ### Your editor won't use a package's TypeScript version

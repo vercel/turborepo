@@ -141,7 +141,7 @@ export async function initProjectReferences(
     graph,
     plans,
     dryRun: options.dryRun === true,
-    diagnostics: diagnosticsForState(graph, state)
+    diagnostics: diagnosticsForInit(state)
   });
 }
 
@@ -1012,6 +1012,27 @@ function diagnosticsForState(
       message: `${pkgPath} is blocked by excluded dependencies.`,
       packagePath: pkgPath,
       details: blockers
+    });
+  }
+  return diagnostics;
+}
+
+function diagnosticsForInit(state: MigrationState): Array<Diagnostic> {
+  const diagnostics: Array<Diagnostic> = [];
+  if (state.excluded.length > 0) {
+    diagnostics.push({
+      level: "info",
+      code: "added_to_excluded",
+      message: "Packages will start in excluded until write can migrate them.",
+      details: state.excluded
+    });
+  }
+  if (state.ignored.length > 0) {
+    diagnostics.push({
+      level: "info",
+      code: "added_to_ignored",
+      message: "Packages without package-root tsconfig.json are ignored.",
+      details: state.ignored
     });
   }
   return diagnostics;
