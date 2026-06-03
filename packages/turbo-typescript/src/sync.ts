@@ -154,7 +154,7 @@ export async function checkProjectReferences(
   const graph = computeGraphState(context, parsed.state);
   const plans = await planConvergedFiles(context, graph, false);
   const changedPlans = plans.filter((plan) => plan.before !== plan.after);
-  const diagnostics = diagnosticsForState(graph, parsed.state);
+  const diagnostics = diagnosticsForState(graph, parsed.state, "would");
 
   for (const plan of changedPlans) {
     diagnostics.push({
@@ -203,7 +203,11 @@ export async function writeProjectReferences(
     graph,
     plans,
     dryRun: options.dryRun === true,
-    diagnostics: diagnosticsForState(graph, parsed.state)
+    diagnostics: diagnosticsForState(
+      graph,
+      parsed.state,
+      options.dryRun === true ? "would" : "did"
+    )
   });
 }
 
@@ -221,7 +225,7 @@ export async function getProjectReferenceCandidates(
     (pkgPath) =>
       !currentExcluded.has(pkgPath) && !parsed.state.ignored.includes(pkgPath)
   );
-  const diagnostics = diagnosticsForState(graph, parsed.state);
+  const diagnostics = diagnosticsForState(graph, parsed.state, "can");
 
   if (candidates.length === 0) {
     diagnostics.push({
@@ -957,7 +961,8 @@ function normalizeMigrationState(state: MigrationState): MigrationState | true {
 
 function diagnosticsForState(
   graph: GraphState,
-  previous: MigrationState
+  previous: MigrationState,
+  mode: "can" | "would" | "did"
 ): Array<Diagnostic> {
   const diagnostics: Array<Diagnostic> = [];
   const previousExcluded = new Set(previous.excluded);
@@ -976,7 +981,7 @@ function diagnosticsForState(
     diagnostics.push({
       level: "info",
       code: "removed_from_excluded",
-      message: "Packages can be removed from excluded.",
+      message: removedFromExcludedMessage(mode),
       details: removedExcluded
     });
   }
@@ -1015,6 +1020,20 @@ function diagnosticsForState(
     });
   }
   return diagnostics;
+}
+
+function removedFromExcludedMessage(mode: "can" | "would" | "did"): string {
+  switch (mode) {
+    case "can": {
+      return "Packages can be removed from excluded.";
+    }
+    case "would": {
+      return "Packages would be removed from excluded.";
+    }
+    case "did": {
+      return "Packages removed from excluded.";
+    }
+  }
 }
 
 function diagnosticsForInit(state: MigrationState): Array<Diagnostic> {
