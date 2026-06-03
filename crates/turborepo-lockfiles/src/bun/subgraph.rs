@@ -786,14 +786,14 @@ impl BunLockfile {
                     .chain(info.optional_dependencies.iter())
                 {
                     let nested_key = format!("{key}/{dep_name}");
-                    let top_level_satisfies = pruned_data
-                        .packages
-                        .get(dep_name)
-                        .is_some_and(|entry| self.version_satisfies_spec(entry.version(), dep_version));
-                    let nested_satisfies = pruned_data
-                        .packages
-                        .get(&nested_key)
-                        .is_some_and(|entry| self.version_satisfies_spec(entry.version(), dep_version));
+                    let top_level_satisfies =
+                        pruned_data.packages.get(dep_name).is_some_and(|entry| {
+                            self.version_satisfies_spec(entry.version(), dep_version)
+                        });
+                    let nested_satisfies =
+                        pruned_data.packages.get(&nested_key).is_some_and(|entry| {
+                            self.version_satisfies_spec(entry.version(), dep_version)
+                        });
                     if top_level_satisfies || nested_satisfies {
                         continue;
                     }
