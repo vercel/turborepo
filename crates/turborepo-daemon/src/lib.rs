@@ -91,8 +91,26 @@ pub struct Paths {
 
 fn repo_hash(repo_root: &AbsoluteSystemPath) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(repo_root.to_string().as_bytes());
+    hasher.update(repo_hash_input(repo_root).as_bytes());
     hex::encode(&hasher.finalize()[..8])
+}
+
+#[cfg(windows)]
+fn repo_hash_input(repo_root: &AbsoluteSystemPath) -> String {
+    let path = repo_root.to_string();
+    let mut chars = path.chars();
+
+    match (chars.next(), chars.next()) {
+        (Some(drive), Some(':')) if drive.is_ascii_alphabetic() => {
+            format!("{}:{}", drive.to_ascii_uppercase(), chars.as_str())
+        }
+        _ => path,
+    }
+}
+
+#[cfg(not(windows))]
+fn repo_hash_input(repo_root: &AbsoluteSystemPath) -> String {
+    repo_root.to_string()
 }
 
 #[cfg(unix)]
@@ -238,5 +256,14 @@ mod test {
 
         assert_eq!(hash, expected_hash);
         assert_eq!(hash.len(), 16);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn repo_hash_normalizes_drive_letter_case() {
+        let lower = AbsoluteSystemPathBuf::new("c:\\tmp\\turborepo").unwrap();
+        let upper = AbsoluteSystemPathBuf::new("C:\\tmp\\turborepo").unwrap();
+
+        assert_eq!(repo_hash(&lower), repo_hash(&upper));
     }
 }
