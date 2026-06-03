@@ -872,18 +872,18 @@ mod tests {
     #[test_case("[]", TaskOutputs::default() ; "empty")]
     #[test_case(r#"["target/**"]"#, TaskOutputs { inclusions: vec!["target/**".to_string()], exclusions: vec![] })]
     #[test_case(
-        r#"[".next/**", "!.next/cache/**"]"#,
+        r#"[".next/**", "!.next/cache/**", "!.next/dev/**"]"#,
         TaskOutputs {
              inclusions: vec![".next/**".to_string()],
-             exclusions: vec![".next/cache/**".to_string()]
+             exclusions: vec![".next/cache/**".to_string(), ".next/dev/**".to_string()]
         }
         ; "with .next"
     )]
     #[test_case(
-        r#"[".next\\**", "!.next\\cache\\**"]"#,
+        r#"[".next\\**", "!.next\\cache\\**", "!.next\\dev\\**"]"#,
         TaskOutputs {
             inclusions: vec![".next\\**".to_string()],
-            exclusions: vec![".next\\cache\\**".to_string()]
+            exclusions: vec![".next\\cache\\**".to_string(), ".next\\dev\\**".to_string()]
         }
         ; "with .next (windows)"
     )]

@@ -29,7 +29,12 @@ describe("transform-env-literals-to-wildcards", () => {
           cache: false
         },
         build: {
-          outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
+          outputs: [
+            "dist/**/*",
+            ".next/**/*",
+            "!.next/cache/**",
+            "!.next/dev/**"
+          ],
           dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"]
         }
       }
@@ -57,7 +62,12 @@ describe("transform-env-literals-to-wildcards", () => {
           cache: false
         },
         build: {
-          outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
+          outputs: [
+            "dist/**/*",
+            ".next/**/*",
+            "!.next/cache/**",
+            "!.next/dev/**"
+          ],
           dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"]
         }
       }

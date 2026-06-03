@@ -117,7 +117,7 @@ You can now control `turbo`'s [cache fingerprinting (a.k.a. hashing)](/docs/craf
           "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
           "$NEXT_PUBLIC_ANALYTICS_ID"
       ],
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "docs#build": { // override settings for the "build" task for the "docs" app
       "dependsOn": [
@@ -127,7 +127,7 @@ You can now control `turbo`'s [cache fingerprinting (a.k.a. hashing)](/docs/craf
           "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
           "$NEXT_PUBLIC_ANALYTICS_ID"
       ],
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
     }
   },
   "globalDependencies": [

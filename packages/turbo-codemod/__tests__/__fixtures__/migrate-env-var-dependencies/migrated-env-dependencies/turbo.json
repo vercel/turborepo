@@ -6,7 +6,7 @@
     "build": {
       "dependsOn": ["^build"],
       "env": ["PROD_API_KEY"],
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "dev": {
       "cache": false

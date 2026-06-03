@@ -111,7 +111,7 @@ We'll be using `build` and `check-types` tasks in this guide but you can replace
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "check-types": {
       "dependsOn": ["^check-types"]

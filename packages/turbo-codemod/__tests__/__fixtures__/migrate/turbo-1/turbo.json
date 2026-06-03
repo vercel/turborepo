@@ -3,7 +3,7 @@
   // A comment which we allow
   "pipeline": {
     "build": {
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "lint": {
       "dotEnv": [".env.local"],

@@ -562,7 +562,7 @@ In the example below, we've defined three tasks under the `tasks` key: `build`, 
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**"],
     },
     "test": {
       "outputs": ["coverage/**"],
@@ -897,13 +897,13 @@ A Package Configuration can add additional outputs while keeping the root output
   "tasks": {
     "build": {
       // Inherits "dist/**" from root, and adds ".next/**"
-      "outputs": ["$TURBO_EXTENDS$", ".next/**", "!.next/cache/**"],
+      "outputs": ["$TURBO_EXTENDS$", ".next/**", "!.next/cache/**", "!.next/dev/**"],
     },
   },
 }
 ```
 
-Without `$TURBO_EXTENDS$`, the `outputs` array would be completely replaced with `[".next/**", "!.next/cache/**"]`, dropping the `"dist/**"` from the root configuration.
+Without `$TURBO_EXTENDS$`, the `outputs` array would be completely replaced with `[".next/**", "!.next/cache/**", "!.next/dev/**"]`, dropping the `"dist/**"` from the root configuration.
 
 ### `outputLogs`
 
