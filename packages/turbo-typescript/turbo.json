@@ -1,0 +1,9 @@
+{
+  "$schema": "../turbo-types/schemas/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"]
+    }
+  }
+}

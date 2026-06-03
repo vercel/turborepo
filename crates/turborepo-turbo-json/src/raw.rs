@@ -396,6 +396,7 @@ pub struct RawRootTurboJson {
     pub global_dependencies: Option<Vec<Spanned<UnescapedString>>>,
     pub global_env: Option<Vec<Spanned<UnescapedString>>>,
     pub global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
+    pub typescript_project_references: Option<Spanned<serde_json::Value>>,
     // Tasks is a map of task entries which define the task graph
     // and cache behavior on a per task or per package-task basis.
     pub tasks: Option<Pipeline>,
@@ -507,6 +508,14 @@ pub struct RawTurboJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
+
+    /// Configuration for `@turbo/typescript` Project References sync.
+    ///
+    /// Accepted values are `true` or an object with `excluded` and `ignored`
+    /// package path arrays. The syncer performs stricter runtime validation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(skip)]
+    pub typescript_project_references: Option<Spanned<serde_json::Value>>,
 
     /// An object representing the task dependency graph of your project.
     ///
@@ -895,6 +904,7 @@ impl TryFrom<RawRootTurboJson> for RawTurboJson {
                 global_dependencies: None,
                 global_env: None,
                 global_pass_through_env: None,
+                typescript_project_references: root.typescript_project_references,
                 remote_cache: None,
                 ui: None,
                 allow_no_package_manager: None,
@@ -919,6 +929,7 @@ impl TryFrom<RawRootTurboJson> for RawTurboJson {
                 global_dependencies: root.global_dependencies,
                 global_env: root.global_env,
                 global_pass_through_env: root.global_pass_through_env,
+                typescript_project_references: root.typescript_project_references,
                 tasks: root.tasks,
                 pipeline: root.pipeline,
                 remote_cache: root.remote_cache,

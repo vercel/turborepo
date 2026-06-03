@@ -105,6 +105,19 @@ export interface RootSchema extends BaseSchema {
   globalPassThroughEnv?: null | Array<EnvWildcard>;
 
   /**
+   * Configuration for `@turbo/typescript` Project References sync.
+   *
+   * Runtime validation in `@turbo/typescript` is stricter than this editor
+   * schema: entries must be workspace-relative package paths.
+   */
+  typescriptProjectReferences?:
+    | boolean
+    | {
+        excluded?: Array<RelativeUnixPath>;
+        ignored?: Array<RelativeUnixPath>;
+      };
+
+  /**
    * Configuration options that control how turbo interfaces with the remote cache.
    *
    * Documentation: https://turborepo.dev/docs/core-concepts/remote-caching

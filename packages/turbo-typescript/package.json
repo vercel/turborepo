@@ -1,0 +1,60 @@
+{
+  "name": "@turbo/typescript",
+  "version": "2.9.15-canary.8",
+  "description": "Synchronize TypeScript Project References for Turborepo workspaces",
+  "homepage": "https://turborepo.dev",
+  "bugs": {
+    "url": "https://github.com/vercel/turborepo/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vercel/turborepo",
+    "directory": "packages/turbo-typescript"
+  },
+  "bin": {
+    "turbo-typescript": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown && tsc -p tsconfig.build.json",
+    "dev": "tsdown --watch",
+    "test": "jest",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fast-glob": "3.2.12",
+    "js-yaml": "4.1.1",
+    "jsonc-parser": "3.3.1",
+    "semver": "7.6.2"
+  },
+  "devDependencies": {
+    "@jest/globals": "30.3.0",
+    "@turbo/tsconfig": "workspace:*",
+    "@types/js-yaml": "4.0.5",
+    "@types/node": "18.17.4",
+    "@types/semver": "7.5.8",
+    "jest": "30.3.0",
+    "ts-jest": "29.4.9",
+    "tsdown": "0.12.0",
+    "typescript": "5.5.4"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  }
+}

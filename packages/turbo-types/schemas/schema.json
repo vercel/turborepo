@@ -157,6 +157,35 @@
         "$ref": "#/definitions/String"
       }
     },
+    "typescriptProjectReferences": {
+      "description": "Configuration for `@turbo/typescript` Project References sync. Runtime validation is stricter than this editor schema.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Boolean"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "excluded": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/String"
+              }
+            },
+            "ignored": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/String"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "noUpdateNotifier": {
       "description": "When set to `true`, disables the update notification that appears when a new version of `turbo` is available.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#noupdatenotifier",
       "anyOf": [
