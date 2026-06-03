@@ -80,7 +80,7 @@ describe("migrate", () => {
       $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**", "!.next/cache/**", "!.next/dev/**"]
+          outputs: [".next/**", "!.next/cache/**"]
         },
         dev: {
           cache: false
@@ -237,7 +237,7 @@ describe("migrate", () => {
       $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**", "!.next/cache/**", "!.next/dev/**"]
+          outputs: [".next/**", "!.next/cache/**"]
         },
         dev: {
           cache: false
@@ -322,7 +322,7 @@ describe("migrate", () => {
       $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**", "!.next/cache/**", "!.next/dev/**"]
+          outputs: [".next/**", "!.next/cache/**"]
         },
         dev: {
           cache: false
@@ -528,7 +528,7 @@ describe("migrate", () => {
       $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**", "!.next/cache/**", "!.next/dev/**"]
+          outputs: [".next/**", "!.next/cache/**"]
         },
         dev: {
           cache: false
@@ -636,7 +636,7 @@ describe("migrate", () => {
       $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**", "!.next/cache/**", "!.next/dev/**"]
+          outputs: [".next/**", "!.next/cache/**"]
         },
         dev: {
           cache: false
@@ -984,7 +984,7 @@ describe("migrate", () => {
       $schema: "https://v2-9-3.turborepo.dev/schema.json",
       tasks: {
         build: {
-          outputs: [".next/**", "!.next/cache/**", "!.next/dev/**"]
+          outputs: [".next/**", "!.next/cache/**"]
         },
         dev: {
           cache: false

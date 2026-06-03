@@ -134,7 +134,6 @@ describe("getTurboConfigs", () => {
             "outputs": [
               ".next/**",
               "!.next/cache/**",
-              "!.next/dev/**",
             ],
           },
           "dev": {

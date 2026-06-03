@@ -24,7 +24,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
       "passThroughEnv": ["BACKEND_URL"]
     },
 

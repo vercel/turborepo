@@ -28,12 +28,7 @@ describe("set-default-outputs", () => {
           cache: false
         },
         build: {
-          outputs: [
-            "dist/**/*",
-            ".next/**/*",
-            "!.next/cache/**",
-            "!.next/dev/**"
-          ],
+          outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
           dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"]
         }
       }

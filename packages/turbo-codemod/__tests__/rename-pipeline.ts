@@ -59,7 +59,7 @@ describe("rename-pipeline", () => {
       tasks: {
         build: {
           dependsOn: ["^build"],
-          outputs: [".next/**", "!.next/cache/**", "!.next/dev/**"]
+          outputs: [".next/**", "!.next/cache/**"]
         },
         dev: {
           cache: false

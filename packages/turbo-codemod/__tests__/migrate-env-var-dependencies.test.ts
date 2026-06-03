@@ -27,12 +27,7 @@ const getTestTurboConfig = (
         cache: false
       },
       build: {
-        outputs: [
-          "dist/**/*",
-          ".next/**/*",
-          "!.next/cache/**",
-          "!.next/dev/**"
-        ],
+        outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
         dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"]
       }
     }
@@ -60,12 +55,7 @@ describe("migrate-env-var-dependencies", () => {
           cache: false
         },
         build: {
-          outputs: [
-            "dist/**/*",
-            ".next/**/*",
-            "!.next/cache/**",
-            "!.next/dev/**"
-          ],
+          outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
           dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"]
         }
       }
@@ -249,7 +239,6 @@ describe("migrate-env-var-dependencies", () => {
                 "dist/**/*",
                 ".next/**/*",
                 "!.next/cache/**",
-                "!.next/dev/**",
               ],
             },
             "dev": {
@@ -291,7 +280,6 @@ describe("migrate-env-var-dependencies", () => {
                 "dist/**/*",
                 ".next/**/*",
                 "!.next/cache/**",
-                "!.next/dev/**",
               ],
             },
             "dev": {
@@ -339,7 +327,6 @@ describe("migrate-env-var-dependencies", () => {
                 "dist/**/*",
                 ".next/**/*",
                 "!.next/cache/**",
-                "!.next/dev/**",
               ],
             },
             "dev": {
@@ -391,7 +378,6 @@ describe("migrate-env-var-dependencies", () => {
                 "dist/**/*",
                 ".next/**/*",
                 "!.next/cache/**",
-                "!.next/dev/**",
               ],
             },
             "dev": {
@@ -444,7 +430,7 @@ describe("migrate-env-var-dependencies", () => {
           build: {
             dependsOn: ["^build"],
             env: ["PROD_API_KEY"],
-            outputs: [".next/**", "!.next/cache/**", "!.next/dev/**"]
+            outputs: [".next/**", "!.next/cache/**"]
           },
           dev: {
             cache: false
@@ -494,7 +480,7 @@ describe("migrate-env-var-dependencies", () => {
           build: {
             dependsOn: ["^build"],
             env: ["PROD_API_KEY"],
-            outputs: [".next/**", "!.next/cache/**", "!.next/dev/**"]
+            outputs: [".next/**", "!.next/cache/**"]
           },
           dev: {
             cache: false
@@ -578,7 +564,7 @@ describe("migrate-env-var-dependencies", () => {
           build: {
             dependsOn: ["^build"],
             env: ["PROD_API_KEY"],
-            outputs: [".next/**", "!.next/cache/**", "!.next/dev/**"]
+            outputs: [".next/**", "!.next/cache/**"]
           },
           dev: {
             cache: false
@@ -674,7 +660,7 @@ describe("migrate-env-var-dependencies", () => {
           build: {
             dependsOn: ["^build"],
             env: ["PROD_API_KEY"],
-            outputs: [".next/**", "!.next/cache/**", "!.next/dev/**"]
+            outputs: [".next/**", "!.next/cache/**"]
           },
           dev: {
             cache: false
