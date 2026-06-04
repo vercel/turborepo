@@ -17,6 +17,7 @@ import {
   SidebarSeparator
 } from "fumadocs-ui/components/sidebar/base";
 import type { SidebarPageTreeComponents } from "fumadocs-ui/components/sidebar/page-tree";
+import { usePathname } from "fumadocs-core/framework";
 import { useTreeContext, useTreePath } from "fumadocs-ui/contexts/tree";
 import { SiGithub } from "@icons-pack/react-simple-icons";
 import { ExternalLinkIcon } from "lucide-react";
@@ -33,6 +34,16 @@ import { useSidebarContext } from "@/hooks/geistdocs/use-sidebar";
 import { cn } from "@/lib/utils";
 import { SearchButton } from "./search";
 import { VersionWarning } from "@/components/version-warning";
+
+const normalizePath = (path: string) => {
+  const normalized = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+  const docsPathStart = normalized.indexOf("/docs");
+
+  return docsPathStart > 0 ? normalized.slice(docsPathStart) : normalized;
+};
+
+const isActive = (href: string, pathname: string) =>
+  normalizePath(href) === normalizePath(pathname);
 
 export const Sidebar: DocsSlots["sidebar"]["root"] = ({
   className,
@@ -147,6 +158,7 @@ export const Folder: SidebarPageTreeComponents["Folder"] = ({
   item
 }) => {
   const path = useTreePath();
+  const pathname = usePathname();
   const defaultOpen = item.defaultOpen ?? path.includes(item);
 
   return (
@@ -156,6 +168,7 @@ export const Folder: SidebarPageTreeComponents["Folder"] = ({
           className="flex items-center gap-2 text-pretty py-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground data-[active=true]:text-foreground [&_svg]:size-3.5"
           external={item.index.external}
           href={item.index.url}
+          active={isActive(item.index.url, pathname)}
         >
           {item.icon}
           {item.name}
@@ -171,16 +184,21 @@ export const Folder: SidebarPageTreeComponents["Folder"] = ({
   );
 };
 
-export const Item: SidebarPageTreeComponents["Item"] = ({ item }) => (
-  <SidebarItem
-    className="block w-full truncate text-pretty py-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground data-[active=true]:text-foreground"
-    external={item.external}
-    href={item.url}
-    icon={item.icon}
-  >
-    {item.name}
-  </SidebarItem>
-);
+export const Item: SidebarPageTreeComponents["Item"] = ({ item }) => {
+  const pathname = usePathname();
+
+  return (
+    <SidebarItem
+      active={isActive(item.url, pathname)}
+      className="block w-full truncate text-pretty py-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground data-[active=true]:text-foreground"
+      external={item.external}
+      href={item.url}
+      icon={item.icon}
+    >
+      {item.name}
+    </SidebarItem>
+  );
+};
 
 export const Separator: SidebarPageTreeComponents["Separator"] = ({ item }) => (
   <SidebarSeparator className="mt-4 mb-2 flex items-center gap-2 px-0 font-medium text-sm first-child:mt-0">
