@@ -462,9 +462,9 @@ impl PnpmLockfile {
             return Ok(Some(specifier));
         }
 
-        if resolved_specifier == override_specifier {
-            Ok(Some(resolved_version))
-        } else if self.has_package_by_parts(name, resolved_version, key_buf) {
+        if resolved_specifier == override_specifier
+            || self.has_package_by_parts(name, resolved_version, key_buf)
+        {
             Ok(Some(resolved_version))
         } else if self.has_package_by_parts(name, override_specifier, key_buf) {
             Ok(Some(override_specifier))
