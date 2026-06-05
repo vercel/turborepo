@@ -464,6 +464,8 @@ impl PnpmLockfile {
 
         if resolved_specifier == override_specifier {
             Ok(Some(resolved_version))
+        } else if self.has_package_by_parts(name, resolved_version, key_buf) {
+            Ok(Some(resolved_version))
         } else if self.has_package_by_parts(name, override_specifier, key_buf) {
             Ok(Some(override_specifier))
         } else {
@@ -1136,6 +1138,64 @@ importers:
             !pruned_lockfile.importers.contains_key("apps/docs"),
             "pruned lockfile should still trim workspaces from the final document"
         );
+    }
+
+    #[test]
+    fn test_pnpm_v9_resolves_override_rewritten_importer_versions() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: false
+  excludeLinksFromLockfile: false
+
+overrides:
+  ms@>=2.1.0: 2.0.0
+  picomatch@>=3.0.0 <4: 3.0.2
+
+importers:
+
+  .: {}
+
+  apps/web-inrange:
+    dependencies:
+      picomatch:
+        specifier: 3.0.2
+        version: 3.0.2
+
+  apps/web-override:
+    dependencies:
+      ms:
+        specifier: 2.0.0
+        version: 2.0.0
+
+packages:
+
+  ms@2.0.0:
+    resolution: {integrity: sha512-abc}
+
+  picomatch@3.0.2:
+    resolution: {integrity: sha512-def}
+
+snapshots:
+
+  ms@2.0.0: {}
+
+  picomatch@3.0.2: {}
+"#;
+
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let in_range = lockfile
+            .resolve_package("apps/web-inrange", "picomatch", "^3.0.1")
+            .unwrap()
+            .expect("override-rewritten in-range specifier should resolve");
+        assert_eq!(in_range.key, "picomatch@3.0.2");
+
+        let out_of_range = lockfile
+            .resolve_package("apps/web-override", "ms", "^2.1.3")
+            .unwrap()
+            .expect("override-rewritten out-of-range specifier should resolve");
+        assert_eq!(out_of_range.key, "ms@2.0.0");
     }
 
     #[test]
