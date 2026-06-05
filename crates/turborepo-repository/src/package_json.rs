@@ -14,6 +14,12 @@ use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 use turborepo_errors::{ParseDiagnostic, Spanned, WithMetadata};
 use turborepo_unescape::UnescapedString;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DependencyKind {
+    Normal,
+    Peer,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageJson {
@@ -208,6 +214,24 @@ impl PackageJson {
             .chain(self.dev_dependencies.iter().flatten())
             .chain(self.optional_dependencies.iter().flatten())
             .chain(self.peer_dependencies.iter().flatten())
+    }
+
+    pub fn dependencies_with_kind(
+        &self,
+    ) -> impl Iterator<Item = (&String, &String, DependencyKind)> + '_ {
+        let normal = self
+            .dependencies
+            .iter()
+            .flatten()
+            .chain(self.dev_dependencies.iter().flatten())
+            .chain(self.optional_dependencies.iter().flatten())
+            .map(|(name, version)| (name, version, DependencyKind::Normal));
+        let peer = self
+            .peer_dependencies
+            .iter()
+            .flatten()
+            .map(|(name, version)| (name, version, DependencyKind::Peer));
+        normal.chain(peer)
     }
 
     /// Returns the command for script_name if it is non-empty
