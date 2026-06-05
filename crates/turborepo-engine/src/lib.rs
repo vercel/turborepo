@@ -47,7 +47,7 @@ use thiserror::Error;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::PackageName;
 use turborepo_task_id::TaskId;
-use turborepo_types::{EngineInfo, TaskDefinition};
+use turborepo_types::{EngineInfo, ShardSpec, ShardSummary, ShardingSummary, TaskDefinition};
 pub use validate::{TaskDefinitionResult, validate_task_name};
 
 /// Trait for types that provide task definition information needed by the
@@ -111,6 +111,22 @@ impl TryFrom<TaskNode> for TaskId<'static> {
             TaskNode::Task(id) => Ok(id),
         }
     }
+}
+
+/// The result of dividing the task graph into shards.
+///
+/// Carries both the serializable [`ShardingSummary`] (surfaced in run summaries
+/// / `--dry=json`) and the per-shard entry task sets needed to prune the engine
+/// down to a single selected shard.
+#[derive(Debug, Clone)]
+pub struct ShardingPlan {
+    /// Human/machine-readable summary of the sharding decision.
+    pub summary: ShardingSummary,
+    /// For each shard (indexed 0-based; shard `n` in the summary is
+    /// `shard_entry_tasks[n - 1]`), the set of entry (top-level requested)
+    /// tasks assigned to it. Pruning the engine to a shard means retaining
+    /// these tasks and their transitive dependencies.
+    pub shard_entry_tasks: Vec<HashSet<TaskId<'static>>>,
 }
 
 #[derive(Debug, Default)]
@@ -652,6 +668,216 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     /// Provides access to the task lookup map (task_id -> node index)
     pub fn task_lookup(&self) -> &HashMap<TaskId<'static>, petgraph::graph::NodeIndex> {
         &self.task_lookup
+    }
+
+    /// The "entry" tasks: the top-level tasks that nothing else depends on,
+    /// i.e. the sinks of the dependency DAG (the final outputs the user asked
+    /// for). Edges point from a dependent to its dependency, so an entry task
+    /// is a task node with no incoming edges. These are the units the sharder
+    /// distributes across shards; every other task is pulled into a shard as a
+    /// transitive dependency of one of these.
+    ///
+    /// (Note: the synthetic root is connected *from* the leaf tasks that have
+    /// no dependencies, so it is not an entry task and is skipped here.)
+    fn entrypoint_indices(&self) -> Vec<petgraph::graph::NodeIndex> {
+        self.task_graph
+            .node_indices()
+            .filter(|&idx| {
+                idx != self.root_index
+                    && matches!(self.task_graph.node_weight(idx), Some(TaskNode::Task(_)))
+                    && self
+                        .task_graph
+                        .neighbors_directed(idx, petgraph::Direction::Incoming)
+                        .next()
+                        .is_none()
+            })
+            .collect()
+    }
+
+    /// Forward (dependency) closure of a single task node: the node itself plus
+    /// every task it transitively depends on. Root is excluded. This is exactly
+    /// the set of tasks that must be present for the seed task to run.
+    fn dependency_closure(
+        &self,
+        seed: petgraph::graph::NodeIndex,
+    ) -> HashSet<petgraph::graph::NodeIndex> {
+        let mut set = HashSet::new();
+        depth_first_search(&self.task_graph, Some(seed), |event| {
+            if let DfsEvent::Discover(n, _) = event
+                && n != self.root_index
+            {
+                set.insert(n);
+            }
+        });
+        set
+    }
+
+    fn node_to_task_id(&self, idx: petgraph::graph::NodeIndex) -> Option<TaskId<'static>> {
+        match self.task_graph.node_weight(idx)? {
+            TaskNode::Task(id) => Some(id.clone()),
+            TaskNode::Root => None,
+        }
+    }
+
+    fn sorted_task_ids(
+        &self,
+        indices: impl IntoIterator<Item = petgraph::graph::NodeIndex>,
+    ) -> Vec<String> {
+        let mut ids: Vec<String> = indices
+            .into_iter()
+            .filter_map(|idx| self.node_to_task_id(idx).map(|id| id.to_string()))
+            .collect();
+        ids.sort();
+        ids
+    }
+
+    /// Divides the task graph into shards according to `spec`.
+    ///
+    /// Sharding distributes the *entry* tasks (top-level requested tasks) and
+    /// pulls each entry's transitive dependencies into the same shard so every
+    /// shard is independently runnable. A dependency shared by entries in
+    /// different shards therefore lands in each of those shards; this
+    /// duplication is reported via `shared_tasks`.
+    ///
+    /// Balancing strategy:
+    /// - `MaxShards(k)`: at most `k` shards (capped by the number of entries).
+    ///   Entries are placed into the currently least-loaded shard, heaviest
+    ///   first (LPT / greedy multiway partitioning), balancing node counts.
+    /// - `MaxNodesPerShard(p)`: as many shards as needed so each holds at most
+    ///   `p` task nodes. Entries are bin-packed heaviest-first (first-fit
+    ///   decreasing). A single entry whose closure already exceeds `p` gets its
+    ///   own shard.
+    ///
+    /// Node counts used for balancing are per-entry dependency-closure sizes,
+    /// which over-count shared dependencies; this is an intentional, simple
+    /// heuristic. The reported `task_count`/`tasks` reflect the true,
+    /// de-duplicated shard contents.
+    pub fn compute_sharding(&self, spec: ShardSpec) -> ShardingPlan {
+        // Entries, sorted deterministically by task id so sharding is stable
+        // across runs.
+        let mut entries: Vec<(TaskId<'static>, petgraph::graph::NodeIndex)> = self
+            .entrypoint_indices()
+            .into_iter()
+            .filter_map(|idx| self.node_to_task_id(idx).map(|id| (id, idx)))
+            .collect();
+        entries.sort_by_key(|(id, _)| id.to_string());
+
+        let closures: Vec<HashSet<petgraph::graph::NodeIndex>> = entries
+            .iter()
+            .map(|(_, idx)| self.dependency_closure(*idx))
+            .collect();
+        let weights: Vec<usize> = closures.iter().map(|c| c.len()).collect();
+        let num_entries = entries.len();
+
+        let (limit, assignment, num_shards) = match spec {
+            ShardSpec::MaxShards(k) => {
+                let k = k.max(1);
+                let num_shards = if num_entries == 0 {
+                    0
+                } else {
+                    k.min(num_entries)
+                };
+                let mut assignment = vec![0usize; num_entries];
+                if num_shards > 0 {
+                    // Heaviest entries first.
+                    let mut order: Vec<usize> = (0..num_entries).collect();
+                    order.sort_by(|&a, &b| {
+                        weights[b]
+                            .cmp(&weights[a])
+                            .then_with(|| entries[a].0.to_string().cmp(&entries[b].0.to_string()))
+                    });
+                    let mut loads = vec![0usize; num_shards];
+                    for entry in order {
+                        // Least-loaded shard, ties broken by lowest index.
+                        let shard = (0..num_shards).min_by_key(|&s| (loads[s], s)).unwrap_or(0);
+                        assignment[entry] = shard;
+                        loads[shard] += weights[entry];
+                    }
+                }
+                (k, assignment, num_shards)
+            }
+            ShardSpec::MaxNodesPerShard(p) => {
+                let p = p.max(1);
+                let mut assignment = vec![0usize; num_entries];
+                let mut loads: Vec<usize> = Vec::new();
+                // Heaviest entries first.
+                let mut order: Vec<usize> = (0..num_entries).collect();
+                order.sort_by(|&a, &b| {
+                    weights[b]
+                        .cmp(&weights[a])
+                        .then_with(|| entries[a].0.to_string().cmp(&entries[b].0.to_string()))
+                });
+                for entry in order {
+                    let fit = loads.iter().position(|&load| load + weights[entry] <= p);
+                    let shard = match fit {
+                        Some(s) => s,
+                        None => {
+                            loads.push(0);
+                            loads.len() - 1
+                        }
+                    };
+                    assignment[entry] = shard;
+                    loads[shard] += weights[entry];
+                }
+                (p, assignment, loads.len())
+            }
+        };
+
+        // Build each shard's node set as the union of its entries' closures.
+        let mut shard_nodes: Vec<HashSet<petgraph::graph::NodeIndex>> =
+            vec![HashSet::new(); num_shards];
+        let mut shard_entry_indices: Vec<Vec<petgraph::graph::NodeIndex>> =
+            vec![Vec::new(); num_shards];
+        let mut shard_entry_tasks: Vec<HashSet<TaskId<'static>>> = vec![HashSet::new(); num_shards];
+        for (entry, shard) in assignment.iter().copied().enumerate() {
+            shard_nodes[shard].extend(closures[entry].iter().copied());
+            shard_entry_indices[shard].push(entries[entry].1);
+            shard_entry_tasks[shard].insert(entries[entry].0.clone());
+        }
+
+        // Count how many shards each node appears in to find shared deps.
+        let mut shard_count: HashMap<petgraph::graph::NodeIndex, usize> = HashMap::new();
+        for nodes in &shard_nodes {
+            for &node in nodes {
+                *shard_count.entry(node).or_default() += 1;
+            }
+        }
+        let is_shared = |idx: petgraph::graph::NodeIndex| -> bool {
+            shard_count.get(&idx).is_some_and(|&c| c > 1)
+        };
+
+        let shared_indices: Vec<petgraph::graph::NodeIndex> = shard_count
+            .iter()
+            .filter_map(|(&n, &c)| (c > 1).then_some(n))
+            .collect();
+        let shared_tasks = self.sorted_task_ids(shared_indices);
+
+        let shards: Vec<ShardSummary> = (0..num_shards)
+            .map(|s| {
+                let tasks = self.sorted_task_ids(shard_nodes[s].iter().copied());
+                let shared =
+                    self.sorted_task_ids(shard_nodes[s].iter().copied().filter(|&n| is_shared(n)));
+                ShardSummary {
+                    index: s + 1,
+                    entry_tasks: self.sorted_task_ids(shard_entry_indices[s].iter().copied()),
+                    task_count: tasks.len(),
+                    tasks,
+                    shared_tasks: shared,
+                }
+            })
+            .collect();
+
+        ShardingPlan {
+            summary: ShardingSummary {
+                strategy: spec.strategy(),
+                limit,
+                total_shards: num_shards,
+                selected_shard: None,
+                shards,
+                shared_tasks,
+            },
+            shard_entry_tasks,
+        }
     }
 }
 
@@ -1230,6 +1456,125 @@ impl turborepo_task_executor::TaskWarningCollector for TaskWarningCollectorWrapp
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .push(warning);
+        }
+    }
+}
+
+#[cfg(test)]
+mod sharding_tests {
+    use turborepo_types::ShardSpec;
+
+    use super::*;
+
+    /// Builds a fan-in graph with four independent `test` sinks, each
+    /// depending on its own `#build` plus one `shared#build` dependency:
+    ///
+    ///   {a,b,c,d}#test ── depend on ──> {a,b,c,d}#build
+    ///                  └─ depend on ──> shared#build
+    ///
+    /// Entry tasks (no dependents) are the four `#test` tasks; each has a
+    /// dependency closure of size 3 (`X#test`, `X#build`, `shared#build`).
+    fn build_fan_in_engine() -> Engine {
+        let mut engine: Engine<Building> = Engine::new();
+        let shared = TaskId::new("shared", "build");
+        let shared_idx = engine.get_index(&shared);
+        engine.add_definition(shared.clone(), TaskInfo::default());
+        engine.connect_to_root(&shared);
+
+        for pkg in ["a", "b", "c", "d"] {
+            let test = TaskId::new(pkg, "test");
+            let build = TaskId::new(pkg, "build");
+            let test_idx = engine.get_index(&test);
+            let build_idx = engine.get_index(&build);
+            engine.add_definition(test.clone(), TaskInfo::default());
+            engine.add_definition(build.clone(), TaskInfo::default());
+            // test depends on its own build and the shared build.
+            engine.task_graph_mut().add_edge(test_idx, build_idx, ());
+            engine.task_graph_mut().add_edge(test_idx, shared_idx, ());
+            // build has no deps, so it anchors to root.
+            engine.connect_to_root(&build);
+        }
+
+        engine.seal()
+    }
+
+    #[test]
+    fn entrypoints_are_the_sinks() {
+        let engine = build_fan_in_engine();
+        let mut entries: Vec<String> = engine
+            .entrypoint_indices()
+            .into_iter()
+            .filter_map(|idx| engine.node_to_task_id(idx).map(|id| id.to_string()))
+            .collect();
+        entries.sort();
+        assert_eq!(
+            entries,
+            vec!["a#test", "b#test", "c#test", "d#test"],
+            "only the test tasks (no dependents) are entries"
+        );
+    }
+
+    #[test]
+    fn max_shards_balances_and_reports_shared() {
+        let engine = build_fan_in_engine();
+        let plan = engine.compute_sharding(ShardSpec::MaxShards(2));
+        let summary = &plan.summary;
+
+        assert_eq!(summary.strategy, "maxShards");
+        assert_eq!(summary.limit, 2);
+        assert_eq!(summary.total_shards, 2);
+        assert_eq!(summary.selected_shard, None);
+        // 4 entries split evenly across 2 shards.
+        assert_eq!(summary.shards.len(), 2);
+        for shard in &summary.shards {
+            assert_eq!(shard.entry_tasks.len(), 2);
+            // {X#test, X#build, Y#test, Y#build, shared#build} == 5
+            assert_eq!(shard.task_count, 5);
+            assert!(shard.tasks.contains(&"shared#build".to_string()));
+            assert!(shard.shared_tasks.contains(&"shared#build".to_string()));
+        }
+        // shared#build is the only task in more than one shard.
+        assert_eq!(summary.shared_tasks, vec!["shared#build".to_string()]);
+
+        // Every entry is assigned to exactly one shard.
+        let total_entries: usize = plan.shard_entry_tasks.iter().map(|s| s.len()).sum();
+        assert_eq!(total_entries, 4);
+    }
+
+    #[test]
+    fn max_shards_is_capped_by_entry_count() {
+        let engine = build_fan_in_engine();
+        // Asking for more shards than entries yields one shard per entry.
+        let plan = engine.compute_sharding(ShardSpec::MaxShards(100));
+        assert_eq!(plan.summary.total_shards, 4);
+        for shard in &plan.summary.shards {
+            assert_eq!(shard.entry_tasks.len(), 1);
+        }
+    }
+
+    #[test]
+    fn max_nodes_per_shard_packs_entries() {
+        let engine = build_fan_in_engine();
+        // Each entry's closure weight is 3, so a limit of 6 packs two entries
+        // per shard (2 shards total).
+        let plan = engine.compute_sharding(ShardSpec::MaxNodesPerShard(6));
+        assert_eq!(plan.summary.strategy, "maxNodesPerShard");
+        assert_eq!(plan.summary.limit, 6);
+        assert_eq!(plan.summary.total_shards, 2);
+        for shard in &plan.summary.shards {
+            assert_eq!(shard.entry_tasks.len(), 2);
+        }
+    }
+
+    #[test]
+    fn max_nodes_per_shard_isolates_oversized_entries() {
+        let engine = build_fan_in_engine();
+        // A limit smaller than a single entry's closure (3) forces each entry
+        // into its own shard.
+        let plan = engine.compute_sharding(ShardSpec::MaxNodesPerShard(1));
+        assert_eq!(plan.summary.total_shards, 4);
+        for shard in &plan.summary.shards {
+            assert_eq!(shard.entry_tasks.len(), 1);
         }
     }
 }

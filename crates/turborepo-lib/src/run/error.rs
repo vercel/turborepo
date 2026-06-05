@@ -77,4 +77,11 @@ pub enum Error {
     GlobalFileHashTaskIncomplete,
     #[error("Affected range was not configured")]
     MissingAffectedRange,
+    #[error(
+        "--shard {requested} is out of range: the task graph was divided into {total} shard(s) \
+         (valid range is 1..={total})"
+    )]
+    ShardOutOfRange { requested: usize, total: usize },
+    #[error("--shard was requested but the task graph produced no shards (no tasks to run)")]
+    NoShards,
 }

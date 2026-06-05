@@ -1046,6 +1046,7 @@ impl ExecutionArgs {
 #[derive(Parser, Clone, Debug, PartialEq)]
 #[command(groups = [
     ArgGroup::new("daemon-group").multiple(false).required(false),
+    ArgGroup::new("shard-spec-group").multiple(false).required(false),
 ])]
 pub struct RunArgs {
     /// Set the cache behavior for this run. Pass a list of comma-separated key,
@@ -1112,6 +1113,23 @@ pub struct RunArgs {
     /// (`persistent`, `with`) instead.
     #[clap(long)]
     pub parallel: bool,
+
+    /// Execute only the given shard of the task graph (1-based). Requires
+    /// `--max-shards` or `--max-nodes-per-shard` to determine how many shards
+    /// the graph is divided into.
+    #[clap(long, requires = "shard-spec-group")]
+    pub shard: Option<usize>,
+
+    /// Divide the task graph into at most this many shards, balancing the
+    /// number of tasks across them. Mutually exclusive with
+    /// `--max-nodes-per-shard`.
+    #[clap(long, group = "shard-spec-group")]
+    pub max_shards: Option<usize>,
+
+    /// Divide the task graph into as many shards as needed so each shard holds
+    /// at most this many task nodes. Mutually exclusive with `--max-shards`.
+    #[clap(long, group = "shard-spec-group")]
+    pub max_nodes_per_shard: Option<usize>,
 }
 
 impl Default for RunArgs {
@@ -1131,6 +1149,9 @@ impl Default for RunArgs {
             remote_cache_read_only: None,
             summarize: None,
             parallel: false,
+            shard: None,
+            max_shards: None,
+            max_nodes_per_shard: None,
         }
     }
 }

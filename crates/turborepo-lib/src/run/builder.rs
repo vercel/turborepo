@@ -419,7 +419,7 @@ impl RunBuilder {
 
     #[tracing::instrument(skip(self, signal_handler))]
     pub async fn build(
-        self,
+        mut self,
         signal_handler: &SignalHandler,
         telemetry: CommandEventBuilder,
     ) -> Result<(Run, Option<AnalyticsHandle>), Error> {
@@ -799,6 +799,42 @@ impl RunBuilder {
                 &root_turbo_json,
                 &scm,
             )?;
+        }
+
+        // Sharding: divide the task graph into shards and, if a specific shard
+        // was selected via --shard, prune the engine down to it. Runs after all
+        // other filtering so shards reflect the tasks that would actually run.
+        if let Some(spec) = self.opts.run_opts.shard_spec {
+            let plan = engine.compute_sharding(spec);
+            let mut summary = plan.summary;
+            let selected = self.opts.run_opts.shard;
+
+            if let Some(selected) = selected {
+                if summary.total_shards == 0 {
+                    return Err(Error::NoShards);
+                }
+                if selected < 1 || selected > summary.total_shards {
+                    return Err(Error::ShardOutOfRange {
+                        requested: selected,
+                        total: summary.total_shards,
+                    });
+                }
+                summary.selected_shard = Some(selected);
+                // Prune to the selected shard's entry tasks; retain_filtered_tasks
+                // re-derives the same transitive-dependency closure used to build
+                // the shard, so the executed engine matches the shard summary.
+                if let Some(entry_tasks) = plan.shard_entry_tasks.get(selected - 1) {
+                    engine = engine.retain_filtered_tasks(entry_tasks);
+                }
+                tracing::info!(
+                    selected_shard = selected,
+                    total_shards = summary.total_shards,
+                    strategy = summary.strategy,
+                    "pruned task graph to selected shard"
+                );
+            }
+
+            self.opts.run_opts.sharding = Some(summary);
         }
 
         // Validate after all filtering so the persistent task count reflects

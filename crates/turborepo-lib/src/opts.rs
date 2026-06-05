@@ -7,8 +7,8 @@ use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
 use turborepo_types::{
     APIClientOpts, ContinueMode, DryRunMode, EnvMode, GraphOpts, LogOrder, LogPrefix, RepoOpts,
-    ResolvedLogOrder, ResolvedLogPrefix, RunCacheOpts, RunOptsInfo, ScopeOpts, TaskArgs, TuiOpts,
-    UIMode,
+    ResolvedLogOrder, ResolvedLogPrefix, RunCacheOpts, RunOptsInfo, ScopeOpts, ShardSpec,
+    ShardingSummary, TaskArgs, TuiOpts, UIMode,
 };
 
 use crate::{
@@ -417,6 +417,15 @@ pub struct RunOpts {
     pub summarize: bool,
     pub is_github_actions: bool,
     pub ui_mode: UIMode,
+    /// Which shard to execute (1-based), if `--shard` was passed.
+    pub(crate) shard: Option<usize>,
+    /// How to divide the task graph into shards, if `--max-shards` or
+    /// `--max-nodes-per-shard` was passed.
+    #[serde(skip)]
+    pub(crate) shard_spec: Option<ShardSpec>,
+    /// Summary of the sharding decision, computed against the task graph during
+    /// run building. Surfaced in `--summarize` / `--dry=json` output.
+    pub(crate) sharding: Option<ShardingSummary>,
 }
 
 impl RunOpts {
@@ -491,10 +500,25 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             log_order
         };
 
+        let shard_spec = match (
+            inputs.run_args.max_shards,
+            inputs.run_args.max_nodes_per_shard,
+        ) {
+            (Some(n), None) => Some(ShardSpec::MaxShards(n)),
+            (None, Some(n)) => Some(ShardSpec::MaxNodesPerShard(n)),
+            (None, None) => None,
+            // clap's `shard-spec-group` (multiple(false)) enforces that at most
+            // one of these is set.
+            (Some(_), Some(_)) => unreachable!("--max-shards and --max-nodes-per-shard conflict"),
+        };
+
         Ok(Self {
             tasks: inputs.execution_args.tasks.clone(),
             log_prefix,
             log_order,
+            shard: inputs.run_args.shard,
+            shard_spec,
+            sharding: None,
             summarize: inputs.config.run_summary(),
             framework_inference: inputs.execution_args.framework_inference,
             concurrency,
@@ -716,6 +740,10 @@ impl RunOptsInfo for RunOpts {
     fn tasks(&self) -> &[String] {
         &self.tasks
     }
+
+    fn sharding(&self) -> Option<&ShardingSummary> {
+        self.sharding.as_ref()
+    }
 }
 
 impl<'a> From<OptsInputs<'a>> for TuiOpts {
@@ -889,6 +917,9 @@ mod test {
             summarize: false,
             is_github_actions: false,
             daemon: None,
+            shard: None,
+            shard_spec: None,
+            sharding: None,
         };
         let cache_opts = CacheOpts {
             cache_dir: ".turbo/cache".into(),

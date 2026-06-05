@@ -1,5 +1,5 @@
 ---
-source: crates/turborepo-lib/src/cli/mod.rs
+source: crates/turborepo-lib/src/cli/test.rs
 expression: "String::from_utf8(buf).unwrap()"
 ---
 The build system that makes ship happen
@@ -115,6 +115,12 @@ Run Arguments:
           Generate a summary of the turbo run [possible values: true, false]
       --parallel
           [DEPRECATED] Execute all tasks in parallel. Use task configuration (`persistent`, `with`) instead
+      --shard <SHARD>
+          Execute only the given shard of the task graph (1-based). Requires `--max-shards` or `--max-nodes-per-shard` to determine how many shards the graph is divided into
+      --max-shards <MAX_SHARDS>
+          Divide the task graph into at most this many shards, balancing the number of tasks across them. Mutually exclusive with `--max-nodes-per-shard`
+      --max-nodes-per-shard <MAX_NODES_PER_SHARD>
+          Divide the task graph into as many shards as needed so each shard holds at most this many task nodes. Mutually exclusive with `--max-shards`
       --cache-dir <CACHE_DIR>
           Override the filesystem cache directory
       --concurrency <CONCURRENCY>

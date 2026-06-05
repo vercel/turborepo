@@ -152,6 +152,79 @@ impl fmt::Display for DryRunMode {
     }
 }
 
+/// How to divide the task graph into shards.
+///
+/// Exactly one of these can be specified at a time (enforced at the CLI layer).
+/// Both are used as an upper bound that the sharder balances against:
+/// - `MaxShards`: produce at most this many shards, balancing node counts
+///   across them.
+/// - `MaxNodesPerShard`: produce as many shards as needed so that each shard
+///   holds at most this many task nodes.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ShardSpec {
+    /// Produce at most `n` shards.
+    MaxShards(usize),
+    /// Each shard holds at most `n` task nodes.
+    MaxNodesPerShard(usize),
+}
+
+impl ShardSpec {
+    /// A short, stable identifier for how the shard count was derived. Used in
+    /// the run summary so consumers can understand the sharding strategy.
+    pub fn strategy(&self) -> &'static str {
+        match self {
+            ShardSpec::MaxShards(_) => "maxShards",
+            ShardSpec::MaxNodesPerShard(_) => "maxNodesPerShard",
+        }
+    }
+}
+
+/// Summary of how the task graph was divided into shards.
+///
+/// Because the task graph is a dependency graph, splitting it means a single
+/// task (a shared dependency) can land in more than one shard — every shard
+/// that contains a task which (transitively) depends on it must also contain
+/// it so the shard is independently runnable. `shared_tasks` makes that
+/// duplication visible.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShardingSummary {
+    /// How the shard count was derived: `maxShards` or `maxNodesPerShard`.
+    pub strategy: &'static str,
+    /// The numeric value supplied for `strategy` (the max-shards or
+    /// max-nodes-per-shard bound).
+    pub limit: usize,
+    /// Total number of shards the graph was divided into.
+    pub total_shards: usize,
+    /// The shard selected to execute (1-based), if `--shard` was provided.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_shard: Option<usize>,
+    /// Per-shard breakdown.
+    pub shards: Vec<ShardSummary>,
+    /// Task ids that appear in more than one shard (shared dependencies),
+    /// sorted. A surfaced view of the unavoidable duplication that comes from
+    /// splitting a dependency graph.
+    pub shared_tasks: Vec<String>,
+}
+
+/// Summary of a single shard.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShardSummary {
+    /// 1-based shard index.
+    pub index: usize,
+    /// The top-level (requested) tasks assigned to this shard, sorted.
+    pub entry_tasks: Vec<String>,
+    /// Every task in this shard: the entry tasks plus all of their transitive
+    /// dependencies, sorted.
+    pub tasks: Vec<String>,
+    /// Number of tasks in this shard.
+    pub task_count: usize,
+    /// Tasks in this shard that also appear in at least one other shard,
+    /// sorted.
+    pub shared_tasks: Vec<String>,
+}
+
 /// Enable use of the UI for `turbo`.
 ///
 /// Documentation: https://turborepo.dev/docs/reference/configuration#ui
@@ -1066,6 +1139,11 @@ pub trait RunOptsInfo {
     fn pass_through_args(&self) -> &[String];
     /// Returns the list of task names being run
     fn tasks(&self) -> &[String];
+    /// Returns the sharding summary when `--shard`/`--max-shards`/
+    /// `--max-nodes-per-shard` divided the task graph, None otherwise.
+    fn sharding(&self) -> Option<&ShardingSummary> {
+        None
+    }
 }
 
 /// Trait for accessing task hash tracking information.

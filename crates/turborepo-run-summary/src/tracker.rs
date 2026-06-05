@@ -17,7 +17,9 @@ use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
-use turborepo_types::{DryRunMode, EngineInfo, EnvMode, HashTrackerInfo, RunOptsInfo};
+use turborepo_types::{
+    DryRunMode, EngineInfo, EnvMode, HashTrackerInfo, RunOptsInfo, ShardingSummary,
+};
 use turborepo_ui::{BOLD, BOLD_CYAN, ColorConfig, GREY, color, cprintln, cwriteln};
 
 use crate::{
@@ -72,6 +74,8 @@ pub struct RunSummary<'a> {
     packages: Vec<&'a PackageName>,
     env_mode: EnvMode,
     framework_inference: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sharding: Option<&'a ShardingSummary>,
     tasks: Vec<TaskSummary>,
     user: String,
     scm: SCMState,
@@ -190,6 +194,7 @@ impl RunTracker {
             execution: Some(execution_summary),
             env_mode: global_env_mode,
             framework_inference: run_opts.framework_inference(),
+            sharding: run_opts.sharding(),
             tasks,
             global_hash_summary,
             scm: scm_state,
@@ -328,6 +333,8 @@ pub struct SinglePackageRunSummary<'a> {
     global_hash_summary: &'a GlobalHashSummary<'a>,
     env_mode: EnvMode,
     framework_inference: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sharding: Option<&'a ShardingSummary>,
     tasks: Vec<SinglePackageTaskSummary>,
     user: &'a str,
     pub scm: &'a SCMState,
@@ -351,6 +358,7 @@ impl<'a> From<&'a RunSummary<'a>> for SinglePackageRunSummary<'a> {
             global_hash_summary: &run_summary.global_hash_summary,
             env_mode: run_summary.env_mode,
             framework_inference: run_summary.framework_inference,
+            sharding: run_summary.sharding,
             tasks,
             user: &run_summary.user,
             scm: &run_summary.scm,

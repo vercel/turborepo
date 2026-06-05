@@ -182,6 +182,32 @@ The core task graph consists of:
   tasks, transitive dependents, and only cacheable upstream dependencies that can
   restore outputs without forcing non-cacheable tasks to rerun
 
+#### Sharding (`crates/turborepo-engine/src/lib.rs`)
+
+`--shard`, `--max-shards`, and `--max-nodes-per-shard` divide the task graph
+into independently runnable shards so a large run can be split across machines.
+
+- The unit of distribution is the set of *entry* tasks: task nodes with no
+  dependents (the sinks of the dependency DAG — the outputs the user asked for).
+  Every other task is pulled into a shard as a transitive dependency of an
+  entry, so each shard is self-contained.
+- Because a dependency shared by entries in different shards must appear in
+  every shard that needs it, splitting necessarily duplicates shared
+  dependencies across shards. This duplication is surfaced as `sharedTasks` in
+  the run summary (per-shard and overall).
+- `compute_sharding(ShardSpec)` returns a `ShardingPlan` (summary + per-shard
+  entry task sets). Balancing is greedy on per-entry dependency-closure size:
+  - `--max-shards N`: at most `N` shards (capped by the entry count); entries
+    are placed heaviest-first into the least-loaded shard (LPT).
+  - `--max-nodes-per-shard N`: as many shards as needed for each to hold at most
+    `N` nodes; entries are bin-packed first-fit-decreasing. A single entry whose
+    closure already exceeds `N` gets its own shard.
+  `--max-shards` and `--max-nodes-per-shard` are mutually exclusive.
+- When `--shard K` selects a shard, the run builder prunes the engine to that
+  shard's entry tasks via `retain_filtered_tasks` (reusing the same
+  dependency-closure logic), so the executed graph matches the shard summary.
+  Without `--shard`, the plan is reported but the full graph runs.
+
 ### 4. Task Visitor (`crates/turborepo-lib/src/task_graph/visitor/`)
 
 The task graph visitor handles task execution:
