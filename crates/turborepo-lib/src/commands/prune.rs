@@ -1,7 +1,7 @@
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet, HashSet},
     str::FromStr,
     sync::{LazyLock, OnceLock},
 };
@@ -160,12 +160,7 @@ pub async fn prune(
     let mut workspace_paths = Vec::new();
     let mut workspace_names = Vec::new();
     let workspaces = prune.internal_dependencies();
-    let lockfile_keys: Vec<_> = prune
-        .package_graph
-        .transitive_external_dependencies(workspaces.iter())
-        .into_iter()
-        .map(|pkg| pkg.key.clone())
-        .collect();
+    let lockfile_keys = prune.lockfile_keys(&workspaces)?;
     for workspace in workspaces {
         let entry = prune
             .package_graph
@@ -748,17 +743,111 @@ impl<'a> Prune<'a> {
                     .map(|workspace| PackageNode::Workspace(PackageName::Other(workspace.clone()))),
             )
             .collect::<Vec<_>>();
-        let nodes = self.package_graph.transitive_closure(workspaces.iter());
-
-        let mut names: Vec<_> = nodes
+        let mut names = self
+            .package_graph
+            .transitive_closure(workspaces.iter())
             .into_iter()
             .filter_map(|node| match node {
                 PackageNode::Root => None,
                 PackageNode::Workspace(workspace) => Some(workspace.clone()),
             })
-            .collect();
+            .collect::<HashSet<_>>();
+
+        loop {
+            let mut changed = false;
+            for workspace in names.clone() {
+                let Some(info) = self.package_graph.package_info(&workspace) else {
+                    continue;
+                };
+                for (peer_name, _) in info.package_json.peer_dependencies.iter().flatten() {
+                    if info.package_json.is_optional_peer_dependency(peer_name) {
+                        continue;
+                    }
+
+                    let peer = PackageName::from(peer_name.as_str());
+                    if self.package_graph.package_info(&peer).is_some() && names.insert(peer) {
+                        changed = true;
+                    }
+                }
+            }
+
+            if !changed {
+                break;
+            }
+
+            let workspace_nodes = names
+                .iter()
+                .cloned()
+                .map(PackageNode::Workspace)
+                .collect::<Vec<_>>();
+            names.extend(
+                self.package_graph
+                    .transitive_closure(workspace_nodes.iter())
+                    .into_iter()
+                    .filter_map(|node| match node {
+                        PackageNode::Root => None,
+                        PackageNode::Workspace(workspace) => Some(workspace.clone()),
+                    }),
+            );
+        }
+
+        let mut names = names.into_iter().collect::<Vec<_>>();
         names.sort();
         names
+    }
+
+    fn lockfile_keys(&self, workspaces: &[PackageName]) -> Result<Vec<String>, Error> {
+        let mut keys = self
+            .package_graph
+            .transitive_external_dependencies(workspaces.iter())
+            .into_iter()
+            .map(|pkg| pkg.key.clone())
+            .collect::<HashSet<_>>();
+
+        let lockfile = self
+            .package_graph
+            .lockfile()
+            .ok_or(Error::MissingLockfile)?;
+
+        for workspace in workspaces {
+            let Some(info) = self.package_graph.package_info(workspace) else {
+                continue;
+            };
+
+            let peer_dependencies = info
+                .package_json
+                .peer_dependencies
+                .iter()
+                .flatten()
+                .filter(|(name, _)| !info.package_json.is_optional_peer_dependency(name))
+                .filter(|(name, _)| {
+                    self.package_graph
+                        .package_info(&PackageName::from(name.as_str()))
+                        .is_none()
+                })
+                .map(|(name, version)| (name.clone(), version.clone()))
+                .collect::<BTreeMap<_, _>>();
+
+            if peer_dependencies.is_empty() {
+                continue;
+            }
+
+            let workspace_path = info.package_path().to_unix();
+            keys.extend(
+                turborepo_lockfiles::transitive_closure(
+                    lockfile,
+                    workspace_path.as_str(),
+                    peer_dependencies,
+                    false,
+                )?
+                .into_iter()
+                .map(|pkg| pkg.key),
+            );
+        }
+
+        let mut keys = keys.into_iter().collect::<Vec<_>>();
+        keys.sort();
+        Ok(keys)
     }
 
     /// Copy files matched by `globalDependencies` globs when the
@@ -1081,6 +1170,84 @@ mod tests {
                 PackageName::Root,
                 PackageName::from("pkg-a"),
                 PackageName::from("pkg-b")
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn internal_dependencies_includes_non_optional_peer_workspaces() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let package_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({
+                "name": "repo",
+                "packageManager": "npm@10.5.0"
+            }))
+            .unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(HashMap::from([
+            (
+                root.join_components(&["packages", "pkg-b", "package.json"]),
+                PackageJson::from_value(json!({
+                    "name": "pkg-b",
+                    "peerDependencies": {
+                        "pkg-c": "*",
+                        "pkg-e": "*"
+                    },
+                    "peerDependenciesMeta": {
+                        "pkg-e": { "optional": true }
+                    }
+                }))
+                .unwrap(),
+            ),
+            (
+                root.join_components(&["packages", "pkg-c", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("pkg-c".to_string())),
+                    dependencies: Some(BTreeMap::from([("pkg-d".to_string(), "*".to_string())])),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["packages", "pkg-d", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("pkg-d".to_string())),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["packages", "pkg-e", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("pkg-e".to_string())),
+                    ..Default::default()
+                },
+            ),
+        ])))
+        .build()
+        .await
+        .unwrap();
+        let scope = vec!["pkg-b".to_string()];
+        let out_directory = root.join_component("out");
+        let prune = Prune {
+            package_graph,
+            root: root.clone(),
+            out_directory: out_directory.clone(),
+            full_directory: out_directory,
+            docker: false,
+            scope: &scope,
+            use_gitignore: false,
+            uses_per_workspace_lockfiles: false,
+        };
+
+        assert_eq!(
+            prune.internal_dependencies(),
+            vec![
+                PackageName::Root,
+                PackageName::from("pkg-b"),
+                PackageName::from("pkg-c"),
+                PackageName::from("pkg-d")
             ]
         );
     }

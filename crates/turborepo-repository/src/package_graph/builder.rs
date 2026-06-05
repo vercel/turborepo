@@ -705,7 +705,7 @@ impl Dependencies {
 
             match kind {
                 // Peers are provided by consumers and are not package graph inputs.
-                DependencyKind::Peer => {}
+                DependencyKind::Peer { .. } => {}
                 DependencyKind::Normal => {
                     if let Some(workspace) = splitter.is_internal(name, version) {
                         internal.insert(workspace);
@@ -1184,7 +1184,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_prune_excludes_internal_peer_and_external_peer() {
+    async fn test_peer_dependencies_do_not_create_internal_edges() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
 
@@ -1240,7 +1240,8 @@ mod test {
         let lib_closure = graph.transitive_closure([&lib]);
         assert!(
             !lib_closure.contains(&app),
-            "prune closure for lib should exclude pure-peer workspace app, got: {lib_closure:?}"
+            "package graph closure for lib should exclude pure-peer workspace app, got: \
+             {lib_closure:?}"
         );
         assert!(
             graph.transitive_closure([&app]).contains(&lib),
@@ -1255,7 +1256,7 @@ mod test {
             .unwrap();
         assert!(
             !lib_external.contains_key("react"),
-            "external peer should not be retained for prune, got: {:?}",
+            "external peer should not be retained by package graph, got: {:?}",
             lib_external
         );
     }

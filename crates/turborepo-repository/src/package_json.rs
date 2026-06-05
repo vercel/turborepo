@@ -17,7 +17,7 @@ use turborepo_unescape::UnescapedString;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DependencyKind {
     Normal,
-    Peer,
+    Peer { optional: bool },
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -230,8 +230,27 @@ impl PackageJson {
             .peer_dependencies
             .iter()
             .flatten()
-            .map(|(name, version)| (name, version, DependencyKind::Peer));
+            .map(|(name, version)| {
+                (
+                    name,
+                    version,
+                    DependencyKind::Peer {
+                        optional: self.is_optional_peer_dependency(name),
+                    },
+                )
+            });
         normal.chain(peer)
+    }
+
+    pub fn is_optional_peer_dependency(&self, name: &str) -> bool {
+        self.other
+            .get("peerDependenciesMeta")
+            .and_then(|meta| meta.as_object())
+            .and_then(|meta| meta.get(name))
+            .and_then(|entry| entry.as_object())
+            .and_then(|entry| entry.get("optional"))
+            .and_then(|optional| optional.as_bool())
+            .unwrap_or(false)
     }
 
     /// Returns the command for script_name if it is non-empty
