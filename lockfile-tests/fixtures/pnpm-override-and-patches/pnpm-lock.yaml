@@ -1,0 +1,64 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: false
+  dedupePeers: true
+  excludeLinksFromLockfile: false
+
+overrides:
+  ms@>=2.1.0: 2.0.0
+  picomatch@>=3.0.0 <4: 3.0.2
+
+patchedDependencies:
+  is-odd@3.0.1: 66290452f179b5d7f514e314e13e46caf04cf274071e5ca9db6508f272ed4a31
+
+importers:
+
+  .: {}
+
+  apps/web-inrange:
+    dependencies:
+      picomatch:
+        specifier: 3.0.2
+        version: 3.0.2
+
+  apps/web-override:
+    dependencies:
+      ms:
+        specifier: 2.0.0
+        version: 2.0.0
+
+  packages/other:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1(patch_hash=66290452f179b5d7f514e314e13e46caf04cf274071e5ca9db6508f272ed4a31)
+
+packages:
+
+  is-number@6.0.0:
+    resolution: {integrity: sha512-Wu1VHeILBK8KAWJUAiSZQX94GmOE45Rg6/538fKwiloUu21KncEkYGPqob2oSZ5mUT73vLGrHQjKw3KMPwfDzg==}
+    engines: {node: '>=0.10.0'}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-CQpnWPrDwmP1+SMHXZhtLtJv90yiyVfluGsX5iNCVkrhQtU3TQHsUWPG9wkdk9Lgd5yNpAg9jQEo90CBaXgWMA==}
+    engines: {node: '>=4'}
+
+  ms@2.0.0:
+    resolution: {integrity: sha512-Tpp60P6IUJDTuOq/5Z8cdskzJujfwqfOTkrwIwj7IRISpnkJnT6SyJ4PCPnGMoFjC9ddhal5KVIYtAt97ix05A==}
+
+  picomatch@3.0.2:
+    resolution: {integrity: sha512-cfDHL6LStTEKlNilboNtobT/kEa30PtAf2Q1OgszfrG/rpVl1xaFWT9ktfkS306GmHgmnad1Sw4wabhlvFtsTw==}
+    engines: {node: '>=10'}
+
+snapshots:
+
+  is-number@6.0.0: {}
+
+  is-odd@3.0.1(patch_hash=66290452f179b5d7f514e314e13e46caf04cf274071e5ca9db6508f272ed4a31):
+    dependencies:
+      is-number: 6.0.0
+
+  ms@2.0.0: {}
+
+  picomatch@3.0.2: {}
