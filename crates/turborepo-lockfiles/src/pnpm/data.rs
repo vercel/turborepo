@@ -462,8 +462,12 @@ impl PnpmLockfile {
             return Ok(Some(specifier));
         }
 
-        if resolved_specifier == override_specifier
-            || self.has_package_by_parts(name, resolved_version, key_buf)
+        if resolved_specifier == override_specifier {
+            Ok(Some(resolved_version))
+        } else if self.has_package_by_parts(name, specifier, key_buf) {
+            Ok(Some(specifier))
+        } else if resolved_specifier == resolved_version
+            && self.has_package_by_parts(name, resolved_version, key_buf)
         {
             Ok(Some(resolved_version))
         } else if self.has_package_by_parts(name, override_specifier, key_buf) {
@@ -1196,6 +1200,71 @@ snapshots:
             .unwrap()
             .expect("override-rewritten out-of-range specifier should resolve");
         assert_eq!(out_of_range.key, "ms@2.0.0");
+    }
+
+    #[test]
+    fn test_pnpm_keeps_transitive_exact_version_when_importer_has_same_dep() {
+        let yaml = r#"lockfileVersion: 5.4
+
+importers:
+  packages/a:
+    specifiers:
+      ci-info: ^2.0.0
+      is-ci: ^3.0.1
+    dependencies:
+      ci-info: 2.0.0
+      is-ci: 3.0.1
+
+packages:
+  /ci-info/2.0.0:
+    resolution: {integrity: sha512-abc}
+
+  /ci-info/3.7.1:
+    resolution: {integrity: sha512-def}
+
+  /is-ci/3.0.1:
+    resolution: {integrity: sha512-ghi}
+    dependencies:
+      ci-info: 3.7.1
+"#;
+
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let transitive = lockfile
+            .resolve_package("packages/a", "ci-info", "3.7.1")
+            .unwrap()
+            .expect("transitive exact version should resolve independently of importer range");
+        assert_eq!(transitive.key, "/ci-info/3.7.1");
+
+        let yaml = r#"lockfileVersion: '9.0'
+
+importers:
+  apps/api:
+    dependencies:
+      express:
+        specifier: 4.21.2
+        version: 4.21.2
+
+packages:
+  express@4.21.2:
+    resolution: {integrity: sha512-abc}
+
+  express@5.1.0:
+    resolution: {integrity: sha512-def}
+
+snapshots:
+  express@4.21.2: {}
+
+  express@5.1.0: {}
+"#;
+
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let transitive = lockfile
+            .resolve_package("apps/api", "express", "5.1.0")
+            .unwrap()
+            .expect("transitive exact version should resolve independently of importer exact dep");
+        assert_eq!(transitive.key, "express@5.1.0");
     }
 
     #[test]
