@@ -703,16 +703,15 @@ impl Dependencies {
                 continue;
             }
 
-            match (kind, splitter.is_internal(name, version)) {
-                // Peers are provided by consumers, never a build-order edge
-                (DependencyKind::Peer | DependencyKind::OptionalPeer, Some(_)) => {}
-                (DependencyKind::Normal, Some(workspace)) => {
-                    internal.insert(workspace);
-                }
-                // Optional peers aren't auto-installed, so no need to retain them for external deps
-                (DependencyKind::OptionalPeer, None) => {}
-                (_, None) => {
-                    external.insert(name.clone(), version.clone());
+            match kind {
+                // Peers are provided by consumers and are not package graph inputs.
+                DependencyKind::Peer => {}
+                DependencyKind::Normal => {
+                    if let Some(workspace) = splitter.is_internal(name, version) {
+                        internal.insert(workspace);
+                    } else {
+                        external.insert(name.clone(), version.clone());
+                    }
                 }
             }
         }
@@ -1080,7 +1079,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_external_peer_dep_is_retained_as_external() {
+    async fn test_external_peer_dep_is_not_retained_as_external() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
 
@@ -1121,10 +1120,10 @@ mod test {
             .unresolved_external_dependencies
             .as_ref()
             .unwrap();
-        assert_eq!(
-            a_external.get("react").map(|v| v.as_str()),
-            Some("*"),
-            "external peer dependency should be retained as an external dep"
+        assert!(
+            !a_external.contains_key("react"),
+            "external peer dependency should not be retained as an external dep, got: {:?}",
+            a_external
         );
     }
 
@@ -1146,30 +1145,18 @@ mod test {
             let mut package_jsons = HashMap::new();
             package_jsons.insert(
                 root.join_components(&["packages", "a", "package.json"]),
-                PackageJson {
-                    name: Some(Spanned::new("a".into())),
-                    version: Some("1.0.0".to_string()),
-                    peer_dependencies: Some(
-                        [
-                            ("react".to_string(), "*".to_string()),
-                            ("lodash".to_string(), "*".to_string()),
-                        ]
-                        .into_iter()
-                        .collect(),
-                    ),
-                    peer_dependencies_meta: Some(
-                        [(
-                            "react".to_string(),
-                            crate::package_json::PeerDependencyMeta {
-                                optional: Some(true),
-                                ..Default::default()
-                            },
-                        )]
-                        .into_iter()
-                        .collect(),
-                    ),
-                    ..Default::default()
-                },
+                PackageJson::from_value(serde_json::json!({
+                    "name": "a",
+                    "version": "1.0.0",
+                    "peerDependencies": {
+                        "react": "*",
+                        "lodash": "*"
+                    },
+                    "peerDependenciesMeta": {
+                        "react": { "optional": true }
+                    }
+                }))
+                .unwrap(),
             );
             package_jsons
         }))
@@ -1184,20 +1171,20 @@ mod test {
             .unresolved_external_dependencies
             .as_ref()
             .unwrap();
-        assert_eq!(
-            a_external.get("lodash").map(|v| v.as_str()),
-            Some("*"),
-            "required peer should be retained as an external dep"
-        );
         assert!(
             !a_external.contains_key("react"),
             "optional peer should not be retained, got: {:?}",
             a_external
         );
+        assert!(
+            !a_external.contains_key("lodash"),
+            "required peer should not be retained, got: {:?}",
+            a_external
+        );
     }
 
     #[tokio::test]
-    async fn test_prune_excludes_internal_peer_keeps_external_peer() {
+    async fn test_prune_excludes_internal_peer_and_external_peer() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
 
@@ -1266,10 +1253,10 @@ mod test {
             .unresolved_external_dependencies
             .as_ref()
             .unwrap();
-        assert_eq!(
-            lib_external.get("react").map(|v| v.as_str()),
-            Some("*"),
-            "external peer should be retained for prune"
+        assert!(
+            !lib_external.contains_key("react"),
+            "external peer should not be retained for prune, got: {:?}",
+            lib_external
         );
     }
 
