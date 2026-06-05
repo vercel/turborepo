@@ -733,25 +733,33 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
 
     /// Divides the task graph into shards according to `spec`.
     ///
-    /// Sharding distributes the *entry* tasks (top-level requested tasks) and
-    /// pulls each entry's transitive dependencies into the same shard so every
-    /// shard is independently runnable. A dependency shared by entries in
-    /// different shards therefore lands in each of those shards; this
-    /// duplication is reported via `shared_tasks`.
+    /// The unit of distribution is the set of *entry* tasks (task nodes with no
+    /// dependents). Each entry's transitive dependencies are pulled into its
+    /// shard so every shard is independently runnable. Because the graph is a
+    /// dependency graph, entries share large parts of their dependency closures
+    /// (e.g. when `test` depends on `^test`, sibling packages pull in the same
+    /// lower layers), so a naive split duplicates those shared layers into
+    /// every shard.
     ///
-    /// Balancing strategy:
-    /// - `MaxShards(k)`: at most `k` shards (capped by the number of entries).
-    ///   Entries are placed into the currently least-loaded shard, heaviest
-    ///   first (LPT / greedy multiway partitioning), balancing node counts.
+    /// To reduce that duplication, assignment is *overlap-aware*: entries whose
+    /// closures overlap are co-located so a shared dependency is duplicated
+    /// across as few shards as possible. Concretely we minimize, greedily, the
+    /// number of *new* nodes each entry adds to the shard it is placed in.
+    ///
+    /// - `MaxShards(k)`: at most `k` shards (capped by the entry count). Shards
+    ///   are seeded with `k` entries chosen farthest-first (each seed maximizes
+    ///   the new nodes it adds versus already-chosen seeds) so the shards start
+    ///   in different regions of the graph and none stays empty. Remaining
+    ///   entries, heaviest first, go to the shard they overlap most with,
+    ///   capped at `ceil(entries / k)` entries per shard for balance.
     /// - `MaxNodesPerShard(p)`: as many shards as needed so each holds at most
-    ///   `p` task nodes. Entries are bin-packed heaviest-first (first-fit
-    ///   decreasing). A single entry whose closure already exceeds `p` gets its
-    ///   own shard.
+    ///   `p` *distinct* task nodes. Entries (heaviest first) go to the existing
+    ///   shard they overlap most with that still fits under `p`; otherwise a
+    ///   new shard is opened. A single entry whose own closure exceeds `p` gets
+    ///   its own (over-sized) shard.
     ///
-    /// Node counts used for balancing are per-entry dependency-closure sizes,
-    /// which over-count shared dependencies; this is an intentional, simple
-    /// heuristic. The reported `task_count`/`tasks` reflect the true,
-    /// de-duplicated shard contents.
+    /// Overlap is measured on the true, de-duplicated shard node sets, so the
+    /// reported `task_count`/`total_task_instances` reflect actual duplication.
     pub fn compute_sharding(&self, spec: ShardSpec) -> ShardingPlan {
         // Entries, sorted deterministically by task id so sharding is stable
         // across runs.
@@ -766,10 +774,31 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
             .iter()
             .map(|(_, idx)| self.dependency_closure(*idx))
             .collect();
-        let weights: Vec<usize> = closures.iter().map(|c| c.len()).collect();
         let num_entries = entries.len();
 
-        let (limit, assignment, num_shards) = match spec {
+        // Deterministic processing order: heaviest closures first, ties by id.
+        // Placing big entries first lets smaller, overlapping entries slot into
+        // the shard that already contains their dependencies.
+        let mut order: Vec<usize> = (0..num_entries).collect();
+        order.sort_by(|&a, &b| {
+            closures[b]
+                .len()
+                .cmp(&closures[a].len())
+                .then_with(|| entries[a].0.to_string().cmp(&entries[b].0.to_string()))
+        });
+
+        // Number of nodes in `closures[entry]` not already in `shard`.
+        let added_nodes = |shard: &HashSet<petgraph::graph::NodeIndex>, entry: usize| -> usize {
+            closures[entry]
+                .iter()
+                .filter(|n| !shard.contains(n))
+                .count()
+        };
+
+        let mut shard_nodes: Vec<HashSet<petgraph::graph::NodeIndex>> = Vec::new();
+        let mut shard_entries: Vec<Vec<usize>> = Vec::new();
+
+        let limit = match spec {
             ShardSpec::MaxShards(k) => {
                 let k = k.max(1);
                 let num_shards = if num_entries == 0 {
@@ -777,63 +806,109 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
                 } else {
                     k.min(num_entries)
                 };
-                let mut assignment = vec![0usize; num_entries];
+
                 if num_shards > 0 {
-                    // Heaviest entries first.
-                    let mut order: Vec<usize> = (0..num_entries).collect();
-                    order.sort_by(|&a, &b| {
-                        weights[b]
-                            .cmp(&weights[a])
-                            .then_with(|| entries[a].0.to_string().cmp(&entries[b].0.to_string()))
-                    });
-                    let mut loads = vec![0usize; num_shards];
-                    for entry in order {
-                        // Least-loaded shard, ties broken by lowest index.
-                        let shard = (0..num_shards).min_by_key(|&s| (loads[s], s)).unwrap_or(0);
-                        assignment[entry] = shard;
-                        loads[shard] += weights[entry];
+                    // Farthest-first seeding: first seed is the largest closure,
+                    // each subsequent seed maximizes new coverage versus the
+                    // union of chosen seeds. Guarantees `num_shards` non-empty
+                    // shards spread across the graph.
+                    let mut chosen = vec![false; num_entries];
+                    let mut seed_union: HashSet<petgraph::graph::NodeIndex> = HashSet::new();
+                    let mut seeds: Vec<usize> = Vec::with_capacity(num_shards);
+                    while seeds.len() < num_shards {
+                        // Pick the not-yet-chosen entry (iterating in `order` for
+                        // determinism) that adds the most new nodes.
+                        let mut best: Option<usize> = None;
+                        let mut best_added = 0usize;
+                        for &entry in &order {
+                            if chosen[entry] {
+                                continue;
+                            }
+                            let added = added_nodes(&seed_union, entry);
+                            if best.is_none() || added > best_added {
+                                best = Some(entry);
+                                best_added = added;
+                            }
+                        }
+                        let seed = best.unwrap_or(order[seeds.len()]);
+                        chosen[seed] = true;
+                        seed_union.extend(closures[seed].iter().copied());
+                        seeds.push(seed);
+                    }
+
+                    shard_nodes = seeds.iter().map(|&e| closures[e].clone()).collect();
+                    shard_entries = seeds.iter().map(|&e| vec![e]).collect();
+
+                    // Balance: cap entries per shard.
+                    let cap = num_entries.div_ceil(num_shards);
+                    for &entry in &order {
+                        if chosen[entry] {
+                            continue;
+                        }
+                        // Place in the under-cap shard the entry overlaps most
+                        // with (fewest new nodes); ties to the smaller shard.
+                        let mut best: Option<usize> = None;
+                        let mut best_key = (usize::MAX, usize::MAX);
+                        for s in 0..shard_nodes.len() {
+                            if shard_entries[s].len() >= cap {
+                                continue;
+                            }
+                            let key = (added_nodes(&shard_nodes[s], entry), shard_nodes[s].len());
+                            if key < best_key {
+                                best_key = key;
+                                best = Some(s);
+                            }
+                        }
+                        let s = best.unwrap_or(0);
+                        shard_nodes[s].extend(closures[entry].iter().copied());
+                        shard_entries[s].push(entry);
                     }
                 }
-                (k, assignment, num_shards)
+                k
             }
             ShardSpec::MaxNodesPerShard(p) => {
                 let p = p.max(1);
-                let mut assignment = vec![0usize; num_entries];
-                let mut loads: Vec<usize> = Vec::new();
-                // Heaviest entries first.
-                let mut order: Vec<usize> = (0..num_entries).collect();
-                order.sort_by(|&a, &b| {
-                    weights[b]
-                        .cmp(&weights[a])
-                        .then_with(|| entries[a].0.to_string().cmp(&entries[b].0.to_string()))
-                });
-                for entry in order {
-                    let fit = loads.iter().position(|&load| load + weights[entry] <= p);
-                    let shard = match fit {
-                        Some(s) => s,
-                        None => {
-                            loads.push(0);
-                            loads.len() - 1
+                for &entry in &order {
+                    // Best-overlap existing shard that still fits under `p`.
+                    let mut best: Option<usize> = None;
+                    let mut best_added = usize::MAX;
+                    for (s, shard) in shard_nodes.iter().enumerate() {
+                        let added = added_nodes(shard, entry);
+                        if shard.len() + added > p {
+                            continue;
                         }
-                    };
-                    assignment[entry] = shard;
-                    loads[shard] += weights[entry];
+                        if added < best_added {
+                            best_added = added;
+                            best = Some(s);
+                        }
+                    }
+                    match best {
+                        Some(s) => {
+                            shard_nodes[s].extend(closures[entry].iter().copied());
+                            shard_entries[s].push(entry);
+                        }
+                        None => {
+                            // Doesn't fit anywhere (or graph is empty of shards):
+                            // open a new shard, even if this single entry's
+                            // closure already exceeds `p`.
+                            shard_nodes.push(closures[entry].clone());
+                            shard_entries.push(vec![entry]);
+                        }
+                    }
                 }
-                (p, assignment, loads.len())
+                p
             }
         };
 
-        // Build each shard's node set as the union of its entries' closures.
-        let mut shard_nodes: Vec<HashSet<petgraph::graph::NodeIndex>> =
-            vec![HashSet::new(); num_shards];
-        let mut shard_entry_indices: Vec<Vec<petgraph::graph::NodeIndex>> =
-            vec![Vec::new(); num_shards];
-        let mut shard_entry_tasks: Vec<HashSet<TaskId<'static>>> = vec![HashSet::new(); num_shards];
-        for (entry, shard) in assignment.iter().copied().enumerate() {
-            shard_nodes[shard].extend(closures[entry].iter().copied());
-            shard_entry_indices[shard].push(entries[entry].1);
-            shard_entry_tasks[shard].insert(entries[entry].0.clone());
-        }
+        let num_shards = shard_nodes.len();
+        let shard_entry_indices: Vec<Vec<petgraph::graph::NodeIndex>> = shard_entries
+            .iter()
+            .map(|es| es.iter().map(|&e| entries[e].1).collect())
+            .collect();
+        let shard_entry_tasks: Vec<HashSet<TaskId<'static>>> = shard_entries
+            .iter()
+            .map(|es| es.iter().map(|&e| entries[e].0.clone()).collect())
+            .collect();
 
         // Count how many shards each node appears in to find shared deps.
         let mut shard_count: HashMap<petgraph::graph::NodeIndex, usize> = HashMap::new();
@@ -867,11 +942,18 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
             })
             .collect();
 
+        // total_tasks: distinct tasks across all shards (the work that must run
+        // once). total_task_instances: sum of shard sizes (with duplication).
+        let total_tasks = shard_count.len();
+        let total_task_instances: usize = shard_nodes.iter().map(|nodes| nodes.len()).sum();
+
         ShardingPlan {
             summary: ShardingSummary {
                 strategy: spec.strategy(),
                 limit,
                 total_shards: num_shards,
+                total_tasks,
+                total_task_instances,
                 selected_shard: None,
                 shards,
                 shared_tasks,
@@ -1576,5 +1658,72 @@ mod sharding_tests {
         for shard in &plan.summary.shards {
             assert_eq!(shard.entry_tasks.len(), 1);
         }
+    }
+
+    /// Two groups of entries; entries within a group share a deep subtree but
+    /// the groups share nothing:
+    ///
+    ///   a1#test, a2#test ──> libA#typecheck ──> libA#build
+    ///   b1#test, b2#test ──> libB#typecheck ──> libB#build
+    fn build_two_cluster_engine() -> Engine {
+        let mut engine: Engine<Building> = Engine::new();
+        for (lib, entries) in [("libA", ["a1", "a2"]), ("libB", ["b1", "b2"])] {
+            let lib_build = TaskId::new(lib, "build").into_owned();
+            let lib_check = TaskId::new(lib, "typecheck").into_owned();
+            let lib_build_idx = engine.get_index(&lib_build);
+            let lib_check_idx = engine.get_index(&lib_check);
+            engine.add_definition(lib_build.clone(), TaskInfo::default());
+            engine.add_definition(lib_check.clone(), TaskInfo::default());
+            engine
+                .task_graph_mut()
+                .add_edge(lib_check_idx, lib_build_idx, ());
+            engine.connect_to_root(&lib_build);
+
+            for pkg in entries {
+                let test = TaskId::new(pkg, "test").into_owned();
+                let test_idx = engine.get_index(&test);
+                engine.add_definition(test.clone(), TaskInfo::default());
+                engine
+                    .task_graph_mut()
+                    .add_edge(test_idx, lib_check_idx, ());
+            }
+        }
+        engine.seal()
+    }
+
+    #[test]
+    fn overlap_aware_clustering_avoids_duplication() {
+        let engine = build_two_cluster_engine();
+        let plan = engine.compute_sharding(ShardSpec::MaxShards(2));
+        let summary = &plan.summary;
+
+        assert_eq!(summary.total_shards, 2);
+        // 6 distinct tasks: a1,a2,b1,b2 tests + libA{build,typecheck} +
+        // libB{build,typecheck} = 4 + 2 + 2 = 8.
+        assert_eq!(summary.total_tasks, 8);
+        // Clustering the two groups onto separate shards duplicates nothing, so
+        // instances == distinct tasks. A naive size-balanced split (e.g.
+        // a1+b1 / a2+b2) would duplicate both lib subtrees, giving 12.
+        assert_eq!(
+            summary.total_task_instances, 8,
+            "overlap-aware clustering should add no duplicated work"
+        );
+        assert!(
+            summary.shared_tasks.is_empty(),
+            "no task should span both shards: {:?}",
+            summary.shared_tasks
+        );
+
+        // Each group's two entries must land together.
+        let shard_of = |task: &str| -> usize {
+            summary
+                .shards
+                .iter()
+                .position(|s| s.entry_tasks.iter().any(|t| t == task))
+                .expect("entry assigned to a shard")
+        };
+        assert_eq!(shard_of("a1#test"), shard_of("a2#test"));
+        assert_eq!(shard_of("b1#test"), shard_of("b2#test"));
+        assert_ne!(shard_of("a1#test"), shard_of("b1#test"));
     }
 }

@@ -196,6 +196,14 @@ pub struct ShardingSummary {
     pub limit: usize,
     /// Total number of shards the graph was divided into.
     pub total_shards: usize,
+    /// Number of distinct tasks in the graph being sharded (the work that must
+    /// run exactly once).
+    pub total_tasks: usize,
+    /// Sum of every shard's task count. Because shards duplicate shared
+    /// dependencies, this is >= `total_tasks`; the gap is wasted/duplicated
+    /// work. Lower is more efficient. `total_task_instances / total_tasks` is
+    /// the average number of shards a task lands in.
+    pub total_task_instances: usize,
     /// The shard selected to execute (1-based), if `--shard` was provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected_shard: Option<usize>,

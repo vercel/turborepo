@@ -193,16 +193,26 @@ into independently runnable shards so a large run can be split across machines.
   entry, so each shard is self-contained.
 - Because a dependency shared by entries in different shards must appear in
   every shard that needs it, splitting necessarily duplicates shared
-  dependencies across shards. This duplication is surfaced as `sharedTasks` in
-  the run summary (per-shard and overall).
+  dependencies. Entries typically overlap heavily (e.g. when `test` depends on
+  `^test`, sibling packages pull in the same lower layers), so assignment is
+  **overlap-aware**: entries whose dependency closures overlap are co-located so
+  a shared task is duplicated across as few shards as possible. The heuristic
+  greedily minimizes the number of *new* nodes each entry adds to its shard.
 - `compute_sharding(ShardSpec)` returns a `ShardingPlan` (summary + per-shard
-  entry task sets). Balancing is greedy on per-entry dependency-closure size:
-  - `--max-shards N`: at most `N` shards (capped by the entry count); entries
-    are placed heaviest-first into the least-loaded shard (LPT).
-  - `--max-nodes-per-shard N`: as many shards as needed for each to hold at most
-    `N` nodes; entries are bin-packed first-fit-decreasing. A single entry whose
-    closure already exceeds `N` gets its own shard.
+  entry task sets):
+  - `--max-shards N`: at most `N` shards (capped by the entry count). Shards are
+    seeded farthest-first (each seed maximizes new nodes vs. chosen seeds) so
+    they start in different graph regions and none stays empty; remaining
+    entries go to the shard they overlap most with, capped at
+    `ceil(entries / N)` entries per shard for balance.
+  - `--max-nodes-per-shard N`: as many shards as needed so each holds at most
+    `N` *distinct* nodes. Entries go to the best-overlap shard that still fits;
+    otherwise a new shard opens. A single entry whose closure exceeds `N` gets
+    its own over-sized shard.
   `--max-shards` and `--max-nodes-per-shard` are mutually exclusive.
+- The summary reports efficiency directly: `totalTasks` (distinct work),
+  `totalTaskInstances` (sum of shard sizes — the gap is duplicated work), plus
+  per-shard and overall `sharedTasks`.
 - When `--shard K` selects a shard, the run builder prunes the engine to that
   shard's entry tasks via `retain_filtered_tasks` (reusing the same
   dependency-closure logic), so the executed graph matches the shard summary.
