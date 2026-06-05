@@ -1197,6 +1197,83 @@ mod test {
     }
 
     #[tokio::test]
+    async fn test_prune_excludes_internal_peer_keeps_external_peer() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+
+        let graph = PackageGraphBuilder::new(
+            &root,
+            PackageJson {
+                name: Some(Spanned::new("root".into())),
+                ..Default::default()
+            },
+        )
+        .with_single_package_mode(false)
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut package_jsons = HashMap::new();
+            package_jsons.insert(
+                root.join_components(&["packages", "app", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("app".into())),
+                    version: Some("1.0.0".to_string()),
+                    dependencies: Some(
+                        [("lib".to_string(), "workspace:*".to_string())]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    ..Default::default()
+                },
+            );
+            package_jsons.insert(
+                root.join_components(&["packages", "lib", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("lib".into())),
+                    version: Some("1.0.0".to_string()),
+                    peer_dependencies: Some(
+                        [
+                            ("app".to_string(), "workspace:*".to_string()),
+                            ("react".to_string(), "*".to_string()),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    ),
+                    ..Default::default()
+                },
+            );
+            package_jsons
+        }))
+        .build()
+        .await
+        .unwrap();
+
+        let app = PackageNode::Workspace(PackageName::from("app"));
+        let lib = PackageNode::Workspace(PackageName::from("lib"));
+
+        let lib_closure = graph.transitive_closure([&lib]);
+        assert!(
+            !lib_closure.contains(&app),
+            "prune closure for lib should exclude pure-peer workspace app, got: {lib_closure:?}"
+        );
+        assert!(
+            graph.transitive_closure([&app]).contains(&lib),
+            "prune closure for app should include its regular dependency lib"
+        );
+
+        let lib_external = graph
+            .package_info(&PackageName::from("lib"))
+            .unwrap()
+            .unresolved_external_dependencies
+            .as_ref()
+            .unwrap();
+        assert_eq!(
+            lib_external.get("react").map(|v| v.as_str()),
+            Some("*"),
+            "external peer should be retained for prune"
+        );
+    }
+
+    #[tokio::test]
     async fn test_duplicate_package_names() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
