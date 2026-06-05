@@ -14,6 +14,12 @@ use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 use turborepo_errors::{ParseDiagnostic, Spanned, WithMetadata};
 use turborepo_unescape::UnescapedString;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DependencyKind {
+    Normal,
+    Peer,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageJson {
@@ -210,6 +216,24 @@ impl PackageJson {
             .chain(self.peer_dependencies.iter().flatten())
     }
 
+    pub fn dependencies_with_kind(
+        &self,
+    ) -> impl Iterator<Item = (&String, &String, DependencyKind)> + '_ {
+        let normal = self
+            .dependencies
+            .iter()
+            .flatten()
+            .chain(self.dev_dependencies.iter().flatten())
+            .chain(self.optional_dependencies.iter().flatten())
+            .map(|(name, version)| (name, version, DependencyKind::Normal));
+        let peer = self
+            .peer_dependencies
+            .iter()
+            .flatten()
+            .map(|(name, version)| (name, version, DependencyKind::Peer));
+        normal.chain(peer)
+    }
+
     /// Returns the command for script_name if it is non-empty
     pub fn command(&self, script_name: &str) -> Option<&str> {
         self.scripts
@@ -250,6 +274,7 @@ mod test {
     #[test_case(json!({"devDependencies": { "turbo": "latest" }, "foo": "bar"}) ; "dev dependencies")]
     #[test_case(json!({"optionalDependencies": { "turbo": "latest" }, "foo": "bar"}) ; "optional dependencies")]
     #[test_case(json!({"peerDependencies": { "turbo": "latest" }, "foo": "bar"}) ; "peer dependencies")]
+    #[test_case(json!({"peerDependenciesMeta": { "turbo": { "optional": true } }, "foo": "bar"}) ; "peer dependencies meta")]
     #[test_case(json!({"scripts": { "build": "turbo build" }, "foo": "bar"}) ; "scripts")]
     #[test_case(json!({"resolutions": { "turbo": "latest" }, "foo": "bar"}) ; "resolutions")]
     fn test_roundtrip(json: serde_json::Value) {
