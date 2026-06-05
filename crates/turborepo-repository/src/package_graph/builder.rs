@@ -703,13 +703,15 @@ impl Dependencies {
                 continue;
             }
 
-            match splitter.is_internal(name, version) {
-                // A peer that is internal, does not create a build-order edge
-                Some(_) if kind == DependencyKind::Peer => {}
-                Some(workspace) => {
+            match (kind, splitter.is_internal(name, version)) {
+                // Peers are provided by consumers, never a build-order edge
+                (DependencyKind::Peer | DependencyKind::OptionalPeer, Some(_)) => {}
+                (DependencyKind::Normal, Some(workspace)) => {
                     internal.insert(workspace);
                 }
-                None => {
+                // Optional peers aren't auto-installed, so no need to retain them for external deps
+                (DependencyKind::OptionalPeer, None) => {}
+                (_, None) => {
                     external.insert(name.clone(), version.clone());
                 }
             }
@@ -1123,6 +1125,74 @@ mod test {
             a_external.get("react").map(|v| v.as_str()),
             Some("*"),
             "external peer dependency should be retained as an external dep"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_optional_external_peer_is_not_retained() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+
+        let graph = PackageGraphBuilder::new(
+            &root,
+            PackageJson {
+                name: Some(Spanned::new("root".into())),
+                ..Default::default()
+            },
+        )
+        .with_single_package_mode(false)
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut package_jsons = HashMap::new();
+            package_jsons.insert(
+                root.join_components(&["packages", "a", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("a".into())),
+                    version: Some("1.0.0".to_string()),
+                    peer_dependencies: Some(
+                        [
+                            ("react".to_string(), "*".to_string()),
+                            ("lodash".to_string(), "*".to_string()),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    ),
+                    peer_dependencies_meta: Some(
+                        [(
+                            "react".to_string(),
+                            crate::package_json::PeerDependencyMeta {
+                                optional: Some(true),
+                                ..Default::default()
+                            },
+                        )]
+                        .into_iter()
+                        .collect(),
+                    ),
+                    ..Default::default()
+                },
+            );
+            package_jsons
+        }))
+        .build()
+        .await
+        .unwrap();
+
+        let a = PackageName::from("a");
+        let a_external = graph
+            .package_info(&a)
+            .unwrap()
+            .unresolved_external_dependencies
+            .as_ref()
+            .unwrap();
+        assert_eq!(
+            a_external.get("lodash").map(|v| v.as_str()),
+            Some("*"),
+            "required peer should be retained as an external dep"
+        );
+        assert!(
+            !a_external.contains_key("react"),
+            "optional peer should not be retained, got: {:?}",
+            a_external
         );
     }
 
