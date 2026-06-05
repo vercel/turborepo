@@ -71,6 +71,16 @@ pub enum Event {
     },
     SearchEnterChar(char),
     SearchBackspace,
+    BufferSearchEnter,
+    BufferSearchExit {
+        restore_scroll: bool,
+    },
+    BufferSearchLock,
+    BufferSearchScroll {
+        direction: Direction,
+    },
+    BufferSearchEnterChar(char),
+    BufferSearchBackspace,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]

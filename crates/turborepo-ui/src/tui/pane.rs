@@ -5,7 +5,7 @@ use ratatui::{
 };
 use tui_term::widget::PseudoTerminal;
 
-use super::{TerminalOutput, app::LayoutSections};
+use super::{TerminalOutput, app::LayoutSections, buffer_search::BufferSearchResults};
 
 const EXIT_INTERACTIVE_HINT: &str = "Ctrl-z - Stop interacting";
 const ENTER_INTERACTIVE_HINT: &str = "i - Interact";
@@ -13,7 +13,28 @@ const HAS_SELECTION: &str = "c - Copy selection";
 const SCROLL_LOGS: &str = "u/d - Scroll logs";
 const PAGE_LOGS: &str = "U/D - Page logs";
 const JUMP_IN_LOGS: &str = "t/b - Jump to top/bottom";
+const SEARCH_LOGS: &str = "f - Search logs";
 const TASK_LIST_HIDDEN: &str = "h - Show task list";
+
+fn buffer_search_status(results: &BufferSearchResults, typing: bool) -> String {
+    let match_count = results.matches().len();
+    let current = if match_count == 0 {
+        0
+    } else {
+        results.current() + 1
+    };
+    if typing {
+        format!(
+            "f {} ({current}/{match_count})   Enter - Lock   ESC - Clear",
+            results.query()
+        )
+    } else {
+        format!(
+            "f {} ({current}/{match_count})   n/N - Next/prev   ESC - Clear",
+            results.query()
+        )
+    }
+}
 
 pub struct TerminalPane<'a, W> {
     terminal_output: &'a TerminalOutput<W>,
@@ -50,7 +71,9 @@ impl<'a, W> TerminalPane<'a, W> {
                 messages.push(TASK_LIST_HIDDEN);
             }
 
-            if self.terminal_output.has_selection() {
+            if self.terminal_output.has_selection()
+                && !matches!(self.section, LayoutSections::BufferSearch { .. })
+            {
                 messages.push(HAS_SELECTION);
             }
 
@@ -66,12 +89,41 @@ impl<'a, W> TerminalPane<'a, W> {
 
         match self.section {
             LayoutSections::Pane => build_message_vec(&[EXIT_INTERACTIVE_HINT]),
-            LayoutSections::TaskList if self.has_stdin() => {
-                build_message_vec(&[ENTER_INTERACTIVE_HINT, SCROLL_LOGS, PAGE_LOGS, JUMP_IN_LOGS])
-            }
-            LayoutSections::TaskList => build_message_vec(&[SCROLL_LOGS, PAGE_LOGS, JUMP_IN_LOGS]),
+            LayoutSections::TaskList if self.has_stdin() => build_message_vec(&[
+                ENTER_INTERACTIVE_HINT,
+                SEARCH_LOGS,
+                SCROLL_LOGS,
+                PAGE_LOGS,
+                JUMP_IN_LOGS,
+            ]),
+            LayoutSections::TaskList => build_message_vec(&[
+                SEARCH_LOGS,
+                SCROLL_LOGS,
+                PAGE_LOGS,
+                JUMP_IN_LOGS,
+            ]),
             LayoutSections::Search { .. } | LayoutSections::SearchLocked { .. } => {
-                build_message_vec(&[SCROLL_LOGS, PAGE_LOGS, JUMP_IN_LOGS])
+                build_message_vec(&[SEARCH_LOGS, SCROLL_LOGS, PAGE_LOGS, JUMP_IN_LOGS])
+            }
+            LayoutSections::BufferSearch { results, .. } if self.has_stdin() => {
+                let search_status = buffer_search_status(results, true);
+                build_message_vec(&[
+                    ENTER_INTERACTIVE_HINT,
+                    search_status.as_str(),
+                    SCROLL_LOGS,
+                    PAGE_LOGS,
+                    JUMP_IN_LOGS,
+                ])
+            }
+            LayoutSections::BufferSearch { results, .. } => {
+                let search_status = buffer_search_status(results, true);
+                let footer = [search_status.as_str(), SCROLL_LOGS];
+                build_message_vec(&footer)
+            }
+            LayoutSections::BufferSearchLocked { results, .. } => {
+                let search_status = buffer_search_status(results, false);
+                let footer = [search_status.as_str(), SCROLL_LOGS];
+                build_message_vec(&footer)
             }
         }
     }
@@ -106,7 +158,7 @@ mod test {
         let pane = TerminalPane::new(&term, "foo", &LayoutSections::TaskList, true);
         assert_eq!(
             String::from(pane.footer()),
-            "   i - Interact   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom"
+            "   i - Interact   f - Search logs   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom"
         );
     }
 
@@ -116,7 +168,7 @@ mod test {
         let pane = TerminalPane::new(&term, "foo", &LayoutSections::TaskList, true);
         assert_eq!(
             String::from(pane.footer()),
-            "   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom"
+            "   f - Search logs   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom"
         );
     }
 }

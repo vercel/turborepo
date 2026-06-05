@@ -1,4 +1,5 @@
 mod app;
+mod buffer_search;
 mod clipboard;
 mod debouncer;
 pub mod event;

@@ -33,6 +33,7 @@ use super::{
 use crate::{
     ColorConfig,
     tui::{
+        buffer_search::{BufferSearchResults, scroll_to_match},
         scroll::ScrollMomentum,
         task::{Task, TasksByStatus},
         term_output::TerminalOutput,
@@ -49,6 +50,14 @@ pub enum LayoutSections {
     },
     SearchLocked {
         results: SearchResults,
+    },
+    BufferSearch {
+        results: BufferSearchResults,
+        previous_scrollback: usize,
+    },
+    BufferSearchLocked {
+        results: BufferSearchResults,
+        previous_scrollback: usize,
     },
 }
 
@@ -134,7 +143,9 @@ impl<W> App<W> {
             LayoutSections::Pane => true,
             LayoutSections::TaskList
             | LayoutSections::Search { .. }
-            | LayoutSections::SearchLocked { .. } => false,
+            | LayoutSections::SearchLocked { .. }
+            | LayoutSections::BufferSearch { .. }
+            | LayoutSections::BufferSearchLocked { .. } => false,
         }
     }
 
@@ -257,6 +268,7 @@ impl<W> App<W> {
 
         self.is_task_selection_pinned = true;
         self.persist_active_task().ok();
+        self.refresh_buffer_search().ok();
     }
 
     #[tracing::instrument(skip(self))]
@@ -278,6 +290,7 @@ impl<W> App<W> {
 
         self.is_task_selection_pinned = true;
         self.persist_active_task().ok();
+        self.refresh_buffer_search().ok();
     }
 
     #[tracing::instrument(skip_all)]
@@ -410,6 +423,169 @@ impl<W> App<W> {
                 debug!("failed to select search result: {error}");
             }
         }
+    }
+
+    pub fn enter_buffer_search(&mut self) -> Result<(), Error> {
+        let previous_scrollback = self.get_full_task()?.parser.screen().scrollback();
+        self.get_full_task_mut()?.parser.screen_mut().clear_selection();
+        self.section_focus = LayoutSections::BufferSearch {
+            results: BufferSearchResults::new(),
+            previous_scrollback,
+        };
+        Ok(())
+    }
+
+    pub fn exit_buffer_search(&mut self, restore_scroll: bool) -> Result<(), Error> {
+        let mut prev_focus = LayoutSections::TaskList;
+        mem::swap(&mut self.section_focus, &mut prev_focus);
+        match prev_focus {
+            LayoutSections::BufferSearch {
+                previous_scrollback, ..
+            }
+            | LayoutSections::BufferSearchLocked {
+                previous_scrollback, ..
+            } => {
+                let task = self.get_full_task_mut()?;
+                task.parser.screen_mut().clear_selection();
+                if restore_scroll {
+                    task.parser
+                        .screen_mut()
+                        .set_scrollback(previous_scrollback);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    pub fn lock_buffer_search(&mut self) {
+        if let LayoutSections::BufferSearch {
+            results,
+            previous_scrollback,
+        } = &self.section_focus
+        {
+            self.section_focus = LayoutSections::BufferSearchLocked {
+                results: results.clone(),
+                previous_scrollback: *previous_scrollback,
+            };
+        }
+    }
+
+    pub fn buffer_search_scroll(&mut self, direction: Direction) -> Result<(), Error> {
+        match &mut self.section_focus {
+            LayoutSections::BufferSearch { results, .. }
+            | LayoutSections::BufferSearchLocked { results, .. } => {
+                match direction {
+                    Direction::Down => results.next_match(),
+                    Direction::Up => results.previous_match(),
+                }
+            }
+            _ => {
+                debug!("scrolling buffer search while not searching");
+                return Ok(());
+            }
+        };
+        self.jump_to_buffer_search_match()
+    }
+
+    pub fn buffer_search_enter_char(&mut self, c: char) -> Result<(), Error> {
+        let LayoutSections::BufferSearch { .. } = &self.section_focus else {
+            debug!("modifying buffer search query while not searching");
+            return Ok(());
+        };
+        let active_task = self.active_task()?.to_owned();
+        let parser = &self
+            .tasks
+            .get(&active_task)
+            .ok_or(Error::TaskNotFound {
+                name: active_task.clone(),
+            })?
+            .parser;
+        let query_updated = match &mut self.section_focus {
+            LayoutSections::BufferSearch { results, .. } => {
+                results.modify_query(parser, |s| s.push(c));
+                true
+            }
+            _ => return Ok(()),
+        };
+        if query_updated {
+            self.jump_to_buffer_search_match()?;
+        }
+        Ok(())
+    }
+
+    pub fn buffer_search_remove_char(&mut self) -> Result<(), Error> {
+        let LayoutSections::BufferSearch { .. } = &self.section_focus else {
+            debug!("modified buffer search query while not searching");
+            return Ok(());
+        };
+        let active_task = self.active_task()?.to_owned();
+        let parser = &self
+            .tasks
+            .get(&active_task)
+            .ok_or(Error::TaskNotFound {
+                name: active_task.clone(),
+            })?
+            .parser;
+        let mut query_was_empty = false;
+        match &mut self.section_focus {
+            LayoutSections::BufferSearch { results, .. } => {
+                results.modify_query(parser, |s| {
+                    query_was_empty = s.pop().is_none();
+                });
+            }
+            _ => return Ok(()),
+        };
+        if query_was_empty {
+            self.exit_buffer_search(true)
+        } else {
+            self.jump_to_buffer_search_match()
+        }
+    }
+
+    fn jump_to_buffer_search_match(&mut self) -> Result<(), Error> {
+        let (m, query) = match &self.section_focus {
+            LayoutSections::BufferSearch { results, .. }
+            | LayoutSections::BufferSearchLocked { results, .. } => (
+                results.matches().get(results.current()).copied(),
+                results.query().to_owned(),
+            ),
+            _ => (None, String::new()),
+        };
+        let Some(m) = m else {
+            self.get_full_task_mut()?.parser.screen_mut().clear_selection();
+            return Ok(());
+        };
+        let task = self.get_full_task_mut()?;
+        scroll_to_match(&mut task.parser, &m, &query);
+        Ok(())
+    }
+
+    fn refresh_buffer_search(&mut self) -> Result<(), Error> {
+        let should_jump = matches!(
+            self.section_focus,
+            LayoutSections::BufferSearch { .. } | LayoutSections::BufferSearchLocked { .. }
+        );
+        if !should_jump {
+            return Ok(());
+        }
+
+        let active_task = self.active_task()?.to_owned();
+        let parser = &self
+            .tasks
+            .get(&active_task)
+            .ok_or(Error::TaskNotFound {
+                name: active_task.clone(),
+            })?
+            .parser;
+        match &mut self.section_focus {
+            LayoutSections::BufferSearch { results, .. }
+            | LayoutSections::BufferSearchLocked { results, .. } => {
+                results.refresh(parser);
+            }
+            _ => {}
+        };
+        self.jump_to_buffer_search_match()
     }
 
     /// Mark the given task as started.
@@ -707,6 +883,8 @@ impl<W> App<W> {
         self.selected_task_index = new_index_to_highlight;
         self.task_list_scroll.select(Some(new_index_to_highlight));
 
+        self.refresh_buffer_search().ok();
+
         Ok(())
     }
 
@@ -725,7 +903,8 @@ impl<W> App<W> {
             .pane_cols_with_sidebar(self.preferences.is_task_list_visible());
         self.tasks.values_mut().for_each(|term| {
             term.resize(pane_rows, pane_cols);
-        })
+        });
+        self.refresh_buffer_search().ok();
     }
 
     pub fn jump_to_logs_top(&mut self) -> Result<(), Error> {
@@ -788,6 +967,9 @@ impl<W: Write> App<W> {
                 name: task.to_owned(),
             })?;
         task_output.process(output);
+        if self.active_task().ok() == Some(task) {
+            self.refresh_buffer_search()?;
+        }
         Ok(())
     }
 }
@@ -1238,6 +1420,24 @@ fn update(
         }
         Event::SearchBackspace => {
             app.search_remove_char()?;
+        }
+        Event::BufferSearchEnter => {
+            app.enter_buffer_search()?;
+        }
+        Event::BufferSearchExit { restore_scroll } => {
+            app.exit_buffer_search(restore_scroll)?;
+        }
+        Event::BufferSearchLock => {
+            app.lock_buffer_search();
+        }
+        Event::BufferSearchScroll { direction } => {
+            app.buffer_search_scroll(direction)?;
+        }
+        Event::BufferSearchEnterChar(c) => {
+            app.buffer_search_enter_char(c)?;
+        }
+        Event::BufferSearchBackspace => {
+            app.buffer_search_remove_char()?;
         }
         Event::PaneSizeQuery(callback) => {
             // If caller has already hung up do nothing
@@ -1783,6 +1983,89 @@ mod test {
         assert!(matches!(app.section_focus, LayoutSections::Search { .. }));
         app.search_remove_char()?;
         assert!(matches!(app.section_focus, LayoutSections::TaskList));
+        Ok(())
+    }
+
+    #[test]
+    fn test_buffer_search_finds_and_scrolls() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<()> = App::new(
+            10,
+            40,
+            vec!["task".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        app.get_full_task_mut()?.process(b"alpha\r\nbeta\r\ngamma\r\n");
+        app.enter_buffer_search()?;
+        app.buffer_search_enter_char('b')?;
+        app.buffer_search_enter_char('e')?;
+        app.buffer_search_enter_char('t')?;
+        app.buffer_search_enter_char('a')?;
+
+        let task = app.get_full_task()?;
+        assert!(task.has_selection());
+        assert!(
+            task.copy_selection()
+                .is_some_and(|text| text.contains("beta"))
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_buffer_search_backspace_exits_search() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<()> = App::new(
+            10,
+            40,
+            vec!["task".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        app.enter_buffer_search()?;
+        assert!(matches!(app.section_focus, LayoutSections::BufferSearch { .. }));
+        app.buffer_search_remove_char()?;
+        assert!(matches!(app.section_focus, LayoutSections::TaskList));
+        Ok(())
+    }
+
+    #[test]
+    fn test_buffer_search_scroll_matches() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<()> = App::new(
+            10,
+            40,
+            vec!["task".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        app.get_full_task_mut()?.process(b"aaa\r\n");
+        app.enter_buffer_search()?;
+        app.buffer_search_enter_char('a')?;
+        app.buffer_search_scroll(Direction::Down)?;
+        app.buffer_search_scroll(Direction::Down)?;
+        let current = match &app.section_focus {
+            LayoutSections::BufferSearch { results, .. } => results.current(),
+            _ => panic!("expected buffer search"),
+        };
+        assert_eq!(current, 2);
+
+        app.buffer_search_scroll(Direction::Down)?;
+        let current = match &app.section_focus {
+            LayoutSections::BufferSearch { results, .. } => results.current(),
+            _ => panic!("expected buffer search"),
+        };
+        assert_eq!(current, 0, "wraps around to first match");
         Ok(())
     }
 

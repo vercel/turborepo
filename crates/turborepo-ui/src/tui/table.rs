@@ -23,6 +23,7 @@ pub struct TaskTable<'b> {
 }
 
 const TASK_NAVIGATE_INSTRUCTIONS: &str = "↑ ↓ - Select";
+const SEARCH_LOGS_INSTRUCTIONS: &str = "f - Search logs";
 const MORE_BINDS_INSTRUCTIONS: &str = "m - More binds";
 const TASK_HEADER: &str = "Tasks (/ - Search)";
 
@@ -169,10 +170,12 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
         )
         .footer(
             Row::new(vec![Cell::from(Text::styled(
-                format!("{TASK_NAVIGATE_INSTRUCTIONS}\n{MORE_BINDS_INSTRUCTIONS}"),
+                format!(
+                    "{TASK_NAVIGATE_INSTRUCTIONS}\n{SEARCH_LOGS_INSTRUCTIONS}\n{MORE_BINDS_INSTRUCTIONS}"
+                ),
                 Style::default().add_modifier(Modifier::DIM),
             ))])
-            .height(2),
+            .height(3),
         );
         StatefulWidget::render(table, area, buf, state);
     }

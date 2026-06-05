@@ -14,6 +14,7 @@ const BIND_LIST: &[&str] = [
     "h       - Toggle task list",
     "p       - Toggle pinned task selection",
     "/       - Filter tasks to search term",
+    "f       - Search logs for term",
     "ESC     - Clear filter",
     "i       - Interact with task",
     "Ctrl+z  - Stop interacting with task",

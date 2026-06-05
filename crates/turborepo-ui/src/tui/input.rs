@@ -71,7 +71,11 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         KeyCode::Char('c') if key_event.modifiers == crossterm::event::KeyModifiers::CONTROL => {
             ctrl_c()
         }
-        KeyCode::Char('c') if options.has_selection => Some(Event::CopySelection),
+        KeyCode::Char('c')
+            if options.has_selection && !is_typing_search(options.focus) =>
+        {
+            Some(Event::CopySelection)
+        }
         // Interactive branches
         KeyCode::Char('z')
             if matches!(options.focus, LayoutSections::Pane)
@@ -124,6 +128,47 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         KeyCode::Char(c) if matches!(options.focus, LayoutSections::Search { .. }) => {
             Some(Event::SearchEnterChar(c))
         }
+        // Buffer search in the task output pane
+        KeyCode::Char('f') if can_buffer_search(options.focus) => Some(Event::BufferSearchEnter),
+        KeyCode::Esc if matches!(options.focus, LayoutSections::BufferSearch { .. }) => {
+            Some(Event::BufferSearchExit {
+                restore_scroll: true,
+            })
+        }
+        KeyCode::Esc if matches!(options.focus, LayoutSections::BufferSearchLocked { .. }) => {
+            Some(Event::BufferSearchExit {
+                restore_scroll: false,
+            })
+        }
+        KeyCode::Enter if matches!(options.focus, LayoutSections::BufferSearch { .. }) => {
+            Some(Event::BufferSearchLock)
+        }
+        KeyCode::Up if matches!(options.focus, LayoutSections::BufferSearch { .. }) => {
+            Some(Event::BufferSearchScroll {
+                direction: Direction::Up,
+            })
+        }
+        KeyCode::Down if matches!(options.focus, LayoutSections::BufferSearch { .. }) => {
+            Some(Event::BufferSearchScroll {
+                direction: Direction::Down,
+            })
+        }
+        KeyCode::Char('n') if matches!(options.focus, LayoutSections::BufferSearchLocked { .. }) => {
+            Some(Event::BufferSearchScroll {
+                direction: Direction::Down,
+            })
+        }
+        KeyCode::Char('N') if matches!(options.focus, LayoutSections::BufferSearchLocked { .. }) => {
+            Some(Event::BufferSearchScroll {
+                direction: Direction::Up,
+            })
+        }
+        KeyCode::Backspace if matches!(options.focus, LayoutSections::BufferSearch { .. }) => {
+            Some(Event::BufferSearchBackspace)
+        }
+        KeyCode::Char(c) if matches!(options.focus, LayoutSections::BufferSearch { .. }) => {
+            Some(Event::BufferSearchEnterChar(c))
+        }
         // Fall through if we aren't in interactive mode
         KeyCode::Char('l') => Some(Event::ToggleLogPanel),
         KeyCode::Char('h') => Some(Event::ToggleSidebar),
@@ -133,7 +178,7 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         KeyCode::PageDown | KeyCode::Char('D') => Some(Event::PageDown),
         KeyCode::Char('t') => Some(Event::JumpToLogsTop),
         KeyCode::Char('b') => Some(Event::JumpToLogsBottom),
-        KeyCode::Char('C') => Some(Event::ClearLogs),
+        KeyCode::Char('C') if !is_typing_search(options.focus) => Some(Event::ClearLogs),
         KeyCode::Char('m') => Some(Event::ToggleHelpPopup),
         KeyCode::Char('p') => Some(Event::TogglePinnedTask),
         KeyCode::Up | KeyCode::Char('k') => Some(Event::Up),
@@ -141,6 +186,23 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         KeyCode::Enter | KeyCode::Char('i') => Some(Event::EnterInteractive),
         _ => None,
     }
+}
+
+fn can_buffer_search(focus: &LayoutSections) -> bool {
+    matches!(
+        focus,
+        LayoutSections::TaskList
+            | LayoutSections::Search { .. }
+            | LayoutSections::SearchLocked { .. }
+            | LayoutSections::BufferSearchLocked { .. }
+    )
+}
+
+fn is_typing_search(focus: &LayoutSections) -> bool {
+    matches!(
+        focus,
+        LayoutSections::Search { .. } | LayoutSections::BufferSearch { .. }
+    )
 }
 
 #[cfg(unix)]
@@ -461,7 +523,28 @@ mod test {
     use test_case::test_case;
 
     use super::*;
-    use crate::tui::{search::SearchResults, task::TasksByStatus};
+    use crate::tui::{
+        buffer_search::BufferSearchResults,
+        search::SearchResults,
+        task::TasksByStatus,
+    };
+
+    fn buffer_search() -> &'static LayoutSections {
+        static BUFFER_SEARCH: OnceLock<LayoutSections> = OnceLock::new();
+        BUFFER_SEARCH.get_or_init(|| LayoutSections::BufferSearch {
+            previous_scrollback: 0,
+            results: BufferSearchResults::new(),
+        })
+    }
+
+    fn in_buffer_search_with_selection() -> InputOptions<'static> {
+        InputOptions {
+            focus: buffer_search(),
+            has_selection: true,
+            is_help_popup_open: false,
+            is_log_panel_open: false,
+        }
+    }
 
     fn search() -> &'static LayoutSections {
         static SEARCH: OnceLock<LayoutSections> = OnceLock::new();
@@ -481,8 +564,15 @@ mod test {
     }
 
     const H: KeyEvent = KeyEvent::new(KeyCode::Char('h'), KeyModifiers::empty());
+    const C: KeyEvent = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::empty());
 
     #[test_case(in_find(), H, Some(Event::SearchEnterChar('h')) ; "h while searching")]
+    #[test_case(
+        in_buffer_search_with_selection(),
+        C,
+        Some(Event::BufferSearchEnterChar('c'))
+        ; "c while buffer searching with selection"
+    )]
     // Note: This only checks event variants not any data contained in the variant
     fn test_translate_key_event_variant(
         opts: InputOptions,
