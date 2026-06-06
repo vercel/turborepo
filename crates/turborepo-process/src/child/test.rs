@@ -942,6 +942,39 @@ async fn test_held_stdin_keeps_persistent_child_alive() {
 }
 
 #[tokio::test]
+async fn test_taken_pty_stdin_guard_keeps_persistent_child_alive() {
+    if !TEST_PTY {
+        return;
+    }
+    let script = find_script_dir().join_component("persistent_server.js");
+    let mut cmd = Command::new("node");
+    cmd.args([script.as_std_path()]);
+    cmd.open_stdin();
+    let mut child = Child::spawn(cmd, ShutdownStyle::Kill, Some(PtySize::default())).unwrap();
+
+    tokio::time::sleep(STARTUP_DELAY).await;
+
+    let stdin_guard = child.take_stdin();
+    assert!(
+        matches!(stdin_guard, Some(ChildStdin::Writable(_))),
+        "PTY child should return a writable stdin guard"
+    );
+
+    let result = tokio::time::timeout(Duration::from_secs(2), child.wait()).await;
+    assert!(
+        result.is_err(),
+        "child should still be alive while stdin is held"
+    );
+
+    drop(stdin_guard);
+
+    let exit = tokio::time::timeout(Duration::from_secs(5), child.wait())
+        .await
+        .expect("child should exit after stdin guard is dropped");
+    assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+}
+
+#[tokio::test]
 async fn test_non_pty_stdin_guard_keeps_persistent_child_alive() {
     let script = find_script_dir().join_component("persistent_server.js");
     let mut cmd = Command::new("node");
