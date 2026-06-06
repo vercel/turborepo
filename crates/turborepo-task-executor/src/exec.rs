@@ -458,10 +458,22 @@ where
             None
         };
 
-        // Close stdin for non-persistent tasks
-        if !self.takes_input && !self.manager.closing_stdin_ends_process() {
-            process.stdin();
-        }
+        // Close piped stdin for non-interactive tasks so tools that read stdin
+        // before starting don't hang. In PTY mode, keep stdin open without
+        // forwarding input: EOF on a PTY is observable and can shut down tools
+        // that treat it as a terminal/session close signal.
+        let _non_interactive_stdin_guard = if !self.takes_input {
+            if self.manager.use_pty() {
+                process.take_stdin()
+            } else if !self.manager.closing_stdin_ends_process() {
+                process.stdin();
+                None
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         // Create output writer and pipe outputs.
         // The stdout_writer is scoped so that TaskHandleWriter drops before
