@@ -1,11 +1,12 @@
 use ratatui::{
+    prelude::Rect,
     style::{Modifier, Style, Stylize},
     text::Line,
     widgets::{Block, Widget},
 };
 use tui_term::widget::PseudoTerminal;
 
-use super::{TerminalOutput, app::LayoutSections};
+use super::{PANE_LEFT_PADDING_WITH_SIDEBAR, TerminalOutput, app::LayoutSections};
 
 const EXIT_INTERACTIVE_HINT: &str = "Ctrl-z - Stop interacting";
 const ENTER_INTERACTIVE_HINT: &str = "i - Interact";
@@ -92,7 +93,23 @@ impl<W> Widget for &TerminalPane<'_, W> {
             .title_bottom(self.footer());
 
         let term = PseudoTerminal::new(screen).block(block);
-        term.render(area, buf)
+        term.render(self.content_area(area), buf)
+    }
+}
+
+impl<W> TerminalPane<'_, W> {
+    fn content_area(&self, area: Rect) -> Rect {
+        let left_padding = if self.has_sidebar {
+            PANE_LEFT_PADDING_WITH_SIDEBAR
+        } else {
+            0
+        };
+
+        Rect {
+            x: area.x.saturating_add(left_padding),
+            width: area.width.saturating_sub(left_padding),
+            ..area
+        }
     }
 }
 
@@ -117,6 +134,28 @@ mod test {
         assert_eq!(
             String::from(pane.footer()),
             "   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom"
+        );
+    }
+
+    #[test]
+    fn test_content_area_pads_when_sidebar_visible() {
+        let term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
+        let pane = TerminalPane::new(&term, "foo", &LayoutSections::TaskList, true);
+
+        assert_eq!(
+            pane.content_area(Rect::new(10, 0, 20, 10)),
+            Rect::new(11, 0, 19, 10)
+        );
+    }
+
+    #[test]
+    fn test_content_area_has_no_padding_when_sidebar_hidden() {
+        let term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
+        let pane = TerminalPane::new(&term, "foo", &LayoutSections::TaskList, false);
+
+        assert_eq!(
+            pane.content_area(Rect::new(10, 0, 20, 10)),
+            Rect::new(10, 0, 20, 10)
         );
     }
 }

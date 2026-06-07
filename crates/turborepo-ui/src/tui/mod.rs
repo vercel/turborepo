@@ -28,6 +28,8 @@ use size::SizeInfo;
 pub use table::TaskTable;
 pub use term_output::TerminalOutput;
 
+const PANE_LEFT_PADDING_WITH_SIDEBAR: u16 = 1;
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Failed to send event to TUI: {0}")]
