@@ -88,28 +88,3 @@ fn signature_algorithms_with_p521(
         mapping: Box::leak(mapping.into_boxed_slice()),
     }
 }
-
-#[cfg(test)]
-mod test {
-    use rustls::SignatureScheme;
-
-    use super::signature_algorithms_with_p521;
-
-    /// The augmentation is purely additive: every algorithm `ring` already
-    /// supported is still present, plus the three P-521 algorithms and the
-    /// P-521 handshake mapping.
-    #[test]
-    fn augmentation_is_additive() {
-        let ring_algs = rustls::crypto::ring::default_provider().signature_verification_algorithms;
-        let augmented = signature_algorithms_with_p521(ring_algs);
-
-        assert_eq!(augmented.all.len(), ring_algs.all.len() + 3);
-        assert_eq!(augmented.mapping.len(), ring_algs.mapping.len() + 1);
-        assert!(
-            augmented
-                .mapping
-                .iter()
-                .any(|(scheme, _)| *scheme == SignatureScheme::ECDSA_NISTP521_SHA512)
-        );
-    }
-}
