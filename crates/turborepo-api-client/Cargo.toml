@@ -10,6 +10,8 @@ native-tls = ["reqwest/native-tls"]
 rustls-tls = [
   "reqwest/rustls-tls-native-roots",
   "reqwest/rustls-tls-webpki-roots",
+  "dep:rustls",
+  "dep:rustls-webpki",
 ]
 
 [dev-dependencies]
@@ -28,7 +30,19 @@ workspace = true
 bytes.workspace = true
 reqwest = { workspace = true, features = ["json", "stream"] }
 rustc_version_runtime = "0.2.1"
+# `ring`, rustls' default crypto provider, cannot verify P-521 (secp521r1)
+# ECDSA certificate signatures at all. We pull in rustls + the aws-lc-rs webpki
+# algorithms so we can install a provider that augments ring with P-521 support
+# (see `tls.rs`). Both are gated behind the `rustls-tls` feature.
+rustls = { version = "0.23.36", default-features = false, features = [
+  "ring",
+  "std",
+], optional = true }
 rustls-pemfile = "2.1.2"
+rustls-webpki = { version = "0.103.10", default-features = false, features = [
+  "aws-lc-rs",
+  "std",
+], optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

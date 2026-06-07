@@ -32,6 +32,8 @@ mod error;
 mod retry;
 mod shared_http_client;
 pub mod telemetry;
+#[cfg(feature = "rustls-tls")]
+mod tls;
 
 pub use bytes::Bytes;
 pub use shared_http_client::SharedHttpClient;
@@ -681,6 +683,12 @@ impl APIClient {
         connect_timeout: Option<Duration>,
         #[allow(unused_variables)] native_roots: bool,
     ) -> Result<reqwest::Client> {
+        // Make sure rustls can verify P-521 certificate chains before we build
+        // any client. ring (rustls' default provider) cannot, which breaks
+        // remote caches sitting behind P-521 issuers. See `tls.rs`.
+        #[cfg(feature = "rustls-tls")]
+        tls::ensure_crypto_provider();
+
         let build = |#[allow(unused_variables)] use_native: bool| {
             let mut builder = reqwest::Client::builder();
             #[cfg(feature = "rustls-tls")]
