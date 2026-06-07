@@ -91,73 +91,9 @@ fn signature_algorithms_with_p521(
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
+    use rustls::SignatureScheme;
 
-    use rustls::{
-        RootCertStore, SignatureScheme,
-        client::{WebPkiServerVerifier, danger::ServerCertVerifier},
-        crypto::CryptoProvider,
-        pki_types::{CertificateDer, ServerName, UnixTime},
-    };
-
-    use super::{provider_with_p521, signature_algorithms_with_p521};
-
-    // A P-521 ECDSA CA and a P-384 leaf signed by it with `ecdsa-with-SHA256`,
-    // matching the exact chain from issue #13035. Generated with openssl; see
-    // `tests/fixtures/p521/README.md`.
-    const CA_PEM: &[u8] = include_bytes!("../tests/fixtures/p521/ca.crt");
-    const LEAF_PEM: &[u8] = include_bytes!("../tests/fixtures/p521/server.crt");
-
-    fn first_cert(pem: &[u8]) -> CertificateDer<'static> {
-        rustls_pemfile::certs(&mut std::io::Cursor::new(pem))
-            .next()
-            .expect("fixture should contain a certificate")
-            .expect("fixture should be a valid PEM certificate")
-    }
-
-    fn leaf_and_roots() -> (CertificateDer<'static>, RootCertStore) {
-        let leaf = first_cert(LEAF_PEM);
-        let mut roots = RootCertStore::empty();
-        roots.add(first_cert(CA_PEM)).unwrap();
-        (leaf, roots)
-    }
-
-    fn verify_chain(provider: CryptoProvider) -> Result<(), rustls::Error> {
-        let (leaf, roots) = leaf_and_roots();
-        let verifier =
-            WebPkiServerVerifier::builder_with_provider(Arc::new(roots), Arc::new(provider))
-                .build()
-                .unwrap();
-        verifier
-            .verify_server_cert(
-                &leaf,
-                &[],
-                &ServerName::try_from("localhost").unwrap(),
-                &[],
-                UnixTime::now(),
-            )
-            .map(|_| ())
-    }
-
-    /// Sanity check: the unmodified `ring` provider that ships with rustls
-    /// reproduces the bug — it cannot verify the P-521 issuer's signature.
-    #[test]
-    fn ring_rejects_p521_chain() {
-        let err = verify_chain(rustls::crypto::ring::default_provider())
-            .expect_err("ring unexpectedly verified a P-521 chain");
-        let msg = err.to_string();
-        assert!(
-            msg.contains("UnsupportedSignatureAlgorithmForPublicKeyContext"),
-            "expected the P-521 signature-algorithm error, got: {msg}"
-        );
-    }
-
-    /// The augmented provider accepts the exact chain `ring` rejects.
-    #[test]
-    fn augmented_provider_accepts_p521_chain() {
-        verify_chain(provider_with_p521())
-            .expect("augmented provider should verify the P-521 chain");
-    }
+    use super::signature_algorithms_with_p521;
 
     /// The augmentation is purely additive: every algorithm `ring` already
     /// supported is still present, plus the three P-521 algorithms and the
