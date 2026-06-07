@@ -659,19 +659,23 @@ impl<W> App<W> {
 
     pub fn handle_mouse(&mut self, mut event: crossterm::event::MouseEvent) -> Result<(), Error> {
         // Only offset by table width if the sidebar is visible
-        let table_width = if self.preferences.is_task_list_visible() {
+        let has_sidebar = self.preferences.is_task_list_visible();
+        let table_width = if has_sidebar {
             self.size.task_list_width()
         } else {
             0
         };
+        let pane_left_padding = self.size.pane_left_padding_with_sidebar(has_sidebar);
         debug!("original mouse event: {event:?}, table_width: {table_width}");
         // Only handle mouse event if it happens inside of pane
         // We give a 1 cell buffer to make it easier to select the first column of a row
         if event.row > 0 && event.column >= table_width {
             // Subtract 1 from the y axis due to the title of the pane
             event.row -= 1;
-            // Subtract the width of the table
-            event.column -= table_width;
+            // Subtract the width of the table and the pane's link-safe left padding.
+            event.column = event
+                .column
+                .saturating_sub(table_width.saturating_add(pane_left_padding));
             debug!("translated mouse event: {event:?}");
 
             let task = self.get_full_task_mut()?;
@@ -1255,7 +1259,7 @@ fn update(
 }
 
 fn view<W>(app: &mut App<W>, f: &mut Frame) {
-    let cols = app.size.pane_cols();
+    let cols = app.size.rendered_pane_cols();
     let horizontal = if app.preferences.is_task_list_visible() {
         Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)])
     } else {

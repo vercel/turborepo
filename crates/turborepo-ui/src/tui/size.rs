@@ -1,3 +1,4 @@
+use super::PANE_LEFT_PADDING_WITH_SIDEBAR;
 use crate::TaskTable;
 
 const PANE_SIZE_RATIO: f32 = 3.0 / 4.0;
@@ -33,7 +34,7 @@ impl SizeInfo {
     }
 
     pub fn task_list_width(&self) -> u16 {
-        self.cols - self.pane_cols()
+        self.cols.saturating_sub(self.rendered_pane_cols())
     }
 
     pub fn pane_cols(&self) -> u16 {
@@ -47,11 +48,56 @@ impl SizeInfo {
             let full_task_width = self.cols.saturating_sub(self.task_width_hint);
             full_task_width
                 .max(ratio_pane_width)
-                // We need to account for the left border of the pane
-                .saturating_sub(1)
+                // Account for the task list border and the spacer before pane content.
+                .saturating_sub(1 + PANE_LEFT_PADDING_WITH_SIDEBAR)
         } else {
             // When sidebar is hidden, pane takes full width minus border
             self.cols.saturating_sub(1)
         }
+    }
+
+    pub fn rendered_pane_cols(&self) -> u16 {
+        self.rendered_pane_cols_with_sidebar(true)
+    }
+
+    pub fn rendered_pane_cols_with_sidebar(&self, has_sidebar: bool) -> u16 {
+        self.pane_cols_with_sidebar(has_sidebar)
+            .saturating_add(if has_sidebar {
+                PANE_LEFT_PADDING_WITH_SIDEBAR
+            } else {
+                0
+            })
+    }
+
+    pub fn pane_left_padding_with_sidebar(&self, has_sidebar: bool) -> u16 {
+        if has_sidebar {
+            PANE_LEFT_PADDING_WITH_SIDEBAR
+        } else {
+            0
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_rendered_pane_includes_left_padding_when_sidebar_visible() {
+        let size = SizeInfo::new(20, 100, ["app-a#dev"].into_iter());
+
+        assert_eq!(size.rendered_pane_cols(), size.pane_cols() + 1);
+        assert_eq!(size.task_list_width() + size.rendered_pane_cols(), 100);
+    }
+
+    #[test]
+    fn test_rendered_pane_has_no_padding_when_sidebar_hidden() {
+        let size = SizeInfo::new(20, 100, ["app-a#dev"].into_iter());
+
+        assert_eq!(
+            size.rendered_pane_cols_with_sidebar(false),
+            size.pane_cols_with_sidebar(false)
+        );
+        assert_eq!(size.pane_left_padding_with_sidebar(false), 0);
     }
 }
