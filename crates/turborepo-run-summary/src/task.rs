@@ -646,6 +646,7 @@ mod test {
             package: "pkg".to_string(),
             shared: SharedTaskSummary {
                 hash: Arc::from("hash"),
+                hash_reason: None,
                 inputs: BTreeMap::from([(
                     RelativeUnixPathBuf::new("src/input.ts").unwrap(),
                     "abc".into(),
