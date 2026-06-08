@@ -2,7 +2,6 @@
 
 import { CheckIcon, CopyIcon } from "lucide-react";
 import {
-  type CSSProperties,
   type ReactNode,
   useCallback,
   useRef,
@@ -13,12 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-type CodeBlockProps = {
-  children: ReactNode;
-  className?: string;
+type CodeBlockProps = React.ComponentProps<"pre"> & {
+  children?: ReactNode;
   icon?: ReactNode;
-  style?: CSSProperties;
-  tabIndex?: number;
   title?: string;
   "data-line-numbers"?: string;
   "data-line-highlighting"?: string;

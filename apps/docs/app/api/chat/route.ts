@@ -411,7 +411,7 @@ User question: ${userQuestion}`
         // Stage 2: Use better model for generation with retrieved context
         const result = streamText({
           model: GENERATION_MODEL,
-          messages: convertToModelMessages([
+          messages: await convertToModelMessages([
             ...processedMessages.slice(0, -1),
             {
               role: "user",
