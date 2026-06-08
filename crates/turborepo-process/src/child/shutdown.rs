@@ -170,7 +170,7 @@ impl ShutdownStyle {
                         match deadline {
                             Some(deadline) => {
                                 tokio::select! {
-                                    result = child.wait_for_graceful_exit() => {
+                                    result = child.wait() => {
                                         break match result {
                                             Ok(_exit_code) => ChildExit::Interrupted,
                                             Err(_) => ChildExit::Failed,
@@ -200,7 +200,7 @@ impl ShutdownStyle {
                             }
                             None => {
                                 tokio::select! {
-                                    result = child.wait_for_graceful_exit() => {
+                                    result = child.wait() => {
                                         break match result {
                                             Ok(_exit_code) => ChildExit::Interrupted,
                                             Err(_) => ChildExit::Failed,

@@ -17,6 +17,27 @@ const PROCESS_TREE_DRAIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
 #[cfg(windows)]
 const WINDOWS_DESCENDANT_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 
+#[cfg(windows)]
+fn windows_pty_child_exit_code(child: &(dyn PtyChild + Send + Sync)) -> io::Result<Option<i32>> {
+    let Some(handle) = child.as_raw_handle() else {
+        return Ok(None);
+    };
+
+    let mut status = 0;
+    let result = unsafe {
+        windows_sys::Win32::System::Threading::GetExitCodeProcess(handle as _, &mut status)
+    };
+    if result == 0 {
+        return Err(io::Error::last_os_error());
+    }
+
+    if status == windows_sys::Win32::Foundation::STILL_ACTIVE as u32 {
+        Ok(None)
+    } else {
+        Ok(Some(status as i32))
+    }
+}
+
 pub(super) struct ChildHandle {
     pid: Option<u32>,
     imp: ChildHandleImpl,
@@ -655,22 +676,25 @@ impl ChildHandle {
                             // child hasn't finished, we sleep for a short time
                             tokio::time::sleep(CHILD_POLL_INTERVAL).await;
                         }
-                        Err(err) => return Err(err),
+                        Err(err) => {
+                            #[cfg(windows)]
+                            match windows_pty_child_exit_code(child.as_ref()) {
+                                Ok(Some(exit_code)) => return Ok(Some(exit_code)),
+                                Ok(None) => {}
+                                Err(fallback_err) => {
+                                    debug!(
+                                        "failed to query Windows PTY child exit code: \
+                                         {fallback_err}"
+                                    );
+                                }
+                            }
+
+                            return Err(err);
+                        }
                     }
                 }
             }
         }
-    }
-
-    #[cfg(windows)]
-    pub(super) async fn wait_for_graceful_exit(&mut self) -> io::Result<Option<i32>> {
-        let result = self.wait().await;
-        if let Err(err) = &result {
-            debug!("child wait failed after Windows graceful shutdown: {err}");
-            return Ok(None);
-        }
-
-        result
     }
 
     pub(super) async fn kill(&mut self) -> io::Result<()> {
