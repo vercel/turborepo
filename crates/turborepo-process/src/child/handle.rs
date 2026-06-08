@@ -18,15 +18,18 @@ const PROCESS_TREE_DRAIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
 const WINDOWS_DESCENDANT_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[cfg(windows)]
-fn windows_pty_child_exit_code(child: &(dyn PtyChild + Send + Sync)) -> io::Result<Option<i32>> {
-    let Some(handle) = child.as_raw_handle() else {
-        return Ok(None);
-    };
+fn windows_process_exit_code(
+    handle: windows_sys::Win32::Foundation::HANDLE,
+) -> io::Result<Option<i32>> {
+    match unsafe { windows_sys::Win32::System::Threading::WaitForSingleObject(handle, 0) } {
+        windows_sys::Win32::Foundation::WAIT_OBJECT_0 => {}
+        windows_sys::Win32::Foundation::WAIT_TIMEOUT => return Ok(None),
+        _ => return Err(io::Error::last_os_error()),
+    }
 
     let mut status = 0;
-    let result = unsafe {
-        windows_sys::Win32::System::Threading::GetExitCodeProcess(handle as _, &mut status)
-    };
+    let result =
+        unsafe { windows_sys::Win32::System::Threading::GetExitCodeProcess(handle, &mut status) };
     if result == 0 {
         return Err(io::Error::last_os_error());
     }
@@ -36,6 +39,51 @@ fn windows_pty_child_exit_code(child: &(dyn PtyChild + Send + Sync)) -> io::Resu
     } else {
         Ok(Some(status as i32))
     }
+}
+
+#[cfg(windows)]
+fn windows_pty_child_exit_code(
+    child: &(dyn PtyChild + Send + Sync),
+    pid: Option<u32>,
+) -> io::Result<Option<i32>> {
+    if let Some(handle) = child.as_raw_handle() {
+        match windows_process_exit_code(handle as _) {
+            Ok(status) => return Ok(status),
+            Err(err) => debug!("failed to query Windows PTY child handle: {err}"),
+        }
+    }
+
+    let Some(pid) = pid else {
+        return Err(io::Error::other("missing Windows PTY child pid"));
+    };
+
+    let handle = unsafe {
+        windows_sys::Win32::System::Threading::OpenProcess(
+            windows_sys::Win32::System::Threading::PROCESS_QUERY_LIMITED_INFORMATION
+                | windows_sys::Win32::System::Threading::PROCESS_SYNCHRONIZE,
+            0,
+            pid,
+        )
+    };
+
+    if handle.is_null() {
+        let err = io::Error::last_os_error();
+        if err.raw_os_error()
+            == Some(windows_sys::Win32::Foundation::ERROR_INVALID_PARAMETER as i32)
+        {
+            return Ok(None);
+        }
+
+        return Err(err);
+    }
+
+    let status = windows_process_exit_code(handle);
+    let close_result = unsafe { windows_sys::Win32::Foundation::CloseHandle(handle) };
+    if close_result == 0 {
+        return Err(io::Error::last_os_error());
+    }
+
+    status
 }
 
 pub(super) struct ChildHandle {
@@ -634,6 +682,9 @@ impl ChildHandle {
 
     /// Perform a `wait` syscall on the child until it exits
     pub(super) async fn wait(&mut self) -> io::Result<Option<i32>> {
+        #[cfg(windows)]
+        let pid = self.pid;
+
         match &mut self.imp {
             ChildHandleImpl::Tokio(child) => {
                 let result = match child {
@@ -678,7 +729,7 @@ impl ChildHandle {
                         }
                         Err(err) => {
                             #[cfg(windows)]
-                            match windows_pty_child_exit_code(child.as_ref()) {
+                            match windows_pty_child_exit_code(child.as_ref(), pid) {
                                 Ok(Some(exit_code)) => return Ok(Some(exit_code)),
                                 Ok(None) => {
                                     tokio::time::sleep(CHILD_POLL_INTERVAL).await;
