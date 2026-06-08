@@ -94,6 +94,8 @@ pub struct SinglePackageTaskSummary {
 #[serde(rename_all = "camelCase")]
 pub struct SharedTaskSummary<T> {
     pub hash: Arc<str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hash_reason: Option<String>,
     pub inputs: BTreeMap<RelativeUnixPathBuf, String>,
     pub hash_of_external_dependencies: String,
     pub cache: TaskCacheSummary,
@@ -334,6 +336,7 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
     fn from(value: SharedTaskSummary<TaskId<'static>>) -> Self {
         let SharedTaskSummary {
             hash,
+            hash_reason,
             inputs,
             hash_of_external_dependencies,
             cache,
@@ -355,6 +358,7 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
         } = value;
         Self {
             hash,
+            hash_reason,
             inputs,
             hash_of_external_dependencies,
             cache,

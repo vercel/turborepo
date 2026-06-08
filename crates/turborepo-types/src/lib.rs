@@ -537,12 +537,32 @@ pub struct IncrementalPartition {
 /// missing `inputs` key), affected detection treats all files in the
 /// package as inputs. This matches turbo's existing hashing behavior
 /// where an omitted `inputs` key means "hash everything."
-#[derive(Debug, PartialEq, Clone, Eq, Hash, Default)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub struct TaskInputs {
     /// Glob patterns for input files
     pub globs: Vec<String>,
     /// Set when $TURBO_DEFAULT$ is in inputs
     pub default: bool,
+    /// Glob patterns for files that should be hashed after task dependencies
+    /// complete.
+    pub jit_globs: Vec<String>,
+    /// Set when $TURBO_JIT$ is in inputs.
+    pub jit_default: bool,
+    /// Whether eager file hashing should run. This is false for JIT-only
+    /// inputs.
+    pub eager: bool,
+}
+
+impl Default for TaskInputs {
+    fn default() -> Self {
+        Self {
+            globs: Vec::new(),
+            default: false,
+            jit_globs: Vec::new(),
+            jit_default: false,
+            eager: true,
+        }
+    }
 }
 
 impl TaskInputs {
@@ -551,6 +571,9 @@ impl TaskInputs {
         Self {
             globs,
             default: false,
+            jit_globs: Vec::new(),
+            jit_default: false,
+            eager: true,
         }
     }
 
@@ -558,6 +581,10 @@ impl TaskInputs {
     pub fn with_default(mut self, default: bool) -> Self {
         self.default = default;
         self
+    }
+
+    pub fn has_jit_inputs(&self) -> bool {
+        self.jit_default || !self.jit_globs.is_empty()
     }
 }
 

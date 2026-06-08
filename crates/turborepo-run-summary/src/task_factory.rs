@@ -134,6 +134,8 @@ where
             .hash_tracker
             .hash(task_id)
             .ok_or_else(|| Error::MissingHash(task_id.clone()))?;
+        let hash_reason =
+            (hash.as_ref() == "Deferred because $TURBO_JIT$ was used.").then(|| hash.to_string());
 
         let expanded_inputs: std::collections::BTreeMap<_, _> = self
             .hash_tracker
@@ -175,6 +177,7 @@ where
 
         Ok(SharedTaskSummary {
             hash,
+            hash_reason,
             inputs: expanded_inputs,
             hash_of_external_dependencies,
             cache: cache_summary,

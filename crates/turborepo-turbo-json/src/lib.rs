@@ -375,9 +375,18 @@ impl TaskInputsFromProcessed for turborepo_types::TaskInputs {
     ) -> turborepo_types::TaskInputs {
         // Resolve all globs with the turbo_root path
         // Absolute path validation was already done during ProcessedGlob creation
+        let globs = inputs.resolve(turbo_root_path);
+        let default = inputs.default;
+        let jit_globs = inputs.resolve_jit(turbo_root_path);
+        let jit_default = inputs.jit_default;
+        let eager = default || !globs.is_empty() || (!jit_default && jit_globs.is_empty());
+
         turborepo_types::TaskInputs {
-            globs: inputs.resolve(turbo_root_path),
-            default: inputs.default,
+            globs,
+            default,
+            jit_globs,
+            jit_default,
+            eager,
         }
     }
 }

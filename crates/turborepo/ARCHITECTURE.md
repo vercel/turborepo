@@ -189,7 +189,10 @@ The task graph visitor handles task execution:
 #### Visitor `visit` (`crates/turborepo-lib/src/task_graph/visitor/mod.rs`)
 
 - Receives tasks from the engine when they can be executed
-- Calculates task hashes
+- Calculates task hashes. Most task hashes are precomputed before scheduling,
+  but tasks with `$TURBO_JIT$` inputs defer final file-input hashing until the
+  engine dispatches the task, after its dependencies have completed and restored
+  any cached outputs.
 - Creates `ExecContext` for each task
 - Manages UI output and progress tracking
 - Collects errors and execution information
@@ -316,6 +319,10 @@ Creates a "content identifier" for a specific task depending on current state of
 - **Explicit Inputs**: When tasks use custom `inputs`, glob matches still walk the
   filesystem, but clean tracked matches reuse blob OIDs from the repo index
   instead of re-hashing file contents
+- **JIT Inputs**: `inputs` entries prefixed with `$TURBO_JIT$` are file inputs
+  hashed just before task execution. They are merged with the eagerly hashed
+  file inputs to produce the final task hash. In dry runs, the task hash is
+  reported as deferred because dependency outputs are not materialized.
 - **CRLF Normalization**: When `.gitattributes` marks files as `text` or
   `text=auto`, git normalizes CRLF line endings to LF in blob objects. The
   `crlf` module in `turborepo-scm` replicates this so turbo's file hashes

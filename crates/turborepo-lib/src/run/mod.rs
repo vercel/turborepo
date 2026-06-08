@@ -1095,6 +1095,8 @@ impl Run {
             self.color_config,
             self.processes.clone(),
             &self.repo_root,
+            &self.scm,
+            repo_index,
             global_env,
             &self.root_turbo_json.global_env,
             ui_sender,
