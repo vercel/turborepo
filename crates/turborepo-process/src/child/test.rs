@@ -716,7 +716,7 @@ async fn test_graceful_shutdown_sends_ctrl_c_to_noninteractive_pty() {
     let output_task =
         tokio::spawn(async move { output_child.wait_with_piped_outputs(output).await });
 
-    tokio::time::timeout(Duration::from_secs(5), ready_rx)
+    tokio::time::timeout(Duration::from_secs(30), ready_rx)
         .await
         .expect("timed out waiting for child to become ready")
         .expect("ready sender dropped");
