@@ -736,7 +736,6 @@ async fn test_graceful_shutdown_sends_ctrl_c_to_noninteractive_pty() {
     };
 
     let output = String::from_utf8_lossy(&buffer.lock().unwrap()).into_owned();
-    assert_eq!(exit, Some(ChildExit::Interrupted));
     assert!(
         output.contains("received SIGINT"),
         "expected child to receive Ctrl+C over PTY\n{output}"
@@ -744,6 +743,11 @@ async fn test_graceful_shutdown_sends_ctrl_c_to_noninteractive_pty() {
     assert!(
         output.contains("exiting after SIGINT"),
         "expected child to finish graceful shutdown\n{output}"
+    );
+    assert_eq!(
+        exit,
+        Some(ChildExit::Interrupted),
+        "expected graceful shutdown to report Interrupted after child handled Ctrl+C\n{output}"
     );
 }
 
