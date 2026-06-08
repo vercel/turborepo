@@ -1,9 +1,13 @@
+#[cfg(windows)]
+use std::io::Write;
 use std::{io, time::Duration};
 
 use portable_pty::{Child as PtyChild, MasterPty as PtyController, native_pty_system};
 use tokio::{process::Command as TokioCommand, sync::mpsc};
 use tracing::debug;
 
+#[cfg(windows)]
+use super::child_io::SharedPtyWriter;
 use super::{ChildCommand, ChildExit, ChildIO, ChildInput, ChildOutput};
 use crate::{Command, PtySize};
 
@@ -24,6 +28,8 @@ pub(super) struct ChildHandle {
     pty_controller_fd: Option<libc::c_int>,
     #[cfg(windows)]
     _job: Option<crate::job_object::JobObject>,
+    #[cfg(windows)]
+    shutdown_stdin: Option<SharedPtyWriter>,
 }
 
 enum ChildHandleImpl {
@@ -214,6 +220,8 @@ impl ChildHandle {
                 pty_controller_fd: None,
                 #[cfg(windows)]
                 _job: job,
+                #[cfg(windows)]
+                shutdown_stdin: None,
             },
             io: ChildIO {
                 stdin,
@@ -224,7 +232,11 @@ impl ChildHandle {
     }
 
     #[tracing::instrument(skip(command))]
-    pub(super) fn spawn_pty(command: Command, size: PtySize) -> io::Result<SpawnResult> {
+    pub(super) fn spawn_pty(
+        command: Command,
+        size: PtySize,
+        _keep_shutdown_stdin: bool,
+    ) -> io::Result<SpawnResult> {
         let keep_stdin_open = command.will_open_stdin();
 
         let command = portable_pty::CommandBuilder::from(command);
@@ -288,8 +300,11 @@ impl ChildHandle {
         #[cfg(unix)]
         let pty_controller_fd = controller.as_raw_fd();
 
-        let mut stdin = controller.take_writer().ok();
+        let stdin = controller.take_writer().ok();
         let output = controller.try_clone_reader().ok().map(ChildOutput::Pty);
+
+        #[cfg(windows)]
+        let mut stdin = stdin;
 
         // portable-pty 0.9.0 creates ConPTY with PSEUDOCONSOLE_INHERIT_CURSOR,
         // which sends a Device Status Report (DSR) cursor position request
@@ -306,11 +321,26 @@ impl ChildHandle {
             }
         }
 
-        // If we don't want to keep stdin open we take it here and it is immediately
-        // dropped resulting in a EOF being sent to the child process.
-        if !keep_stdin_open {
-            stdin.take();
-        }
+        #[cfg(windows)]
+        let (stdin, shutdown_stdin) = match stdin.take() {
+            Some(writer) if _keep_shutdown_stdin => {
+                let writer = SharedPtyWriter::new(writer);
+                let stdin = keep_stdin_open
+                    .then(|| Box::new(writer.clone()) as Box<dyn Write + Send>)
+                    .map(ChildInput::Pty);
+                (stdin, Some(writer))
+            }
+            Some(writer) if keep_stdin_open => (Some(ChildInput::Pty(writer)), None),
+            Some(_) => (None, None),
+            None => (None, None),
+        };
+
+        #[cfg(not(windows))]
+        let stdin = if keep_stdin_open {
+            stdin.map(ChildInput::Pty)
+        } else {
+            None
+        };
 
         Ok(SpawnResult {
             handle: Self {
@@ -324,11 +354,10 @@ impl ChildHandle {
                 pty_controller_fd,
                 #[cfg(windows)]
                 _job: job,
+                #[cfg(windows)]
+                shutdown_stdin,
             },
-            io: ChildIO {
-                stdin: stdin.map(ChildInput::Pty),
-                output,
-            },
+            io: ChildIO { stdin, output },
             controller: Some(controller),
         })
     }
@@ -468,6 +497,17 @@ impl ChildHandle {
         }
 
         ChildExit::Interrupted
+    }
+
+    #[cfg(windows)]
+    pub(super) fn send_graceful_interrupt(&mut self) {
+        let Some(stdin) = &mut self.shutdown_stdin else {
+            return;
+        };
+
+        if let Err(err) = stdin.write_all(b"\x03").and_then(|_| stdin.flush()) {
+            debug!("failed to send Ctrl+C to Windows PTY child stdin: {err}");
+        }
     }
 
     #[cfg(windows)]

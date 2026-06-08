@@ -702,6 +702,46 @@ async fn test_graceful_shutdown_waits_for_force_kill(use_pty: bool) {
     assert_eq!(shutdown.await.unwrap(), Some(ChildExit::Killed));
 }
 
+#[cfg(windows)]
+#[tokio::test]
+async fn test_graceful_shutdown_sends_ctrl_c_to_noninteractive_pty() {
+    let script = find_script_dir().join_component("graceful_sigint_output.js");
+    let mut cmd = Command::new("node");
+    cmd.args([script.as_std_path()]);
+    let mut child =
+        Child::spawn(cmd, ShutdownStyle::Graceful(None), Some(PtySize::default())).unwrap();
+
+    let mut output_child = child.clone();
+    let (output, buffer, ready_rx) = ObservedOutput::new();
+    let output_task =
+        tokio::spawn(async move { output_child.wait_with_piped_outputs(output).await });
+
+    tokio::time::timeout(Duration::from_secs(5), ready_rx)
+        .await
+        .expect("timed out waiting for child to become ready")
+        .expect("ready sender dropped");
+
+    assert_eq!(
+        child.shutdown(ShutdownStyle::Graceful(None)).await,
+        Some(ChildExit::Interrupted)
+    );
+
+    output_task
+        .await
+        .expect("output task panicked")
+        .expect("failed to wait for child output");
+
+    let output = String::from_utf8_lossy(&buffer.lock().unwrap()).into_owned();
+    assert!(
+        output.contains("received SIGINT"),
+        "expected child to receive Ctrl+C over PTY\n{output}"
+    );
+    assert!(
+        output.contains("exiting after SIGINT"),
+        "expected child to finish graceful shutdown\n{output}"
+    );
+}
+
 #[test_case(false)]
 #[test_case(TEST_PTY)]
 #[tokio::test]
