@@ -3,7 +3,11 @@
 //! This module provides the trait and factory for creating commands to execute
 //! tasks.
 
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::HashSet,
+    ffi::OsString,
+    path::{Path, PathBuf},
+};
 
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, PathError, RelativeUnixPath};
@@ -21,6 +25,47 @@ use crate::MfeConfigProvider;
 fn apply_environment(cmd: &mut Command, environment: &EnvironmentVariableMap) {
     cmd.env_clear();
     cmd.envs(environment.iter());
+}
+
+#[cfg(windows)]
+// Avoid npm.cmd so Windows Ctrl+C reaches npm/node without cmd.exe emitting
+// "Terminate batch job (Y/N)?" during graceful shutdown.
+fn npm_direct_command(package_manager_binary: &Path) -> Option<(PathBuf, OsString)> {
+    if package_manager_binary.file_name()?.to_str()? != "npm.cmd" {
+        return None;
+    }
+
+    let node_dir = package_manager_binary.parent()?;
+    let node = node_dir.join("node.exe");
+    let npm_cli = node_dir
+        .join("node_modules")
+        .join("npm")
+        .join("bin")
+        .join("npm-cli.js");
+
+    (node.is_file() && npm_cli.is_file()).then(|| (node, npm_cli.into_os_string()))
+}
+
+#[cfg(windows)]
+fn package_manager_command(
+    package_manager: &PackageManager,
+    package_manager_binary: &Path,
+) -> (OsString, Vec<OsString>) {
+    if package_manager == &PackageManager::Npm
+        && let Some((node, npm_cli)) = npm_direct_command(package_manager_binary)
+    {
+        return (node.into_os_string(), vec![npm_cli]);
+    }
+
+    (package_manager_binary.as_os_str().to_owned(), Vec::new())
+}
+
+#[cfg(not(windows))]
+fn package_manager_command(
+    _package_manager: &PackageManager,
+    package_manager_binary: &Path,
+) -> (OsString, Vec<OsString>) {
+    (package_manager_binary.as_os_str().to_owned(), Vec::new())
 }
 
 /// Trait for providing commands to execute tasks.
@@ -206,17 +251,19 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             .package_manager_binary
             .as_deref()
             .map_err(|e| CommandProviderError::from(*e))?;
-        let mut cmd = Command::new(package_manager_binary);
-        let mut args = vec!["run".to_string(), task_id.task().to_string()];
+        let (program, mut args) =
+            package_manager_command(self.package_graph.package_manager(), package_manager_binary);
+        args.extend([OsString::from("run"), OsString::from(task_id.task())]);
         if let Some(pass_through_args) = self.task_args.args_for_task(task_id) {
             args.extend(
                 self.package_graph
                     .package_manager()
                     .arg_separator(pass_through_args)
-                    .map(|s| s.to_string()),
+                    .map(OsString::from),
             );
-            args.extend(pass_through_args.iter().cloned());
+            args.extend(pass_through_args.iter().map(OsString::from));
         }
+        let mut cmd = Command::new(program);
         cmd.args(args);
 
         let package_dir = self.repo_root.resolve(workspace_info.package_path());
@@ -706,6 +753,43 @@ mod tests {
             .command(&task_id, &EnvironmentVariableMap::default())
             .unwrap();
         assert!(cmd.is_none(), "expected no cmd, got {cmd:?}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn npm_cmd_unwraps_to_node_and_npm_cli() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let npm_cmd = tempdir.path().join("npm.cmd");
+        let node = tempdir.path().join("node.exe");
+        let npm_cli = tempdir
+            .path()
+            .join("node_modules")
+            .join("npm")
+            .join("bin")
+            .join("npm-cli.js");
+
+        fs::write(&npm_cmd, "").unwrap();
+        fs::write(&node, "").unwrap();
+        fs::create_dir_all(npm_cli.parent().unwrap()).unwrap();
+        fs::write(&npm_cli, "").unwrap();
+
+        let (program, args) = package_manager_command(&PackageManager::Npm, &npm_cmd);
+
+        assert_eq!(program, node.into_os_string());
+        assert_eq!(args, vec![npm_cli.into_os_string()]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn npm_cmd_falls_back_when_npm_cli_missing() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let npm_cmd = tempdir.path().join("npm.cmd");
+        fs::write(&npm_cmd, "").unwrap();
+
+        let (program, args) = package_manager_command(&PackageManager::Npm, &npm_cmd);
+
+        assert_eq!(program, npm_cmd.into_os_string());
+        assert!(args.is_empty());
     }
 
     #[tokio::test]
