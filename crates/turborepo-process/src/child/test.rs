@@ -721,10 +721,10 @@ async fn test_graceful_shutdown_sends_ctrl_c_to_noninteractive_pty() {
         .expect("timed out waiting for child to become ready")
         .expect("ready sender dropped");
 
-    assert_eq!(
-        child.shutdown(ShutdownStyle::Graceful(None)).await,
-        Some(ChildExit::Interrupted)
-    );
+    let exit = child
+        .shutdown(ShutdownStyle::Graceful(Some(Duration::from_secs(5))))
+        .await;
+    assert_eq!(exit, Some(ChildExit::Interrupted));
 
     output_task
         .await
