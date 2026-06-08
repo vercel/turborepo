@@ -724,14 +724,19 @@ async fn test_graceful_shutdown_sends_ctrl_c_to_noninteractive_pty() {
     let exit = child
         .shutdown(ShutdownStyle::Graceful(Some(Duration::from_secs(5))))
         .await;
-    assert_eq!(exit, Some(ChildExit::Interrupted));
 
-    output_task
-        .await
-        .expect("output task panicked")
-        .expect("failed to wait for child output");
+    let _ = match tokio::time::timeout(Duration::from_secs(5), output_task).await {
+        Ok(result) => result
+            .expect("output task panicked")
+            .expect("failed to wait for child output"),
+        Err(_) => {
+            let _ = child.kill().await;
+            panic!("timed out waiting for child output after shutdown returned {exit:?}");
+        }
+    };
 
     let output = String::from_utf8_lossy(&buffer.lock().unwrap()).into_owned();
+    assert_eq!(exit, Some(ChildExit::Interrupted));
     assert!(
         output.contains("received SIGINT"),
         "expected child to receive Ctrl+C over PTY\n{output}"
