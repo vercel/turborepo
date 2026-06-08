@@ -487,6 +487,8 @@ mod test {
         ProcessedInputs {
             globs: vec![],
             default: false,
+            jit_globs: vec![],
+            jit_default: false,
             extends: false,
         }
     }
@@ -495,6 +497,8 @@ mod test {
         ProcessedInputs {
             globs: vec![],
             default: true,
+            jit_globs: vec![],
+            jit_default: false,
             extends: true,
         }
     }
