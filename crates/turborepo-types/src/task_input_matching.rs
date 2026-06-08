@@ -31,9 +31,7 @@ pub struct CompiledGlobs {
     /// meaning all files within the package directory match by default.
     default: bool,
     eager: bool,
-    jit_inclusions: Vec<wax::Glob<'static>>,
-    jit_exclusions: Vec<wax::Glob<'static>>,
-    jit_default: bool,
+    has_jit_inputs: bool,
     /// True when any glob starts with `../`, indicating cross-package
     /// file references (from `$TURBO_ROOT$` expansion).
     has_traversal_globs: bool,
@@ -48,17 +46,14 @@ pub struct CompiledGlobs {
 /// all files — see [`check_compiled_globs`] for details.
 pub fn compile_globs(inputs: &TaskInputs) -> CompiledGlobs {
     let (inclusions, exclusions, eager_has_traversal) = compile_patterns(&inputs.globs);
-    let (jit_inclusions, jit_exclusions, jit_has_traversal) = compile_patterns(&inputs.jit_globs);
 
     CompiledGlobs {
         inclusions,
         exclusions,
         default: inputs.default,
         eager: inputs.eager,
-        jit_inclusions,
-        jit_exclusions,
-        jit_default: inputs.jit_default,
-        has_traversal_globs: eager_has_traversal || jit_has_traversal,
+        has_jit_inputs: inputs.has_jit_inputs(),
+        has_traversal_globs: eager_has_traversal,
     }
 }
 
@@ -138,6 +133,10 @@ pub fn file_matches_compiled_inputs(
     pkg_prefix_slash: &str,
     compiled: &CompiledGlobs,
 ) -> bool {
+    if compiled.has_jit_inputs {
+        return true;
+    }
+
     let file_relative_to_pkg = if pkg_str.is_empty() {
         Some(file_unix)
     } else {
@@ -167,12 +166,6 @@ pub fn file_matches_compiled_inputs(
             &compiled.exclusions,
             false,
             false,
-        ) || check_compiled_globs(
-            &relative,
-            &compiled.jit_inclusions,
-            &compiled.jit_exclusions,
-            false,
-            false,
         );
     };
 
@@ -182,12 +175,6 @@ pub fn file_matches_compiled_inputs(
         &compiled.exclusions,
         compiled.default,
         compiled.eager,
-    ) || check_compiled_globs(
-        relative_path,
-        &compiled.jit_inclusions,
-        &compiled.jit_exclusions,
-        compiled.jit_default,
-        compiled.jit_default || !compiled.jit_inclusions.is_empty(),
     )
 }
 
@@ -519,30 +506,25 @@ mod tests {
     }
 
     #[test]
-    fn normal_exclusion_does_not_exclude_jit_input() {
+    fn jit_inputs_are_conservatively_affected() {
         let inputs = TaskInputs {
             globs: vec!["!src/generated/**".to_string()],
             jit_globs: vec!["src/generated/**".to_string()],
             ..Default::default()
         };
 
-        assert_match(
-            "packages/lib-a/src/generated/schema.ts",
-            "packages/lib-a",
-            &inputs,
-            true,
-        );
+        assert_match("packages/lib-a/README.md", "packages/lib-a", &inputs, true);
     }
 
     #[test]
-    fn jit_traversal_does_not_make_unrelated_root_file_match() {
+    fn jit_traversal_is_conservatively_affected() {
         let inputs = TaskInputs {
             jit_globs: vec!["../../schema.json".to_string()],
             eager: false,
             ..Default::default()
         };
 
-        assert_match("other.json", "packages/lib-a", &inputs, false);
+        assert_match("other.json", "packages/lib-a", &inputs, true);
         assert_match("schema.json", "packages/lib-a", &inputs, true);
     }
 }

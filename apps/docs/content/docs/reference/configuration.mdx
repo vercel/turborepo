@@ -941,7 +941,11 @@ Notes:
 - `$TURBO_JIT$` only applies to task `inputs`.
 - `$TURBO_JIT$` is not valid in `dependsOn`, `outputs`, or global inputs.
 - A task using `$TURBO_JIT$` cannot know its final cache key until just before it
-  runs. Because of this, `--dry` output shows returns `null` for tasks using `$TURBO_JIT$` with `hashReason` mentioning the just-in-time deferral.
+  runs. Because of this, `--dry` output shows a deferred hash message for tasks
+  using `$TURBO_JIT$`, with `hashReason` mentioning the just-in-time deferral.
+- `--affected` and `turbo query affected` conservatively treat tasks with
+  `$TURBO_JIT$` inputs as affected, since their final inputs are not known until
+  their task dependencies complete.
 
 #### `$TURBO_EXTENDS$`
 
