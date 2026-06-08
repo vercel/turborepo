@@ -22,7 +22,7 @@ use turborepo_log::grouping::{GroupingLayer, GroupingMode};
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker, TaskTracker};
-use turborepo_scm::SCM;
+use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_task_executor::{command_invokes_turbo, TaskOutput};
 use turborepo_task_hash::{
     Error as TaskHashError, GlobalHashableInputs, PackageInputsHashes, TaskHashTrackerState,
@@ -56,6 +56,8 @@ pub struct Visitor<'a> {
     run_tracker: RunTracker,
     task_access: &'a TaskAccess,
     task_hasher: TaskHasher<'a>,
+    scm: &'a SCM,
+    repo_index: Option<&'a RepoGitIndex>,
     color_config: ColorConfig,
     is_watch: bool,
     ui_sender: Option<UISender>,
@@ -87,6 +89,14 @@ pub struct RecursiveTurboError {
     pub span: Option<SourceSpan>,
     #[source_code]
     pub text: NamedSource<String>,
+}
+
+enum PrecomputedTask {
+    Ready {
+        task_hash: String,
+        execution_env: EnvironmentVariableMap,
+    },
+    Deferred,
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -132,6 +142,8 @@ impl<'a> Visitor<'a> {
         color_config: ColorConfig,
         manager: ProcessManager,
         repo_root: &'a AbsoluteSystemPath,
+        scm: &'a SCM,
+        repo_index: Option<&'a RepoGitIndex>,
         global_env: EnvironmentVariableMap,
         global_env_patterns: &'a [String],
         ui_sender: Option<UISender>,
@@ -190,6 +202,8 @@ impl<'a> Visitor<'a> {
             run_tracker,
             task_access,
             task_hasher,
+            scm,
+            repo_index,
             color_config,
             ui_sender,
             is_watch,
@@ -206,7 +220,7 @@ impl<'a> Visitor<'a> {
         &self,
         engine: &Engine,
         telemetry: &GenericEventBuilder,
-    ) -> Result<HashMap<TaskId<'static>, (String, EnvironmentVariableMap)>, Error> {
+    ) -> Result<HashMap<TaskId<'static>, PrecomputedTask>, Error> {
         use petgraph::algo::toposort;
         use rayon::prelude::*;
         use turborepo_engine::TaskNode;
@@ -244,14 +258,13 @@ impl<'a> Visitor<'a> {
             waves[d].push(node_idx);
         }
 
-        let results: Arc<Mutex<HashMap<TaskId<'static>, (String, EnvironmentVariableMap)>>> =
+        let results: Arc<Mutex<HashMap<TaskId<'static>, PrecomputedTask>>> =
             Arc::new(Mutex::new(HashMap::with_capacity(sorted.len())));
 
         // Process each wave in parallel. Within a wave, all dependencies
         // have already been hashed in earlier waves.
         for wave in &waves {
-            type HashResult =
-                Result<Option<(TaskId<'static>, String, EnvironmentVariableMap)>, Error>;
+            type HashResult = Result<Option<(TaskId<'static>, PrecomputedTask)>, Error>;
             let wave_results: Vec<HashResult> = wave
                 .par_iter()
                 .map(|&node_idx| {
@@ -274,6 +287,17 @@ impl<'a> Visitor<'a> {
                         .ok_or(Error::MissingDefinition)?;
 
                     let task_env_mode = task_definition.env_mode.unwrap_or(self.global_env_mode);
+
+                    if task_definition.inputs.has_jit_inputs() {
+                        if self.dry {
+                            self.task_hasher.insert_deferred_hash(
+                                task_id,
+                                task_definition,
+                                task_env_mode,
+                            )?;
+                        }
+                        return Ok(Some((task_id.clone(), PrecomputedTask::Deferred)));
+                    }
 
                     let dependency_set = engine
                         .dependencies(task_id)
@@ -298,7 +322,13 @@ impl<'a> Visitor<'a> {
                         self.task_hasher
                             .env(task_id, task_env_mode, task_definition)?;
 
-                    Ok(Some((task_id.clone(), task_hash, execution_env)))
+                    Ok(Some((
+                        task_id.clone(),
+                        PrecomputedTask::Ready {
+                            task_hash,
+                            execution_env,
+                        },
+                    )))
                 })
                 .collect();
 
@@ -306,8 +336,8 @@ impl<'a> Visitor<'a> {
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             for result in wave_results {
-                if let Some((task_id, hash, env)) = result? {
-                    map.insert(task_id, (hash, env));
+                if let Some((task_id, precomputed)) = result? {
+                    map.insert(task_id, precomputed);
                 }
             }
         }
@@ -413,9 +443,64 @@ impl<'a> Visitor<'a> {
 
             // Move pre-computed hash and env out of the map — each task is
             // dispatched exactly once, so remove avoids cloning the env map.
-            let Some((task_hash, execution_env)) = precomputed.remove(&info) else {
+            let Some(precomputed_task) = precomputed.remove(&info) else {
                 dispatch_error = Some(Error::MissingDefinition);
                 break;
+            };
+
+            let (task_hash, execution_env) = match precomputed_task {
+                PrecomputedTask::Ready {
+                    task_hash,
+                    execution_env,
+                } => (task_hash, execution_env),
+                PrecomputedTask::Deferred => {
+                    if self.dry {
+                        (
+                            turborepo_task_hash::DEFERRED_TASK_HASH_MESSAGE.to_string(),
+                            EnvironmentVariableMap::default(),
+                        )
+                    } else {
+                        let task_env_mode =
+                            task_definition.env_mode.unwrap_or(self.global_env_mode);
+                        let dependency_set = match engine.dependencies(&info) {
+                            Some(dependency_set) => dependency_set,
+                            None => {
+                                dispatch_error = Some(Error::MissingDefinition);
+                                break;
+                            }
+                        };
+                        let package_task_event =
+                            PackageTaskEventBuilder::new(info.package(), info.task())
+                                .with_parent(telemetry);
+                        let task_hash_telemetry = package_task_event.child();
+                        let task_hash = match self.task_hasher.calculate_task_hash_with_jit_inputs(
+                            &info,
+                            task_definition,
+                            task_env_mode,
+                            workspace_info,
+                            &dependency_set,
+                            task_hash_telemetry,
+                            self.scm,
+                            self.repo_root,
+                            self.repo_index,
+                        ) {
+                            Ok(hash) => hash,
+                            Err(err) => {
+                                dispatch_error = Some(Error::TaskHash(err));
+                                break;
+                            }
+                        };
+                        let execution_env =
+                            match self.task_hasher.env(&info, task_env_mode, task_definition) {
+                                Ok(env) => env,
+                                Err(err) => {
+                                    dispatch_error = Some(Error::TaskHash(err));
+                                    break;
+                                }
+                            };
+                        (task_hash, execution_env)
+                    }
+                }
             };
 
             debug!("task {} hash is {}", info, task_hash);

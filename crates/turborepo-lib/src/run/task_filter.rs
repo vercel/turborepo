@@ -495,6 +495,7 @@ mod tests {
             inputs: TaskInputs {
                 globs: globs.iter().map(|s| s.to_string()).collect(),
                 default,
+                ..Default::default()
             },
             ..Default::default()
         }

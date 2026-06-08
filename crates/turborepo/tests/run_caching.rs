@@ -222,6 +222,86 @@ fn test_excluded_inputs() {
 }
 
 #[test]
+fn test_jit_inputs_hash_after_dependencies_complete() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+
+    fs::write(
+        tempdir.path().join("apps/my-app/package.json"),
+        r#"{
+  "name": "my-app",
+  "scripts": {
+    "codegen": "node -e \"require('fs').mkdirSync('src/generated', { recursive: true }); require('fs').writeFileSync('src/generated/schema.txt', 'schema-v1\\n')\"",
+    "build": "node -e \"const fs = require('fs'); fs.mkdirSync('.output', { recursive: true }); fs.writeFileSync('.output/result.txt', fs.readFileSync('src/generated/schema.txt'))\""
+  },
+  "dependencies": {
+    "util": "*"
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "codegen": {
+      "inputs": ["$TURBO_DEFAULT$", "!src/generated/**", "!.output/**"],
+      "outputs": ["src/generated/**"]
+    },
+    "build": {
+      "dependsOn": ["codegen"],
+      "inputs": ["$TURBO_DEFAULT$", "!.output/**", "$TURBO_JIT$/src/generated/**"],
+      "outputs": [".output/**"]
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=my-app", "--dry=json"],
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let build_task = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|task| task["taskId"] == "my-app#build")
+        .unwrap();
+    assert_eq!(build_task["hash"], "Deferred because $TURBO_JIT$ was used.");
+    assert_eq!(
+        build_task["hashReason"],
+        "Deferred because $TURBO_JIT$ was used."
+    );
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=my-app", "--output-logs=none"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("0 cached, 2 total"),
+        "expected first run to execute both tasks, got:\n{stdout}"
+    );
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=my-app", "--output-logs=none"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("2 cached, 2 total"),
+        "expected second run to cache both tasks after one run, got:\n{stdout}"
+    );
+    assert!(stdout.contains("FULL TURBO"));
+}
+
+#[test]
 fn test_gitignored_output_deletion_restores_from_cache() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();

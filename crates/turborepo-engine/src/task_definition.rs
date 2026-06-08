@@ -192,6 +192,7 @@ mod tests {
         let mut inputs = TaskInputs {
             globs: vec!["src/**".to_string()],
             default: false,
+            ..Default::default()
         };
 
         prepend_global_inputs(
@@ -237,6 +238,7 @@ mod tests {
         let mut inputs = TaskInputs {
             globs: vec!["**".to_string()],
             default: false,
+            ..Default::default()
         };
 
         prepend_global_inputs(
@@ -258,6 +260,7 @@ mod tests {
         let mut inputs = TaskInputs {
             globs: vec!["src/**".to_string()],
             default: false,
+            ..Default::default()
         };
         let original = inputs.clone();
 

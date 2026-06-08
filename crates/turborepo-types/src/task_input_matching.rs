@@ -30,6 +30,8 @@ pub struct CompiledGlobs {
     /// True when `$TURBO_DEFAULT$` was present in the task's inputs,
     /// meaning all files within the package directory match by default.
     default: bool,
+    eager: bool,
+    has_jit_inputs: bool,
     /// True when any glob starts with `../`, indicating cross-package
     /// file references (from `$TURBO_ROOT$` expansion).
     has_traversal_globs: bool,
@@ -43,11 +45,24 @@ pub struct CompiledGlobs {
 /// `inputs: []` or a missing `inputs` key), the compiled result will match
 /// all files — see [`check_compiled_globs`] for details.
 pub fn compile_globs(inputs: &TaskInputs) -> CompiledGlobs {
+    let (inclusions, exclusions, eager_has_traversal) = compile_patterns(&inputs.globs);
+
+    CompiledGlobs {
+        inclusions,
+        exclusions,
+        default: inputs.default,
+        eager: inputs.eager,
+        has_jit_inputs: inputs.has_jit_inputs(),
+        has_traversal_globs: eager_has_traversal,
+    }
+}
+
+fn compile_patterns(globs: &[String]) -> (Vec<wax::Glob<'static>>, Vec<wax::Glob<'static>>, bool) {
     let mut inclusions = Vec::new();
     let mut exclusions = Vec::new();
     let mut has_traversal_globs = false;
 
-    for glob_str in &inputs.globs {
+    for glob_str in globs {
         if let Some(stripped) = glob_str.strip_prefix('!') {
             if stripped.starts_with("../") {
                 has_traversal_globs = true;
@@ -79,12 +94,7 @@ pub fn compile_globs(inputs: &TaskInputs) -> CompiledGlobs {
         }
     }
 
-    CompiledGlobs {
-        inclusions,
-        exclusions,
-        default: inputs.default,
-        has_traversal_globs,
-    }
+    (inclusions, exclusions, has_traversal_globs)
 }
 
 /// Checks whether a changed file matches pre-compiled task input globs.
@@ -123,6 +133,10 @@ pub fn file_matches_compiled_inputs(
     pkg_prefix_slash: &str,
     compiled: &CompiledGlobs,
 ) -> bool {
+    if compiled.has_jit_inputs {
+        return true;
+    }
+
     let file_relative_to_pkg = if pkg_str.is_empty() {
         Some(file_unix)
     } else {
@@ -146,7 +160,13 @@ pub fn file_matches_compiled_inputs(
         // `default` (from $TURBO_DEFAULT$) only covers files *inside* the
         // package. For traversal paths (files outside the package, typically
         // from $TURBO_ROOT$), only explicit inclusion globs should match.
-        return check_compiled_globs(&relative, &compiled.inclusions, &compiled.exclusions, false);
+        return check_compiled_globs(
+            &relative,
+            &compiled.inclusions,
+            &compiled.exclusions,
+            false,
+            false,
+        );
     };
 
     check_compiled_globs(
@@ -154,6 +174,7 @@ pub fn file_matches_compiled_inputs(
         &compiled.inclusions,
         &compiled.exclusions,
         compiled.default,
+        compiled.eager,
     )
 }
 
@@ -170,6 +191,7 @@ fn check_compiled_globs(
     inclusions: &[wax::Glob<'static>],
     exclusions: &[wax::Glob<'static>],
     default: bool,
+    fallback_to_all: bool,
 ) -> bool {
     for pattern in exclusions {
         if pattern.is_match(file_path) {
@@ -185,7 +207,7 @@ fn check_compiled_globs(
     // TaskInputs { globs: [], default: false }. We treat both as "all files
     // are inputs" for affected detection, matching turbo's existing hashing
     // behavior.
-    if inclusions.is_empty() && exclusions.is_empty() {
+    if fallback_to_all && inclusions.is_empty() && exclusions.is_empty() {
         return true;
     }
 
@@ -224,6 +246,7 @@ mod tests {
             &TaskInputs {
                 globs: vec![],
                 default: true,
+                ..Default::default()
             },
             true,
         );
@@ -237,6 +260,7 @@ mod tests {
             &TaskInputs {
                 globs: vec![],
                 default: true,
+                ..Default::default()
             },
             false,
         );
@@ -250,6 +274,7 @@ mod tests {
             &TaskInputs {
                 globs: vec!["src/**/*.ts".to_string()],
                 default: false,
+                ..Default::default()
             },
             true,
         );
@@ -263,6 +288,7 @@ mod tests {
             &TaskInputs {
                 globs: vec!["src/**/*.ts".to_string()],
                 default: false,
+                ..Default::default()
             },
             false,
         );
@@ -276,6 +302,7 @@ mod tests {
             &TaskInputs {
                 globs: vec!["!**/*.md".to_string()],
                 default: true,
+                ..Default::default()
             },
             false,
         );
@@ -289,6 +316,7 @@ mod tests {
             &TaskInputs {
                 globs: vec!["**/*.ts".to_string(), "!src/generated.ts".to_string()],
                 default: false,
+                ..Default::default()
             },
             false,
         );
@@ -304,6 +332,7 @@ mod tests {
             &TaskInputs {
                 globs: vec!["!src/generated.ts".to_string(), "**/*.ts".to_string()],
                 default: false,
+                ..Default::default()
             },
             false,
         );
@@ -314,6 +343,7 @@ mod tests {
         let inputs = TaskInputs {
             globs: vec!["!**/*.md".to_string(), "!**/*.test.ts".to_string()],
             default: true,
+            ..Default::default()
         };
         assert_match("packages/lib-a/README.md", "packages/lib-a", &inputs, false);
         assert_match(
@@ -338,6 +368,7 @@ mod tests {
             &TaskInputs {
                 globs: vec!["../../jest.config.js".to_string()],
                 default: true,
+                ..Default::default()
             },
             true,
         );
@@ -350,6 +381,7 @@ mod tests {
         let inputs = TaskInputs {
             globs: vec!["../../*".to_string(), "!../../jest.setup.js".to_string()],
             default: true,
+            ..Default::default()
         };
         assert_match("jest.config.js", "packages/lib-a", &inputs, true);
         assert_match("jest.setup.js", "packages/lib-a", &inputs, false);
@@ -372,6 +404,7 @@ mod tests {
         let inputs = TaskInputs {
             globs: vec![],
             default: false,
+            ..Default::default()
         };
         assert_match(
             "packages/lib-a/anything.txt",
@@ -396,6 +429,7 @@ mod tests {
             &TaskInputs {
                 globs: vec![],
                 default: true,
+                ..Default::default()
             },
             true,
         );
@@ -409,6 +443,7 @@ mod tests {
             &TaskInputs {
                 globs: vec!["../../../../jest.config.js".to_string()],
                 default: true,
+                ..Default::default()
             },
             true,
         );
@@ -431,6 +466,7 @@ mod tests {
             &TaskInputs {
                 globs: vec!["../../test-config.txt".to_string()],
                 default: true,
+                ..Default::default()
             },
             false,
         );
@@ -445,6 +481,7 @@ mod tests {
             &TaskInputs {
                 globs: vec!["../../test-config.txt".to_string()],
                 default: true,
+                ..Default::default()
             },
             true,
         );
@@ -457,6 +494,7 @@ mod tests {
         let inputs = TaskInputs {
             globs: vec!["[invalid".to_string(), "src/**/*.ts".to_string()],
             default: false,
+            ..Default::default()
         };
         assert_match(
             "packages/lib-a/src/index.ts",
@@ -465,5 +503,28 @@ mod tests {
             true,
         );
         assert_match("packages/lib-a/README.md", "packages/lib-a", &inputs, false);
+    }
+
+    #[test]
+    fn jit_inputs_are_conservatively_affected() {
+        let inputs = TaskInputs {
+            globs: vec!["!src/generated/**".to_string()],
+            jit_globs: vec!["src/generated/**".to_string()],
+            ..Default::default()
+        };
+
+        assert_match("packages/lib-a/README.md", "packages/lib-a", &inputs, true);
+    }
+
+    #[test]
+    fn jit_traversal_is_conservatively_affected() {
+        let inputs = TaskInputs {
+            jit_globs: vec!["../../schema.json".to_string()],
+            eager: false,
+            ..Default::default()
+        };
+
+        assert_match("other.json", "packages/lib-a", &inputs, true);
+        assert_match("schema.json", "packages/lib-a", &inputs, true);
     }
 }

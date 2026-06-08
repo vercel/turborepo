@@ -14,6 +14,8 @@ use turborepo_unescape::UnescapedString;
 use crate::{error::Error, future_flags::FutureFlags, raw::RawTaskDefinition};
 
 const TURBO_DEFAULT: &str = "$TURBO_DEFAULT$";
+const TURBO_JIT: &str = "$TURBO_JIT$";
+const TURBO_JIT_SLASH: &str = "$TURBO_JIT$/";
 const TURBO_ROOT: &str = "$TURBO_ROOT$";
 const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
 const TURBO_EXTENDS: &str = "$TURBO_EXTENDS$";
@@ -174,6 +176,8 @@ impl ProcessedEnv {
 pub struct ProcessedInputs {
     pub globs: Vec<ProcessedGlob>,
     pub default: bool,
+    pub jit_globs: Vec<ProcessedGlob>,
+    pub jit_default: bool,
     pub extends: bool,
 }
 
@@ -185,10 +189,20 @@ impl ProcessedInputs {
         let (processed_globs, extends) = extract_turbo_extends(raw_globs, future_flags);
 
         let mut globs = Vec::with_capacity(processed_globs.len());
+        let mut jit_globs = Vec::new();
         let mut default = false;
+        let mut jit_default = false;
         for raw_glob in processed_globs {
             if raw_glob.as_str() == TURBO_DEFAULT {
                 default = true;
+            } else if raw_glob.as_str() == TURBO_JIT {
+                jit_default = true;
+                continue;
+            } else if is_jit_glob(raw_glob.as_str()) {
+                jit_globs.push(ProcessedGlob::from_spanned_input(strip_jit_prefix(
+                    raw_glob,
+                )?)?);
+                continue;
             }
             globs.push(ProcessedGlob::from_spanned_input(raw_glob)?);
         }
@@ -196,6 +210,8 @@ impl ProcessedInputs {
         Ok(ProcessedInputs {
             globs,
             default,
+            jit_globs,
+            jit_default,
             extends,
         })
     }
@@ -207,6 +223,43 @@ impl ProcessedInputs {
             .map(|glob| glob.resolve(turbo_root_path))
             .collect()
     }
+
+    pub fn resolve_jit(&self, turbo_root_path: &RelativeUnixPath) -> Vec<String> {
+        self.jit_globs
+            .iter()
+            .map(|glob| glob.resolve(turbo_root_path))
+            .collect()
+    }
+}
+
+fn is_jit_glob(value: &str) -> bool {
+    let without_negation = value.strip_prefix('!').unwrap_or(value);
+    without_negation.starts_with(TURBO_JIT_SLASH)
+}
+
+fn strip_jit_prefix(value: Spanned<UnescapedString>) -> Result<Spanned<UnescapedString>, Error> {
+    let (raw, span) = value.split();
+    let raw: String = raw.into();
+    let (negated, without_negation) = raw
+        .strip_prefix('!')
+        .map_or((false, raw.as_str()), |stripped| (true, stripped));
+
+    let Some(glob) = without_negation.strip_prefix(TURBO_JIT_SLASH) else {
+        let value = span.to(UnescapedString::from(raw));
+        let (span, text) = value.span_and_text("turbo.json");
+        return Err(Error::InvalidDependsOnValue {
+            field: "inputs",
+            span,
+            text,
+        });
+    };
+
+    let resolved = if negated {
+        format!("!{glob}")
+    } else {
+        glob.to_string()
+    };
+    Ok(span.to(UnescapedString::from(resolved)))
 }
 
 /// Processed pass_through_env field with DSL detection
@@ -372,12 +425,14 @@ impl ProcessedTaskDefinition {
                         if outputs.globs.is_empty() {
                             return None;
                         }
-                        // Reject $TURBO_DEFAULT$ and $TURBO_EXTENDS$ in
+                        // Reject task-input DSL tokens in
                         // incremental inputs — these DSL tokens only apply to
                         // regular task inputs and have no meaning here.
                         if let Some(ref raw_inputs) = partition.inputs {
                             for input in raw_inputs {
                                 if input.as_str() == TURBO_DEFAULT
+                                    || input.as_str() == TURBO_JIT
+                                    || is_jit_glob(input.as_str())
                                     || input.as_str() == TURBO_EXTENDS
                                 {
                                     let (span, text) = input.span_and_text("turbo.json");

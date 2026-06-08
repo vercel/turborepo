@@ -370,6 +370,7 @@ mod tests {
                     inputs: TaskInputs {
                         globs: vec!["../../config.txt".to_string()],
                         default: true,
+                        ..Default::default()
                     },
                     ..Default::default()
                 },
