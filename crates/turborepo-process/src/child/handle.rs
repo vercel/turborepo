@@ -680,7 +680,10 @@ impl ChildHandle {
                             #[cfg(windows)]
                             match windows_pty_child_exit_code(child.as_ref()) {
                                 Ok(Some(exit_code)) => return Ok(Some(exit_code)),
-                                Ok(None) => {}
+                                Ok(None) => {
+                                    tokio::time::sleep(CHILD_POLL_INTERVAL).await;
+                                    continue;
+                                }
                                 Err(fallback_err) => {
                                     debug!(
                                         "failed to query Windows PTY child exit code: \
