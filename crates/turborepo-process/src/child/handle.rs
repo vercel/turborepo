@@ -524,20 +524,6 @@ impl ChildHandle {
     }
 
     #[cfg(windows)]
-    fn windows_job_has_exited(&self) -> bool {
-        self._job
-            .as_ref()
-            .is_some_and(|job| match job.active_processes() {
-                Ok(0) => true,
-                Ok(_) => false,
-                Err(err) => {
-                    debug!("failed to query job object: {err}");
-                    false
-                }
-            })
-    }
-
-    #[cfg(windows)]
     fn has_running_windows_descendants(&self) -> bool {
         match self.pid {
             Some(pid) => match crate::job_object::has_descendant_processes(pid) {
@@ -679,10 +665,8 @@ impl ChildHandle {
     #[cfg(windows)]
     pub(super) async fn wait_for_graceful_exit(&mut self) -> io::Result<Option<i32>> {
         let result = self.wait().await;
-        if let Err(err) = &result
-            && self.windows_job_has_exited()
-        {
-            debug!("child wait failed after Windows graceful shutdown, but job exited: {err}");
+        if let Err(err) = &result {
+            debug!("child wait failed after Windows graceful shutdown: {err}");
             return Ok(None);
         }
 
