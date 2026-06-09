@@ -7,10 +7,12 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
-    "eslint": "^8.57.0",
+    "@repo/rslint-config": "workspace:*",
+    "@rslint/core": "^0.5.3",
+    "jiti": "^2.7.0",
     "prettier": "^3.2.5",
     "turbo": "^2.9.17"
   },
-  "packageManager": "pnpm@8.15.6",
-  "name": "with-rollup"
+  "packageManager": "pnpm@10.28.2",
+  "name": "with-rsbuild"
 }
