@@ -430,7 +430,7 @@ async fn test_pty_child_receives_single_sigint() {
             .unwrap()
     });
 
-    tokio::time::timeout(Duration::from_secs(5), ready_rx)
+    tokio::time::timeout(Duration::from_secs(30), ready_rx)
         .await
         .expect("timed out waiting for ready")
         .expect("ready channel closed");

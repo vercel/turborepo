@@ -288,8 +288,11 @@ impl ChildHandle {
         #[cfg(unix)]
         let pty_controller_fd = controller.as_raw_fd();
 
-        let mut stdin = controller.take_writer().ok();
+        let stdin = controller.take_writer().ok();
         let output = controller.try_clone_reader().ok().map(ChildOutput::Pty);
+
+        #[cfg(windows)]
+        let mut stdin = stdin;
 
         // portable-pty 0.9.0 creates ConPTY with PSEUDOCONSOLE_INHERIT_CURSOR,
         // which sends a Device Status Report (DSR) cursor position request
@@ -306,11 +309,11 @@ impl ChildHandle {
             }
         }
 
-        // If we don't want to keep stdin open we take it here and it is immediately
-        // dropped resulting in a EOF being sent to the child process.
-        if !keep_stdin_open {
-            stdin.take();
-        }
+        let stdin = if keep_stdin_open {
+            stdin.map(ChildInput::Pty)
+        } else {
+            None
+        };
 
         Ok(SpawnResult {
             handle: Self {
@@ -325,10 +328,7 @@ impl ChildHandle {
                 #[cfg(windows)]
                 _job: job,
             },
-            io: ChildIO {
-                stdin: stdin.map(ChildInput::Pty),
-                output,
-            },
+            io: ChildIO { stdin, output },
             controller: Some(controller),
         })
     }
