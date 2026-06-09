@@ -87,11 +87,7 @@ impl Child {
             io: ChildIO { stdin, output },
             controller,
         } = if let Some(size) = pty_size {
-            ChildHandle::spawn_pty(
-                command,
-                size,
-                matches!(shutdown_style, ShutdownStyle::Graceful(_)),
-            )
+            ChildHandle::spawn_pty(command, size)
         } else {
             ChildHandle::spawn_normal(command)
         }?;

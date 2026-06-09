@@ -160,9 +160,8 @@ impl ShutdownStyle {
                 #[cfg(windows)]
                 {
                     // Windows consoles deliver Ctrl+C to attached child processes.
-                    // Windows PTY children do not receive that console event, so
-                    // also write ETX to their PTY stdin before waiting.
-                    child.send_graceful_interrupt();
+                    // Turbo can't send a targeted signal, so graceful shutdown
+                    // waits for that external event when no timeout is provided.
                     let deadline = timeout.map(|timeout| tokio::time::Instant::now() + timeout);
                     let mut command_rx_open = true;
 

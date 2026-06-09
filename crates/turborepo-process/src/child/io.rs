@@ -1,5 +1,3 @@
-#[cfg(windows)]
-use std::sync::{Arc, Mutex};
 use std::{
     fmt,
     io::{self, BufRead, Read, Write},
@@ -23,34 +21,6 @@ pub(super) struct ChildIO {
 pub(super) enum ChildInput {
     Std(tokio::process::ChildStdin),
     Pty(Box<dyn Write + Send>),
-}
-
-#[cfg(windows)]
-#[derive(Clone)]
-pub(super) struct SharedPtyWriter(Arc<Mutex<Box<dyn Write + Send>>>);
-
-#[cfg(windows)]
-impl SharedPtyWriter {
-    pub(super) fn new(writer: Box<dyn Write + Send>) -> Self {
-        Self(Arc::new(Mutex::new(writer)))
-    }
-}
-
-#[cfg(windows)]
-impl Write for SharedPtyWriter {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.0
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.0
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .flush()
-    }
 }
 
 #[derive(Debug)]
