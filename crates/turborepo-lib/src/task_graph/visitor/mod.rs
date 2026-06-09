@@ -288,7 +288,24 @@ impl<'a> Visitor<'a> {
 
                     let task_env_mode = task_definition.env_mode.unwrap_or(self.global_env_mode);
 
-                    if task_definition.inputs.has_jit_inputs() {
+                    let dependency_set = engine
+                        .dependencies(task_id)
+                        .ok_or(Error::MissingDefinition)?;
+
+                    let has_deferred_dependency = {
+                        let map = results
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
+                        dependency_set.iter().any(|dependency| {
+                            let TaskNode::Task(dependency_task_id) = dependency else {
+                                return false;
+                            };
+
+                            matches!(map.get(dependency_task_id), Some(PrecomputedTask::Deferred))
+                        })
+                    };
+
+                    if task_definition.inputs.has_jit_inputs() || has_deferred_dependency {
                         if self.dry {
                             self.task_hasher.insert_deferred_hash(
                                 task_id,
@@ -298,10 +315,6 @@ impl<'a> Visitor<'a> {
                         }
                         return Ok(Some((task_id.clone(), PrecomputedTask::Deferred)));
                     }
-
-                    let dependency_set = engine
-                        .dependencies(task_id)
-                        .ok_or(Error::MissingDefinition)?;
 
                     let package_task_event =
                         PackageTaskEventBuilder::new(task_id.package(), task_id.task())
@@ -473,21 +486,38 @@ impl<'a> Visitor<'a> {
                             PackageTaskEventBuilder::new(info.package(), info.task())
                                 .with_parent(telemetry);
                         let task_hash_telemetry = package_task_event.child();
-                        let task_hash = match self.task_hasher.calculate_task_hash_with_jit_inputs(
-                            &info,
-                            task_definition,
-                            task_env_mode,
-                            workspace_info,
-                            &dependency_set,
-                            task_hash_telemetry,
-                            self.scm,
-                            self.repo_root,
-                            self.repo_index,
-                        ) {
-                            Ok(hash) => hash,
-                            Err(err) => {
-                                dispatch_error = Some(Error::TaskHash(err));
-                                break;
+                        let task_hash = if task_definition.inputs.has_jit_inputs() {
+                            match self.task_hasher.calculate_task_hash_with_jit_inputs(
+                                &info,
+                                task_definition,
+                                task_env_mode,
+                                workspace_info,
+                                &dependency_set,
+                                task_hash_telemetry,
+                                self.scm,
+                                self.repo_root,
+                                self.repo_index,
+                            ) {
+                                Ok(hash) => hash,
+                                Err(err) => {
+                                    dispatch_error = Some(Error::TaskHash(err));
+                                    break;
+                                }
+                            }
+                        } else {
+                            match self.task_hasher.calculate_task_hash(
+                                &info,
+                                task_definition,
+                                task_env_mode,
+                                workspace_info,
+                                &dependency_set,
+                                task_hash_telemetry,
+                            ) {
+                                Ok(hash) => hash,
+                                Err(err) => {
+                                    dispatch_error = Some(Error::TaskHash(err));
+                                    break;
+                                }
                             }
                         };
                         let execution_env =

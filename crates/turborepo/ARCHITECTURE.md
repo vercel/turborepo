@@ -192,7 +192,8 @@ The task graph visitor handles task execution:
 - Calculates task hashes. Most task hashes are precomputed before scheduling,
   but tasks with `$TURBO_JIT$` inputs defer final file-input hashing until the
   engine dispatches the task, after its dependencies have completed and restored
-  any cached outputs.
+  any cached outputs. Tasks that depend on deferred tasks are also deferred so
+  their dependency hashes are available before their own hash is calculated.
 - Creates `ExecContext` for each task
 - Manages UI output and progress tracking
 - Collects errors and execution information

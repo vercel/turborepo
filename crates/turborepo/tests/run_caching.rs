@@ -302,6 +302,72 @@ fn test_jit_inputs_hash_after_dependencies_complete() {
 }
 
 #[test]
+fn test_jit_dependency_defers_dependent_hashing() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+
+    fs::write(
+        tempdir.path().join("packages/util/package.json"),
+        r#"{
+  "name": "util"
+}
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        tempdir.path().join("apps/my-app/package.json"),
+        r#"{
+  "name": "my-app",
+  "scripts": {
+    "build": "node -e \"require('fs').mkdirSync('.output', { recursive: true }); require('fs').writeFileSync('.output/result.txt', 'built')\""
+  },
+  "dependencies": {
+    "util": "*"
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "codegen": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "build": {
+      "dependsOn": ["^build", "codegen"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!src/generated/**",
+        "$TURBO_JIT$/src/generated/**"
+      ],
+      "outputs": [".output/**"]
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=my-app", "--output-logs=none"],
+    );
+
+    assert!(
+        output.status.success(),
+        "expected JIT-dependent task graph to succeed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn test_gitignored_output_deletion_restores_from_cache() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
