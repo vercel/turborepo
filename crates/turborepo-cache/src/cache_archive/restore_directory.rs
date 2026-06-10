@@ -161,7 +161,7 @@ fn create_dir_all_with_mode(path: &AbsoluteSystemPath, mode: u32) -> io::Result<
 
     std::fs::DirBuilder::new()
         .recursive(true)
-        .mode(mode & 0o7777)
+        .mode(mode & 0o777)
         .create(path.as_path())
 }
 
