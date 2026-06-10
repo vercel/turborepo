@@ -80,6 +80,8 @@ pub enum Error {
     Walk(#[from] globwalk::WalkError),
     #[error("Unable to resolve base branch. Please set with `TURBO_SCM_BASE`.")]
     UnableToResolveRef,
+    #[error("Invalid git ref `{0}`: refs must not begin with `-`")]
+    InvalidGitRef(String),
 }
 
 pub type GitHashes = HashMap<RelativeUnixPathBuf, OidHash>;

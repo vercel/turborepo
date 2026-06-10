@@ -205,6 +205,14 @@ impl GitRepo {
         Ok(output.trim().to_owned())
     }
 
+    fn validate_git_ref(git_ref: &str) -> Result<(), Error> {
+        if git_ref.starts_with('-') {
+            return Err(Error::InvalidGitRef(git_ref.to_string()));
+        }
+
+        Ok(())
+    }
+
     /// Compute a hash summarizing all uncommitted state in the working tree.
     /// Uses `git status --porcelain -z` (which files are dirty/untracked) and
     /// `git diff HEAD` (the actual content changes for tracked files) as inputs
@@ -346,15 +354,19 @@ impl GitRepo {
 
     fn resolve_base(&self, base_override: Option<&str>, env: CIEnv) -> Result<String, Error> {
         if let Some(valid_from) = base_override {
+            Self::validate_git_ref(valid_from)?;
             return Ok(valid_from.to_string());
         }
 
         if let Some(github_base_ref) = Self::get_github_base_ref(env) {
+            Self::validate_git_ref(&github_base_ref)?;
             // we don't fall through to checking against main or master
             // because at this point we know we're in a GITHUB CI environment
             // and we should really know by now what the base ref is
             // so it's better to just error if something went wrong
-            return match self.execute_git_command(&["rev-parse", &github_base_ref], "") {
+            return match self
+                .execute_git_command(&["rev-parse", "--end-of-options", &github_base_ref], "")
+            {
                 Ok(_) => {
                     eprintln!("Resolved base ref from GitHub Actions event: {github_base_ref}");
                     Ok(github_base_ref)
@@ -390,19 +402,14 @@ impl GitRepo {
         // If a to commit is not specified for `diff-tree` it will change the comparison
         // to be between the provided commit and it's parent
         let to_commit = to_commit.unwrap_or("HEAD");
-        let mut args = vec![
-            "diff-tree",
-            "-r",
-            "--name-only",
-            "--no-commit-id",
-            "-z",
-            &valid_from,
-            to_commit,
-        ];
+        Self::validate_git_ref(to_commit)?;
+        let mut args = vec!["diff-tree", "-r", "--name-only", "--no-commit-id", "-z"];
 
         if merge_base {
             args.push("--merge-base");
         }
+
+        args.extend(["--end-of-options", &valid_from, to_commit]);
 
         let output = self.execute_git_command(&args, pathspec)?;
         self.add_files_from_stdout(&mut files, turbo_root, output)?;
@@ -491,7 +498,7 @@ impl GitRepo {
         let valid_from = self.resolve_base(from_commit, CIEnv::new())?;
         let arg = format!("{}:{}", valid_from, anchored_file_path.as_str());
 
-        self.execute_git_command(&["show", &arg], "")
+        self.execute_git_command(&["show", "--end-of-options", &arg], "")
     }
 }
 
@@ -1143,6 +1150,68 @@ mod tests {
         let actual = git.resolve_base(Some("ziltoid"), CIEnv::none())?;
 
         assert_eq!(actual, "ziltoid");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_changed_files_rejects_option_like_refs() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(None)?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let file = root.join_component("todo.txt");
+        file.create_with_contents("1. reject git option injection")?;
+        commit_file(&repo_path, Path::new("todo.txt"), None);
+
+        let target = NamedTempFile::new()?;
+        fs::write(target.path(), "keep")?;
+        let injected_ref = format!("--output={}", target.path().display());
+
+        let scm = SCM::new(&root);
+        let base_result =
+            scm.changed_files(&root, Some(&injected_ref), Some("HEAD"), false, false, true);
+
+        assert_matches!(
+            base_result,
+            Err(Error::InvalidGitRef(ref git_ref)) if git_ref == &injected_ref
+        );
+        assert_eq!(fs::read_to_string(target.path())?, "keep");
+
+        let head_result =
+            scm.changed_files(&root, Some("HEAD"), Some(&injected_ref), false, false, true);
+
+        assert_matches!(
+            head_result,
+            Err(Error::InvalidGitRef(ref git_ref)) if git_ref == &injected_ref
+        );
+        assert_eq!(fs::read_to_string(target.path())?, "keep");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_previous_content_rejects_option_like_ref() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(None)?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let file = root.join_component("todo.txt");
+        file.create_with_contents("1. reject git option injection")?;
+        commit_file(&repo_path, Path::new("todo.txt"), None);
+
+        let target = NamedTempFile::new()?;
+        fs::write(target.path(), "keep")?;
+        let injected_ref = format!("--output={}", target.path().display());
+        let result = previous_content(
+            repo_root.path().to_path_buf(),
+            Some(&injected_ref),
+            file.to_string(),
+        );
+
+        assert_matches!(
+            result,
+            Err(Error::InvalidGitRef(ref git_ref)) if git_ref == &injected_ref
+        );
+        assert_eq!(fs::read_to_string(target.path())?, "keep");
 
         Ok(())
     }
