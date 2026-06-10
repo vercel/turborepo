@@ -661,6 +661,43 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn restore_rejects_chained_symlink_escape() -> Result<()> {
+        let base_dir = tempdir()?;
+        let output_dir = base_dir.path().join("repo");
+        let outside_file = base_dir.path().join("pwned");
+        let tar = generate_raw_tar(&[
+            RawTarEntry::Directory { path: "sub" },
+            RawTarEntry::Symlink {
+                link_path: "sub/up",
+                link_target: "..",
+            },
+            RawTarEntry::Symlink {
+                link_path: "escape",
+                link_target: "sub/up/..",
+            },
+            RawTarEntry::File {
+                path: "escape/pwned",
+                body: b"should not escape".to_vec(),
+            },
+        ]);
+
+        let output_dir_path = output_dir.to_string_lossy();
+        let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+        let mut reader = CacheReader::from_reader(&tar[..], false)?;
+
+        let result = reader.restore(anchor, None);
+
+        assert!(result.is_err());
+        assert!(
+            !outside_file.exists(),
+            "chained symlink restore must not write outside anchor"
+        );
+
+        Ok(())
+    }
+
     #[test]
     fn test_windows_unsafe() -> Result<()> {
         let uncompressed_tar = include_bytes!("../../fixtures/windows-unsafe.tar");

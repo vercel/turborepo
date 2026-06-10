@@ -6,7 +6,10 @@ use turbopath::{
     PathError, UnknownPathType,
 };
 
-use crate::{CacheError, cache_archive::restore_directory::CachedDirTree};
+use crate::{
+    CacheError,
+    cache_archive::restore_directory::{CachedDirTree, realpath_existing_prefix},
+};
 
 pub fn restore_symlink(
     dir_cache: &mut CachedDirTree,
@@ -77,7 +80,38 @@ fn validate_linkname(
         ));
     }
 
+    let raw_linkname = raw_linkname_path(anchor, processed_name, linkname_str)?;
+    let real_anchor = anchor.to_realpath()?;
+    if let Some(real_target) = realpath_existing_prefix(&raw_linkname)?
+        && !real_target.starts_with(&real_anchor)
+    {
+        return Err(CacheError::LinkOutsideOfDirectory(
+            linkname_str.to_string(),
+            Backtrace::capture(),
+        ));
+    }
+
     Ok(processed_linkname)
+}
+
+fn raw_linkname_path(
+    anchor: &AbsoluteSystemPath,
+    processed_name: &AnchoredSystemPathBuf,
+    linkname: &str,
+) -> Result<AbsoluteSystemPathBuf, CacheError> {
+    if Utf8Path::new(linkname).is_absolute() {
+        return Ok(AbsoluteSystemPathBuf::new(linkname.to_string())?);
+    }
+
+    let source = anchor.resolve(processed_name);
+    let Some(parent) = source.parent() else {
+        return Err(CacheError::InvalidFilePath(
+            source.to_string(),
+            Backtrace::capture(),
+        ));
+    };
+
+    Ok(parent.resolve(AnchoredSystemPath::new(linkname)?))
 }
 
 fn is_windows_absolute_path(path: &str) -> bool {
