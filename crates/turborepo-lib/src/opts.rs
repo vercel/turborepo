@@ -583,12 +583,14 @@ impl<'a> From<OptsInputs<'a>> for APIClientOpts {
 
         APIClientOpts {
             api_url,
+            api_url_source: inputs.config.api_url_source(),
             timeout,
             upload_timeout,
             token,
             team_id,
             team_slug,
             login_url,
+            login_url_source: inputs.config.login_url_source(),
             preflight,
             sso_login_callback_port,
         }
@@ -924,12 +926,14 @@ mod test {
             },
             api_client_opts: APIClientOpts {
                 api_url: "".to_string(),
+                api_url_source: None,
                 timeout: 0,
                 upload_timeout: 0,
                 token: None,
                 team_id: None,
                 team_slug: None,
                 login_url: "".to_string(),
+                login_url_source: None,
                 preflight: false,
                 sso_login_callback_port: None,
             },

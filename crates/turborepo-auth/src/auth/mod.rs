@@ -11,7 +11,7 @@ use turbopath::AbsoluteSystemPath;
 #[cfg(test)]
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{Client, TokenClient};
-use turborepo_types::SecretString;
+use turborepo_types::{ConfigurationSource, SecretString};
 use turborepo_ui::ColorConfig;
 use url::Url;
 
@@ -33,6 +33,61 @@ pub(crate) fn ensure_trusted_vercel_api<T: Client>(api_client: &T) -> Result<(),
     Err(Error::UntrustedVercelApiUrl {
         api_url: api_url.to_string(),
     })
+}
+
+pub(crate) fn ensure_non_vercel_redirect_allowed<T: Client>(
+    login_url: &Url,
+    login_url_source: Option<ConfigurationSource>,
+    api_client: &T,
+    api_url_source: Option<ConfigurationSource>,
+) -> Result<(), Error> {
+    ensure_non_vercel_login_url_is_safe(login_url)?;
+
+    if !is_user_controlled_url_source(login_url_source) {
+        return Err(Error::UntrustedNonVercelLoginUrlSource {
+            url_source: login_url_source,
+        });
+    }
+
+    let api_url = api_client.make_url("")?;
+    if !is_trusted_vercel_origin(&api_url) && !is_user_controlled_url_source(api_url_source) {
+        return Err(Error::UntrustedNonVercelApiUrlSource {
+            url_source: api_url_source,
+        });
+    }
+
+    Ok(())
+}
+
+fn is_user_controlled_url_source(source: Option<ConfigurationSource>) -> bool {
+    matches!(
+        source,
+        Some(ConfigurationSource::Cli)
+            | Some(ConfigurationSource::Environment)
+            | Some(ConfigurationSource::GlobalConfig)
+    )
+}
+
+fn ensure_non_vercel_login_url_is_safe(login_url: &Url) -> Result<(), Error> {
+    if !login_url.username().is_empty() || login_url.password().is_some() {
+        return Err(Error::LoginUrlIncludesCredentials);
+    }
+
+    if login_url.scheme() == "https" {
+        return Ok(());
+    }
+
+    if login_url.scheme() == "http" && login_url.host_str().is_some_and(is_localhost) {
+        return Ok(());
+    }
+
+    Err(Error::UntrustedNonVercelLoginUrlScheme)
+}
+
+fn is_localhost(host: &str) -> bool {
+    // `Url::host_str` returns IPv6 addresses wrapped in brackets (e.g. `[::1]`),
+    // so match both the bracketed and bare forms to be safe.
+    matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]")
 }
 
 pub(crate) fn should_attempt_vercel_token_refresh(source: ExistingTokenSource) -> bool {
@@ -96,6 +151,8 @@ pub(crate) enum ExistingTokenSource {
 pub struct LoginOptions<'a, T: Client + TokenClient> {
     pub color_config: &'a ColorConfig,
     pub login_url: &'a str,
+    pub login_url_source: Option<ConfigurationSource>,
+    pub api_url_source: Option<ConfigurationSource>,
     pub api_client: &'a T,
 
     pub sso_team: Option<&'a str>,
@@ -108,6 +165,8 @@ impl<'a, T: Client + TokenClient> LoginOptions<'a, T> {
         Self {
             color_config,
             login_url,
+            login_url_source: None,
+            api_url_source: None,
             api_client,
             sso_team: None,
             existing_token: None,

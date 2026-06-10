@@ -342,6 +342,17 @@ pub enum GraphOpts {
     File(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum ConfigurationSource {
+    Cli,
+    Environment,
+    OverrideEnvironment,
+    LocalConfig,
+    GlobalAuth,
+    GlobalConfig,
+    TurboJson,
+}
+
 /// API client configuration options.
 ///
 /// Contains all settings needed to connect to the Turborepo remote cache API,
@@ -350,6 +361,8 @@ pub enum GraphOpts {
 pub struct APIClientOpts {
     /// Base URL for the Turborepo API
     pub api_url: String,
+    /// Source that provided the API URL, if explicitly configured.
+    pub api_url_source: Option<ConfigurationSource>,
     /// Request timeout in seconds
     pub timeout: u64,
     /// Upload-specific timeout in seconds
@@ -365,6 +378,8 @@ pub struct APIClientOpts {
     pub team_slug: Option<String>,
     /// Login URL for authentication flow
     pub login_url: String,
+    /// Source that provided the login URL, if explicitly configured.
+    pub login_url_source: Option<ConfigurationSource>,
     /// Whether to use preflight requests
     pub preflight: bool,
     /// Port for SSO login callback (non-Vercel flows only)
