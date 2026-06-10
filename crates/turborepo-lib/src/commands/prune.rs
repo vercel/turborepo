@@ -10,8 +10,8 @@ use globwalk::{ValidatedGlob, WalkType};
 use miette::Diagnostic;
 use tracing::trace;
 use turbopath::{
-    AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
-    RelativeUnixPathBuf,
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
+    RelativeUnixPath, RelativeUnixPathBuf,
 };
 use turborepo_repository::{
     package_graph::{self, PackageGraph, PackageName, PackageNode},
@@ -54,6 +54,10 @@ pub enum Error {
     NoWorkspaceSpecified,
     #[error("Invalid scope. Package with name {0} in `package.json` not found.")]
     MissingWorkspace(PackageName),
+    #[error(
+        "Invalid patched dependency path `{0}`: path escapes the repository or output directory"
+    )]
+    InvalidPatchPath(RelativeUnixPathBuf),
     #[error("Cannot prune without parsed lockfile.")]
     MissingLockfile,
     #[error("Unable to read config: {0}")]
@@ -304,10 +308,7 @@ pub async fn prune(
 
     if !original_patches.is_empty() {
         for patch in &pruned_patches {
-            prune.copy_file(
-                &patch.to_anchored_system_path_buf(),
-                Some(CopyDestination::Docker),
-            )?;
+            prune.copy_patch_file(patch)?;
         }
 
         // Prune pnpm-workspace.yaml's patchedDependencies so it only
@@ -392,7 +393,31 @@ fn collect_patch_paths(
 
     patches.sort();
     patches.dedup();
+    validate_patch_source_paths(repo_root, &patches)?;
     Ok(patches)
+}
+
+fn validate_patch_source_paths(
+    repo_root: &AbsoluteSystemPath,
+    patches: &[RelativeUnixPathBuf],
+) -> Result<(), Error> {
+    let repo_root_realpath = repo_root.to_realpath()?;
+
+    for patch in patches {
+        let patch_path = repo_root.join_unix_path(patch);
+        if !patch_path.starts_with(repo_root.as_std_path()) {
+            return Err(Error::InvalidPatchPath(patch.clone()));
+        }
+
+        if patch_path.try_exists()? {
+            let patch_realpath = patch_path.to_realpath()?;
+            if !patch_realpath.starts_with(repo_root_realpath.as_std_path()) {
+                return Err(Error::InvalidPatchPath(patch.clone()));
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn package_json_patch_paths(
@@ -566,6 +591,50 @@ impl<'a> Prune<'a> {
             let docker_to = self.docker_directory().resolve(path);
             turborepo_fs::copy_file(&from_path, docker_to)?;
         }
+        Ok(())
+    }
+
+    fn copy_patch_file(&self, patch: &RelativeUnixPathBuf) -> Result<(), Error> {
+        self.validate_patch_destination_path(patch, &self.full_directory)?;
+        if self.docker {
+            self.validate_patch_destination_path(patch, &self.docker_directory())?;
+        }
+
+        self.copy_file(
+            &patch.to_anchored_system_path_buf(),
+            Some(CopyDestination::Docker),
+        )
+    }
+
+    fn validate_patch_destination_path(
+        &self,
+        patch: &RelativeUnixPathBuf,
+        destination_root: &AbsoluteSystemPath,
+    ) -> Result<(), Error> {
+        let destination_root_realpath = destination_root.to_realpath()?;
+        let patch_path = destination_root.join_unix_path(patch);
+
+        if !patch_path.starts_with(destination_root.as_std_path()) {
+            return Err(Error::InvalidPatchPath(patch.clone()));
+        }
+
+        if patch_path.symlink_metadata().is_ok() {
+            let patch_realpath = patch_path.to_realpath()?;
+            if !patch_realpath.starts_with(destination_root_realpath.as_std_path()) {
+                return Err(Error::InvalidPatchPath(patch.clone()));
+            }
+        }
+
+        for ancestor in patch_path.ancestors().skip(1) {
+            if ancestor.try_exists()? {
+                let ancestor_realpath = ancestor.to_realpath()?;
+                if !ancestor_realpath.starts_with(destination_root_realpath.as_std_path()) {
+                    return Err(Error::InvalidPatchPath(patch.clone()));
+                }
+                break;
+            }
+        }
+
         Ok(())
     }
 
