@@ -62,9 +62,8 @@ pub fn get_version() -> &'static str {
 /// Main entry point for the turborepo CLI.
 ///
 /// `query_server` provides the GraphQL query execution layer. When `None`,
-/// the `turbo query` command returns an error and the Web UI mode falls
-/// back silently. Pass `Some(...)` with a [`QueryServer`] implementation
-/// to enable the full query subsystem.
+/// the `turbo query` command returns an error. Pass `Some(...)` with a
+/// [`QueryServer`] implementation to enable the full query subsystem.
 pub fn main(
     query_server: Option<std::sync::Arc<dyn turborepo_query_api::QueryServer>>,
 ) -> Result<i32, shim::Error> {

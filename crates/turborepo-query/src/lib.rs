@@ -72,11 +72,6 @@ impl From<turbopath::PathError> for Error {
         Error::Api(e.into())
     }
 }
-impl From<turborepo_ui::Error> for Error {
-    fn from(e: turborepo_ui::Error) -> Self {
-        Error::Api(e.into())
-    }
-}
 impl From<AffectedPackagesError> for Error {
     fn from(e: AffectedPackagesError) -> Self {
         Error::Api(e.into())
@@ -812,7 +807,7 @@ pub async fn run_query_server(run: Arc<dyn QueryRun>, signal: SignalHandler) -> 
             println!("Shutting down GraphQL server");
             return Ok(());
         }
-        result = server::run_server(None, run) => {
+        result = server::run_server(run) => {
             result?;
         }
     }

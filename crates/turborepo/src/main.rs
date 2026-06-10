@@ -58,18 +58,6 @@ impl turborepo_query_api::QueryServer for TurboQueryServer {
                 .map_err(Into::into)
         })
     }
-
-    fn run_web_ui_server(
-        &self,
-        state: turborepo_ui::wui::query::SharedState,
-        run: Arc<dyn turborepo_query_api::QueryRun>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), turborepo_query_api::Error>> + Send + '_>> {
-        Box::pin(async move {
-            turborepo_query::run_server(Some(state), run)
-                .await
-                .map_err(Into::into)
-        })
-    }
 }
 
 // This function should not expanded. Please add any logic to

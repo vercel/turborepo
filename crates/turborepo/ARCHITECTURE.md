@@ -383,7 +383,7 @@ The summary module is responsible for any time of summary:
 ### 8. Query Subsystem
 
 The query subsystem powers `turbo query` (GraphQL introspection of the
-package/task graph) and the Web UI mode (`--ui=web`).
+package/task graph).
 
 **Crate layout:**
 

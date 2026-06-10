@@ -91,8 +91,6 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Path(#[from] turbopath::PathError),
-    #[error(transparent)]
-    UI(#[from] turborepo_ui::Error),
     #[error("Failed to calculate affected packages: {0}")]
     AffectedPackages(#[from] AffectedPackagesError),
     #[error(transparent)]
@@ -145,15 +143,6 @@ pub trait QueryServer: Send + Sync {
         &self,
         run: Arc<dyn QueryRun>,
         signal: turborepo_signals::SignalHandler,
-    ) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + '_>>;
-
-    /// Start the Web UI server that serves the TUI-integrated query interface.
-    ///
-    /// The shared state is used to stream build events to the UI.
-    fn run_web_ui_server(
-        &self,
-        state: turborepo_ui::wui::query::SharedState,
-        run: Arc<dyn QueryRun>,
     ) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + '_>>;
 }
 

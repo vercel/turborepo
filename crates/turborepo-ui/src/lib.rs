@@ -10,7 +10,6 @@ pub mod sender;
 mod terminal_sink;
 pub mod tui;
 mod tui_sink;
-pub mod wui;
 
 use std::{borrow::Cow, env, f64::consts::PI, io::IsTerminal, sync::LazyLock, time::Duration};
 
@@ -50,8 +49,6 @@ pub use crate::{
 pub enum Error {
     #[error(transparent)]
     Tui(#[from] tui::Error),
-    #[error(transparent)]
-    Wui(#[from] wui::Error),
     #[error("Cannot read logs: {0}")]
     CannotReadLogs(#[source] std::io::Error),
     #[error("Cannot write logs: {0}")]

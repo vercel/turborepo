@@ -185,12 +185,6 @@ pub enum UIMode {
     #[schemars(rename = "stream-with-experimental-timestamps")]
     #[value(name = "stream-with-experimental-timestamps")]
     StreamWithTimestamps,
-    /// Use the web user interface.
-    /// Note: This feature is undocumented, experimental, and not meant to be
-    /// used. It may change or be removed at any time.
-    #[schemars(skip)]
-    #[ts(skip)]
-    Web,
 }
 
 impl fmt::Display for UIMode {
@@ -199,7 +193,6 @@ impl fmt::Display for UIMode {
             UIMode::Tui => write!(f, "tui"),
             UIMode::Stream => write!(f, "stream"),
             UIMode::StreamWithTimestamps => write!(f, "stream-with-experimental-timestamps"),
-            UIMode::Web => write!(f, "web"),
         }
     }
 }
@@ -210,9 +203,9 @@ impl UIMode {
     }
 
     /// Returns true if the UI mode has a sender,
-    /// i.e. web or tui but not stream
+    /// i.e. tui but not stream
     pub fn has_sender(&self) -> bool {
-        matches!(self, Self::Tui | Self::Web)
+        matches!(self, Self::Tui)
     }
 
     /// Returns true if this UI mode should include timestamps in the prefix

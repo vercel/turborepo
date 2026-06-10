@@ -12,8 +12,7 @@ turborepo-ui
     ├── PrefixedUI - Output with task prefixes
     ├── ColorSelector - Assign colors to concurrent tasks
     ├── LogWriter - Task log handling
-    ├── tui/ - Interactive terminal UI (ratatui)
-    └── wui/ - Web UI server
+    └── tui/ - Interactive terminal UI (ratatui)
 ```
 
 Key components:
