@@ -159,6 +159,13 @@ pub struct LoginOptions<'a, T: Client + TokenClient> {
     pub existing_token: Option<&'a str>,
     pub force: bool,
     pub sso_login_callback_port: Option<u16>,
+    /// The team currently linked in configuration, if any. When set, reusing
+    /// an existing token additionally requires that the token still has
+    /// access to this team. This catches tokens that are active at the user
+    /// level but have lost team access (e.g. an expired SAML session on an
+    /// SSO-enforced team).
+    pub linked_team_id: Option<&'a str>,
+    pub linked_team_slug: Option<&'a str>,
 }
 impl<'a, T: Client + TokenClient> LoginOptions<'a, T> {
     pub fn new(color_config: &'a ColorConfig, login_url: &'a str, api_client: &'a T) -> Self {
@@ -172,6 +179,8 @@ impl<'a, T: Client + TokenClient> LoginOptions<'a, T> {
             existing_token: None,
             force: false,
             sso_login_callback_port: None,
+            linked_team_id: None,
+            linked_team_slug: None,
         }
     }
 }

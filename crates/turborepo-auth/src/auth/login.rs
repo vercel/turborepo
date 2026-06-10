@@ -6,7 +6,7 @@ use std::{
 
 pub use error::Error;
 use tracing::warn;
-use turborepo_api_client::{Client, TokenClient};
+use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_types::SecretString;
 use turborepo_ui::{BOLD, ColorConfig, start_spinner};
 use url::Url;
@@ -59,35 +59,70 @@ pub(super) fn valid_token_callback(message: &str, color_config: &ColorConfig) ->
 async fn reuse_existing_token<T, F>(
     token: Token,
     api_client: &T,
+    linked_team_id: Option<&str>,
+    linked_team_slug: Option<&str>,
     valid_message_fn: Option<F>,
 ) -> Result<Option<Token>, Error>
 where
-    T: Client + TokenClient,
+    T: Client + TokenClient + CacheClient,
     F: FnOnce(&str),
 {
-    match token.is_valid(api_client, valid_message_fn).await {
-        Ok(true) => Ok(Some(token)),
-        Ok(false) => Ok(None),
+    match token.is_valid(api_client, Option::<fn(&str)>::None).await {
+        Ok(true) => {}
+        Ok(false) => return Ok(None),
         Err(err) if is_inactive_token_error(&err) => {
             warn!("Stored token is no longer active, proceeding with new login");
-            Ok(None)
+            return Ok(None);
         }
-        Err(err) => Err(err),
+        Err(err) => return Err(err),
     }
+
+    // A token can be active at the user level while no longer having access
+    // to the linked team, most commonly when the team enforces SAML and the
+    // session behind the token has expired. Reusing such a token would leave
+    // the user stuck getting 403s from every team-scoped endpoint, so verify
+    // team access before deciding the stored token is good.
+    if linked_team_id.is_some() || linked_team_slug.is_some() {
+        match token
+            .has_cache_access(api_client, linked_team_id, linked_team_slug)
+            .await
+        {
+            Ok(true) => {}
+            Ok(false) => {
+                warn!(
+                    "Stored token no longer has access to the linked team, proceeding with new \
+                     login"
+                );
+                return Ok(None);
+            }
+            Err(err) => return Err(err),
+        }
+    }
+
+    if let Some(message_callback) = valid_message_fn {
+        let user = token.user(api_client).await?;
+        message_callback(&user.email);
+    }
+
+    Ok(Some(token))
 }
 
 async fn reuse_existing_token_with_recovery<T>(
     token: Token,
     api_client: &T,
+    linked_team_id: Option<&str>,
+    linked_team_slug: Option<&str>,
     valid_message: &str,
     color_config: &ColorConfig,
 ) -> Result<Option<Token>, Error>
 where
-    T: Client + TokenClient,
+    T: Client + TokenClient + CacheClient,
 {
     match reuse_existing_token(
         token.clone(),
         api_client,
+        linked_team_id,
+        linked_team_slug,
         Some(valid_token_callback(valid_message, color_config)),
     )
     .await
@@ -107,6 +142,8 @@ where
     match reuse_existing_token(
         Token::existing_secret(recovered_token),
         api_client,
+        linked_team_id,
+        linked_team_slug,
         Some(valid_token_callback(valid_message, color_config)),
     )
     .await
@@ -130,7 +167,7 @@ where
 /// The `TokenSet` is `Some` when login completed via the device authorization
 /// flow (Vercel only). It's `None` for non-Vercel logins or when an existing
 /// token was reused.
-pub async fn login<T: Client + TokenClient>(
+pub async fn login<T: Client + TokenClient + CacheClient>(
     options: &LoginOptions<'_, T>,
 ) -> Result<(Token, Option<TokenSet>), Error> {
     let LoginOptions {
@@ -143,6 +180,8 @@ pub async fn login<T: Client + TokenClient>(
         force,
         sso_team: _,
         sso_login_callback_port,
+        linked_team_id,
+        linked_team_slug,
     } = *options;
 
     let is_vercel_login = is_vercel(login_url_configuration);
@@ -169,6 +208,8 @@ pub async fn login<T: Client + TokenClient>(
                             && let Some(token) = reuse_existing_token_with_recovery(
                                 Token::existing_secret(token_secret),
                                 api_client,
+                                linked_team_id,
+                                linked_team_slug,
                                 "Using existing Vercel login.",
                                 color_config,
                             )
@@ -188,14 +229,21 @@ pub async fn login<T: Client + TokenClient>(
                     reuse_existing_token_with_recovery(
                         token,
                         api_client,
+                        linked_team_id,
+                        linked_team_slug,
                         "Using existing Vercel login.",
                         color_config,
                     )
                     .await?
                 } else {
+                    // Self-hosted remote caches aren't guaranteed to implement
+                    // the caching-status endpoint, so skip the linked-team
+                    // access check for non-Vercel logins.
                     reuse_existing_token(
                         token,
                         api_client,
+                        None,
+                        None,
                         Some(valid_token_callback("Using existing login.", color_config)),
                     )
                     .await?
@@ -213,6 +261,8 @@ pub async fn login<T: Client + TokenClient>(
                         && let Some(token) = reuse_existing_token_with_recovery(
                             Token::existing_secret(token_secret),
                             api_client,
+                            linked_team_id,
+                            linked_team_slug,
                             "Using existing Vercel login.",
                             color_config,
                         )
@@ -485,7 +535,8 @@ mod tests {
     use tokio::sync::Mutex;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_vercel_api::{
-        Membership, Role, Team, TeamsResponse, User, UserResponse, VerifiedSsoUser,
+        CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse, User,
+        UserResponse, VerifiedSsoUser,
     };
     use turborepo_vercel_api_mock::start_test_server;
 
@@ -640,6 +691,80 @@ mod tests {
         }
     }
 
+    impl turborepo_api_client::CacheClient for MockApiClient {
+        async fn get_artifact(
+            &self,
+            _hash: &str,
+            _token: &SecretString,
+            _team_id: Option<&str>,
+            _team_slug: Option<&str>,
+            _method: reqwest::Method,
+        ) -> turborepo_api_client::Result<Option<Response>> {
+            unimplemented!("get_artifact")
+        }
+
+        async fn fetch_artifact(
+            &self,
+            _hash: &str,
+            _token: &SecretString,
+            _team_id: Option<&str>,
+            _team_slug: Option<&str>,
+        ) -> turborepo_api_client::Result<Option<Response>> {
+            unimplemented!("fetch_artifact")
+        }
+
+        async fn put_artifact(
+            &self,
+            _hash: &str,
+            _artifact_body: impl turborepo_api_client::Stream<
+                Item = turborepo_api_client::Result<turborepo_api_client::Bytes>,
+            > + Send
+            + Sync
+            + 'static,
+            _body_len: usize,
+            _duration: u64,
+            _tag: Option<&str>,
+            _token: &SecretString,
+            _team_id: Option<&str>,
+            _team_slug: Option<&str>,
+            _sha: Option<&str>,
+            _dirty_hash: Option<&str>,
+        ) -> turborepo_api_client::Result<()> {
+            unimplemented!("put_artifact")
+        }
+
+        async fn artifact_exists(
+            &self,
+            _hash: &str,
+            _token: &SecretString,
+            _team_id: Option<&str>,
+            _team_slug: Option<&str>,
+        ) -> turborepo_api_client::Result<Option<Response>> {
+            unimplemented!("artifact_exists")
+        }
+
+        async fn get_caching_status(
+            &self,
+            token: &SecretString,
+            _team_id: Option<&str>,
+            _team_slug: Option<&str>,
+        ) -> turborepo_api_client::Result<CachingStatusResponse> {
+            // Mimics a token that is active at the user level but has lost
+            // access to the team (e.g. an expired SAML session).
+            if token.expose() == "team-forbidden-token" {
+                return Err(turborepo_api_client::Error::UnknownStatus {
+                    code: "forbidden".to_string(),
+                    message: "Not authorized".to_string(),
+                    backtrace: std::backtrace::Backtrace::capture(),
+                });
+            }
+
+            Ok(CachingStatusResponse {
+                status: CachingStatus::Enabled,
+            })
+        }
+    }
+
     fn spawn_login_callback(
         port: u16,
         token: &'static str,
@@ -708,6 +833,8 @@ mod tests {
             existing_token: Some("stale-token"),
             force: false,
             sso_team: None,
+            linked_team_id: None,
+            linked_team_slug: None,
             sso_login_callback_port: Some(port),
         };
 
@@ -792,6 +919,59 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_reuse_existing_token_discards_token_without_linked_team_access() {
+        let api_client = MockApiClient::new();
+
+        let reused = reuse_existing_token(
+            Token::existing("team-forbidden-token".to_string()),
+            &api_client,
+            Some("team_id"),
+            Some("team_slug"),
+            Option::<fn(&str)>::None,
+        )
+        .await
+        .unwrap();
+
+        assert!(reused.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_reuse_existing_token_with_linked_team_access() {
+        let api_client = MockApiClient::new();
+
+        let reused = reuse_existing_token(
+            Token::existing("good-token".to_string()),
+            &api_client,
+            Some("team_id"),
+            Some("team_slug"),
+            Option::<fn(&str)>::None,
+        )
+        .await
+        .unwrap();
+
+        assert_matches!(reused, Some(Token::Existing(ref token)) if token.expose() == "good-token");
+    }
+
+    #[tokio::test]
+    async fn test_reuse_existing_token_skips_team_check_when_unlinked() {
+        let api_client = MockApiClient::new();
+
+        // The team-forbidden token is reusable when no team is linked because
+        // the team access check should not run at all.
+        let reused = reuse_existing_token(
+            Token::existing("team-forbidden-token".to_string()),
+            &api_client,
+            None,
+            None,
+            Option::<fn(&str)>::None,
+        )
+        .await
+        .unwrap();
+
+        assert!(reused.is_some());
+    }
+
+    #[tokio::test]
     async fn test_reuse_existing_token_with_recovery_discards_invalid_token_errors() {
         let _lock = ENV_LOCK.lock().await;
         let turbo_config_dir = create_mock_config_dir();
@@ -807,6 +987,8 @@ mod tests {
         let reused = reuse_existing_token_with_recovery(
             Token::existing("forbidden-token".to_string()),
             &api_client,
+            None,
+            None,
             "Using existing Vercel login.",
             &color_config,
         )

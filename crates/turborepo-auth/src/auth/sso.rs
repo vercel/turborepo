@@ -162,6 +162,9 @@ pub async fn sso_login<T: Client + TokenClient>(
         existing_token,
         force,
         sso_login_callback_port,
+        // SSO login validates team access via `is_valid_sso` instead.
+        linked_team_id: _,
+        linked_team_slug: _,
     } = *options;
 
     let sso_team = sso_team.ok_or(Error::EmptySSOTeam)?;
@@ -640,6 +643,8 @@ mod tests {
             existing_token: None,
             sso_team: None,
             force: false,
+            linked_team_id: None,
+            linked_team_slug: None,
             sso_login_callback_port: None,
         };
 
@@ -661,6 +666,8 @@ mod tests {
             existing_token: Some("existing-token"),
             sso_team: Some("my-team"),
             force: false,
+            linked_team_id: None,
+            linked_team_slug: None,
             sso_login_callback_port: None,
         };
 
@@ -683,6 +690,8 @@ mod tests {
             existing_token: Some("existing-token"),
             sso_team: Some("my-team"),
             force: false,
+            linked_team_id: None,
+            linked_team_slug: None,
             sso_login_callback_port: None,
         };
 
@@ -709,6 +718,8 @@ mod tests {
             sso_team: Some("my-team"),
             force: false,
             sso_login_callback_port: None,
+            linked_team_id: None,
+            linked_team_slug: None,
             color_config: &color_config,
         };
 
