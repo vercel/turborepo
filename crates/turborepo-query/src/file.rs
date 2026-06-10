@@ -6,7 +6,7 @@ use miette::SourceCode;
 use turbo_trace::Tracer;
 use turbopath::AbsoluteSystemPathBuf;
 
-use crate::{Array, Diagnostic, Error, QueryRun};
+use crate::{confine_file_path, Array, Diagnostic, Error, QueryRun};
 
 pub struct File {
     run: Arc<dyn QueryRun>,
@@ -16,8 +16,7 @@ pub struct File {
 
 impl File {
     pub fn new(run: Arc<dyn QueryRun>, path: AbsoluteSystemPathBuf) -> Result<Self, Error> {
-        #[cfg(windows)]
-        let path = path.to_realpath()?;
+        let path = confine_file_path(run.repo_root(), path)?;
 
         Ok(Self {
             run,

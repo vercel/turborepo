@@ -24,7 +24,7 @@ use package_graph::{Edge, PackageGraph};
 pub use server::run_server;
 use tokio::select;
 use turbo_trace::TraceError;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 pub use turborepo_query_api::{
     AffectedPackagesError, BoundariesFuture, QueryErrorLocation, QueryResult, QueryRun,
     SCHEMA_QUERY,
@@ -48,6 +48,8 @@ pub enum Error {
     NoSignalHandler,
     #[error("File `{0}` not found.")]
     FileNotFound(String),
+    #[error("File `{0}` is outside the repository root.")]
+    FileOutsideRepository(String),
     #[error("Package not found: {0}")]
     PackageNotFound(PackageName),
     #[error("Failed to serialize result: {0}")]
@@ -588,6 +590,33 @@ struct ChangedTask {
     task: task::RepositoryTask,
 }
 
+fn resolve_file_path(
+    repo_root: &AbsoluteSystemPath,
+    path: String,
+) -> Result<AbsoluteSystemPathBuf, Error> {
+    let abs_path = AbsoluteSystemPathBuf::from_unknown(repo_root, path);
+
+    confine_file_path(repo_root, abs_path)
+}
+
+pub(crate) fn confine_file_path(
+    repo_root: &AbsoluteSystemPath,
+    abs_path: AbsoluteSystemPathBuf,
+) -> Result<AbsoluteSystemPathBuf, Error> {
+    if !abs_path.exists() {
+        return Err(Error::FileNotFound(abs_path.to_string()));
+    }
+
+    let real_repo_root = repo_root.to_realpath()?;
+    let real_path = abs_path.to_realpath()?;
+
+    if !real_repo_root.contains(&real_path) {
+        return Err(Error::FileOutsideRepository(abs_path.to_string()));
+    }
+
+    Ok(real_path)
+}
+
 #[Object]
 impl RepositoryQuery {
     async fn affected_packages(
@@ -712,11 +741,7 @@ impl RepositoryQuery {
     }
 
     async fn file(&self, path: String) -> Result<file::File, Error> {
-        let abs_path = AbsoluteSystemPathBuf::from_unknown(self.run.repo_root(), path);
-
-        if !abs_path.exists() {
-            return Err(Error::FileNotFound(abs_path.to_string()));
-        }
+        let abs_path = resolve_file_path(self.run.repo_root(), path)?;
 
         file::File::new(self.run.clone(), abs_path)
     }
@@ -860,4 +885,74 @@ pub async fn execute_query(
         result_json,
         errors,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use turbopath::AbsoluteSystemPath;
+
+    use super::{resolve_file_path, Error};
+
+    #[test]
+    fn resolve_file_path_allows_repo_relative_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let file = tmp.path().join("package.json");
+        fs::write(&file, "{}").unwrap();
+
+        let resolved = resolve_file_path(root, "package.json".to_string()).unwrap();
+        let expected = AbsoluteSystemPath::from_std_path(&file)
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+
+        assert_eq!(resolved, expected);
+    }
+
+    #[test]
+    fn resolve_file_path_rejects_absolute_files_outside_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let outside_file = outside.path().join("secret.txt");
+        fs::write(&outside_file, "secret").unwrap();
+
+        let err = resolve_file_path(root, outside_file.to_string_lossy().to_string()).unwrap_err();
+
+        assert!(matches!(err, Error::FileOutsideRepository(_)));
+    }
+
+    #[test]
+    fn resolve_file_path_rejects_relative_traversal_outside_repo() {
+        let parent = tempfile::tempdir().unwrap();
+        let repo = parent.path().join("repo");
+        fs::create_dir(&repo).unwrap();
+        let outside_file = parent.path().join("secret.txt");
+        fs::write(&outside_file, "secret").unwrap();
+        let root = AbsoluteSystemPath::from_std_path(&repo).unwrap();
+
+        let err = resolve_file_path(root, "../secret.txt".to_string()).unwrap_err();
+
+        assert!(matches!(err, Error::FileOutsideRepository(_)));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolve_file_path_rejects_symlink_escape() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let outside_file = outside.path().join("secret.txt");
+        let link = tmp.path().join("link.txt");
+        fs::write(&outside_file, "secret").unwrap();
+        symlink(&outside_file, &link).unwrap();
+
+        let err = resolve_file_path(root, "link.txt".to_string()).unwrap_err();
+
+        assert!(matches!(err, Error::FileOutsideRepository(_)));
+    }
 }
