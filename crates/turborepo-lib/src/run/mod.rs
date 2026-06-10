@@ -6,7 +6,6 @@ pub(crate) mod package_discovery;
 pub(crate) mod scope;
 pub mod task_access;
 pub(crate) mod task_filter;
-mod ui;
 pub mod watch;
 
 use std::{
@@ -44,7 +43,7 @@ use turborepo_task_hash::{
 };
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_types::{EnvMode, UIMode};
-use turborepo_ui::{sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig};
+use turborepo_ui::{sender::UISender, tui, tui::TuiSender, ColorConfig};
 
 pub use crate::run::error::Error;
 use crate::{
@@ -106,7 +105,6 @@ pub struct Run {
 
 type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
 
-type WuiResult = UIResult<WebUISender>;
 type TuiResult = UIResult<TuiSender>;
 
 #[derive(Debug, Clone, Copy)]
@@ -525,21 +523,7 @@ impl Run {
                 .start_terminal_ui()
                 .map(|res| res.map(|(sender, handle)| (UISender::Tui(sender), handle))),
             UIMode::Stream | UIMode::StreamWithTimestamps => Ok(None),
-            UIMode::Web => self
-                .start_web_ui()
-                .map(|res| res.map(|(sender, handle)| (UISender::Wui(sender), handle))),
         }
-    }
-    fn start_web_ui(self: &Arc<Self>) -> WuiResult {
-        let Some(query_server) = self.query_server.clone() else {
-            tracing::warn!("Web UI requires a query server implementation");
-            return Ok(None);
-        };
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-
-        let handle = tokio::spawn(ui::start_web_ui_server(rx, self.clone(), query_server));
-
-        Ok(Some((WebUISender { tx }, handle)))
     }
 
     #[allow(clippy::type_complexity)]
