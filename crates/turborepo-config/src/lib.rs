@@ -50,7 +50,7 @@ use turborepo_cache::CacheConfig;
 use turborepo_repository::package_graph::PackageName;
 use turborepo_scm::WorktreeInfo;
 use turborepo_turbo_json::FutureFlags;
-use turborepo_types::{EnvMode, LogOrder, UIMode};
+use turborepo_types::{ConfigurationSource, EnvMode, LogOrder, UIMode};
 
 pub const CONFIG_FILE: &str = "turbo.json";
 pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
@@ -269,10 +269,14 @@ pub struct ConfigurationOptions {
     #[serde(alias = "ApiUrl")]
     #[serde(alias = "APIURL")]
     pub api_url: Option<String>,
+    #[serde(skip)]
+    pub api_url_source: Option<ConfigurationSource>,
     #[serde(alias = "loginurl")]
     #[serde(alias = "LoginUrl")]
     #[serde(alias = "LOGINURL")]
     pub login_url: Option<String>,
+    #[serde(skip)]
+    pub login_url_source: Option<ConfigurationSource>,
     #[serde(alias = "teamslug")]
     #[serde(alias = "TeamSlug")]
     #[serde(alias = "TEAMSLUG")]
@@ -344,12 +348,31 @@ pub struct TurborepoConfigBuilder {
 
 // Getters
 impl ConfigurationOptions {
+    fn with_url_sources(mut self, source: ConfigurationSource) -> Self {
+        if self.api_url.is_some() {
+            self.api_url_source = Some(source);
+        }
+        if self.login_url.is_some() {
+            self.login_url_source = Some(source);
+        }
+
+        self
+    }
+
     pub fn api_url(&self) -> &str {
         non_empty_str(self.api_url.as_deref()).unwrap_or(DEFAULT_API_URL)
     }
 
     pub fn login_url(&self) -> &str {
         non_empty_str(self.login_url.as_deref()).unwrap_or(DEFAULT_LOGIN_URL)
+    }
+
+    pub fn api_url_source(&self) -> Option<ConfigurationSource> {
+        self.api_url_source
+    }
+
+    pub fn login_url_source(&self) -> Option<ConfigurationSource> {
+        self.login_url_source
     }
 
     pub fn team_slug(&self) -> Option<&str> {
@@ -687,20 +710,24 @@ impl TurborepoConfigBuilder {
         let env_var_config = EnvVars::new(&env_vars)?;
         let override_env_var_config = OverrideEnvVars::new(&env_vars)?;
 
-        let sources: [Box<dyn ResolvedConfigurationOptions>; 7] = [
-            Box::new(&self.override_config),
-            Box::new(env_var_config),
-            Box::new(override_env_var_config),
-            Box::new(local_config),
-            Box::new(global_auth),
-            Box::new(global_config),
-            Box::new(turbo_json),
+        let sources: [(ConfigurationSource, Box<dyn ResolvedConfigurationOptions>); 7] = [
+            (ConfigurationSource::Cli, Box::new(&self.override_config)),
+            (ConfigurationSource::Environment, Box::new(env_var_config)),
+            (
+                ConfigurationSource::OverrideEnvironment,
+                Box::new(override_env_var_config),
+            ),
+            (ConfigurationSource::LocalConfig, Box::new(local_config)),
+            (ConfigurationSource::GlobalAuth, Box::new(global_auth)),
+            (ConfigurationSource::GlobalConfig, Box::new(global_config)),
+            (ConfigurationSource::TurboJson, Box::new(turbo_json)),
         ];
 
         let config = sources.into_iter().try_fold(
             ConfigurationOptions::default(),
-            |mut acc, current_source| {
+            |mut acc, (source, current_source)| {
                 let current_source_config = current_source.get_configuration_options(&acc)?;
+                let current_source_config = current_source_config.with_url_sources(source);
                 acc.merge(current_source_config);
                 Ok(acc)
             },
@@ -745,7 +772,7 @@ mod test {
 
     use tempfile::TempDir;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-    use turborepo_types::LogOrder;
+    use turborepo_types::{ConfigurationSource, LogOrder};
 
     use crate::{
         CONFIG_FILE, CONFIG_FILE_JSONC, ConfigurationOptions, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
@@ -1288,6 +1315,112 @@ mod test {
         assert!(
             config.no_update_notifier(),
             "noUpdateNotifier from turbo.json should be respected"
+        );
+    }
+
+    #[test]
+    fn test_turbo_json_url_sources_are_recorded() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(
+                r#"{
+                    "remoteCache": {
+                        "apiUrl": "https://attacker.test/api",
+                        "loginUrl": "https://attacker.test"
+                    }
+                }"#,
+            )
+            .unwrap();
+
+        let config = TurborepoConfigBuilder {
+            repo_root,
+            override_config: ConfigurationOptions::default(),
+            global_config_path: None,
+            environment: Some(HashMap::default()),
+        }
+        .build()
+        .unwrap();
+
+        assert_eq!(
+            config.api_url_source(),
+            Some(ConfigurationSource::TurboJson)
+        );
+        assert_eq!(
+            config.login_url_source(),
+            Some(ConfigurationSource::TurboJson)
+        );
+    }
+
+    #[test]
+    fn test_cli_login_url_source_overrides_turbo_json_source() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(
+                r#"{
+                    "remoteCache": {
+                        "loginUrl": "https://attacker.test"
+                    }
+                }"#,
+            )
+            .unwrap();
+
+        let config = TurborepoConfigBuilder {
+            repo_root,
+            override_config: ConfigurationOptions {
+                login_url: Some("https://cache.example.com".to_string()),
+                ..Default::default()
+            },
+            global_config_path: None,
+            environment: Some(HashMap::default()),
+        }
+        .build()
+        .unwrap();
+
+        assert_eq!(config.login_url(), "https://cache.example.com");
+        assert_eq!(config.login_url_source(), Some(ConfigurationSource::Cli));
+    }
+
+    #[test]
+    fn test_env_login_url_source_overrides_turbo_json_source() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(
+                r#"{
+                    "remoteCache": {
+                        "loginUrl": "https://attacker.test"
+                    }
+                }"#,
+            )
+            .unwrap();
+
+        let mut env = HashMap::new();
+        env.insert(
+            OsString::from("turbo_login"),
+            OsString::from("https://cache.example.com"),
+        );
+
+        let config = TurborepoConfigBuilder {
+            repo_root,
+            override_config: ConfigurationOptions::default(),
+            global_config_path: None,
+            environment: Some(env),
+        }
+        .build()
+        .unwrap();
+
+        assert_eq!(config.login_url(), "https://cache.example.com");
+        assert_eq!(
+            config.login_url_source(),
+            Some(ConfigurationSource::Environment)
         );
     }
 }

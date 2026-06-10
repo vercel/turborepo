@@ -14,9 +14,9 @@ use url::Url;
 use crate::{
     LoginOptions, Token,
     auth::{
-        ExistingTokenSource, classify_existing_vercel_token, ensure_trusted_vercel_api,
-        generate_csrf_state, is_vercel, should_attempt_vercel_token_refresh,
-        should_skip_existing_token_for_login,
+        ExistingTokenSource, classify_existing_vercel_token, ensure_non_vercel_redirect_allowed,
+        ensure_trusted_vercel_api, generate_csrf_state, is_vercel,
+        should_attempt_vercel_token_refresh, should_skip_existing_token_for_login,
     },
     device_flow::{self, TokenSet},
     error, ui,
@@ -137,6 +137,8 @@ pub async fn login<T: Client + TokenClient>(
         api_client,
         color_config,
         login_url: login_url_configuration,
+        login_url_source,
+        api_url_source,
         existing_token,
         force,
         sso_team: _,
@@ -231,7 +233,15 @@ pub async fn login<T: Client + TokenClient>(
         login_vercel_device_flow(api_client, color_config, login_url_configuration).await
     } else {
         let port = sso_login_callback_port.unwrap_or(DEFAULT_PORT);
-        login_redirect(api_client, color_config, login_url_configuration, port).await
+        login_redirect(
+            api_client,
+            color_config,
+            login_url_configuration,
+            login_url_source,
+            api_url_source,
+            port,
+        )
+        .await
     }
 }
 
@@ -315,8 +325,17 @@ async fn login_redirect<T: Client>(
     api_client: &T,
     color_config: &ColorConfig,
     login_url_configuration: &str,
+    login_url_source: Option<turborepo_types::ConfigurationSource>,
+    api_url_source: Option<turborepo_types::ConfigurationSource>,
     port: u16,
 ) -> Result<(Token, Option<TokenSet>), Error> {
+    let mut login_url =
+        Url::parse(login_url_configuration).map_err(|_| error::Error::LoginUrlCannotBeABase {
+            value: login_url_configuration.to_string(),
+        })?;
+
+    ensure_non_vercel_redirect_allowed(&login_url, login_url_source, api_client, api_url_source)?;
+
     let listener = TcpListener::bind(format!("{DEFAULT_HOST_NAME}:{port}"))
         .map_err(error::Error::CallbackListenerFailed)?;
     let port = listener
@@ -325,11 +344,6 @@ async fn login_redirect<T: Client>(
         .port();
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{port}");
     let state = generate_csrf_state();
-
-    let mut login_url =
-        Url::parse(login_url_configuration).map_err(|_| error::Error::LoginUrlCannotBeABase {
-            value: login_url_configuration.to_string(),
-        })?;
 
     let mut success_url = login_url.clone();
     success_url
@@ -688,6 +702,8 @@ mod tests {
         let options = LoginOptions {
             color_config: &color_config,
             login_url: "https://example.com",
+            login_url_source: Some(turborepo_types::ConfigurationSource::Cli),
+            api_url_source: None,
             api_client: &api_client,
             existing_token: Some("stale-token"),
             force: false,
@@ -717,6 +733,62 @@ mod tests {
             Err(Error::UntrustedVercelApiUrl { ref api_url })
                 if api_url == "https://attacker.test/api"
         );
+    }
+
+    #[tokio::test]
+    async fn test_non_vercel_login_rejects_repo_controlled_login_url() {
+        let color_config = turborepo_ui::ColorConfig::new(false);
+        let api_client = MockApiClient::new();
+
+        let options = LoginOptions {
+            login_url_source: Some(turborepo_types::ConfigurationSource::TurboJson),
+            ..LoginOptions::new(&color_config, "https://attacker.test", &api_client)
+        };
+
+        let result = login(&options).await;
+
+        assert_matches!(
+            result,
+            Err(Error::UntrustedNonVercelLoginUrlSource {
+                url_source: Some(turborepo_types::ConfigurationSource::TurboJson)
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_non_vercel_login_rejects_repo_controlled_api_url() {
+        let color_config = turborepo_ui::ColorConfig::new(false);
+        let api_client = MockApiClient::with_base_url("https://attacker.test/api");
+
+        let options = LoginOptions {
+            login_url_source: Some(turborepo_types::ConfigurationSource::Cli),
+            api_url_source: Some(turborepo_types::ConfigurationSource::TurboJson),
+            ..LoginOptions::new(&color_config, "https://cache.example.com", &api_client)
+        };
+
+        let result = login(&options).await;
+
+        assert_matches!(
+            result,
+            Err(Error::UntrustedNonVercelApiUrlSource {
+                url_source: Some(turborepo_types::ConfigurationSource::TurboJson)
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_non_vercel_login_rejects_http_remote_url() {
+        let color_config = turborepo_ui::ColorConfig::new(false);
+        let api_client = MockApiClient::new();
+
+        let options = LoginOptions {
+            login_url_source: Some(turborepo_types::ConfigurationSource::Cli),
+            ..LoginOptions::new(&color_config, "http://attacker.test", &api_client)
+        };
+
+        let result = login(&options).await;
+
+        assert_matches!(result, Err(Error::UntrustedNonVercelLoginUrlScheme));
     }
 
     #[tokio::test]

@@ -302,7 +302,9 @@ impl ResolvedConfigurationOptions for EnvVars {
 
         let output = ConfigurationOptions {
             api_url: self.output_map.get("api_url").cloned(),
+            api_url_source: None,
             login_url: self.output_map.get("login_url").cloned(),
+            login_url_source: None,
             team_slug: self.output_map.get("team_slug").cloned(),
             team_id: self.output_map.get("team_id").cloned(),
             token: self.output_map.get("token").cloned(),
