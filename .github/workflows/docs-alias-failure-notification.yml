@@ -19,18 +19,19 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'failure' }}
     steps:
-      - name: Checkout staging branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_branch }}
-
+      # Fetch version.txt via the API at the exact commit of the failed run
+      # instead of checking out the branch. This avoids checking out a ref by
+      # name (the staging branch may already be deleted by the failure cleanup
+      # job) and avoids putting any repo content on disk.
       - name: Get version
         id: version
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          if [ -f version.txt ]; then
-            IFS= read -r VERSION < version.txt
-
+          if CONTENT=$(gh api -H "Accept: application/vnd.github.raw+json" "repos/${{ github.repository }}/contents/version.txt?ref=${HEAD_SHA}"); then
+            IFS= read -r VERSION <<< "$CONTENT"
             if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
               printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
             else
@@ -38,6 +39,7 @@ jobs:
               echo "version=unknown" >> "$GITHUB_OUTPUT"
             fi
           else
+            echo "::warning::Could not fetch version.txt at ${HEAD_SHA}. Reporting unknown version."
             echo "version=unknown" >> "$GITHUB_OUTPUT"
           fi
 
