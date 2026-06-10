@@ -89,12 +89,16 @@ async fn login_no_sso(base: &mut CommandBase, force: bool) -> Result<(), Error> 
     let login_url_source = base.opts.api_client_opts.login_url_source;
     let api_url_source = base.opts.api_client_opts.api_url_source;
     let existing_token = base.opts.api_client_opts.token.as_ref().map(|t| t.expose());
+    let linked_team_id = base.opts.api_client_opts.team_id.as_deref();
+    let linked_team_slug = base.opts.api_client_opts.team_slug.as_deref();
 
     let options = LoginOptions {
         existing_token,
         force,
         login_url_source,
         api_url_source,
+        linked_team_id,
+        linked_team_slug,
         ..LoginOptions::new(&color_config, &login_url_config, &api_client)
     };
 

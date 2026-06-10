@@ -174,18 +174,16 @@ impl Token {
 
     /// Checks if the token is still valid. The checks ran are:
     /// 1. If the token is active.
-    /// 2. If the token has access to the cache.
-    ///     - If the token is forbidden from accessing the cache, we consider it
-    ///       invalid.
-    /// 3. We are able to fetch the user associated with the token.
+    /// 2. We are able to fetch the user associated with the token (only when
+    ///    `valid_message_fn` is provided).
+    ///
+    /// This validates token activity and user identity only. It does NOT
+    /// verify team or cache access; use `has_cache_access` for that.
     ///
     /// ## Arguments
     /// * `client` - The client to use for API calls.
     /// * `valid_message_fn` - An optional callback that gets called if the
     ///   token is valid. It will be passed the user's email.
-    ///
-    /// This validates token activity and user identity only. Cache access is
-    /// checked later when the cache is actually used.
     // TODO(voz): This should do a `get_user` or `get_teams` instead of the caller
     // doing it. The reason we don't do it here is because the caller
     // needs to do printing and requires the user struct, which we don't want to
