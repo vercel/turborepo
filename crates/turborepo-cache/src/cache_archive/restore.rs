@@ -219,8 +219,17 @@ mod tests {
             path: &'static str,
             body: Vec<u8>,
         },
+        FileWithMode {
+            path: &'static str,
+            body: Vec<u8>,
+            mode: u32,
+        },
         Directory {
             path: &'static str,
+        },
+        DirectoryWithMode {
+            path: &'static str,
+            mode: u32,
         },
         Symlink {
             link_path: &'static str,
@@ -241,11 +250,25 @@ mod tests {
                         header.set_mode(0o644);
                         builder.append_data(&mut header, path, &body[..]).unwrap();
                     }
+                    RawTarEntry::FileWithMode { path, body, mode } => {
+                        let mut header = Header::new_gnu();
+                        header.set_size(body.len() as u64);
+                        header.set_entry_type(tar::EntryType::Regular);
+                        header.set_mode(*mode);
+                        builder.append_data(&mut header, path, &body[..]).unwrap();
+                    }
                     RawTarEntry::Directory { path } => {
                         let mut header = Header::new_gnu();
                         header.set_entry_type(tar::EntryType::Directory);
                         header.set_size(0);
                         header.set_mode(0o755);
+                        builder.append_data(&mut header, path, empty()).unwrap();
+                    }
+                    RawTarEntry::DirectoryWithMode { path, mode } => {
+                        let mut header = Header::new_gnu();
+                        header.set_entry_type(tar::EntryType::Directory);
+                        header.set_size(0);
+                        header.set_mode(*mode);
                         builder.append_data(&mut header, path, empty()).unwrap();
                     }
                     RawTarEntry::Symlink {
@@ -1907,6 +1930,59 @@ mod tests {
                     .symlink_metadata()?
                     .is_symlink()
             );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_restore_regular_file_strips_special_mode_bits() -> Result<()> {
+            use std::os::unix::fs::PermissionsExt;
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+            let tar = generate_raw_tar(&[RawTarEntry::FileWithMode {
+                path: "helper",
+                body: b"payload".to_vec(),
+                mode: 0o7755,
+            }]);
+
+            let mut reader = CacheReader::from_reader(&tar[..], false)?;
+            reader.restore(anchor, None)?;
+
+            let mode = anchor
+                .join_component("helper")
+                .symlink_metadata()?
+                .permissions()
+                .mode()
+                & 0o7777;
+            assert_eq!(mode & 0o7000, 0);
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_restore_directory_strips_special_mode_bits() -> Result<()> {
+            use std::os::unix::fs::PermissionsExt;
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+            let tar = generate_raw_tar(&[RawTarEntry::DirectoryWithMode {
+                path: "dist",
+                mode: 0o7755,
+            }]);
+
+            let mut reader = CacheReader::from_reader(&tar[..], false)?;
+            reader.restore(anchor, None)?;
+
+            let mode = anchor
+                .join_component("dist")
+                .symlink_metadata()?
+                .permissions()
+                .mode()
+                & 0o7777;
+            assert_eq!(mode & 0o7000, 0);
 
             Ok(())
         }
