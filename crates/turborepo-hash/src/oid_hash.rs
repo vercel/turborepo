@@ -8,18 +8,28 @@ pub struct OidHash([u8; 40]);
 
 impl OidHash {
     /// Create from a pre-filled 40-byte hex buffer.
-    /// Caller must ensure `buf` contains valid lowercase ASCII hex.
+    /// Panics if `buf` contains any non-ASCII-hex bytes.
     pub fn from_hex_buf(buf: [u8; 40]) -> Self {
+        assert_ascii_hex(&buf);
         Self(buf)
     }
 
     /// Create from a hex-encoded string slice.
     pub fn from_hex_str(s: &str) -> Self {
-        debug_assert_eq!(s.len(), 40, "OID hex must be exactly 40 chars");
+        assert_eq!(s.len(), 40, "OID hex must be exactly 40 chars");
+        assert_ascii_hex(s.as_bytes());
+
         let mut buf = [0u8; 40];
         buf.copy_from_slice(s.as_bytes());
         Self(buf)
     }
+}
+
+fn assert_ascii_hex(bytes: &[u8]) {
+    assert!(
+        bytes.iter().all(u8::is_ascii_hexdigit),
+        "OID hex must contain only ASCII hex digits"
+    );
 }
 
 impl std::ops::Deref for OidHash {
@@ -71,5 +81,29 @@ impl From<OidHash> for String {
     fn from(oid: OidHash) -> Self {
         // SAFETY: OidHash is always valid ASCII hex.
         unsafe { String::from_utf8_unchecked(oid.0.to_vec()) }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OidHash;
+
+    #[test]
+    fn from_hex_buf_accepts_ascii_hex() {
+        let oid = OidHash::from_hex_buf(*b"0123456789abcdef0123456789abcdef01234567");
+
+        assert_eq!(&*oid, "0123456789abcdef0123456789abcdef01234567");
+    }
+
+    #[test]
+    #[should_panic(expected = "OID hex must contain only ASCII hex digits")]
+    fn from_hex_buf_rejects_non_utf8_bytes() {
+        OidHash::from_hex_buf([0xff; 40]);
+    }
+
+    #[test]
+    #[should_panic(expected = "OID hex must contain only ASCII hex digits")]
+    fn from_hex_str_rejects_non_hex_ascii() {
+        OidHash::from_hex_str("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz");
     }
 }
