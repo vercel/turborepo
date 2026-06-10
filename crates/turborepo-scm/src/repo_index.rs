@@ -1357,9 +1357,9 @@ mod tests {
             ("apps/web/package.json", "ddd"),
             ("apps/web/src/index.ts", "eee"),
             ("apps/web/src/utils.ts", "fff"),
-            ("packages/ui/button.tsx", "ggg"),
-            ("packages/ui/package.json", "hhh"),
-            ("root.json", "iii"),
+            ("packages/ui/button.tsx", "111"),
+            ("packages/ui/package.json", "222"),
+            ("root.json", "333"),
         ];
         let index = make_index(ls_tree_data.clone(), vec![]);
 
