@@ -47,7 +47,7 @@ impl Cell {
 
     #[inline]
     fn num_bytes(&self) -> usize {
-        usize::from(self.num_bytes & 0x0f)
+        usize::from(self.num_bytes)
     }
 
     pub(crate) fn set(&mut self, c: char, a: crate::attrs::Attrs) {
@@ -121,8 +121,9 @@ impl Cell {
     #[must_use]
     pub fn contents(&self) -> &str {
         let num_bytes = self.num_bytes();
-        // Since contents has been constructed by appending chars encoded as UTF-8 it will be valid UTF-8
-        unsafe { std::str::from_utf8_unchecked(&self.contents[..num_bytes]) }
+        std::str::from_utf8(&self.contents[..num_bytes]).unwrap_or_else(
+            |_| unreachable!("cell contents should be valid UTF-8"),
+        )
     }
 
     /// Returns whether the cell contains any text data.

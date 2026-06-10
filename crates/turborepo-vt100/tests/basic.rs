@@ -95,6 +95,15 @@ fn cell_contents() {
 }
 
 #[test]
+fn cell_contents_handles_more_than_15_bytes() {
+    let mut parser = vt100::Parser::default();
+    let input = "\u{0800}\u{20d0}\u{20d1}\u{20d2}\u{20d3}\u{20d4}";
+    parser.process(input.as_bytes());
+
+    assert_eq!(parser.screen().cell(0, 0).unwrap().contents(), input);
+}
+
+#[test]
 fn cell_colors() {
     let mut parser = vt100::Parser::default();
     let input = b"foo\x1b[31m\x1b[32mb\x1b[3;7;42ma\x1b[23mr";
