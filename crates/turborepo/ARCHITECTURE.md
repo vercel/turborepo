@@ -398,8 +398,8 @@ package/task graph).
 **Data flow:** `main()` constructs `Arc<TurboQueryServer>` → passes to
 `turborepo_lib::main` → threaded through `shim` → `cli::run` →
 `commands::run` → `RunBuilder` → `Run`.  The `Run` struct stores the
-`query_server` and uses it in `start_web_ui()` and the `turbo query`
-command handler.
+`query_server`; the `turbo query` command handler uses it for direct query
+execution and the local GraphQL server mode.
 
 ## Data Flow Overview
 
