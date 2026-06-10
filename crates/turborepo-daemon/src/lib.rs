@@ -266,4 +266,12 @@ mod test {
 
         assert_eq!(repo_hash(&lower), repo_hash(&upper));
     }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn repo_hash_input_preserves_non_drive_paths() {
+        let repo_root = AbsoluteSystemPathBuf::new(r"\\server\share\turborepo").unwrap();
+
+        assert_eq!(super::repo_hash_input(&repo_root), repo_root.to_string());
+    }
 }
