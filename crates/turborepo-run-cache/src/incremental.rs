@@ -489,6 +489,12 @@ fn collect_partition_files(
 
     let files = globwalk::globwalk(repo_root, &inclusions, &exclusions, globwalk::WalkType::All)?;
 
+    for path in &files {
+        if !repo_root.contains(path) {
+            return Err(crate::Error::OutputOutsideRepo(path.to_string()));
+        }
+    }
+
     let mut relative_paths: Vec<_> = files
         .into_iter()
         .map(|path| AnchoredSystemPathBuf::relative_path_between(repo_root, &path))
@@ -797,6 +803,23 @@ mod tests {
         assert_eq!(files.len(), 2);
         let names: Vec<_> = files.iter().map(|f| f.to_string()).collect();
         assert!(names[0] < names[1], "files should be sorted: {:?}", names);
+    }
+
+    #[test]
+    fn collect_partition_files_rejects_paths_outside_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_path = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo_path).unwrap();
+        std::fs::write(tmp.path().join("secret.txt"), b"secret").unwrap();
+
+        let repo = AbsoluteSystemPathBuf::try_from(repo_path.to_str().unwrap()).unwrap();
+        let outputs = TaskOutputs {
+            inclusions: vec!["../secret.txt".into()],
+            exclusions: vec![],
+        };
+
+        let err = collect_partition_files(&repo, &repo, &outputs).unwrap_err();
+        assert!(matches!(err, crate::Error::OutputOutsideRepo(_)));
     }
 
     #[test]
