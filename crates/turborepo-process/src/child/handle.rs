@@ -24,6 +24,38 @@ pub(super) struct ChildHandle {
     pty_controller_fd: Option<libc::c_int>,
     #[cfg(windows)]
     _job: Option<crate::job_object::JobObject>,
+    /// Shared handle to the ConPTY input pipe, used to deliver a Ctrl-C
+    /// keystroke during graceful shutdown. ConPTY children are attached to a
+    /// pseudoconsole rather than turbo's console, so console Ctrl-C events
+    /// never reach them on their own.
+    #[cfg(windows)]
+    pty_input: Option<SharedPtyInput>,
+}
+
+#[cfg(windows)]
+type SharedPtyInput = std::sync::Arc<std::sync::Mutex<Box<dyn io::Write + Send>>>;
+
+/// A `Write` handle to the ConPTY input pipe that shares ownership with
+/// `ChildHandle::pty_input` so the shutdown path can inject a Ctrl-C while
+/// stdin forwarding holds the writer.
+#[cfg(windows)]
+struct SharedPtyWriter(SharedPtyInput);
+
+#[cfg(windows)]
+impl io::Write for SharedPtyWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .flush()
+    }
 }
 
 enum ChildHandleImpl {
@@ -214,6 +246,8 @@ impl ChildHandle {
                 pty_controller_fd: None,
                 #[cfg(windows)]
                 _job: job,
+                #[cfg(windows)]
+                pty_input: None,
             },
             io: ChildIO {
                 stdin,
@@ -309,6 +343,21 @@ impl ChildHandle {
             }
         }
 
+        // Keep a shared handle to the ConPTY input pipe so graceful shutdown
+        // can deliver a Ctrl-C keystroke even while stdin forwarding (or an
+        // exec stdin guard) owns the writer. This also keeps the input pipe
+        // open for the child's lifetime: ConPTY terminates children when
+        // their input pipe closes.
+        #[cfg(windows)]
+        let (stdin, pty_input) = match stdin {
+            Some(writer) => {
+                let shared: SharedPtyInput = std::sync::Arc::new(std::sync::Mutex::new(writer));
+                let writer: Box<dyn io::Write + Send> = Box::new(SharedPtyWriter(shared.clone()));
+                (Some(writer), Some(shared))
+            }
+            None => (None, None),
+        };
+
         let stdin = if keep_stdin_open {
             stdin.map(ChildInput::Pty)
         } else {
@@ -327,6 +376,8 @@ impl ChildHandle {
                 pty_controller_fd,
                 #[cfg(windows)]
                 _job: job,
+                #[cfg(windows)]
+                pty_input,
             },
             io: ChildIO { stdin, output },
             controller: Some(controller),
@@ -468,6 +519,35 @@ impl ChildHandle {
         }
 
         ChildExit::Interrupted
+    }
+
+    /// Attempt to deliver a Ctrl-C to a ConPTY child by writing ETX to the
+    /// pseudoconsole's input pipe. ConPTY translates the keystroke into a
+    /// CTRL_C_EVENT for the attached process tree, mirroring what happens
+    /// when a user types Ctrl-C in a real console. Returns whether the
+    /// keystroke was written.
+    ///
+    /// Children not attached to a ConPTY share turbo's console and receive
+    /// console Ctrl-C events directly, so there is nothing to send here.
+    #[cfg(windows)]
+    pub(super) fn send_graceful_interrupt(&self) -> bool {
+        let Some(pty_input) = &self.pty_input else {
+            return false;
+        };
+
+        let mut writer = pty_input
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        match writer.write_all(b"\x03").and_then(|()| writer.flush()) {
+            Ok(()) => {
+                debug!("wrote Ctrl-C to ConPTY input for child {:?}", self.pid);
+                true
+            }
+            Err(err) => {
+                debug!("failed to write Ctrl-C to ConPTY input: {err}");
+                false
+            }
+        }
     }
 
     #[cfg(windows)]
