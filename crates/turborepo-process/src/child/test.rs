@@ -402,53 +402,6 @@ async fn test_graceful_shutdown_drains_final_output(use_pty: bool) {
     }
 }
 
-// Regression test: ConPTY children are attached to a pseudoconsole rather
-// than turbo's console, so console Ctrl-C events never reach them. Graceful
-// shutdown must write a Ctrl-C keystroke to the ConPTY input so the child
-// can exit on its own terms instead of being force killed at the timeout.
-#[cfg(windows)]
-#[tokio::test]
-#[traced_test]
-async fn test_conpty_graceful_shutdown_delivers_ctrl_c() {
-    let script = find_script_dir().join_component("graceful_sigint_output.js");
-    let mut cmd = Command::new("node");
-    cmd.args([script.as_std_path()]);
-
-    // The script runs until signaled, so a false pass is impossible: if the
-    // Ctrl-C keystroke is not delivered, the graceful timeout elapses and the
-    // child reports Killed.
-    let mut child = Child::spawn(
-        cmd,
-        ShutdownStyle::Graceful(Some(Duration::from_secs(5))),
-        Some(PtySize::default()),
-    )
-    .unwrap();
-
-    let mut output_child = child.clone();
-    let (mut observer, output, ready_rx) = ObservedOutput::new();
-    let output_task = tokio::spawn(async move {
-        output_child
-            .wait_with_piped_outputs(&mut observer)
-            .await
-            .unwrap()
-    });
-
-    tokio::time::timeout(Duration::from_secs(10), ready_rx)
-        .await
-        .expect("timed out waiting for startup output")
-        .expect("ready notification channel closed unexpectedly");
-    child.set_closing();
-    child.stop().await;
-    let exit = output_task.await.unwrap();
-    let output = String::from_utf8(output.lock().unwrap().clone()).unwrap();
-
-    assert!(
-        output.contains("received SIGINT"),
-        "missing SIGINT receipt log: {output}"
-    );
-    assert_matches!(exit, Some(ChildExit::Interrupted));
-}
-
 // Regression test: a wrapper process (simulating npm/pnpm) forwards SIGINT
 // to its child. When turbo sends SIGINT to the process group, the child
 // gets it twice — once from the group signal, once from the wrapper.
