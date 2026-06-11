@@ -16,7 +16,7 @@ jobs:
   determine_changes:
     name: Determine changes
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read
@@ -59,7 +59,7 @@ jobs:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -79,7 +79,7 @@ jobs:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     env:
       # AWS-backed sccache is disabled.
       # SCCACHE_BUCKET: turborepo-sccache
@@ -114,7 +114,7 @@ jobs:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -131,7 +131,7 @@ jobs:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.formatting == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     env:
       TURBO_CACHE: local:rw
     steps:
