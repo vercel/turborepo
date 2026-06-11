@@ -25,9 +25,10 @@ pub enum ChildExit {
 
 #[derive(Debug, Clone, Copy)]
 pub enum ShutdownStyle {
-    /// On Unix this sends SIGINT to the process group. On Windows, Turbo cannot
-    /// send a signal directly, so it waits for an externally delivered console
-    /// event or an explicit kill.
+    /// On Unix this sends SIGINT to the process group. On Windows, a Ctrl-C
+    /// keystroke is written to the child's ConPTY input when one exists;
+    /// children attached to turbo's real console instead rely on externally
+    /// delivered console events or an explicit kill.
     ///
     /// `Graceful(Some(timeout))` escalates to `Kill` after `timeout` elapses.
     /// `Graceful(None)` waits indefinitely until an explicit `Kill` command
@@ -159,9 +160,13 @@ impl ShutdownStyle {
 
                 #[cfg(windows)]
                 {
-                    // Windows consoles deliver Ctrl+C to attached child processes.
-                    // Turbo can't send a targeted signal, so graceful shutdown
-                    // waits for that external event when no timeout is provided.
+                    // For ConPTY children, write a Ctrl-C keystroke to the
+                    // pseudoconsole input so the attached process tree gets a
+                    // CTRL_C_EVENT. Children sharing turbo's real console
+                    // receive console Ctrl-C events directly instead, so
+                    // graceful shutdown waits for that external event when no
+                    // timeout is provided.
+                    child.send_graceful_interrupt();
                     let deadline = timeout.map(|timeout| tokio::time::Instant::now() + timeout);
                     let mut command_rx_open = true;
 
