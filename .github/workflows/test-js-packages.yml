@@ -13,6 +13,7 @@ jobs:
   find-changes:
     name: Find path changes
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read
@@ -115,7 +116,7 @@ jobs:
     name: "(${{matrix.os.name}}, Node ${{matrix.node-version}})"
     needs: find-changes
     if: needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.js-packages == 'true'
-    timeout-minutes: 30
+    timeout-minutes: 15
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -174,7 +175,7 @@ jobs:
   summary:
     name: JS Test Summary
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     if: always()
     needs:
       - find-changes
