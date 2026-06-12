@@ -138,6 +138,83 @@ pub fn patch_paths_for_keys(
         .collect())
 }
 
+/// Returns all patch file paths from `pnpm-workspace.yaml`, without filtering
+/// by lockfile keys. This is used for pnpm 9/10 workspaces where
+/// `patchedDependencies` are stored only in `pnpm-workspace.yaml` and the
+/// lockfile has no `patched_dependencies` section.
+pub fn all_patch_paths(
+    workspace_yaml_path: &AbsoluteSystemPath,
+) -> Result<Vec<RelativeUnixPathBuf>, std::io::Error> {
+    if !workspace_yaml_path.exists() {
+        return Ok(Vec::new());
+    }
+    let contents = workspace_yaml_path.read_to_string()?;
+    let workspace: PnpmWorkspace = serde_yaml_ng::from_str(&contents)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    Ok(workspace
+        .patched_dependencies
+        .unwrap_or_default()
+        .into_values()
+        .collect())
+}
+
+/// Returns patch file paths from `pnpm-workspace.yaml` for packages whose
+/// patch key matches any entry in `lockfile_keys`. Used for pnpm 9/10 to
+/// compute the set of patches needed by a pruned subgraph.
+///
+/// A workspace.yaml patch key matches a lockfile key when:
+/// - **Versioned** patch key (`name@version`): any lockfile key that equals
+///   `name@version` exactly or starts with `name@version(` (peer-dep/patch
+///   hash suffix).
+/// - **Unversioned** patch key (no `@` after the optional leading scope
+///   slash): any lockfile key that starts with `name@`.
+pub fn workspace_patch_paths_for_lockfile_keys(
+    workspace_yaml_path: &AbsoluteSystemPath,
+    lockfile_keys: &[String],
+) -> Result<Vec<RelativeUnixPathBuf>, std::io::Error> {
+    if !workspace_yaml_path.exists() {
+        return Ok(Vec::new());
+    }
+    let contents = workspace_yaml_path.read_to_string()?;
+    let workspace: PnpmWorkspace = serde_yaml_ng::from_str(&contents)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    let Some(patched) = workspace.patched_dependencies else {
+        return Ok(Vec::new());
+    };
+    Ok(patched
+        .into_iter()
+        .filter_map(|(patch_key, path)| {
+            patch_key_in_lockfile_keys(&patch_key, lockfile_keys).then_some(path)
+        })
+        .collect())
+}
+
+/// Check whether a `pnpm-workspace.yaml` patch key matches any key in
+/// `lockfile_keys`.
+///
+/// - A **versioned** patch key (`name@version`, where `@` appears after the
+///   optional leading scope `@`) matches a lockfile key that equals
+///   `name@version` exactly or starts with `name@version(` (peer-dep suffix).
+/// - An **unversioned** patch key (e.g. `pkg` or `@scope/pkg`) matches any
+///   lockfile key that starts with `name@`.
+fn patch_key_in_lockfile_keys(patch_key: &str, lockfile_keys: &[String]) -> bool {
+    // Skip the leading '@' of a scoped package when searching for the version '@'.
+    let search_start = if patch_key.starts_with('@') { 1 } else { 0 };
+    let has_version = patch_key[search_start..].contains('@');
+
+    if has_version {
+        // Versioned: exact match or with a peer-dep/patch-hash suffix in parens.
+        let with_paren = format!("{patch_key}(");
+        lockfile_keys
+            .iter()
+            .any(|k| k == patch_key || k.starts_with(&with_paren))
+    } else {
+        // Unversioned: match any version of this package.
+        let prefix = format!("{patch_key}@");
+        lockfile_keys.iter().any(|k| k.starts_with(&prefix))
+    }
+}
+
 pub fn link_workspace_packages(pnpm_version: PnpmVersion, repo_root: &AbsoluteSystemPath) -> bool {
     let npmrc_config = npmrc::NpmRc::from_file(repo_root)
         .inspect_err(|e| debug!("unable to read npmrc: {e}"))
@@ -595,5 +672,152 @@ catalogs:
             .create_with_contents("packages:\n  - \"packages/*\"\n")
             .unwrap();
         assert!(read_catalogs(repo_root).is_none());
+    }
+
+    #[test]
+    fn test_all_patch_paths() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let ws_path = AbsoluteSystemPath::from_std_path(tmpdir.path())
+            .unwrap()
+            .join_component(WORKSPACE_CONFIGURATION_PATH);
+        ws_path
+            .create_with_contents(
+                "packages:\n  - \"packages/*\"\npatchedDependencies:\n  \
+                 is-number@7.0.0: patches/is-number@7.0.0.patch\n  is-odd: \
+                 patches/is-odd.patch\n",
+            )
+            .unwrap();
+
+        let mut paths = all_patch_paths(&ws_path).unwrap();
+        paths.sort();
+        assert_eq!(
+            paths,
+            vec![
+                RelativeUnixPathBuf::new("patches/is-number@7.0.0.patch").unwrap(),
+                RelativeUnixPathBuf::new("patches/is-odd.patch").unwrap(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_all_patch_paths_no_patches() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let ws_path = AbsoluteSystemPath::from_std_path(tmpdir.path())
+            .unwrap()
+            .join_component(WORKSPACE_CONFIGURATION_PATH);
+        ws_path
+            .create_with_contents("packages:\n  - \"packages/*\"\n")
+            .unwrap();
+        assert!(all_patch_paths(&ws_path).unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_all_patch_paths_missing_file() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let ws_path = AbsoluteSystemPath::from_std_path(tmpdir.path())
+            .unwrap()
+            .join_component(WORKSPACE_CONFIGURATION_PATH);
+        // File does not exist – should return empty rather than error.
+        assert!(all_patch_paths(&ws_path).unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_workspace_patch_paths_for_lockfile_keys_versioned() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let ws_path = AbsoluteSystemPath::from_std_path(tmpdir.path())
+            .unwrap()
+            .join_component(WORKSPACE_CONFIGURATION_PATH);
+        ws_path
+            .create_with_contents(
+                "packages:\n  - \"packages/*\"\npatchedDependencies:\n  \
+                 is-number@7.0.0: patches/is-number@7.0.0.patch\n  is-odd: \
+                 patches/is-odd.patch\n",
+            )
+            .unwrap();
+
+        // Only is-odd@3.0.1 is in the pruned subgraph – is-number@7.0.0 is not.
+        let keys = vec!["is-odd@3.0.1".to_string(), "is-number@6.0.0".to_string()];
+        let paths = workspace_patch_paths_for_lockfile_keys(&ws_path, &keys).unwrap();
+        assert_eq!(
+            paths,
+            vec![RelativeUnixPathBuf::new("patches/is-odd.patch").unwrap()]
+        );
+    }
+
+    #[test]
+    fn test_workspace_patch_paths_for_lockfile_keys_exact_version() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let ws_path = AbsoluteSystemPath::from_std_path(tmpdir.path())
+            .unwrap()
+            .join_component(WORKSPACE_CONFIGURATION_PATH);
+        ws_path
+            .create_with_contents(
+                "packages:\n  - \"packages/*\"\npatchedDependencies:\n  \
+                 is-number@7.0.0: patches/is-number@7.0.0.patch\n  is-odd@3.0.1: \
+                 patches/is-odd@3.0.1.patch\n",
+            )
+            .unwrap();
+
+        // Both packages in pruned subgraph.
+        let keys = vec![
+            "is-number@7.0.0".to_string(),
+            "is-odd@3.0.1".to_string(),
+        ];
+        let mut paths = workspace_patch_paths_for_lockfile_keys(&ws_path, &keys).unwrap();
+        paths.sort();
+        assert_eq!(
+            paths,
+            vec![
+                RelativeUnixPathBuf::new("patches/is-number@7.0.0.patch").unwrap(),
+                RelativeUnixPathBuf::new("patches/is-odd@3.0.1.patch").unwrap(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_workspace_patch_paths_for_lockfile_keys_peer_dep_suffix() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let ws_path = AbsoluteSystemPath::from_std_path(tmpdir.path())
+            .unwrap()
+            .join_component(WORKSPACE_CONFIGURATION_PATH);
+        ws_path
+            .create_with_contents(
+                "packages:\n  - \"packages/*\"\npatchedDependencies:\n  \
+                 is-odd@3.0.1: patches/is-odd@3.0.1.patch\n",
+            )
+            .unwrap();
+
+        // Lockfile key with a peer-dep suffix – should still match.
+        let keys =
+            vec!["is-odd@3.0.1(patch_hash=abc123)".to_string()];
+        let paths = workspace_patch_paths_for_lockfile_keys(&ws_path, &keys).unwrap();
+        assert_eq!(
+            paths,
+            vec![RelativeUnixPathBuf::new("patches/is-odd@3.0.1.patch").unwrap()]
+        );
+    }
+
+    #[test]
+    fn test_patch_key_in_lockfile_keys_scoped_package() {
+        // Scoped package, versioned.
+        assert!(patch_key_in_lockfile_keys(
+            "@babel/core@7.0.0",
+            &["@babel/core@7.0.0".to_string()]
+        ));
+        // Scoped package, versioned, with peer-dep suffix.
+        assert!(patch_key_in_lockfile_keys(
+            "@babel/core@7.0.0",
+            &["@babel/core@7.0.0(peer@1.0.0)".to_string()]
+        ));
+        // Scoped package, unversioned.
+        assert!(patch_key_in_lockfile_keys(
+            "@babel/core",
+            &["@babel/core@7.0.0".to_string()]
+        ));
+        // No match.
+        assert!(!patch_key_in_lockfile_keys(
+            "@babel/core@7.0.0",
+            &["@babel/core@6.0.0".to_string()]
+        ));
     }
 }

@@ -994,3 +994,117 @@ fn test_prune_pnpm_v11_multi_document_lockfile() {
         "pruned lockfile should still trim workspaces from the dependency document"
     );
 }
+
+// --- pnpm 9/10 workspace-yaml-only patches ---
+
+/// pnpm 9/10 stores patchedDependencies exclusively in pnpm-workspace.yaml
+/// (the lockfile has no patched_dependencies section). Verify that `turbo
+/// prune` correctly prunes workspace.yaml to keep only patches used by the
+/// selected scope, and that the pruned patch files are present in the output.
+#[test]
+fn test_prune_pnpm_workspace_yaml_patches() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("pnpm_workspace_yaml_patches", tempdir.path()).unwrap();
+    setup::setup_git(tempdir.path()).unwrap();
+
+    // Prune for app-a, which depends on pkg-a → is-odd (patched).
+    // app-b (which depends on pkg-b → is-number@7.0.0, patched) is excluded.
+    let output = run_turbo(tempdir.path(), &["prune", "app-a"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // The patch file for is-odd should be present (it's used by app-a's deps).
+    assert!(
+        tempdir
+            .path()
+            .join("out/patches/is-odd.patch")
+            .exists(),
+        "is-odd.patch should be in pruned output (used by app-a → pkg-a → is-odd)"
+    );
+
+    // The patch file for is-number@7.0.0 should NOT be present (only app-b
+    // → pkg-b → is-number@7.0.0, which is excluded from the pruned scope).
+    assert!(
+        !tempdir
+            .path()
+            .join("out/patches/is-number@7.0.0.patch")
+            .exists(),
+        "is-number@7.0.0.patch should not be in pruned output (only used by app-b)"
+    );
+
+    // pnpm-workspace.yaml in the pruned output should only reference is-odd.
+    let ws_yaml =
+        fs::read_to_string(tempdir.path().join("out/pnpm-workspace.yaml")).unwrap();
+    assert!(
+        ws_yaml.contains("is-odd"),
+        "pruned pnpm-workspace.yaml should still reference is-odd patch"
+    );
+    assert!(
+        !ws_yaml.contains("is-number@7.0.0"),
+        "pruned pnpm-workspace.yaml must not reference is-number@7.0.0 patch"
+    );
+}
+
+#[test]
+fn test_prune_pnpm_workspace_yaml_patches_docker() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("pnpm_workspace_yaml_patches", tempdir.path()).unwrap();
+    setup::setup_git(tempdir.path()).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "app-a", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // full/ should have the is-odd patch.
+    assert!(
+        tempdir
+            .path()
+            .join("out/full/patches/is-odd.patch")
+            .exists(),
+        "is-odd.patch should be in out/full/"
+    );
+    // json/ (docker install stage) should also have the is-odd patch.
+    assert!(
+        tempdir
+            .path()
+            .join("out/json/patches/is-odd.patch")
+            .exists(),
+        "is-odd.patch should be in out/json/ (docker install stage)"
+    );
+
+    // is-number@7.0.0.patch should not appear in either docker directory.
+    assert!(
+        !tempdir
+            .path()
+            .join("out/full/patches/is-number@7.0.0.patch")
+            .exists(),
+        "is-number@7.0.0.patch should not appear in out/full/"
+    );
+    assert!(
+        !tempdir
+            .path()
+            .join("out/json/patches/is-number@7.0.0.patch")
+            .exists(),
+        "is-number@7.0.0.patch should not appear in out/json/"
+    );
+
+    // Both docker workspace.yaml files should only reference is-odd.
+    for ws_yaml_path in &["out/full/pnpm-workspace.yaml", "out/json/pnpm-workspace.yaml"] {
+        let ws_yaml =
+            fs::read_to_string(tempdir.path().join(ws_yaml_path)).unwrap();
+        assert!(
+            ws_yaml.contains("is-odd"),
+            "{ws_yaml_path} should reference is-odd patch"
+        );
+        assert!(
+            !ws_yaml.contains("is-number@7.0.0"),
+            "{ws_yaml_path} must not reference is-number@7.0.0 patch"
+        );
+    }
+}

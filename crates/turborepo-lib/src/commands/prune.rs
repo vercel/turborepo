@@ -240,14 +240,42 @@ pub async fn prune(
         .lockfile()
         .ok_or(Error::MissingLockfile)?;
     let package_manager = prune.package_graph.package_manager();
-    let original_patches = collect_patch_paths(
+    let mut original_patches = collect_patch_paths(
         original_lockfile,
         prune.package_graph.root_package_json(),
         &prune.root,
         package_manager,
     )?;
+
+    // pnpm 9/10: patchedDependencies are stored only in pnpm-workspace.yaml,
+    // not in the lockfile. collect_patch_paths relies on patch_keys() from the
+    // lockfile which returns empty for these versions, so patches are not
+    // collected above. Fall back to reading all patch paths from workspace.yaml.
+    let using_workspace_yaml_only_patches = original_patches.is_empty()
+        && matches!(
+            package_manager,
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
+        );
+    if using_workspace_yaml_only_patches {
+        let ws_yaml = prune.root.join_component(
+            turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH,
+        );
+        original_patches =
+            turborepo_repository::package_manager::pnpm::all_patch_paths(&ws_yaml)?;
+    }
+
     let pruned_patches = if original_patches.is_empty() {
         Vec::new()
+    } else if using_workspace_yaml_only_patches {
+        // pnpm 9/10: filter workspace.yaml patches to those whose package key
+        // appears in the pruned subgraph (determined via lockfile_keys).
+        let ws_yaml = prune.root.join_component(
+            turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH,
+        );
+        turborepo_repository::package_manager::pnpm::workspace_patch_paths_for_lockfile_keys(
+            &ws_yaml,
+            &lockfile_keys,
+        )?
     } else {
         collect_patch_paths(
             lockfile.as_ref(),
