@@ -82,6 +82,65 @@ fn test_prune_docker() {
 }
 
 #[test]
+fn test_prune_docker_filters_pnpm_workspace_patched_dependencies() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("monorepo_with_root_dep", tempdir.path()).unwrap();
+
+    fs::write(
+        tempdir.path().join("pnpm-workspace.yaml"),
+        r#"packages:
+  - "apps/*"
+  - "packages/*"
+
+patchedDependencies:
+  is-number@7.0.0: patches/is-number@7.0.0.patch
+  is-odd@3.0.1: patches/is-odd@3.0.1.patch
+"#,
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("patches/is-odd@3.0.1.patch"),
+        "patch for out-of-closure dependency\n",
+    )
+    .unwrap();
+
+    let lockfile_path = tempdir.path().join("pnpm-lock.yaml");
+    let lockfile = fs::read_to_string(&lockfile_path).unwrap();
+    fs::write(
+        &lockfile_path,
+        lockfile.replace(
+            "patchedDependencies:\n  is-number@7.0.0:",
+            "patchedDependencies:\n  is-odd@3.0.1:\n    hash: unusedpatchhash\n    path: \
+             patches/is-odd@3.0.1.patch\n  is-number@7.0.0:",
+        ),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    for workspace_yaml in [
+        "out/pnpm-workspace.yaml",
+        "out/json/pnpm-workspace.yaml",
+        "out/full/pnpm-workspace.yaml",
+    ] {
+        let contents = fs::read_to_string(tempdir.path().join(workspace_yaml)).unwrap();
+        assert!(
+            contents.contains("is-number@7.0.0"),
+            "{workspace_yaml} should retain in-closure patch:\n{contents}"
+        );
+        assert!(
+            !contents.contains("is-odd@3.0.1"),
+            "{workspace_yaml} should drop out-of-closure patch:\n{contents}"
+        );
+    }
+}
+
+#[test]
 fn test_prune_rejects_patch_paths_with_parent_dir() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::copy_fixture("monorepo_with_root_dep", tempdir.path()).unwrap();
