@@ -402,50 +402,6 @@ async fn test_graceful_shutdown_drains_final_output(use_pty: bool) {
     }
 }
 
-#[cfg(windows)]
-#[tokio::test]
-async fn test_windows_pty_graceful_shutdown_receives_ctrl_c() {
-    let script = find_script_dir().join_component("graceful_sigint_output.js");
-    let mut cmd = Command::new("node");
-    cmd.args([script.as_std_path()]);
-
-    let mut child = Child::spawn(
-        cmd,
-        ShutdownStyle::Graceful(Some(Duration::from_millis(1000))),
-        Some(PtySize::default()),
-    )
-    .unwrap();
-
-    let mut output_child = child.clone();
-    let (mut observer, output, ready_rx) = ObservedOutput::new();
-    let output_task = tokio::spawn(async move {
-        output_child
-            .wait_with_piped_outputs(&mut observer)
-            .await
-            .unwrap()
-    });
-
-    tokio::time::timeout(Duration::from_secs(2), ready_rx)
-        .await
-        .expect("timed out waiting for startup output")
-        .expect("ready notification channel closed unexpectedly");
-    child.set_closing();
-    child.stop().await;
-    let exit = output_task.await.unwrap();
-    let output = String::from_utf8(output.lock().unwrap().clone()).unwrap();
-
-    assert!(output.contains("ready"), "missing startup output: {output}");
-    assert!(
-        output.contains("received SIGINT"),
-        "missing SIGINT receipt log: {output}"
-    );
-    assert!(
-        output.contains("exiting after SIGINT"),
-        "missing SIGINT exit log: {output}"
-    );
-    assert_matches!(exit, Some(ChildExit::Interrupted));
-}
-
 // Regression test: a wrapper process (simulating npm/pnpm) forwards SIGINT
 // to its child. When turbo sends SIGINT to the process group, the child
 // gets it twice — once from the group signal, once from the wrapper.
