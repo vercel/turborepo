@@ -334,6 +334,8 @@ fn open_parent_dir(
     use std::os::unix::io::AsRawFd;
 
     let mut dir = fs::File::open(anchor.as_std_path())?;
+    let real_anchor = anchor.to_realpath()?;
+    let mut dir_path = real_anchor.clone();
     let mut components = file_path.components().peekable();
 
     while let Some(component) = components.next() {
@@ -342,13 +344,76 @@ fn open_parent_dir(
             return Ok((dir, component.to_string()));
         }
 
-        dir = open_dir_at(dir.as_raw_fd(), component)?;
+        let (next_dir, next_dir_path) = open_dir_at_allowing_internal_symlink(
+            &real_anchor,
+            &dir_path,
+            dir.as_raw_fd(),
+            component,
+        )?;
+        dir = next_dir;
+        dir_path = next_dir_path;
     }
 
     Err(CacheError::InvalidFilePath(
         file_path.to_string(),
         Backtrace::capture(),
     ))
+}
+
+#[cfg(unix)]
+fn open_dir_at_allowing_internal_symlink(
+    real_anchor: &AbsoluteSystemPath,
+    parent_path: &AbsoluteSystemPath,
+    parent_fd: i32,
+    component: &str,
+) -> Result<(fs::File, AbsoluteSystemPathBuf), CacheError> {
+    match open_dir_at(parent_fd, component) {
+        Ok(file) => {
+            let path = parent_path.join_component(component).to_realpath()?;
+            Ok((file, path))
+        }
+        Err(CacheError::IO(err, _)) if err.kind() == std::io::ErrorKind::NotADirectory => {
+            let link_target = read_link_at(parent_fd, component)?;
+            let target_path = if link_target.is_absolute() {
+                AbsoluteSystemPathBuf::new(link_target.as_str())?
+            } else {
+                parent_path.resolve(AnchoredSystemPath::new(link_target.as_str())?)
+            };
+
+            let file = fs::File::open(target_path.as_std_path())?;
+            if !file.metadata()?.is_dir() {
+                return Err(CacheError::CreateUnsupportedFileType(Backtrace::capture()));
+            }
+
+            let real_target = file_realpath(&file, &target_path)?;
+            if !real_target.starts_with(real_anchor) {
+                return Err(CacheError::LinkOutsideOfDirectory(
+                    link_target.to_string(),
+                    Backtrace::capture(),
+                ));
+            }
+
+            Ok((file, real_target))
+        }
+        Err(err) => Err(err),
+    }
+}
+
+#[cfg(unix)]
+fn file_realpath(
+    file: &fs::File,
+    fallback_path: &AbsoluteSystemPath,
+) -> Result<AbsoluteSystemPathBuf, CacheError> {
+    use std::os::unix::io::AsRawFd;
+
+    for fd_dir in ["/proc/self/fd", "/dev/fd"] {
+        let fd_path = std::path::PathBuf::from(format!("{}/{}", fd_dir, file.as_raw_fd()));
+        if let Ok(realpath) = std::fs::read_link(fd_path) {
+            return Ok(AbsoluteSystemPathBuf::try_from(realpath.as_path())?);
+        }
+    }
+
+    fallback_path.to_realpath().map_err(Into::into)
 }
 
 #[cfg(unix)]
@@ -881,6 +946,129 @@ mod tests {
 
         let link = input_dir_path.join_component("linked");
         link.symlink_to_dir(outside_dir_path.as_str())?;
+
+        let mut cache_archive = CacheWriter::create(&archive_path)?;
+        let file_path = AnchoredSystemPathBuf::from_raw("linked/secret.txt")?;
+        assert!(cache_archive.add_file(&input_dir_path, &file_path).is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn add_file_allows_file_through_internal_symlinked_parent() -> Result<()> {
+        let input_dir = tempdir()?;
+        let input_dir_path = AbsoluteSystemPathBuf::try_from(input_dir.path())?;
+        let archive_dir = tempdir()?;
+        let archive_path = AbsoluteSystemPathBuf::try_from(archive_dir.path().join("out.tar"))?;
+
+        let actual_dist = input_dir_path.join_component("actual-dist");
+        actual_dist.create_dir_all()?;
+        actual_dist
+            .join_component("file.txt")
+            .create_with_contents("hello")?;
+
+        let link = input_dir_path.join_component("dist");
+        link.symlink_to_dir("actual-dist")?;
+
+        let mut cache_archive = CacheWriter::create(&archive_path)?;
+        let file_path = AnchoredSystemPathBuf::from_raw("dist/file.txt")?;
+        cache_archive.add_file(&input_dir_path, &file_path)?;
+        cache_archive.finish()?;
+
+        let restore_dir = tempdir()?;
+        let restore_dir_path = AbsoluteSystemPathBuf::try_from(restore_dir.path())?;
+        let mut restore = CacheReader::open(&archive_path)?;
+        let (files, _) = restore.restore(&restore_dir_path, None)?;
+
+        assert_eq!(files, vec![file_path]);
+        assert_eq!(
+            restore_dir_path
+                .join_component("dist")
+                .join_component("file.txt")
+                .read_to_string()?,
+            "hello"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn add_file_allows_repo_relative_file_through_internal_symlinked_parent() -> Result<()> {
+        let repo_dir = tempdir()?;
+        let repo_dir_path = AbsoluteSystemPathBuf::try_from(repo_dir.path())?;
+        let app_dir = repo_dir_path
+            .join_component("packages")
+            .join_component("app");
+        app_dir.create_dir_all()?;
+
+        let archive_dir = tempdir()?;
+        let archive_path = AbsoluteSystemPathBuf::try_from(archive_dir.path().join("out.tar"))?;
+
+        let actual_dist = app_dir.join_component("actual-dist");
+        actual_dist.create_dir_all()?;
+        actual_dist
+            .join_component("file.txt")
+            .create_with_contents("hello")?;
+
+        let link = app_dir.join_component("dist");
+        link.symlink_to_dir("actual-dist")?;
+
+        let mut cache_archive = CacheWriter::create(&archive_path)?;
+        let file_path = AnchoredSystemPathBuf::from_raw("packages/app/dist/file.txt")?;
+        cache_archive.add_file(&repo_dir_path, &file_path)?;
+        cache_archive.finish()?;
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn add_file_allows_repo_relative_internal_symlinked_directory() -> Result<()> {
+        let repo_dir = tempdir()?;
+        let repo_dir_path = AbsoluteSystemPathBuf::try_from(repo_dir.path())?;
+        let app_dir = repo_dir_path
+            .join_component("packages")
+            .join_component("app");
+        app_dir.create_dir_all()?;
+
+        let archive_dir = tempdir()?;
+        let archive_path = AbsoluteSystemPathBuf::try_from(archive_dir.path().join("out.tar"))?;
+
+        app_dir.join_component("actual-dist").create_dir_all()?;
+        app_dir
+            .join_component("dist")
+            .symlink_to_dir("actual-dist")?;
+
+        let mut cache_archive = CacheWriter::create(&archive_path)?;
+        let file_path = AnchoredSystemPathBuf::from_raw("packages/app/dist/")?;
+        cache_archive.add_file(&repo_dir_path, &file_path)?;
+        cache_archive.finish()?;
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn add_file_rejects_relative_symlink_escape() -> Result<()> {
+        let root_dir = tempdir()?;
+        let input_path = root_dir.path().join("input");
+        let outside_path = root_dir.path().join("outside");
+        std::fs::create_dir_all(&input_path)?;
+        std::fs::create_dir_all(&outside_path)?;
+
+        let input_dir_path = AbsoluteSystemPathBuf::try_from(input_path.as_path())?;
+        let outside_dir_path = AbsoluteSystemPathBuf::try_from(outside_path.as_path())?;
+        let archive_dir = tempdir()?;
+        let archive_path = AbsoluteSystemPathBuf::try_from(archive_dir.path().join("out.tar"))?;
+
+        outside_dir_path
+            .join_component("secret.txt")
+            .create_with_contents("secret")?;
+
+        let link = input_dir_path.join_component("linked");
+        link.symlink_to_dir("../outside")?;
 
         let mut cache_archive = CacheWriter::create(&archive_path)?;
         let file_path = AnchoredSystemPathBuf::from_raw("linked/secret.txt")?;

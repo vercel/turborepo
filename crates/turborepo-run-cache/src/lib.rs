@@ -553,11 +553,12 @@ impl TaskCache {
 
         let validated_inclusions = self.repo_relative_globs.validated_inclusions()?;
         let validated_exclusions = self.repo_relative_globs.validated_exclusions()?;
-        let files_to_be_cached = globwalk::globwalk(
+        let files_to_be_cached = globwalk::globwalk_with_settings(
             &self.run_cache.repo_root,
             &validated_inclusions,
             &validated_exclusions,
             globwalk::WalkType::All,
+            globwalk::Settings::default().follow_links(),
         )?;
 
         for path in &files_to_be_cached {
@@ -1382,5 +1383,39 @@ mod test {
             "outputs outside repo root should be rejected before cache upload"
         );
         assert!(task_cache.expanded_outputs().is_empty());
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn save_outputs_does_not_follow_symlink_that_escapes_repo_root() {
+        let temp = tempdir().unwrap();
+        let repo_dir = temp.path().join("repo");
+        let outside_dir = temp.path().join("outside");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+        std::fs::create_dir_all(&outside_dir).unwrap();
+        std::fs::write(outside_dir.join("output.txt"), b"outside").unwrap();
+        std::os::unix::fs::symlink("../outside", repo_dir.join("dist")).unwrap();
+
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_dir.as_path()).unwrap();
+        let mut task_cache = task_cache_for_outputs(&repo_root, vec!["dist/**".to_string()]);
+        let telemetry = PackageTaskEventBuilder::new("pkg", "build");
+
+        task_cache
+            .save_outputs(Duration::from_millis(10), &telemetry)
+            .await
+            .unwrap();
+
+        task_cache.run_cache.cache.wait().await.unwrap();
+        let cached = task_cache
+            .run_cache
+            .cache
+            .fetch(&repo_root, "test-hash")
+            .await
+            .unwrap();
+
+        assert!(
+            cached.is_none(),
+            "symlinked output outside repo root should not write a cache artifact"
+        );
     }
 }
