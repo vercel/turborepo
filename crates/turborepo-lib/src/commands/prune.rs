@@ -328,6 +328,11 @@ pub async fn prune(
                 &pruned_patches,
             )?;
             if prune.docker {
+                let out_ws = prune.out_directory.resolve(&ws_path);
+                turborepo_repository::package_manager::pnpm::prune_workspace_patches(
+                    &out_ws,
+                    &pruned_patches,
+                )?;
                 let docker_ws = prune.docker_directory().resolve(&ws_path);
                 turborepo_repository::package_manager::pnpm::prune_workspace_patches(
                     &docker_ws,
