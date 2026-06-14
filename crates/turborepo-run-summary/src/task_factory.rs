@@ -3,7 +3,9 @@ use std::collections::HashSet;
 use turbopath::AnchoredSystemPath;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_lockfiles::Package;
-use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
+use turborepo_repository::package_graph::{
+    PackageGraph, PackageInfo, PackageName, PackageToolchain,
+};
 use turborepo_task_id::TaskId;
 use turborepo_types::{
     EngineInfo, EnvMode, HashTrackerInfo, LOG_DIR, RunOptsInfo, TaskDefinition, task_log_filename,
@@ -16,6 +18,26 @@ use crate::{
         TaskSummary,
     },
 };
+
+/// The command shown for a Cargo crate task in summaries/dry-runs.
+///
+/// This mirrors the task->verb mapping in turborepo-task-executor's
+/// `CargoCommandProvider` (the source of truth for actual execution); it's
+/// duplicated here only for display since this crate can't depend on the
+/// executor.
+fn cargo_display_command(task_id: &TaskId) -> Option<String> {
+    let verb = match task_id.task() {
+        "build" => "build",
+        "test" => "test",
+        "check" => "check",
+        "lint" | "clippy" => "clippy",
+        "doc" | "docs" => "doc",
+        "bench" => "bench",
+        "run" => "run",
+        _ => return None,
+    };
+    Some(format!("cargo {verb} -p {}", task_id.package()))
+}
 
 pub struct TaskSummaryFactory<'a, E, H, R> {
     package_graph: &'a PackageGraph,
@@ -113,13 +135,17 @@ where
         display_task: impl Fn(&TaskId<'static>) -> Option<T> + Copy,
     ) -> Result<SharedTaskSummary<T>, Error> {
         // TODO: command should be optional
-        let command = workspace_info
-            .package_json
-            .scripts
-            .get(task_id.task())
-            .map(|script| script.as_inner())
-            .cloned()
-            .unwrap_or_else(|| "<NONEXISTENT>".to_string());
+        let command = if workspace_info.toolchain == PackageToolchain::Cargo {
+            cargo_display_command(task_id).unwrap_or_else(|| "<NONEXISTENT>".to_string())
+        } else {
+            workspace_info
+                .package_json
+                .scripts
+                .get(task_id.task())
+                .map(|script| script.as_inner())
+                .cloned()
+                .unwrap_or_else(|| "<NONEXISTENT>".to_string())
+        };
 
         let task_definition = self.task_definition(task_id)?;
 
