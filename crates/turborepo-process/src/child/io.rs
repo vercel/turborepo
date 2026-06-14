@@ -12,6 +12,7 @@ use tracing::{debug, trace};
 use super::{Child, ChildExit};
 
 const POST_EXIT_OUTPUT_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(100);
+
 pub(super) struct ChildIO {
     pub(super) stdin: Option<ChildInput>,
     pub(super) output: Option<ChildOutput>,
