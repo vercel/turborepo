@@ -12,9 +12,6 @@ use tracing::{debug, trace};
 use super::{Child, ChildExit};
 
 const POST_EXIT_OUTPUT_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(100);
-#[cfg(any(windows, test))]
-const CONPTY_CURSOR_POSITION_REQUEST: &[u8] = b"\x1b[6n";
-
 pub(super) struct ChildIO {
     pub(super) stdin: Option<ChildInput>,
     pub(super) output: Option<ChildOutput>,
@@ -153,20 +150,9 @@ impl Child {
         tokio::task::spawn_blocking(move || {
             let mut buffer = [0; 1024];
             let mut last_byte = None;
-            #[cfg(windows)]
-            let mut conpty_cursor_request_match = 0;
             loop {
                 match stdout_lines.read(&mut buffer) {
                     Ok(0) => {
-                        #[cfg(windows)]
-                        if conpty_cursor_request_match > 0 {
-                            byte_tx
-                                .blocking_send(
-                                    CONPTY_CURSOR_POSITION_REQUEST[..conpty_cursor_request_match]
-                                        .to_vec(),
-                                )
-                                .ok();
-                        }
                         if !matches!(last_byte, Some(b'\n')) {
                             // Ignore if this fails as we already are shutting down
                             byte_tx.blocking_send(vec![b'\n']).ok();
@@ -176,16 +162,6 @@ impl Child {
                     Ok(n) => {
                         let mut bytes = Vec::with_capacity(n);
                         bytes.extend_from_slice(&buffer[..n]);
-                        #[cfg(windows)]
-                        {
-                            bytes = strip_conpty_cursor_position_requests(
-                                &bytes,
-                                &mut conpty_cursor_request_match,
-                            );
-                        }
-                        if bytes.is_empty() {
-                            continue;
-                        }
                         last_byte = bytes.last().copied();
                         if byte_tx.blocking_send(bytes).is_err() {
                             // A dropped receiver indicates that there was an issue writing to the
@@ -334,58 +310,5 @@ fn add_trailing_newline(buffer: &mut Vec<u8>) {
     // line.
     if buffer.last() != Some(&b'\n') {
         buffer.push(b'\n');
-    }
-}
-
-#[cfg(any(windows, test))]
-fn strip_conpty_cursor_position_requests(bytes: &[u8], matched: &mut usize) -> Vec<u8> {
-    let mut output = Vec::with_capacity(bytes.len());
-
-    for byte in bytes {
-        if *byte == CONPTY_CURSOR_POSITION_REQUEST[*matched] {
-            *matched += 1;
-            if *matched == CONPTY_CURSOR_POSITION_REQUEST.len() {
-                *matched = 0;
-            }
-            continue;
-        }
-
-        if *matched > 0 {
-            output.extend_from_slice(&CONPTY_CURSOR_POSITION_REQUEST[..*matched]);
-            *matched = 0;
-        }
-
-        if *byte == CONPTY_CURSOR_POSITION_REQUEST[0] {
-            *matched = 1;
-        } else {
-            output.push(*byte);
-        }
-    }
-
-    output
-}
-
-#[cfg(test)]
-mod tests {
-    use super::strip_conpty_cursor_position_requests;
-
-    #[test]
-    fn strips_complete_conpty_cursor_position_request() {
-        let mut matched = 0;
-        let output = strip_conpty_cursor_position_requests(b"before\x1b[6nafter", &mut matched);
-
-        assert_eq!(output, b"beforeafter");
-        assert_eq!(matched, 0);
-    }
-
-    #[test]
-    fn strips_conpty_cursor_position_request_across_chunks() {
-        let mut matched = 0;
-        let first = strip_conpty_cursor_position_requests(b"before\x1b[", &mut matched);
-        let second = strip_conpty_cursor_position_requests(b"6nafter", &mut matched);
-
-        assert_eq!(first, b"before");
-        assert_eq!(second, b"after");
-        assert_eq!(matched, 0);
     }
 }

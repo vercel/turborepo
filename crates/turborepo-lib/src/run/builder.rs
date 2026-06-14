@@ -87,12 +87,7 @@ impl RunBuilder {
         let api_auth = base.api_auth()?;
 
         let version = base.version();
-        let processes = ProcessManager::new(
-            // A terminal-backed PTY lets Turbo own interactive task input. On
-            // Windows this is also how we deliver a targeted Ctrl+C to tasks
-            // instead of relying on console-wide Ctrl+C broadcasts.
-            std::io::stdout().is_terminal(),
-        );
+        let processes = ProcessManager::new(!cfg!(windows) && std::io::stdout().is_terminal());
 
         let CommandBase {
             repo_root,
