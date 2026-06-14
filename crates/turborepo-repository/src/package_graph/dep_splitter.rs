@@ -331,6 +331,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
+                    toolchain: Default::default(),
                 },
             );
             map.insert(
@@ -346,6 +347,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
+                    toolchain: Default::default(),
                 },
             );
             map.insert(
@@ -361,6 +363,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
+                    toolchain: Default::default(),
                 },
             );
             map.insert(
@@ -376,6 +379,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
+                    toolchain: Default::default(),
                 },
             );
             map
@@ -467,6 +471,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
+                    toolchain: Default::default(),
                 },
             );
             map
@@ -511,6 +516,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
+                    toolchain: Default::default(),
                 },
             );
             map
@@ -555,6 +561,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
+                    toolchain: Default::default(),
                 },
             );
             map
@@ -624,6 +631,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
+                    toolchain: Default::default(),
                 },
             );
             map
@@ -665,6 +673,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
+                    toolchain: Default::default(),
                 },
             );
             map

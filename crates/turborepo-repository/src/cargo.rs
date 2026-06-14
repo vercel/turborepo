@@ -11,10 +11,11 @@
 //! * the workspace member/exclude globs (if it is a workspace root),
 //! * its internal (path-based) dependencies on other crates.
 
-use std::{collections::BTreeMap, io};
+use std::{collections::BTreeMap, io, str::FromStr};
 
+use globwalk::ValidatedGlob;
 use serde::Deserialize;
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 /// The conventional file name for a Cargo manifest.
 pub const CARGO_TOML: &str = "Cargo.toml";
@@ -33,6 +34,124 @@ pub enum Error {
         #[source]
         source: toml::de::Error,
     },
+    #[error(transparent)]
+    Glob(#[from] globwalk::GlobError),
+    #[error(transparent)]
+    Walk(#[from] globwalk::WalkError),
+}
+
+/// A single Rust crate discovered within a Cargo workspace.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CargoCrate {
+    /// The crate's package name (from `[package].name`).
+    pub name: String,
+    /// Absolute path to the crate's `Cargo.toml`.
+    pub manifest_path: AbsoluteSystemPathBuf,
+    /// Names of other workspace crates this crate depends on (path
+    /// dependencies, including workspace-inherited ones).
+    pub internal_dependencies: Vec<String>,
+}
+
+/// Discover all Rust crates in the Cargo workspace rooted at `repo_root`.
+///
+/// Returns an empty vec if `repo_root` is not a Cargo workspace (no readable
+/// `Cargo.toml`). Individual member manifests that fail to parse are skipped
+/// with a debug log rather than failing the whole discovery — a single broken
+/// `Cargo.toml` should not break `turbo run`.
+pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Vec<CargoCrate> {
+    discover_crates_inner(repo_root).unwrap_or_else(|err| {
+        tracing::warn!("failed to discover Cargo crates: {err}");
+        Vec::new()
+    })
+}
+
+fn discover_crates_inner(repo_root: &AbsoluteSystemPath) -> Result<Vec<CargoCrate>, Error> {
+    let root_manifest_path = repo_root.join_component(CARGO_TOML);
+    let Ok(root_manifest) = CargoManifest::from_file(&root_manifest_path) else {
+        // Not a Cargo workspace (or unreadable root manifest); nothing to do.
+        return Ok(Vec::new());
+    };
+
+    let mut crates = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+
+    // The root manifest may itself declare a `[package]` (a "root crate").
+    if root_manifest.package_name().is_some() {
+        crates.push(build_crate(&root_manifest_path, &root_manifest, &root_manifest));
+        seen.insert(root_manifest_path.clone());
+    }
+
+    if let Some(members) = root_manifest.workspace_members() {
+        let inclusions = members
+            .iter()
+            .map(|member| manifest_glob(member))
+            .collect::<Result<Vec<_>, _>>()?;
+        let exclusions = root_manifest
+            .workspace_exclude()
+            .unwrap_or(&[])
+            .iter()
+            .map(|member| manifest_glob(member))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let manifest_paths = globwalk::globwalk_with_settings(
+            repo_root,
+            &inclusions,
+            &exclusions,
+            globwalk::WalkType::Files,
+            globwalk::Settings::default().follow_links(),
+        )?;
+
+        for manifest_path in manifest_paths {
+            if !seen.insert(manifest_path.clone()) {
+                continue;
+            }
+            match CargoManifest::from_file(&manifest_path) {
+                Ok(manifest) if manifest.package_name().is_some() => {
+                    crates.push(build_crate(&manifest_path, &manifest, &root_manifest));
+                }
+                // Virtual manifest (nested workspace with no package) — skip.
+                Ok(_) => {}
+                Err(err) => tracing::debug!("skipping Cargo manifest {manifest_path}: {err}"),
+            }
+        }
+    }
+
+    Ok(crates)
+}
+
+/// Build the inclusion/exclusion glob for a workspace member directory,
+/// matching the member's `Cargo.toml` (mirrors how JS workspace globs target
+/// `package.json`).
+fn manifest_glob(member: &str) -> Result<ValidatedGlob, globwalk::GlobError> {
+    let mut pattern = member.to_string();
+    if !pattern.ends_with('/') {
+        pattern.push('/');
+    }
+    pattern.push_str(CARGO_TOML);
+    ValidatedGlob::from_str(&pattern)
+}
+
+fn build_crate(
+    manifest_path: &AbsoluteSystemPath,
+    manifest: &CargoManifest,
+    workspace_root: &CargoManifest,
+) -> CargoCrate {
+    let name = manifest
+        .package_name()
+        .expect("caller guarantees a package name")
+        .to_string();
+    let mut internal_dependencies: Vec<String> = manifest
+        .internal_dependencies(Some(workspace_root))
+        .into_iter()
+        .map(|dep| dep.name)
+        .collect();
+    internal_dependencies.sort();
+    internal_dependencies.dedup();
+    CargoCrate {
+        name,
+        manifest_path: manifest_path.to_owned(),
+        internal_dependencies,
+    }
 }
 
 /// A parsed `Cargo.toml`.
@@ -234,6 +353,8 @@ struct RawWorkspace {
 
 #[cfg(test)]
 mod test {
+    use turbopath::AbsoluteSystemPathBuf;
+
     use super::*;
 
     fn parse(contents: &str) -> CargoManifest {
@@ -402,6 +523,59 @@ mod test {
         // Without the workspace root we cannot resolve the path, so it's
         // omitted rather than guessed.
         assert!(crate_manifest.internal_dependencies(None).is_empty());
+    }
+
+    #[test]
+    fn test_discover_crates() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
+
+        let write = |rel: &[&str], contents: &str| {
+            let path = root.join_components(rel);
+            std::fs::create_dir_all(path.parent().unwrap().as_std_path()).unwrap();
+            std::fs::write(path.as_std_path(), contents).unwrap();
+        };
+
+        write(
+            &["Cargo.toml"],
+            r#"
+            [workspace]
+            members = ["crates/*"]
+            exclude = ["crates/ignored"]
+
+            [workspace.dependencies]
+            lib-a = { path = "crates/lib-a" }
+            "#,
+        );
+        write(&["crates", "lib-a", "Cargo.toml"], "[package]\nname = \"lib-a\"\n");
+        write(
+            &["crates", "app", "Cargo.toml"],
+            r#"
+            [package]
+            name = "app"
+
+            [dependencies]
+            lib-a = { workspace = true }
+            serde = "1.0"
+            "#,
+        );
+        write(&["crates", "ignored", "Cargo.toml"], "[package]\nname = \"ignored\"\n");
+
+        let mut crates = discover_crates(&root);
+        crates.sort_by(|a, b| a.name.cmp(&b.name));
+
+        assert_eq!(crates.len(), 2, "expected app and lib-a, got {crates:?}");
+        assert_eq!(crates[0].name, "app");
+        assert_eq!(crates[0].internal_dependencies, vec!["lib-a".to_string()]);
+        assert_eq!(crates[1].name, "lib-a");
+        assert!(crates[1].internal_dependencies.is_empty());
+    }
+
+    #[test]
+    fn test_discover_crates_not_a_workspace() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
+        assert!(discover_crates(&root).is_empty());
     }
 
     #[test]

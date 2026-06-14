@@ -8,8 +8,10 @@ use turbopath::{
 };
 use turborepo_lockfiles::Lockfile;
 
+use turborepo_errors::Spanned;
+
 use super::{
-    PackageGraph, PackageInfo, PackageName, PackageNode,
+    PackageGraph, PackageInfo, PackageName, PackageNode, PackageToolchain,
     dep_splitter::{DependencySplitter, WorkspacePathIndex},
 };
 use crate::{
@@ -29,6 +31,9 @@ pub struct PackageGraphBuilder<'a, T> {
     lockfile: Option<Box<dyn Lockfile>>,
     package_discovery: T,
     package_manager: Option<PackageManager>,
+    /// When enabled, Rust crates discovered from a Cargo workspace at the repo
+    /// root are added to the package graph alongside JS packages.
+    cargo: bool,
 }
 
 #[derive(Debug, Diagnostic, thiserror::Error)]
@@ -87,6 +92,7 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
             package_jsons: None,
             lockfile: None,
             package_manager: None,
+            cargo: false,
         }
     }
 
@@ -107,6 +113,12 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
 impl<'a, P> PackageGraphBuilder<'a, P> {
     pub fn with_single_package_mode(mut self, is_single: bool) -> Self {
         self.is_single_package = is_single;
+        self
+    }
+
+    /// Enable discovery of Rust crates from a Cargo workspace at the repo root.
+    pub fn with_cargo(mut self, cargo: bool) -> Self {
+        self.cargo = cargo;
         self
     }
 
@@ -138,6 +150,7 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
             lockfile: self.lockfile,
             package_discovery: discovery,
             package_manager: self.package_manager,
+            cargo: self.cargo,
         }
     }
 }
@@ -240,6 +253,7 @@ where
             lockfile,
             package_discovery,
             package_manager: _,
+            cargo,
         } = builder;
         let mut workspaces = HashMap::new();
         let root_package_info = PackageInfo {
@@ -259,6 +273,42 @@ where
         let mut node_lookup = HashMap::new();
         node_lookup.insert(PackageNode::Root, root_node_index);
         node_lookup.insert(root_workspace, root_workspace_index);
+
+        // Discover Rust crates from a Cargo workspace and add them as packages.
+        // Their internal dependencies are expressed as `workspace:*` specifiers
+        // so the existing dependency splitter wires crate->crate edges, and the
+        // toolchain marker lets the executor run `cargo` instead of a package
+        // manager script. JS package discovery (parse_package_jsons) runs after
+        // this and will error on any name collision with a crate.
+        if cargo {
+            for cargo_crate in crate::cargo::discover_crates(repo_root) {
+                let name = PackageName::Other(cargo_crate.name.clone());
+                let manifest_path =
+                    AnchoredSystemPathBuf::relative_path_between(repo_root, &cargo_crate.manifest_path);
+                let dependencies = cargo_crate
+                    .internal_dependencies
+                    .iter()
+                    .map(|dep| (dep.clone(), "workspace:*".to_string()))
+                    .collect();
+                let package_json = PackageJson {
+                    name: Some(Spanned::new(cargo_crate.name.clone())),
+                    dependencies: Some(dependencies),
+                    ..Default::default()
+                };
+                let info = PackageInfo {
+                    package_json,
+                    package_json_path: manifest_path,
+                    toolchain: PackageToolchain::Cargo,
+                    ..Default::default()
+                };
+                if workspaces.insert(name.clone(), info).is_some() {
+                    tracing::warn!("duplicate Cargo crate name {name}, ignoring later definition");
+                    continue;
+                }
+                let idx = workspace_graph.add_node(PackageNode::Workspace(name.clone()));
+                node_lookup.insert(PackageNode::Workspace(name), idx);
+            }
+        }
 
         Ok(BuildState {
             repo_root,
@@ -306,7 +356,23 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
                 self.add_node(PackageNode::Workspace(name));
                 Ok(())
             }
-            std::collections::hash_map::Entry::Occupied(occupied) => {
+            std::collections::hash_map::Entry::Occupied(mut occupied) => {
+                // A JS package and a Cargo crate share a name. This is a real
+                // collision in the unified package namespace, but rather than
+                // aborting the whole run we let the JS package win (preserving
+                // pre-existing behavior) and warn. JS-vs-JS duplicates remain a
+                // hard error.
+                if occupied.get().toolchain == PackageToolchain::Cargo {
+                    tracing::warn!(
+                        "package \"{}\" exists as both a Cargo crate ({}) and a JS package ({}); \
+                         using the JS package and ignoring the crate",
+                        occupied.key(),
+                        occupied.get().package_json_path,
+                        entry.package_json_path,
+                    );
+                    occupied.insert(entry);
+                    return Ok(());
+                }
                 let existing_path = occupied.get().package_json_path.to_string();
                 let name = occupied.key().to_string();
                 Err(Error::DuplicateWorkspace {

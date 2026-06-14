@@ -477,9 +477,15 @@ impl RunBuilder {
         }
 
         let mut pkg_dep_graph = {
+            // Experimental: discover Rust crates from a Cargo workspace at the
+            // repo root and run their tasks via `cargo`. Off by default so
+            // JS-only repos are unaffected.
+            let cargo_enabled = std::env::var("TURBO_EXPERIMENTAL_CARGO")
+                .is_ok_and(|v| !v.is_empty() && v != "0" && v != "false");
             let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.opts.run_opts.single_package)
-                .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
+                .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager)
+                .with_cargo(cargo_enabled);
 
             let graph = builder
                 .build()

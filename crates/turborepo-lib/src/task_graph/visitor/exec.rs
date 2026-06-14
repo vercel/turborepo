@@ -68,6 +68,15 @@ impl<'a> ExecContextFactory<'a> {
                 micro_frontends_configs,
             ));
         }
+        // Cargo crates resolve their commands to `cargo <verb> -p <crate>`. This
+        // must come before the package.json script provider, which would
+        // otherwise return nothing for a crate (no scripts) and leave the task a
+        // no-op.
+        command_factory.add_provider(turborepo_task_executor::CargoCommandProvider::new(
+            visitor.repo_root,
+            &visitor.package_graph,
+            visitor.run_opts.task_args(),
+        ));
         command_factory.add_provider(pkg_graph_provider);
 
         Ok(Self {

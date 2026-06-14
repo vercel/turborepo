@@ -67,6 +67,18 @@ impl WorkspacePackage {
     }
 }
 
+/// The language toolchain a package belongs to.
+///
+/// Packages discovered from a `package.json` are [`PackageToolchain::Node`];
+/// crates discovered from a Cargo workspace are [`PackageToolchain::Cargo`].
+/// This drives how a task's command is resolved during execution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PackageToolchain {
+    #[default]
+    Node,
+    Cargo,
+}
+
 /// PackageInfo represents a package within the workspace.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PackageInfo {
@@ -74,6 +86,8 @@ pub struct PackageInfo {
     pub package_json_path: AnchoredSystemPathBuf,
     pub unresolved_external_dependencies: Option<BTreeMap<PackageKey, PackageVersion>>, /* name -> version */
     pub transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
+    /// The language toolchain this package belongs to.
+    pub toolchain: PackageToolchain,
 }
 
 impl PackageInfo {

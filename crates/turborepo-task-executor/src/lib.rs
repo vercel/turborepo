@@ -25,8 +25,8 @@ mod output;
 mod visitor;
 
 pub use command::{
-    CommandFactory, CommandProvider, CommandProviderError, MicroFrontendProxyProvider,
-    PackageGraphCommandProvider, PackageInfoProvider,
+    CargoCommandProvider, CommandFactory, CommandProvider, CommandProviderError,
+    MicroFrontendProxyProvider, PackageGraphCommandProvider, PackageInfoProvider,
 };
 pub use exec::{
     DryRunExecutor, ExecOutcome, HashTrackerProvider, InternalError, SuccessOutcome,

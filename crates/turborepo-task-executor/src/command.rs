@@ -14,7 +14,7 @@ use turbopath::{AbsoluteSystemPath, PathError, RelativeUnixPath};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_process::Command;
 use turborepo_repository::{
-    package_graph::{PackageGraph, PackageInfo, PackageName},
+    package_graph::{PackageGraph, PackageInfo, PackageName, PackageToolchain},
     package_manager::PackageManager,
 };
 use turborepo_task_id::TaskId;
@@ -304,6 +304,97 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
     }
 }
 
+/// Map a Turborepo task name to the Cargo subcommand that implements it.
+///
+/// These are the conventional Cargo verbs; tasks without a Cargo equivalent
+/// return `None` so the provider falls through (and the task becomes a no-op
+/// for that crate, matching how a missing package.json script behaves).
+fn cargo_subcommand(task: &str) -> Option<&'static str> {
+    Some(match task {
+        "build" => "build",
+        "test" => "test",
+        "check" => "check",
+        "lint" | "clippy" => "clippy",
+        "doc" | "docs" => "doc",
+        "bench" => "bench",
+        "run" => "run",
+        _ => return None,
+    })
+}
+
+/// Command provider that runs Cargo subcommands for Rust crates.
+///
+/// For packages whose toolchain is [`PackageToolchain::Cargo`], the task name
+/// is mapped to a Cargo subcommand (e.g. `build` -> `cargo build`) and run
+/// scoped to the crate via `-p <crate>`.
+#[derive(Debug)]
+pub struct CargoCommandProvider<'a> {
+    repo_root: &'a AbsoluteSystemPath,
+    package_graph: &'a PackageGraph,
+    cargo_binary: Result<PathBuf, which::Error>,
+    task_args: TaskArgs<'a>,
+}
+
+impl<'a> CargoCommandProvider<'a> {
+    pub fn new(
+        repo_root: &'a AbsoluteSystemPath,
+        package_graph: &'a PackageGraph,
+        task_args: TaskArgs<'a>,
+    ) -> Self {
+        Self {
+            repo_root,
+            package_graph,
+            cargo_binary: which::which("cargo"),
+            task_args,
+        }
+    }
+}
+
+impl<E: From<CommandProviderError>> CommandProvider<E> for CargoCommandProvider<'_> {
+    fn command(
+        &self,
+        task_id: &TaskId,
+        environment: &EnvironmentVariableMap,
+    ) -> Result<Option<Command>, E> {
+        let Some(info) = self
+            .package_graph
+            .package_info(&PackageName::from(task_id.package()))
+        else {
+            return Ok(None);
+        };
+        if info.toolchain != PackageToolchain::Cargo {
+            return Ok(None);
+        }
+        let Some(subcommand) = cargo_subcommand(task_id.task()) else {
+            return Ok(None);
+        };
+
+        let cargo = self
+            .cargo_binary
+            .as_deref()
+            .map_err(|e| CommandProviderError::from(*e))?;
+
+        let mut args: Vec<OsString> = vec![
+            OsString::from(subcommand),
+            OsString::from("-p"),
+            OsString::from(task_id.package()),
+        ];
+        if let Some(pass_through_args) = self.task_args.args_for_task(task_id) {
+            args.push(OsString::from("--"));
+            args.extend(pass_through_args.iter().map(OsString::from));
+        }
+
+        let mut cmd = Command::new(cargo);
+        cmd.args(args);
+        // `-p` scopes the build to the crate, so we run from the workspace root.
+        cmd.current_dir(self.repo_root.to_owned());
+        apply_environment(&mut cmd, environment);
+        cmd.open_stdin();
+
+        Ok(Some(cmd))
+    }
+}
+
 /// Command provider for microfrontends proxy tasks.
 ///
 /// This provider handles the `proxy` task for microfrontends configurations,
@@ -573,6 +664,7 @@ mod tests {
             package_json_path: AnchoredSystemPathBuf::from_raw("web/package.json").unwrap(),
             unresolved_external_dependencies: None,
             transitive_dependencies: None,
+            toolchain: Default::default(),
         }
     }
 
