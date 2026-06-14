@@ -23,6 +23,25 @@ use crate::{
 /// crates with overlapping name prefixes aren't captured. This covers library
 /// crates and the default binary; less common targets (examples, custom bin
 /// names) are simply not cached.
+/// Input globs whose changes should invalidate a Cargo crate's cache: the
+/// workspace lockfile and pinned toolchain files, expressed relative to the
+/// crate directory via `prefix`. Globs that don't match anything (e.g. a
+/// missing `rust-toolchain` file) simply contribute nothing.
+fn cargo_hash_input_globs(prefix: &str) -> Vec<String> {
+    let join = |rel: &str| {
+        if prefix.is_empty() {
+            rel.to_string()
+        } else {
+            format!("{prefix}/{rel}")
+        }
+    };
+    vec![
+        join("Cargo.lock"),
+        join("rust-toolchain.toml"),
+        join("rust-toolchain"),
+    ]
+}
+
 fn cargo_build_output_globs(prefix: &str, crate_name: &str) -> Vec<String> {
     let join = |rel: String| {
         if prefix.is_empty() {
@@ -236,25 +255,28 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             );
         }
 
-        // Cargo crates write their `build` artifacts into the shared workspace
-        // `target/` directory rather than into the crate directory. Register
-        // those artifacts as task outputs (relative to the crate via
-        // path_to_root, which globwalk collapses) so turbo can cache and
-        // restore them and skip re-running cargo on a hit.
+        // Cargo crates need extra hashing/caching wiring relative to the crate
+        // directory (path_to_root, which globwalk collapses):
+        // - Hash the root Cargo.lock and pinned rust-toolchain files so a
+        //   dependency or toolchain change invalidates the cache. `default` is
+        //   kept true so the crate's own source files are still hashed.
+        // - For `build`, register the artifacts cargo writes into the shared
+        //   workspace `target/` dir as outputs so turbo can cache/restore them.
         let task_id_inner = task_id.as_inner();
-        if task_id_inner.task() == "build"
-            && self
-                .package_graph
-                .package_info(&PackageName::from(task_id_inner.package()))
-                .is_some_and(|info| info.toolchain == PackageToolchain::Cargo)
+        if self
+            .package_graph
+            .package_info(&PackageName::from(task_id_inner.package()))
+            .is_some_and(|info| info.toolchain == PackageToolchain::Cargo)
         {
-            task_def
-                .outputs
-                .inclusions
-                .extend(cargo_build_output_globs(
-                    path_to_root.as_str(),
-                    task_id_inner.package(),
-                ));
+            let prefix = path_to_root.as_str();
+            task_def.inputs.default = true;
+            task_def.inputs.globs.extend(cargo_hash_input_globs(prefix));
+            if task_id_inner.task() == "build" {
+                task_def
+                    .outputs
+                    .inclusions
+                    .extend(cargo_build_output_globs(prefix, task_id_inner.package()));
+            }
         }
 
         Ok(task_def)
