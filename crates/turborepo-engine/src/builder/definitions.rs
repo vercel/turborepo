@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use miette::{NamedSource, SourceSpan};
 use turborepo_errors::Spanned;
-use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageToolchain};
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{
     HasConfigBeyondExtends, ProcessedTaskDefinition, RawTaskDefinition, TurboJson,
@@ -14,6 +14,34 @@ use crate::{
     BuilderError, CyclicExtends, MissingPackageTaskError, MissingRootTaskInTurboJsonError,
     MissingTurboJsonExtends, TaskDefinitionFromProcessed, TaskDefinitionResult, TurboJsonLoader,
 };
+
+/// Output globs for a Cargo crate's `build` artifacts in the shared workspace
+/// `target/debug` directory, expressed relative to the crate directory via
+/// `prefix` (the path from the crate to the repo root, e.g. `../..`).
+///
+/// Exact filenames are used (rather than prefix wildcards) so artifacts of
+/// crates with overlapping name prefixes aren't captured. This covers library
+/// crates and the default binary; less common targets (examples, custom bin
+/// names) are simply not cached.
+fn cargo_build_output_globs(prefix: &str, crate_name: &str) -> Vec<String> {
+    let join = |rel: String| {
+        if prefix.is_empty() {
+            rel
+        } else {
+            format!("{prefix}/{rel}")
+        }
+    };
+    let lib = crate_name.replace('-', "_");
+    vec![
+        join(format!("target/debug/lib{lib}.rlib")),
+        join(format!("target/debug/lib{lib}.rmeta")),
+        join(format!("target/debug/lib{lib}.so")),
+        join(format!("target/debug/lib{lib}.dylib")),
+        join(format!("target/debug/lib{lib}.dll")),
+        join(format!("target/debug/{crate_name}")),
+        join(format!("target/debug/{crate_name}.exe")),
+    ]
+}
 
 impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
     // Helper methods used when building the engine
@@ -206,6 +234,27 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 &self.global_deps,
                 &path_to_root,
             );
+        }
+
+        // Cargo crates write their `build` artifacts into the shared workspace
+        // `target/` directory rather than into the crate directory. Register
+        // those artifacts as task outputs (relative to the crate via
+        // path_to_root, which globwalk collapses) so turbo can cache and
+        // restore them and skip re-running cargo on a hit.
+        let task_id_inner = task_id.as_inner();
+        if task_id_inner.task() == "build"
+            && self
+                .package_graph
+                .package_info(&PackageName::from(task_id_inner.package()))
+                .is_some_and(|info| info.toolchain == PackageToolchain::Cargo)
+        {
+            task_def
+                .outputs
+                .inclusions
+                .extend(cargo_build_output_globs(
+                    path_to_root.as_str(),
+                    task_id_inner.package(),
+                ));
         }
 
         Ok(task_def)
