@@ -341,7 +341,7 @@ jobs:
           turbo-version: ${{ inputs.ci-tag-override || '' }}
 
       - name: Run JS Package Tests
-        run: turbo run check-types test --filter="./packages/*" --filter="!turborepo-repository" --color
+        run: turbo run check-types test --filter="./packages/*" --filter="!@turbo/repository" --color
 
   build-rust:
     name: "Build Rust"

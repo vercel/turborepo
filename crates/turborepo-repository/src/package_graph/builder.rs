@@ -356,23 +356,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
                 self.add_node(PackageNode::Workspace(name));
                 Ok(())
             }
-            std::collections::hash_map::Entry::Occupied(mut occupied) => {
-                // A JS package and a Cargo crate share a name. This is a real
-                // collision in the unified package namespace, but rather than
-                // aborting the whole run we let the JS package win (preserving
-                // pre-existing behavior) and warn. JS-vs-JS duplicates remain a
-                // hard error.
-                if occupied.get().toolchain == PackageToolchain::Cargo {
-                    tracing::warn!(
-                        "package \"{}\" exists as both a Cargo crate ({}) and a JS package ({}); \
-                         using the JS package and ignoring the crate",
-                        occupied.key(),
-                        occupied.get().package_json_path,
-                        entry.package_json_path,
-                    );
-                    occupied.insert(entry);
-                    return Ok(());
-                }
+            std::collections::hash_map::Entry::Occupied(occupied) => {
                 let existing_path = occupied.get().package_json_path.to_string();
                 let name = occupied.key().to_string();
                 Err(Error::DuplicateWorkspace {
