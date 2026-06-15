@@ -368,6 +368,72 @@ fn test_jit_dependency_defers_dependent_hashing() {
 }
 
 #[test]
+fn test_jit_descendant_hashes_after_jit_hash_is_available() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+
+    fs::write(tempdir.path().join("apps/my-app/marker.txt"), "before\n").unwrap();
+    fs::write(tempdir.path().join("apps/my-app/jit-input.txt"), "stable\n").unwrap();
+    fs::write(
+        tempdir.path().join("apps/my-app/package.json"),
+        r#"{
+  "name": "my-app",
+  "scripts": {
+    "generate": "node -e \"const fs = require('fs'); fs.mkdirSync('.generated', { recursive: true }); fs.writeFileSync('.generated/done.txt', 'done\\n'); fs.writeFileSync('marker.txt', 'after\\n')\"",
+    "build": "node -e \"const fs = require('fs'); fs.mkdirSync('.output', { recursive: true }); fs.writeFileSync('.output/marker.txt', fs.readFileSync('marker.txt'))\""
+  },
+  "dependencies": {
+    "util": "*"
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "generate": {
+      "inputs": ["$TURBO_JIT$/jit-input.txt"],
+      "outputs": [".generated/**"]
+    },
+    "build": {
+      "dependsOn": ["generate"],
+      "inputs": ["marker.txt"],
+      "outputs": [".output/**"]
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=my-app", "--output-logs=none"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("0 cached, 2 total"),
+        "expected first run to execute both tasks, got:\n{stdout}"
+    );
+
+    fs::write(tempdir.path().join("apps/my-app/marker.txt"), "before\n").unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=my-app", "--output-logs=none"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("2 cached, 2 total"),
+        "expected JIT descendants to be hashed before the dependency command runs, got:\n{stdout}"
+    );
+}
+
+#[test]
 fn test_gitignored_output_deletion_restores_from_cache() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
