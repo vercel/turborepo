@@ -34,7 +34,7 @@ use turborepo_telemetry::events::{
     repo::{RepoEventBuilder, RepoType},
     EventBuilder, TrackedErrors,
 };
-use turborepo_types::FilterMode;
+use turborepo_types::{FilterMode, UIMode};
 use turborepo_ui::ColorConfig;
 use turborepo_vercel_api::CachingStatusResponse;
 use url::Url;
@@ -84,14 +84,13 @@ impl RunBuilder {
     #[tracing::instrument(skip_all)]
     pub fn new(base: CommandBase, http_client: Option<SharedHttpClient>) -> Result<Self, Error> {
         let http_client = http_client.unwrap_or_default();
+        let opts = base.opts();
         let api_auth = base.api_auth()?;
 
         let version = base.version();
         let processes = ProcessManager::new(
-            // A terminal-backed PTY lets Turbo own interactive task input. On
-            // Windows this is also how we deliver a targeted Ctrl+C to tasks
-            // instead of relying on console-wide Ctrl+C broadcasts.
-            std::io::stdout().is_terminal(),
+            std::io::stdout().is_terminal()
+                && (!cfg!(windows) || matches!(opts.run_opts.ui_mode, UIMode::Tui)),
         );
 
         let CommandBase {

@@ -1091,12 +1091,6 @@ fn cleanup<B: Backend<Error = io::Error> + io::Write>(
         super::panic_handler::set_mouse_capture_disabled();
     }
 
-    // Clear stale main-screen content before replaying task logs and summary.
-    crossterm::execute!(
-        terminal.backend_mut(),
-        crossterm::terminal::Clear(crossterm::terminal::ClearType::FromCursorDown),
-    )?;
-
     let tasks_started = app.tasks_by_status.tasks_started();
     app.persist_tasks(tasks_started)?;
     app.persist_summary()?;
