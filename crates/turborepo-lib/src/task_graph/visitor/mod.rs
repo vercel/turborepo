@@ -35,7 +35,7 @@ use turborepo_types::{EnvMode, ResolvedLogOrder, ResolvedLogPrefix};
 use turborepo_ui::{sender::UISender, ColorConfig, ColorSelector};
 
 use crate::{
-    engine::{Engine, ExecutionOptions},
+    engine::{Engine, ExecutionOptions, TaskNode},
     microfrontends::MicrofrontendsConfigs,
     opts::RunOpts,
     run::{task_access::TaskAccess, RunCache},
@@ -216,6 +216,125 @@ impl<'a> Visitor<'a> {
     /// parallel. Tasks are processed in topological waves so dependency
     /// hashes are always available when needed. Returns a map from TaskId
     /// to (hash, execution_env).
+    fn precompute_ready_task_hash(
+        &self,
+        engine: &Engine,
+        telemetry: &GenericEventBuilder,
+        task_id: &TaskId<'static>,
+    ) -> Result<PrecomputedTask, Error> {
+        let package_name = PackageName::from(task_id.package());
+        let workspace_info = self
+            .package_graph
+            .package_info(&package_name)
+            .ok_or_else(|| Error::MissingPackage {
+                package_name: package_name.clone(),
+                task_id: task_id.clone(),
+            })?;
+
+        let task_definition = engine
+            .task_definition(task_id)
+            .ok_or(Error::MissingDefinition)?;
+
+        let task_env_mode = task_definition.env_mode.unwrap_or(self.global_env_mode);
+
+        let dependency_set = engine
+            .dependencies(task_id)
+            .ok_or(Error::MissingDefinition)?;
+
+        let package_task_event =
+            PackageTaskEventBuilder::new(task_id.package(), task_id.task()).with_parent(telemetry);
+        package_task_event.track_env_mode(&task_env_mode.to_string());
+
+        let task_hash_telemetry = package_task_event.child();
+        let task_hash = self.task_hasher.calculate_task_hash(
+            task_id,
+            task_definition,
+            task_env_mode,
+            workspace_info,
+            &dependency_set,
+            task_hash_telemetry,
+        )?;
+
+        let execution_env = self
+            .task_hasher
+            .env(task_id, task_env_mode, task_definition)?;
+
+        Ok(PrecomputedTask::Ready {
+            task_hash,
+            execution_env,
+        })
+    }
+
+    fn dependency_hashes_available(
+        &self,
+        engine: &Engine,
+        task_id: &TaskId<'static>,
+    ) -> Result<bool, Error> {
+        let dependency_set = engine
+            .dependencies(task_id)
+            .ok_or(Error::MissingDefinition)?;
+        let task_hash_tracker = self.task_hasher.task_hash_tracker();
+
+        Ok(dependency_set.iter().all(|dependency| {
+            let TaskNode::Task(dependency_task_id) = dependency else {
+                return true;
+            };
+
+            task_hash_tracker.hash(dependency_task_id).is_some()
+        }))
+    }
+
+    fn precompute_unblocked_deferred_hashes(
+        &self,
+        engine: &Engine,
+        telemetry: &GenericEventBuilder,
+        precomputed: &mut HashMap<TaskId<'static>, PrecomputedTask>,
+    ) -> Result<(), Error> {
+        use rayon::prelude::*;
+
+        loop {
+            let ready_to_hash = precomputed
+                .iter()
+                .filter_map(|(task_id, precomputed_task)| {
+                    if !matches!(precomputed_task, PrecomputedTask::Deferred) {
+                        return None;
+                    }
+
+                    let Some(task_definition) = engine.task_definition(task_id) else {
+                        return Some(Err(Error::MissingDefinition));
+                    };
+                    if task_definition.inputs.has_jit_inputs() {
+                        return None;
+                    }
+
+                    match self.dependency_hashes_available(engine, task_id) {
+                        Ok(true) => Some(Ok(task_id.clone())),
+                        Ok(false) => None,
+                        Err(err) => Some(Err(err)),
+                    }
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            if ready_to_hash.is_empty() {
+                return Ok(());
+            }
+
+            type HashResult = Result<(TaskId<'static>, PrecomputedTask), Error>;
+            let hash_results: Vec<HashResult> = ready_to_hash
+                .par_iter()
+                .map(|task_id| {
+                    self.precompute_ready_task_hash(engine, telemetry, task_id)
+                        .map(|precomputed_task| (task_id.clone(), precomputed_task))
+                })
+                .collect();
+
+            for result in hash_results {
+                let (task_id, precomputed_task) = result?;
+                precomputed.insert(task_id, precomputed_task);
+            }
+        }
+    }
+
     fn precompute_task_hashes(
         &self,
         engine: &Engine,
@@ -223,8 +342,6 @@ impl<'a> Visitor<'a> {
     ) -> Result<HashMap<TaskId<'static>, PrecomputedTask>, Error> {
         use petgraph::algo::toposort;
         use rayon::prelude::*;
-        use turborepo_engine::TaskNode;
-
         let graph = engine.task_graph();
         let mut sorted = toposort(graph, None).map_err(|_| Error::MissingDefinition)?;
         // toposort returns dependents before dependencies (edges point
@@ -273,19 +390,9 @@ impl<'a> Visitor<'a> {
                         return Ok(None);
                     };
 
-                    let package_name = PackageName::from(task_id.package());
-                    let workspace_info = self
-                        .package_graph
-                        .package_info(&package_name)
-                        .ok_or_else(|| Error::MissingPackage {
-                            package_name: package_name.clone(),
-                            task_id: task_id.clone(),
-                        })?;
-
                     let task_definition = engine
                         .task_definition(task_id)
                         .ok_or(Error::MissingDefinition)?;
-
                     let task_env_mode = task_definition.env_mode.unwrap_or(self.global_env_mode);
 
                     let dependency_set = engine
@@ -316,32 +423,8 @@ impl<'a> Visitor<'a> {
                         return Ok(Some((task_id.clone(), PrecomputedTask::Deferred)));
                     }
 
-                    let package_task_event =
-                        PackageTaskEventBuilder::new(task_id.package(), task_id.task())
-                            .with_parent(telemetry);
-                    package_task_event.track_env_mode(&task_env_mode.to_string());
-
-                    let task_hash_telemetry = package_task_event.child();
-                    let task_hash = self.task_hasher.calculate_task_hash(
-                        task_id,
-                        task_definition,
-                        task_env_mode,
-                        workspace_info,
-                        &dependency_set,
-                        task_hash_telemetry,
-                    )?;
-
-                    let execution_env =
-                        self.task_hasher
-                            .env(task_id, task_env_mode, task_definition)?;
-
-                    Ok(Some((
-                        task_id.clone(),
-                        PrecomputedTask::Ready {
-                            task_hash,
-                            execution_env,
-                        },
-                    )))
+                    self.precompute_ready_task_hash(engine, telemetry, task_id)
+                        .map(|precomputed_task| Some((task_id.clone(), precomputed_task)))
                 })
                 .collect();
 
@@ -528,6 +611,14 @@ impl<'a> Visitor<'a> {
                                     break;
                                 }
                             };
+                        if let Err(err) = self.precompute_unblocked_deferred_hashes(
+                            &engine,
+                            telemetry,
+                            &mut precomputed,
+                        ) {
+                            dispatch_error = Some(err);
+                            break;
+                        }
                         (task_hash, execution_env)
                     }
                 }

@@ -194,6 +194,8 @@ The task graph visitor handles task execution:
   engine dispatches the task, after its dependencies have completed and restored
   any cached outputs. Tasks that depend on deferred tasks are also deferred so
   their dependency hashes are available before their own hash is calculated.
+  Once a deferred task has a real hash, the visitor precomputes any unblocked
+  non-JIT descendants instead of waiting for each descendant to be dispatched.
 - Creates `ExecContext` for each task
 - Manages UI output and progress tracking
 - Collects errors and execution information
