@@ -1,10 +1,7 @@
-import { openapi } from "@/lib/openapi";
 import { shikiTheme } from "@/lib/shiki-theme";
-import { createAPIPage } from "fumadocs-openapi/ui";
-import client from "./api-page.client";
+import { createOpenAPIPage } from "fumadocs-openapi/ui";
 
-export const APIPage = createAPIPage(openapi, {
-  client,
+export const APIPage = createOpenAPIPage({
   shikiOptions: {
     themes: {
       light: shikiTheme,

@@ -1,6 +1,15 @@
 import type { ReactElement } from "react";
 import data from "../../content/examples-data.json";
 
+type ExampleMeta = {
+  slug: string;
+  name: string;
+  description: string;
+  maintainedByCoreTeam: boolean;
+};
+
+const examples = data as ExampleMeta[];
+
 export function ExamplesTable({
   coreMaintained
 }: {
@@ -16,7 +25,7 @@ export function ExamplesTable({
           </tr>
         </thead>
         <tbody>
-          {data
+          {examples
             .filter((meta) =>
               coreMaintained
                 ? meta.maintainedByCoreTeam
