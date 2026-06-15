@@ -548,6 +548,50 @@ impl PnpmLockfile {
         }
         Ok((pruned_packages, None))
     }
+
+    fn retain_package(
+        &self,
+        key: &str,
+        pruned_packages: &mut Packages,
+        pruned_snapshots: &mut Option<Snapshots>,
+    ) -> Result<(), crate::Error> {
+        if let Some(snapshots) = self.snapshots.as_ref() {
+            let Some(snapshot) = snapshots.get(key) else {
+                return Ok(());
+            };
+
+            if let Some(pruned_snapshots) = pruned_snapshots.as_mut() {
+                if pruned_snapshots
+                    .insert(key.to_string(), snapshot.clone())
+                    .is_some()
+                {
+                    return Ok(());
+                }
+            }
+
+            let package_key = self.package_key_for_snapshot(key)?;
+            if let Some(package) = self.get_packages(&package_key) {
+                pruned_packages
+                    .entry(package_key)
+                    .or_insert_with(|| package.clone());
+            }
+
+            for (dep_name, dep_version) in snapshot.dependencies() {
+                let dep_key = self.format_key(&dep_name, &dep_version);
+                self.retain_package(&dep_key, pruned_packages, pruned_snapshots)?;
+            }
+
+            return Ok(());
+        }
+
+        if let Some(package) = self.get_packages(key) {
+            pruned_packages
+                .entry(key.to_string())
+                .or_insert_with(|| package.clone());
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -657,7 +701,19 @@ impl crate::Lockfile for PnpmLockfile {
             .and_then(|s| s.inject_workspace_packages)
             .unwrap_or(false);
 
-        for importer in importers.values() {
+        for (importer_key, importer) in &importers {
+            if importer_key != "." {
+                for dependency in importer.dependencies.all_dependency_names() {
+                    let Some((_, version)) = importer.dependencies.find_resolution(dependency)
+                    else {
+                        continue;
+                    };
+
+                    let key = self.format_key(dependency, version);
+                    self.retain_package(&key, &mut pruned_packages, &mut pruned_snapshots)?;
+                }
+            }
+
             let injected_deps: Vec<_> = importer
                 .dependencies
                 .all_dependency_names()
@@ -1826,6 +1882,159 @@ snapshots:
         // The importer for apps/my-app should retain dependenciesMeta
         let importer = pruned_lockfile.importers.get("apps/my-app").unwrap();
         assert!(importer.dependencies_meta.is_some());
+    }
+
+    #[test]
+    fn test_subgraph_keeps_peer_resolved_importer_dependency() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+importers:
+
+  .: {}
+
+  packages/backend:
+    optionalDependencies:
+      '@nestjs/throttler':
+        specifier: ^6.5.0
+        version: 6.5.0(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)
+
+packages:
+
+  '@nestjs/throttler@6.5.0':
+    resolution: {integrity: sha512-aaa}
+    peerDependencies:
+      '@nestjs/common': ^7.0.0 || ^8.0.0 || ^9.0.0 || ^10.0.0 || ^11.0.0
+      '@nestjs/core': ^7.0.0 || ^8.0.0 || ^9.0.0 || ^10.0.0 || ^11.0.0
+      reflect-metadata: ^0.1.13 || ^0.2.0
+
+  '@nestjs/common@11.1.26':
+    resolution: {integrity: sha512-bbb}
+
+  '@nestjs/core@11.1.26':
+    resolution: {integrity: sha512-ccc}
+
+  reflect-metadata@0.2.2:
+    resolution: {integrity: sha512-ddd}
+
+  rxjs@7.8.2:
+    resolution: {integrity: sha512-eee}
+
+snapshots:
+
+  '@nestjs/throttler@6.5.0(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)':
+    dependencies:
+      '@nestjs/common': 11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core': 11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      reflect-metadata: 0.2.2
+
+  '@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2)':
+    dependencies:
+      reflect-metadata: 0.2.2
+      rxjs: 7.8.2
+
+  '@nestjs/core@11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2)':
+    dependencies:
+      '@nestjs/common': 11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      reflect-metadata: 0.2.2
+      rxjs: 7.8.2
+
+  reflect-metadata@0.2.2: {}
+
+  rxjs@7.8.2: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["packages/backend".to_string()];
+        let resolved_packages = vec!["rxjs@7.8.2".to_string()];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should have packages");
+        let snapshots = pruned_lockfile
+            .snapshots
+            .as_ref()
+            .expect("should have snapshots");
+        let throttler_snapshot = "@nestjs/throttler@6.5.0(@nestjs/common@11.1.26(reflect-metadata@\
+                                  0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26(@nestjs/common@11.1.\
+                                  26(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.\
+                                  2)(rxjs@7.8.2))(reflect-metadata@0.2.2)";
+
+        assert!(packages.contains_key("@nestjs/throttler@6.5.0"));
+        assert!(snapshots.contains_key(throttler_snapshot));
+        assert!(
+            snapshots.contains_key("@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2)")
+        );
+        assert!(snapshots.contains_key(
+            "@nestjs/core@11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.\
+             2))(reflect-metadata@0.2.2)(rxjs@7.8.2)"
+        ));
+    }
+
+    #[test]
+    fn test_subgraph_does_not_keep_unreferenced_patched_dependencies() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+patchedDependencies:
+  is-odd@3.0.1:
+    hash: abc
+    path: patches/is-odd@3.0.1.patch
+
+importers:
+
+  .: {}
+
+  apps/web:
+    dependencies:
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
+
+  packages/other:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+
+packages:
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-aaa}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-bbb}
+    patched: true
+
+snapshots:
+
+  lodash@4.17.21: {}
+
+  is-odd@3.0.1: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/web".to_string()];
+        let resolved_packages = vec!["lodash@4.17.21".to_string()];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should have packages");
+
+        assert!(packages.contains_key("lodash@4.17.21"));
+        assert!(!packages.contains_key("is-odd@3.0.1"));
+        assert_eq!(pruned_lockfile.patched_dependencies, Some(BTreeMap::new()));
     }
 
     /// Regression test for https://github.com/vercel/turborepo/issues/12252
