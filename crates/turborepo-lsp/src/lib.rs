@@ -118,7 +118,7 @@ impl LanguageServer for Backend {
             let (_, daemon) = tokio::join!(
                 self.client
                     .log_message(MessageType::INFO, format!("root uri: {}", paths.sock_file),),
-                tokio_retry::Retry::spawn(
+                tokio_retry::Retry::start(
                     tokio_retry::strategy::FixedInterval::from_millis(100).take(5),
                     || async {
                         let can_start_server = true;
