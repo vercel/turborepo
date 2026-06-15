@@ -84,6 +84,7 @@ pub const BUILTIN_PASS_THROUGH_ENV: &[&str] = &[
     "HOMEDRIVE",
     "HOMEPATH",
     "PNPM_HOME",
+    "pnpm_config_verify_deps_before_run",
     "NPM_CONFIG_STORE_DIR",
 ];
 
