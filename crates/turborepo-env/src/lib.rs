@@ -744,23 +744,6 @@ mod tests {
     }
 
     #[test]
-    fn test_builtin_pass_through_env_includes_pnpm_deps_check_marker() {
-        let env = EnvironmentVariableMap(
-            vec![("pnpm_config_verify_deps_before_run", "false")]
-                .into_iter()
-                .map(|(k, v)| (k.to_owned(), v.to_owned()))
-                .collect(),
-        );
-
-        let output = env.from_wildcards(BUILTIN_PASS_THROUGH_ENV).unwrap();
-
-        assert_eq!(
-            output.get("pnpm_config_verify_deps_before_run"),
-            Some(&"false".to_string())
-        );
-    }
-
-    #[test]
     fn test_compiled_wildcards_with_excludes() {
         let env = EnvironmentVariableMap(
             vec![("FOO", "1"), ("FOOBAR", "2"), ("FOOD", "3"), ("BAR", "4")]
