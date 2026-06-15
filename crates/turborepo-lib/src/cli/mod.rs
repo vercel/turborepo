@@ -447,7 +447,7 @@ async fn run_main(
                 args: args.clone(),
             };
             let child_event = event.child();
-            generate::run(&tag, command, &args, child_event)?;
+            generate::run(&repo_root, &tag, command, &args, child_event)?;
             Ok(0)
         }
         Command::Info => {
