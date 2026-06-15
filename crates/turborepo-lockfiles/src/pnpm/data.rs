@@ -560,13 +560,12 @@ impl PnpmLockfile {
                 return Ok(());
             };
 
-            if let Some(pruned_snapshots) = pruned_snapshots.as_mut() {
-                if pruned_snapshots
+            if let Some(pruned_snapshots) = pruned_snapshots.as_mut()
+                && pruned_snapshots
                     .insert(key.to_string(), snapshot.clone())
                     .is_some()
-                {
-                    return Ok(());
-                }
+            {
+                return Ok(());
             }
 
             let package_key = self.package_key_for_snapshot(key)?;
