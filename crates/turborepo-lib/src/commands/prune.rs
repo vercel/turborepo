@@ -310,35 +310,34 @@ pub async fn prune(
         for patch in &pruned_patches {
             prune.copy_patch_file(patch)?;
         }
+    }
 
-        // Prune pnpm-workspace.yaml's patchedDependencies so it only
-        // references patches that are actually in the pruned output.
-        if matches!(
-            package_manager,
-            turborepo_repository::package_manager::PackageManager::Pnpm
-                | turborepo_repository::package_manager::PackageManager::Pnpm6
-                | turborepo_repository::package_manager::PackageManager::Pnpm9
-        ) {
-            let ws_config =
-                turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH;
-            let ws_path = AnchoredSystemPathBuf::from_raw(ws_config)?;
-            let full_ws = prune.full_directory.resolve(&ws_path);
+    // Prune pnpm-workspace.yaml's patchedDependencies so it only
+    // references patches that are actually in the pruned output.
+    if matches!(
+        package_manager,
+        turborepo_repository::package_manager::PackageManager::Pnpm
+            | turborepo_repository::package_manager::PackageManager::Pnpm6
+            | turborepo_repository::package_manager::PackageManager::Pnpm9
+    ) {
+        let ws_config = turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH;
+        let ws_path = AnchoredSystemPathBuf::from_raw(ws_config)?;
+        let out_ws = prune.out_directory.resolve(&ws_path);
+        turborepo_repository::package_manager::pnpm::prune_workspace_patches(
+            &out_ws,
+            &pruned_patches,
+        )?;
+        let full_ws = prune.full_directory.resolve(&ws_path);
+        turborepo_repository::package_manager::pnpm::prune_workspace_patches(
+            &full_ws,
+            &pruned_patches,
+        )?;
+        if prune.docker {
+            let docker_ws = prune.docker_directory().resolve(&ws_path);
             turborepo_repository::package_manager::pnpm::prune_workspace_patches(
-                &full_ws,
+                &docker_ws,
                 &pruned_patches,
             )?;
-            if prune.docker {
-                let out_ws = prune.out_directory.resolve(&ws_path);
-                turborepo_repository::package_manager::pnpm::prune_workspace_patches(
-                    &out_ws,
-                    &pruned_patches,
-                )?;
-                let docker_ws = prune.docker_directory().resolve(&ws_path);
-                turborepo_repository::package_manager::pnpm::prune_workspace_patches(
-                    &docker_ws,
-                    &pruned_patches,
-                )?;
-            }
         }
     }
 
