@@ -84,6 +84,7 @@ pub const BUILTIN_PASS_THROUGH_ENV: &[&str] = &[
     "HOMEDRIVE",
     "HOMEPATH",
     "PNPM_HOME",
+    "pnpm_config_verify_deps_before_run",
     "NPM_CONFIG_STORE_DIR",
 ];
 
@@ -740,6 +741,23 @@ mod tests {
     fn test_builtin_pass_through_env_compiles() {
         CompiledWildcards::compile(BUILTIN_PASS_THROUGH_ENV)
             .expect("BUILTIN_PASS_THROUGH_ENV should compile without error");
+    }
+
+    #[test]
+    fn test_builtin_pass_through_env_includes_pnpm_deps_check_marker() {
+        let env = EnvironmentVariableMap(
+            vec![("pnpm_config_verify_deps_before_run", "false")]
+                .into_iter()
+                .map(|(k, v)| (k.to_owned(), v.to_owned()))
+                .collect(),
+        );
+
+        let output = env.from_wildcards(BUILTIN_PASS_THROUGH_ENV).unwrap();
+
+        assert_eq!(
+            output.get("pnpm_config_verify_deps_before_run"),
+            Some(&"false".to_string())
+        );
     }
 
     #[test]
