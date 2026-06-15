@@ -166,20 +166,15 @@ export async function createProject({
     const originalDirectory = process.cwd();
     process.chdir(root);
 
-    if (isDefaultExample || repoInfo) {
-      await retry(
-        () =>
-          downloadAndExtractRepo(
-            root,
-            repoInfo ?? {
-              username: "vercel",
-              name: "turborepo",
-              branch: "main",
-              filePath: "examples/basic"
-            }
-          ),
-        { retries: 3 }
-      );
+    if (isDefaultExample) {
+      await retry(() => downloadAndExtractExample(root, "basic"), {
+        retries: 3
+      });
+    } else if (repoInfo) {
+      const selectedRepoInfo = repoInfo;
+      await retry(() => downloadAndExtractRepo(root, selectedRepoInfo), {
+        retries: 3
+      });
     } else {
       await retry(() => downloadAndExtractExample(root, example), {
         retries: 3
