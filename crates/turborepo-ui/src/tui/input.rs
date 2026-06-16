@@ -3,7 +3,6 @@ use std::io::IsTerminal;
 use crossterm::event::{EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use futures::StreamExt;
 use tokio::{sync::mpsc, task::JoinHandle};
-use tracing::debug;
 
 use super::{
     app::LayoutSections,
@@ -150,7 +149,7 @@ fn ctrl_c() -> Option<Event> {
         Ok(_) => None,
         // We're unable to send the signal, stop rendering to force shutdown
         Err(_) => {
-            debug!("unable to send sigint, shutting down");
+            tracing::debug!("unable to send sigint, shutting down");
             Some(Event::InternalStop)
         }
     }
@@ -158,27 +157,7 @@ fn ctrl_c() -> Option<Event> {
 
 #[cfg(windows)]
 fn ctrl_c() -> Option<Event> {
-    use windows_sys::Win32::{
-        Foundation::{BOOL, TRUE},
-        System::Console::GenerateConsoleCtrlEvent,
-    };
-    // First parameter corresponds to what event to generate, 0 is a Ctrl-C
-    let ctrl_c_event = 0x0;
-    // Second parameter corresponds to which process group to send the event to.
-    // If 0 is passed the event gets sent to every process connected to the current
-    // Console.
-    let process_group_id = 0x0;
-    let success: BOOL = unsafe {
-        // See docs https://learn.microsoft.com/en-us/windows/console/generateconsolectrlevent
-        GenerateConsoleCtrlEvent(ctrl_c_event, process_group_id)
-    };
-    if success == TRUE {
-        None
-    } else {
-        // We're unable to send the Ctrl-C event, stop rendering to force shutdown
-        debug!("unable to send sigint, shutting down");
-        Some(Event::InternalStop)
-    }
+    Some(Event::Interrupt)
 }
 
 // Inspired by mprocs encode_term module

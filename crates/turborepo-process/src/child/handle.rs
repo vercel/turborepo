@@ -145,6 +145,28 @@ pub(super) fn signal_process_group(process_group_id: libc::pid_t, signal: libc::
     let _ = unsafe { libc::kill(-process_group_id, signal) };
 }
 
+#[cfg(windows)]
+fn run_child_console_helper(pid: u32, command: &str) -> bool {
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+
+    std::process::Command::new(exe)
+        .arg("__internal_windows_ctrl_c")
+        .arg(command)
+        .arg(pid.to_string())
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+#[cfg(windows)]
+fn send_ctrl_c_to_child_console(pid: u32) -> bool {
+    run_child_console_helper(pid, "ctrl_c")
+}
+
 #[cfg(unix)]
 fn capture_target_identity(pid: Option<u32>) -> Option<TargetIdentity> {
     pid.and_then(|pid| match target_identity(pid as libc::pid_t) {
@@ -162,10 +184,12 @@ impl ChildHandle {
         #[cfg(windows)]
         let command_for_fallback = command.clone();
 
-        let mut command = TokioCommand::from(command);
+        let mut command = std::process::Command::from(command);
 
         // Create a new process group so we can send signals (e.g. SIGINT) to
         // the child and all of its descendants via kill(-pgid, sig).
+        #[cfg(unix)]
+        use std::os::unix::process::CommandExt as _;
         #[cfg(unix)]
         command.process_group(0);
 
@@ -179,12 +203,33 @@ impl ChildHandle {
         };
 
         #[cfg(windows)]
+        let wrapper_ctrl_c = std::env::var_os("__TURBO_WINDOWS_CTRL_C_FD").is_some();
+
+        #[cfg(windows)]
+        use std::os::windows::process::CommandExt as _;
+
+        #[cfg(windows)]
+        if wrapper_ctrl_c {
+            command.show_window(windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE as u16);
+        }
+
+        #[cfg(windows)]
         if job.is_some() {
+            let mut creation_flags = windows_sys::Win32::System::Threading::CREATE_SUSPENDED
+                | windows_sys::Win32::System::Threading::CREATE_BREAKAWAY_FROM_JOB;
+            if wrapper_ctrl_c {
+                creation_flags |= windows_sys::Win32::System::Threading::CREATE_NEW_CONSOLE
+                    | windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
+            }
+            command.creation_flags(creation_flags);
+        } else if wrapper_ctrl_c {
             command.creation_flags(
-                windows_sys::Win32::System::Threading::CREATE_SUSPENDED
-                    | windows_sys::Win32::System::Threading::CREATE_BREAKAWAY_FROM_JOB,
+                windows_sys::Win32::System::Threading::CREATE_NEW_CONSOLE
+                    | windows_sys::Win32::System::Threading::CREATE_NO_WINDOW,
             );
         }
+
+        let mut command = TokioCommand::from(command);
 
         #[cfg(not(windows))]
         let mut child = command.spawn()?;
@@ -195,8 +240,17 @@ impl ChildHandle {
             Err(err) if job.is_some() => {
                 debug!("failed to spawn child with job breakaway: {err}");
                 let mut fallback_command = TokioCommand::from(command_for_fallback);
-                fallback_command
-                    .creation_flags(windows_sys::Win32::System::Threading::CREATE_SUSPENDED);
+                let mut creation_flags = windows_sys::Win32::System::Threading::CREATE_SUSPENDED;
+                if wrapper_ctrl_c {
+                    creation_flags |= windows_sys::Win32::System::Threading::CREATE_NEW_CONSOLE
+                        | windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
+                }
+                if wrapper_ctrl_c {
+                    fallback_command
+                        .as_std_mut()
+                        .show_window(windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE as u16);
+                }
+                fallback_command.creation_flags(creation_flags);
                 fallback_command.spawn()?
             }
             Err(err) => return Err(err),
@@ -527,11 +581,23 @@ impl ChildHandle {
     /// when a user types Ctrl-C in a real console. Returns whether the
     /// keystroke was written.
     ///
-    /// Children not attached to a ConPTY share turbo's console and receive
-    /// console Ctrl-C events directly, so there is nothing to send here.
+    /// When the npm package wrapper captures Ctrl-C in raw mode, Windows does
+    /// not generate the console event. In that case, synthesize it here so
+    /// non-ConPTY children still receive the same event as direct `turbo` use.
     #[cfg(windows)]
     pub(super) fn send_graceful_interrupt(&self) -> bool {
         let Some(pty_input) = &self.pty_input else {
+            if std::env::var_os("__TURBO_WINDOWS_CTRL_C_FD").is_some()
+                && let Some(pid) = self.pid
+            {
+                let sent = send_ctrl_c_to_child_console(pid);
+                if sent {
+                    debug!("generated console Ctrl-C for child console {pid}");
+                } else {
+                    debug!("failed to generate console Ctrl-C for child console {pid}");
+                }
+                return sent;
+            }
             return false;
         };
 

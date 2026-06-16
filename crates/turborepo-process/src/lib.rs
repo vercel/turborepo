@@ -9,6 +9,7 @@
 //! As of now, the manager will execute futures in a random order, and
 //! must be either `wait`ed on or `stop`ped to drive state.
 
+#![cfg_attr(windows, feature(windows_process_extensions_show_window))]
 #![deny(clippy::all)]
 
 mod child;

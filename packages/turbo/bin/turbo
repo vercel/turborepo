@@ -11,6 +11,7 @@ const path = require('path');
 
 // If we do not find the correct platform binary, should we attempt to install it?
 const SHOULD_INSTALL = true;
+const CTRL_C_BYTE = Buffer.from([0x03]);
 
 // If we do not find the correct platform binary, should we trust calling an emulated variant?
 const SHOULD_ATTEMPT_EMULATED = true;
@@ -310,16 +311,96 @@ function exitWithCodeOrSignal(code, signal) {
   process.exit(code === null ? 1 : code);
 }
 
+function shouldOwnWindowsCtrlC() {
+  if (process.platform !== "win32" || !process.stdin.isTTY) {
+    return false;
+  }
+
+  if (usesTui(process.argv.slice(2))) {
+    return false;
+  }
+
+  return Boolean(
+    process.env.npm_command ||
+    process.env.npm_lifecycle_event ||
+    process.env.npm_config_user_agent
+  );
+}
+
+function usesTui(args) {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--ui=tui") {
+      return true;
+    }
+    if (arg === "--ui" && args[i + 1] === "tui") {
+      return true;
+    }
+  }
+  return false;
+}
+
 function runTurbo() {
+  if (shouldOwnWindowsCtrlC()) {
+    return runTurboChild(
+      {
+        ...process.env,
+        __TURBO_WINDOWS_CTRL_C_FD: "3",
+      },
+      true
+    );
+  }
+
+  runTurboChild(process.env, false);
+}
+
+function runTurboChild(env, useCtrlCPipe) {
   const child = child_process.spawn(
     getBinaryPath(),
     process.argv.slice(2),
-    { stdio: "inherit" }
+    {
+      stdio: useCtrlCPipe ? ["inherit", "inherit", "inherit", "pipe"] : "inherit",
+      env,
+    }
   );
 
+  const ctrlCPipe = useCtrlCPipe ? child.stdio[3] : null;
+  ctrlCPipe?.on("error", () => {});
+
+  const sendCtrlC = () => {
+    if (ctrlCPipe && !ctrlCPipe.destroyed && ctrlCPipe.writable) {
+      ctrlCPipe.write(CTRL_C_BYTE);
+    }
+  };
+
+  const restoreStdin = () => {
+    if (!useCtrlCPipe) {
+      return;
+    }
+
+    if (process.stdin.isRaw) {
+      process.stdin.setRawMode(false);
+    }
+    process.stdin.pause();
+  };
+
+  const handleInput = (chunk) => {
+    for (const byte of chunk) {
+      if (byte === 0x03) {
+        sendCtrlC();
+      }
+    }
+  };
+
+  if (useCtrlCPipe) {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.on("data", handleInput);
+  }
+
   const handleSigint = () => {
-    // The child shares our process group, so Ctrl+C already reached it.
-    // Keep the wrapper alive until the child finishes its own shutdown.
+    // Keep the wrapper alive and let native turbo handle graceful shutdown.
+    sendCtrlC();
   };
 
   const handleSigterm = () => {
@@ -331,6 +412,9 @@ function runTurbo() {
   const cleanup = () => {
     process.off("SIGINT", handleSigint);
     process.off("SIGTERM", handleSigterm);
+    process.stdin.off("data", handleInput);
+    restoreStdin();
+    ctrlCPipe?.destroy();
   };
 
   process.on("SIGINT", handleSigint);
