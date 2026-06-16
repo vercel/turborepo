@@ -66,7 +66,7 @@ enum ChildHandleImpl {
 #[cfg(unix)]
 #[derive(Debug, Clone, Copy)]
 enum GracefulInterruptTarget {
-    DirectChildWithProcessGroupFallback,
+    DirectChild,
     ProcessGroup,
 }
 
@@ -88,9 +88,9 @@ impl ShutdownSemantics {
         }
     }
 
-    fn direct_child_with_process_group_fallback() -> Self {
+    fn direct_child() -> Self {
         Self {
-            graceful_interrupt_target: GracefulInterruptTarget::DirectChildWithProcessGroupFallback,
+            graceful_interrupt_target: GracefulInterruptTarget::DirectChild,
             wait_for_process_group_after_child_exit: true,
         }
     }
@@ -423,7 +423,7 @@ impl ChildHandle {
                 pid,
                 imp: ChildHandleImpl::Pty(child),
                 #[cfg(unix)]
-                shutdown_semantics: ShutdownSemantics::direct_child_with_process_group_fallback(),
+                shutdown_semantics: ShutdownSemantics::direct_child(),
                 #[cfg(unix)]
                 target_identity,
                 #[cfg(unix)]
@@ -471,25 +471,18 @@ impl ChildHandle {
     }
 
     #[cfg(unix)]
-    pub(super) fn send_graceful_interrupt(&self, pid: libc::pid_t) -> bool {
+    pub(super) fn send_graceful_interrupt(&self, pid: libc::pid_t) {
         match self.shutdown_semantics.graceful_interrupt_target {
-            GracefulInterruptTarget::DirectChildWithProcessGroupFallback => {
+            GracefulInterruptTarget::DirectChild => {
                 debug!("sending SIGINT to child {pid}");
                 if unsafe { libc::kill(pid, libc::SIGINT) } == -1 {
                     debug!("failed to send SIGINT to {pid}");
                 }
-                false
             }
             GracefulInterruptTarget::ProcessGroup => {
                 self.send_signal_to_process_group(pid, libc::SIGINT);
-                true
             }
         }
-    }
-
-    #[cfg(unix)]
-    pub(super) fn send_fallback_graceful_interrupt(&self, pid: libc::pid_t) {
-        self.send_signal_to_process_group(pid, libc::SIGINT);
     }
 
     #[cfg(unix)]

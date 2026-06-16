@@ -163,11 +163,12 @@ impl ProcessManager {
     }
 
     /// Stop the process manager, closing all child processes. On posix systems
-    /// this will send SIGINT. On Windows, children spawned under ConPTY
-    /// receive a Ctrl-C keystroke via the pseudoconsole input; other children
-    /// share turbo's console and are expected to receive console Ctrl-C
-    /// events directly, with a force kill after the child stop timeout as
-    /// the fallback.
+    /// this will send SIGINT to the process group for non-PTY children and to
+    /// the direct child for PTY children. On Windows, children spawned under
+    /// ConPTY receive a Ctrl-C keystroke via the pseudoconsole input; other
+    /// children share turbo's console and are expected to receive console
+    /// Ctrl-C events directly, with a force kill after the child stop
+    /// timeout as the fallback.
     pub async fn stop(&self) {
         self.close(CloseMode::Stop).await
     }
