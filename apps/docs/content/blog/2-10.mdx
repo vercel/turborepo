@@ -147,8 +147,6 @@ On the first `SIGINT` or `SIGTERM`, Turborepo forwards the signal to running tas
 
 If tasks are still running after 3 seconds, Turborepo prints the remaining task list. In an interactive terminal, press `Ctrl+C` again to force shut down. Without a terminal on stdin, Turborepo automatically escalates after 10 seconds.
 
-This works through the Node.js shim as well, so `npx turbo run` and `pnpm turbo run` keep the native `turbo` process alive until shutdown completes.
-
 [Visit the documentation](/docs/reference/run#graceful-shutdown) to learn more.
 
 ## Local cache eviction
