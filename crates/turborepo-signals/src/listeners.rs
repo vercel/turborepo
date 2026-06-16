@@ -11,30 +11,20 @@ pub struct Error(#[from] std::io::Error);
 pub fn get_signal() -> Result<impl Stream<Item = Option<Signal>>, Error> {
     use tokio::io::AsyncReadExt;
 
-    let debug_ctrl_c = std::env::var("TURBO_DEBUG_WINDOWS_CTRL_C").as_deref() == Ok("1");
     let mut ctrl_c = tokio::signal::windows::ctrl_c()?;
     Ok(stream::once(async move {
-        let wrapper_ctrl_c_port = std::env::var("TURBO_WINDOWS_CTRL_C_PORT")
+        let wrapper_ctrl_c_port = std::env::var("__TURBO_WINDOWS_CTRL_C_PORT")
             .ok()
             .and_then(|port| port.parse::<u16>().ok());
 
         if let Some(port) = wrapper_ctrl_c_port {
-            if debug_ctrl_c {
-                eprintln!("[turbo rust ctrl-c] connecting to wrapper on port {port}");
-            }
             let wrapper_ctrl_c = async move {
                 loop {
                     if let Ok(mut stream) =
                         tokio::net::TcpStream::connect(("127.0.0.1", port)).await
                     {
-                        if debug_ctrl_c {
-                            eprintln!("[turbo rust ctrl-c] connected to wrapper");
-                        }
                         let mut byte = [0];
                         if stream.read_exact(&mut byte).await.is_ok() && byte[0] == 0x03 {
-                            if debug_ctrl_c {
-                                eprintln!("[turbo rust ctrl-c] received wrapper ctrl-c");
-                            }
                             return Some(Signal::CtrlC);
                         }
                     }
@@ -44,18 +34,10 @@ pub fn get_signal() -> Result<impl Stream<Item = Option<Signal>>, Error> {
             };
 
             tokio::select! {
-                signal = ctrl_c.recv() => {
-                    if debug_ctrl_c {
-                        eprintln!("[turbo rust ctrl-c] received console ctrl-c");
-                    }
-                    signal.map(|_| Signal::CtrlC)
-                },
+                signal = ctrl_c.recv() => signal.map(|_| Signal::CtrlC),
                 signal = wrapper_ctrl_c => signal,
             }
         } else {
-            if debug_ctrl_c {
-                eprintln!("[turbo rust ctrl-c] waiting for console ctrl-c");
-            }
             ctrl_c.recv().await.map(|_| Signal::CtrlC)
         }
     }))

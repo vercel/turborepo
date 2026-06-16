@@ -147,16 +147,11 @@ pub(super) fn signal_process_group(process_group_id: libc::pid_t, signal: libc::
 
 #[cfg(windows)]
 fn run_child_console_helper(pid: u32, command: &str) -> bool {
-    let debug_ctrl_c = std::env::var("TURBO_DEBUG_WINDOWS_CTRL_C").as_deref() == Ok("1");
-    if debug_ctrl_c {
-        eprintln!("[turbo process ctrl-c] spawning helper `{command}` for child console {pid}");
-    }
-
     let Ok(exe) = std::env::current_exe() else {
         return false;
     };
 
-    let success = std::process::Command::new(exe)
+    std::process::Command::new(exe)
         .arg("__internal_windows_ctrl_c")
         .arg(command)
         .arg(pid.to_string())
@@ -164,13 +159,7 @@ fn run_child_console_helper(pid: u32, command: &str) -> bool {
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
-        .is_ok_and(|status| status.success());
-
-    if debug_ctrl_c {
-        eprintln!("[turbo process ctrl-c] helper returned {success}");
-    }
-
-    success
+        .is_ok_and(|status| status.success())
 }
 
 #[cfg(windows)]
@@ -214,7 +203,7 @@ impl ChildHandle {
         };
 
         #[cfg(windows)]
-        let wrapper_ctrl_c = std::env::var_os("TURBO_WINDOWS_CTRL_C_PORT").is_some();
+        let wrapper_ctrl_c = std::env::var_os("__TURBO_WINDOWS_CTRL_C_PORT").is_some();
 
         #[cfg(windows)]
         use std::os::windows::process::CommandExt as _;
@@ -598,7 +587,7 @@ impl ChildHandle {
     #[cfg(windows)]
     pub(super) fn send_graceful_interrupt(&self) -> bool {
         let Some(pty_input) = &self.pty_input else {
-            if std::env::var_os("TURBO_WINDOWS_CTRL_C_PORT").is_some()
+            if std::env::var_os("__TURBO_WINDOWS_CTRL_C_PORT").is_some()
                 && let Some(pid) = self.pid
             {
                 let sent = send_ctrl_c_to_child_console(pid);
