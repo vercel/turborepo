@@ -9,38 +9,67 @@ pub struct Error(#[from] std::io::Error);
 #[cfg(windows)]
 /// A listener for Windows Console Ctrl-C events
 pub fn get_signal() -> Result<impl Stream<Item = Option<Signal>>, Error> {
-    use tokio::io::AsyncReadExt;
+    let wrapper_ctrl_c = wrapper_ctrl_c_fd_from_env(std::env::var_os("__TURBO_WINDOWS_CTRL_C_FD"))
+        .map(wrapper_ctrl_c_receiver)
+        .transpose()?;
+    let ctrl_c = if wrapper_ctrl_c.is_none() {
+        Some(tokio::signal::windows::ctrl_c()?)
+    } else {
+        None
+    };
 
-    let mut ctrl_c = tokio::signal::windows::ctrl_c()?;
     Ok(stream::once(async move {
-        let wrapper_ctrl_c_port = std::env::var("__TURBO_WINDOWS_CTRL_C_PORT")
-            .ok()
-            .and_then(|port| port.parse::<u16>().ok());
-
-        if let Some(port) = wrapper_ctrl_c_port {
-            let wrapper_ctrl_c = async move {
-                loop {
-                    if let Ok(mut stream) =
-                        tokio::net::TcpStream::connect(("127.0.0.1", port)).await
-                    {
-                        let mut byte = [0];
-                        if stream.read_exact(&mut byte).await.is_ok() && byte[0] == 0x03 {
-                            return Some(Signal::CtrlC);
-                        }
-                    }
-
-                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-                }
-            };
-
-            tokio::select! {
-                signal = ctrl_c.recv() => signal.map(|_| Signal::CtrlC),
-                signal = wrapper_ctrl_c => signal,
-            }
-        } else {
+        if let Some(wrapper_ctrl_c) = wrapper_ctrl_c {
+            wrapper_ctrl_c.await.ok().flatten()
+        } else if let Some(mut ctrl_c) = ctrl_c {
             ctrl_c.recv().await.map(|_| Signal::CtrlC)
+        } else {
+            None
         }
     }))
+}
+
+#[cfg(windows)]
+fn wrapper_ctrl_c_fd_from_env(value: Option<std::ffi::OsString>) -> Option<i32> {
+    value.and_then(|fd| fd.to_str()?.parse::<i32>().ok())
+}
+
+#[cfg(windows)]
+fn wrapper_ctrl_c_receiver(
+    fd: i32,
+) -> Result<tokio::sync::oneshot::Receiver<Option<Signal>>, std::io::Error> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    std::thread::Builder::new()
+        .name("turbo-windows-ctrl-c-pipe".to_string())
+        .spawn(move || {
+            tx.send(read_wrapper_ctrl_c(fd)).ok();
+        })?;
+    Ok(rx)
+}
+
+#[cfg(windows)]
+fn read_wrapper_ctrl_c(fd: i32) -> Option<Signal> {
+    let mut byte = [0];
+    loop {
+        match unsafe { libc::read(fd, byte.as_mut_ptr().cast(), 1) } {
+            1 if byte[0] == 0x03 => return Some(Signal::CtrlC),
+            1 => {}
+            _ => return None,
+        }
+    }
+}
+
+#[cfg(windows)]
+#[cfg(test)]
+mod tests {
+    use super::wrapper_ctrl_c_fd_from_env;
+
+    #[test]
+    fn parses_wrapper_ctrl_c_fd() {
+        assert_eq!(wrapper_ctrl_c_fd_from_env(Some("3".into())), Some(3));
+        assert_eq!(wrapper_ctrl_c_fd_from_env(Some("not-a-fd".into())), None);
+        assert_eq!(wrapper_ctrl_c_fd_from_env(None), None);
+    }
 }
 
 #[cfg(not(windows))]

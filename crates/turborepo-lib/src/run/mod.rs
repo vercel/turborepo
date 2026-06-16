@@ -542,6 +542,8 @@ impl Run {
         let color_config = self.color_config;
         let scrollback_len = self.opts.tui_opts.scrollback_length;
         let repo_root = self.repo_root.clone();
+        let signal_handler = self.signal_handler.clone();
+        let interrupt = Arc::new(move || signal_handler.notify_signal());
         let handle = tokio::task::spawn(async move {
             Ok(tui::run_app(
                 task_names,
@@ -549,6 +551,7 @@ impl Run {
                 color_config,
                 &repo_root,
                 scrollback_len,
+                Some(interrupt),
             )
             .await?)
         });

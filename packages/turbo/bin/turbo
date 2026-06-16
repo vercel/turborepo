@@ -7,11 +7,12 @@
 
 const child_process = require('child_process');
 const fs = require('fs');
-const net = require('net');
 const path = require('path');
 
 // If we do not find the correct platform binary, should we attempt to install it?
 const SHOULD_INSTALL = true;
+const CTRL_C_BYTE = Buffer.from([0x03]);
+const CTRL_C_DEBOUNCE_MS = 200;
 
 // If we do not find the correct platform binary, should we trust calling an emulated variant?
 const SHOULD_ATTEMPT_EMULATED = true;
@@ -316,6 +317,10 @@ function shouldOwnWindowsCtrlC() {
     return false;
   }
 
+  if (usesTui(process.argv.slice(2))) {
+    return false;
+  }
+
   return Boolean(
     process.env.npm_command ||
     process.env.npm_lifecycle_event ||
@@ -323,54 +328,71 @@ function shouldOwnWindowsCtrlC() {
   );
 }
 
-function createWindowsCtrlCServer(callback) {
-  const clients = new Set();
-  const server = net.createServer((socket) => {
-    clients.add(socket);
-    socket.on("error", () => {});
-    socket.once("close", () => clients.delete(socket));
-  });
-
-  server.listen(0, "127.0.0.1", () => {
-    callback({
-      port: server.address().port,
-      sendCtrlC() {
-        for (const client of clients) {
-          client.write(Buffer.from([0x03]));
-        }
-      },
-      close() {
-        for (const client of clients) {
-          client.destroy();
-        }
-        server.close();
-      },
-    });
-  });
+function usesTui(args) {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--ui=tui") {
+      return true;
+    }
+    if (arg === "--ui" && args[i + 1] === "tui") {
+      return true;
+    }
+  }
+  return false;
 }
 
 function runTurbo() {
   if (shouldOwnWindowsCtrlC()) {
-    return createWindowsCtrlCServer((ctrlCServer) => {
-      runTurboChild({
+    return runTurboChild(
+      {
         ...process.env,
-        __TURBO_WINDOWS_CTRL_C_PORT: String(ctrlCServer.port),
-      }, ctrlCServer);
-    });
+        __TURBO_WINDOWS_CTRL_C_FD: "3",
+      },
+      true
+    );
   }
 
-  runTurboChild(process.env, null);
+  runTurboChild(process.env, false);
 }
 
-function runTurboChild(env, ctrlCServer) {
+function runTurboChild(env, useCtrlCPipe) {
   const child = child_process.spawn(
     getBinaryPath(),
     process.argv.slice(2),
-    { stdio: "inherit", env }
+    {
+      stdio: useCtrlCPipe ? ["inherit", "inherit", "inherit", "pipe"] : "inherit",
+      env,
+    }
   );
 
+  const ctrlCPipe = useCtrlCPipe ? child.stdio[3] : null;
+  ctrlCPipe?.on("error", () => {});
+  let lastCtrlCSentAt = 0;
+
+  const sendCtrlC = () => {
+    const now = Date.now();
+    if (now - lastCtrlCSentAt < CTRL_C_DEBOUNCE_MS) {
+      return;
+    }
+    lastCtrlCSentAt = now;
+
+    if (ctrlCPipe && !ctrlCPipe.destroyed && ctrlCPipe.writable) {
+      ctrlCPipe.write(CTRL_C_BYTE);
+    }
+  };
+
+  const handleCtrlCPipeData = (chunk) => {
+    for (const byte of chunk) {
+      if (byte === 0x03) {
+        sendCtrlC();
+      }
+    }
+  };
+
+  ctrlCPipe?.on("data", handleCtrlCPipeData);
+
   const restoreStdin = () => {
-    if (!ctrlCServer) {
+    if (!useCtrlCPipe) {
       return;
     }
 
@@ -383,21 +405,20 @@ function runTurboChild(env, ctrlCServer) {
   const handleInput = (chunk) => {
     for (const byte of chunk) {
       if (byte === 0x03) {
-        ctrlCServer.sendCtrlC();
+        sendCtrlC();
       }
     }
   };
 
-  if (ctrlCServer) {
+  if (useCtrlCPipe) {
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdin.on("data", handleInput);
   }
 
   const handleSigint = () => {
-    // The child shares our process group, so Ctrl+C already reached it.
-    // Keep the wrapper alive until the child finishes its own shutdown.
-    ctrlCServer?.sendCtrlC();
+    // Keep the wrapper alive and let native turbo handle graceful shutdown.
+    sendCtrlC();
   };
 
   const handleSigterm = () => {
@@ -410,8 +431,9 @@ function runTurboChild(env, ctrlCServer) {
     process.off("SIGINT", handleSigint);
     process.off("SIGTERM", handleSigterm);
     process.stdin.off("data", handleInput);
+    ctrlCPipe?.off("data", handleCtrlCPipeData);
     restoreStdin();
-    ctrlCServer?.close();
+    ctrlCPipe?.destroy();
   };
 
   process.on("SIGINT", handleSigint);

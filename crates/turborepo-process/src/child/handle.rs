@@ -203,7 +203,7 @@ impl ChildHandle {
         };
 
         #[cfg(windows)]
-        let wrapper_ctrl_c = std::env::var_os("__TURBO_WINDOWS_CTRL_C_PORT").is_some();
+        let wrapper_ctrl_c = std::env::var_os("__TURBO_WINDOWS_CTRL_C_FD").is_some();
 
         #[cfg(windows)]
         use std::os::windows::process::CommandExt as _;
@@ -587,7 +587,7 @@ impl ChildHandle {
     #[cfg(windows)]
     pub(super) fn send_graceful_interrupt(&self) -> bool {
         let Some(pty_input) = &self.pty_input else {
-            if std::env::var_os("__TURBO_WINDOWS_CTRL_C_PORT").is_some()
+            if std::env::var_os("__TURBO_WINDOWS_CTRL_C_FD").is_some()
                 && let Some(pid) = self.pid
             {
                 let sent = send_ctrl_c_to_child_console(pid);
