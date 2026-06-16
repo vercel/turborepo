@@ -47,6 +47,7 @@ impl PackageChangesWatcher {
         hash_watcher: Arc<HashWatcher>,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
+        allow_no_package_manager: bool,
     ) -> Self {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (package_change_events_tx, package_change_events_rx) =
@@ -58,6 +59,7 @@ impl PackageChangesWatcher {
             hash_watcher,
             custom_turbo_json_path,
             single_package,
+            allow_no_package_manager,
         );
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
@@ -104,6 +106,7 @@ struct Subscriber {
     hash_watcher: Arc<HashWatcher>,
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     single_package: bool,
+    allow_no_package_manager: bool,
 }
 
 // This is a workaround because `ignore` doesn't match against a path's
@@ -238,6 +241,7 @@ impl Subscriber {
         hash_watcher: Arc<HashWatcher>,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
+        allow_no_package_manager: bool,
     ) -> Self {
         // Try to canonicalize the custom path to match what the file watcher reports
         let normalized_custom_path = custom_turbo_json_path.map(|path| {
@@ -279,6 +283,7 @@ impl Subscriber {
             hash_watcher,
             custom_turbo_json_path: normalized_custom_path,
             single_package,
+            allow_no_package_manager,
         }
     }
 
@@ -292,6 +297,7 @@ impl Subscriber {
         let Ok(pkg_dep_graph) =
             PackageGraphBuilder::new(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.single_package)
+                .with_allow_no_package_manager(self.allow_no_package_manager)
                 .build()
                 .await
         else {
@@ -1138,12 +1144,13 @@ mod test {
 
     /// Create a PackageChangesWatcher backed by a synthetic file event channel.
     fn create_test_watcher(repo_root: &AbsoluteSystemPathBuf) -> TestWatcherHandle {
-        create_test_watcher_with_opts(repo_root, false)
+        create_test_watcher_with_opts(repo_root, false, false)
     }
 
     fn create_test_watcher_with_opts(
         repo_root: &AbsoluteSystemPathBuf,
         single_package: bool,
+        allow_no_package_manager: bool,
     ) -> TestWatcherHandle {
         let (file_events_tx, file_events_rx) = broadcast::channel(128);
         let (opt_tx, opt_watch) = OptionalWatch::new();
@@ -1175,6 +1182,7 @@ mod test {
             hash_watcher,
             None,
             single_package,
+            allow_no_package_manager,
         );
 
         TestWatcherHandle {
@@ -1476,7 +1484,7 @@ mod test {
     #[tokio::test]
     async fn single_package_watcher_sends_initial_rediscover() {
         let (_tmp, repo_root) = setup_single_package_git_repo();
-        let handle = create_test_watcher_with_opts(&repo_root, true);
+        let handle = create_test_watcher_with_opts(&repo_root, true, false);
         let mut rx = handle.watcher.package_change_events_rx.resubscribe();
 
         let event = recv_event(&mut rx, Duration::from_secs(2)).await;
@@ -1506,6 +1514,95 @@ mod test {
             pkg_names.iter().any(|n| n == "//"),
             "root package '//' not found in graph. packages: {:?}",
             pkg_names
+        );
+    }
+
+    /// Set up a git-initialized pnpm monorepo whose package manager must be
+    /// inferred from the lockfile, and return everything needed to create a
+    /// PackageChangesWatcher.
+    fn setup_pnpm_repo_without_package_manager() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root =
+            AbsoluteSystemPathBuf::new(tmp.path().to_str().unwrap().to_string()).unwrap();
+        let repo_root = repo_root.to_realpath().unwrap();
+
+        std::process::Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(repo_root.as_std_path())
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["config", "user.name", "test"])
+            .current_dir(repo_root.as_std_path())
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(repo_root.as_std_path())
+            .status()
+            .unwrap();
+
+        // Root package.json — no `packageManager` field
+        repo_root
+            .join_component("package.json")
+            .create_with_contents(r#"{"name":"root"}"#.as_bytes())
+            .unwrap();
+        repo_root
+            .join_component("pnpm-workspace.yaml")
+            .create_with_contents(r#"packages: ["packages/*"]"#.as_bytes())
+            .unwrap();
+        repo_root
+            .join_component("pnpm-lock.yaml")
+            .create_with_contents("lockfileVersion: '6.0'\n".as_bytes())
+            .unwrap();
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(r#"{"tasks":{"build":{}}}"#.as_bytes())
+            .unwrap();
+        repo_root
+            .join_component(".gitignore")
+            .create_with_contents("node_modules/\n.turbo/\n".as_bytes())
+            .unwrap();
+
+        let pkg_a_dir = repo_root.join_components(&["packages", "a"]);
+        pkg_a_dir.create_dir_all().unwrap();
+        pkg_a_dir
+            .join_component("package.json")
+            .create_with_contents(r#"{"name":"a","scripts":{"build":"echo built"}}"#.as_bytes())
+            .unwrap();
+        pkg_a_dir
+            .join_component("index.ts")
+            .create_with_contents(b"export const a = 1;")
+            .unwrap();
+
+        std::process::Command::new("git")
+            .args(["add", "."])
+            .current_dir(repo_root.as_std_path())
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "-m", "init", "--quiet"])
+            .current_dir(repo_root.as_std_path())
+            .status()
+            .unwrap();
+
+        (tmp, repo_root)
+    }
+
+    #[tokio::test]
+    async fn watcher_initializes_without_package_manager_when_allowed() {
+        // The watcher only emits the initial Rediscover after the package graph
+        // builds, so receiving it proves discovery succeeded without a root
+        // `packageManager` field.
+        let (_tmp, repo_root) = setup_pnpm_repo_without_package_manager();
+        let handle = create_test_watcher_with_opts(&repo_root, false, true);
+        let mut rx = handle.watcher.package_change_events_rx.resubscribe();
+
+        let event = recv_event(&mut rx, Duration::from_secs(2)).await;
+        assert!(
+            matches!(event, Some(PackageChangeEvent::Rediscover)),
+            "expected Rediscover when allow_no_package_manager is set, got {:?}",
+            event
         );
     }
 

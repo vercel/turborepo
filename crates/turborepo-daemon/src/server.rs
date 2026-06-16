@@ -199,6 +199,7 @@ impl<W: PackageChangesWatcher + 'static> FileWatching<W> {
                     file_events: recv,
                     hash_watcher: self.hash_watcher.clone(),
                     custom_turbo_json_path: self.custom_turbo_json_path.clone(),
+                    allow_no_package_manager: self.allow_no_package_manager,
                 };
                 Arc::new((self.package_changes_watcher_factory)(args))
             })
