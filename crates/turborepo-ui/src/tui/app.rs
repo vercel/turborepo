@@ -2667,7 +2667,7 @@ mod test {
             turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
             "something went wrong",
         );
-        update(&mut app, Event::LogEvent(event))?;
+        update(&mut app, Event::LogEvent(event), None)?;
 
         assert_eq!(app.log_events.len(), 1);
         assert_eq!(app.log_events[0].message(), "something went wrong");
@@ -2701,7 +2701,7 @@ mod test {
         sender.end_task("app-a#dev".to_string(), TaskResult::Success);
 
         let (callback_tx, _callback_rx) = oneshot::channel();
-        update(&mut app, Event::Stop(callback_tx))?;
+        update(&mut app, Event::Stop(callback_tx), None)?;
         let mut terminal = None;
         let mut last_render = Instant::now();
         drain_after_stop(&mut terminal, &mut app, &mut receiver, &mut last_render).await?;
