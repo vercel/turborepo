@@ -272,6 +272,24 @@ It's possible to create scenarios where caching ends up being slower than not ca
 
 While these situations are rare, be sure to test the behavior of your projects to determine if disabling caching in specific places provides a performance benefit.
 
+## Local cache eviction
+
+Over time, your local filesystem cache can grow large. Turborepo can automatically evict stale or oversized cache entries at the start of each `turbo run`.
+
+Configure eviction in `turbo.json`:
+
+```jsonc title="turbo.json"
+{
+  "cacheMaxAge": "7d",
+  "cacheMaxSize": "10GB",
+}
+```
+
+- [`cacheMaxAge`](/docs/reference/configuration#cachemaxage) removes entries older than the configured duration
+- [`cacheMaxSize`](/docs/reference/configuration#cachemaxsize) removes the oldest entries when the cache exceeds the configured size limit
+
+Size-based eviction runs after age-based eviction. Both options are opt-in and disabled by default. You can also set them with the [`TURBO_CACHE_MAX_AGE`](/docs/reference/system-environment-variables#turbo_cache_max_age) and [`TURBO_CACHE_MAX_SIZE`](/docs/reference/system-environment-variables#turbo_cache_max_size) environment variables.
+
 ## Next steps
 
 Now that you've seen how Turborepo's caching makes your repository faster, let's take a look at how to develop applications and libraries in your Turborepo.

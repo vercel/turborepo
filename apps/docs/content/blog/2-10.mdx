@@ -1,0 +1,525 @@
+---
+title: Turborepo 2.10
+date: 2026/06/16
+description: "Graceful task shutdown, cache eviction, composable `--affected` and `--filter`, and `$TURBO_JIT$` for generated file inputs"
+product: turborepo
+type: overview
+summary: Release notes for Turborepo 2.10 featuring graceful shutdown, configurable local cache eviction, composable filtering, and just-in-time task input hashing.
+tag: "web development"
+---
+
+import { Authors } from "@/components/blog/authors";
+import { Callout } from "@/components/geistdocs/callout";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Date } from "@/components/blog/date";
+import { Accordion, Accordions } from "@/components/geistdocs/accordion";
+
+# Turborepo 2.10
+
+<Date>Tuesday, June 16th, 2026</Date>
+
+<Authors authors={["anthonyshew"]} />
+
+Turborepo 2.10 improves day-to-day reliability and control in your monorepo:
+
+- [**Graceful task shutdown**](#graceful-task-shutdown): Interrupt `turbo run` without leaving orphaned processes or truncated logs
+- [**Cache eviction with configuration**](#cache-eviction-with-configuration): Automatically reclaim disk space from your local cache
+- [**Composable `--affected` and `--filter`**](#composable---affected-and---filter): Narrow CI runs to affected packages within a specific scope
+- [**`$TURBO_JIT$` for generated file inputs**](#turbo_jit-for-generated-file-inputs): Hash generated files just in time for correct caching on the first run
+
+---
+
+Upgrade today by running `npx @turbo/codemod migrate` or get started with `npx create-turbo@latest`.
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+pnpm dlx @turbo/codemod migrate
+
+# Start a new repository
+pnpm dlx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+yarn dlx @turbo/codemod migrate
+
+# Start a new repository
+yarn dlx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+npx @turbo/codemod migrate
+
+# Start a new repository
+npx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="bun">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+bunx @turbo/codemod migrate
+
+# Start a new repository
+bunx create-turbo@latest
+```
+
+</Tab>
+
+</PackageManagerTabs>
+
+Install or update your [Turborepo Agent Skills](/docs/guides/ai#agent-skill):
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+
+```bash title="Terminal"
+# Install the Turborepo Agent Skill
+pnpm dlx skills add vercel/turborepo
+
+# Update the Turborepo Agent Skill
+pnpm dlx skills update vercel/turborepo
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```bash title="Terminal"
+# Install the Turborepo Agent Skill
+yarn dlx skills add vercel/turborepo
+
+# Update the Turborepo Agent Skill
+yarn dlx skills update vercel/turborepo
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```bash title="Terminal"
+# Install the Turborepo Agent Skill
+npx skills add vercel/turborepo
+
+# Update the Turborepo Agent Skill
+npx skills update vercel/turborepo
+```
+
+</Tab>
+
+<Tab value="bun">
+
+```bash title="Terminal"
+# Install the Turborepo Agent Skill
+bunx skills add vercel/turborepo
+
+# Update the Turborepo Agent Skill
+bunx skills update vercel/turborepo
+```
+
+</Tab>
+
+</PackageManagerTabs>
+
+---
+
+## Graceful task shutdown
+
+Pressing `Ctrl+C` during a `turbo run` used to risk orphaned child processes, truncated TUI output, or cache writes that never finished. Turborepo now shuts down tasks gracefully.
+
+On the first `SIGINT` or `SIGTERM`, Turborepo forwards the signal to running task process groups and waits for them to exit. While tasks shut down, Turborepo continues flushing cache writes so you do not lose artifacts from completed work.
+
+If tasks are still running after 3 seconds, Turborepo prints the remaining task list. In an interactive terminal, press `Ctrl+C` again to force shut down. Without a terminal on stdin, Turborepo automatically escalates after 10 seconds.
+
+This works through the Node.js shim as well, so `npx turbo run` and `pnpm turbo run` keep the native `turbo` process alive until shutdown completes.
+
+[Visit the documentation](/docs/reference/run#graceful-shutdown) to learn more.
+
+## Cache eviction with configuration
+
+Local caches can grow without bound as your repository evolves. Turborepo now supports automatic eviction through two opt-in configuration options in `turbo.json`:
+
+```jsonc title="turbo.json"
+{
+  "cacheMaxAge": "7d",
+  "cacheMaxSize": "10GB",
+}
+```
+
+Eviction runs in a background thread at the start of each `turbo run`, so it does not block task scheduling:
+
+1. **Age-based eviction**: Entries older than `cacheMaxAge` are removed first
+2. **Size-based eviction**: If the cache still exceeds `cacheMaxSize`, the oldest remaining entries are removed
+
+Both options accept human-readable values like `"24h"`, `"2w"`, `"500MB"`, and `"1.5GB"`. Set either option to `"0"` to disable it. You can also configure eviction with the [`TURBO_CACHE_MAX_AGE`](/docs/reference/system-environment-variables#turbo_cache_max_age) and [`TURBO_CACHE_MAX_SIZE`](/docs/reference/system-environment-variables#turbo_cache_max_size) environment variables.
+
+[Visit the documentation](/docs/reference/configuration#cachemaxage) to learn more.
+
+## Composable `--affected` and `--filter`
+
+`--affected` and `--filter` were previously mutually exclusive. You can now combine them with intersection semantics to run only the tasks that match **both** constraints.
+
+```bash title="Terminal"
+# Only run build for "web" if it's affected by changes
+turbo run build --affected --filter=web
+
+# Run affected packages, excluding "docs"
+turbo run build --affected --filter=!docs
+
+# List "my-app" only if it's affected
+turbo query ls --affected --filter=my-app
+```
+
+This is especially useful in CI when you want to scope an affected run to a subset of your monorepo, like a single application or package group.
+
+[Visit the documentation](/docs/reference/run#--affected) to learn more.
+
+## `$TURBO_JIT$` for generated file inputs
+
+Tasks that consume generated files can be cached incorrectly on the first run. Without just-in-time hashing, Turborepo hashes file inputs when `turbo` starts — before dependency tasks have created or restored the generated files.
+
+`$TURBO_JIT$` defers hashing for selected file inputs until after a task's `dependsOn` tasks complete:
+
+```jsonc title="turbo.json"
+{
+  "tasks": {
+    "codegen": {
+      "outputs": ["src/generated/**"],
+    },
+    "check-types": {
+      "dependsOn": ["codegen"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!src/generated/**",
+        "$TURBO_JIT$/src/generated/**",
+      ],
+    },
+  },
+}
+```
+
+In this example, `check-types` waits for `codegen`, then hashes `src/generated/**` before checking the cache. Tasks using `$TURBO_JIT$` show a deferred hash in `--dry` output until their dependencies finish.
+
+`$TURBO_JIT$` graduates from pre-release status in Turborepo 2.10.
+
+[Visit the documentation](/docs/reference/configuration#turbo_jit) to learn more.
+
+## All changes
+
+<Accordions>
+
+  <Accordion title="Feat (13)">
+
+    - feat: Graceful shutdown ([#12607](https://github.com/vercel/turborepo/pull/12607))
+    - feat: Add JIT task input hashing ([#13043](https://github.com/vercel/turborepo/pull/13043))
+    - feat: Add Rsbuild examples ([#12942](https://github.com/vercel/turborepo/pull/12942))
+    - feat: Add heap allocation profiling ([#12943](https://github.com/vercel/turborepo/pull/12943))
+    - feat: Move Vercel auth to standard OAuth/device flows ([#12526](https://github.com/vercel/turborepo/pull/12526))
+    - feat: Bump @vercel/sandbox from v1 to beta ([#12595](https://github.com/vercel/turborepo/pull/12595))
+    - feat: Add circular package dependency detection to boundaries ([#12567](https://github.com/vercel/turborepo/pull/12567))
+    - feat: Replace package manager commands in scaffolded README files ([#6747](https://github.com/vercel/turborepo/pull/6747))
+    - feat: Allow `--affected` and `--filter` to be combined ([#12543](https://github.com/vercel/turborepo/pull/12543))
+    - feat: Add incremental task caching ([#12531](https://github.com/vercel/turborepo/pull/12531))
+    - feat: Add Next.js + Elysia full-stack starter template ([#12414](https://github.com/vercel/turborepo/pull/12414))
+    - feat: Add `cacheMaxAge` and `cacheMaxSize` for local cache eviction ([#12487](https://github.com/vercel/turborepo/pull/12487))
+    - feat: Handle package manager catalogs in migration codemod ([#12496](https://github.com/vercel/turborepo/pull/12496))
+
+  </Accordion>
+
+  <Accordion title="Perf (6)">
+
+    - perf: Trim microfrontends proxy HTTP features ([#12931](https://github.com/vercel/turborepo/pull/12931))
+    - perf: Trim OpenTelemetry crate features ([#12930](https://github.com/vercel/turborepo/pull/12930))
+    - perf: Index repo gitignore matchers ([#12928](https://github.com/vercel/turborepo/pull/12928))
+    - perf: Reduce `turbo watch` hash memory spikes ([#12695](https://github.com/vercel/turborepo/pull/12695))
+    - perf: Parallelize `boundaries` checking with Rayon and cache DFS traversals ([#12569](https://github.com/vercel/turborepo/pull/12569))
+    - perf: Increase remote cache upload chunk size from 8KB to 256KB ([#12568](https://github.com/vercel/turborepo/pull/12568))
+
+  </Accordion>
+
+  <Accordion title="Fix (229)">
+
+    - fix: Remove accidental shell commands example changes ([#13094](https://github.com/vercel/turborepo/pull/13094))
+    - fix: Prevent duplicate PTY graceful shutdown signals ([#13093](https://github.com/vercel/turborepo/pull/13093))
+    - fix: Handle Windows package manager shutdown ([#13090](https://github.com/vercel/turborepo/pull/13090))
+    - fix: Use repo package manager for generate ([#13089](https://github.com/vercel/turborepo/pull/13089))
+    - fix: Precompute unblocked JIT descendants ([#13088](https://github.com/vercel/turborepo/pull/13088))
+    - fix: Preserve pnpm peer-resolved prune entries ([#13086](https://github.com/vercel/turborepo/pull/13086))
+    - fix: Speed up default create-turbo download ([#13085](https://github.com/vercel/turborepo/pull/13085))
+    - fix: Preserve PNPM deps check config ([#13084](https://github.com/vercel/turborepo/pull/13084))
+    - fix: Prevent ConPTY cursor query output ([#13077](https://github.com/vercel/turborepo/pull/13077))
+    - fix: Cache outputs through internal symlinks ([#13076](https://github.com/vercel/turborepo/pull/13076))
+    - fix: Filter pruned pnpm workspace patches ([#13075](https://github.com/vercel/turborepo/pull/13075))
+    - fix: Use PTY for interactive Windows tasks ([#13073](https://github.com/vercel/turborepo/pull/13073))
+    - fix: Deliver Ctrl-C to ConPTY children during graceful shutdown on Windows ([#13069](https://github.com/vercel/turborepo/pull/13069))
+    - fix: Stop shim from killing local turbo on Windows Ctrl+C ([#13067](https://github.com/vercel/turborepo/pull/13067))
+    - fix: Re-authenticate when stored token loses access to linked team ([#13064](https://github.com/vercel/turborepo/pull/13064))
+    - fix: Block self-hosted login URLs from attempting to use Vercel's SSO ([#13061](https://github.com/vercel/turborepo/pull/13061))
+    - fix: Validate OidHash hex buffers ([#13060](https://github.com/vercel/turborepo/pull/13060))
+    - fix: Separate artifact signature fields ([#13059](https://github.com/vercel/turborepo/pull/13059))
+    - fix: Preserve vt100 cell byte counts ([#13058](https://github.com/vercel/turborepo/pull/13058))
+    - fix: Normalize Windows daemon path hash ([#13020](https://github.com/vercel/turborepo/pull/13020))
+    - fix: Contain incremental cache outputs ([#13057](https://github.com/vercel/turborepo/pull/13057))
+    - fix: Strip special mode bits from cache restore ([#13056](https://github.com/vercel/turborepo/pull/13056))
+    - fix: Prevent git argument injection in SCM refs ([#13055](https://github.com/vercel/turborepo/pull/13055))
+    - fix: Confine prune patch paths ([#13054](https://github.com/vercel/turborepo/pull/13054))
+    - fix: Harden query server file access ([#13053](https://github.com/vercel/turborepo/pull/13053))
+    - fix: Harden cache archive symlink restore ([#13051](https://github.com/vercel/turborepo/pull/13051))
+    - fix: Send Ctrl+C to Windows PTY tasks ([#13041](https://github.com/vercel/turborepo/pull/13041))
+    - fix: Defer hashes for JIT task dependents ([#13045](https://github.com/vercel/turborepo/pull/13045))
+    - fix: Bypass npm command shim on Windows ([#13040](https://github.com/vercel/turborepo/pull/13040))
+    - fix: Support P-521 ECDSA certificate chains over rustls ([#13036](https://github.com/vercel/turborepo/pull/13036))
+    - fix: Add TUI pane padding before logs ([#13034](https://github.com/vercel/turborepo/pull/13034))
+    - fix: Keep PTY stdin open for tasks ([#13033](https://github.com/vercel/turborepo/pull/13033))
+    - fix: Preserve pnpm override-resolved prune deps ([#13031](https://github.com/vercel/turborepo/pull/13031))
+    - fix: Ignore peer dependencies in package graph ([#13025](https://github.com/vercel/turborepo/pull/13025))
+    - fix: Highlight active docs sidebar item ([#13023](https://github.com/vercel/turborepo/pull/13023))
+    - fix: Preserve Bun nested dependency versions ([#13016](https://github.com/vercel/turborepo/pull/13016))
+    - fix: Wait for Windows graceful shutdown ([#12979](https://github.com/vercel/turborepo/pull/12979))
+    - fix: Detect affected root tasks in query ([#12977](https://github.com/vercel/turborepo/pull/12977))
+    - fix: Add auth HTTP timeouts ([#12976](https://github.com/vercel/turborepo/pull/12976))
+    - fix: Keep non-PTY stdin alive for persistent tasks ([#12972](https://github.com/vercel/turborepo/pull/12972))
+    - fix: Don't delete existing `.git` when using `--no-git` flag ([#12968](https://github.com/vercel/turborepo/pull/12968))
+    - fix: Preserve nested Bun dependency versions ([#12965](https://github.com/vercel/turborepo/pull/12965))
+    - fix: Preserve nested Bun dependency versions ([#12963](https://github.com/vercel/turborepo/pull/12963))
+    - fix: Retry npm tlog publish failures ([#12959](https://github.com/vercel/turborepo/pull/12959))
+    - fix: Avoid hanging PTY shutdown ([#12958](https://github.com/vercel/turborepo/pull/12958))
+    - fix: Harden OTEL endpoint validation ([#12954](https://github.com/vercel/turborepo/pull/12954))
+    - fix: Respect root gitignore during prune ([#12953](https://github.com/vercel/turborepo/pull/12953))
+    - fix: Preserve pnpm injected peer package entries ([#12940](https://github.com/vercel/turborepo/pull/12940))
+    - fix: Use build-scale OTel duration buckets ([#12939](https://github.com/vercel/turborepo/pull/12939))
+    - fix: Improve profile tracing coverage ([#12936](https://github.com/vercel/turborepo/pull/12936))
+    - fix: Restore a few internal invariant checks ([#12933](https://github.com/vercel/turborepo/pull/12933))
+    - fix: Accept `experimentalCI` object config ([#12934](https://github.com/vercel/turborepo/pull/12934))
+    - fix: Restore release PR auto-merge ([#12927](https://github.com/vercel/turborepo/pull/12927))
+    - fix: Preserve nested Bun workspace dependency versions ([#12924](https://github.com/vercel/turborepo/pull/12924))
+    - fix: Restore task completion semantics ([#12923](https://github.com/vercel/turborepo/pull/12923))
+    - fix: Remove run summary test unwrap usage ([#12916](https://github.com/vercel/turborepo/pull/12916))
+    - fix: Remove turbo json test unwrap allowance ([#12918](https://github.com/vercel/turborepo/pull/12918))
+    - fix: Remove shim test unwrap usage ([#12917](https://github.com/vercel/turborepo/pull/12917))
+    - fix: Remove `turborepo-lib`'s `expect()` usage ([#12914](https://github.com/vercel/turborepo/pull/12914))
+    - fix: Remove `turborepo-lib`'s `unwrap()` usage ([#12915](https://github.com/vercel/turborepo/pull/12915))
+    - fix: Remove `turborepo-vt100`'s `unwrap()` usage ([#12913](https://github.com/vercel/turborepo/pull/12913))
+    - fix: Remove `turborepo-lockfiles`'s `unwrap()` usage ([#12911](https://github.com/vercel/turborepo/pull/12911))
+    - fix: Remove `turborepo-lockfiles` `expect()` usage ([#12910](https://github.com/vercel/turborepo/pull/12910))
+    - fix: Remove cache unwrap usage ([#12909](https://github.com/vercel/turborepo/pull/12909))
+    - fix: Remove engine expect usage ([#12908](https://github.com/vercel/turborepo/pull/12908))
+    - fix: Remove filewatch unwrap usage ([#12907](https://github.com/vercel/turborepo/pull/12907))
+    - fix: Remove `turborepo-engine`'s `unwrap()` usage ([#12906](https://github.com/vercel/turborepo/pull/12906))
+    - fix: Remove `turborepo-daemon`'s `expect()` usage ([#12904](https://github.com/vercel/turborepo/pull/12904))
+    - fix: Remove `turborepo-cache`'s `expect()` usage ([#12902](https://github.com/vercel/turborepo/pull/12902))
+    - fix: Remove `turborepo-filewatch`'s `expect()` usage ([#12903](https://github.com/vercel/turborepo/pull/12903))
+    - fix: Remove `turborepo-wax`'s `expect()` usage ([#12901](https://github.com/vercel/turborepo/pull/12901))
+    - fix: Include lockfile-changed packages in affected tasks ([#12900](https://github.com/vercel/turborepo/pull/12900))
+    - fix: Remove daemon unwrap usage ([#12898](https://github.com/vercel/turborepo/pull/12898))
+    - fix: Remove `turborepo-boundaries`'s `unwrap()` usage ([#12896](https://github.com/vercel/turborepo/pull/12896))
+    - fix: Remove scm unwrap usage ([#12897](https://github.com/vercel/turborepo/pull/12897))
+    - fix: Remove wax unwrap usage ([#12899](https://github.com/vercel/turborepo/pull/12899))
+    - fix: Remove `auth`'s `expect()` usage ([#12895](https://github.com/vercel/turborepo/pull/12895))
+    - fix: Remove `turbopath`'s `unwrap()` usage ([#12884](https://github.com/vercel/turborepo/pull/12884))
+    - fix: Remove auth unwrap usage ([#12886](https://github.com/vercel/turborepo/pull/12886))
+    - fix: Remove scm expect usage ([#12893](https://github.com/vercel/turborepo/pull/12893))
+    - fix: Remove `turborepo-process`'s `expect()` usage ([#12891](https://github.com/vercel/turborepo/pull/12891))
+    - fix: Remove microfrontends unwrap allow ([#12890](https://github.com/vercel/turborepo/pull/12890))
+    - fix: Remove UI unwrap usage ([#12889](https://github.com/vercel/turborepo/pull/12889))
+    - fix: Remove `turborepo-process`'s `unwrap()` usage ([#12888](https://github.com/vercel/turborepo/pull/12888))
+    - fix: Remove `boundaries`'s `expect()` usage ([#12887](https://github.com/vercel/turborepo/pull/12887))
+    - fix: Remove microfrontends expect usage ([#12885](https://github.com/vercel/turborepo/pull/12885))
+    - fix: Remove UI `expect()` usage ([#12882](https://github.com/vercel/turborepo/pull/12882))
+    - fix: Remove globwalk unwrap usage ([#12883](https://github.com/vercel/turborepo/pull/12883))
+    - fix: Remove api client unwrap usage ([#12881](https://github.com/vercel/turborepo/pull/12881))
+    - fix: Remove microfrontends proxy unwrap usage ([#12880](https://github.com/vercel/turborepo/pull/12880))
+    - fix: Remove run summary expect usage ([#12879](https://github.com/vercel/turborepo/pull/12879))
+    - fix: Remove task executor unwrap usage ([#12878](https://github.com/vercel/turborepo/pull/12878))
+    - fix: Remove Vercel API mock unwrap usage ([#12877](https://github.com/vercel/turborepo/pull/12877))
+    - fix: Remove turbo-trace expect allow ([#12876](https://github.com/vercel/turborepo/pull/12876))
+    - fix: Remove signals panic callsites ([#12874](https://github.com/vercel/turborepo/pull/12874))
+    - fix: Remove `turbopath`'s `expect()` callsites ([#12872](https://github.com/vercel/turborepo/pull/12872))
+    - fix: Remove `globwalk`'s `expect()` callsites ([#12871](https://github.com/vercel/turborepo/pull/12871))
+    - fix: Remove turbo-json panic lint allows ([#12869](https://github.com/vercel/turborepo/pull/12869))
+    - fix: Remove telemetry panic callsites ([#12868](https://github.com/vercel/turborepo/pull/12868))
+    - fix: Remove pidlock panic callsites ([#12867](https://github.com/vercel/turborepo/pull/12867))
+    - fix: Avoid repository NAPI unwrap calls ([#12866](https://github.com/vercel/turborepo/pull/12866))
+    - fix: Remove turborepo-shim expect callsites ([#12864](https://github.com/vercel/turborepo/pull/12864))
+    - fix: Remove vt100 expect lint allow ([#12861](https://github.com/vercel/turborepo/pull/12861))
+    - fix: Remove Vercel API mock expect usage ([#12862](https://github.com/vercel/turborepo/pull/12862))
+    - fix: Remove turbo-trace unwrap callsite ([#12863](https://github.com/vercel/turborepo/pull/12863))
+    - fix: Avoid task executor expect calls ([#12860](https://github.com/vercel/turborepo/pull/12860))
+    - fix: Avoid API client expect calls ([#12858](https://github.com/vercel/turborepo/pull/12858))
+    - fix: Remove microfrontends proxy expect lint allow ([#12859](https://github.com/vercel/turborepo/pull/12859))
+    - fix: Remove frameworks panic lint allows ([#12857](https://github.com/vercel/turborepo/pull/12857))
+    - fix: Remove task hash panic lints ([#12856](https://github.com/vercel/turborepo/pull/12856))
+    - fix: Remove scope panic lint allows ([#12855](https://github.com/vercel/turborepo/pull/12855))
+    - fix: Remove LSP expect callsites ([#12854](https://github.com/vercel/turborepo/pull/12854))
+    - fix: Avoid globwatch expect calls ([#12853](https://github.com/vercel/turborepo/pull/12853))
+    - fix: Remove napi panic lint allows ([#12852](https://github.com/vercel/turborepo/pull/12852))
+    - fix: Remove turborepo-types panic lint allows ([#12849](https://github.com/vercel/turborepo/pull/12849))
+    - fix: Remove json rewrite panic lint allow ([#12848](https://github.com/vercel/turborepo/pull/12848))
+    - fix: Remove devtools WebSocket panics ([#12850](https://github.com/vercel/turborepo/pull/12850))
+    - fix: Remove fixed map panic extraction calls ([#12847](https://github.com/vercel/turborepo/pull/12847))
+    - fix: Remove fs panic extraction lints ([#12846](https://github.com/vercel/turborepo/pull/12846))
+    - fix: Avoid graph walker `expect()` calls ([#12845](https://github.com/vercel/turborepo/pull/12845))
+    - fix: Avoid graph utility node lookup panics ([#12844](https://github.com/vercel/turborepo/pull/12844))
+    - fix: Store `PackageGraph` root invariants ([#12841](https://github.com/vercel/turborepo/pull/12841))
+    - fix: Validate daemon discovery responses ([#12840](https://github.com/vercel/turborepo/pull/12840))
+    - fix: Refactor execsync to execfilesync for Shell command built from environment values ([#12829](https://github.com/vercel/turborepo/pull/12829))
+    - fix: Prevent Windows process drain hangs ([#12838](https://github.com/vercel/turborepo/pull/12838))
+    - fix: Isolate Corepack state in integration tests ([#12831](https://github.com/vercel/turborepo/pull/12831))
+    - fix: Return Berry lockfile errors instead of panicking ([#12828](https://github.com/vercel/turborepo/pull/12828))
+    - fix: Create daemon dirs with private permissions ([#12827](https://github.com/vercel/turborepo/pull/12827))
+    - fix: Preserve non-UTF-8 Git path boundaries ([#12826](https://github.com/vercel/turborepo/pull/12826))
+    - fix: Avoid UTF-8 panics at boundaries ([#12823](https://github.com/vercel/turborepo/pull/12823))
+    - fix: Preserve Bun alias child packages ([#12822](https://github.com/vercel/turborepo/pull/12822))
+    - fix: Make structured log symlink defense race-safe ([#12821](https://github.com/vercel/turborepo/pull/12821))
+    - fix: Prevent cache restore symlink race writes ([#12817](https://github.com/vercel/turborepo/pull/12817))
+    - fix: Avoid path-racy chmod during directory restore ([#12815](https://github.com/vercel/turborepo/pull/12815))
+    - fix: Prevent cache archive symlink reads ([#12813](https://github.com/vercel/turborepo/pull/12813))
+    - fix: Wait for process trees before task completion ([#12809](https://github.com/vercel/turborepo/pull/12809))
+    - fix: Prune package.json workspaces ([#12808](https://github.com/vercel/turborepo/pull/12808))
+    - fix: Avoid project-local Yarn during detection ([#12801](https://github.com/vercel/turborepo/pull/12801))
+    - fix: Harden VS Code extension command execution ([#12800](https://github.com/vercel/turborepo/pull/12800))
+    - fix: Validate auth callback state ([#12802](https://github.com/vercel/turborepo/pull/12802))
+    - fix: Restore docs mobile menu ([#12782](https://github.com/vercel/turborepo/pull/12782))
+    - fix: Allow transit nodes in LSP diagnostics ([#12773](https://github.com/vercel/turborepo/pull/12773))
+    - fix: Allow TURBO_EXTENDS in LSP diagnostics ([#12770](https://github.com/vercel/turborepo/pull/12770))
+    - fix: Support shimmed VS Code LSP probes ([#12767](https://github.com/vercel/turborepo/pull/12767))
+    - fix: Publish VS Code extension from release tag ([#12765](https://github.com/vercel/turborepo/pull/12765))
+    - fix: Remove VS Code task key gradient ([#12761](https://github.com/vercel/turborepo/pull/12761))
+    - fix: Support `turbo.jsonc` in VS Code extension ([#12760](https://github.com/vercel/turborepo/pull/12760))
+    - fix: Reduce VS Code extension startup popups ([#12759](https://github.com/vercel/turborepo/pull/12759))
+    - fix: Prefer installed Turbo for LSP ([#12755](https://github.com/vercel/turborepo/pull/12755))
+    - fix: Preserve Bun nested dependencies during prune ([#12754](https://github.com/vercel/turborepo/pull/12754))
+    - fix: Resolve relative `turbo path` in VS Code extension ([#12753](https://github.com/vercel/turborepo/pull/12753))
+    - fix: Handle JSON decoration visitor depth ([#12752](https://github.com/vercel/turborepo/pull/12752))
+    - fix: Include file URIs in LSP lifecycle logs ([#12751](https://github.com/vercel/turborepo/pull/12751))
+    - fix: Start daemon for VSCode Extension from the extension itself ([#12749](https://github.com/vercel/turborepo/pull/12749))
+    - fix: Enforce cache filesystem boundaries ([#12743](https://github.com/vercel/turborepo/pull/12743))
+    - fix: Hardening for daemon IPC endpoints ([#12742](https://github.com/vercel/turborepo/pull/12742))
+    - fix: Keep workspace config discovery inside root ([#12741](https://github.com/vercel/turborepo/pull/12741))
+    - fix: Restrict Vercel token reuse to trusted API origins ([#12740](https://github.com/vercel/turborepo/pull/12740))
+    - fix: Handle clipboard exec errors ([#12739](https://github.com/vercel/turborepo/pull/12739))
+    - fix: Authenticate local devtools WebSocket ([#12738](https://github.com/vercel/turborepo/pull/12738))
+    - fix: Reject OTel endpoints with userinfo ([#12737](https://github.com/vercel/turborepo/pull/12737))
+    - fix: Use random temp path for repo downloads ([#12736](https://github.com/vercel/turborepo/pull/12736))
+    - fix: Resolve TypeScript `.js` extension imports to `.ts` files in boundaries ([#12644](https://github.com/vercel/turborepo/pull/12644))
+    - fix: Validate proxy Host headers ([#12731](https://github.com/vercel/turborepo/pull/12731))
+    - fix: Preserve FSEvents mount points for device-relative paths ([#12729](https://github.com/vercel/turborepo/pull/12729))
+    - fix: Filter microfrontend proxy environments ([#12732](https://github.com/vercel/turborepo/pull/12732))
+    - fix: Redact task hash env debug logs ([#12733](https://github.com/vercel/turborepo/pull/12733))
+    - fix: Validate microfrontend proxy Host header ([#12730](https://github.com/vercel/turborepo/pull/12730))
+    - fix: Retry HTTP status failures ([#12728](https://github.com/vercel/turborepo/pull/12728))
+    - fix: Prevent OTEL token injection to spoofed origins ([#12727](https://github.com/vercel/turborepo/pull/12727))
+    - fix: Escape graph HTML payloads ([#12726](https://github.com/vercel/turborepo/pull/12726))
+    - fix: Avoid raw create-turbo example telemetry ([#12725](https://github.com/vercel/turborepo/pull/12725))
+    - fix: Respect SCM env vars in `turbo query affected` ([#12722](https://github.com/vercel/turborepo/pull/12722))
+    - fix: Preserve lockfiles during dry-run conversion ([#12717](https://github.com/vercel/turborepo/pull/12717))
+    - fix: Harden docs security endpoints ([#12713](https://github.com/vercel/turborepo/pull/12713))
+    - fix: Scope release npm publishing credentials ([#12710](https://github.com/vercel/turborepo/pull/12710))
+    - fix: Harden OG image signatures ([#12709](https://github.com/vercel/turborepo/pull/12709))
+    - fix: Scope repo index prefixes to Git root ([#12706](https://github.com/vercel/turborepo/pull/12706))
+    - fix: Remove Unix parent death watchdogs ([#12699](https://github.com/vercel/turborepo/pull/12699))
+    - fix: Reduce parent-death watchdog CPU usage ([#12697](https://github.com/vercel/turborepo/pull/12697))
+    - fix: Keep tbx shell connections stable ([#12692](https://github.com/vercel/turborepo/pull/12692))
+    - fix: Create prune docker bin stubs ([#12688](https://github.com/vercel/turborepo/pull/12688))
+    - fix: Preserve Bun prune lockfile validity ([#12686](https://github.com/vercel/turborepo/pull/12686))
+    - fix: Resolve Yarn catalog affected packages ([#12684](https://github.com/vercel/turborepo/pull/12684))
+    - fix: Preserve concrete dependency precedence ([#12682](https://github.com/vercel/turborepo/pull/12682))
+    - fix: Avoid rerunning non-cacheable watch dependencies ([#12678](https://github.com/vercel/turborepo/pull/12678))
+    - fix: Support pnpm 11 flat patch lockfiles ([#12676](https://github.com/vercel/turborepo/pull/12676))
+    - fix: Improve tbx sandbox startup defaults ([#12675](https://github.com/vercel/turborepo/pull/12675))
+    - fix: Improve tbx sandbox startup ([#12674](https://github.com/vercel/turborepo/pull/12674))
+    - fix: Install dotfiles during `tbx base refresh` ([#12673](https://github.com/vercel/turborepo/pull/12673))
+    - fix: Allow tbx sandboxes to use stale bases ([#12672](https://github.com/vercel/turborepo/pull/12672))
+    - fix: Install turbo globally in tbx base ([#12670](https://github.com/vercel/turborepo/pull/12670))
+    - fix: Allow npm registry in tbx sandboxes ([#12669](https://github.com/vercel/turborepo/pull/12669))
+    - fix: Prevent prune from overmatching gitignore entries ([#12662](https://github.com/vercel/turborepo/pull/12662))
+    - fix: Recover Vercel auth tokens across login flows ([#12631](https://github.com/vercel/turborepo/pull/12631))
+    - fix: Preserve legacy Vercel auth compatibility ([#12629](https://github.com/vercel/turborepo/pull/12629))
+    - fix: Preserve PTY graceful shutdown semantics ([#12624](https://github.com/vercel/turborepo/pull/12624))
+    - fix: Keep Node wrapper alive during graceful shutdown ([#12622](https://github.com/vercel/turborepo/pull/12622))
+    - fix: Preserve graceful shutdown exit code ([#12620](https://github.com/vercel/turborepo/pull/12620))
+    - fix: Support pnpm v11 multi-document lockfiles ([#12616](https://github.com/vercel/turborepo/pull/12616))
+    - fix: Ignore SIGINT in shim after spawning local `turbo` ([#12612](https://github.com/vercel/turborepo/pull/12612))
+    - fix: Preserve graceful shutdown output ([#12607](https://github.com/vercel/turborepo/pull/12607))
+    - fix: Support two-dot git ranges in filter selectors ([#12599](https://github.com/vercel/turborepo/pull/12599))
+    - fix: Align Markdown docs routing with docs/md endpoints ([#12596](https://github.com/vercel/turborepo/pull/12596))
+    - fix: Load custom CA certificates in fast webpki-only HTTP client ([#12591](https://github.com/vercel/turborepo/pull/12591))
+    - fix: Add missing `@types/node` to `with-svelte` example apps ([#12585](https://github.com/vercel/turborepo/pull/12585))
+    - fix: Surface actionable message when remote cache is requested but not linked ([#12584](https://github.com/vercel/turborepo/pull/12584))
+    - fix: Mention `turbo.json` in concurrency error message ([#12582](https://github.com/vercel/turborepo/pull/12582))
+    - fix: Suppress telemetry alert when running on Vercel ([#12576](https://github.com/vercel/turborepo/pull/12576))
+    - fix: Normalize CRLF line endings in file hashing to match git ([#12572](https://github.com/vercel/turborepo/pull/12572))
+    - fix: Respect dirty .gitignore patterns during task input hashing ([#12557](https://github.com/vercel/turborepo/pull/12557))
+    - fix: Bun workspace lockfile pruning producing invalid output ([#12548](https://github.com/vercel/turborepo/pull/12548))
+    - fix: Retain microfrontend proxy tasks when using `filterUsingTasks` ([#12545](https://github.com/vercel/turborepo/pull/12545))
+    - fix: Deep-merge nested OTEL config across priority sources ([#12513](https://github.com/vercel/turborepo/pull/12513))
+    - fix: Preserve prerelease info in schema URL during codemod migration ([#12542](https://github.com/vercel/turborepo/pull/12542))
+    - fix: Validate engine concurrency after task-level filtering ([#12540](https://github.com/vercel/turborepo/pull/12540))
+    - fix: Only enforce signature key length for keys that exist ([#12538](https://github.com/vercel/turborepo/pull/12538))
+    - fix: Prevent `filterUsingTasks` `--filter` from pulling dependents into Task Graph ([#12535](https://github.com/vercel/turborepo/pull/12535))
+    - fix: Support `turbo.jsonc` in codemod transforms ([#12532](https://github.com/vercel/turborepo/pull/12532))
+    - fix: Always update $schema URL to versioned format during migration ([#12529](https://github.com/vercel/turborepo/pull/12529))
+    - fix: Preserve per-workspace lockfiles during pnpm pruning ([#12519](https://github.com/vercel/turborepo/pull/12519))
+    - fix: Preserve shallow install strategy during npm lockfile pruning ([#12520](https://github.com/vercel/turborepo/pull/12520))
+    - fix: Include transitive dependencies in engine graph pruning for affected paths using Task Graph ([#12516](https://github.com/vercel/turborepo/pull/12516))
+    - fix: Backfill missing pnpm workspace importer entries during prune ([#12514](https://github.com/vercel/turborepo/pull/12514))
+    - fix: Treat * as wildcard in preflight Access-Control-Allow-Headers ([#12503](https://github.com/vercel/turborepo/pull/12503))
+    - fix: Unblock `watch` loop so interruptible persistent tasks restart on file changes ([#12509](https://github.com/vercel/turborepo/pull/12509))
+    - fix: Resolve correct nested bun lockfile versions during prune ([#12506](https://github.com/vercel/turborepo/pull/12506))
+    - fix: Add retry logic to example update workflow push step ([#12499](https://github.com/vercel/turborepo/pull/12499))
+    - fix: Use previous minor/major tag for release notes on minor/major releases ([#12495](https://github.com/vercel/turborepo/pull/12495))
+
+  </Accordion>
+
+  <Accordion title="Docs (15)">
+
+    - docs: Remove ESM warning from gen page ([#13039](https://github.com/vercel/turborepo/pull/13039))
+    - docs: Exclude Next dev output from cache examples ([#13019](https://github.com/vercel/turborepo/pull/13019))
+    - docs: Correct attribute presence claims in turborepo-otel ([#12932](https://github.com/vercel/turborepo/pull/12932))
+    - docs: Add `with-vite-module-federation` example ([#12794](https://github.com/vercel/turborepo/pull/12794))
+    - docs: Add pnpm workspace flag (-w) to Oxc setup docs ([#12655](https://github.com/vercel/turborepo/pull/12655))
+    - docs: Clarify root task guidance ([#12683](https://github.com/vercel/turborepo/pull/12683))
+    - docs: Fix link to passthrough variables source code ([#12643](https://github.com/vercel/turborepo/pull/12643))
+    - docs: Clarify package hash file inputs ([#12671](https://github.com/vercel/turborepo/pull/12671))
+    - docs: Fix TURBO_PLATFORM_ENV_DISABLED value in docs (true, not false) ([#12633](https://github.com/vercel/turborepo/pull/12633))
+    - docs: Remove pre-release badges ([#12592](https://github.com/vercel/turborepo/pull/12592))
+    - docs: Add Bun equivalent for updating dependencies ([#12580](https://github.com/vercel/turborepo/pull/12580))
+    - docs: Send siteId as label on feedback GitHub issues ([#12527](https://github.com/vercel/turborepo/pull/12527))
+    - docs: Document `turbo.*` generator variables ([#12511](https://github.com/vercel/turborepo/pull/12511))
+    - docs: Add documentation for cacheMaxAge and cacheMaxSize options ([#12500](https://github.com/vercel/turborepo/pull/12500))
+    - docs: Release post for 2.9 ([#12441](https://github.com/vercel/turborepo/pull/12441))
+
+  </Accordion>
+
+  <Accordion title="Examples (1)">
+
+    - examples: Add Ultracite example ([#12615](https://github.com/vercel/turborepo/pull/12615))
+
+  </Accordion>
+
+
+</Accordions>
+
+## Acknowledgments and community
+
+Turborepo is the result of the combined work of all of its contributors, including our core team: [Anthony](https://github.com/anthonyshew) and [Tom](https://github.com/tknickman).
+
+We also thank everyone who contributed to this release of Turborepo: @adityasingh2400, @AndyBitz, @Balance8, @bitttttten, @bjormgyg, @christopherkindl, @dancrumb, @DependerKumarSoni, @eastgold15, @gioboa, @haydenbleasel, @JRoy, @kitten, @marc-vercel, @markandrus, @maschwenk, @mattjoll, @molebox, @mvanhorn, @Nsttt, @ognevny, @saiteja-madha, @sleitor, and @Wartijn.
+
+Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice. To learn how to get involved, [visit the Community page](https://turborepo.dev/docs/community).

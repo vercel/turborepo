@@ -863,7 +863,7 @@ Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to 
 }
 ```
 
-#### `$TURBO_JIT$` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+#### `$TURBO_JIT$`
 
 `$TURBO_JIT$` marks file inputs that should be hashed just in time, after the
 task's `dependsOn` tasks have completed.
@@ -930,11 +930,6 @@ Negations with `$TURBO_JIT$` only apply to JIT inputs:
 
 Normal negations do not exclude JIT inputs. For example,
 `!src/generated/**` does not exclude `$TURBO_JIT$/src/generated/**`.
-
-<Callout type="warn" title="Pre-release">
-  `$TURBO_JIT$` is a pre-release feature. The configuration surface and output
-  shown by `--dry` may change before this feature is marked stable.
-</Callout>
 
 Notes:
 

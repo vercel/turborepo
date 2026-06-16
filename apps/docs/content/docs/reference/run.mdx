@@ -721,3 +721,19 @@ To specify log level, use `--verbosity=<num>` or `-v, -vv, -vvv`.
 turbo run build --verbosity=2
 turbo run build -vvv
 ```
+
+## Graceful shutdown
+
+When you interrupt `turbo run` with `Ctrl+C` (`SIGINT`) or `SIGTERM`, Turborepo enters graceful shutdown instead of immediately terminating your tasks.
+
+On the first signal, Turborepo:
+
+1. Prints a shutdown message and forwards `SIGINT` to running task process groups
+2. Waits for tasks to exit while continuing to flush cache writes
+3. Shows the remaining tasks if shutdown takes longer than 3 seconds
+
+In an interactive terminal, press `Ctrl+C` a second time to force shut down immediately. Without a terminal attached to stdin, Turborepo automatically escalates to a force shutdown after 10 seconds.
+
+On Unix, a second signal escalates to a force kill. On Windows, Turborepo delivers `Ctrl+C` to PTY-backed tasks and waits for the process tree to exit before force killing.
+
+This behavior applies to `turbo run` and the Node.js shim that invokes the native `turbo` binary, so interrupting `npx turbo run` or `pnpm turbo run` still gives your tasks time to clean up.
