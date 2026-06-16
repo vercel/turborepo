@@ -2,6 +2,16 @@ let sigintCount = 0;
 let sigtermCount = 0;
 let exiting = false;
 
+process.stdin.setEncoding("utf8");
+process.stdin.resume();
+process.stdin.on("data", (chunk) => {
+  for (const line of chunk.split(/\r?\n/)) {
+    if (line.length > 0) {
+      console.log(`STDIN_ECHO=${line}`);
+    }
+  }
+});
+
 function scheduleExit() {
   if (exiting) {
     return;
@@ -27,5 +37,5 @@ process.on("SIGTERM", () => {
   scheduleExit();
 });
 
-console.log("Signal counter ready. Press Ctrl+C to stop.");
+console.log("Signal counter ready. Type a line to echo it, or press Ctrl+C to stop.");
 setInterval(() => {}, 1000);
