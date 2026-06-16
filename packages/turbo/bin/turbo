@@ -12,7 +12,6 @@ const path = require('path');
 // If we do not find the correct platform binary, should we attempt to install it?
 const SHOULD_INSTALL = true;
 const CTRL_C_BYTE = Buffer.from([0x03]);
-const CTRL_C_DEBOUNCE_MS = 200;
 
 // If we do not find the correct platform binary, should we trust calling an emulated variant?
 const SHOULD_ATTEMPT_EMULATED = true;
@@ -367,29 +366,12 @@ function runTurboChild(env, useCtrlCPipe) {
 
   const ctrlCPipe = useCtrlCPipe ? child.stdio[3] : null;
   ctrlCPipe?.on("error", () => {});
-  let lastCtrlCSentAt = 0;
 
   const sendCtrlC = () => {
-    const now = Date.now();
-    if (now - lastCtrlCSentAt < CTRL_C_DEBOUNCE_MS) {
-      return;
-    }
-    lastCtrlCSentAt = now;
-
     if (ctrlCPipe && !ctrlCPipe.destroyed && ctrlCPipe.writable) {
       ctrlCPipe.write(CTRL_C_BYTE);
     }
   };
-
-  const handleCtrlCPipeData = (chunk) => {
-    for (const byte of chunk) {
-      if (byte === 0x03) {
-        sendCtrlC();
-      }
-    }
-  };
-
-  ctrlCPipe?.on("data", handleCtrlCPipeData);
 
   const restoreStdin = () => {
     if (!useCtrlCPipe) {
@@ -431,7 +413,6 @@ function runTurboChild(env, useCtrlCPipe) {
     process.off("SIGINT", handleSigint);
     process.off("SIGTERM", handleSigterm);
     process.stdin.off("data", handleInput);
-    ctrlCPipe?.off("data", handleCtrlCPipeData);
     restoreStdin();
     ctrlCPipe?.destroy();
   };

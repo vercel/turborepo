@@ -38,7 +38,7 @@ pub enum ShutdownReason {
 pub struct SignalHandler {
     state: Arc<Mutex<HandlerState>>,
     close: mpsc::Sender<()>,
-    signal: mpsc::Sender<()>,
+    in_process_signal: mpsc::Sender<()>,
     shutdown_reason: Arc<AtomicU8>,
     started: Arc<Notify>,
 }
@@ -76,7 +76,7 @@ impl SignalHandler {
         let started = Arc::new(Notify::new());
         let worker_started = started.clone();
         let (close, mut rx) = mpsc::channel::<()>(1);
-        let (signal, mut signal_rx) = mpsc::channel::<()>(1);
+        let (in_process_signal, mut in_process_signal_rx) = mpsc::channel::<()>(1);
         tokio::spawn(async move {
             pin!(signal_source);
             let shutdown_reason = tokio::select! {
@@ -84,7 +84,7 @@ impl SignalHandler {
                     Some(Some(_signal)) => ShutdownReason::Signal,
                     Some(None) | None => ShutdownReason::Close,
                 },
-                _ = signal_rx.recv() => ShutdownReason::Signal,
+                _ = in_process_signal_rx.recv() => ShutdownReason::Signal,
                 // We don't care if a close message was sent or if all handlers are dropped.
                 // Either way start the shutdown process.
                 _ = rx.recv() => ShutdownReason::Close,
@@ -118,7 +118,7 @@ impl SignalHandler {
         Self {
             state,
             close,
-            signal,
+            in_process_signal,
             shutdown_reason,
             started,
         }
@@ -149,7 +149,7 @@ impl SignalHandler {
     /// signal source, such as the TUI consuming Ctrl-C while raw mode is
     /// active.
     pub fn notify_signal(&self) {
-        self.signal.try_send(()).ok();
+        self.in_process_signal.try_send(()).ok();
     }
 
     /// Wait until handler is finished and all subscribers finish their cleanup
