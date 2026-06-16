@@ -7,6 +7,8 @@ use anyhow::Result;
 use miette::Report;
 
 const INTERNAL_LSP_COMMAND: &str = "__internal_lsp";
+#[cfg(windows)]
+const INTERNAL_WINDOWS_CTRL_C_COMMAND: &str = "__internal_windows_ctrl_c";
 
 #[cfg(feature = "heap-dhat")]
 #[global_allocator]
@@ -16,6 +18,11 @@ static ALLOC: dhat::Alloc = dhat::Alloc;
 enum InternalLspCommand {
     Probe,
     Server,
+}
+
+#[cfg(windows)]
+enum InternalWindowsConsoleCommand {
+    CtrlC(u32),
 }
 
 /// Concrete [`turborepo_query_api::QueryServer`] that delegates to
@@ -63,6 +70,14 @@ impl turborepo_query_api::QueryServer for TurboQueryServer {
 // This function should not expanded. Please add any logic to
 // `turborepo_lib::main` instead
 fn main() -> Result<()> {
+    #[cfg(windows)]
+    if let Some(command) = internal_windows_ctrl_c_command(std::env::args_os()) {
+        let exit_code = match command {
+            InternalWindowsConsoleCommand::CtrlC(pid) => send_windows_ctrl_c(pid),
+        };
+        process::exit(exit_code);
+    }
+
     if let Some(command) = internal_lsp_command(std::env::args_os()) {
         if command == InternalLspCommand::Probe {
             println!("turbo-lsp");
@@ -83,6 +98,66 @@ fn main() -> Result<()> {
 
     turborepo_lib::finish_heap_profile();
     process::exit(exit_code)
+}
+
+#[cfg(windows)]
+fn attach_to_windows_console(pid: u32) -> bool {
+    use windows_sys::Win32::System::Console::{AttachConsole, FreeConsole};
+
+    unsafe { FreeConsole() };
+    (unsafe { AttachConsole(pid) }) != 0
+}
+
+#[cfg(windows)]
+fn send_windows_ctrl_c(pid: u32) -> i32 {
+    use windows_sys::Win32::{
+        Foundation::TRUE,
+        System::Console::{
+            CTRL_C_EVENT, FreeConsole, GenerateConsoleCtrlEvent, SetConsoleCtrlHandler,
+        },
+    };
+
+    if !attach_to_windows_console(pid) {
+        return 1;
+    }
+
+    unsafe {
+        SetConsoleCtrlHandler(None, TRUE);
+    }
+    let success = unsafe { GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0) } != 0;
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    unsafe { FreeConsole() };
+
+    if success { 0 } else { 1 }
+}
+
+#[cfg(windows)]
+fn internal_windows_ctrl_c_command<T>(
+    args: impl IntoIterator<Item = T>,
+) -> Option<InternalWindowsConsoleCommand>
+where
+    T: AsRef<OsStr>,
+{
+    let mut args = args.into_iter().skip(1);
+    let first_arg = args.next()?;
+    let command_arg = if first_arg.as_ref() == OsStr::new("--skip-infer") {
+        args.next()?
+    } else {
+        first_arg
+    };
+
+    if command_arg.as_ref() != OsStr::new(INTERNAL_WINDOWS_CTRL_C_COMMAND) {
+        return None;
+    }
+
+    let subcommand_or_pid = args.next()?;
+    if subcommand_or_pid.as_ref() == OsStr::new("ctrl_c") {
+        let pid = args.next()?.as_ref().to_str()?.parse().ok()?;
+        Some(InternalWindowsConsoleCommand::CtrlC(pid))
+    } else {
+        let pid = subcommand_or_pid.as_ref().to_str()?.parse().ok()?;
+        Some(InternalWindowsConsoleCommand::CtrlC(pid))
+    }
 }
 
 fn internal_lsp_command<T>(args: impl IntoIterator<Item = T>) -> Option<InternalLspCommand>

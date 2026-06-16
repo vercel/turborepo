@@ -89,8 +89,11 @@ impl RunBuilder {
 
         let version = base.version();
         let processes = ProcessManager::new(
-            std::io::stdout().is_terminal()
-                && (!cfg!(windows) || matches!(opts.run_opts.ui_mode, UIMode::Tui)),
+            // We currently only use a pty if the following are met:
+            // - we're attached to a tty
+            std::io::stdout().is_terminal() &&
+            // - if we're on windows, we're using the UI
+            (!cfg!(windows) || matches!(opts.run_opts.ui_mode, UIMode::Tui)),
         );
 
         let CommandBase {

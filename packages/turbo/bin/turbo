@@ -7,6 +7,7 @@
 
 const child_process = require('child_process');
 const fs = require('fs');
+const net = require('net');
 const path = require('path');
 
 // If we do not find the correct platform binary, should we attempt to install it?
@@ -310,16 +311,112 @@ function exitWithCodeOrSignal(code, signal) {
   process.exit(code === null ? 1 : code);
 }
 
+function debugWindowsCtrlC(message) {
+  if (process.env.TURBO_DEBUG_WINDOWS_CTRL_C === "1") {
+    console.error(`[turbo wrapper ctrl-c] ${message}`);
+  }
+}
+
+function shouldOwnWindowsCtrlC() {
+  if (process.platform !== "win32" || !process.stdin.isTTY) {
+    debugWindowsCtrlC("not owning ctrl-c: not win32 or stdin is not a TTY");
+    return false;
+  }
+
+  const shouldOwn = Boolean(
+    process.env.npm_command ||
+    process.env.npm_lifecycle_event ||
+    process.env.npm_config_user_agent
+  );
+  debugWindowsCtrlC(shouldOwn ? "owning ctrl-c for package-manager launch" : "not owning ctrl-c: no package-manager env");
+  return shouldOwn;
+}
+
+function createWindowsCtrlCServer(callback) {
+  const clients = new Set();
+  const server = net.createServer((socket) => {
+    debugWindowsCtrlC("rust listener connected");
+    clients.add(socket);
+    socket.on("error", () => {});
+    socket.once("close", () => {
+      clients.delete(socket);
+      debugWindowsCtrlC("rust listener disconnected");
+    });
+  });
+
+  server.listen(0, "127.0.0.1", () => {
+    debugWindowsCtrlC(`listening on ${server.address().port}`);
+    callback({
+      port: server.address().port,
+      sendCtrlC() {
+        debugWindowsCtrlC(`forwarding ctrl-c to ${clients.size} listener(s)`);
+        for (const client of clients) {
+          client.write(Buffer.from([0x03]));
+        }
+      },
+      close() {
+        for (const client of clients) {
+          client.destroy();
+        }
+        server.close();
+      },
+    });
+  });
+}
+
 function runTurbo() {
+  if (shouldOwnWindowsCtrlC()) {
+    return createWindowsCtrlCServer((ctrlCServer) => {
+      runTurboChild({
+        ...process.env,
+        TURBO_WINDOWS_CTRL_C_PORT: String(ctrlCServer.port),
+      }, ctrlCServer);
+    });
+  }
+
+  runTurboChild(process.env, null);
+}
+
+function runTurboChild(env, ctrlCServer) {
   const child = child_process.spawn(
     getBinaryPath(),
     process.argv.slice(2),
-    { stdio: "inherit" }
+    { stdio: "inherit", env }
   );
+
+  const restoreStdin = () => {
+    if (!ctrlCServer) {
+      return;
+    }
+
+    if (process.stdin.isRaw) {
+      process.stdin.setRawMode(false);
+      debugWindowsCtrlC("disabled stdin raw mode");
+    }
+    process.stdin.pause();
+  };
+
+  const handleInput = (chunk) => {
+    for (const byte of chunk) {
+      if (byte === 0x03) {
+        debugWindowsCtrlC("read ctrl-c from stdin");
+        ctrlCServer.sendCtrlC();
+      }
+    }
+  };
+
+  if (ctrlCServer) {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.on("data", handleInput);
+    debugWindowsCtrlC("enabled stdin raw mode");
+  }
 
   const handleSigint = () => {
     // The child shares our process group, so Ctrl+C already reached it.
     // Keep the wrapper alive until the child finishes its own shutdown.
+    debugWindowsCtrlC("received SIGINT");
+    ctrlCServer?.sendCtrlC();
   };
 
   const handleSigterm = () => {
@@ -331,6 +428,9 @@ function runTurbo() {
   const cleanup = () => {
     process.off("SIGINT", handleSigint);
     process.off("SIGTERM", handleSigterm);
+    process.stdin.off("data", handleInput);
+    restoreStdin();
+    ctrlCServer?.close();
   };
 
   process.on("SIGINT", handleSigint);

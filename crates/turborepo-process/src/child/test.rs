@@ -345,7 +345,7 @@ async fn test_graceful_shutdown(use_pty: bool) {
     child.stop().await;
     let exit = child.wait().await;
 
-    if cfg!(windows) && !use_pty {
+    if cfg!(windows) {
         assert_matches!(exit, Some(ChildExit::Killed));
     } else {
         assert_matches!(exit, Some(ChildExit::Interrupted));
@@ -387,7 +387,7 @@ async fn test_graceful_shutdown_drains_final_output(use_pty: bool) {
 
     assert!(output.contains("ready"), "missing startup output: {output}");
 
-    if cfg!(windows) && !use_pty {
+    if cfg!(windows) {
         assert_matches!(exit, Some(ChildExit::Killed));
     } else {
         assert!(
