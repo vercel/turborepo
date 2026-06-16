@@ -909,7 +909,7 @@ mod tests {
 
         let scm = SCM::new(&repo_root);
         assert!(!scm.is_manual());
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
         let package_discovery = package_watcher.watch_discovery();
         let hash_watcher =
             HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
@@ -997,7 +997,7 @@ mod tests {
 
         let scm = SCM::new(&repo_root);
         assert!(!scm.is_manual());
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
         let package_discovery = package_watcher.watch_discovery();
         let hash_watcher =
             HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
@@ -1051,7 +1051,7 @@ mod tests {
 
         let scm = SCM::new(&repo_root);
         assert!(!scm.is_manual());
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
         let package_discovery = package_watcher.watch_discovery();
         let hash_watcher =
             HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
@@ -1249,7 +1249,7 @@ mod tests {
 
         let scm = SCM::new(&repo_root);
         assert!(!scm.is_manual());
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
         let package_discovery = package_watcher.watch_discovery();
         let hash_watcher =
             HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
@@ -1306,7 +1306,7 @@ mod tests {
 
         let scm = SCM::new(&repo_root);
         assert!(!scm.is_manual());
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
         let package_discovery = package_watcher.watch_discovery();
         let hash_watcher =
             HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
@@ -1368,7 +1368,7 @@ mod tests {
 
         let scm = SCM::new(&repo_root);
         assert!(!scm.is_manual());
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
         let package_discovery = package_watcher.watch_discovery();
         let hash_watcher =
             HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
@@ -1454,7 +1454,7 @@ mod tests {
 
         let scm = SCM::new(&repo_root);
         assert!(!scm.is_manual());
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
         let package_discovery = package_watcher.watch_discovery();
         let hash_watcher =
             HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
