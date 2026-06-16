@@ -1,6 +1,6 @@
 ---
 title: Turborepo 2.10
-date: 2026/06/16
+date: 2026/06/18
 description: "Graceful task shutdown, cache eviction, composable `--affected` and `--filter`, and `$TURBO_JIT$` for generated file inputs"
 product: turborepo
 type: overview
@@ -20,7 +20,7 @@ import { Accordion, Accordions } from "@/components/geistdocs/accordion";
 
 <Authors authors={["anthonyshew"]} />
 
-Turborepo 2.10 improves day-to-day reliability and control in your monorepo:
+Turborepo 2.10 improves day-to-day reliability in your repository:
 
 - [**Graceful task shutdown**](#graceful-task-shutdown): Interrupt `turbo run` without leaving orphaned processes or truncated logs
 - [**Local cache eviction**](#local-cache-eviction): Automatically reclaim disk space from your local cache
@@ -141,17 +141,17 @@ bunx skills update vercel/turborepo
 
 ## Graceful task shutdown
 
-Pressing `Ctrl+C` during a `turbo run` used to risk orphaned child processes, truncated TUI output, or cache writes that never finished. Turborepo now shuts down tasks gracefully.
+It's common for a repository to have a shutdown or cleanup step to tear down a development environment. Examples include cleanly shutting down a server, terminating a Docker compose script, or closing a background process. Until today, tasks that were meant to gracefully shutdown were not respected. Turborepo would immediately exit, killing all of your tasks instantly.
 
-On the first `SIGINT` or `SIGTERM`, Turborepo forwards the signal to running task process groups and waits for them to exit. While tasks shut down, Turborepo continues flushing cache writes so you do not lose artifacts from completed work.
+Starting with this release, Turborepo will now wait for your tasks to exit, and then shut itself down. Pressing CTRL+C (or sending `SIGINT` or `SIGTERM`) to Turborepo will forward the signals to your tasks, and then wait. Once all your tasks have completed their work, Turborepo will exit.
 
-If tasks are still running after 3 seconds, Turborepo prints the remaining task list. In an interactive terminal, press `Ctrl+C` again to force shut down. Without a terminal on stdin, Turborepo automatically escalates after 10 seconds.
-
-[Visit the documentation](/docs/reference/run#graceful-shutdown) to learn more.
+This behavior is zero-congifuration, and if your repository does not have tasks that gracefully shutdown, you will see no observable change. [Visit the documentation](/docs/reference/run#graceful-shutdown) to learn more
 
 ## Local cache eviction
 
-Local caches can grow without bound as your repository evolves. Turborepo now supports automatic eviction through two opt-in configuration options in `turbo.json`:
+Turborepo saves its local cache into `.turbo/cache`, leaving behind cache artifacts every time you run tasks. While this makes your repository faster while working locally, there's one problem: The local cache can keep growing forever - and at accelerated rates.
+
+Turborepo now supports automatic eviction through two opt-in configuration options in `turbo.json`:
 
 ```jsonc title="turbo.json"
 {
@@ -165,13 +165,11 @@ Eviction runs in a background thread at the start of each `turbo run`, so it doe
 1. **Age-based eviction**: Entries older than `cacheMaxAge` are removed first
 2. **Size-based eviction**: If the cache still exceeds `cacheMaxSize`, the oldest remaining entries are removed
 
-Both options accept human-readable values like `"24h"`, `"2w"`, `"500MB"`, and `"1.5GB"`. Set either option to `"0"` to disable it. You can also configure eviction with the [`TURBO_CACHE_MAX_AGE`](/docs/reference/system-environment-variables#turbo_cache_max_age) and [`TURBO_CACHE_MAX_SIZE`](/docs/reference/system-environment-variables#turbo_cache_max_size) environment variables.
-
-[Visit the documentation](/docs/reference/configuration#cachemaxage) to learn more.
+[Visit the documentation](/docs/reference/configuration#cachemaxage) to learn more. We expect to enable this configuration by default in Turborepo 3.0.
 
 ## Combine `--affected` and `--filter`
 
-`--affected` and `--filter` were previously mutually exclusive. You can now combine them with intersection semantics to run only the tasks that match **both** constraints.
+Previously, you couldn't use `--affected` and `--filter` at the esame time. Now, you can.
 
 ```bash title="Terminal"
 # Only run build for "web" if it's affected by changes
@@ -184,15 +182,17 @@ turbo run build --affected --filter=!docs
 turbo query ls --affected --filter=my-app
 ```
 
-This is especially useful in CI when you want to scope an affected run to a subset of your monorepo, like a single application or package group.
+These flags will combine with intersection semantics, only running the tasks that match **both** constraints.
 
 [Visit the documentation](/docs/reference/run#--affected) to learn more.
 
 ## `$TURBO_JIT$` for generated file inputs
 
-Tasks that consume generated files can be cached incorrectly on the first run. Without just-in-time hashing, Turborepo hashes file inputs when `turbo` starts — before dependency tasks have created or restored the generated files.
+Turborepo creates the hashes for all of your tasks immediately, right when `turbo` starts. This lets Turborepo get work done as fast as possible, since it can instantly know whether your work is a cache hit or miss.
 
-`$TURBO_JIT$` defers hashing for selected file inputs until after a task's `dependsOn` tasks complete:
+However, this becomes problematic in certain situations. For example, if you have a task that does code generation, it might change the files for a package's file inputs **after** `turbo` has created the hashes for the repo. In this case, you'd be forced to disable caching for all the tasks whose file inputs might change. That slows your repo down.
+
+Starting with this release, you can now use `$TURBO_JIT$` to defer hashing for selected file inputs until **after** a task's dependencies are complete. In the example below, `check-types` waits for `codegen`, then hashes `src/generated/**` before checking the cache.
 
 ```jsonc title="turbo.json"
 {
@@ -212,11 +212,7 @@ Tasks that consume generated files can be cached incorrectly on the first run. W
 }
 ```
 
-In this example, `check-types` waits for `codegen`, then hashes `src/generated/**` before checking the cache. Tasks using `$TURBO_JIT$` show a deferred hash in `--dry` output until their dependencies finish.
-
-`$TURBO_JIT$` graduates from pre-release status in Turborepo 2.10.
-
-[Visit the documentation](/docs/reference/configuration#turbo_jit) to learn more.
+Tasks using `$TURBO_JIT$` show a deferred hash in `--dry` output until their dependencies finish. [Visit the documentation](/docs/reference/configuration#turbo_jit) to learn more.
 
 ## All changes
 
@@ -510,7 +506,6 @@ In this example, `check-types` waits for `codegen`, then hashes `src/generated/*
     - examples: Add Ultracite example ([#12615](https://github.com/vercel/turborepo/pull/12615))
 
   </Accordion>
-
 
 </Accordions>
 
