@@ -39,6 +39,10 @@ pub use self::child::{Child, ChildExit, ChildStdin};
 pub struct ProcessManager {
     state: Arc<Mutex<ProcessManagerInner>>,
     use_pty: bool,
+    // Captured before the TUI may put stdout in raw mode. Reapply it to child
+    // PTYs so task processes do not inherit TUI-specific terminal settings.
+    #[cfg(unix)]
+    pty_termios: Option<libc::termios>,
 }
 
 #[derive(Debug)]
@@ -78,6 +82,8 @@ impl ProcessManager {
                 size: None,
             })),
             use_pty,
+            #[cfg(unix)]
+            pty_termios: use_pty.then(capture_stdout_termios).flatten(),
         }
     }
 
@@ -147,6 +153,14 @@ impl ProcessManager {
             return None;
         }
         let pty_size = self.use_pty.then(|| lock.pty_size()).flatten();
+        #[cfg(unix)]
+        let child = child::Child::spawn_with_termios(
+            command,
+            child::ShutdownStyle::Graceful(Some(stop_timeout)),
+            pty_size,
+            self.pty_termios,
+        );
+        #[cfg(not(unix))]
         let child = child::Child::spawn(
             command,
             child::ShutdownStyle::Graceful(Some(stop_timeout)),
@@ -286,6 +300,13 @@ impl ProcessManager {
     pub fn is_closing(&self) -> bool {
         self.lock_state().is_closing
     }
+}
+
+#[cfg(unix)]
+fn capture_stdout_termios() -> Option<libc::termios> {
+    let mut termios = std::mem::MaybeUninit::<libc::termios>::uninit();
+    let result = unsafe { libc::tcgetattr(libc::STDOUT_FILENO, termios.as_mut_ptr()) };
+    (result == 0).then(|| unsafe { termios.assume_init() })
 }
 
 impl ProcessManagerInner {
