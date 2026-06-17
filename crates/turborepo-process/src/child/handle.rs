@@ -1,6 +1,7 @@
 use std::{io, time::Duration};
 
 use portable_pty::{Child as PtyChild, MasterPty as PtyController, native_pty_system};
+#[cfg(unix)]
 use sysinfo::{PidExt, ProcessExt, System, SystemExt};
 use tokio::{process::Command as TokioCommand, sync::mpsc};
 use tracing::debug;
@@ -343,7 +344,7 @@ impl ChildHandle {
         })
     }
 
-    #[tracing::instrument(skip(command))]
+    #[tracing::instrument(skip(command, pty_termios))]
     pub(super) fn spawn_pty(
         command: Command,
         size: PtySize,
