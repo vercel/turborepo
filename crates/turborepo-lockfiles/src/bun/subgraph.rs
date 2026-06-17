@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use super::{
-    BunLockfile, BunLockfileData, Error, Map, PackageEntry, PackageIdent, PackageIndex,
-    PackageInfo, PackageKey,
+    data::WorkspaceEntry, BunLockfile, BunLockfileData, Error, Map, PackageEntry, PackageIdent,
+    PackageIndex, PackageInfo, PackageKey,
 };
 
 impl BunLockfile {
@@ -443,29 +443,12 @@ impl BunLockfile {
             }
         }
 
-        // Collect idents of all packages in the subgraph for filtering purposes
-        let included_idents: HashSet<&str> = pruned_data
-            .packages
-            .values()
-            .map(|entry| entry.ident.as_str())
-            .collect();
-
         // Preserve ALL overrides from the original lockfile. turbo prune copies
         // the root package.json with all overrides intact, so the lockfile must
         // keep them in sync. If overrides are selectively stripped here, bun
         // detects the mismatch with package.json and re-resolves, which breaks
         // `bun install --frozen-lockfile` when a range has drifted (e.g. "latest").
         pruned_data.overrides = self.data.overrides.clone();
-
-        // Filter patched_dependencies to only include those for packages in the
-        // subgraph
-        for (pkg_ident, patch_path) in &self.data.patched_dependencies {
-            if included_idents.contains(pkg_ident.as_str()) {
-                pruned_data
-                    .patched_dependencies
-                    .insert(pkg_ident.clone(), patch_path.clone());
-            }
-        }
 
         // ORPHAN REMOVAL: After de-aliasing, some packages may be orphaned
         // (only depended on by packages that were skipped due to de-aliasing
@@ -594,6 +577,14 @@ impl BunLockfile {
         // keeps a nested version, we must promote the nested entry to top-level
         // to maintain a valid lockfile structure that bun's --frozen-lockfile
         // accepts.
+        //
+        // Restore patched hoisted entries first so promotion does not replace a
+        // still-required patched version with an unrelated nested alternative.
+        // See https://github.com/vercel/turborepo/issues/13101
+        let required_patched_idents =
+            self.workspace_required_patched_idents(&pruned_data.workspaces);
+        self.restore_patched_hoisted_entries(&mut pruned_data, &required_patched_idents);
+
         loop {
             let top_level_pkg_names: HashSet<String> = pruned_data
                 .packages
@@ -635,6 +626,11 @@ impl BunLockfile {
                 }
 
                 let pkg_name = ident.name().to_string();
+                if required_patched_idents.iter().any(|patched_ident| {
+                    PackageIdent::parse(patched_ident).name() == pkg_name
+                }) {
+                    continue;
+                }
                 if !top_level_pkg_names.contains(&pkg_name) {
                     promote_target = Some((pkg_name, key.clone()));
                     break;
@@ -858,6 +854,8 @@ impl BunLockfile {
         // rewrite the pruned lockfile.
         self.include_duplicate_alias_children(&mut pruned_data);
 
+        self.preserve_patched_dependencies(&mut pruned_data);
+
         // Rebuild key_to_entry HashMap for the pruned lockfile
         let mut key_to_entry: HashMap<String, String> =
             HashMap::with_capacity(pruned_data.packages.len());
@@ -886,5 +884,87 @@ impl BunLockfile {
             key_to_entry,
             index,
         })
+    }
+
+    fn workspace_required_patched_idents(
+        &self,
+        workspaces: &Map<String, WorkspaceEntry>,
+    ) -> HashSet<String> {
+        let mut required = HashSet::new();
+        for workspace in workspaces.values() {
+            for deps in [
+                workspace.dependencies.as_ref(),
+                workspace.dev_dependencies.as_ref(),
+                workspace.optional_dependencies.as_ref(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                for (name, version) in deps {
+                    if version.contains("workspace:") {
+                        continue;
+                    }
+                    let ident = format!("{name}@{version}");
+                    if self.data.patched_dependencies.contains_key(&ident) {
+                        required.insert(ident);
+                    }
+                }
+            }
+        }
+        required
+    }
+
+    fn restore_patched_hoisted_entries(
+        &self,
+        pruned_data: &mut BunLockfileData,
+        required_patched_idents: &HashSet<String>,
+    ) {
+        for ident in required_patched_idents {
+            let pkg_name = PackageIdent::parse(ident).name().to_string();
+            let hoisted_correct = pruned_data
+                .packages
+                .get(&pkg_name)
+                .is_some_and(|entry| entry.ident == *ident);
+            if hoisted_correct {
+                continue;
+            }
+
+            if let Some(entry) = self.data.packages.get(&pkg_name)
+                && entry.ident == *ident
+            {
+                pruned_data
+                    .packages
+                    .insert(pkg_name.clone(), entry.clone());
+                let hoisted_prefix = format!("{pkg_name}/");
+                for (key, child) in &self.data.packages {
+                    if key.starts_with(&hoisted_prefix) {
+                        pruned_data.packages.insert(key.clone(), child.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    fn preserve_patched_dependencies(&self, pruned_data: &mut BunLockfileData) {
+        let required_patched_idents =
+            self.workspace_required_patched_idents(&pruned_data.workspaces);
+        self.restore_patched_hoisted_entries(pruned_data, &required_patched_idents);
+
+        let included_idents: HashSet<&str> = pruned_data
+            .packages
+            .values()
+            .map(|entry| entry.ident.as_str())
+            .collect();
+
+        pruned_data.patched_dependencies.clear();
+        for (pkg_ident, patch_path) in &self.data.patched_dependencies {
+            if required_patched_idents.contains(pkg_ident)
+                || included_idents.contains(pkg_ident.as_str())
+            {
+                pruned_data
+                    .patched_dependencies
+                    .insert(pkg_ident.clone(), patch_path.clone());
+            }
+        }
     }
 }
