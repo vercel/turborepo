@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use super::{
-    data::WorkspaceEntry, BunLockfile, BunLockfileData, Error, Map, PackageEntry, PackageIdent,
-    PackageIndex, PackageInfo, PackageKey,
+    BunLockfile, BunLockfileData, Error, Map, PackageEntry, PackageIdent, PackageIndex,
+    PackageInfo, PackageKey, data::WorkspaceEntry,
 };
 
 impl BunLockfile {
@@ -626,9 +626,10 @@ impl BunLockfile {
                 }
 
                 let pkg_name = ident.name().to_string();
-                if required_patched_idents.iter().any(|patched_ident| {
-                    PackageIdent::parse(patched_ident).name() == pkg_name
-                }) {
+                if required_patched_idents
+                    .iter()
+                    .any(|patched_ident| PackageIdent::parse(patched_ident).name() == pkg_name)
+                {
                     continue;
                 }
                 if !top_level_pkg_names.contains(&pkg_name) {
@@ -932,9 +933,7 @@ impl BunLockfile {
             if let Some(entry) = self.data.packages.get(&pkg_name)
                 && entry.ident == *ident
             {
-                pruned_data
-                    .packages
-                    .insert(pkg_name.clone(), entry.clone());
+                pruned_data.packages.insert(pkg_name.clone(), entry.clone());
                 let hoisted_prefix = format!("{pkg_name}/");
                 for (key, child) in &self.data.packages {
                     if key.starts_with(&hoisted_prefix) {

@@ -2093,7 +2093,11 @@ fn test_subgraph_preserves_patched_dependency_when_two_versions_exist() {
             .collect::<Vec<_>>()
     );
     assert_eq!(
-        pruned.data.packages.get("pkg-old/is-odd").map(|e| e.ident.as_str()),
+        pruned
+            .data
+            .packages
+            .get("pkg-old/is-odd")
+            .map(|e| e.ident.as_str()),
         Some("is-odd@2.0.0")
     );
 }
@@ -2147,14 +2151,10 @@ fn test_subgraph_preserves_patch_when_patched_version_missing_from_lockfile_keys
 
     // Omit is-odd@3.0.1 from lockfile_keys, as can happen when only the nested
     // version appears in the package graph's transitive external dependencies.
-    let lockfile_keys: Vec<String> = [
-        "is-number@4.0.0",
-        "is-odd@2.0.0",
-        "turbo@2.9.14",
-    ]
-    .into_iter()
-    .map(String::from)
-    .collect();
+    let lockfile_keys: Vec<String> = ["is-number@4.0.0", "is-odd@2.0.0", "turbo@2.9.14"]
+        .into_iter()
+        .map(String::from)
+        .collect();
 
     let subgraph = Lockfile::subgraph(
         &lockfile,
