@@ -636,6 +636,14 @@ while true; do sleep 0.2 || true; done
             transcript.contains("1 task shutting down..."),
             "expected repeated shutdown status after the initial banner\n{transcript}"
         );
+        assert!(
+            transcript.contains(" - Force killed Turborepo tasks: app-a#dev"),
+            "expected force-kill status after second Ctrl+C\n{transcript}"
+        );
+        assert!(
+            !transcript.contains(" WARNING "),
+            "force-kill status should not use warning styling\n{transcript}"
+        );
     }
 
     #[test]
@@ -695,7 +703,7 @@ while true; do sleep 0.2 || true; done
         );
         assert!(
             combined
-                .contains("Graceful shutdown timed out. Force killing Turborepo tasks: app-a#dev"),
+                .contains("Graceful shutdown timed out. Force killed Turborepo tasks: app-a#dev"),
             "expected auto-force banner after timeout\n{combined}"
         );
     }

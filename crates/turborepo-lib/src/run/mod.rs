@@ -241,31 +241,28 @@ impl Run {
     ) {
         let message = match (reason, task_names.is_empty()) {
             (ForceShutdownReason::Signal, false) if is_interactive => {
-                format!(
-                    " - Force killing Turborepo tasks: {}",
-                    task_names.join(", ")
-                )
+                format!(" - Force killed Turborepo tasks: {}", task_names.join(", "))
             }
             (ForceShutdownReason::Signal, false) => {
-                format!("Force killing Turborepo tasks: {}", task_names.join(", "))
+                format!("Force killed Turborepo tasks: {}", task_names.join(", "))
             }
             (ForceShutdownReason::Timeout, false) => format!(
-                "Graceful shutdown timed out. Force killing Turborepo tasks: {}",
+                "Graceful shutdown timed out. Force killed Turborepo tasks: {}",
                 task_names.join(", ")
             ),
             (ForceShutdownReason::Signal, true) if is_interactive => {
-                " - Force killing remaining Turborepo tasks...".to_string()
+                " - Force killed remaining Turborepo tasks...".to_string()
             }
             (ForceShutdownReason::Signal, true) => {
-                "Force killing remaining Turborepo tasks...".to_string()
+                "Force killed remaining Turborepo tasks...".to_string()
             }
-            (ForceShutdownReason::Timeout, true) => "Graceful shutdown timed out. Force killing \
-                                                     remaining Turborepo tasks..."
-                .to_string(),
+            (ForceShutdownReason::Timeout, true) => {
+                "Graceful shutdown timed out. Force killed remaining Turborepo tasks...".to_string()
+            }
         };
-        turborepo_log::warn(
+        turborepo_log::info(
             turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-            message,
+            LIGHT_GREY.apply_to(message).to_string(),
         )
         .emit();
     }
