@@ -43,7 +43,7 @@ use turborepo_task_hash::{
 };
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_types::{EnvMode, UIMode};
-use turborepo_ui::{sender::UISender, tui, tui::TuiSender, ColorConfig};
+use turborepo_ui::{sender::UISender, tui, tui::TuiSender, ColorConfig, LIGHT_GREY};
 
 pub use crate::run::error::Error;
 use crate::{
@@ -107,7 +107,7 @@ type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>
 
 type TuiResult = UIResult<TuiSender>;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ForceShutdownReason {
     Signal,
     Timeout,
@@ -119,7 +119,7 @@ enum CacheShutdownOutcome {
     ForcedShutdown,
 }
 
-const SLOW_SHUTDOWN_WARNING_DELAY: Duration = Duration::from_secs(3);
+const SLOW_SHUTDOWN_STATUS_INTERVAL: Duration = Duration::from_secs(2);
 
 fn remote_cache_status_message(status: RemoteCacheStatus, api_url: &str) -> (String, bool) {
     match status {
@@ -176,20 +176,20 @@ fn remote_cache_status_message(status: RemoteCacheStatus, api_url: &str) -> (Str
 }
 
 impl Run {
-    fn shutdown_started_message(force_shutdown_timeout: Option<Duration>) -> &'static str {
+    fn shutdown_started_message(force_shutdown_timeout: Option<Duration>) -> String {
         #[cfg(windows)]
-        {
+        let message = {
             let _ = force_shutdown_timeout;
             "Shutting down Turborepo tasks..."
-        }
+        };
 
         #[cfg(not(windows))]
-        {
-            match force_shutdown_timeout {
-                Some(_) => "Shutting down Turborepo tasks...",
-                None => "^C - Shutting down Turborepo tasks...",
-            }
-        }
+        let message = match force_shutdown_timeout {
+            Some(_) => "Shutting down Turborepo tasks...",
+            None => " - Shutting down Turborepo tasks...Press CTRL+C again to exit forcefully.",
+        };
+
+        LIGHT_GREY.apply_to(message).to_string()
     }
 
     fn force_shutdown_timeout() -> Option<Duration> {
@@ -216,33 +216,22 @@ impl Run {
         }
     }
 
-    fn emit_slow_tasks(task_names: &[String], force_shutdown_timeout: Option<Duration>) {
+    fn emit_shutdown_status(task_names: &[String]) {
         if task_names.is_empty() {
             return;
         }
 
-        let list = task_names.join(", ");
-        turborepo_log::warn(
+        let task_description = match task_names.len() {
+            1 => "1 task".to_string(),
+            count => format!("{count} tasks"),
+        };
+        turborepo_log::info(
             turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-            format!("Some tasks in your Turborepo are taking awhile to shut down: {list}"),
+            LIGHT_GREY
+                .apply_to(format!("{task_description} shutting down..."))
+                .to_string(),
         )
         .emit();
-
-        if let Some(remaining) = force_shutdown_timeout
-            .map(|timeout| timeout.saturating_sub(SLOW_SHUTDOWN_WARNING_DELAY))
-        {
-            turborepo_log::warn(
-                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-                format!("Shutting down forcibly in {}s...", remaining.as_secs()),
-            )
-            .emit();
-        } else {
-            turborepo_log::warn(
-                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-                "Press CTRL+C again to force shut down, or wait.",
-            )
-            .emit();
-        }
     }
 
     fn emit_force_shutdown_message(
@@ -283,11 +272,31 @@ impl Run {
 
     async fn wait_for_forced_shutdown(
         force_shutdown_timeout: Option<Duration>,
+        in_process_signals: Option<tokio::sync::broadcast::Receiver<()>>,
     ) -> ForceShutdownReason {
+        let in_process_signal = async move {
+            let Some(mut in_process_signals) = in_process_signals else {
+                std::future::pending::<()>().await;
+                return;
+            };
+
+            loop {
+                match in_process_signals.recv().await {
+                    Ok(()) | Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => return,
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        std::future::pending::<()>().await;
+                    }
+                }
+            }
+        };
+        pin!(in_process_signal);
+
         match force_shutdown_timeout {
             Some(timeout) => {
-                tokio::time::sleep(timeout).await;
-                ForceShutdownReason::Timeout
+                select! {
+                    _ = tokio::time::sleep(timeout) => ForceShutdownReason::Timeout,
+                    _ = &mut in_process_signal => ForceShutdownReason::Signal,
+                }
             }
             None => {
                 let interrupt = async {
@@ -299,8 +308,10 @@ impl Run {
                         tokio::time::sleep(Duration::MAX).await;
                     }
                 };
-                interrupt.await;
-                ForceShutdownReason::Signal
+                select! {
+                    _ = interrupt => ForceShutdownReason::Signal,
+                    _ = &mut in_process_signal => ForceShutdownReason::Signal,
+                }
             }
         }
     }
@@ -308,6 +319,7 @@ impl Run {
     async fn wait_for_cache_shutdown<FClosed, FProgress>(
         shutdown_reason: Option<ShutdownReason>,
         force_shutdown_timeout: Option<Duration>,
+        in_process_signals: Option<tokio::sync::broadcast::Receiver<()>>,
         closed: FClosed,
         progress: FProgress,
     ) -> CacheShutdownOutcome
@@ -319,7 +331,7 @@ impl Run {
             select! {
                 _ = closed => CacheShutdownOutcome::Complete,
                 _ = progress => CacheShutdownOutcome::Complete,
-                _ = Self::wait_for_forced_shutdown(force_shutdown_timeout) => {
+                _ = Self::wait_for_forced_shutdown(force_shutdown_timeout, in_process_signals) => {
                     CacheShutdownOutcome::ForcedShutdown
                 }
             }
@@ -334,23 +346,27 @@ impl Run {
     async fn wait_for_process_manager_shutdown<F>(
         process_manager: ProcessManager,
         force_shutdown_timeout: Option<Duration>,
+        in_process_signals: Option<tokio::sync::broadcast::Receiver<()>>,
         graceful_shutdown: F,
     ) where
         F: Future<Output = ()> + Send,
     {
         let is_interactive = force_shutdown_timeout.is_none();
-        let slow_task_delay = tokio::time::sleep(SLOW_SHUTDOWN_WARNING_DELAY);
-        let force_shutdown = Self::wait_for_forced_shutdown(force_shutdown_timeout);
-        pin!(graceful_shutdown, slow_task_delay, force_shutdown);
-        let mut slow_tasks_emitted = false;
+        let mut shutdown_status = tokio::time::interval_at(
+            tokio::time::Instant::now() + SLOW_SHUTDOWN_STATUS_INTERVAL,
+            SLOW_SHUTDOWN_STATUS_INTERVAL,
+        );
+        shutdown_status.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let force_shutdown =
+            Self::wait_for_forced_shutdown(force_shutdown_timeout, in_process_signals);
+        pin!(graceful_shutdown, force_shutdown);
 
         loop {
             select! {
                 _ = &mut graceful_shutdown => break,
-                _ = &mut slow_task_delay, if !slow_tasks_emitted => {
-                    slow_tasks_emitted = true;
+                _ = shutdown_status.tick() => {
                     let tasks = process_manager.running_task_ids();
-                    Self::emit_slow_tasks(&tasks, force_shutdown_timeout);
+                    Self::emit_shutdown_status(&tasks);
                 }
                 reason = &mut force_shutdown => {
                     let tasks = process_manager.running_task_ids();
@@ -542,6 +558,8 @@ impl Run {
         let color_config = self.color_config;
         let scrollback_len = self.opts.tui_opts.scrollback_length;
         let repo_root = self.repo_root.clone();
+        let signal_handler = self.signal_handler.clone();
+        let interrupt = Arc::new(move || signal_handler.notify_signal());
         let handle = tokio::task::spawn(async move {
             Ok(tui::run_app(
                 task_names,
@@ -549,6 +567,7 @@ impl Run {
                 color_config,
                 &repo_root,
                 scrollback_len,
+                Some(interrupt),
             )
             .await?)
         });
@@ -732,6 +751,7 @@ impl Run {
                 Self::wait_for_process_manager_shutdown(
                     process_manager.clone(),
                     force_shutdown_timeout,
+                    Some(signal_handler.subscribe_in_process_signals()),
                     graceful_shutdown,
                 )
                 .await;
@@ -828,6 +848,7 @@ impl Run {
                 if Self::wait_for_cache_shutdown(
                     shutdown_reason,
                     force_shutdown_timeout,
+                    Some(signal_handler.subscribe_in_process_signals()),
                     async {
                         let _ = closed.await;
                     },
@@ -881,6 +902,7 @@ impl Run {
             Self::wait_for_process_manager_shutdown(
                 process_manager.clone(),
                 force_shutdown_timeout,
+                Some(signal_handler.subscribe_in_process_signals()),
                 graceful_shutdown,
             )
             .await;
@@ -1336,7 +1358,7 @@ mod tests {
     use turborepo_signals::ShutdownReason;
 
     use super::{
-        remote_cache_status_message, CacheShutdownOutcome, RemoteCacheStatus,
+        remote_cache_status_message, CacheShutdownOutcome, ForceShutdownReason, RemoteCacheStatus,
         RemoteCacheUnavailableReason, Run,
     };
     use crate::opts::RemoteCacheDisabledReason;
@@ -1389,6 +1411,7 @@ mod tests {
             Run::wait_for_cache_shutdown(
                 Some(ShutdownReason::Close),
                 Some(Duration::from_millis(10)),
+                None,
                 pending::<()>(),
                 pending::<()>(),
             ),
@@ -1406,6 +1429,34 @@ mod tests {
         let result = Run::wait_for_cache_shutdown(
             Some(ShutdownReason::Signal),
             Some(Duration::from_millis(10)),
+            None,
+            pending::<()>(),
+            pending::<()>(),
+        )
+        .await;
+
+        assert_eq!(result, CacheShutdownOutcome::ForcedShutdown);
+    }
+
+    #[tokio::test]
+    async fn forced_shutdown_accepts_in_process_signal_before_timeout() {
+        let (tx, rx) = tokio::sync::broadcast::channel(1);
+        tx.send(()).unwrap();
+
+        let result = Run::wait_for_forced_shutdown(Some(Duration::from_secs(60)), Some(rx)).await;
+
+        assert_eq!(result, ForceShutdownReason::Signal);
+    }
+
+    #[tokio::test]
+    async fn cache_shutdown_signal_accepts_in_process_signal() {
+        let (tx, rx) = tokio::sync::broadcast::channel(1);
+        tx.send(()).unwrap();
+
+        let result = Run::wait_for_cache_shutdown(
+            Some(ShutdownReason::Signal),
+            Some(Duration::from_secs(60)),
+            Some(rx),
             pending::<()>(),
             pending::<()>(),
         )

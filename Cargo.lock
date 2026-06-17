@@ -7241,6 +7241,7 @@ dependencies = [
  "turborepo-signals",
  "turborepo-ui",
  "which",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -8004,6 +8005,7 @@ dependencies = [
  "libc",
  "nix 0.26.2",
  "portable-pty",
+ "sysinfo",
  "test-case",
  "tokio",
  "tracing",
@@ -8289,6 +8291,7 @@ name = "turborepo-signals"
 version = "0.1.0"
 dependencies = [
  "futures",
+ "libc",
  "thiserror 2.0.18",
  "tokio",
 ]

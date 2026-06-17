@@ -5,9 +5,6 @@ use tracing::debug;
 
 use super::{ChildCommand, ChildHandle};
 
-#[cfg(unix)]
-const PTY_PROCESS_GROUP_SIGINT_DELAY: Duration = Duration::from_secs(1);
-
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ChildExit {
     Finished(Option<i32>),
@@ -25,10 +22,11 @@ pub enum ChildExit {
 
 #[derive(Debug, Clone, Copy)]
 pub enum ShutdownStyle {
-    /// On Unix this sends SIGINT to the process group. On Windows, a Ctrl-C
-    /// keystroke is written to the child's ConPTY input when one exists;
-    /// children attached to turbo's real console instead rely on externally
-    /// delivered console events or an explicit kill.
+    /// On Unix this sends SIGINT to the process group for non-PTY children and
+    /// to the direct child for PTY children. On Windows, a Ctrl-C keystroke is
+    /// written to the child's ConPTY input when one exists; children attached
+    /// to turbo's real console instead rely on externally delivered console
+    /// events or an explicit kill.
     ///
     /// `Graceful(Some(timeout))` escalates to `Kill` after `timeout` elapses.
     /// `Graceful(None)` waits indefinitely until an explicit `Kill` command
@@ -70,9 +68,7 @@ impl ShutdownStyle {
                     };
 
                     let pid = pid as libc::pid_t;
-                    let mut process_group_interrupt_sent = child.send_graceful_interrupt(pid);
-                    let process_group_interrupt_deadline =
-                        tokio::time::Instant::now() + PTY_PROCESS_GROUP_SIGINT_DELAY;
+                    child.send_graceful_interrupt(pid);
                     debug!("waiting for child {}", pid);
 
                     let deadline = timeout.map(|timeout| tokio::time::Instant::now() + timeout);
@@ -87,10 +83,6 @@ impl ShutdownStyle {
                                             Ok(_exit_code) => ChildExit::Interrupted,
                                             Err(_) => ChildExit::Failed,
                                         };
-                                    }
-                                    _ = tokio::time::sleep_until(process_group_interrupt_deadline), if !process_group_interrupt_sent => {
-                                        child.send_fallback_graceful_interrupt(pid);
-                                        process_group_interrupt_sent = true;
                                     }
                                     command = command_rx.recv(), if command_rx_open => {
                                         match command {
@@ -122,10 +114,6 @@ impl ShutdownStyle {
                                             Err(_) => ChildExit::Failed,
                                         };
                                     }
-                                    _ = tokio::time::sleep_until(process_group_interrupt_deadline), if !process_group_interrupt_sent => {
-                                        child.send_fallback_graceful_interrupt(pid);
-                                        process_group_interrupt_sent = true;
-                                    }
                                     command = command_rx.recv(), if command_rx_open => {
                                         match command {
                                             Some(ChildCommand::Kill) => {
@@ -145,6 +133,20 @@ impl ShutdownStyle {
                     };
 
                     if exit == ChildExit::Interrupted {
+                        if child.send_interrupt_to_remaining_descendants() {
+                            let descendant_exit = child
+                                .wait_for_remaining_descendants_exit(
+                                    deadline,
+                                    command_rx,
+                                    &mut command_rx_open,
+                                )
+                                .await;
+
+                            if descendant_exit != ChildExit::Interrupted {
+                                return descendant_exit;
+                            }
+                        }
+
                         child
                             .wait_for_process_group_exit(
                                 pid,

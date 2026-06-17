@@ -226,6 +226,7 @@ impl ColorConfig {
 }
 
 pub static GREY: LazyLock<Style> = LazyLock::new(|| Style::new().dim());
+pub static LIGHT_GREY: LazyLock<Style> = LazyLock::new(|| Style::new().color256(245));
 pub static CYAN: LazyLock<Style> = LazyLock::new(|| Style::new().cyan());
 pub static BOLD: LazyLock<Style> = LazyLock::new(|| Style::new().bold());
 pub static MAGENTA: LazyLock<Style> = LazyLock::new(|| Style::new().magenta());

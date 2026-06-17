@@ -1,5 +1,5 @@
 use std::{
-    assert_matches, fs, io,
+    assert_matches, io,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -345,7 +345,7 @@ async fn test_graceful_shutdown(use_pty: bool) {
     child.stop().await;
     let exit = child.wait().await;
 
-    if cfg!(windows) && !use_pty {
+    if cfg!(windows) {
         assert_matches!(exit, Some(ChildExit::Killed));
     } else {
         assert_matches!(exit, Some(ChildExit::Interrupted));
@@ -387,7 +387,7 @@ async fn test_graceful_shutdown_drains_final_output(use_pty: bool) {
 
     assert!(output.contains("ready"), "missing startup output: {output}");
 
-    if cfg!(windows) && !use_pty {
+    if cfg!(windows) {
         assert_matches!(exit, Some(ChildExit::Killed));
     } else {
         assert!(
@@ -403,9 +403,9 @@ async fn test_graceful_shutdown_drains_final_output(use_pty: bool) {
 }
 
 // Regression test: a wrapper process (simulating npm/pnpm) forwards SIGINT
-// to its child. When turbo sends SIGINT to the process group, the child
-// gets it twice — once from the group signal, once from the wrapper.
-// For PTY children we now signal only the direct PID to avoid this.
+// to its child. PTY children are signaled through the direct PID only so the
+// wrapped child does not receive both a process-group signal and a forwarded
+// signal.
 #[cfg(unix)]
 #[tokio::test]
 #[traced_test]
@@ -448,6 +448,107 @@ async fn test_pty_child_receives_single_sigint() {
         !output.contains("SIGINT_COUNT=2"),
         "child received SIGINT twice: {output}"
     );
+}
+
+// Regression test: a forwarding wrapper may keep running while its child does
+// graceful cleanup. PTY shutdown must not send a delayed process-group SIGINT,
+// or the wrapped child receives the original forwarded signal plus duplicates.
+#[cfg(unix)]
+#[tokio::test]
+#[traced_test]
+async fn test_pty_child_receives_single_sigint_during_slow_cleanup() {
+    let script = find_script_dir().join_component("wrapper_count_sigints_slow.js");
+    let mut cmd = Command::new("node");
+    cmd.args([script.as_std_path()]);
+    cmd.open_stdin();
+    let mut child = Child::spawn(
+        cmd,
+        ShutdownStyle::Graceful(Some(Duration::from_millis(3000))),
+        Some(PtySize::default()),
+    )
+    .unwrap();
+
+    let mut output_child = child.clone();
+    let (mut observer, output, ready_rx) = ObservedOutput::new();
+    let output_task = tokio::spawn(async move {
+        output_child
+            .wait_with_piped_outputs(&mut observer)
+            .await
+            .unwrap()
+    });
+
+    tokio::time::timeout(Duration::from_secs(30), ready_rx)
+        .await
+        .expect("timed out waiting for ready")
+        .expect("ready channel closed");
+
+    child.set_closing();
+    child.stop().await;
+    output_task.await.unwrap();
+
+    let output = String::from_utf8(output.lock().unwrap().clone()).unwrap();
+    assert!(
+        output.contains("SIGINT_COUNT=1"),
+        "expected one SIGINT, got output: {output}"
+    );
+    assert!(
+        !output.contains("SIGINT_COUNT=2"),
+        "child received SIGINT more than once: {output}"
+    );
+}
+
+// Regression test: if a PTY wrapper exits after SIGINT without forwarding the
+// signal, Turbo still owns the child process tree and must interrupt the
+// remaining descendant before completing shutdown.
+#[cfg(unix)]
+#[tokio::test]
+#[traced_test]
+async fn test_pty_remaining_descendant_receives_sigint_when_wrapper_exits() {
+    let script = find_script_dir().join_component("wrapper_exit_without_forwarding_sigint.js");
+    let marker = std::env::temp_dir().join(format!(
+        "turbo-remaining-descendant-sigint-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&marker);
+
+    let mut cmd = Command::new("node");
+    cmd.args([script.as_std_path(), marker.as_path()]);
+    cmd.open_stdin();
+    let mut child = Child::spawn(
+        cmd,
+        ShutdownStyle::Graceful(Some(Duration::from_millis(3000))),
+        Some(PtySize::default()),
+    )
+    .unwrap();
+
+    let mut output_child = child.clone();
+    let (mut observer, output, ready_rx) = ObservedOutput::new();
+    let output_task = tokio::spawn(async move {
+        output_child
+            .wait_with_piped_outputs(&mut observer)
+            .await
+            .unwrap()
+    });
+
+    tokio::time::timeout(Duration::from_secs(30), ready_rx)
+        .await
+        .expect("timed out waiting for ready")
+        .expect("ready channel closed");
+
+    child.set_closing();
+    child.stop().await;
+    output_task.await.unwrap();
+
+    let output = String::from_utf8(output.lock().unwrap().clone()).unwrap();
+    assert!(
+        output.contains("ready"),
+        "missing child ready output: {output}"
+    );
+    let marker_contents = std::fs::read_to_string(&marker)
+        .unwrap_or_else(|err| panic!("expected remaining descendant SIGINT marker: {err}"));
+    assert_eq!(marker_contents, "SIGINT\n");
+
+    let _ = std::fs::remove_file(&marker);
 }
 
 #[test_case(false)]
@@ -1247,65 +1348,6 @@ async fn test_grandchild_inherits_child_process_group() {
     child.stop().await;
     // Give OS time to clean up
     tokio::time::sleep(Duration::from_millis(200)).await;
-}
-
-#[cfg(unix)]
-#[tokio::test]
-async fn test_pty_graceful_shutdown_signals_process_group() {
-    let marker_file = std::env::temp_dir().join(format!(
-        "turbo-pty-process-group-sigint-{}",
-        std::process::id()
-    ));
-    let ready_file = std::env::temp_dir().join(format!(
-        "turbo-pty-process-group-ready-{}",
-        std::process::id()
-    ));
-    let _ = fs::remove_file(&marker_file);
-    let _ = fs::remove_file(&ready_file);
-    let marker_file = marker_file.to_string_lossy().into_owned();
-    let ready_file = ready_file.to_string_lossy().into_owned();
-
-    let script = r#"
-const { spawn } = require("child_process");
-process.on("SIGINT", () => {});
-const child = spawn(process.execPath, [
-  "-e",
-  "process.on('SIGINT', () => { require('fs').writeFileSync(process.argv[1], 'interrupted'); process.exit(0); }); require('fs').writeFileSync(process.argv[2], 'ready'); setInterval(() => {}, 1000);",
-  process.argv[1],
-  process.argv[2],
-], { stdio: "inherit" });
-child.on("exit", () => process.exit(0));
-"#;
-    let mut cmd = Command::new("node");
-    cmd.args(["-e", script, marker_file.as_str(), ready_file.as_str()]);
-    let mut child = Child::spawn(
-        cmd,
-        ShutdownStyle::Graceful(Some(Duration::from_secs(2))),
-        Some(PtySize::default()),
-    )
-    .unwrap();
-
-    for _ in 0..50 {
-        if fs::metadata(&ready_file).is_ok() {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-    assert!(
-        fs::metadata(&ready_file).is_ok(),
-        "node child should become ready before shutdown"
-    );
-
-    let exit = child.stop().await;
-
-    assert_eq!(exit, Some(ChildExit::Interrupted));
-    assert!(
-        fs::metadata(&marker_file).is_ok(),
-        "node child should receive SIGINT from PTY process-group shutdown"
-    );
-
-    let _ = fs::remove_file(marker_file);
-    let _ = fs::remove_file(ready_file);
 }
 
 #[cfg(unix)]

@@ -2,6 +2,7 @@ use std::{
     collections::BTreeMap,
     io::{self, Stdout, Write},
     mem,
+    sync::Arc,
     time::Duration,
 };
 
@@ -804,6 +805,7 @@ pub async fn run_app(
     color_config: ColorConfig,
     repo_root: &AbsoluteSystemPathBuf,
     scrollback_len: u64,
+    interrupt: Option<Arc<dyn Fn() + Send + Sync>>,
 ) -> Result<(), Error> {
     // Get terminal size before potentially entering alternate screen
     let size = crossterm::terminal::size()?;
@@ -823,6 +825,7 @@ pub async fn run_app(
         receiver,
         crossterm_rx,
         color_config,
+        interrupt.as_deref(),
     )
     .await
     {
@@ -873,6 +876,7 @@ async fn run_app_inner(
     mut receiver: AppReceiver,
     mut crossterm_rx: mpsc::Receiver<crossterm::event::Event>,
     color_config: ColorConfig,
+    interrupt: Option<&(dyn Fn() + Send + Sync)>,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
     let mut last_render = Instant::now();
     let mut resize_debouncer = Debouncer::new(RESIZE_DEBOUNCE_DELAY);
@@ -909,10 +913,10 @@ async fn run_app_inner(
             if let Some(term) = terminal.as_mut() {
                 term.autoresize()?;
             }
-            update(app, resize)?;
+            update(app, resize, interrupt)?;
         }
         if let Some(event) = event {
-            callback = update(app, event)?;
+            callback = update(app, event, interrupt)?;
             if callback.is_some() {
                 drain_after_stop(terminal, app, &mut receiver, &mut last_render).await?;
                 break;
@@ -948,7 +952,7 @@ async fn drain_after_stop(
         if !matches!(event, Event::Tick) {
             needs_rerender = true;
         }
-        update(app, event)?;
+        update(app, event, None)?;
 
         if let Some(term) = terminal.as_mut()
             && FRAMERATE <= last_render.elapsed()
@@ -1109,6 +1113,7 @@ fn cleanup<B: Backend<Error = io::Error> + io::Write>(
 fn update(
     app: &mut App<Box<dyn io::Write + Send>>,
     event: Event,
+    interrupt: Option<&(dyn Fn() + Send + Sync)>,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
     match event {
         Event::LogEvent(log_event) => {
@@ -1130,6 +1135,14 @@ fn update(
         Event::InternalStop => {
             debug!("shutting down due to internal failure");
             app.done = true;
+        }
+        Event::Interrupt => {
+            if let Some(interrupt) = interrupt {
+                interrupt();
+            } else {
+                debug!("unable to notify interrupt handler, shutting down");
+                app.done = true;
+            }
         }
         Event::Stop(callback) => {
             debug!("shutting down due to message");
@@ -2654,7 +2667,7 @@ mod test {
             turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
             "something went wrong",
         );
-        update(&mut app, Event::LogEvent(event))?;
+        update(&mut app, Event::LogEvent(event), None)?;
 
         assert_eq!(app.log_events.len(), 1);
         assert_eq!(app.log_events[0].message(), "something went wrong");
@@ -2688,7 +2701,7 @@ mod test {
         sender.end_task("app-a#dev".to_string(), TaskResult::Success);
 
         let (callback_tx, _callback_rx) = oneshot::channel();
-        update(&mut app, Event::Stop(callback_tx))?;
+        update(&mut app, Event::Stop(callback_tx), None)?;
         let mut terminal = None;
         let mut last_render = Instant::now();
         drain_after_stop(&mut terminal, &mut app, &mut receiver, &mut last_render).await?;
