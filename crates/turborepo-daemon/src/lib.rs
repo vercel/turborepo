@@ -60,6 +60,7 @@ pub struct PackageChangesWatcherArgs {
     >,
     pub hash_watcher: std::sync::Arc<turborepo_filewatch::hash_watcher::HashWatcher>,
     pub custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    pub allow_no_package_manager: bool,
 }
 
 /// Events that indicate package changes in the repository.

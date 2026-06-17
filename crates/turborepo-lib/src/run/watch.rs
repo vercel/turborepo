@@ -250,8 +250,13 @@ impl WatchClient {
             recv.clone(),
         ));
         let package_watcher = Arc::new(
-            PackageWatcher::new(base.repo_root.clone(), recv.clone(), cookie_writer)
-                .map_err(|e| Error::PackageWatcher(format!("{e:?}")))?,
+            PackageWatcher::new(
+                base.repo_root.clone(),
+                recv.clone(),
+                cookie_writer,
+                base.opts().repo_opts.allow_no_package_manager,
+            )
+            .map_err(|e| Error::PackageWatcher(format!("{e:?}")))?,
         );
         let scm = SCM::new(&base.repo_root);
         let hash_watcher = Arc::new(HashWatcher::new(
@@ -266,6 +271,7 @@ impl WatchClient {
             hash_watcher,
             custom_turbo_json_path,
             base.opts().run_opts.single_package,
+            base.opts().repo_opts.allow_no_package_manager,
         );
 
         // Subscribe before building the Run so we don't miss the initial
