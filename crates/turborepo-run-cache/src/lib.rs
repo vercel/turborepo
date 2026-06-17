@@ -558,7 +558,9 @@ impl TaskCache {
             &validated_inclusions,
             &validated_exclusions,
             globwalk::WalkType::All,
-            globwalk::Settings::default().follow_links(),
+            globwalk::Settings::default()
+                .follow_links()
+                .ignore_link_cycles(),
         )?;
 
         for path in &files_to_be_cached {
@@ -1417,5 +1419,59 @@ mod test {
             cached.is_none(),
             "symlinked output outside repo root should not write a cache artifact"
         );
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn save_outputs_ignores_symlink_cycles() {
+        let temp = tempdir().unwrap();
+        let repo_dir = temp.path().join("repo");
+        std::fs::create_dir_all(repo_dir.join("apps/app/node_modules/@vercel")).unwrap();
+        std::fs::create_dir_all(repo_dir.join("apps/app/node_modules/.cache")).unwrap();
+        std::fs::create_dir_all(
+            repo_dir.join("packages/navigation-metrics/examples/basic/node_modules/@vercel"),
+        )
+        .unwrap();
+        std::fs::write(
+            repo_dir.join("apps/app/node_modules/.cache/tsbuildinfo.json"),
+            b"{}",
+        )
+        .unwrap();
+
+        std::os::unix::fs::symlink(
+            "../../../../packages/navigation-metrics",
+            repo_dir.join("apps/app/node_modules/@vercel/navigation-metrics"),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(
+            "../../../..",
+            repo_dir
+                .join("packages/navigation-metrics")
+                .join("examples/basic/node_modules/@vercel/navigation-metrics"),
+        )
+        .unwrap();
+
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_dir.as_path()).unwrap();
+        let mut task_cache = task_cache_for_outputs(
+            &repo_root,
+            vec!["**/node_modules/.cache/tsbuildinfo.json".to_string()],
+        );
+        let telemetry = PackageTaskEventBuilder::new("pkg", "type-check");
+
+        task_cache
+            .save_outputs(Duration::from_millis(10), &telemetry)
+            .await
+            .unwrap();
+
+        let expected = AnchoredSystemPathBuf::from_raw(format!(
+            "apps{}app{}node_modules{}.cache{}tsbuildinfo.json",
+            std::path::MAIN_SEPARATOR_STR,
+            std::path::MAIN_SEPARATOR_STR,
+            std::path::MAIN_SEPARATOR_STR,
+            std::path::MAIN_SEPARATOR_STR,
+        ))
+        .unwrap();
+
+        assert!(task_cache.expanded_outputs().contains(&expected));
     }
 }
