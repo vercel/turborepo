@@ -497,6 +497,60 @@ async fn test_pty_child_receives_single_sigint_during_slow_cleanup() {
     );
 }
 
+// Regression test: if a PTY wrapper exits after SIGINT without forwarding the
+// signal, Turbo still owns the child process tree and must interrupt the
+// remaining descendant before completing shutdown.
+#[cfg(unix)]
+#[tokio::test]
+#[traced_test]
+async fn test_pty_remaining_descendant_receives_sigint_when_wrapper_exits() {
+    let script = find_script_dir().join_component("wrapper_exit_without_forwarding_sigint.js");
+    let marker = std::env::temp_dir().join(format!(
+        "turbo-remaining-descendant-sigint-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&marker);
+
+    let mut cmd = Command::new("node");
+    cmd.args([script.as_std_path(), marker.as_path()]);
+    cmd.open_stdin();
+    let mut child = Child::spawn(
+        cmd,
+        ShutdownStyle::Graceful(Some(Duration::from_millis(3000))),
+        Some(PtySize::default()),
+    )
+    .unwrap();
+
+    let mut output_child = child.clone();
+    let (mut observer, output, ready_rx) = ObservedOutput::new();
+    let output_task = tokio::spawn(async move {
+        output_child
+            .wait_with_piped_outputs(&mut observer)
+            .await
+            .unwrap()
+    });
+
+    tokio::time::timeout(Duration::from_secs(30), ready_rx)
+        .await
+        .expect("timed out waiting for ready")
+        .expect("ready channel closed");
+
+    child.set_closing();
+    child.stop().await;
+    output_task.await.unwrap();
+
+    let output = String::from_utf8(output.lock().unwrap().clone()).unwrap();
+    assert!(
+        output.contains("ready"),
+        "missing child ready output: {output}"
+    );
+    let marker_contents = std::fs::read_to_string(&marker)
+        .unwrap_or_else(|err| panic!("expected remaining descendant SIGINT marker: {err}"));
+    assert_eq!(marker_contents, "SIGINT\n");
+
+    let _ = std::fs::remove_file(&marker);
+}
+
 #[test_case(false)]
 #[test_case(TEST_PTY)]
 #[tokio::test]
