@@ -1,7 +1,7 @@
 ---
 title: Turborepo 2.10
 date: 2026/06/18
-description: "Graceful task shutdown, cache eviction, composable `--affected` and `--filter`, and `$TURBO_JIT$` for generated file inputs"
+description: "Graceful task shutdown, cache eviction, composable `--affected` and `--filter`, and just-in-time task input hashing with `$TURBO_JIT$`"
 product: turborepo
 type: overview
 summary: Release notes for Turborepo 2.10 featuring graceful shutdown, configurable local cache eviction, composable filtering, and just-in-time task input hashing.
@@ -23,9 +23,9 @@ import { Accordion, Accordions } from "@/components/geistdocs/accordion";
 Turborepo 2.10 improves day-to-day reliability in your repository:
 
 - [**Graceful task shutdown**](#graceful-task-shutdown): Exit your development environment cleanly
-- [**Local cache eviction**](#local-cache-eviction): Automatically reclaim disk space from your local cache
+- [**Deferred input hashing with `$TURBO_JIT$`**](#deferred-input-hashing-with-turbo_jit): Hash selected file inputs after upstream tasks complete
 - [**Combine `--affected` and `--filter`**](#combine---affected-and---filter): Narrow CI runs to affected packages within a specific scope
-- [**`$TURBO_JIT$` for generated file inputs**](#turbo_jit-for-generated-file-inputs): Defer a task's hashing until the moment it starts
+- [**Local cache eviction**](#local-cache-eviction): Automatically reclaim disk space from your local cache
 
 ---
 
@@ -141,82 +141,47 @@ bunx skills update vercel/turborepo
 
 ## Graceful task shutdown
 
-It's common for a repository to have a shutdown or cleanup step to tear down a development environment. Examples include cleanly shutting down a server, terminating a Docker Compose script, or closing a background process.
+It's common for a repository to have shutdown or cleanup steps when closing out a development environment. Examples include cleanly shutting down a server, terminating a Docker Compose script, or closing a background process.
 
-In previous versions of Turborepo, tasks that wanted to gracefully shut down were not respected. Turborepo would immediately exit, abruptly killing all of your tasks, and possibly leaving your development environment in an undesirable state.
+In previous versions of Turborepo, tasks that wanted to gracefully shut down were not respected. Turborepo would immediately exit, abruptly killing all of your tasks, and possibly leaving your development environment in an undesirable state. Any tasks that wanted to handle `SIGINT` or `SIGTERM` themselves wouldn't get the opportunity.
 
-Starting with this release, Turborepo will now wait for your tasks to exit, and then shut itself down. Pressing `Ctrl+C` (or sending `SIGINT` or `SIGTERM`) to Turborepo will forward the signals to your tasks, and then wait. Once all your tasks have completed their work, Turborepo will exit.
+Starting with this release, Turborepo will now wait for your tasks to exit Pressing `Ctrl+C` (or sending `SIGINT` or `SIGTERM`) to Turborepo will forward the signals to your tasks. Once all your tasks have completed their work, Turborepo will exit.
 
 ```bash title="Terminal"
-▲ ~ turbo dev
+▲ ~ turbo start
+   • turbo 2.10.0
 
-app-a:dev: cache bypass, force executing 62affbb4b4b49ad4
-app-a:dev:
-app-a:dev: > dev
-app-a:dev: > node script.mjs
-app-a:dev: Ready
+server:dev: cache bypass, force executing 57ef564a0dbdb237
+server:dev:
+server:dev: Server started...
+server:dev: Handling request [GET] /
 ^C - Shutting down Turborepo tasks...Press CTRL+C again to exit forcefully.
-app-a:dev: Tearing down.
+server:dev: SIGINT received!
+server:dev: Terminating database connection...
+server:dev: Terminated database connection.
 
  Tasks:    0 successful, 1 total
 Cached:    0 cached, 1 total
-  Time:    3.803s
+  Time:    3.6s
 ```
 
-This behavior is zero-configuration, and if your repository does not have tasks that gracefully shutdown, you will see no observable change. [Visit the documentation](/docs/reference/run#graceful-shutdown) to learn more
+This feature is zero-configuration, and tasks that do not have their own exit handling will continue to work as before. [Visit the documentation](/docs/reference/run#graceful-shutdown) to learn more
 
-## Local cache eviction
+## Deferred input hashing with `$TURBO_JIT$`
 
-Turborepo saves its local cache into `.turbo/cache`, leaving behind cache artifacts every time you run tasks. While this makes your repository faster while working locally, there's one problem: The local cache can keep growing forever - and at accelerated rates.
+By default, Turborepo creates the hashes for all of your tasks immediately, right when `turbo` starts. This lets Turborepo get work done as fast as possible, since it can instantly know whether your work is a cache hit or miss.
 
-Turborepo now supports automatic eviction through two opt-in configuration options in `turbo.json`:
+However, some file inputs are not stable at that point. An upstream task might generate, transform, or otherwise change files that a downstream task depends on **after** `turbo` has already hashed everything. Without a way to defer hashing, you would have to disable caching for those downstream tasks, or risk unexpected cache hits.
 
-```jsonc title="turbo.json"
-{
-  "cacheMaxAge": "7d",
-  "cacheMaxSize": "10GB",
-}
-```
+Starting with this release, you can use `$TURBO_JIT$` to mark file inputs that should be hashed "just-in-time" - **after** a task's dependencies complete. Code generation is the most common case, but any input that intentionally changes during the run can use this pattern.
 
-Eviction runs in a background thread at the start of each `turbo run`, so it does not block task scheduling:
-
-1. **Age-based eviction**: Entries older than `cacheMaxAge` are removed first
-2. **Size-based eviction**: If the cache still exceeds `cacheMaxSize`, the oldest remaining entries are removed
-
-[Visit the documentation](/docs/reference/configuration#cachemaxage) to learn more. We expect to enable this configuration by default in Turborepo 3.0.
-
-## Combine `--affected` and `--filter`
-
-Previously, you couldn't use `--affected` and `--filter` at the esame time. Now, you can.
-
-```bash title="Terminal"
-# Only run build for "web" if it's affected by changes
-turbo run build --affected --filter=web
-
-# Run affected packages, excluding "docs"
-turbo run build --affected --filter=!docs
-
-# List "my-app" only if it's affected
-turbo query ls --affected --filter=my-app
-```
-
-These flags will combine with intersection semantics, only running the tasks that match **both** constraints.
-
-[Visit the documentation](/docs/reference/run#--affected) to learn more.
-
-## `$TURBO_JIT$` for generated file inputs
-
-Turborepo creates the hashes for all of your tasks immediately, right when `turbo` starts. This lets Turborepo get work done as fast as possible, since it can instantly know whether your work is a cache hit or miss.
-
-However, this becomes problematic in certain situations. For example, if you have a task that does code generation, it might change the files for a package's file inputs **after** `turbo` has created the hashes for the repo. In this case, you'd be forced to disable caching for all the tasks whose file inputs might change. That slows your repo down.
-
-Starting with this release, you can now use `$TURBO_JIT$` to defer hashing for selected file inputs until **after** a task's dependencies are complete. In the example below, `check-types` waits for `codegen`, then hashes `src/generated/**` before checking the cache.
+In the example below, `check-types` waits for `codegen`, then hashes `src/generated/**` before checking the cache.
 
 ```jsonc title="turbo.json"
 {
   "tasks": {
     "codegen": {
-      "outputs": ["src/generated/**"],
+      "inputs": ["schema.graphql", "codegen.config.ts"],
     },
     "check-types": {
       "dependsOn": ["codegen"],
@@ -230,7 +195,41 @@ Starting with this release, you can now use `$TURBO_JIT$` to defer hashing for s
 }
 ```
 
-Tasks using `$TURBO_JIT$` show a deferred hash in `--dry` output until their dependencies finish. [Visit the documentation](/docs/reference/configuration#turbo_jit) to learn more.
+[Visit the documentation](/docs/reference/configuration#turbo_jit) to learn more.
+
+## Combine `--affected` and `--filter`
+
+Previously, you couldn't use `--affected` and `--filter` at the same time. Now, you can.
+
+```bash title="Terminal"
+# Only run build for "web" if it's affected by changes
+turbo run build --affected --filter=web
+
+# Run affected packages, excluding "docs"
+turbo run build --affected --filter=!docs
+
+# List "my-app" only if it's affected
+turbo query ls --affected --filter=my-app
+```
+
+These flags will combine with intersection semantics, only running the tasks that match **both** constraints. [Visit the documentation](/docs/reference/run#--affected) to learn more.
+
+## Local cache eviction
+
+Turborepo saves its local cache into `.turbo/cache`, leaving behind cache artifacts every time you run tasks. While this makes your repository faster locally, there's one problem: The local cache can keep growing forever.
+
+Turborepo now supports automatic eviction through two opt-in configuration options in `turbo.json`:
+
+```jsonc title="turbo.json"
+{
+  "cacheMaxAge": "7d",
+  "cacheMaxSize": "10GB",
+}
+```
+
+Eviction runs in a background thread at the start of each `turbo run`, so it does not block tasks. You can use either age-based eviction or size-based eviction.
+
+We expect to enable local cache eviction by default in Turborepo 3.0. [Visit the documentation](/docs/reference/configuration#cachemaxage) to learn more.
 
 ## All changes
 
