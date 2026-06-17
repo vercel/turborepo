@@ -1,6 +1,7 @@
 use std::{io, time::Duration};
 
 use portable_pty::{Child as PtyChild, MasterPty as PtyController, native_pty_system};
+use sysinfo::{PidExt, ProcessExt, System, SystemExt};
 use tokio::{process::Command as TokioCommand, sync::mpsc};
 use tracing::debug;
 
@@ -22,6 +23,8 @@ pub(super) struct ChildHandle {
     pub(super) target_identity: Option<TargetIdentity>,
     #[cfg(unix)]
     pty_controller_fd: Option<libc::c_int>,
+    #[cfg(unix)]
+    graceful_descendant_pids: Vec<libc::pid_t>,
     #[cfg(windows)]
     _job: Option<crate::job_object::JobObject>,
     /// Shared handle to the ConPTY input pipe, used to deliver a Ctrl-C
@@ -178,6 +181,33 @@ fn capture_target_identity(pid: Option<u32>) -> Option<TargetIdentity> {
     })
 }
 
+#[cfg(unix)]
+fn descendant_pids(root_pid: libc::pid_t) -> Vec<libc::pid_t> {
+    let mut system = System::new_all();
+    system.refresh_processes();
+
+    let root_pid = sysinfo::Pid::from_u32(root_pid as u32);
+    let mut descendants = Vec::new();
+    let mut stack = vec![root_pid];
+
+    while let Some(parent_pid) = stack.pop() {
+        for (pid, process) in system.processes() {
+            if process.parent() == Some(parent_pid) {
+                stack.push(*pid);
+                descendants.push(pid.as_u32() as libc::pid_t);
+            }
+        }
+    }
+
+    descendants
+}
+
+#[cfg(unix)]
+fn is_pid_alive(pid: libc::pid_t) -> bool {
+    let result = unsafe { libc::kill(pid, 0) };
+    result == 0 || io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
 impl ChildHandle {
     #[tracing::instrument(skip(command))]
     pub(super) fn spawn_normal(command: Command) -> io::Result<SpawnResult> {
@@ -298,6 +328,8 @@ impl ChildHandle {
                 target_identity,
                 #[cfg(unix)]
                 pty_controller_fd: None,
+                #[cfg(unix)]
+                graceful_descendant_pids: Vec::new(),
                 #[cfg(windows)]
                 _job: job,
                 #[cfg(windows)]
@@ -428,6 +460,8 @@ impl ChildHandle {
                 target_identity,
                 #[cfg(unix)]
                 pty_controller_fd,
+                #[cfg(unix)]
+                graceful_descendant_pids: Vec::new(),
                 #[cfg(windows)]
                 _job: job,
                 #[cfg(windows)]
@@ -451,12 +485,17 @@ impl ChildHandle {
 
     #[cfg(unix)]
     fn graceful_process_group_id(&self) -> Option<libc::pid_t> {
+        self.foreground_process_group_id()
+            .or_else(|| self.process_group_id())
+    }
+
+    #[cfg(unix)]
+    fn foreground_process_group_id(&self) -> Option<libc::pid_t> {
         self.pty_controller_fd
             .and_then(|fd| match unsafe { libc::tcgetpgrp(fd) } {
                 process_group_id if process_group_id > 0 => Some(process_group_id),
                 _ => None,
             })
-            .or_else(|| self.process_group_id())
     }
 
     #[cfg(unix)]
@@ -471,9 +510,52 @@ impl ChildHandle {
     }
 
     #[cfg(unix)]
-    pub(super) fn send_graceful_interrupt(&self, pid: libc::pid_t) {
+    pub(super) fn send_graceful_interrupt(&mut self, pid: libc::pid_t) {
+        let child_process_group_id = self.process_group_id();
+        let foreground_process_group_id = self.foreground_process_group_id();
+        self.graceful_descendant_pids = descendant_pids(pid);
+
+        debug!(
+            "graceful interrupt target={:?}, child pid={pid}, child pgid={:?}, pty foreground \
+             pgid={:?}, descendant pids={:?}",
+            self.shutdown_semantics.graceful_interrupt_target,
+            child_process_group_id,
+            foreground_process_group_id,
+            self.graceful_descendant_pids
+        );
+
         match self.shutdown_semantics.graceful_interrupt_target {
             GracefulInterruptTarget::DirectChild => {
+                if self.graceful_descendant_pids.len() > 1 {
+                    debug!(
+                        "sending SIGINT to process group because PTY child has nested descendants"
+                    );
+                    self.send_signal_to_process_group(pid, libc::SIGINT);
+                    return;
+                }
+
+                if !self.graceful_descendant_pids.is_empty() {
+                    debug!(
+                        "sending SIGINT to descendant processes {:?}",
+                        self.graceful_descendant_pids
+                    );
+                    for descendant_pid in &self.graceful_descendant_pids {
+                        let _ = unsafe { libc::kill(*descendant_pid, libc::SIGINT) };
+                    }
+                    return;
+                }
+
+                if let (Some(foreground_process_group_id), Some(child_process_group_id)) =
+                    (foreground_process_group_id, child_process_group_id)
+                    && foreground_process_group_id != child_process_group_id
+                {
+                    debug!(
+                        "sending SIGINT to foreground process group -{foreground_process_group_id}"
+                    );
+                    signal_process_group(foreground_process_group_id, libc::SIGINT);
+                    return;
+                }
+
                 debug!("sending SIGINT to child {pid}");
                 if unsafe { libc::kill(pid, libc::SIGINT) } == -1 {
                     debug!("failed to send SIGINT to {pid}");
@@ -482,6 +564,58 @@ impl ChildHandle {
             GracefulInterruptTarget::ProcessGroup => {
                 self.send_signal_to_process_group(pid, libc::SIGINT);
             }
+        }
+    }
+
+    #[cfg(unix)]
+    pub(super) fn send_interrupt_to_remaining_descendants(&self) -> bool {
+        if !matches!(
+            self.shutdown_semantics.graceful_interrupt_target,
+            GracefulInterruptTarget::DirectChild
+        ) {
+            return false;
+        }
+
+        let remaining_descendants = self
+            .graceful_descendant_pids
+            .iter()
+            .copied()
+            .filter(|pid| is_pid_alive(*pid))
+            .collect::<Vec<_>>();
+
+        if remaining_descendants.is_empty() {
+            return false;
+        }
+
+        debug!(
+            "sending SIGINT to remaining descendant processes {:?}",
+            remaining_descendants
+        );
+        for pid in remaining_descendants {
+            let _ = unsafe { libc::kill(pid, libc::SIGINT) };
+        }
+
+        true
+    }
+
+    #[cfg(unix)]
+    fn has_running_descendants(&self) -> bool {
+        self.graceful_descendant_pids
+            .iter()
+            .copied()
+            .any(is_pid_alive)
+    }
+
+    #[cfg(unix)]
+    fn kill_remaining_descendants(&self) {
+        for pid in self
+            .graceful_descendant_pids
+            .iter()
+            .copied()
+            .filter(|pid| is_pid_alive(*pid))
+        {
+            debug!("killing remaining descendant process {pid}");
+            let _ = unsafe { libc::kill(pid, libc::SIGKILL) };
         }
     }
 
@@ -553,6 +687,58 @@ impl ChildHandle {
                                 Some(ChildCommand::Kill) => {
                                     debug!("graceful shutdown interrupted, killing process group");
                                     self.kill_process_group(pid);
+                                    return ChildExit::Killed;
+                                }
+                                Some(ChildCommand::Shutdown(_)) => {}
+                                None => *command_rx_open = false,
+                            }
+                        }
+                        _ = tokio::time::sleep(PROCESS_TREE_DRAIN_POLL_INTERVAL) => {}
+                    }
+                }
+            }
+        }
+
+        ChildExit::Interrupted
+    }
+
+    #[cfg(unix)]
+    pub(super) async fn wait_for_remaining_descendants_exit(
+        &mut self,
+        deadline: Option<tokio::time::Instant>,
+        command_rx: &mut mpsc::Receiver<ChildCommand>,
+        command_rx_open: &mut bool,
+    ) -> ChildExit {
+        while self.has_running_descendants() {
+            match deadline {
+                Some(deadline) => {
+                    tokio::select! {
+                        command = command_rx.recv(), if *command_rx_open => {
+                            match command {
+                                Some(ChildCommand::Kill) => {
+                                    debug!("graceful shutdown interrupted, killing remaining descendants");
+                                    self.kill_remaining_descendants();
+                                    return ChildExit::Killed;
+                                }
+                                Some(ChildCommand::Shutdown(_)) => {}
+                                None => *command_rx_open = false,
+                            }
+                        }
+                        _ = tokio::time::sleep_until(deadline) => {
+                            debug!("graceful shutdown timed out, killing remaining descendants");
+                            self.kill_remaining_descendants();
+                            return ChildExit::Killed;
+                        }
+                        _ = tokio::time::sleep(PROCESS_TREE_DRAIN_POLL_INTERVAL) => {}
+                    }
+                }
+                None => {
+                    tokio::select! {
+                        command = command_rx.recv(), if *command_rx_open => {
+                            match command {
+                                Some(ChildCommand::Kill) => {
+                                    debug!("graceful shutdown interrupted, killing remaining descendants");
+                                    self.kill_remaining_descendants();
                                     return ChildExit::Killed;
                                 }
                                 Some(ChildCommand::Shutdown(_)) => {}

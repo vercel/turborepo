@@ -133,6 +133,20 @@ impl ShutdownStyle {
                     };
 
                     if exit == ChildExit::Interrupted {
+                        if child.send_interrupt_to_remaining_descendants() {
+                            let descendant_exit = child
+                                .wait_for_remaining_descendants_exit(
+                                    deadline,
+                                    command_rx,
+                                    &mut command_rx_open,
+                                )
+                                .await;
+
+                            if descendant_exit != ChildExit::Interrupted {
+                                return descendant_exit;
+                            }
+                        }
+
                         child
                             .wait_for_process_group_exit(
                                 pid,
