@@ -2121,7 +2121,7 @@ fn test_subgraph_preserves_patch_when_patched_version_missing_from_lockfile_keys
                 "name": "app-a",
                 "version": "0.0.0",
                 "dependencies": {
-                    "is-odd": "3.0.1",
+                    "is-odd": "^3.0.1",
                     "pkg-old": "workspace:*"
                 }
             },

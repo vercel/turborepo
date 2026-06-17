@@ -1,5 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
+use semver::{Version, VersionReq};
+
 use super::{
     BunLockfile, BunLockfileData, Error, Map, PackageEntry, PackageIdent, PackageIndex,
     PackageInfo, PackageKey, data::WorkspaceEntry,
@@ -905,14 +907,47 @@ impl BunLockfile {
                     if version.contains("workspace:") {
                         continue;
                     }
-                    let ident = format!("{name}@{version}");
-                    if self.data.patched_dependencies.contains_key(&ident) {
-                        required.insert(ident);
+                    for patched_ident in self.data.patched_dependencies.keys() {
+                        if self.patched_ident_satisfies_dep(patched_ident, name, version) {
+                            required.insert(patched_ident.clone());
+                        }
                     }
                 }
             }
         }
         required
+    }
+
+    fn patched_ident_satisfies_dep(&self, patched_ident: &str, name: &str, version: &str) -> bool {
+        let parsed_ident = PackageIdent::parse(patched_ident);
+        if parsed_ident.name() != name {
+            return false;
+        }
+
+        let Some((_, patched_version)) = patched_ident.rsplit_once('@') else {
+            return false;
+        };
+
+        let version = self
+            .resolve_catalog_version(name, version)
+            .unwrap_or(version);
+        let version = self.apply_overrides(name, version);
+
+        if let Some(exact_version) = version.strip_prefix('=') {
+            return patched_version == exact_version;
+        }
+        if Version::parse(version).is_ok() {
+            return patched_version == version;
+        }
+
+        let Ok(req) = VersionReq::parse(version) else {
+            return false;
+        };
+        let Ok(patched_version) = Version::parse(patched_version) else {
+            return false;
+        };
+
+        req.matches(&patched_version)
     }
 
     fn restore_patched_hoisted_entries(
