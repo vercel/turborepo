@@ -22,10 +22,10 @@ import { Accordion, Accordions } from "@/components/geistdocs/accordion";
 
 Turborepo 2.10 improves day-to-day reliability in your repository:
 
-- [**Graceful task shutdown**](#graceful-task-shutdown): Interrupt `turbo run` without leaving orphaned processes or truncated logs
+- [**Graceful task shutdown**](#graceful-task-shutdown): Exit your development environment cleanly
 - [**Local cache eviction**](#local-cache-eviction): Automatically reclaim disk space from your local cache
 - [**Combine `--affected` and `--filter`**](#combine---affected-and---filter): Narrow CI runs to affected packages within a specific scope
-- [**`$TURBO_JIT$` for generated file inputs**](#turbo_jit-for-generated-file-inputs): Hash generated files Just-In-Time for correct caching on the first run
+- [**`$TURBO_JIT$` for generated file inputs**](#turbo_jit-for-generated-file-inputs): Defer a task's hashing until the moment it starts
 
 ---
 
@@ -141,11 +141,29 @@ bunx skills update vercel/turborepo
 
 ## Graceful task shutdown
 
-It's common for a repository to have a shutdown or cleanup step to tear down a development environment. Examples include cleanly shutting down a server, terminating a Docker compose script, or closing a background process. Until today, tasks that were meant to gracefully shutdown were not respected. Turborepo would immediately exit, killing all of your tasks instantly.
+It's common for a repository to have a shutdown or cleanup step to tear down a development environment. Examples include cleanly shutting down a server, terminating a Docker Compose script, or closing a background process.
 
-Starting with this release, Turborepo will now wait for your tasks to exit, and then shut itself down. Pressing CTRL+C (or sending `SIGINT` or `SIGTERM`) to Turborepo will forward the signals to your tasks, and then wait. Once all your tasks have completed their work, Turborepo will exit.
+In previous versions of Turborepo, tasks that wanted to gracefully shut down were not respected. Turborepo would immediately exit, abruptly killing all of your tasks, and possibly leaving your development environment in an undesirable state.
 
-This behavior is zero-congifuration, and if your repository does not have tasks that gracefully shutdown, you will see no observable change. [Visit the documentation](/docs/reference/run#graceful-shutdown) to learn more
+Starting with this release, Turborepo will now wait for your tasks to exit, and then shut itself down. Pressing `Ctrl+C` (or sending `SIGINT` or `SIGTERM`) to Turborepo will forward the signals to your tasks, and then wait. Once all your tasks have completed their work, Turborepo will exit.
+
+```bash name="Terminal"
+▲ ~ turbo dev
+
+app-a:dev: cache bypass, force executing 62affbb4b4b49ad4
+app-a:dev:
+app-a:dev: > dev
+app-a:dev: > node script.mjs
+app-a:dev: Ready
+^C - Shutting down Turborepo tasks...Press CTRL+C again to exit forcefully.
+app-a:dev: Tearing down.
+
+ Tasks:    0 successful, 1 total
+Cached:    0 cached, 1 total
+  Time:    3.803s
+```
+
+This behavior is zero-configuration, and if your repository does not have tasks that gracefully shutdown, you will see no observable change. [Visit the documentation](/docs/reference/run#graceful-shutdown) to learn more
 
 ## Local cache eviction
 
