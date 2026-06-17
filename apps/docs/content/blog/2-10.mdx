@@ -147,7 +147,7 @@ In previous versions of Turborepo, tasks that wanted to gracefully shut down wer
 
 Starting with this release, Turborepo will now wait for your tasks to exit, and then shut itself down. Pressing `Ctrl+C` (or sending `SIGINT` or `SIGTERM`) to Turborepo will forward the signals to your tasks, and then wait. Once all your tasks have completed their work, Turborepo will exit.
 
-```bash name="Terminal"
+```bash title="Terminal"
 ▲ ~ turbo dev
 
 app-a:dev: cache bypass, force executing 62affbb4b4b49ad4
