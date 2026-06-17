@@ -177,10 +177,18 @@ fn remote_cache_status_message(status: RemoteCacheStatus, api_url: &str) -> (Str
 
 impl Run {
     fn shutdown_started_message(force_shutdown_timeout: Option<Duration>) -> String {
+        #[cfg(windows)]
+        let message = {
+            let _ = force_shutdown_timeout;
+            "Shutting down Turborepo tasks..."
+        };
+
+        #[cfg(not(windows))]
         let message = match force_shutdown_timeout {
             Some(_) => "Shutting down Turborepo tasks...",
             None => " - Shutting down Turborepo tasks...Press CTRL+C again to exit forcefully.",
         };
+
         LIGHT_GREY.apply_to(message).to_string()
     }
 
