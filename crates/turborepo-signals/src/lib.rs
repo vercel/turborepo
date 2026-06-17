@@ -18,7 +18,7 @@ use futures::{Stream, StreamExt, stream::FuturesUnordered};
 use signals::Signal;
 use tokio::{
     pin,
-    sync::{Notify, mpsc, oneshot},
+    sync::{Notify, broadcast, mpsc, oneshot},
 };
 
 /// Why the signal handler started shutdown.
@@ -39,6 +39,7 @@ pub struct SignalHandler {
     state: Arc<Mutex<HandlerState>>,
     close: mpsc::Sender<()>,
     in_process_signal: mpsc::Sender<()>,
+    in_process_signals: broadcast::Sender<()>,
     shutdown_reason: Arc<AtomicU8>,
     started: Arc<Notify>,
 }
@@ -77,6 +78,7 @@ impl SignalHandler {
         let worker_started = started.clone();
         let (close, mut rx) = mpsc::channel::<()>(1);
         let (in_process_signal, mut in_process_signal_rx) = mpsc::channel::<()>(1);
+        let (in_process_signals, _) = broadcast::channel::<()>(16);
         tokio::spawn(async move {
             pin!(signal_source);
             let shutdown_reason = tokio::select! {
@@ -119,6 +121,7 @@ impl SignalHandler {
             state,
             close,
             in_process_signal,
+            in_process_signals,
             shutdown_reason,
             started,
         }
@@ -150,6 +153,14 @@ impl SignalHandler {
     /// active.
     pub fn notify_signal(&self) {
         self.in_process_signal.try_send(()).ok();
+        self.in_process_signals.send(()).ok();
+    }
+
+    /// Subscribe to in-process signals after the initial shutdown has started.
+    /// This is used by UIs that consume Ctrl-C while the terminal is in raw
+    /// mode.
+    pub fn subscribe_in_process_signals(&self) -> broadcast::Receiver<()> {
+        self.in_process_signals.subscribe()
     }
 
     /// Wait until handler is finished and all subscribers finish their cleanup
