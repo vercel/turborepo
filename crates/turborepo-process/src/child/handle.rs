@@ -344,7 +344,11 @@ impl ChildHandle {
     }
 
     #[tracing::instrument(skip(command))]
-    pub(super) fn spawn_pty(command: Command, size: PtySize) -> io::Result<SpawnResult> {
+    pub(super) fn spawn_pty(
+        command: Command,
+        size: PtySize,
+        #[cfg(unix)] pty_termios: Option<libc::termios>,
+    ) -> io::Result<SpawnResult> {
         let keep_stdin_open = command.will_open_stdin();
 
         let command = portable_pty::CommandBuilder::from(command);
@@ -367,20 +371,19 @@ impl ChildHandle {
 
         #[cfg(unix)]
         {
-            use nix::sys::termios;
-            if let Some((file_desc, mut termios)) = controller
-                .as_raw_fd()
-                .and_then(|fd| Some(fd).zip(termios::tcgetattr(fd).ok()))
+            if let Some(file_desc) = controller.as_raw_fd()
+                && let Some(mut termios) = pty_termios.or_else(|| {
+                    let mut termios = std::mem::MaybeUninit::<libc::termios>::uninit();
+                    let result = unsafe { libc::tcgetattr(file_desc, termios.as_mut_ptr()) };
+                    (result == 0).then(|| unsafe { termios.assume_init() })
+                })
             {
                 // We unset ECHOCTL to disable rendering of the closing of stdin
                 // as ^D
-                termios.local_flags &= !nix::sys::termios::LocalFlags::ECHOCTL;
-                if let Err(e) = nix::sys::termios::tcsetattr(
-                    file_desc,
-                    nix::sys::termios::SetArg::TCSANOW,
-                    &termios,
-                ) {
-                    debug!("unable to unset ECHOCTL: {e}");
+                termios.c_lflag &= !(libc::ECHOCTL as libc::tcflag_t);
+                if unsafe { libc::tcsetattr(file_desc, libc::TCSANOW, &termios) } != 0 {
+                    let e = io::Error::last_os_error();
+                    debug!("unable to configure PTY termios: {e}");
                 }
             }
         }
