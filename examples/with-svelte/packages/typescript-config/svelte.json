@@ -1,18 +1,26 @@
 {
   "compilerOptions": {
+    "allowArbitraryExtensions": true,
     "allowJs": true,
     "checkJs": true,
+    "declaration": true,
+    "declarationMap": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "lib": ["esnext", "DOM", "DOM.Iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
+    "rootDir": "./src",
     "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
-    "moduleResolution": "bundler",
-    "module": "esnext",
+    "strictNullChecks": true,
     "target": "esnext",
-    "verbatimModuleSyntax": true,
-    "isolatedModules": true,
-    "lib": ["esnext", "DOM", "DOM.Iterable"]
-  }
+    "types": ["node", "svelte"],
+    "verbatimModuleSyntax": true
+  },
+  "exclude": [".svelte-kit", ".turbo", "dist", "node_modules"],
+  "include": ["./src/**/*.svelte", "./src/**/*.svelte.ts", "./src/**/*.ts"]
 }
