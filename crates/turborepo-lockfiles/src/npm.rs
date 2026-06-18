@@ -465,9 +465,12 @@ impl NpmLockfile {
                 }
             }
 
-            // Remove the now-unreachable copy left at the original nested
-            // location (and its subtree).
-            if orig_dep_key != placement {
+            // Remove the original nested location only if no remaining package
+            // still resolves to it. Sibling consumers in the same workspace can
+            // share that nested copy even after this package is promoted.
+            if orig_dep_key != placement
+                && !Self::is_resolved_by_any_consumer(pruned, &orig_dep_key)
+            {
                 pruned.remove(&orig_dep_key);
                 let strand_prefix = format!("{orig_dep_key}/node_modules/");
                 let strays: Vec<String> = pruned
@@ -483,6 +486,20 @@ impl NpmLockfile {
             // Descend into the relocated dependency.
             Self::relocate_stranded_closure(pruned, original, &orig_dep_key, &placement, visited);
         }
+    }
+
+    fn is_resolved_by_any_consumer(packages: &HashMap<String, NpmPackage>, dep_key: &str) -> bool {
+        let Some(dep_name) = dep_key.rsplit_once("node_modules/").map(|(_, name)| name) else {
+            return false;
+        };
+
+        packages.iter().any(|(consumer_key, pkg)| {
+            pkg.dep_keys().any(|dep| {
+                dep == dep_name
+                    && Self::resolve_in_map(packages, consumer_key, dep)
+                        .is_some_and(|(resolved_key, _)| resolved_key == dep_key)
+            })
+        })
     }
 
     /// Resolve a dependency name within an arbitrary packages map by walking up
@@ -985,6 +1002,8 @@ mod test {
     // promotes send@0.17.2 to `node_modules/send`; mime@1.6.0 must move to a
     // position where the promoted send can resolve it (here nested under send,
     // since `node_modules/mime` is still occupied by the root devDep 3.0.0).
+    // The original nested copy must remain when another app-2 dependency still
+    // resolves to it.
     #[test]
     fn test_subgraph_relocates_stranded_promoted_deps() {
         let json = r#"{
@@ -994,7 +1013,10 @@ mod test {
                 "": {
                     "name": "monorepo",
                     "workspaces": ["apps/*"],
-                    "devDependencies": { "mime": "^3.0.0" }
+                    "devDependencies": {
+                        "legacy": "^2.0.0",
+                        "mime": "^3.0.0"
+                    }
                 },
                 "node_modules/app-1": {
                     "resolved": "apps/app-1",
@@ -1009,6 +1031,9 @@ mod test {
                 },
                 "node_modules/mime": {
                     "version": "3.0.0"
+                },
+                "node_modules/legacy": {
+                    "version": "2.0.0"
                 },
                 "node_modules/send": {
                     "version": "1.2.1",
@@ -1026,7 +1051,14 @@ mod test {
                 },
                 "apps/app-2": {
                     "version": "1.0.0",
-                    "dependencies": { "send": "^0.17.0" }
+                    "dependencies": {
+                        "legacy": "^1.0.0",
+                        "send": "^0.17.0"
+                    }
+                },
+                "apps/app-2/node_modules/legacy": {
+                    "version": "1.0.0",
+                    "dependencies": { "mime": "1.6.0" }
                 },
                 "apps/app-2/node_modules/mime": {
                     "version": "1.6.0"
@@ -1050,8 +1082,10 @@ mod test {
         let workspace_packages = vec!["apps/app-2".to_string()];
         let packages = vec![
             "node_modules/destroy".to_string(),
+            "node_modules/legacy".to_string(),
             "node_modules/mime".to_string(),
             "node_modules/encodeurl".to_string(),
+            "apps/app-2/node_modules/legacy".to_string(),
             "apps/app-2/node_modules/mime".to_string(),
             "apps/app-2/node_modules/send".to_string(),
         ];
@@ -1082,11 +1116,21 @@ mod test {
             Some("1.6.0"),
             "send@0.17.2's mime@1.6.0 must be relocated where send can resolve it"
         );
-        assert!(
-            !reparsed
+        assert_eq!(
+            reparsed
                 .packages
-                .contains_key("apps/app-2/node_modules/mime"),
-            "the stranded apps/app-2/node_modules/mime copy must be removed"
+                .get("apps/app-2/node_modules/mime")
+                .and_then(|p| p.version.as_deref()),
+            Some("1.6.0"),
+            "the shared apps/app-2/node_modules/mime copy must remain for sibling consumers"
+        );
+        assert_eq!(
+            reparsed
+                .packages
+                .get("apps/app-2/node_modules/legacy")
+                .and_then(|p| p.version.as_deref()),
+            Some("1.0.0"),
+            "legacy@1.0.0 should remain nested and resolve apps/app-2/node_modules/mime"
         );
 
         // The root devDependency mime@3.0.0 must be preserved untouched.
