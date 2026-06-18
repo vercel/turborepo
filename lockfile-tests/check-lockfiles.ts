@@ -38,6 +38,12 @@ interface FixtureMeta {
   pruneTargets?: string[];
   /** Run `turbo prune --docker` and validate `out/json`. */
   docker?: boolean;
+  /**
+   * Additionally assert that every package in the pruned lockfile can resolve
+   * its declared dependencies (via `npm ls`). Catches stranded transitive deps
+   * that `npm ci --dry-run` silently accepts. npm fixtures only.
+   */
+  validateResolution?: boolean;
   /** Workspace names where pruning or lockfile validation is known to fail. */
   expectedFailures?: string[];
 }
@@ -211,7 +217,8 @@ function buildTestCases(
           filepath: fixture.dir,
           packageManager: fixture.meta.packageManager,
           lockfileName: fixture.meta.lockfileName,
-          packageManagerVersion: fixture.meta.packageManagerVersion
+          packageManagerVersion: fixture.meta.packageManagerVersion,
+          validateResolution: fixture.meta.validateResolution
         },
         targetWorkspace: { name: target },
         label,
