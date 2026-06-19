@@ -86,6 +86,10 @@ pub const BUILTIN_PASS_THROUGH_ENV: &[&str] = &[
     "PNPM_HOME",
     "pnpm_config_verify_deps_before_run",
     "NPM_CONFIG_STORE_DIR",
+    // Needed by npm to spawn scripts now that turbo invokes the bundled npm
+    // directly instead of going through cmd.exe (see vercel/turborepo#13113)
+    "COMSPEC",
+    "PATHEXT",
 ];
 
 #[derive(Clone, Debug, Error)]
