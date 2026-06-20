@@ -910,3 +910,77 @@ fn watch_interruptible_persistent_task_restarts_on_file_change() {
          after: {a_after}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Regression test for #13115: watchUsingTaskInputs + interruptible persistent
+// ---------------------------------------------------------------------------
+
+fn setup_watch_task_inputs_persistent_test() -> (tempfile::TempDir, PathBuf) {
+    let tempdir = tempfile::tempdir().expect("failed to create tempdir");
+    let test_dir = tempdir.path().to_path_buf();
+
+    setup::copy_fixture("watch_task_inputs_persistent_test", &test_dir).unwrap();
+    setup::setup_git(&test_dir).unwrap();
+
+    let gitignore = test_dir.join(".gitignore");
+    let mut gi = fs::read_to_string(&gitignore).unwrap_or_default();
+    gi.push_str(".markers/\n");
+    fs::write(&gitignore, gi).unwrap();
+
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "add markers ignore", "--quiet"],
+    );
+
+    (tempdir, test_dir)
+}
+
+/// Regression test for https://github.com/vercel/turborepo/issues/13115
+///
+/// With `watchUsingTaskInputs: true`, changing a file outside a persistent
+/// task's `inputs` must not stop the dev server. Turbo should only interrupt
+/// interruptible persistent tasks when their own inputs (or upstream deps)
+/// change.
+#[test]
+#[cfg_attr(windows, ignore)]
+fn watch_task_inputs_persistent_task_not_stopped_for_out_of_input_change() {
+    let (_tempdir, test_dir) = setup_watch_task_inputs_persistent_test();
+    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks(&test_dir, &["dev"]));
+
+    wait_for_prefixed_markers(&test_dir, "app", "dev-", 1, Duration::from_secs(60));
+
+    // Let the watcher fully settle after the initial run.
+    std::thread::sleep(Duration::from_secs(2));
+
+    let dev_before = prefixed_marker_count(&test_dir, "app", "dev-");
+
+    // Modify app-source.txt, which is intentionally NOT in dev.inputs.
+    let src_file = test_dir.join("packages/app/src/app-source.txt");
+    for attempt in 0..3 {
+        fs::write(&src_file, format!("updated app source {attempt}\n")).unwrap();
+
+        common::git(&test_dir, &["add", "."]);
+        common::git(
+            &test_dir,
+            &[
+                "commit",
+                "-m",
+                &format!("modify app source (attempt {attempt})"),
+                "--quiet",
+            ],
+        );
+
+        std::thread::sleep(Duration::from_secs(10));
+    }
+
+    let dev_after = prefixed_marker_count(&test_dir, "app", "dev-");
+
+    drop(guard);
+
+    assert_eq!(
+        dev_before, dev_after,
+        "app dev should not restart when a file outside dev.inputs changes. before: {dev_before}, \
+         after: {dev_after}"
+    );
+}

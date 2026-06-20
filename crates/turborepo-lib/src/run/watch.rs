@@ -424,8 +424,13 @@ impl WatchClient {
                     // builds of the same package and stale cache-hit signals.
                     debug!(?changed_packages, "processing changed packages");
                     match changed_packages {
-                        ChangedPackages::Some { ref packages, .. } => {
-                            let impacted = self.stop_impacted_tasks(packages).await;
+                        ChangedPackages::Some {
+                            ref packages,
+                            ref changed_files,
+                        } => {
+                            let impacted = self
+                                .stop_impacted_tasks(packages, changed_files)
+                                .await;
                             if let ChangedPackages::Some {
                                 ref mut packages, ..
                             } = changed_packages
@@ -531,23 +536,60 @@ impl WatchClient {
         }
     }
 
-    async fn stop_impacted_tasks(&self, pkgs: &HashSet<PackageName>) -> HashSet<PackageName> {
+    async fn stop_impacted_tasks(
+        &self,
+        pkgs: &HashSet<PackageName>,
+        changed_files: &HashSet<AnchoredSystemPathBuf>,
+    ) -> HashSet<PackageName> {
         let engine = self.run.engine();
 
-        let impacted_nodes = engine.tasks_impacted_by_packages(pkgs);
+        let (task_ids, impacted_packages) =
+            if self.run.opts().future_flags.watch_using_task_inputs && !changed_files.is_empty() {
+                // Only consider files that still exist on disk. Editor temp
+                // files (vim 4913, *~ backups, etc.) are created and deleted
+                // within the same watcher batch. The hash algorithm only sees
+                // files that exist, so input matching should too.
+                let existing_files: HashSet<_> = changed_files
+                    .iter()
+                    .filter(|f| self.run.repo_root().resolve(f).exists())
+                    .cloned()
+                    .collect();
 
-        let task_ids: Vec<_> = impacted_nodes
-            .iter()
-            .filter_map(|node| match node {
-                TaskNode::Task(task_id) => Some(task_id.clone()),
-                TaskNode::Root => None,
-            })
-            .collect();
+                let affected_tasks = crate::task_change_detector::affected_task_ids(
+                    engine,
+                    self.run.pkg_dep_graph(),
+                    &existing_files,
+                    &self.run.root_turbo_json().global_deps,
+                );
 
-        let impacted_packages: HashSet<PackageName> = task_ids
-            .iter()
-            .map(|task_id| PackageName::from(task_id.package()))
-            .collect();
+                let mut tasks_to_run = affected_tasks.clone();
+                tasks_to_run.extend(engine.collect_task_dependents(&tasks_to_run));
+                tasks_to_run.extend(engine.collect_task_dependencies(&tasks_to_run));
+
+                let impacted_packages: HashSet<PackageName> = tasks_to_run
+                    .iter()
+                    .map(|task_id| PackageName::from(task_id.package()))
+                    .collect();
+
+                (tasks_to_run.into_iter().collect::<Vec<_>>(), impacted_packages)
+            } else {
+                let impacted_nodes = engine.tasks_impacted_by_packages(pkgs);
+
+                let task_ids: Vec<_> = impacted_nodes
+                    .iter()
+                    .filter_map(|node| match node {
+                        TaskNode::Task(task_id) => Some(task_id.clone()),
+                        TaskNode::Root => None,
+                    })
+                    .collect();
+
+                let impacted_packages: HashSet<PackageName> = task_ids
+                    .iter()
+                    .map(|task_id| PackageName::from(task_id.package()))
+                    .collect();
+
+                (task_ids, impacted_packages)
+            };
 
         debug!(
             ?pkgs,
