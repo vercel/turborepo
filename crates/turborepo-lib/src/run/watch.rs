@@ -545,33 +545,21 @@ impl WatchClient {
 
         let (task_ids, impacted_packages) =
             if self.run.opts().future_flags.watch_using_task_inputs && !changed_files.is_empty() {
-                // Only consider files that still exist on disk. Editor temp
-                // files (vim 4913, *~ backups, etc.) are created and deleted
-                // within the same watcher batch. The hash algorithm only sees
-                // files that exist, so input matching should too.
-                let existing_files: HashSet<_> = changed_files
-                    .iter()
-                    .filter(|f| self.run.repo_root().resolve(f).exists())
-                    .cloned()
-                    .collect();
-
-                let affected_tasks = crate::task_change_detector::affected_task_ids(
+                let filter = crate::task_change_detector::resolve_watch_task_filter(
                     engine,
                     self.run.pkg_dep_graph(),
-                    &existing_files,
+                    self.run.repo_root(),
+                    changed_files,
                     &self.run.root_turbo_json().global_deps,
                 );
 
-                let mut tasks_to_run = affected_tasks.clone();
-                tasks_to_run.extend(engine.collect_task_dependents(&tasks_to_run));
-                tasks_to_run.extend(engine.collect_task_dependencies(&tasks_to_run));
-
-                let impacted_packages: HashSet<PackageName> = tasks_to_run
+                let impacted_packages: HashSet<PackageName> = filter
+                    .execution_tasks
                     .iter()
                     .map(|task_id| PackageName::from(task_id.package()))
                     .collect();
 
-                (tasks_to_run.into_iter().collect::<Vec<_>>(), impacted_packages)
+                (filter.execution_tasks.into_iter().collect::<Vec<_>>(), impacted_packages)
             } else {
                 let impacted_nodes = engine.tasks_impacted_by_packages(pkgs);
 

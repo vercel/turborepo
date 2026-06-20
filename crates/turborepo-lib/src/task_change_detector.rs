@@ -1,5 +1,6 @@
 //! Task-level affected detection for `--affected` with the
-//! `affectedUsingTaskInputs` future flag.
+//! `affectedUsingTaskInputs` future flag and `turbo watch` with
+//! `watchUsingTaskInputs`.
 //!
 //! The core matching logic lives in `turborepo_engine::affected` and is
 //! shared with `turbo query { affectedTasks }`. This module adds the
@@ -8,12 +9,65 @@
 
 use std::collections::HashSet;
 
-use turbopath::AnchoredSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::package_graph::PackageGraph;
 use turborepo_task_id::TaskId;
 use wax::Program;
 
 use crate::engine::Engine;
+
+/// Result of resolving which tasks are affected by file changes in watch mode
+/// with `watchUsingTaskInputs`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WatchTaskFilterResult {
+    /// Changed files that still exist on disk.
+    pub existing_files: HashSet<AnchoredSystemPathBuf>,
+    /// Tasks whose `inputs` directly match the changed files.
+    pub directly_affected: HashSet<TaskId<'static>>,
+    /// Full set of tasks that would execute, including dependents and
+    /// dependencies. Matches what `Engine::retain_affected_tasks` keeps.
+    pub execution_tasks: HashSet<TaskId<'static>>,
+}
+
+/// Resolves which tasks watch mode should stop and/or re-run when
+/// `watchUsingTaskInputs` is enabled.
+///
+/// Both `stop_impacted_tasks` and `RunBuilder` engine pruning must call this
+/// function so they stay aligned.
+pub fn resolve_watch_task_filter(
+    engine: &Engine,
+    pkg_dep_graph: &PackageGraph,
+    repo_root: &AbsoluteSystemPath,
+    changed_files: &HashSet<AnchoredSystemPathBuf>,
+    global_deps: &[String],
+) -> WatchTaskFilterResult {
+    let existing_files = filter_existing_changed_files(repo_root, changed_files);
+    let directly_affected =
+        affected_task_ids(engine, pkg_dep_graph, &existing_files, global_deps);
+    let execution_tasks = engine.execution_closure_for_affected(&directly_affected);
+
+    WatchTaskFilterResult {
+        existing_files,
+        directly_affected,
+        execution_tasks,
+    }
+}
+
+/// Filters changed files to those that still exist on disk.
+///
+/// Editor temp files (vim 4913, *~ backups, etc.) are created and deleted
+/// within the same watcher batch. The hash algorithm only sees files that
+/// exist, so input matching should too.
+pub fn filter_existing_changed_files(
+    repo_root: &AbsoluteSystemPath,
+    changed_files: &HashSet<AnchoredSystemPathBuf>,
+) -> HashSet<AnchoredSystemPathBuf> {
+    changed_files
+        .iter()
+        .filter(|f| repo_root.resolve(f).exists())
+        .cloned()
+        .collect()
+}
 
 /// Root-level files that always trigger a full rebuild when changed.
 ///

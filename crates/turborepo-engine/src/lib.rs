@@ -267,6 +267,29 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         self.prune_to_reachable(&reachable, true)
     }
 
+    /// Returns the full execution closure for directly affected tasks:
+    /// transitive dependents plus transitive dependencies needed for execution.
+    /// This is the task set retained by `retain_affected_tasks` without
+    /// pruning the engine.
+    pub fn execution_closure_for_affected(
+        &self,
+        directly_affected: &HashSet<TaskId<'static>>,
+    ) -> HashSet<TaskId<'static>> {
+        let entrypoint_indices: Vec<_> = directly_affected
+            .iter()
+            .filter_map(|task_id| self.task_lookup.get(task_id))
+            .copied()
+            .collect();
+
+        self.reachable_closure(entrypoint_indices)
+            .into_iter()
+            .filter_map(|node| match self.task_graph.node_weight(node)? {
+                TaskNode::Task(id) => Some(id.clone()),
+                TaskNode::Root => None,
+            })
+            .collect()
+    }
+
     /// Returns a new engine containing only the given directly affected tasks,
     /// their transitive dependents, and all transitive dependencies required
     /// for execution. Used for task-level `--affected` detection: the caller
@@ -845,6 +868,18 @@ mod affected_tasks_tests {
 
     fn task_ids_set(engine: &Engine) -> HashSet<TaskId<'static>> {
         engine.task_ids().cloned().collect()
+    }
+
+    #[test]
+    fn execution_closure_matches_retain_affected_tasks() {
+        let engine = build_linear_engine();
+        let affected: HashSet<_> = [TaskId::new("b", "build")].into_iter().collect();
+
+        let closure = engine.execution_closure_for_affected(&affected);
+        let pruned = engine.retain_affected_tasks(&affected);
+        let pruned_ids = task_ids_set(&pruned);
+
+        assert_eq!(closure, pruned_ids);
     }
 
     #[test]
