@@ -42,8 +42,7 @@ pub fn resolve_watch_task_filter(
     global_deps: &[String],
 ) -> WatchTaskFilterResult {
     let existing_files = filter_existing_changed_files(repo_root, changed_files);
-    let directly_affected =
-        affected_task_ids(engine, pkg_dep_graph, &existing_files, global_deps);
+    let directly_affected = affected_task_ids(engine, pkg_dep_graph, &existing_files, global_deps);
     let execution_tasks = engine.execution_closure_for_affected(&directly_affected);
 
     WatchTaskFilterResult {

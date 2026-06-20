@@ -428,9 +428,7 @@ impl WatchClient {
                             ref packages,
                             ref changed_files,
                         } => {
-                            let impacted = self
-                                .stop_impacted_tasks(packages, changed_files)
-                                .await;
+                            let impacted = self.stop_impacted_tasks(packages, changed_files).await;
                             if let ChangedPackages::Some {
                                 ref mut packages, ..
                             } = changed_packages
@@ -559,7 +557,10 @@ impl WatchClient {
                     .map(|task_id| PackageName::from(task_id.package()))
                     .collect();
 
-                (filter.execution_tasks.into_iter().collect::<Vec<_>>(), impacted_packages)
+                (
+                    filter.execution_tasks.into_iter().collect::<Vec<_>>(),
+                    impacted_packages,
+                )
             } else {
                 let impacted_nodes = engine.tasks_impacted_by_packages(pkgs);
 
