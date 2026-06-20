@@ -1019,30 +1019,20 @@ impl RunBuilder {
         // the file).
         let watch_task_filtered = if let Some(ref changed_files) = self.changed_files_for_watch {
             if self.opts.future_flags.watch_using_task_inputs && !changed_files.is_empty() {
-                // Only consider files that still exist on disk. Editor temp
-                // files (vim 4913, *~ backups, etc.) are created and deleted
-                // within the same watcher batch. The hash algorithm only sees
-                // files that exist, so input matching should too.
-                let existing_files: std::collections::HashSet<_> = changed_files
-                    .iter()
-                    .filter(|f| self.repo_root.resolve(f).exists())
-                    .cloned()
-                    .collect();
-
-                let total_tasks = engine.task_ids().count();
-                let affected_tasks = crate::task_change_detector::affected_task_ids(
+                let filter = crate::task_change_detector::resolve_watch_task_filter(
                     &engine,
                     pkg_dep_graph,
-                    &existing_files,
+                    &self.repo_root,
+                    changed_files,
                     &root_turbo_json.global_deps,
                 );
                 tracing::info!(
-                    total_tasks,
-                    affected_tasks = affected_tasks.len(),
-                    changed_files = existing_files.len(),
+                    total_tasks = engine.task_ids().count(),
+                    affected_tasks = filter.directly_affected.len(),
+                    changed_files = filter.existing_files.len(),
                     "watch task-level input filtering complete"
                 );
-                engine = engine.retain_affected_tasks(&affected_tasks);
+                engine = engine.retain_affected_tasks(&filter.directly_affected);
                 true
             } else {
                 false
