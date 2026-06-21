@@ -1,8 +1,8 @@
 //! # Bun Lockfile Support
 //!
 //! This module provides comprehensive support for Bun lockfiles (`bun.lockb`),
-//! handling both binary and JSON formats with support for lockfile versions 0
-//! and 1.
+//! handling both binary and JSON formats with support for lockfile versions 0,
+//! 1, and 2.
 //!
 //! ## Lockfile Version Support
 //!
@@ -11,11 +11,18 @@
 //! - Simple workspace support
 //! - Limited override functionality
 //!
-//! ### Version 1 (Current)
+//! ### Version 1
 //! - Enhanced workspace dependency resolution with optimized lookup strategies
 //! - Improved catalog support with multiple catalog types
 //! - Advanced override functionality with precedence rules
 //! - Optimized subgraph filtering for workspace dependencies
+//!
+//! ### Version 2 (Bun 1.4+)
+//! - Schema-compatible with V1 for the surfaces turbo reads (workspaces,
+//!   packages, catalogs, overrides, patched dependencies). Bun writes
+//!   `configVersion: 1` as a sibling top-level key — already parsed in V1 — so
+//!   only the version tag needs to be accepted; no downstream branches fork on
+//!   V2.
 //!
 //! ## Key Features
 //!
