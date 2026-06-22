@@ -274,7 +274,8 @@ impl TryFrom<&'_ PackageManager> for PnpmVersion {
             PackageManager::Berry
             | PackageManager::Yarn
             | PackageManager::Npm
-            | PackageManager::Bun => Err(NotPnpmError {
+            | PackageManager::Bun
+            | PackageManager::Nub { .. } => Err(NotPnpmError {
                 package_manager: value.clone(),
             }),
         }

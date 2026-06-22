@@ -222,6 +222,12 @@ pub mod proto {
                 PackageManager::Pnpm6 => Self::Pnpm6,
                 PackageManager::Pnpm9 => Self::Pnpm9,
                 PackageManager::Bun => Self::Bun,
+                // The wire format does not carry nub's underlying lockfile
+                // manager. Default to npm's lockfile here; the daemon re-resolves
+                // the concrete package manager from disk on the server side.
+                PackageManager::Nub => Self::Nub {
+                    lockfile: Box::new(Self::Npm),
+                },
             }
         }
     }
@@ -236,6 +242,7 @@ pub mod proto {
                 turborepo_repository::package_manager::PackageManager::Pnpm6 => Self::Pnpm6,
                 turborepo_repository::package_manager::PackageManager::Pnpm9 => Self::Pnpm9,
                 turborepo_repository::package_manager::PackageManager::Bun => Self::Bun,
+                turborepo_repository::package_manager::PackageManager::Nub { .. } => Self::Nub,
             }
         }
     }
