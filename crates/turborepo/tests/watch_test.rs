@@ -250,6 +250,72 @@ fn setup_watch_test() -> (tempfile::TempDir, PathBuf) {
     (tempdir, test_dir)
 }
 
+fn setup_watch_deferred_dependency_outputs_test() -> (tempfile::TempDir, PathBuf) {
+    let (tempdir, test_dir) = setup_watch_test();
+
+    fs::write(
+        test_dir.join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "watchUsingTaskInputs": true
+  },
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "pkg-b#build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        {
+          "mode": "dependencyOutputs",
+          "from": ["^build"]
+        }
+      ],
+      "outputs": ["dist/**"]
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        test_dir.join("packages/a/build.js"),
+        r#"const fs = require('fs');
+const path = require('path');
+
+const markerDir = path.join(__dirname, '.markers');
+fs.mkdirSync(markerDir, { recursive: true });
+
+const count = fs.readdirSync(markerDir).length;
+const markerFile = path.join(markerDir, `run-${count}`);
+fs.writeFileSync(markerFile, `${Date.now()}\n`);
+
+const distDir = path.join(__dirname, 'dist');
+fs.mkdirSync(distDir, { recursive: true });
+fs.copyFileSync(path.join(__dirname, 'src.js'), path.join(distDir, 'src.js'));
+console.log(`pkg-a build #${count}`);
+"#,
+    )
+    .unwrap();
+
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &[
+            "commit",
+            "-m",
+            "configure deferred dependency outputs watch test",
+            "--quiet",
+        ],
+    );
+
+    (tempdir, test_dir)
+}
+
 #[test]
 fn watch_initial_run_executes_tasks() {
     let (_tempdir, test_dir) = setup_watch_test();
@@ -268,6 +334,35 @@ fn watch_initial_run_executes_tasks() {
     assert!(
         b_count >= 1,
         "package b should have run at least once, ran {b_count} times"
+    );
+}
+
+#[test]
+fn watch_task_inputs_reruns_deferred_dependency_output_consumers() {
+    let (_tempdir, test_dir) = setup_watch_deferred_dependency_outputs_test();
+    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+
+    wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
+    wait_for_markers(&test_dir, "b", 1, Duration::from_secs(30));
+    std::thread::sleep(Duration::from_secs(2));
+
+    let a_before = marker_count(&test_dir, "a");
+    let b_before = marker_count(&test_dir, "b");
+
+    let a_after = retry_file_change(&test_dir, "a", a_before, 3);
+    let b_after = wait_for_markers(&test_dir, "b", b_before + 1, Duration::from_secs(30));
+
+    drop(guard);
+
+    assert!(
+        a_after > a_before,
+        "package a should have rebuilt after its source changed. before: {a_before}, after: \
+         {a_after}"
+    );
+    assert!(
+        b_after > b_before,
+        "package b should have rebuilt because its hash includes package a's deferred dependency \
+         outputs. before: {b_before}, after: {b_after}"
     );
 }
 
