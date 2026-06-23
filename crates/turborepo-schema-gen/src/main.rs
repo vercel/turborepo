@@ -947,9 +947,30 @@ fn add_type_decl<T: TS>(output: &mut String, description: &str) {
             output.push_str(&format!("/** {} */\n", description));
         }
         output.push_str("export ");
-        output.push_str(&decl);
+        output.push_str(&format_type_decl(&decl));
         output.push('\n');
     }
+}
+
+fn format_type_decl(decl: &str) -> String {
+    if decl.len() + "export ".len() <= 80 || !decl.contains(" | ") {
+        return decl.to_string();
+    }
+
+    let Some((name, variants)) = decl.trim_end_matches(';').split_once(" = ") else {
+        return decl.to_string();
+    };
+
+    let mut formatted = format!("{name} =\n");
+    for (index, variant) in variants.split(" | ").enumerate() {
+        if index > 0 {
+            formatted.push('\n');
+        }
+        formatted.push_str("  | ");
+        formatted.push_str(variant);
+    }
+    formatted.push(';');
+    formatted
 }
 
 /// Write output to file or stdout

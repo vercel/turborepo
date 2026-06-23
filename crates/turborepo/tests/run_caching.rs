@@ -1034,6 +1034,9 @@ fn test_dependency_outputs_from_selects_topological_dependencies() {
   "$schema": "https://turborepo.dev/schema.json",
   "tasks": {
     "build": {
+      "outputs": ["dist/**"]
+    },
+    "my-app#build": {
       "dependsOn": ["^build"],
       "inputs": [
         {
@@ -1191,6 +1194,117 @@ fn test_dependency_outputs_from_hashes_package_qualified_dependency_outputs() {
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("0 cached, 2 total"), "got:\n{stdout}");
+}
+
+#[test]
+fn test_dependency_outputs_distinguishes_cross_package_output_paths() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+
+    fs::write(
+        tempdir.path().join("packages/another/seed.txt"),
+        "another-v1\n",
+    )
+    .unwrap();
+    fs::write(tempdir.path().join("packages/util/seed.txt"), "util-v1\n").unwrap();
+    fs::write(
+        tempdir.path().join("packages/another/package.json"),
+        r#"{
+  "name": "another",
+  "scripts": {
+    "build": "node -e \"const fs = require('fs'); fs.mkdirSync('dist', { recursive: true }); fs.writeFileSync('dist/generated.txt', fs.readFileSync('seed.txt'))\""
+  }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("packages/util/package.json"),
+        r#"{
+  "name": "util",
+  "scripts": {
+    "build": "node -e \"const fs = require('fs'); fs.mkdirSync('dist', { recursive: true }); fs.writeFileSync('dist/generated.txt', fs.readFileSync('seed.txt'))\""
+  }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("apps/my-app/package.json"),
+        r#"{
+  "name": "my-app",
+  "scripts": {
+    "build": "node -e \"const fs = require('fs'); fs.mkdirSync('.output', { recursive: true }); fs.writeFileSync('.output/result.txt', 'build\\n')\""
+  },
+  "dependencies": {
+    "another": "*",
+    "util": "*"
+  }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "another#build": {
+      "cache": false,
+      "inputs": ["$TURBO_DEFAULT$", "!seed.txt", "!dist/**"],
+      "outputs": ["dist/**"]
+    },
+    "util#build": {
+      "cache": false,
+      "inputs": ["$TURBO_DEFAULT$", "!seed.txt", "!dist/**"],
+      "outputs": ["dist/**"]
+    },
+    "my-app#build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        {
+          "mode": "startup",
+          "withDefaults": true,
+          "globs": ["!.output/**"]
+        },
+        {
+          "mode": "dependencyOutputs",
+          "from": ["^build"]
+        }
+      ],
+      "outputs": [".output/**"]
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=my-app", "--output-logs=none"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("0 cached, 3 total"), "got:\n{stdout}");
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=my-app", "--output-logs=none"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("1 cached, 3 total"), "got:\n{stdout}");
+
+    fs::write(
+        tempdir.path().join("packages/another/seed.txt"),
+        "another-v2\n",
+    )
+    .unwrap();
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=my-app", "--output-logs=none"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("0 cached, 3 total"), "got:\n{stdout}");
 }
 
 #[test]

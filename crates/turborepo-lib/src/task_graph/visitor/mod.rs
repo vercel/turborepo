@@ -14,7 +14,7 @@ use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use tokio::sync::mpsc;
 use tracing::{debug, Instrument, Span};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_engine::{TaskError, TaskWarning};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_errors::TURBO_SITE;
@@ -352,7 +352,14 @@ impl<'a> Visitor<'a> {
             };
 
             for (path, hash) in output_hashes.0.iter() {
-                combined.insert(path.clone(), *hash);
+                let full_output_path = self
+                    .repo_root
+                    .resolve(producer_workspace.package_path())
+                    .join_unix_path(path);
+                let repo_relative_path =
+                    AnchoredSystemPathBuf::relative_path_between(self.repo_root, &full_output_path)
+                        .to_unix();
+                combined.insert(repo_relative_path, *hash);
             }
         }
 
