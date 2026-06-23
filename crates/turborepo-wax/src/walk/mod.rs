@@ -183,6 +183,10 @@ impl WalkError {
     pub fn depth(&self) -> usize {
         self.depth
     }
+
+    pub fn is_link_cycle(&self) -> bool {
+        matches!(self.kind, WalkErrorKind::LinkCycle { .. })
+    }
 }
 
 impl From<walkdir::Error> for WalkError {

@@ -107,7 +107,7 @@ type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>
 
 type TuiResult = UIResult<TuiSender>;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ForceShutdownReason {
     Signal,
     Timeout,
@@ -241,42 +241,59 @@ impl Run {
     ) {
         let message = match (reason, task_names.is_empty()) {
             (ForceShutdownReason::Signal, false) if is_interactive => {
-                format!(
-                    " - Force killing Turborepo tasks: {}",
-                    task_names.join(", ")
-                )
+                format!(" - Force killed Turborepo tasks: {}", task_names.join(", "))
             }
             (ForceShutdownReason::Signal, false) => {
-                format!("Force killing Turborepo tasks: {}", task_names.join(", "))
+                format!("Force killed Turborepo tasks: {}", task_names.join(", "))
             }
             (ForceShutdownReason::Timeout, false) => format!(
-                "Graceful shutdown timed out. Force killing Turborepo tasks: {}",
+                "Graceful shutdown timed out. Force killed Turborepo tasks: {}",
                 task_names.join(", ")
             ),
             (ForceShutdownReason::Signal, true) if is_interactive => {
-                " - Force killing remaining Turborepo tasks...".to_string()
+                " - Force killed remaining Turborepo tasks...".to_string()
             }
             (ForceShutdownReason::Signal, true) => {
-                "Force killing remaining Turborepo tasks...".to_string()
+                "Force killed remaining Turborepo tasks...".to_string()
             }
-            (ForceShutdownReason::Timeout, true) => "Graceful shutdown timed out. Force killing \
-                                                     remaining Turborepo tasks..."
-                .to_string(),
+            (ForceShutdownReason::Timeout, true) => {
+                "Graceful shutdown timed out. Force killed remaining Turborepo tasks...".to_string()
+            }
         };
-        turborepo_log::warn(
+        turborepo_log::info(
             turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-            message,
+            LIGHT_GREY.apply_to(message).to_string(),
         )
         .emit();
     }
 
     async fn wait_for_forced_shutdown(
         force_shutdown_timeout: Option<Duration>,
+        in_process_signals: Option<tokio::sync::broadcast::Receiver<()>>,
     ) -> ForceShutdownReason {
+        let in_process_signal = async move {
+            let Some(mut in_process_signals) = in_process_signals else {
+                std::future::pending::<()>().await;
+                return;
+            };
+
+            loop {
+                match in_process_signals.recv().await {
+                    Ok(()) | Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => return,
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        std::future::pending::<()>().await;
+                    }
+                }
+            }
+        };
+        pin!(in_process_signal);
+
         match force_shutdown_timeout {
             Some(timeout) => {
-                tokio::time::sleep(timeout).await;
-                ForceShutdownReason::Timeout
+                select! {
+                    _ = tokio::time::sleep(timeout) => ForceShutdownReason::Timeout,
+                    _ = &mut in_process_signal => ForceShutdownReason::Signal,
+                }
             }
             None => {
                 let interrupt = async {
@@ -288,8 +305,10 @@ impl Run {
                         tokio::time::sleep(Duration::MAX).await;
                     }
                 };
-                interrupt.await;
-                ForceShutdownReason::Signal
+                select! {
+                    _ = interrupt => ForceShutdownReason::Signal,
+                    _ = &mut in_process_signal => ForceShutdownReason::Signal,
+                }
             }
         }
     }
@@ -297,6 +316,7 @@ impl Run {
     async fn wait_for_cache_shutdown<FClosed, FProgress>(
         shutdown_reason: Option<ShutdownReason>,
         force_shutdown_timeout: Option<Duration>,
+        in_process_signals: Option<tokio::sync::broadcast::Receiver<()>>,
         closed: FClosed,
         progress: FProgress,
     ) -> CacheShutdownOutcome
@@ -308,7 +328,7 @@ impl Run {
             select! {
                 _ = closed => CacheShutdownOutcome::Complete,
                 _ = progress => CacheShutdownOutcome::Complete,
-                _ = Self::wait_for_forced_shutdown(force_shutdown_timeout) => {
+                _ = Self::wait_for_forced_shutdown(force_shutdown_timeout, in_process_signals) => {
                     CacheShutdownOutcome::ForcedShutdown
                 }
             }
@@ -323,6 +343,7 @@ impl Run {
     async fn wait_for_process_manager_shutdown<F>(
         process_manager: ProcessManager,
         force_shutdown_timeout: Option<Duration>,
+        in_process_signals: Option<tokio::sync::broadcast::Receiver<()>>,
         graceful_shutdown: F,
     ) where
         F: Future<Output = ()> + Send,
@@ -333,7 +354,8 @@ impl Run {
             SLOW_SHUTDOWN_STATUS_INTERVAL,
         );
         shutdown_status.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-        let force_shutdown = Self::wait_for_forced_shutdown(force_shutdown_timeout);
+        let force_shutdown =
+            Self::wait_for_forced_shutdown(force_shutdown_timeout, in_process_signals);
         pin!(graceful_shutdown, force_shutdown);
 
         loop {
@@ -726,6 +748,7 @@ impl Run {
                 Self::wait_for_process_manager_shutdown(
                     process_manager.clone(),
                     force_shutdown_timeout,
+                    Some(signal_handler.subscribe_in_process_signals()),
                     graceful_shutdown,
                 )
                 .await;
@@ -822,6 +845,7 @@ impl Run {
                 if Self::wait_for_cache_shutdown(
                     shutdown_reason,
                     force_shutdown_timeout,
+                    Some(signal_handler.subscribe_in_process_signals()),
                     async {
                         let _ = closed.await;
                     },
@@ -875,6 +899,7 @@ impl Run {
             Self::wait_for_process_manager_shutdown(
                 process_manager.clone(),
                 force_shutdown_timeout,
+                Some(signal_handler.subscribe_in_process_signals()),
                 graceful_shutdown,
             )
             .await;
@@ -1330,7 +1355,7 @@ mod tests {
     use turborepo_signals::ShutdownReason;
 
     use super::{
-        remote_cache_status_message, CacheShutdownOutcome, RemoteCacheStatus,
+        remote_cache_status_message, CacheShutdownOutcome, ForceShutdownReason, RemoteCacheStatus,
         RemoteCacheUnavailableReason, Run,
     };
     use crate::opts::RemoteCacheDisabledReason;
@@ -1383,6 +1408,7 @@ mod tests {
             Run::wait_for_cache_shutdown(
                 Some(ShutdownReason::Close),
                 Some(Duration::from_millis(10)),
+                None,
                 pending::<()>(),
                 pending::<()>(),
             ),
@@ -1400,6 +1426,34 @@ mod tests {
         let result = Run::wait_for_cache_shutdown(
             Some(ShutdownReason::Signal),
             Some(Duration::from_millis(10)),
+            None,
+            pending::<()>(),
+            pending::<()>(),
+        )
+        .await;
+
+        assert_eq!(result, CacheShutdownOutcome::ForcedShutdown);
+    }
+
+    #[tokio::test]
+    async fn forced_shutdown_accepts_in_process_signal_before_timeout() {
+        let (tx, rx) = tokio::sync::broadcast::channel(1);
+        tx.send(()).unwrap();
+
+        let result = Run::wait_for_forced_shutdown(Some(Duration::from_secs(60)), Some(rx)).await;
+
+        assert_eq!(result, ForceShutdownReason::Signal);
+    }
+
+    #[tokio::test]
+    async fn cache_shutdown_signal_accepts_in_process_signal() {
+        let (tx, rx) = tokio::sync::broadcast::channel(1);
+        tx.send(()).unwrap();
+
+        let result = Run::wait_for_cache_shutdown(
+            Some(ShutdownReason::Signal),
+            Some(Duration::from_secs(60)),
+            Some(rx),
             pending::<()>(),
             pending::<()>(),
         )

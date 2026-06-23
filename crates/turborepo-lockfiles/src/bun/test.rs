@@ -1996,3 +1996,193 @@ fn test_subgraph_preserves_hoisted_transitive_version_with_nested_mismatch() {
         .expect("bs58@6 should resolve base-x@5");
     assert_eq!(app_base_x.key, "base-x@5.0.1");
 }
+
+// Regression test for https://github.com/vercel/turborepo/issues/13101
+// When a patched package exists at two versions in the prune closure, the
+// patched hoisted version must be preserved and patchedDependencies must not
+// be dropped.
+#[test]
+fn test_subgraph_preserves_patched_dependency_when_two_versions_exist() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "configVersion": 1,
+        "workspaces": {
+            "": {
+                "name": "turbo-prune-patch-repro",
+                "devDependencies": {
+                    "turbo": "2.9.14"
+                }
+            },
+            "apps/app-a": {
+                "name": "app-a",
+                "version": "0.0.0",
+                "dependencies": {
+                    "is-odd": "3.0.1",
+                    "pkg-old": "workspace:*"
+                }
+            },
+            "packages/pkg-old": {
+                "name": "pkg-old",
+                "version": "0.0.0",
+                "dependencies": {
+                    "is-odd": "2.0.0"
+                }
+            }
+        },
+        "patchedDependencies": {
+            "is-odd@3.0.1": "patches/is-odd@3.0.1.patch"
+        },
+        "packages": {
+            "app-a": ["app-a@workspace:apps/app-a"],
+            "is-number": ["is-number@6.0.0", "", {}, "sha512-is-number-6"],
+            "is-odd": ["is-odd@3.0.1", "", { "dependencies": { "is-number": "^6.0.0" } }, "sha512-is-odd-3"],
+            "pkg-old": ["pkg-old@workspace:packages/pkg-old"],
+            "pkg-old/is-odd": ["is-odd@2.0.0", "", { "dependencies": { "is-number": "^4.0.0" } }, "sha512-is-odd-2"],
+            "pkg-old/is-odd/is-number": ["is-number@4.0.0", "", {}, "sha512-is-number-4"]
+        }
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+    // Simulate lockfile_keys from `turbo prune` (external transitive deps only).
+    let lockfile_keys: Vec<String> = [
+        "is-number@4.0.0",
+        "is-number@6.0.0",
+        "is-odd@2.0.0",
+        "is-odd@3.0.1",
+        "turbo@2.9.14",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect();
+
+    let subgraph = Lockfile::subgraph(
+        &lockfile,
+        &["apps/app-a".into(), "packages/pkg-old".into()],
+        &lockfile_keys,
+    )
+    .unwrap();
+
+    let encoded = subgraph.encode().unwrap();
+    let encoded_str = String::from_utf8(encoded).unwrap();
+    let pruned = BunLockfile::from_str(&encoded_str).unwrap();
+
+    assert!(
+        pruned
+            .data
+            .patched_dependencies
+            .contains_key("is-odd@3.0.1"),
+        "patchedDependencies should retain is-odd@3.0.1, got {:?}",
+        pruned.data.patched_dependencies
+    );
+    assert_eq!(
+        pruned.data.packages.get("is-odd").map(|e| e.ident.as_str()),
+        Some("is-odd@3.0.1"),
+        "hoisted is-odd should remain the patched 3.0.1 version, got {:?}",
+        pruned.data.packages.get("is-odd")
+    );
+    assert!(
+        pruned.data.packages.contains_key("pkg-old/is-odd"),
+        "nested is-odd@2.0.0 should remain under pkg-old, packages: {:?}",
+        pruned
+            .data
+            .packages
+            .iter()
+            .filter(|(k, _)| k.contains("is-odd"))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        pruned
+            .data
+            .packages
+            .get("pkg-old/is-odd")
+            .map(|e| e.ident.as_str()),
+        Some("is-odd@2.0.0")
+    );
+}
+
+// When the patched hoisted version is missing from lockfile_keys but still
+// required by a workspace importer, prune must retain the patch and the
+// patched version instead of promoting the nested alternative.
+#[test]
+fn test_subgraph_preserves_patch_when_patched_version_missing_from_lockfile_keys() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "configVersion": 1,
+        "workspaces": {
+            "": {
+                "name": "turbo-prune-patch-repro",
+                "devDependencies": {
+                    "turbo": "2.9.14"
+                }
+            },
+            "apps/app-a": {
+                "name": "app-a",
+                "version": "0.0.0",
+                "dependencies": {
+                    "is-odd": "^3.0.1",
+                    "pkg-old": "workspace:*"
+                }
+            },
+            "packages/pkg-old": {
+                "name": "pkg-old",
+                "version": "0.0.0",
+                "dependencies": {
+                    "is-odd": "2.0.0"
+                }
+            }
+        },
+        "patchedDependencies": {
+            "is-odd@3.0.1": "patches/is-odd@3.0.1.patch"
+        },
+        "packages": {
+            "app-a": ["app-a@workspace:apps/app-a"],
+            "is-number": ["is-number@6.0.0", "", {}, "sha512-is-number-6"],
+            "is-odd": ["is-odd@3.0.1", "", { "dependencies": { "is-number": "^6.0.0" } }, "sha512-is-odd-3"],
+            "pkg-old": ["pkg-old@workspace:packages/pkg-old"],
+            "pkg-old/is-odd": ["is-odd@2.0.0", "", { "dependencies": { "is-number": "^4.0.0" } }, "sha512-is-odd-2"],
+            "pkg-old/is-odd/is-number": ["is-number@4.0.0", "", {}, "sha512-is-number-4"]
+        }
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+    // Omit is-odd@3.0.1 from lockfile_keys, as can happen when only the nested
+    // version appears in the package graph's transitive external dependencies.
+    let lockfile_keys: Vec<String> = ["is-number@4.0.0", "is-odd@2.0.0", "turbo@2.9.14"]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+    let subgraph = Lockfile::subgraph(
+        &lockfile,
+        &["apps/app-a".into(), "packages/pkg-old".into()],
+        &lockfile_keys,
+    )
+    .unwrap();
+
+    let encoded = subgraph.encode().unwrap();
+    let encoded_str = String::from_utf8(encoded).unwrap();
+    let pruned = BunLockfile::from_str(&encoded_str).unwrap();
+
+    assert!(
+        pruned
+            .data
+            .patched_dependencies
+            .contains_key("is-odd@3.0.1"),
+        "patchedDependencies should retain is-odd@3.0.1, got {:?}",
+        pruned.data.patched_dependencies
+    );
+    assert_eq!(
+        pruned.data.packages.get("is-odd").map(|e| e.ident.as_str()),
+        Some("is-odd@3.0.1"),
+        "hoisted is-odd should remain the patched 3.0.1 version, got {:?}",
+        pruned.data.packages.get("is-odd")
+    );
+    assert!(
+        pruned.data.packages.contains_key("pkg-old/is-odd"),
+        "nested is-odd@2.0.0 should remain under pkg-old"
+    );
+}

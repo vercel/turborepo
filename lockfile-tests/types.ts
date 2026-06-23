@@ -7,6 +7,12 @@ export interface TestCase {
     packageManager: PackageManagerType;
     lockfileName: string;
     packageManagerVersion: string;
+    /**
+     * Additionally assert that every package in the (pruned) lockfile can
+     * resolve its declared dependencies to the correct version. Catches
+     * "stranded" transitive deps that `npm ci --dry-run` silently accepts.
+     */
+    validateResolution?: boolean;
   };
   targetWorkspace: {
     name: string;

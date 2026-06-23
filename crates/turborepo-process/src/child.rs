@@ -79,6 +79,32 @@ impl Child {
         shutdown_style: ShutdownStyle,
         pty_size: Option<PtySize>,
     ) -> std::io::Result<Self> {
+        #[cfg(unix)]
+        {
+            Self::spawn_with_termios(command, shutdown_style, pty_size, None)
+        }
+        #[cfg(not(unix))]
+        {
+            Self::spawn_inner(command, shutdown_style, pty_size)
+        }
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn spawn_with_termios(
+        command: Command,
+        shutdown_style: ShutdownStyle,
+        pty_size: Option<PtySize>,
+        pty_termios: Option<libc::termios>,
+    ) -> std::io::Result<Self> {
+        Self::spawn_inner(command, shutdown_style, pty_size, pty_termios)
+    }
+
+    fn spawn_inner(
+        command: Command,
+        shutdown_style: ShutdownStyle,
+        pty_size: Option<PtySize>,
+        #[cfg(unix)] pty_termios: Option<libc::termios>,
+    ) -> std::io::Result<Self> {
         let label = command.label();
         #[cfg(test)]
         let pty_test_guard = pty_size.map(|_| Arc::new(PtyTestGuard::acquire()));
@@ -87,7 +113,14 @@ impl Child {
             io: ChildIO { stdin, output },
             controller,
         } = if let Some(size) = pty_size {
-            ChildHandle::spawn_pty(command, size)
+            #[cfg(unix)]
+            {
+                ChildHandle::spawn_pty(command, size, pty_termios)
+            }
+            #[cfg(not(unix))]
+            {
+                ChildHandle::spawn_pty(command, size)
+            }
         } else {
             ChildHandle::spawn_normal(command)
         }?;

@@ -23,7 +23,7 @@ import { Accordion, Accordions } from "@/components/geistdocs/accordion";
 Turborepo 2.10 improves day-to-day reliability in your repository:
 
 - [**Graceful task shutdown**](#graceful-task-shutdown): Exit your development environment cleanly
-- [**Deferred input hashing with `$TURBO_JIT$`**](#deferred-input-hashing-with-turbo_jit): Hash selected file inputs after upstream tasks complete
+- [**Deferred input hashing**](#deferred-input-hashing): Hash generated files and dependency outputs after upstream tasks complete
 - [**Combine `--affected` and `--filter`**](#combine---affected-and---filter): Narrow CI runs to affected packages within a specific scope
 - [**Local cache eviction**](#local-cache-eviction): Automatically reclaim disk space from your local cache
 
@@ -167,35 +167,52 @@ Cached:    0 cached, 1 total
 
 This feature is zero-configuration, and tasks that do not have their own exit handling will continue to work as before. [Visit the documentation](/docs/reference/run#graceful-shutdown) to learn more
 
-## Deferred input hashing with `$TURBO_JIT$`
+## Deferred input hashing
 
 By default, Turborepo creates the hashes for all of your tasks immediately, right when `turbo` starts. This lets Turborepo get work done as fast as possible, since it can instantly know whether your work is a cache hit or miss.
 
 However, some file inputs are not stable at that point. An upstream task might generate, transform, or otherwise change files that a downstream task depends on **after** `turbo` has already hashed everything. Without a way to defer hashing, you would have to disable caching for those downstream tasks, or risk unexpected cache hits.
 
-Starting with this release, you can use `$TURBO_JIT$` to mark file inputs that should be hashed "just-in-time" - **after** a task's dependencies complete. Code generation is the most common case, but any input that intentionally changes during the run can use this pattern.
+Starting with this release, you can use structured `inputs` objects to defer hashing until the right moment in the run:
 
-In the example below, `check-types` waits for `codegen`, then hashes `src/generated/**` before checking the cache.
+| Mode | What it does |
+| --- | --- |
+| `startup` | Hashes files before the task graph starts executing. Use this for the non-deferred part of the cache key. |
+| `jit` | Hashes selected files after the task's `dependsOn` tasks complete, just before checking cache. |
+| `dependencyOutputs` | Hashes declared `outputs` from selected dependency tasks after those tasks complete. |
+
+Code generation is the most common case for `jit`, but any input that intentionally changes during the run can use this pattern. Use `dependencyOutputs` when a downstream task should hash the artifacts another task declares in `outputs`.
+
+In the example below, `check-types` excludes generated files from startup hashing, waits for `codegen`, then hashes `src/generated/**` before checking the cache.
 
 ```jsonc title="turbo.json"
 {
   "tasks": {
     "codegen": {
       "inputs": ["schema.graphql", "codegen.config.ts"],
+      "outputs": ["src/generated/**"],
     },
     "check-types": {
       "dependsOn": ["codegen"],
       "inputs": [
-        "$TURBO_DEFAULT$",
-        "!src/generated/**",
-        "$TURBO_JIT$/src/generated/**",
+        {
+          "mode": "startup",
+          "withDefaults": true,
+          "globs": ["!src/generated/**"],
+        },
+        {
+          "mode": "jit",
+          "globs": ["src/generated/**"],
+        },
       ],
     },
   },
 }
 ```
 
-[Visit the documentation](/docs/reference/configuration#turbo_jit) to learn more.
+Tasks using `jit` or `dependencyOutputs` cannot know their final cache key until execution time, so `turbo run --dry=json` reports `hash: null` with a `hashReason` explaining the deferral.
+
+[Visit the documentation](/docs/reference/configuration#deferred-hashing) to learn more.
 
 ## Combine `--affected` and `--filter`
 

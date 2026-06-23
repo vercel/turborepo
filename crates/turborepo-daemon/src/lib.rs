@@ -20,6 +20,7 @@
 //! `_tx`/`_rx` suffixes indicate that this variable is respectively a `Sender`
 //! or `Receiver`.
 
+#![allow(unused_features, reason = "impl_trait_in_assoc_type is actually used")]
 #![feature(impl_trait_in_assoc_type)]
 #![deny(clippy::all)]
 #![allow(clippy::needless_lifetimes)]
@@ -60,6 +61,7 @@ pub struct PackageChangesWatcherArgs {
     >,
     pub hash_watcher: std::sync::Arc<turborepo_filewatch::hash_watcher::HashWatcher>,
     pub custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    pub allow_no_package_manager: bool,
 }
 
 /// Events that indicate package changes in the repository.

@@ -250,8 +250,13 @@ impl WatchClient {
             recv.clone(),
         ));
         let package_watcher = Arc::new(
-            PackageWatcher::new(base.repo_root.clone(), recv.clone(), cookie_writer)
-                .map_err(|e| Error::PackageWatcher(format!("{e:?}")))?,
+            PackageWatcher::new(
+                base.repo_root.clone(),
+                recv.clone(),
+                cookie_writer,
+                base.opts().repo_opts.allow_no_package_manager,
+            )
+            .map_err(|e| Error::PackageWatcher(format!("{e:?}")))?,
         );
         let scm = SCM::new(&base.repo_root);
         let hash_watcher = Arc::new(HashWatcher::new(
@@ -266,6 +271,7 @@ impl WatchClient {
             hash_watcher,
             custom_turbo_json_path,
             base.opts().run_opts.single_package,
+            base.opts().repo_opts.allow_no_package_manager,
         );
 
         // Subscribe before building the Run so we don't miss the initial
@@ -418,8 +424,11 @@ impl WatchClient {
                     // builds of the same package and stale cache-hit signals.
                     debug!(?changed_packages, "processing changed packages");
                     match changed_packages {
-                        ChangedPackages::Some { ref packages, .. } => {
-                            let impacted = self.stop_impacted_tasks(packages).await;
+                        ChangedPackages::Some {
+                            ref packages,
+                            ref changed_files,
+                        } => {
+                            let impacted = self.stop_impacted_tasks(packages, changed_files).await;
                             if let ChangedPackages::Some {
                                 ref mut packages, ..
                             } = changed_packages
@@ -525,23 +534,51 @@ impl WatchClient {
         }
     }
 
-    async fn stop_impacted_tasks(&self, pkgs: &HashSet<PackageName>) -> HashSet<PackageName> {
+    async fn stop_impacted_tasks(
+        &self,
+        pkgs: &HashSet<PackageName>,
+        changed_files: &HashSet<AnchoredSystemPathBuf>,
+    ) -> HashSet<PackageName> {
         let engine = self.run.engine();
 
-        let impacted_nodes = engine.tasks_impacted_by_packages(pkgs);
+        let (task_ids, impacted_packages) =
+            if self.run.opts().future_flags.watch_using_task_inputs && !changed_files.is_empty() {
+                let filter = crate::task_change_detector::resolve_watch_task_filter(
+                    engine,
+                    self.run.pkg_dep_graph(),
+                    self.run.repo_root(),
+                    changed_files,
+                    &self.run.root_turbo_json().global_deps,
+                );
 
-        let task_ids: Vec<_> = impacted_nodes
-            .iter()
-            .filter_map(|node| match node {
-                TaskNode::Task(task_id) => Some(task_id.clone()),
-                TaskNode::Root => None,
-            })
-            .collect();
+                let impacted_packages: HashSet<PackageName> = filter
+                    .execution_tasks
+                    .iter()
+                    .map(|task_id| PackageName::from(task_id.package()))
+                    .collect();
 
-        let impacted_packages: HashSet<PackageName> = task_ids
-            .iter()
-            .map(|task_id| PackageName::from(task_id.package()))
-            .collect();
+                (
+                    filter.execution_tasks.into_iter().collect::<Vec<_>>(),
+                    impacted_packages,
+                )
+            } else {
+                let impacted_nodes = engine.tasks_impacted_by_packages(pkgs);
+
+                let task_ids: Vec<_> = impacted_nodes
+                    .iter()
+                    .filter_map(|node| match node {
+                        TaskNode::Task(task_id) => Some(task_id.clone()),
+                        TaskNode::Root => None,
+                    })
+                    .collect();
+
+                let impacted_packages: HashSet<PackageName> = task_ids
+                    .iter()
+                    .map(|task_id| PackageName::from(task_id.package()))
+                    .collect();
+
+                (task_ids, impacted_packages)
+            };
 
         debug!(
             ?pkgs,

@@ -594,7 +594,13 @@ impl<'a> RunSummary<'a> {
             if self.monorepo {
                 cwriteln!(tab_writer, ui, GREY, "  Package\t=\t{}", &task.package)?;
             }
-            cwriteln!(tab_writer, ui, GREY, "  Hash\t=\t{}", &task.shared.hash)?;
+            let hash = task
+                .shared
+                .hash
+                .as_deref()
+                .or(task.shared.hash_reason.as_deref())
+                .unwrap_or("<unknown>");
+            cwriteln!(tab_writer, ui, GREY, "  Hash\t=\t{}", hash)?;
             cwriteln!(
                 tab_writer,
                 ui,

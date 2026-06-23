@@ -335,12 +335,14 @@ pub async fn daemon_server(
         CloseReason::Interrupt
     });
     let custom_turbo_json_path = convert_turbo_json_path(turbo_json_path.as_deref())?;
+    let allow_no_package_manager = base.opts().repo_opts.allow_no_package_manager;
     let server = TurboGrpcService::new(
         base.repo_root.clone(),
         paths,
         timeout,
         exit_signal,
         custom_turbo_json_path,
+        allow_no_package_manager,
         |args| {
             PackageChangesWatcher::new(
                 args.repo_root,
@@ -348,6 +350,7 @@ pub async fn daemon_server(
                 args.hash_watcher,
                 args.custom_turbo_json_path,
                 false,
+                args.allow_no_package_manager,
             )
         },
     );

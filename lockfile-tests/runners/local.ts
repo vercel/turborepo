@@ -79,7 +79,8 @@ function copyDirSync(src: string, dest: string): void {
 
 function lockfileValidationCommand(
   pm: PackageManagerType,
-  cwd: string
+  cwd: string,
+  validateResolution = false
 ): LockfileValidationCommand {
   switch (pm) {
     case "pnpm": {
@@ -103,8 +104,17 @@ function lockfileValidationCommand(
       };
     }
     case "npm": {
+      // `npm ci --dry-run` proves the lockfile is in sync with the
+      // package.json files, but it mirrors the lockfile's tree verbatim and
+      // won't notice a transitive dep that was pruned into an unreachable
+      // position. When requested, `npm ls --all` additionally walks the tree
+      // and fails (ELSPROBLEMS) if any package can't resolve a declared dep.
+      // See https://github.com/vercel/turborepo/issues/13109
+      const ci = "npm ci --dry-run --ignore-scripts --no-audit --no-fund";
       return {
-        command: "npm ci --dry-run --ignore-scripts --no-audit --no-fund"
+        command: validateResolution
+          ? `${ci} && npm ls --package-lock-only --all`
+          : ci
       };
     }
     case "yarn": {
@@ -271,7 +281,8 @@ export class LocalRunner {
 
       const validation = lockfileValidationCommand(
         fixture.packageManager,
-        tmpDir
+        tmpDir,
+        fixture.validateResolution
       );
       console.log(
         `[${fixture.filename}] Validating fixture (${validation.command})...`
@@ -475,7 +486,8 @@ export class LocalRunner {
           const outLabel = tc.docker ? "out/json" : "out";
           const validation = lockfileValidationCommand(
             fixture.packageManager,
-            outDir
+            outDir,
+            fixture.validateResolution
           );
           log(
             `[${label}] ${validation.command} (lockfile validation in ${outLabel}/)`

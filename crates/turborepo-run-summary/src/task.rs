@@ -93,7 +93,9 @@ pub struct SinglePackageTaskSummary {
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SharedTaskSummary<T> {
-    pub hash: Arc<str>,
+    /// The computed task hash. This is `null` in dry-run output when hashing
+    /// is deferred until execution; `hashReason` explains why.
+    pub hash: Option<Arc<str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash_reason: Option<String>,
     pub inputs: BTreeMap<RelativeUnixPathBuf, String>,
@@ -645,7 +647,7 @@ mod test {
             task: "test".to_string(),
             package: "pkg".to_string(),
             shared: SharedTaskSummary {
-                hash: Arc::from("hash"),
+                hash: Some(Arc::from("hash")),
                 hash_reason: None,
                 inputs: BTreeMap::from([(
                     RelativeUnixPathBuf::new("src/input.ts").unwrap(),

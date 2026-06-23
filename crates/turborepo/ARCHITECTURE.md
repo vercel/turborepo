@@ -190,12 +190,14 @@ The task graph visitor handles task execution:
 
 - Receives tasks from the engine when they can be executed
 - Calculates task hashes. Most task hashes are precomputed before scheduling,
-  but tasks with `$TURBO_JIT$` inputs defer final file-input hashing until the
-  engine dispatches the task, after its dependencies have completed and restored
-  any cached outputs. Tasks that depend on deferred tasks are also deferred so
-  their dependency hashes are available before their own hash is calculated.
-  Once a deferred task has a real hash, the visitor precomputes any unblocked
-  non-JIT descendants instead of waiting for each descendant to be dispatched.
+  but tasks with structured deferred inputs (`mode: "jit"` or
+  `mode: "dependencyOutputs"`) defer final file-input hashing until the engine
+  dispatches the task, after its dependencies have completed and restored any
+  cached outputs. Tasks that depend on deferred tasks are also deferred so their
+  dependency hashes are available before their own hash is calculated. Once a
+  deferred task has a real hash, the visitor precomputes any unblocked
+  non-deferred descendants instead of waiting for each descendant to be
+  dispatched.
 - Creates `ExecContext` for each task
 - Manages UI output and progress tracking
 - Collects errors and execution information
@@ -205,7 +207,7 @@ The task graph visitor handles task execution:
 - `ExecContext`: Holds state required to execute a task
 - Attempts cache restoration before execution
 - Spawns and manages child processes using `turborepo_process`
-- Captures `stdout`/`sterr` output
+- Captures `stdout`/`stderr` output
 - Saves outputs to cache on success
 - Reports task result back to the execution engine
 
@@ -322,10 +324,11 @@ Creates a "content identifier" for a specific task depending on current state of
 - **Explicit Inputs**: When tasks use custom `inputs`, glob matches still walk the
   filesystem, but clean tracked matches reuse blob OIDs from the repo index
   instead of re-hashing file contents
-- **JIT Inputs**: `inputs` entries prefixed with `$TURBO_JIT$` are file inputs
-  hashed just before task execution. They are merged with the eagerly hashed
-  file inputs to produce the final task hash. In dry runs, the task hash is
-  reported as deferred because dependency outputs are not materialized.
+- **Structured Deferred Inputs**: `inputs` entries with `mode: "jit"` are file
+  inputs hashed just before task execution. `mode: "dependencyOutputs"` selects
+  already-expanded dependency task nodes and defers the task hash because those
+  producers' declared outputs are not known until after dependencies complete.
+  In dry runs, these task hashes are reported as deferred.
 - **CRLF Normalization**: When `.gitattributes` marks files as `text` or
   `text=auto`, git normalizes CRLF line endings to LF in blob objects. The
   `crlf` module in `turborepo-scm` replicates this so turbo's file hashes

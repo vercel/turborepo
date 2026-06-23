@@ -25,7 +25,7 @@ use crate::raw::{
     Pipeline, RawExperimentalCIConfig, RawExperimentalObservability, RawGlobalConfig,
     RawObservabilityOtel, RawObservabilityOtelMetrics, RawObservabilityOtelRunAttributes,
     RawObservabilityOtelTaskAttributes, RawPackageTurboJson, RawRemoteCacheOptions,
-    RawRootTurboJson, RawTaskDefinition, RawTurboJson,
+    RawRootTurboJson, RawStructuredInput, RawTaskDefinition, RawTaskInput, RawTurboJson,
 };
 
 /// Error type for turbo.json parsing failures using biome parser
@@ -81,6 +81,83 @@ impl Deserializable for Pipeline {
         diagnostics: &mut Vec<DeserializationDiagnostic>,
     ) -> Option<Self> {
         value.deserialize(PipelineVisitor, name, diagnostics)
+    }
+}
+
+impl Deserializable for RawTaskInput {
+    fn deserialize(
+        value: &impl DeserializableValue,
+        name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self> {
+        value.deserialize(RawTaskInputVisitor, name, diagnostics)
+    }
+}
+
+struct RawTaskInputVisitor;
+
+impl DeserializationVisitor for RawTaskInputVisitor {
+    type Output = RawTaskInput;
+
+    const EXPECTED_TYPE: VisitableType = VisitableType::STR.union(VisitableType::MAP);
+
+    fn visit_str(
+        self,
+        value: biome_deserialize::Text,
+        _range: TextRange,
+        _name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        match UnescapedString::from_escaped(value.text().to_string()) {
+            Ok(value) => Some(RawTaskInput::String(value)),
+            Err(error) => {
+                diagnostics.push(DeserializationDiagnostic::new(format!("{error}")));
+                None
+            }
+        }
+    }
+
+    fn visit_map(
+        self,
+        members: impl Iterator<Item = Option<(impl DeserializableValue, impl DeserializableValue)>>,
+        _range: TextRange,
+        _name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        let mut structured = RawStructuredInput {
+            mode: None,
+            globs: None,
+            with_defaults: None,
+            from: None,
+        };
+
+        for (key, value) in members.flatten() {
+            let key = String::deserialize(&key, "", diagnostics)?;
+            match key.as_str() {
+                "mode" => {
+                    structured.mode = Spanned::deserialize(&value, "mode", diagnostics);
+                }
+                "globs" => {
+                    structured.globs =
+                        Vec::<Spanned<UnescapedString>>::deserialize(&value, "globs", diagnostics);
+                }
+                "withDefaults" => {
+                    structured.with_defaults =
+                        Spanned::<bool>::deserialize(&value, "withDefaults", diagnostics);
+                }
+                "from" => {
+                    structured.from =
+                        Vec::<Spanned<UnescapedString>>::deserialize(&value, "from", diagnostics);
+                }
+                _ => diagnostics.push(DeserializationDiagnostic::new_unknown_key(
+                    &key,
+                    value.range(),
+                    &["mode", "globs", "withDefaults", "from"],
+                )),
+            }
+        }
+
+        Some(RawTaskInput::Structured(structured))
     }
 }
 
@@ -621,6 +698,34 @@ mod tests {
             "expected parsing to fail due to unknown key 'lol' in task definition, but got: {:?}",
             result
         );
+    }
+
+    #[test]
+    fn test_structured_task_inputs_accept_mixed_entries() {
+        let json = r#"{
+          "tasks": {
+            "build": {
+              "inputs": [
+                "$TURBO_DEFAULT$",
+                "!src/generated/**",
+                {
+                  "mode": "jit",
+                  "globs": ["src/generated/**"],
+                  "withDefaults": true
+                },
+                {
+                  "mode": "dependencyOutputs",
+                  "from": ["codegen"],
+                  "globs": ["dist/**", "!dist/**/*.map"]
+                }
+              ]
+            }
+          }
+        }"#;
+
+        let result = RawRootTurboJson::parse(json, "turbo.json");
+
+        assert!(result.is_ok(), "structured task inputs should parse");
     }
 
     #[test]
