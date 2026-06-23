@@ -679,6 +679,38 @@ pub struct RawIncrementalPartition {
     pub inputs: Option<Vec<Spanned<UnescapedString>>>,
 }
 
+#[derive(Serialize, Default, Debug, PartialEq, Clone, Deserializable, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[schemars(rename = "StructuredInput", rename_all = "camelCase")]
+#[ts(export, rename = "StructuredInput")]
+#[deserializable(unknown_fields = "deny")]
+pub struct RawStructuredInput {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub mode: Option<Spanned<UnescapedString>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub globs: Option<Vec<Spanned<UnescapedString>>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub with_defaults: Option<Spanned<bool>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub from: Option<Vec<Spanned<UnescapedString>>>,
+}
+
+#[derive(Serialize, Debug, PartialEq, Clone, JsonSchema, TS)]
+#[serde(untagged)]
+#[schemars(rename = "TaskInput")]
+#[ts(export, rename = "TaskInput")]
+pub enum RawTaskInput {
+    String(UnescapedString),
+    Structured(RawStructuredInput),
+}
+
 /// Configuration for a pipeline task.
 ///
 /// The name of a task that can be executed by turbo. If turbo finds a
@@ -748,7 +780,7 @@ pub struct RawTaskDefinition {
     /// Documentation: https://turborepo.dev/docs/reference/configuration#inputs
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub inputs: Option<Vec<Spanned<UnescapedString>>>,
+    pub inputs: Option<Vec<Spanned<RawTaskInput>>>,
 
     /// An allowlist of environment variables that should be made available
     /// in this task's environment, but should not contribute to the task's

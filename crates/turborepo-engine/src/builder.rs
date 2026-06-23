@@ -23,8 +23,8 @@ use turborepo_turbo_json::{FutureFlags, TurboJson, Validator};
 use turborepo_types::TaskDefinition;
 
 use crate::{
-    BuilderError, Building, Engine, MissingPackageFromTaskError, MissingRootTaskInTurboJsonError,
-    MissingTaskError, TurboJsonLoader, validate_task_name,
+    BuilderError, Building, Built, Engine, MissingPackageFromTaskError,
+    MissingRootTaskInTurboJsonError, MissingTaskError, TurboJsonLoader, validate_task_name,
 };
 
 mod definitions;
@@ -452,7 +452,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // execution. See #2559.
         graph::validate_graph(engine.task_graph_mut())?;
 
-        Ok(engine.seal())
+        let engine = engine.seal();
+        validate_dependency_outputs_inputs(&engine)?;
+        Ok(engine)
     }
 
     /// Returns the path from a task's package directory to the repo root
@@ -470,6 +472,74 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         )
         .to_unix())
     }
+}
+
+fn validate_dependency_outputs_inputs(
+    engine: &Engine<Built, TaskDefinition>,
+) -> Result<(), BuilderError> {
+    for task_id in engine.task_ids() {
+        let Some(task_definition) = engine.task_definition(task_id) else {
+            continue;
+        };
+        let Some(dependency_outputs) = task_definition.inputs.dependency_outputs.as_ref() else {
+            continue;
+        };
+
+        let selected = if let Some(from) = dependency_outputs.from.as_ref() {
+            let mut selected = Vec::new();
+            for selector in from {
+                let matches = engine.dependency_output_producers_for_selector(task_id, selector);
+                if matches.is_empty() {
+                    return Err(structured_input_error(format!(
+                        "does not match any eligible dependency task node for this task: \
+                         \"dependencyOutputs.from\" contains \"{selector}\".\n\nAdd it to \
+                         dependsOn or remove it from dependencyOutputs.from."
+                    )));
+                }
+                selected.extend(matches);
+            }
+            selected.sort();
+            selected.dedup();
+            selected
+        } else {
+            let selected = engine.dependency_output_producers(task_id, None);
+            if selected.is_empty() {
+                return Err(structured_input_error(format!(
+                    "dependencyOutputs mode was used for task \"{}\", but this task has no \
+                     dependency tasks to select.",
+                    task_id.task()
+                )));
+            }
+            selected
+        };
+
+        for selected_task in selected {
+            let Some(selected_definition) = engine.task_definition(&selected_task) else {
+                continue;
+            };
+            if selected_definition.outputs.inclusions.is_empty()
+                && selected_definition.outputs.exclusions.is_empty()
+            {
+                return Err(structured_input_error(format!(
+                    "Selected dependency task \"{}\" does not declare outputs, so it cannot \
+                     contribute dependency output inputs.\n\nAdd outputs to \"{}\" or remove it \
+                     from dependencyOutputs.from.",
+                    selected_task.task(),
+                    selected_task.task()
+                )));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn structured_input_error(message: String) -> BuilderError {
+    BuilderError::TurboJson(turborepo_turbo_json::Error::StructuredInput {
+        message,
+        span: None,
+        text: miette::NamedSource::new("turbo.json", String::new()),
+    })
 }
 
 #[cfg(test)]

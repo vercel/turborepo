@@ -43,7 +43,7 @@ pub use parser::{BiomeParseError, parse_turbo_json};
 pub use processed::{
     ProcessedDependsOn, ProcessedEnv, ProcessedGlob, ProcessedIncrementalPartition,
     ProcessedInputs, ProcessedOutputs, ProcessedPassThroughEnv, ProcessedTaskDefinition,
-    ProcessedWith,
+    ProcessedWith, duplicate_startup_error,
 };
 pub use raw::{
     HasConfigBeyondExtends, Pipeline, RawExperimentalObservability, RawIncrementalPartition,
@@ -365,29 +365,49 @@ pub trait TaskInputsFromProcessed {
     fn from_processed(
         inputs: ProcessedInputs,
         turbo_root_path: &RelativeUnixPath,
-    ) -> turborepo_types::TaskInputs;
+    ) -> Result<turborepo_types::TaskInputs, Error>;
 }
 
 impl TaskInputsFromProcessed for turborepo_types::TaskInputs {
     fn from_processed(
         inputs: ProcessedInputs,
         turbo_root_path: &RelativeUnixPath,
-    ) -> turborepo_types::TaskInputs {
+    ) -> Result<turborepo_types::TaskInputs, Error> {
+        if inputs.legacy_startup && inputs.structured_startup {
+            return Err(duplicate_startup_error(None));
+        }
+
         // Resolve all globs with the turbo_root path
         // Absolute path validation was already done during ProcessedGlob creation
         let globs = inputs.resolve(turbo_root_path);
         let default = inputs.default;
         let jit_globs = inputs.resolve_jit(turbo_root_path);
         let jit_default = inputs.jit_default;
+        let dependency_outputs =
+            inputs
+                .dependency_outputs
+                .map(|input| turborepo_types::DependencyOutputsInput {
+                    from: input.from.map(|from| {
+                        from.into_iter()
+                            .map(|entry| entry.into_inner().into())
+                            .collect()
+                    }),
+                    globs: input
+                        .globs
+                        .iter()
+                        .map(|glob| glob.resolve(turbo_root_path))
+                        .collect(),
+                });
         let eager = default || !globs.is_empty() || (!jit_default && jit_globs.is_empty());
 
-        turborepo_types::TaskInputs {
+        Ok(turborepo_types::TaskInputs {
             globs,
             default,
             jit_globs,
             jit_default,
+            dependency_outputs,
             eager,
-        }
+        })
     }
 }
 
@@ -403,8 +423,11 @@ pub fn incremental_partitions_from_processed(
             let outputs = task_outputs_from_processed(p.outputs, turbo_root_path)?;
             let inputs = p
                 .inputs
-                .map(|i| turborepo_types::TaskInputs::from_processed(i, turbo_root_path))
-                .map(|ti| ti.globs)
+                .map(|i| {
+                    turborepo_types::TaskInputs::from_processed(i, turbo_root_path)
+                        .map(|ti| ti.globs)
+                })
+                .transpose()?
                 .unwrap_or_default();
             Ok(turborepo_types::IncrementalPartition { outputs, inputs })
         })

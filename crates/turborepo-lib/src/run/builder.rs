@@ -702,13 +702,21 @@ impl RunBuilder {
             && self.opts.scope_opts.affected_range.is_some()
             && self.opts.future_flags.affected_using_task_inputs;
 
-        let needs_all_packages =
-            use_task_level_affected || use_task_level_filter || self.add_all_tasks;
+        let use_watch_task_level_filter = self
+            .changed_files_for_watch
+            .as_ref()
+            .is_some_and(|changed_files| !changed_files.is_empty())
+            && self.opts.future_flags.watch_using_task_inputs;
+
+        let needs_all_packages = use_task_level_affected
+            || use_task_level_filter
+            || use_watch_task_level_filter
+            || self.add_all_tasks;
 
         // When task-level filtering or add_all_tasks is active, the engine must
-        // contain tasks for ALL packages so that $TURBO_ROOT$ inputs in packages
-        // not flagged by the package-level scope resolution are still matched.
-        // The task-level filter (below) does the pruning when needed.
+        // contain tasks for ALL packages so that tasks in packages not flagged
+        // by package-level scope resolution can still be matched. The
+        // task-level filter (below) does the pruning when needed.
         let all_pkgs: Vec<PackageName> = if needs_all_packages {
             pkg_dep_graph
                 .packages()
@@ -1019,30 +1027,20 @@ impl RunBuilder {
         // the file).
         let watch_task_filtered = if let Some(ref changed_files) = self.changed_files_for_watch {
             if self.opts.future_flags.watch_using_task_inputs && !changed_files.is_empty() {
-                // Only consider files that still exist on disk. Editor temp
-                // files (vim 4913, *~ backups, etc.) are created and deleted
-                // within the same watcher batch. The hash algorithm only sees
-                // files that exist, so input matching should too.
-                let existing_files: std::collections::HashSet<_> = changed_files
-                    .iter()
-                    .filter(|f| self.repo_root.resolve(f).exists())
-                    .cloned()
-                    .collect();
-
-                let total_tasks = engine.task_ids().count();
-                let affected_tasks = crate::task_change_detector::affected_task_ids(
+                let filter = crate::task_change_detector::resolve_watch_task_filter(
                     &engine,
                     pkg_dep_graph,
-                    &existing_files,
+                    &self.repo_root,
+                    changed_files,
                     &root_turbo_json.global_deps,
                 );
                 tracing::info!(
-                    total_tasks,
-                    affected_tasks = affected_tasks.len(),
-                    changed_files = existing_files.len(),
+                    total_tasks = engine.task_ids().count(),
+                    affected_tasks = filter.directly_affected.len(),
+                    changed_files = filter.existing_files.len(),
                     "watch task-level input filtering complete"
                 );
-                engine = engine.retain_affected_tasks(&affected_tasks);
+                engine = engine.retain_affected_tasks(&filter.directly_affected);
                 true
             } else {
                 false

@@ -427,6 +427,24 @@ export interface GlobalConfig {
   noUpdateNotifier?: boolean;
 }
 
+export interface StartupInput {
+  mode: "startup";
+  globs?: Array<string>;
+  withDefaults?: boolean;
+}
+
+export interface JitInput {
+  mode: "jit";
+  globs?: Array<string>;
+  withDefaults?: boolean;
+}
+
+export interface DependencyOutputsInput {
+  mode: "dependencyOutputs";
+  from?: Array<string>;
+  globs?: Array<string>;
+}
+
 export interface Pipeline {
   /**
    * A human-readable description of what this task does.
@@ -518,7 +536,7 @@ export interface Pipeline {
    *
    * @defaultValue `[]`
    */
-  inputs?: Array<string>;
+  inputs?: Array<string | StartupInput | JitInput | DependencyOutputsInput>;
 
   /**
    * Output mode for the task.

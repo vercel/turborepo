@@ -262,7 +262,11 @@ fn build_task_payload(task: &TaskSummary) -> TaskMetricsPayload {
         task_id: task.task_id.to_string(),
         task: task.task.clone(),
         package: task.package.clone(),
-        hash: task.shared.hash.to_string(),
+        hash: task
+            .shared
+            .hash
+            .as_ref()
+            .map_or_else(String::new, ToString::to_string),
         external_inputs_hash: task.shared.hash_of_external_dependencies.clone(),
         // TODO: Keep passthrough CLI args out of OTEL payloads until we define
         // a sensitive-data redaction policy for `cli_arguments`.
