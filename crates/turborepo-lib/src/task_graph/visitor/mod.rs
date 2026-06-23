@@ -3,7 +3,7 @@ mod exec;
 
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::{Arc, Mutex},
 };
 
@@ -33,6 +33,7 @@ use turborepo_telemetry::events::{
 };
 use turborepo_types::{EnvMode, ResolvedLogOrder, ResolvedLogPrefix};
 use turborepo_ui::{sender::UISender, ColorConfig, ColorSelector};
+use wax::Program;
 
 use crate::{
     engine::{Engine, ExecutionOptions, TaskNode},
@@ -284,6 +285,86 @@ impl<'a> Visitor<'a> {
         }))
     }
 
+    fn dependency_output_hashes(
+        &self,
+        engine: &Engine,
+        task_id: &TaskId<'static>,
+    ) -> Result<Option<Arc<turborepo_hash::FileHashes>>, Error> {
+        let Some(task_definition) = engine.task_definition(task_id) else {
+            return Err(Error::MissingDefinition);
+        };
+        let Some(dependency_outputs) = task_definition.inputs.dependency_outputs.as_ref() else {
+            return Ok(None);
+        };
+
+        let selected_tasks =
+            engine.dependency_output_producers(task_id, dependency_outputs.from.as_deref());
+
+        let mut combined = BTreeMap::new();
+        let mut selected_any = false;
+        for producer_task_id in selected_tasks {
+            selected_any = true;
+            let producer_package = PackageName::from(producer_task_id.package());
+            let Some(producer_workspace) = self.package_graph.package_info(&producer_package)
+            else {
+                return Err(Error::MissingPackage {
+                    package_name: producer_package,
+                    task_id: producer_task_id,
+                });
+            };
+            let Some(producer_definition) = engine.task_definition(&producer_task_id) else {
+                return Err(Error::MissingDefinition);
+            };
+
+            let declared_output_globs = producer_definition
+                .outputs
+                .inclusions
+                .iter()
+                .cloned()
+                .chain(
+                    producer_definition
+                        .outputs
+                        .exclusions
+                        .iter()
+                        .map(|glob| format!("!{glob}")),
+                )
+                .collect::<Vec<_>>();
+
+            let output_hashes = if dependency_outputs.globs.is_empty() {
+                turborepo_task_hash::file_hashes_for_inputs(
+                    self.scm,
+                    self.repo_root,
+                    producer_workspace.package_path(),
+                    &declared_output_globs,
+                    false,
+                    self.repo_index,
+                )?
+            } else {
+                let requested_hashes = turborepo_task_hash::file_hashes_for_inputs(
+                    self.scm,
+                    self.repo_root,
+                    producer_workspace.package_path(),
+                    &dependency_outputs.globs,
+                    false,
+                    self.repo_index,
+                )?;
+                filter_hashes_to_declared_outputs(&requested_hashes, &declared_output_globs)
+            };
+
+            for (path, hash) in output_hashes.0.iter() {
+                combined.insert(path.clone(), *hash);
+            }
+        }
+
+        if selected_any {
+            Ok(Some(Arc::new(turborepo_hash::FileHashes(
+                combined.into_iter().collect(),
+            ))))
+        } else {
+            Ok(None)
+        }
+    }
+
     fn precompute_unblocked_deferred_hashes(
         &self,
         engine: &Engine,
@@ -303,7 +384,7 @@ impl<'a> Visitor<'a> {
                     let Some(task_definition) = engine.task_definition(task_id) else {
                         return Some(Err(Error::MissingDefinition));
                     };
-                    if task_definition.inputs.has_jit_inputs() {
+                    if task_definition.inputs.has_deferred_inputs() {
                         return None;
                     }
 
@@ -412,7 +493,7 @@ impl<'a> Visitor<'a> {
                         })
                     };
 
-                    if task_definition.inputs.has_jit_inputs() || has_deferred_dependency {
+                    if task_definition.inputs.has_deferred_inputs() || has_deferred_dependency {
                         if self.dry {
                             self.task_hasher.insert_deferred_hash(
                                 task_id,
@@ -552,7 +633,10 @@ impl<'a> Visitor<'a> {
                 PrecomputedTask::Deferred => {
                     if self.dry {
                         (
-                            turborepo_task_hash::DEFERRED_TASK_HASH_MESSAGE.to_string(),
+                            turborepo_task_hash::deferred_task_hash_message(
+                                &task_definition.inputs,
+                            )
+                            .to_string(),
                             EnvironmentVariableMap::default(),
                         )
                     } else {
@@ -569,8 +653,16 @@ impl<'a> Visitor<'a> {
                             PackageTaskEventBuilder::new(info.package(), info.task())
                                 .with_parent(telemetry);
                         let task_hash_telemetry = package_task_event.child();
-                        let task_hash = if task_definition.inputs.has_jit_inputs() {
-                            match self.task_hasher.calculate_task_hash_with_jit_inputs(
+                        let task_hash = if task_definition.inputs.has_deferred_inputs() {
+                            let dependency_output_hashes =
+                                match self.dependency_output_hashes(&engine, &info) {
+                                    Ok(hashes) => hashes,
+                                    Err(err) => {
+                                        dispatch_error = Some(err);
+                                        break;
+                                    }
+                                };
+                            match self.task_hasher.calculate_task_hash_with_deferred_inputs(
                                 &info,
                                 task_definition,
                                 task_env_mode,
@@ -580,6 +672,7 @@ impl<'a> Visitor<'a> {
                                 self.scm,
                                 self.repo_root,
                                 self.repo_index,
+                                dependency_output_hashes,
                             ) {
                                 Ok(hash) => hash,
                                 Err(err) => {
@@ -903,5 +996,55 @@ impl<'a> Visitor<'a> {
         self.dry = true;
         // No need to start a UI on dry run
         self.ui_sender = None;
+    }
+}
+
+fn filter_hashes_to_declared_outputs(
+    requested_hashes: &turborepo_hash::FileHashes,
+    declared_output_globs: &[String],
+) -> Arc<turborepo_hash::FileHashes> {
+    let declared_outputs = CompiledOutputGlobs::new(declared_output_globs);
+    Arc::new(turborepo_hash::FileHashes(
+        requested_hashes
+            .0
+            .iter()
+            .filter(|(path, _)| declared_outputs.matches(&path.to_string()))
+            .cloned()
+            .collect(),
+    ))
+}
+
+struct CompiledOutputGlobs {
+    inclusions: Vec<wax::Glob<'static>>,
+    exclusions: Vec<wax::Glob<'static>>,
+}
+
+impl CompiledOutputGlobs {
+    fn new(globs: &[String]) -> Self {
+        let mut inclusions = Vec::new();
+        let mut exclusions = Vec::new();
+
+        for glob in globs {
+            if let Some(exclusion) = glob.strip_prefix('!') {
+                if let Ok(glob) = wax::Glob::new(exclusion) {
+                    exclusions.push(glob.into_owned());
+                }
+            } else if let Ok(glob) = wax::Glob::new(glob) {
+                inclusions.push(glob.into_owned());
+            }
+        }
+
+        Self {
+            inclusions,
+            exclusions,
+        }
+    }
+
+    fn matches(&self, path: &str) -> bool {
+        if self.exclusions.iter().any(|glob| glob.is_match(path)) {
+            return false;
+        }
+
+        self.inclusions.iter().any(|glob| glob.is_match(path))
     }
 }

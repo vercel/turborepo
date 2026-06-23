@@ -280,6 +280,15 @@ pub enum Error {
         text: NamedSource<String>,
     },
 
+    #[error("Invalid inputs for task.\n\n{message}")]
+    StructuredInput {
+        message: String,
+        #[label("invalid input declared here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
     // ============================================================
     // Root-only field errors
     // ============================================================

@@ -82,7 +82,9 @@ pub struct PackageInputsHashes {
     expanded_hashes: HashMap<TaskId<'static>, Arc<FileHashes>>,
 }
 
-pub const DEFERRED_TASK_HASH_MESSAGE: &str = "Deferred because $TURBO_JIT$ was used.";
+pub const JIT_DEFERRED_TASK_HASH_MESSAGE: &str = "Deferred because JIT hashing mode was used.";
+pub const DEPENDENCY_OUTPUTS_DEFERRED_TASK_HASH_MESSAGE: &str =
+    "Deferred because dependencyOutputs hashing mode was used.";
 
 impl PackageInputsHashes {
     #[tracing::instrument(skip(
@@ -217,7 +219,7 @@ impl PackageInputsHashes {
             let hash = file_hashes.as_ref().hash();
 
             hashes.insert(info.task_id.clone(), hash);
-            if needs_expanded_hashes || info.inputs.has_jit_inputs() {
+            if needs_expanded_hashes || info.inputs.has_deferred_inputs() {
                 expanded_hashes.insert(info.task_id, Arc::clone(file_hashes));
             }
         }
@@ -346,7 +348,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         scm,
         repo_index
     ))]
-    pub fn calculate_task_hash_with_jit_inputs<T: TaskDefinitionHashInfo>(
+    pub fn calculate_task_hash_with_deferred_inputs<T: TaskDefinitionHashInfo>(
         &self,
         task_id: &TaskId<'static>,
         task_definition: &T,
@@ -357,21 +359,34 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         scm: &SCM,
         repo_root: &AbsoluteSystemPath,
         repo_index: Option<&RepoGitIndex>,
+        dependency_output_hashes: Option<Arc<FileHashes>>,
     ) -> Result<String, Error> {
         let package_path = workspace.package_path();
-        let jit_hashes = file_hashes_for_inputs(
-            scm,
-            repo_root,
-            package_path,
-            &task_definition.inputs().jit_globs,
-            task_definition.inputs().jit_default,
-            repo_index,
-        )?;
+        let jit_hashes = task_definition
+            .inputs()
+            .has_jit_inputs()
+            .then(|| {
+                file_hashes_for_inputs(
+                    scm,
+                    repo_root,
+                    package_path,
+                    &task_definition.inputs().jit_globs,
+                    task_definition.inputs().jit_default,
+                    repo_index,
+                )
+            })
+            .transpose()?;
         let eager_hashes = self
             .task_hash_tracker
             .get_expanded_inputs(task_id)
             .ok_or_else(|| Error::MissingPackageFileHash(task_id.to_string()))?;
-        let combined_hashes = combine_file_hashes(&eager_hashes, &jit_hashes);
+        let mut combined_hashes = eager_hashes;
+        if let Some(jit_hashes) = jit_hashes {
+            combined_hashes = combine_file_hashes(&combined_hashes, &jit_hashes);
+        }
+        if let Some(dependency_output_hashes) = dependency_output_hashes {
+            combined_hashes = combine_file_hashes(&combined_hashes, &dependency_output_hashes);
+        }
         let hash_of_files = combined_hashes.as_ref().hash();
 
         self.task_hash_tracker
@@ -398,7 +413,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         self.task_hash_tracker.insert_hash(
             task_id.clone(),
             env_vars,
-            Arc::from(DEFERRED_TASK_HASH_MESSAGE),
+            Arc::from(deferred_task_hash_message(task_definition.inputs())),
             None,
         );
         Ok(())
@@ -630,6 +645,14 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
     }
 }
 
+pub fn deferred_task_hash_message(inputs: &TaskInputs) -> &'static str {
+    if inputs.has_dependency_outputs() {
+        DEPENDENCY_OUTPUTS_DEFERRED_TASK_HASH_MESSAGE
+    } else {
+        JIT_DEFERRED_TASK_HASH_MESSAGE
+    }
+}
+
 pub fn get_external_deps_hash(
     transitive_dependencies: &Option<HashSet<turborepo_lockfiles::Package>>,
 ) -> String {
@@ -688,7 +711,7 @@ pub fn get_internal_deps_hash(
     Ok(FileHashes(file_hashes).try_hash()?)
 }
 
-fn file_hashes_for_inputs<S: AsRef<str>>(
+pub fn file_hashes_for_inputs<S: AsRef<str>>(
     scm: &SCM,
     repo_root: &AbsoluteSystemPath,
     package_path: &AnchoredSystemPath,
@@ -705,7 +728,7 @@ fn file_hashes_for_inputs<S: AsRef<str>>(
         .map_err(Error::from)
 }
 
-fn combine_file_hashes(eager: &FileHashes, jit: &FileHashes) -> Arc<FileHashes> {
+pub fn combine_file_hashes(eager: &FileHashes, jit: &FileHashes) -> Arc<FileHashes> {
     let mut combined = BTreeMap::new();
     for (path, hash) in &eager.0 {
         combined.insert(path.clone(), *hash);

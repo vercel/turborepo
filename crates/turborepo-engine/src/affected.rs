@@ -27,6 +27,7 @@ static DEFAULT_TASK_INPUTS: TaskInputs = TaskInputs {
     default: true,
     jit_globs: Vec::new(),
     jit_default: false,
+    dependency_outputs: None,
     eager: true,
 };
 

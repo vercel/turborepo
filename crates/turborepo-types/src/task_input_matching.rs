@@ -225,7 +225,7 @@ mod tests {
     use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
     use super::*;
-    use crate::TaskInputs;
+    use crate::{DependencyOutputsInput, TaskInputs};
 
     fn assert_match(file: &str, pkg: &str, inputs: &TaskInputs, expected: bool) {
         let compiled = compile_globs(inputs);
@@ -526,5 +526,25 @@ mod tests {
 
         assert_match("other.json", "packages/lib-a", &inputs, true);
         assert_match("schema.json", "packages/lib-a", &inputs, true);
+    }
+
+    #[test]
+    fn dependency_outputs_do_not_match_unrelated_files_like_jit() {
+        let inputs = TaskInputs {
+            globs: vec!["src/**/*.ts".to_string()],
+            dependency_outputs: Some(DependencyOutputsInput {
+                from: None,
+                globs: vec![],
+            }),
+            ..Default::default()
+        };
+
+        assert_match("packages/lib-a/README.md", "packages/lib-a", &inputs, false);
+        assert_match(
+            "packages/lib-a/src/index.ts",
+            "packages/lib-a",
+            &inputs,
+            true,
+        );
     }
 }

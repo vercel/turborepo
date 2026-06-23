@@ -319,7 +319,25 @@ fn generate_remote_cache_interface() -> String {
 
 /// Generate the Pipeline interface (task definition)
 fn generate_pipeline_interface() -> String {
-    r#"export interface Pipeline {
+    r#"export interface StartupInput {
+  mode: "startup";
+  globs?: Array<string>;
+  withDefaults?: boolean;
+}
+
+export interface JitInput {
+  mode: "jit";
+  globs?: Array<string>;
+  withDefaults?: boolean;
+}
+
+export interface DependencyOutputsInput {
+  mode: "dependencyOutputs";
+  from?: Array<string>;
+  globs?: Array<string>;
+}
+
+export interface Pipeline {
   /**
    * A human-readable description of what this task does.
    *
@@ -410,7 +428,7 @@ fn generate_pipeline_interface() -> String {
    *
    * @defaultValue `[]`
    */
-  inputs?: Array<string>;
+  inputs?: Array<string | StartupInput | JitInput | DependencyOutputsInput>;
 
   /**
    * Output mode for the task.
