@@ -24,7 +24,7 @@ use turborepo_repository::package_graph::PackageName;
 use turborepo_run_cache::{OutputWatcher, OutputWatcherError};
 use turborepo_scm::SCM;
 use turborepo_scope::target_selector::InvalidSelectorError;
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_signals::{listeners::get_signal, ShutdownReason, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{sender::UISender, LogSinks};
 
@@ -522,15 +522,50 @@ impl WatchClient {
     }
 
     pub async fn shutdown(&mut self) {
+        let force_shutdown_timeout = Run::force_shutdown_timeout();
+        if self.handler.shutdown_reason() == Some(ShutdownReason::Signal) {
+            Run::emit_shutdown_started_once(
+                self.run.shutdown_started_emitted.as_ref(),
+                force_shutdown_timeout,
+            );
+        }
+
         if let Some(sender) = &self.ui_sender {
             sender.stop().await;
         }
-        for stopper in self.background_stoppers.drain(..) {
+        if let Some(handle) = self.ui_handle.take() {
+            match handle.await {
+                Ok(Err(err)) => tracing::error!("error encountered rendering tui: {err}"),
+                Err(err) => tracing::error!("render thread panicked: {err}"),
+                Ok(Ok(())) => {}
+            }
+        }
+
+        let mut stoppers = self.background_stoppers.drain(..).collect::<Vec<_>>();
+        for stopper in &stoppers {
             stopper.stop().await;
         }
+
         for handle in self.active_runs.drain(..) {
-            handle.stopper.stop().await;
-            let _ = handle.run_task.await;
+            let RunHandle { stopper, run_task } = handle;
+            stopper.stop().await;
+            let _ = run_task.await;
+            stoppers.push(stopper);
+        }
+
+        if stoppers
+            .iter()
+            .any(|stopper| stopper.cache_writes_enabled())
+        {
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
+                "Finishing writing to cache...",
+            )
+            .emit();
+        }
+
+        for stopper in &stoppers {
+            stopper.shutdown_cache().await;
         }
     }
 

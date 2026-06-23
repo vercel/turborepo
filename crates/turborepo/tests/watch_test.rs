@@ -92,6 +92,15 @@ fn wait_for_markers(test_dir: &Path, pkg: &str, expected: usize, timeout: Durati
 
 /// Spawn `turbo watch` with the given tasks as a child process.
 fn spawn_turbo_watch_with_tasks(test_dir: &Path, tasks: &[&str]) -> Child {
+    spawn_turbo_watch_with_tasks_and_stdio(test_dir, tasks, Stdio::null(), Stdio::null())
+}
+
+fn spawn_turbo_watch_with_tasks_and_stdio(
+    test_dir: &Path,
+    tasks: &[&str],
+    stdout: Stdio,
+    stderr: Stdio,
+) -> Child {
     let turbo_bin = assert_cmd::cargo::cargo_bin("turbo");
     let mut cmd = std::process::Command::new(turbo_bin);
     #[cfg(unix)]
@@ -114,8 +123,8 @@ fn spawn_turbo_watch_with_tasks(test_dir: &Path, tasks: &[&str]) -> Child {
         .env_remove("CI")
         .env_remove("GITHUB_ACTIONS")
         .current_dir(test_dir)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stdout(stdout)
+        .stderr(stderr)
         .spawn()
         .expect("failed to spawn turbo watch")
 }
@@ -351,6 +360,68 @@ fn watch_clean_shutdown_on_sigint() {
             Err(e) => panic!("error waiting for turbo watch: {e}"),
         }
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn watch_shutdown_after_rebuild_emits_single_shutdown_banner() {
+    use nix::{
+        sys::signal::{self, Signal},
+        unistd::Pid,
+    };
+
+    let (_tempdir, test_dir) = setup_watch_test();
+    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks_and_stdio(
+        &test_dir,
+        &["build"],
+        Stdio::piped(),
+        Stdio::piped(),
+    ));
+
+    let initial = wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
+    assert!(initial >= 1, "initial watch run did not complete");
+    let rebuilt = retry_file_change(&test_dir, "a", initial, 3);
+    assert!(rebuilt > initial, "watch rebuild did not complete");
+
+    let mut child = guard.take();
+    let pid = Pid::from_raw(child.id() as i32);
+    signal::kill(Pid::from_raw(-pid.as_raw()), Signal::SIGINT).expect("failed to send SIGINT");
+
+    let start = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if start.elapsed() <= Duration::from_secs(10) => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Ok(None) => {
+                stop_watch(child);
+                panic!("turbo watch did not exit within 10s after SIGINT");
+            }
+            Err(e) => panic!("error waiting for turbo watch: {e}"),
+        }
+    };
+
+    let output = child.wait_with_output().expect("failed to collect output");
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(
+        status.success(),
+        "turbo watch should exit cleanly on SIGINT\n{combined}"
+    );
+    assert_eq!(
+        combined.matches("Shutting down Turborepo tasks...").count(),
+        1,
+        "shutdown banner should be emitted once after rebuilds\n{combined}"
+    );
+    assert!(
+        !combined.contains("could not start shutdown, exiting"),
+        "stale run cache shutdown handlers should not warn\n{combined}"
+    );
 }
 
 // ---------------------------------------------------------------------------
