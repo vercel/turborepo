@@ -244,6 +244,63 @@ impl<T: TaskDefinitionInfo + Default + Clone> Default for Engine<Building, T> {
 }
 
 impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
+    /// Returns dependency task nodes selected by `dependencyOutputs` for
+    /// `task_id`.
+    ///
+    /// With no explicit `from`, this selects direct task dependencies. With
+    /// `from`, each selector is resolved against the transitive dependency set.
+    pub fn dependency_output_producers(
+        &self,
+        task_id: &TaskId<'static>,
+        from: Option<&[String]>,
+    ) -> Vec<TaskId<'static>> {
+        let Some(from) = from else {
+            return self.direct_task_dependencies(task_id);
+        };
+
+        let mut selected = from
+            .iter()
+            .flat_map(|selector| self.dependency_output_producers_for_selector(task_id, selector))
+            .collect::<Vec<_>>();
+        selected.sort();
+        selected.dedup();
+        selected
+    }
+
+    /// Returns transitive dependency task nodes matching one
+    /// `dependencyOutputs.from` selector.
+    pub fn dependency_output_producers_for_selector(
+        &self,
+        task_id: &TaskId<'static>,
+        selector: &str,
+    ) -> Vec<TaskId<'static>> {
+        self.transitive_task_dependencies(task_id)
+            .into_iter()
+            .filter(|candidate| dependency_output_selector_matches(task_id, selector, candidate))
+            .collect()
+    }
+
+    fn direct_task_dependencies(&self, task_id: &TaskId<'static>) -> Vec<TaskId<'static>> {
+        self.dependencies(task_id)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|node| match node {
+                TaskNode::Task(id) => Some((*id).clone()),
+                TaskNode::Root => None,
+            })
+            .collect()
+    }
+
+    fn transitive_task_dependencies(&self, task_id: &TaskId<'static>) -> Vec<TaskId<'static>> {
+        self.transitive_dependencies(task_id)
+            .into_iter()
+            .filter_map(|node| match node {
+                TaskNode::Task(id) => Some(id.clone()),
+                TaskNode::Root => None,
+            })
+            .collect()
+    }
+
     /// Creates an engine containing only tasks reachable from the given
     /// packages: their direct tasks, transitive dependents, and cacheable
     /// transitive dependencies needed for execution. Persistent
@@ -675,6 +732,20 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     /// Provides access to the task lookup map (task_id -> node index)
     pub fn task_lookup(&self) -> &HashMap<TaskId<'static>, petgraph::graph::NodeIndex> {
         &self.task_lookup
+    }
+}
+
+fn dependency_output_selector_matches(
+    current_task: &TaskId,
+    selector: &str,
+    candidate: &TaskId,
+) -> bool {
+    if let Some(task) = selector.strip_prefix('^') {
+        candidate.task() == task && candidate.package() != current_task.package()
+    } else if selector.contains('#') {
+        TaskId::try_from(selector).is_ok_and(|id| id == candidate.as_borrowed())
+    } else {
+        candidate.package() == current_task.package() && candidate.task() == selector
     }
 }
 
