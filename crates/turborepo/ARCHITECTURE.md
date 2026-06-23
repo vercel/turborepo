@@ -207,7 +207,7 @@ The task graph visitor handles task execution:
 - `ExecContext`: Holds state required to execute a task
 - Attempts cache restoration before execution
 - Spawns and manages child processes using `turborepo_process`
-- Captures `stdout`/`sterr` output
+- Captures `stdout`/`stderr` output
 - Saves outputs to cache on success
 - Reports task result back to the execution engine
 
