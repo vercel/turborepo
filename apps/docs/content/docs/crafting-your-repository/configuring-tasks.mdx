@@ -230,14 +230,16 @@ For this reason, you can use the `$TURBO_DEFAULT$` microsyntax to fine-tune the 
 
 In this task definition, Turborepo will use the default `inputs` behavior for the `build` task, but will ignore changes to the `README.md` file. If the `README.md` file is changed, the task will still hit cache.
 
-#### Hashing generated inputs
+#### Deferred hashing
 
 Some tasks need to hash files that are created by another task in the same run.
-task.
+For example, a type-check task might need to hash API types produced by a
+`codegen` task.
 
-Structured task inputs are available as a pre-release feature for these cases.
-Use [`mode: "jit"` or `mode: "dependencyOutputs"`](/docs/reference/configuration#structured-inputs)
-to defer hashing until the task's dependencies have completed.
+Deferred hashing is available as a pre-release feature for these power-user
+cases. Use [`mode: "jit"` or `mode: "dependencyOutputs"`](/docs/reference/configuration#deferred-hashing)
+to wait until the task's dependencies have completed before finalizing the cache
+key.
 
 ### Registering Root Tasks
 

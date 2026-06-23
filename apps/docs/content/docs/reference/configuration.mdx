@@ -863,25 +863,30 @@ Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to 
 }
 ```
 
-#### Structured inputs <ExperimentalBadge>Pre-release</ExperimentalBadge>
+#### Deferred hashing <ExperimentalBadge>Pre-release</ExperimentalBadge>
 
-Structured inputs describe when files are hashed instead of encoding that
-behavior in special glob strings.
+Deferred hashing is a power-user feature for tasks whose cache key depends on
+files that are not reliable when `turbo` starts. This commonly happens when a
+task consumes generated code, generated CSS, API types, or other files
+materialized by an earlier task in the same run.
 
 <Callout type="warn" title="Pre-release">
-  Structured inputs are a pre-release feature. The configuration surface and
+  Deferred hashing is a pre-release feature. The configuration surface and
   `--dry` output may change before this feature is marked stable.
 </Callout>
 
-Available modes:
+Most tasks should continue using normal string `inputs`. Use deferred hashing
+only when startup hashing would read missing or stale files.
+
+Deferred hashing uses structured `inputs` objects. Available modes:
 
 | Mode | What it does |
 | --- | --- |
-| `startup` | Hashes files before the task graph starts executing. This is equivalent to normal string inputs. |
-| `jit` | Hashes files after the task's `dependsOn` tasks complete, just before this task checks cache. |
-| `dependencyOutputs` | Hashes declared `outputs` from selected dependency tasks after those tasks complete. |
+| `startup` | Hashes files before the task graph starts executing. This is equivalent to normal string inputs, but useful when pairing normal inputs with deferred inputs. |
+| `jit` | Defers hashing until after the task's `dependsOn` tasks complete, just before this task checks cache. |
+| `dependencyOutputs` | Defers hashing of declared `outputs` from selected dependency tasks until after those tasks complete. |
 
-Use `startup` when you want normal input hashing with structured syntax:
+Use `startup` to describe the non-deferred part of the cache key:
 
 ```jsonc title="./turbo.json"
 {
@@ -900,10 +905,11 @@ Use `startup` when you want normal input hashing with structured syntax:
 }
 ```
 
-In this example, `build` hashes the default package inputs while excluding
-`dist/**`.
+In this example, `build` still hashes at startup, using the default package
+inputs while excluding `dist/**`.
 
-Use `jit` when another task creates files that this task should hash:
+Use `jit` when this task should hash files after another task creates or updates
+them:
 
 ```jsonc title="./turbo.json"
 {
@@ -933,7 +939,7 @@ In this example, `check-types` excludes generated files from startup hashing,
 waits for `codegen`, then hashes `src/generated/**` before checking cache.
 
 Use `dependencyOutputs` when this task should hash declared outputs from a task
-dependency:
+dependency instead of arbitrary files in its own package:
 
 ```jsonc title="./turbo.json"
 {
