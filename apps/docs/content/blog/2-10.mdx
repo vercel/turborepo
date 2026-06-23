@@ -173,17 +173,11 @@ By default, Turborepo creates the hashes for all of your tasks immediately, righ
 
 However, some file inputs are not stable at that point. An upstream task might generate, transform, or otherwise change files that a downstream task depends on **after** `turbo` has already hashed everything. Without a way to defer hashing, you would have to disable caching for those downstream tasks, or risk unexpected cache hits.
 
-Starting with this release, you can use structured `inputs` objects to defer hashing until the right moment in the run:
+Starting with this release, you can use structured `inputs` objects to defer hashing until the right moment in the run.
 
-| Mode | What it does |
-| --- | --- |
-| `startup` | Hashes files before the task graph starts executing. Use this for the non-deferred part of the cache key. |
-| `jit` | Hashes selected files after the task's `dependsOn` tasks complete, just before checking cache. |
-| `dependencyOutputs` | Hashes declared `outputs` from selected dependency tasks after those tasks complete. |
+TODO: Explain when to use `jit` vs `dependencyOutputs`.
 
-Code generation is the most common case for `jit`, but any input that intentionally changes during the run can use this pattern. Use `dependencyOutputs` when a downstream task should hash the artifacts another task declares in `outputs`.
-
-In the example below, `check-types` excludes generated files from startup hashing, waits for `codegen`, then hashes `src/generated/**` before checking the cache.
+Use `jit` when a task should hash files after another task creates or updates them:
 
 ```jsonc title="turbo.json"
 {
@@ -195,13 +189,34 @@ In the example below, `check-types` excludes generated files from startup hashin
     "check-types": {
       "dependsOn": ["codegen"],
       "inputs": [
-        {
-          "mode": "startup",
-          "withDefaults": true,
-          "globs": ["!src/generated/**"],
-        },
+        "$TURBO_DEFAULT$",
+        "!src/generated/**",
         {
           "mode": "jit",
+          "globs": ["src/generated/**"],
+        },
+      ],
+    },
+  },
+}
+```
+
+Use `dependencyOutputs` when a task should hash declared outputs from a task dependency:
+
+```jsonc title="turbo.json"
+{
+  "tasks": {
+    "codegen": {
+      "outputs": ["src/generated/**"],
+    },
+    "check-types": {
+      "dependsOn": ["codegen"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!src/generated/**",
+        {
+          "mode": "dependencyOutputs",
+          "from": ["codegen"],
           "globs": ["src/generated/**"],
         },
       ],
