@@ -1230,6 +1230,25 @@ impl RunStopper {
         self.manager.stop().await;
     }
 
+    pub async fn shutdown(
+        &self,
+        force_shutdown_timeout: Option<Duration>,
+        in_process_signals: Option<tokio::sync::broadcast::Receiver<()>>,
+    ) {
+        let process_manager = self.manager.clone();
+        let graceful_process_manager = process_manager.clone();
+        let graceful_shutdown = async move {
+            graceful_process_manager.shutdown(None).await;
+        };
+        Run::wait_for_process_manager_shutdown(
+            process_manager,
+            force_shutdown_timeout,
+            in_process_signals,
+            graceful_shutdown,
+        )
+        .await;
+    }
+
     pub async fn shutdown_cache(&self) {
         if self.skip_cache_writes {
             return;
