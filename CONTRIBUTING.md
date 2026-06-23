@@ -218,11 +218,11 @@ In the event of a crash, Rust's crash logs will be written to your temp director
 
 The architecture of the Terminal UI makes for a tricky debugging experience. Because the UI writes to the console through `stdout` in a specific way, using `println!()` statements won't work as expected.
 
-Instead, use `eprintln!()` to print to `stdout` and output `stdout` to a file:
+Instead, use `eprintln!()` to print to `stderr` and redirect `stderr` to a file:
 
 ```bash
 # devturbo is an alias to the debug binary of `turbo` in this case
-devturbo run build --ui=tui --skip-infer 2&> ~/tmp/logs.txt
+devturbo run build --ui=tui --skip-infer 2> ~/tmp/logs.txt
 ```
 
 > [!IMPORTANT]
