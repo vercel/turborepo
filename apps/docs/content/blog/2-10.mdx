@@ -269,7 +269,7 @@ We expect to enable local cache eviction by default in Turborepo 3.0. [Visit the
 
   <Accordion title="Feat (13)">
 
-    - feat: Graceful shutdown ([#12607](https://github.com/vercel/turborepo/pull/12607))
+    - feat: Add deferred hashing for task inputs ([#13125](https://github.com/vercel/turborepo/pull/13125))
     - feat: Add JIT task input hashing ([#13043](https://github.com/vercel/turborepo/pull/13043))
     - feat: Add Rsbuild examples ([#12942](https://github.com/vercel/turborepo/pull/12942))
     - feat: Add heap allocation profiling ([#12943](https://github.com/vercel/turborepo/pull/12943))
@@ -296,8 +296,22 @@ We expect to enable local cache eviction by default in Turborepo 3.0. [Visit the
 
   </Accordion>
 
-  <Accordion title="Fix (229)">
+  <Accordion title="Fix (243)">
 
+    - fix: Restart deferred hash consumers in watch ([#13127](https://github.com/vercel/turborepo/pull/13127))
+    - fix: Respect task inputs when stopping interruptible persistent tasks in watch ([#13116](https://github.com/vercel/turborepo/pull/13116))
+    - fix: Add ComSpec and PATHEXT to default Windows env passthrough ([#13114](https://github.com/vercel/turborepo/pull/13114))
+    - fix: Relocate stranded transitive deps when promoting npm workspace-nested packages ([#13111](https://github.com/vercel/turborepo/pull/13111))
+    - fix: Upgrade esbuild to patched version ([#13112](https://github.com/vercel/turborepo/pull/13112))
+    - fix: Preserve terminal settings for child PTYs ([#13110](https://github.com/vercel/turborepo/pull/13110))
+    - fix: Ignore symlink cycles when caching outputs ([#13107](https://github.com/vercel/turborepo/pull/13107))
+    - fix: Preserve bun patchedDependencies during prune ([#13106](https://github.com/vercel/turborepo/pull/13106))
+    - fix: Thread `allow_no_package_manager` to daemon and watcher ([#13091](https://github.com/vercel/turborepo/pull/13091))
+    - fix: Soften force shutdown message ([#13104](https://github.com/vercel/turborepo/pull/13104))
+    - fix: Upgrade tsdown in kitchen-sink api to fix dev script ([#13105](https://github.com/vercel/turborepo/pull/13105))
+    - fix: Restore TUI force shutdown ([#13102](https://github.com/vercel/turborepo/pull/13102))
+    - fix: Gracefully stop nested PTY processes ([#13100](https://github.com/vercel/turborepo/pull/13100))
+    - fix: Refine graceful shutdown messaging ([#13098](https://github.com/vercel/turborepo/pull/13098))
     - fix: Remove accidental shell commands example changes ([#13094](https://github.com/vercel/turborepo/pull/13094))
     - fix: Prevent duplicate PTY graceful shutdown signals ([#13093](https://github.com/vercel/turborepo/pull/13093))
     - fix: Handle Windows package manager shutdown ([#13090](https://github.com/vercel/turborepo/pull/13090))
@@ -530,8 +544,9 @@ We expect to enable local cache eviction by default in Turborepo 3.0. [Visit the
 
   </Accordion>
 
-  <Accordion title="Docs (15)">
+  <Accordion title="Docs (16)">
 
+    - docs: Fix stderr debugging guidance ([#13122](https://github.com/vercel/turborepo/pull/13122))
     - docs: Remove ESM warning from gen page ([#13039](https://github.com/vercel/turborepo/pull/13039))
     - docs: Exclude Next dev output from cache examples ([#13019](https://github.com/vercel/turborepo/pull/13019))
     - docs: Correct attribute presence claims in turborepo-otel ([#12932](https://github.com/vercel/turborepo/pull/12932))
@@ -562,6 +577,6 @@ We expect to enable local cache eviction by default in Turborepo 3.0. [Visit the
 
 Turborepo is the result of the combined work of all of its contributors, including our core team: [Anthony](https://github.com/anthonyshew) and [Tom](https://github.com/tknickman).
 
-We also thank everyone who contributed to this release of Turborepo: @adityasingh2400, @AndyBitz, @Balance8, @bitttttten, @bjormgyg, @christopherkindl, @dancrumb, @DependerKumarSoni, @eastgold15, @gioboa, @haydenbleasel, @JRoy, @kitten, @marc-vercel, @markandrus, @maschwenk, @mattjoll, @molebox, @mvanhorn, @Nsttt, @ognevny, @saiteja-madha, @sleitor, and @Wartijn.
+We also thank everyone who contributed to this release of Turborepo: @adityasingh2400, @AndyBitz, @Balance8, @bitttttten, @bjormgyg, @christopherkindl, @dancrumb, @DependerKumarSoni, @eastgold15, @gioboa, @gwagjiug, @hack-313-ip, @haydenbleasel, @JRoy, @kitten, @marc-vercel, @markandrus, @maschwenk, @mattjoll, @molebox, @mvanhorn, @Nsttt, @ognevny, @saiteja-madha, @sleitor, and @Wartijn.
 
 Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice. To learn how to get involved, [visit the Community page](https://turborepo.dev/docs/community).
