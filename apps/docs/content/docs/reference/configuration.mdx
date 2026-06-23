@@ -865,8 +865,8 @@ Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to 
 
 #### Deferred hashing <ExperimentalBadge>Pre-release</ExperimentalBadge>
 
-Deferred hashing is a power-user feature for tasks whose cache key depends on
-files that are not reliable when `turbo` starts. This commonly happens when a
+Deferred hashing is a feature for tasks whose cache key depends on
+files that are not reliable when `turbo` starts up. This commonly happens when a
 task consumes generated code, generated CSS, API types, or other files
 materialized by an earlier task in the same run.
 
@@ -875,16 +875,15 @@ materialized by an earlier task in the same run.
   `--dry` output may change before this feature is marked stable.
 </Callout>
 
-Most tasks should continue using normal string `inputs`. Use deferred hashing
-only when startup hashing would read missing or stale files.
+Most tasks should continue using normal string `inputs`. Use deferred hashing only when startup hashing would read missing or stale files.
 
 Deferred hashing uses structured `inputs` objects. Available modes:
 
-| Mode | What it does |
-| --- | --- |
-| `startup` | Hashes files before the task graph starts executing. This is equivalent to normal string inputs, but useful when pairing normal inputs with deferred inputs. |
-| `jit` | Defers hashing until after the task's `dependsOn` tasks complete, just before this task checks cache. |
-| `dependencyOutputs` | Defers hashing of declared `outputs` from selected dependency tasks until after those tasks complete. |
+| Mode                | What it does                                                                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `startup`           | Hashes files before the task graph starts executing. This is equivalent to normal string inputs, but useful when pairing normal inputs with deferred inputs. |
+| `jit`               | Defers hashing until after the task's `dependsOn` tasks complete, just before this task checks cache.                                                        |
+| `dependencyOutputs` | Defers hashing of declared `outputs` from selected dependency tasks until after those tasks complete.                                                        |
 
 Use `startup` to describe the non-deferred part of the cache key:
 
@@ -905,11 +904,9 @@ Use `startup` to describe the non-deferred part of the cache key:
 }
 ```
 
-In this example, `build` still hashes at startup, using the default package
-inputs while excluding `dist/**`.
+In this example, `build` still hashes at startup, using the default package inputs while excluding `dist/**`.
 
-Use `jit` when this task should hash files after another task creates or updates
-them:
+Use `jit` when this task should hash files after another task creates or updates them:
 
 ```jsonc title="./turbo.json"
 {
@@ -935,11 +932,9 @@ them:
 }
 ```
 
-In this example, `check-types` excludes generated files from startup hashing,
-waits for `codegen`, then hashes `src/generated/**` before checking cache.
+In this example, `check-types` excludes generated files from startup hashing, waits for `codegen`, then hashes `src/generated/**` before checking cache.
 
-Use `dependencyOutputs` when this task should hash declared outputs from a task
-dependency instead of arbitrary files in its own package:
+Use `dependencyOutputs` when this task should hash declared outputs from a task dependency instead of arbitrary files in its own package:
 
 ```jsonc title="./turbo.json"
 {
@@ -966,10 +961,7 @@ dependency instead of arbitrary files in its own package:
 }
 ```
 
-In this example, `check-types` hashes the files that `codegen` declares in
-`outputs` and that also match `src/generated/**`. `dependencyOutputs` does not
-create task graph edges; the selected task must already be present through
-`dependsOn`.
+In this example, `check-types` hashes the files that `codegen` declares in `outputs` and that also match `src/generated/**`. `dependencyOutputs` does not create task graph edges; the selected task must already be present through `dependsOn`.
 
 Notes:
 
@@ -977,8 +969,7 @@ Notes:
 - `from` is only valid with `dependencyOutputs`.
 - `dependencyOutputs.from` defaults to the task's direct task dependencies.
 - A selected `dependencyOutputs` task must declare `outputs`.
-- Tasks using `jit` or `dependencyOutputs` cannot know their final cache key
-  until execution time, so `--dry=json` reports `hash: null` and a `hashReason`.
+- Tasks using `jit` or `dependencyOutputs` cannot know their final cache key until execution time, so `--dry=json` reports `hash: null` and a `hashReason`.
 
 #### `$TURBO_EXTENDS$`
 
