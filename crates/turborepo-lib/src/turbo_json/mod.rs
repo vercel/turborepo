@@ -91,7 +91,7 @@ mod tests {
     use super::RawTaskDefinition;
 
     fn raw_input(value: &str) -> RawTaskInput {
-        RawTaskInput::String(turborepo_unescape::UnescapedString::from(value))
+        RawTaskInput::String(turborepo_unescape::UnescapedString::from(value.to_string()))
     }
 
     // This test must stay in turborepo-lib because it uses TaskDefinition::from_raw
