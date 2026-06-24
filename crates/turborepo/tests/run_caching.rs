@@ -1070,6 +1070,42 @@ fn test_dependency_outputs_from_selects_topological_dependencies() {
 }
 
 #[test]
+fn test_dependency_outputs_from_allows_empty_selector_matches() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        {
+          "mode": "dependencyOutputs",
+          "from": ["^build"]
+        }
+      ],
+      "outputs": ["dist/**"]
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["run", "build", "--dry=json"]);
+    assert!(
+        output.status.success(),
+        "expected terminal dependencyOutputs.from selector matches to be \
+         ignored\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn test_dependency_outputs_from_selects_package_qualified_dependency_node() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
@@ -1194,6 +1230,83 @@ fn test_dependency_outputs_from_hashes_package_qualified_dependency_outputs() {
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("0 cached, 2 total"), "got:\n{stdout}");
+}
+
+#[test]
+fn test_dependency_outputs_replaces_selected_dependency_task_hashes() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+
+    fs::write(tempdir.path().join("packages/util/seed.txt"), "v1\n").unwrap();
+    fs::write(
+        tempdir.path().join("packages/util/package.json"),
+        r#"{
+  "name": "util",
+  "scripts": {
+    "build": "node -e \"const fs = require('fs'); fs.mkdirSync('dist', { recursive: true }); fs.writeFileSync('dist/generated.txt', 'stable\\n')\""
+  }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("apps/my-app/package.json"),
+        r#"{
+  "name": "my-app",
+  "scripts": {
+    "build": "node -e \"const fs = require('fs'); fs.mkdirSync('.output', { recursive: true }); fs.writeFileSync('.output/result.txt', 'build\\n')\""
+  },
+  "dependencies": {
+    "util": "*"
+  }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "build": {
+      "inputs": ["$TURBO_DEFAULT$", "!dist/**"],
+      "outputs": ["dist/**"]
+    },
+    "my-app#build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        {
+          "mode": "startup",
+          "withDefaults": true,
+          "globs": ["!.output/**"]
+        },
+        {
+          "mode": "dependencyOutputs",
+          "from": ["^build"]
+        }
+      ],
+      "outputs": [".output/**"]
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=my-app", "--output-logs=none"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("0 cached, 2 total"), "got:\n{stdout}");
+
+    fs::write(tempdir.path().join("packages/util/seed.txt"), "v2\n").unwrap();
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=my-app", "--output-logs=none"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("1 cached, 2 total"), "got:\n{stdout}");
 }
 
 #[test]
@@ -1532,47 +1645,6 @@ fn test_dependency_outputs_globs_cannot_select_undeclared_outputs() {
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("0 cached, 2 total"), "got:\n{stdout}");
-}
-
-#[test]
-fn test_dependency_outputs_from_must_match_existing_dependency_task() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
-
-    fs::write(
-        tempdir.path().join("turbo.json"),
-        r#"{
-  "$schema": "https://turborepo.dev/schema.json",
-  "tasks": {
-    "codegen": {
-      "outputs": ["src/generated/**"]
-    },
-    "build": {
-      "inputs": [
-        {
-          "mode": "dependencyOutputs",
-          "from": ["codegen"]
-        }
-      ],
-      "outputs": ["dist/**"]
-    }
-  }
-}
-"#,
-    )
-    .unwrap();
-
-    let output = run_turbo(tempdir.path(), &["run", "build", "--filter=my-app"]);
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("does not match any eligible dependency task node"),
-        "expected dependencyOutputs.from validation error, got:\n{stderr}"
-    );
-    assert!(
-        stderr.contains("Add it to dependsOn or remove it from dependencyOutputs.from"),
-        "expected remediation guidance, got:\n{stderr}"
-    );
 }
 
 #[test]

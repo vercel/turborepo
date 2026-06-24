@@ -336,6 +336,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             dependency_set,
             telemetry,
             hash_of_files,
+            None,
         )
     }
 
@@ -360,6 +361,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         repo_root: &AbsoluteSystemPath,
         repo_index: Option<&RepoGitIndex>,
         dependency_output_hashes: Option<Arc<FileHashes>>,
+        dependency_output_producers: &HashSet<TaskId<'static>>,
     ) -> Result<String, Error> {
         let package_path = workspace.package_path();
         let jit_hashes = task_definition
@@ -400,6 +402,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             dependency_set,
             telemetry,
             &hash_of_files,
+            Some(dependency_output_producers),
         )
     }
 
@@ -428,6 +431,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         dependency_set: &[&TaskNode],
         telemetry: PackageTaskEventBuilder,
         hash_of_files: &str,
+        excluded_dependency_hashes: Option<&HashSet<TaskId<'static>>>,
     ) -> Result<String, Error> {
         let do_framework_inference = self.run_opts.framework_inference();
         let is_monorepo = !self.run_opts.single_package();
@@ -450,7 +454,8 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             self.calculate_env_vars(task_id, task_definition, task_env_mode, framework)?;
 
         let outputs = task_definition.hashable_outputs(task_id);
-        let task_dependency_hashes = self.calculate_dependency_hashes(dependency_set)?;
+        let task_dependency_hashes =
+            self.calculate_dependency_hashes(dependency_set, excluded_dependency_hashes)?;
         let ext_hash_fallback;
         let external_deps_hash: Option<&str> = if !is_monorepo {
             None
@@ -574,6 +579,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
     fn calculate_dependency_hashes(
         &self,
         dependency_set: &[&TaskNode],
+        excluded_dependency_hashes: Option<&HashSet<TaskId<'static>>>,
     ) -> Result<Vec<Arc<str>>, Error> {
         let mut dependency_hash_list = self.task_hash_tracker.with_state(|state| {
             let mut dependency_hash_list: Vec<Arc<str>> = Vec::with_capacity(dependency_set.len());
@@ -581,6 +587,11 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 let TaskNode::Task(dependency_task_id) = dependency_task else {
                     continue;
                 };
+                if excluded_dependency_hashes
+                    .is_some_and(|excluded| excluded.contains(dependency_task_id))
+                {
+                    continue;
+                }
 
                 let dependency_hash = state
                     .package_task_hashes

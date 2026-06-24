@@ -489,28 +489,13 @@ fn validate_dependency_outputs_inputs(
             let mut selected = Vec::new();
             for selector in from {
                 let matches = engine.dependency_output_producers_for_selector(task_id, selector);
-                if matches.is_empty() {
-                    return Err(structured_input_error(format!(
-                        "does not match any eligible dependency task node for this task: \
-                         \"dependencyOutputs.from\" contains \"{selector}\".\n\nAdd it to \
-                         dependsOn or remove it from dependencyOutputs.from."
-                    )));
-                }
                 selected.extend(matches);
             }
             selected.sort();
             selected.dedup();
             selected
         } else {
-            let selected = engine.dependency_output_producers(task_id, None);
-            if selected.is_empty() {
-                return Err(structured_input_error(format!(
-                    "dependencyOutputs mode was used for task \"{}\", but this task has no \
-                     dependency tasks to select.",
-                    task_id.task()
-                )));
-            }
-            selected
+            engine.dependency_output_producers(task_id, None)
         };
 
         for selected_task in selected {

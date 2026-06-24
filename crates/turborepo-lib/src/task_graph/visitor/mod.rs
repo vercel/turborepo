@@ -289,16 +289,23 @@ impl<'a> Visitor<'a> {
         &self,
         engine: &Engine,
         task_id: &TaskId<'static>,
-    ) -> Result<Option<Arc<turborepo_hash::FileHashes>>, Error> {
+    ) -> Result<
+        (
+            Option<Arc<turborepo_hash::FileHashes>>,
+            HashSet<TaskId<'static>>,
+        ),
+        Error,
+    > {
         let Some(task_definition) = engine.task_definition(task_id) else {
             return Err(Error::MissingDefinition);
         };
         let Some(dependency_outputs) = task_definition.inputs.dependency_outputs.as_ref() else {
-            return Ok(None);
+            return Ok((None, HashSet::new()));
         };
 
         let selected_tasks =
             engine.dependency_output_producers(task_id, dependency_outputs.from.as_deref());
+        let selected_task_set = selected_tasks.iter().cloned().collect::<HashSet<_>>();
 
         let mut combined = BTreeMap::new();
         let mut selected_any = false;
@@ -364,11 +371,14 @@ impl<'a> Visitor<'a> {
         }
 
         if selected_any {
-            Ok(Some(Arc::new(turborepo_hash::FileHashes(
-                combined.into_iter().collect(),
-            ))))
+            Ok((
+                Some(Arc::new(turborepo_hash::FileHashes(
+                    combined.into_iter().collect(),
+                ))),
+                selected_task_set,
+            ))
         } else {
-            Ok(None)
+            Ok((None, selected_task_set))
         }
     }
 
@@ -661,7 +671,7 @@ impl<'a> Visitor<'a> {
                                 .with_parent(telemetry);
                         let task_hash_telemetry = package_task_event.child();
                         let task_hash = if task_definition.inputs.has_deferred_inputs() {
-                            let dependency_output_hashes =
+                            let (dependency_output_hashes, dependency_output_producers) =
                                 match self.dependency_output_hashes(&engine, &info) {
                                     Ok(hashes) => hashes,
                                     Err(err) => {
@@ -680,6 +690,7 @@ impl<'a> Visitor<'a> {
                                 self.repo_root,
                                 self.repo_index,
                                 dependency_output_hashes,
+                                &dependency_output_producers,
                             ) {
                                 Ok(hash) => hash,
                                 Err(err) => {
