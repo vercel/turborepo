@@ -301,8 +301,10 @@ We expect to enable local cache eviction by default in Turborepo 3.0. [Read more
 
   </Accordion>
 
-  <Accordion title="Fix (243)">
+  <Accordion title="Fix (247)">
 
+    - fix: Hash selected dependency outputs instead of tasks ([#13129](https://github.com/vercel/turborepo/pull/13129))
+    - fix: Improve watch graceful shutdown ([#13128](https://github.com/vercel/turborepo/pull/13128))
     - fix: Restart deferred hash consumers in watch ([#13127](https://github.com/vercel/turborepo/pull/13127))
     - fix: Respect task inputs when stopping interruptible persistent tasks in watch ([#13116](https://github.com/vercel/turborepo/pull/13116))
     - fix: Add ComSpec and PATHEXT to default Windows env passthrough ([#13114](https://github.com/vercel/turborepo/pull/13114))
@@ -540,12 +542,14 @@ We expect to enable local cache eviction by default in Turborepo 3.0. [Read more
     - fix: Preserve per-workspace lockfiles during pnpm pruning ([#12519](https://github.com/vercel/turborepo/pull/12519))
     - fix: Preserve shallow install strategy during npm lockfile pruning ([#12520](https://github.com/vercel/turborepo/pull/12520))
     - fix: Include transitive dependencies in engine graph pruning for affected paths using Task Graph ([#12516](https://github.com/vercel/turborepo/pull/12516))
+    - fix: Update AI-generated response disclaimer to include human attribution ([#12517](https://github.com/vercel/turborepo/pull/12517))
     - fix: Backfill missing pnpm workspace importer entries during prune ([#12514](https://github.com/vercel/turborepo/pull/12514))
     - fix: Treat * as wildcard in preflight Access-Control-Allow-Headers ([#12503](https://github.com/vercel/turborepo/pull/12503))
     - fix: Unblock `watch` loop so interruptible persistent tasks restart on file changes ([#12509](https://github.com/vercel/turborepo/pull/12509))
     - fix: Resolve correct nested bun lockfile versions during prune ([#12506](https://github.com/vercel/turborepo/pull/12506))
     - fix: Add retry logic to example update workflow push step ([#12499](https://github.com/vercel/turborepo/pull/12499))
     - fix: Use previous minor/major tag for release notes on minor/major releases ([#12495](https://github.com/vercel/turborepo/pull/12495))
+    - fix: Avoid panic for unanchorable/non-UTF8 git paths ([#11106](https://github.com/vercel/turborepo/pull/11106))
 
   </Accordion>
 
@@ -582,6 +586,6 @@ We expect to enable local cache eviction by default in Turborepo 3.0. [Read more
 
 Turborepo is the result of the combined work of all of its contributors, including our core team: [Anthony](https://github.com/anthonyshew) and [Tom](https://github.com/tknickman).
 
-We also thank everyone who contributed to this release of Turborepo: @adityasingh2400, @AndyBitz, @Balance8, @bitttttten, @bjormgyg, @christopherkindl, @dancrumb, @DependerKumarSoni, @eastgold15, @gioboa, @gwagjiug, @hack-313-ip, @haydenbleasel, @JRoy, @kitten, @marc-vercel, @markandrus, @maschwenk, @mattjoll, @molebox, @mvanhorn, @Nsttt, @ognevny, @saiteja-madha, @sleitor, and @Wartijn.
+We also thank everyone who contributed to this release of Turborepo: @adityasingh2400, @AndyBitz, @Balance8, @bitttttten, @bjormgyg, @biru-codeastromer, @christopherkindl, @dancrumb, @DependerKumarSoni, @eastgold15, @gioboa, @gwagjiug, @hack-313-ip, @haydenbleasel, @JRoy, @kitten, @marc-vercel, @markandrus, @maschwenk, @mattjoll, @mehulkar, @molebox, @mvanhorn, @Nsttt, @ognevny, @saiteja-madha, @sleitor, and @Wartijn.
 
 Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice. To learn how to get involved, [visit the Community page](https://turborepo.dev/docs/community).
