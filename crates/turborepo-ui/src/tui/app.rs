@@ -735,13 +735,13 @@ impl<W> App<W> {
 
     pub fn jump_to_logs_top(&mut self) -> Result<(), Error> {
         let task = self.get_full_task_mut()?;
-        task.parser.screen_mut().set_scrollback(usize::MAX);
+        task.scroll_to_top()?;
         Ok(())
     }
 
     pub fn jump_to_logs_bottom(&mut self) -> Result<(), Error> {
         let task = self.get_full_task_mut()?;
-        task.parser.screen_mut().set_scrollback(0);
+        task.scroll_to_bottom()?;
         Ok(())
     }
 
@@ -1286,14 +1286,14 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
 
     if let Ok(active_task) = app.active_task() {
         let active_task = active_task.to_string();
-        if let Some(output_logs) = app.tasks.get(&active_task) {
-            let pane_to_render: TerminalPane<W> = TerminalPane::new(
+        if let Some(output_logs) = app.tasks.get_mut(&active_task) {
+            let mut pane_to_render = TerminalPane::new(
                 output_logs,
                 &active_task,
                 &app.section_focus,
                 app.preferences.is_task_list_visible(),
             );
-            f.render_widget(&pane_to_render, pane);
+            f.render_widget(&mut pane_to_render, pane);
         }
     }
 
@@ -2709,11 +2709,13 @@ mod test {
         assert!(app.done);
         assert!(app.tasks_by_status.running.is_empty());
         assert_eq!(app.tasks_by_status.finished.len(), 1);
-        let screen = app.tasks["app-a#dev"].parser.entire_screen();
-        let (_, cols) = screen.size();
-        let output =
-            String::from_utf8(screen.rows_formatted(0, cols).flatten().collect::<Vec<_>>())
-                .unwrap();
+        let output = String::from_utf8(
+            app.tasks["app-a#dev"]
+                .parser
+                .format_screen_vt()
+                .expect("format screen"),
+        )
+        .unwrap();
         assert!(output.contains("before stop"));
         assert!(output.contains("after stop"));
 

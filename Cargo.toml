@@ -94,7 +94,7 @@ wax = { path = "crates/turborepo-wax" }
 turborepo-shim = { path = "crates/turborepo-shim" }
 turborepo-vercel-api = { path = "crates/turborepo-vercel-api" }
 turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
-turborepo-vt100 = { path = "crates/turborepo-vt100" }
+turborepo-ghostty = { path = "crates/turborepo-ghostty" }
 
 reqwest = { version = "0.12.28", default-features = false }
 rustls-native-certs = "0.8.3"
@@ -183,7 +183,6 @@ tokio-util = { version = "0.7.7", features = ["io"] }
 tracing = "0.1.37"
 tracing-appender = "0.2.2"
 tracing-subscriber = "0.3.20"
-tui-term = { version = "0.3.1", default-features = false }
 url = "2.2.2"
 webbrowser = "0.8.7"
 which = "4.4.0"

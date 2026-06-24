@@ -1,0 +1,38 @@
+name: "Setup Zig"
+description: "Installs the Zig toolchain required to build libghostty-vt"
+inputs:
+  version:
+    description: "Zig version to install"
+    required: false
+    default: "0.15.2"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Zig
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "${{ runner.os }}" in
+          Linux)
+            archive="zig-x86_64-linux-${{ inputs.version }}"
+            ;;
+          macOS)
+            archive="zig-x86_64-macos-${{ inputs.version }}"
+            ;;
+          Windows)
+            archive="zig-x86_64-windows-${{ inputs.version }}"
+            ;;
+          *)
+            echo "Unsupported runner OS: ${{ runner.os }}" >&2
+            exit 1
+            ;;
+        esac
+
+        curl --fail --show-error --silent --location \
+          --output zig.tar.xz \
+          "https://ziglang.org/download/${{ inputs.version }}/${archive}.tar.xz"
+        mkdir -p zig
+        tar -xJf zig.tar.xz -C zig --strip-components 1
+        rm zig.tar.xz
+        echo "${{ github.workspace }}/zig" >> "$GITHUB_PATH"

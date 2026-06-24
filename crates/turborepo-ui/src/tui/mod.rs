@@ -44,4 +44,6 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("Unable to persist preferences.")]
     Preferences(#[from] preferences::Error),
+    #[error(transparent)]
+    Ghostty(#[from] turborepo_ghostty::Error),
 }
