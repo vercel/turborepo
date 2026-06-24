@@ -1106,6 +1106,41 @@ fn test_dependency_outputs_from_allows_empty_selector_matches() {
 }
 
 #[test]
+fn test_dependency_outputs_from_must_match_existing_dependency_task_when_dependencies_exist() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        {
+          "mode": "dependencyOutputs",
+          "from": ["^codegen"]
+        }
+      ],
+      "outputs": ["dist/**"]
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["run", "build", "--filter=my-app"]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("does not match any eligible dependency task node"),
+        "expected dependencyOutputs.from validation error, got:\n{stderr}"
+    );
+}
+
+#[test]
 fn test_dependency_outputs_from_selects_package_qualified_dependency_node() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
@@ -1619,32 +1654,13 @@ fn test_dependency_outputs_globs_cannot_select_undeclared_outputs() {
     )
     .unwrap();
 
-    let output = run_turbo(
-        tempdir.path(),
-        &["run", "build", "--filter=my-app", "--output-logs=none"],
+    let output = run_turbo(tempdir.path(), &["run", "build", "--filter=my-app"]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("dependencyOutputs.globs") && stderr.contains("private.txt"),
+        "expected dependencyOutputs.globs validation error, got:\n{stderr}"
     );
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("0 cached, 2 total"), "got:\n{stdout}");
-
-    fs::write(
-        tempdir.path().join("apps/my-app/private.txt"),
-        "private-v2\n",
-    )
-    .unwrap();
-    let output = run_turbo(
-        tempdir.path(),
-        &["run", "build", "--filter=my-app", "--output-logs=none"],
-    );
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("1 cached, 2 total"), "got:\n{stdout}");
-
-    fs::write(tempdir.path().join("apps/my-app/seed.txt"), "v2\n").unwrap();
-    let output = run_turbo(
-        tempdir.path(),
-        &["run", "build", "--filter=my-app", "--output-logs=none"],
-    );
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("0 cached, 2 total"), "got:\n{stdout}");
 }
 
 #[test]

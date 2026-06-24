@@ -399,3 +399,35 @@ fn test_structured_jit_rejects_negative_only_globs_without_defaults() {
         "expected negative-only jit glob validation error, got: {stderr}"
     );
 }
+
+#[test]
+fn test_dependency_outputs_requires_dependency_tasks_to_select() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+
+    write_turbo_json(
+        tempdir.path(),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "build": {
+      "inputs": [
+        {
+          "mode": "dependencyOutputs"
+        }
+      ],
+      "outputs": ["dist/**"]
+    }
+  }
+}
+"#,
+    );
+
+    let output = run_turbo(tempdir.path(), &["run", "build"]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("dependencyOutputs") && stderr.contains("dependency"),
+        "expected dependencyOutputs dependency-selection validation error, got: {stderr}"
+    );
+}
