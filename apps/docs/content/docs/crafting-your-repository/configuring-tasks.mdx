@@ -233,11 +233,9 @@ In this task definition, Turborepo will use the default `inputs` behavior for th
 #### Deferred hashing
 
 Some tasks need to hash files that are created by another task in the same run.
-Use [`mode: "jit"`](/docs/reference/configuration#just-in-time-jit) when a task
-depends on files created by upstream tasks, or
-[`mode: "dependencyOutputs"`](/docs/reference/configuration#output-dependent-dependencyoutputs)
-when dependents should hash a dependency's declared `outputs`. Both modes wait
-until the task's dependencies have completed before finalizing the cache key.
+Use structured [`inputs`](/docs/reference/configuration#deferred-hashing) with
+`mode: "jit"` or `mode: "dependencyOutputs"` to defer hashing until the task's
+dependencies have completed.
 
 ### Registering Root Tasks
 

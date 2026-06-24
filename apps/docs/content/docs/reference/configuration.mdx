@@ -870,39 +870,14 @@ Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to 
 
 #### Deferred hashing
 
-By default, Turborepo creates the hashes for all of your tasks right when
-`turbo` starts. Hashing up front lets Turborepo execute your Task Graph as fast
-as possible, since it can instantly know whether each task is a cache hit or
-miss.
+`inputs` entries can be structured objects that defer file hashing until after
+the task's dependencies have completed. Tasks that depend on a deferred task are
+also deferred until upstream hashes are available.
 
-Some file inputs are not stable while the Task Graph is executing. An upstream
-task like `codegen` might change files **after** `turbo` has already hashed
-everything. Because task hashing happened too early, you might turn off caching
-or risk unexpected cache hits.
+##### `mode: "jit"`
 
-Use structured `inputs` objects to defer hashing until the right moment in the
-run. Most tasks should continue using normal string `inputs`. Use deferred
-hashing when your task's cache key depends on files that are not yet available
-or are stale when `turbo` starts.
-
-There are two deferred hashing modes:
-
-- **`jit`**: Hash specific files on disk after dependencies complete. Use this
-  when a task depends on files created or updated by upstream tasks, even if
-  those files are not declared in the upstream task's `outputs`.
-- **`dependencyOutputs`**: Hash the declared `outputs` of task dependencies that
-  match your `globs`. Use this when dependents should only miss cache when a
-  dependency's published interface changes, such as type declaration files from
-  `^check-types`.
-
-##### Just-in-Time (`jit`)
-
-When you need to delay hashing for a specific task, use `"mode": "jit"`.
-Postponing task hashing gives your task the freedom to edit file inputs after
-initial hashing and still hit cache for dependent tasks.
-
-In the example below, the `build` task needs a generated GraphQL schema from a
-remote source:
+Hash the files matching `globs` just before the task executes, after its
+dependencies have completed.
 
 ```jsonc title="./turbo.json"
 {
@@ -925,19 +900,11 @@ remote source:
 }
 ```
 
-Because the GraphQL schema must be fetched, `codegen` is uncacheable. The `build`
-task can still hit cache safely if the schema does not change. Just-in-Time
-hashing delays the task hash for `build` until **after** `codegen` has completed,
-ensuring that `build`'s task hash uses the generated inputs.
+##### `mode: "dependencyOutputs"`
 
-##### Output-dependent (`dependencyOutputs`)
-
-When you want the outputs of task dependencies to affect the hash of dependent
-tasks, use `"mode": "dependencyOutputs"`. Output-dependent task hashing uses the
-declared `outputs` of a task dependency as file inputs to a dependent task.
-
-For example, the following configuration can increase cache hit ratios for type
-checking in a TypeScript repository that emits type declaration files:
+Hash the intersection of a dependency's declared `outputs` and `globs`.
+`dependencyOutputs` does not create task graph edges; selected tasks must
+already be present through `dependsOn`.
 
 ```jsonc title="./turbo.json"
 {
@@ -957,17 +924,6 @@ checking in a TypeScript repository that emits type declaration files:
   },
 }
 ```
-
-This configuration uses the type declaration files in `dist` as inputs to a
-dependent task's hash. Dependents only miss cache when the package's interface
-changes. Updating internal logic or comments will not cause cache misses in
-dependencies, but changing the interface of an export will.
-
-`dependencyOutputs` hashes the intersection of a dependency's declared `outputs`
-and your `globs`. It does not create task graph edges; the selected tasks must
-already be present through `dependsOn`.
-
-Notes:
 
 - `from` is only valid with `dependencyOutputs`.
 - `dependencyOutputs.from` defaults to the task's direct task dependencies.
