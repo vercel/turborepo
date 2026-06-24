@@ -83,7 +83,7 @@ bunx create-turbo@latest
 
 </PackageManagerTabs>
 
-Install or update your [Turborepo Agent Skills](/docs/guides/ai#agent-skill):
+Install or update your [Turborepo Agent Skill](/docs/guides/ai#agent-skill):
 
 <PackageManagerTabs>
 
@@ -141,14 +141,15 @@ bunx skills update vercel/turborepo
 
 ## Graceful task shutdown
 
-It's common for a repository to have shutdown or cleanup steps when closing out a development environment. Examples include cleanly shutting down a server, terminating a Docker Compose script, or closing a background process.
+It's common for a repository to have cleanup steps when closing out a development environment. For example, flushing logs, terminating a Docker Compose script, or closing a background process.
 
-In previous versions of Turborepo, tasks that wanted to gracefully shut down were not respected. Turborepo would immediately exit, abruptly killing all of your tasks, and possibly leaving your development environment in an undesirable state. Any tasks that wanted to handle `SIGINT` or `SIGTERM` themselves wouldn't get the opportunity.
+In previous versions, Turborepo exited immediately when it received a `SIGTERM` or `SIGINT` signal, abruptly killing all of your tasks. A server wouldn't close its connections, a background process wouldn't get cleaned up, and you'd be left to sort out the mess yourself.
 
-Starting with this release, Turborepo will now wait for your tasks to exit Pressing `Ctrl+C` (or sending `SIGINT` or `SIGTERM`) to Turborepo will forward the signals to your tasks. Once all your tasks have completed their work, Turborepo will exit.
+Now, Turborepo forwards `Ctrl+C` (or `SIGINT`/`SIGTERM`) to your tasks and waits for them to finish shutting down. Your signal handling code runs, cleanup finishes, and Turborepo exits after every task is done.
 
 ```bash title="Terminal"
-▲ ~ turbo start
+▲ ~ turbo dev
+
    • turbo 2.10.0
 
 server:dev: cache bypass, force executing 57ef564a0dbdb237
@@ -160,33 +161,34 @@ server:dev: SIGINT received!
 server:dev: Terminating database connection...
 server:dev: Terminated database connection.
 
- Tasks:    0 successful, 1 total
+ Tasks:    1 successful, 1 total
 Cached:    0 cached, 1 total
   Time:    3.6s
 ```
 
-This feature is zero-configuration, and tasks that do not have their own exit handling will continue to work as before.
+There's nothing to configure, and tasks without their own signal handling behave exactly as before.
 
 ## Deferred input hashing
 
-By default, Turborepo creates the hashes for all of your tasks immediately, right when `turbo` starts. This lets Turborepo get work done as fast as possible, since it can instantly know whether your work is a cache hit or miss.
+By default, Turborepo creates the hashes for all of your tasks right when `turbo` starts. Hashing up front lets Turborepo execute your Task Graph as fast as possible, since it can instantly know whether each task is a cache hit or miss.
 
-However, some file inputs are not stable at that point. An upstream task might generate, transform, or otherwise change files that a downstream task depends on **after** `turbo` has already hashed everything. Without a way to defer hashing, you would have to disable caching for those downstream tasks, or risk unexpected cache hits.
+But some file inputs aren't stable while the Task Graph is executing. An upstream task like `codegen` might change files **after** `turbo` has already hashed everything. Because task hashing happened too early, you might choose to turn off caching, or risk unexpected cache hits.
 
-Starting with this release, you can use structured `inputs` objects to defer hashing until the right moment in the run.
+Starting with this release, you can use structured `inputs` objects to defer hashing until the right moment in the run. We're introducing two new task hashing primitives.
 
-TODO: Explain when to use `jit` vs `dependencyOutputs`.
+### Just-in-Time task hashing
 
-Use `jit` when a task should hash files after another task creates or updates them:
+When you need to delay hashing for a specific task, use `"mode": "jit"`. Postponing task hashing gives your task the freedom to edit file inputs after initial hashing and still hit cache for dependent tasks.
+
+In the example below, the `build` task needs a generated GraphQL schema from a remote source:
 
 ```jsonc title="turbo.json"
 {
   "tasks": {
     "codegen": {
-      "inputs": ["schema.graphql", "codegen.config.ts"],
-      "outputs": ["src/generated/**"],
+      "cache": false,
     },
-    "check-types": {
+    "build": {
       "dependsOn": ["codegen"],
       "inputs": [
         "$TURBO_DEFAULT$",
@@ -201,31 +203,33 @@ Use `jit` when a task should hash files after another task creates or updates th
 }
 ```
 
-Use `dependencyOutputs` when a task should hash declared outputs from a task dependency:
+Because the GraphQL schema must be fetched, that task is uncacheable. The `build` task can still hit cache safely if the schema doesn't change. Just-in-Time hashing delays the task hash for `build` until **after** `codegen` has completed, ensuring that `build`'s task hash uses the generated inputs.
+
+### Output-dependent task hashing
+
+When you want the outputs of task dependencies to affect the hash of dependent tasks, use the `dependencyOutputs` mode. Output-dependent task hashing uses the outputs of a task dependency as file inputs to a dependent task.
+
+For example, the following configuration can increase cache hit ratios for type checking in a TypeScript repository that emits type declaration files:
 
 ```jsonc title="turbo.json"
 {
   "tasks": {
-    "codegen": {
-      "outputs": ["src/generated/**"],
-    },
     "check-types": {
-      "dependsOn": ["codegen"],
+      "dependsOn": ["^check-types"],
+      "outputs": ["dist/**"],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "!src/generated/**",
         {
           "mode": "dependencyOutputs",
-          "from": ["codegen"],
-          "globs": ["src/generated/**"],
-        },
-      ],
+          "globs": ["dist/**/*.d.ts"],
+          "from": ["^check-types"]
+        }
+      ]
     },
-  },
 }
 ```
 
-Tasks using `jit` or `dependencyOutputs` cannot know their final cache key until execution time, so `turbo run --dry=json` reports `hash: null` with a `hashReason` explaining the deferral.
+This configuration uses the type declaration files in `dist` as inputs to a task dependent's hash, meaning task dependents will only miss cache when the package's interface changes. Updating internal logic or comments won't result in cache misses in dependencies, but changing the interface of an export will.
 
 [Visit the documentation](/docs/reference/configuration#deferred-hashing) to learn more.
 
@@ -244,13 +248,13 @@ turbo run build --affected --filter=!docs
 turbo query ls --affected --filter=my-app
 ```
 
-These flags will combine with intersection semantics, only running the tasks that match **both** constraints. [Visit the documentation](/docs/reference/run#--affected) to learn more.
+The two flags intersect, so only the tasks that match **both** constraints run. To learn more, [visit the documentation](/docs/reference/run#--affected).
 
 ## Local cache eviction
 
-Turborepo saves its local cache into `.turbo/cache`, leaving behind cache artifacts every time you run tasks. While this makes your repository faster locally, there's one problem: The local cache can keep growing forever.
+Turborepo saves its local cache into `.turbo/cache`, adding cache artifacts every time you run a cacheable task. This speeds up repeat runs, but the cache never stops growing.
 
-Turborepo now supports automatic eviction through two opt-in configuration options in `turbo.json`:
+Turborepo now supports automatic eviction through two opt-in configuration options in `turbo.json`. You can use either age-based eviction or size-based eviction:
 
 ```jsonc title="turbo.json"
 {
@@ -259,9 +263,9 @@ Turborepo now supports automatic eviction through two opt-in configuration optio
 }
 ```
 
-Eviction runs in a background thread at the start of each `turbo run`, so it does not block tasks. You can use either age-based eviction or size-based eviction.
+`cacheMaxAge` clears artifacts older than the limit. `cacheMaxSize` clears the oldest artifacts first once the cache passes the cap. Eviction runs in a background thread at the start of each `turbo run`, so it does not block tasks.
 
-We expect to enable local cache eviction by default in Turborepo 3.0. [Visit the documentation](/docs/reference/configuration#cachemaxage) to learn more.
+We expect to enable local cache eviction by default in Turborepo 3.0. [Read more here.](/docs/reference/configuration#cachemaxage)
 
 ## All changes
 
