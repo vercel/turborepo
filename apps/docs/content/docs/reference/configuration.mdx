@@ -177,7 +177,7 @@ Specify the filesystem cache directory.
 
 Default: `"0"` (disabled)
 
-Maximum age of local cache entries before automatic eviction. Entries older than this value are removed at the start of each `turbo run`.
+Maximum age of local cache entries before automatic eviction. Entries older than this value are removed when eviction runs at the start of each `turbo run`. Eviction runs in a background thread so it does not block tasks.
 
 ```jsonc title="./turbo.json"
 {
@@ -198,6 +198,11 @@ Accepts a human-readable duration string with the following units:
 Set to `"0"` to disable age-based eviction.
 
 <Callout type="info">
+  Local cache eviction is opt-in today. We expect to enable it by default in
+  Turborepo 3.0.
+</Callout>
+
+<Callout type="info">
   You may also set this option via the
   [`TURBO_CACHE_MAX_AGE`](/docs/reference/system-environment-variables#turbo_cache_max_age)
   environment variable.
@@ -207,7 +212,7 @@ Set to `"0"` to disable age-based eviction.
 
 Default: `"0"` (disabled)
 
-Maximum total size of the local filesystem cache. When the cache exceeds this limit, the oldest entries are evicted until the cache is within the limit.
+Maximum total size of the local filesystem cache. When the cache exceeds this limit, the oldest entries are evicted until the cache is within the limit. Eviction runs in a background thread at the start of each `turbo run`, so it does not block tasks.
 
 ```jsonc title="./turbo.json"
 {
@@ -863,32 +868,49 @@ Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to 
 }
 ```
 
-#### Deferred hashing <ExperimentalBadge>Pre-release</ExperimentalBadge>
+#### Deferred hashing
 
-Deferred hashing is a feature for tasks whose cache key depends on
-files that are not reliable when `turbo` starts up. This commonly happens when a
-task consumes generated code, generated CSS, API types, or other files
-materialized by an earlier task in the same run.
+By default, Turborepo creates the hashes for all of your tasks right when
+`turbo` starts. Hashing up front lets Turborepo execute your Task Graph as fast
+as possible, since it can instantly know whether each task is a cache hit or
+miss.
 
-<Callout type="warn" title="Pre-release">
-  Deferred hashing is a pre-release feature. The configuration surface and
-  `--dry` output may change before this feature is marked stable.
-</Callout>
+Some file inputs are not stable while the Task Graph is executing. An upstream
+task like `codegen` might change files **after** `turbo` has already hashed
+everything. Because task hashing happened too early, you might turn off caching
+or risk unexpected cache hits.
 
-Most tasks should continue using normal string `inputs`. Use deferred hashing when your task's cache key depends on files that are not yet available or are stale when `turbo` starts.
+Use structured `inputs` objects to defer hashing until the right moment in the
+run. Most tasks should continue using normal string `inputs`. Use deferred
+hashing when your task's cache key depends on files that are not yet available
+or are stale when `turbo` starts.
 
-TODO: Explain when to use `jit` vs `dependencyOutputs`.
+There are two deferred hashing modes:
 
-Use `jit` when this task should hash files after another task creates or updates them:
+- **`jit`**: Hash specific files on disk after dependencies complete. Use this
+  when a task depends on files created or updated by upstream tasks, even if
+  those files are not declared in the upstream task's `outputs`.
+- **`dependencyOutputs`**: Hash the declared `outputs` of task dependencies that
+  match your `globs`. Use this when dependents should only miss cache when a
+  dependency's published interface changes, such as type declaration files from
+  `^check-types`.
+
+##### Just-in-Time (`jit`)
+
+When you need to delay hashing for a specific task, use `"mode": "jit"`.
+Postponing task hashing gives your task the freedom to edit file inputs after
+initial hashing and still hit cache for dependent tasks.
+
+In the example below, the `build` task needs a generated GraphQL schema from a
+remote source:
 
 ```jsonc title="./turbo.json"
 {
   "tasks": {
     "codegen": {
-      "inputs": ["schema.graphql", "codegen.config.ts"],
-      "outputs": ["src/generated/**"],
+      "cache": false,
     },
-    "check-types": {
+    "build": {
       "dependsOn": ["codegen"],
       "inputs": [
         "$TURBO_DEFAULT$",
@@ -903,25 +925,32 @@ Use `jit` when this task should hash files after another task creates or updates
 }
 ```
 
-In this example, `check-types` waits for `codegen`, then hashes `src/generated/**` before checking cache.
+Because the GraphQL schema must be fetched, `codegen` is uncacheable. The `build`
+task can still hit cache safely if the schema does not change. Just-in-Time
+hashing delays the task hash for `build` until **after** `codegen` has completed,
+ensuring that `build`'s task hash uses the generated inputs.
 
-Use `dependencyOutputs` when this task should hash declared outputs from a task dependency:
+##### Output-dependent (`dependencyOutputs`)
+
+When you want the outputs of task dependencies to affect the hash of dependent
+tasks, use `"mode": "dependencyOutputs"`. Output-dependent task hashing uses the
+declared `outputs` of a task dependency as file inputs to a dependent task.
+
+For example, the following configuration can increase cache hit ratios for type
+checking in a TypeScript repository that emits type declaration files:
 
 ```jsonc title="./turbo.json"
 {
   "tasks": {
-    "codegen": {
-      "outputs": ["src/generated/**"],
-    },
     "check-types": {
-      "dependsOn": ["codegen"],
+      "dependsOn": ["^check-types"],
+      "outputs": ["dist/**"],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "!src/generated/**",
         {
           "mode": "dependencyOutputs",
-          "from": ["codegen"],
-          "globs": ["src/generated/**"],
+          "globs": ["dist/**/*.d.ts"],
+          "from": ["^check-types"],
         },
       ],
     },
@@ -929,7 +958,14 @@ Use `dependencyOutputs` when this task should hash declared outputs from a task 
 }
 ```
 
-In this example, `check-types` hashes the files that `codegen` declares in `outputs` and that also match `src/generated/**`. `dependencyOutputs` does not create task graph edges; the selected task must already be present through `dependsOn`.
+This configuration uses the type declaration files in `dist` as inputs to a
+dependent task's hash. Dependents only miss cache when the package's interface
+changes. Updating internal logic or comments will not cause cache misses in
+dependencies, but changing the interface of an export will.
+
+`dependencyOutputs` hashes the intersection of a dependency's declared `outputs`
+and your `globs`. It does not create task graph edges; the selected tasks must
+already be present through `dependsOn`.
 
 Notes:
 
