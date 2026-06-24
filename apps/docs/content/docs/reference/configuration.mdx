@@ -177,7 +177,7 @@ Specify the filesystem cache directory.
 
 Default: `"0"` (disabled)
 
-Maximum age of local cache entries before automatic eviction. Entries older than this value are removed at the start of each `turbo run`.
+Maximum age of local cache entries before automatic eviction. Entries older than this value are removed when eviction runs at the start of each `turbo run`. Eviction runs in a background thread so it does not block tasks.
 
 ```jsonc title="./turbo.json"
 {
@@ -198,6 +198,11 @@ Accepts a human-readable duration string with the following units:
 Set to `"0"` to disable age-based eviction.
 
 <Callout type="info">
+  Local cache eviction is opt-in today. We expect to enable it by default in
+  Turborepo 3.0.
+</Callout>
+
+<Callout type="info">
   You may also set this option via the
   [`TURBO_CACHE_MAX_AGE`](/docs/reference/system-environment-variables#turbo_cache_max_age)
   environment variable.
@@ -207,7 +212,7 @@ Set to `"0"` to disable age-based eviction.
 
 Default: `"0"` (disabled)
 
-Maximum total size of the local filesystem cache. When the cache exceeds this limit, the oldest entries are evicted until the cache is within the limit.
+Maximum total size of the local filesystem cache. When the cache exceeds this limit, the oldest entries are evicted until the cache is within the limit. Eviction runs in a background thread at the start of each `turbo run`, so it does not block tasks.
 
 ```jsonc title="./turbo.json"
 {
@@ -863,65 +868,28 @@ Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to 
 }
 ```
 
-#### Deferred hashing <ExperimentalBadge>Pre-release</ExperimentalBadge>
+#### Deferred hashing
 
-Deferred hashing is a feature for tasks whose cache key depends on
-files that are not reliable when `turbo` starts up. This commonly happens when a
-task consumes generated code, generated CSS, API types, or other files
-materialized by an earlier task in the same run.
+`inputs` entries can be structured objects that defer file hashing until after
+the task's dependencies have completed. Tasks that depend on a deferred task are
+also deferred until upstream hashes are available.
 
-<Callout type="warn" title="Pre-release">
-  Deferred hashing is a pre-release feature. The configuration surface and
-  `--dry` output may change before this feature is marked stable.
-</Callout>
+##### `mode: "jit"`
 
-Most tasks should continue using normal string `inputs`. Use deferred hashing only when startup hashing would read missing or stale files.
-
-Deferred hashing uses structured `inputs` objects. Available modes:
-
-| Mode                | What it does                                                                                                                                                 |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `startup`           | Hashes files before the task graph starts executing. This is equivalent to normal string inputs, but useful when pairing normal inputs with deferred inputs. |
-| `jit`               | Defers hashing until after the task's `dependsOn` tasks complete, just before this task checks cache.                                                        |
-| `dependencyOutputs` | Defers hashing of declared `outputs` from selected dependency tasks until after those tasks complete.                                                        |
-
-Use `startup` to describe the non-deferred part of the cache key:
-
-```jsonc title="./turbo.json"
-{
-  "tasks": {
-    "build": {
-      "inputs": [
-        {
-          "mode": "startup",
-          "withDefaults": true,
-          "globs": ["!dist/**"],
-        },
-      ],
-      "outputs": ["dist/**"],
-    },
-  },
-}
-```
-
-In this example, `build` still hashes at startup, using the default package inputs while excluding `dist/**`.
-
-Use `jit` when this task should hash files after another task creates or updates them:
+Hash the files matching `globs` just before the task executes, after its
+dependencies have completed.
 
 ```jsonc title="./turbo.json"
 {
   "tasks": {
     "codegen": {
-      "outputs": ["src/generated/**"],
+      "cache": false,
     },
-    "check-types": {
+    "build": {
       "dependsOn": ["codegen"],
       "inputs": [
-        {
-          "mode": "startup",
-          "withDefaults": true,
-          "globs": ["!src/generated/**"],
-        },
+        "$TURBO_DEFAULT$",
+        "!src/generated/**",
         {
           "mode": "jit",
           "globs": ["src/generated/**"],
@@ -932,28 +900,24 @@ Use `jit` when this task should hash files after another task creates or updates
 }
 ```
 
-In this example, `check-types` excludes generated files from startup hashing, waits for `codegen`, then hashes `src/generated/**` before checking cache.
+##### `mode: "dependencyOutputs"`
 
-Use `dependencyOutputs` when this task should hash declared outputs from a task dependency instead of arbitrary files in its own package:
+Hash the intersection of a dependency's declared `outputs` and `globs`.
+`dependencyOutputs` does not create task graph edges; selected tasks must
+already be present through `dependsOn`.
 
 ```jsonc title="./turbo.json"
 {
   "tasks": {
-    "codegen": {
-      "outputs": ["src/generated/**"],
-    },
     "check-types": {
-      "dependsOn": ["codegen"],
+      "dependsOn": ["^check-types"],
+      "outputs": ["dist/**"],
       "inputs": [
-        {
-          "mode": "startup",
-          "withDefaults": true,
-          "globs": ["!src/generated/**"],
-        },
+        "$TURBO_DEFAULT$",
         {
           "mode": "dependencyOutputs",
-          "from": ["codegen"],
-          "globs": ["src/generated/**"],
+          "globs": ["dist/**/*.d.ts"],
+          "from": ["^check-types"],
         },
       ],
     },
@@ -961,11 +925,6 @@ Use `dependencyOutputs` when this task should hash declared outputs from a task 
 }
 ```
 
-In this example, `check-types` hashes the files that `codegen` declares in `outputs` and that also match `src/generated/**`. `dependencyOutputs` does not create task graph edges; the selected task must already be present through `dependsOn`.
-
-Notes:
-
-- `withDefaults` is only valid with `startup` and `jit`.
 - `from` is only valid with `dependencyOutputs`.
 - `dependencyOutputs.from` defaults to the task's direct task dependencies.
 - A selected `dependencyOutputs` task must declare `outputs`.
