@@ -66,9 +66,9 @@ export default defineTool({
       const content = await readFile(file, "utf8");
       const relativePath = path.relative(repoRoot, file);
       const lines = content.split("\n");
-      lines.forEach((line, index) => {
+      for (const [index, line] of lines.entries()) {
         references.push(...findReferencesInLine(relativePath, index + 1, line));
-      });
+      }
     }
 
     return { scannedFiles: files.length, references };

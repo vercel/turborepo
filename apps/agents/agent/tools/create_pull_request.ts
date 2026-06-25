@@ -16,7 +16,7 @@ const inputSchema = z.object({
   baseBranch: z.string().min(1).default("main"),
   branchName: z
     .string()
-    .regex(/^agents\/[A-Za-z0-9._\/-]+$/, "Branch must start with agents/"),
+    .regex(/^agents\/[A-Za-z0-9._/-]+$/, "Branch must start with agents/"),
   title: z.string().min(1),
   body: z.string().default(""),
   commitMessage: z.string().min(1),
@@ -64,7 +64,7 @@ function installationId() {
 
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) {
-    throw new Error("GITHUB_INSTALLATION_ID must be an integer.");
+    throw new TypeError("GITHUB_INSTALLATION_ID must be an integer.");
   }
 
   return parsed;
@@ -88,7 +88,7 @@ function requireEnv(name: string) {
 function base64Url(value: Buffer | string) {
   return Buffer.from(value)
     .toString("base64")
-    .replace(/=/g, "")
+    .replace(/[=]/g, "")
     .replace(/\+/g, "-")
     .replace(/\//g, "_");
 }
