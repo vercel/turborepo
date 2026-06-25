@@ -53,12 +53,7 @@ In general, there are two major areas in the repository:
 ## Building Turborepo
 
 1. Run `pnpm install` at the root of the repository
-2. Ensure [Zig 0.15.2+](#general-dependencies) is on your `PATH`
 3. Run `cargo build`
-
-The Rust build compiles Ghostty's `libghostty-vt` via Zig as part of
-`turborepo-ghostty-sys`. To use a local Ghostty checkout instead of fetching
-sources at build time, set `GHOSTTY_SOURCE_DIR` to your checkout path.
 
 ### TLS Implementation
 
