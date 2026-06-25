@@ -30,6 +30,9 @@ You will need to have these dependencies installed on your machine to work on th
 - [pnpm](https://pnpm.io/) v10
 - [protoc](https://grpc.io/docs/protoc-installation/)
 - [capnp](https://capnproto.org)
+- [Zig](https://ziglang.org/download/) 0.15.2 or newer — required to build `libghostty-vt` for the TUI (`turborepo-ghostty-sys`). The `zig` binary must be on your `PATH` when running `cargo build`.
+  - macOS/Linux/Windows: download a release from [ziglang.org](https://ziglang.org/download/) and add it to your `PATH`
+  - macOS (Homebrew): `brew install zig` (ensure the installed version is 0.15.2+)
 
 ### Optional dependencies
 
@@ -52,7 +55,12 @@ In general, there are two major areas in the repository:
 ## Building Turborepo
 
 1. Run `pnpm install` at the root of the repository
-2. Run `cargo build`
+2. Ensure [Zig 0.15.2+](#general-dependencies) is on your `PATH`
+3. Run `cargo build`
+
+The Rust build compiles Ghostty's `libghostty-vt` via Zig as part of
+`turborepo-ghostty-sys`. To use a local Ghostty checkout instead of fetching
+sources at build time, set `GHOSTTY_SOURCE_DIR` to your checkout path.
 
 ### TLS Implementation
 
