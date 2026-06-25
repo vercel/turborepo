@@ -172,7 +172,7 @@ impl<W> TerminalOutput<W> {
         Ok(())
     }
 
-    pub fn copy_selection(&self) -> Option<String> {
+    pub fn copy_selection(&mut self) -> Option<String> {
         self.parser.selected_text().ok().flatten()
     }
 
@@ -239,14 +239,27 @@ mod newline_tests {
     }
 
     #[test]
-    fn normalize_fixes_garbled_output() {
-        let mut parser = ghostty::Parser::new(5, 20, 0);
+    fn mouse_drag_selection_can_be_copied() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
-        let normalized = normalize_newlines(b"hello\nworld");
-        parser.process(&normalized);
-        let formatted = parser.format_screen_vt().expect("format");
-        let output = String::from_utf8_lossy(&formatted);
-        assert!(output.contains("hello"));
-        assert!(output.contains("world"));
+        let mut output: TerminalOutput<()> = TerminalOutput::new(10, 40, None, 100);
+        output.process(b"hello world\r\n");
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+
+        assert!(output.has_selection());
+        assert_eq!(output.copy_selection().as_deref(), Some("hello"));
+        Ok(())
     }
 }

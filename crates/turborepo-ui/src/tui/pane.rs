@@ -95,6 +95,8 @@ impl<W> Widget for &mut TerminalPane<'_, W> {
         let inner = block.inner(content_area);
         block.render(content_area, buf);
 
+        let _ = self.terminal_output.parser.prepare_render();
+
         let mut widget = TerminalWidget::new(
             &mut self.terminal_output.parser.terminal,
             &mut self.terminal_output.parser.render_state,

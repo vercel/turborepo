@@ -1,10 +1,9 @@
-use crate::render::{CellIterator, CursorVisualStyle, RowIterator};
+use crate::render::{CellIterator, CursorVisualStyle, CursorViewport, RenderState, RowIterator};
 use crate::style::RgbColor;
 use crate::terminal::Terminal;
-use crate::{RenderState, render::CursorViewport};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
-use ratatui::style::Color;
+use ratatui::style::{Color, Modifier};
 use ratatui::widgets::Widget;
 
 use crate::convert;
@@ -114,6 +113,8 @@ impl Widget for &mut TerminalWidget<'_, '_, '_> {
                 break;
             }
 
+            let row_selection = row.selection().ok().flatten();
+
             let Ok(mut cell_iteration) = cell_iter.update(row) else {
                 row_idx += 1;
                 continue;
@@ -152,6 +153,12 @@ impl Widget for &mut TerminalWidget<'_, '_, '_> {
                     .map(|style| convert::style(style, &colors.palette))
                     .unwrap_or_default();
                 ratatui_style = ratatui_style.fg(fg).bg(bg);
+
+                if row_selection.is_some_and(|selection| {
+                    col_idx >= selection.start_x && col_idx <= selection.end_x
+                }) {
+                    ratatui_style = ratatui_style.add_modifier(Modifier::REVERSED);
+                }
 
                 let buf_x = area.x + col_idx;
                 let buf_y = area.y + row_idx;

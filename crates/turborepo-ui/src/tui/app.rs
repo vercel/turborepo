@@ -686,8 +686,8 @@ impl<W> App<W> {
         Ok(())
     }
 
-    pub fn copy_selection(&self) -> Result<(), Error> {
-        let task = self.get_full_task()?;
+    pub fn copy_selection(&mut self) -> Result<(), Error> {
+        let task = self.get_full_task_mut()?;
         let Some(text) = task.copy_selection() else {
             return Ok(());
         };
