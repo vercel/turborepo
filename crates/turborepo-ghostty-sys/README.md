@@ -18,4 +18,16 @@ Optional environment variables:
 - `GHOSTTY_ZIG_SYSTEM_DIR` — pre-populated Zig package cache for offline builds
 - `TURBOREPO_GHOSTTY_SYS_OPTIMIZE` — override Zig optimize mode
 
-Bindings were generated from libghostty-vt 0.2.0 (MIT OR Apache-2.0).
+## Attribution
+
+This crate vendors FFI and build logic in-tree rather than depending on the
+upstream crates.io packages. The following projects were used as inspiration
+and source material:
+
+- **[Ghostty](https://github.com/ghostty-org/ghostty)** — `libghostty-vt` is
+  compiled from Ghostty sources at build time. License: MIT.
+- **[libghostty-rs](https://github.com/Uzaaft/libghostty-rs)** — `src/bindings.rs`
+  and `build.rs` are adapted from the
+  [`libghostty-vt-sys`](https://github.com/Uzaaft/libghostty-rs/tree/master/crates/libghostty-vt-sys)
+  crate (bindings generated from libghostty-vt 0.2.0). License: MIT OR
+  Apache-2.0.
