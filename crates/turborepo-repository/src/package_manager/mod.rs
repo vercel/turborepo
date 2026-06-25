@@ -202,8 +202,9 @@ impl From<std::convert::Infallible> for Error {
     }
 }
 
-static PACKAGE_MANAGER_PATTERN: Lazy<Regex> =
-    lazy_regex!(r"(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?|https?://.+)");
+static PACKAGE_MANAGER_PATTERN: Lazy<Regex> = lazy_regex!(
+    r"\A(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z"
+);
 
 impl PackageManager {
     pub fn supported_managers() -> &'static [Self] {
@@ -685,6 +686,11 @@ mod tests {
         expected_error: bool,
     }
 
+    const COREPACK_HASHED_YARN: &str =
+        "yarn@3.2.3+sha224.953c8233f7a92884eee2de69a1b92d1f2ec1655e66d08071ba9a02fa";
+    const COREPACK_HASHED_YARN_VERSION: &str =
+        "3.2.3+sha224.953c8233f7a92884eee2de69a1b92d1f2ec1655e66d08071ba9a02fa";
+
     fn repo_root() -> AbsoluteSystemPathBuf {
         let cwd = AbsoluteSystemPathBuf::cwd().unwrap();
         for ancestor in cwd.ancestors() {
@@ -811,6 +817,27 @@ mod tests {
                 expected_error: false,
             },
             TestCase {
+                name: "supports corepack integrity hashes".to_owned(),
+                package_manager: Spanned::new(COREPACK_HASHED_YARN.to_owned()),
+                expected_manager: "yarn".to_owned(),
+                expected_version: COREPACK_HASHED_YARN_VERSION.to_owned(),
+                expected_error: false,
+            },
+            TestCase {
+                name: "errors with leading characters before manager".to_owned(),
+                package_manager: Spanned::new("prefix npm@1.2.3".to_owned()),
+                expected_manager: "".to_owned(),
+                expected_version: "".to_owned(),
+                expected_error: true,
+            },
+            TestCase {
+                name: "errors with trailing characters after version".to_owned(),
+                package_manager: Spanned::new("npm@1.2.3suffix".to_owned()),
+                expected_manager: "".to_owned(),
+                expected_version: "".to_owned(),
+                expected_error: true,
+            },
+            TestCase {
                 name: "only supports specified package managers".to_owned(),
                 package_manager: Spanned::new("pip@1.2.3".to_owned()),
                 expected_manager: "".to_owned(),
@@ -852,6 +879,20 @@ mod tests {
                 expected_version: "https://some-npm-fork".to_owned(),
                 expected_error: false,
             },
+            TestCase {
+                name: "errors with leading whitespace before URL manager".to_owned(),
+                package_manager: Spanned::new(" npm@https://some-npm-fork".to_owned()),
+                expected_manager: "".to_owned(),
+                expected_version: "".to_owned(),
+                expected_error: true,
+            },
+            TestCase {
+                name: "errors with trailing whitespace after URL".to_owned(),
+                package_manager: Spanned::new("npm@https://some-npm-fork ".to_owned()),
+                expected_manager: "".to_owned(),
+                expected_version: "".to_owned(),
+                expected_error: true,
+            },
         ];
 
         for case in tests {
@@ -878,6 +919,10 @@ mod tests {
         assert_eq!(package_manager, PackageManager::Npm);
 
         package_json.package_manager = Some(Spanned::new("yarn@2.0.0".to_string()));
+        let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
+        assert_eq!(package_manager, PackageManager::Berry);
+
+        package_json.package_manager = Some(Spanned::new(COREPACK_HASHED_YARN.to_string()));
         let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
         assert_eq!(package_manager, PackageManager::Berry);
 
