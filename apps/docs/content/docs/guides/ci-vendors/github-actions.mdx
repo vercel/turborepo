@@ -63,10 +63,6 @@ Create a file called `.github/workflows/ci.yml` in your repository with the foll
         name: Build and Test
         timeout-minutes: 15
         runs-on: ubuntu-latest
-        # To use Remote Caching, uncomment the next lines and follow the steps below.
-        # env:
-        #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-        #  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
         steps:
           - name: Check out code
@@ -112,10 +108,6 @@ Create a file called `.github/workflows/ci.yml` in your repository with the foll
         name: Build and Test
         timeout-minutes: 15
         runs-on: ubuntu-latest
-        # To use Remote Caching, uncomment the next lines and follow the steps below.
-        # env:
-        #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-        #  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
         steps:
           - name: Check out code
@@ -156,11 +148,6 @@ Create a file called `.github/workflows/ci.yml` in your repository with the foll
         name: Build and Test
         timeout-minutes: 15
         runs-on: ubuntu-latest
-        # To use Remote Caching, uncomment the next lines and follow the steps below.
-        # env:
-        #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-        #  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-        #  TURBO_REMOTE_ONLY: true
 
         steps:
           - name: Check out code
@@ -201,10 +188,6 @@ Create a file called `.github/workflows/ci.yml` in your repository with the foll
         name: Build and Test
         timeout-minutes: 15
         runs-on: ubuntu-latest
-        # To use Remote Caching, uncomment the next lines and follow the steps below.
-        # env:
-        #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-        #  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
         steps:
           - name: Check out code
@@ -235,13 +218,71 @@ Create a file called `.github/workflows/ci.yml` in your repository with the foll
 
 ## Remote Caching with Vercel Remote Cache
 
-To use Remote Caching with GitHub Actions, add the following environment variables to your GitHub Actions workflow
-to make them available to your `turbo` commands.
+There are two options for authenticating to [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching). We recommend setting up an OpenID Connect (OIDC) policy on your Vercel team to accept GitHub OIDC tokens. This avoids needing to store long-lived secrets in your GitHub Workflow. Alternatively, you can also authenticate using a personal access token (PAT).
+
+### Using OpenID Connect (recommended)
+
+<Steps>
+<Step>
+On the Vercel Dashboard, go to your team's **Settings → Build and Deployment →** [**OIDC Policies for CLI Access**](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings%2Fbuild-and-deployment&title=OIDC+Policies+for+CLI+Access), and click **Add** next to **Turborepo CLI Policies**.
+
+![OIDC Policies for CLI Access](/images/docs/oidc-policies-for-cli-access.png)
+
+</Step>
+<Step>
+Fill out the form, providing a policy name, GitHub account, and repository. You can optionally restrict to a specific workflow or branch, and customize the audience.
+
+![Add Turborepo OIDC Policy](/images/docs/add-turbo-oidc-policy.png)
+
+</Step>
+<Step>
+Go to your GitHub repository settings and click under **Secrets and variables** and then **Actions** and go to the **Variables** tab. Create a new repository variable called `TURBO_TEAM` and set it to your team slug, which can be found on your team's [General](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+ID) settings page.
+
+<Callout type="info">
+  Using a repository variable rather than a secret will keep GitHub Actions from
+  censoring your team name in log output.
+</Callout>
+
+![GitHub Repository Variables](/images/docs/vercel-team-repo-var.png)
+
+</Step>
+<Step>
+Add the [`vercel/setup-turborepo-remote-cache-action`](https://github.com/vercel/setup-turborepo-remote-cache-action) to your workflow before any step that runs `turbo`. The action needs the `id-token: write` permission so it can request a GitHub OIDC token, then exchanges it for a short-lived Turborepo access token and sets `TURBO_TOKEN` and `TURBO_TEAM` for subsequent steps.
+
+```yaml title=".github/workflows/ci.yml"
+# ...
+
+jobs:
+  build:
+    name: Build and Test
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    permissions: # [!code highlight]
+      contents: read # [!code highlight]
+      id-token: write # [!code highlight]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Turborepo Remote Cache # [!code highlight]
+        uses: vercel/setup-turborepo-remote-cache-action@v1 # [!code highlight]
+        with: # [!code highlight]
+          team-id: ${{ vars.TURBO_TEAM }} # [!code highlight]
+    # ...
+```
+
+</Step>
+</Steps>
+
+### Using a Personal Access Token
+
+To authenticate with a personal access token, add the following environment variables to your GitHub Actions workflow to make them available to your `turbo` commands.
 
 - `TURBO_TOKEN` - The Bearer token to access the Remote Cache
 - `TURBO_TEAM` - The slug of the Vercel team to share the artifacts with
-
-To use Remote Caching, retrieve the team and token for the Remote Cache for your provider. In this example, we'll use [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching).
 
 <Steps>
 <Step>
