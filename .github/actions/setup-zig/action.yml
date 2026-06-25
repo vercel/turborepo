@@ -64,4 +64,10 @@ runs:
             ;;
         esac
 
-        echo "$zig_dir" >> "$GITHUB_PATH"
+        # Prefer this toolchain over any preinstalled `zig` on the runner.
+        echo "${zig_dir}" >> "$GITHUB_PATH"
+        echo "ZIG_EXECUTABLE=${zig_dir}/zig" >> "$GITHUB_ENV"
+        echo "ZIG_GLOBAL_CACHE_DIR=${zig_dir}/global-cache" >> "$GITHUB_ENV"
+        mkdir -p "${zig_dir}/global-cache"
+
+        "${zig_dir}/zig" version

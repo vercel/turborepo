@@ -115,7 +115,7 @@ fn build_vendored(link_mode: LinkMode) {
 
     let optimize = zig_optimize_mode();
 
-    let mut build = Command::new("zig");
+    let mut build = Command::new(zig_executable());
     build
         .arg("build")
         .arg("-Demit-lib-vt")
@@ -126,6 +126,8 @@ fn build_vendored(link_mode: LinkMode) {
         .arg(&install_prefix)
         .arg("--cache-dir")
         .arg(&zig_cache_dir)
+        .arg("--global-cache-dir")
+        .arg(&zig_global_cache_dir)
         .current_dir(&ghostty_dir);
 
     // Package managers can provide Ghostty's Zig package cache ahead of time
@@ -142,11 +144,7 @@ fn build_vendored(link_mode: LinkMode) {
             "GHOSTTY_ZIG_SYSTEM_DIR does not exist: {}",
             zig_system_dir.display()
         );
-        build
-            .arg("--system")
-            .arg(&zig_system_dir)
-            .arg("--global-cache-dir")
-            .arg(&zig_global_cache_dir);
+        build.arg("--system").arg(&zig_system_dir);
     }
 
     // Only pass -Dtarget when cross-compiling. For native builds, let zig
@@ -302,6 +300,18 @@ fn run(mut command: Command, context: &str) {
         .status()
         .unwrap_or_else(|error| panic!("failed to execute {context}: {error}"));
     assert!(status.success(), "{context} failed with status {status}");
+}
+
+fn zig_executable() -> String {
+    if let Ok(path) = env::var("ZIG_EXECUTABLE") {
+        return path;
+    }
+
+    if let Ok(path) = env::var("ZIG") {
+        return path;
+    }
+
+    "zig".to_owned()
 }
 
 /// Returns directories to search for the built library artifact.
