@@ -71,6 +71,11 @@
       ],
       "dependsOn": ["^build"]
     },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "env": ["AI_GATEWAY_API_KEY"]
+    },
     "package-checks": {
       "dependsOn": ["package:types"]
     },
