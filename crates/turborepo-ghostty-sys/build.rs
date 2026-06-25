@@ -74,7 +74,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=HOST");
     println!("cargo:rerun-if-env-changed=DEBUG");
     println!("cargo:rerun-if-env-changed=OPT_LEVEL");
-    println!("cargo:rerun-if-changed=crates/turborepo-ghostty-sys/build.rs");
+    println!("cargo:rerun-if-changed=build.rs");
 
     // An explicit source override should stay authoritative even when the
     // pkg-config feature is enabled, so local Ghostty checkouts remain easy to
