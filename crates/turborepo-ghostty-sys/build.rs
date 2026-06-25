@@ -2,8 +2,12 @@
 
 use std::{
     env,
+    fs::OpenOptions,
+    io::ErrorKind,
     path::{Path, PathBuf},
     process::Command,
+    thread,
+    time::Duration,
 };
 
 /// Pinned ghostty commit. Update this to pull a newer version.
@@ -74,7 +78,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=HOST");
     println!("cargo:rerun-if-env-changed=DEBUG");
     println!("cargo:rerun-if-env-changed=OPT_LEVEL");
-    println!("cargo:rerun-if-changed=crates/turborepo-ghostty-sys/build.rs");
+    println!("cargo:rerun-if-changed=build.rs");
 
     // An explicit source override should stay authoritative even when the
     // pkg-config feature is enabled, so local Ghostty checkouts remain easy to
@@ -255,6 +259,7 @@ fn zig_optimize_mode() -> &'static str {
 /// Clone ghostty at the pinned commit into OUT_DIR/ghostty-src.
 /// Reuses an existing clone if the commit matches.
 fn fetch_ghostty(out_dir: &Path) -> PathBuf {
+    let _lock = acquire_fetch_lock(&out_dir.join("ghostty-src.lock"));
     let src_dir = out_dir.join("ghostty-src");
     let stamp = src_dir.join(".ghostty-commit");
 
@@ -283,6 +288,33 @@ fn fetch_ghostty(out_dir: &Path) -> PathBuf {
         .arg(&src_dir);
     run(clone, "git clone ghostty");
 
+    let mut longpaths = Command::new("git");
+    longpaths
+        .arg("config")
+        .arg("core.longpaths")
+        .arg("true")
+        .current_dir(&src_dir);
+    run(longpaths, "git enable long paths for ghostty checkout");
+
+    let mut sparse_checkout = Command::new("git");
+    sparse_checkout
+        .arg("sparse-checkout")
+        .arg("set")
+        .arg("--no-cone")
+        .arg("/*")
+        .arg("!/test/fuzz-libghostty/")
+        .current_dir(&src_dir);
+    run(sparse_checkout, "git configure ghostty sparse checkout");
+
+    let mut fetch_commit = Command::new("git");
+    fetch_commit
+        .arg("fetch")
+        .arg("--filter=blob:none")
+        .arg("origin")
+        .arg(GHOSTTY_COMMIT)
+        .current_dir(&src_dir);
+    run(fetch_commit, "git fetch ghostty commit");
+
     let mut checkout = Command::new("git");
     checkout
         .arg("checkout")
@@ -293,6 +325,32 @@ fn fetch_ghostty(out_dir: &Path) -> PathBuf {
     std::fs::write(&stamp, GHOSTTY_COMMIT).unwrap_or_else(|e| panic!("failed to write stamp: {e}"));
 
     src_dir
+}
+
+struct FetchLock {
+    path: PathBuf,
+}
+
+impl Drop for FetchLock {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+fn acquire_fetch_lock(path: &Path) -> FetchLock {
+    loop {
+        match OpenOptions::new().write(true).create_new(true).open(path) {
+            Ok(_) => {
+                return FetchLock {
+                    path: path.to_owned(),
+                };
+            }
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                thread::sleep(Duration::from_millis(100));
+            }
+            Err(error) => panic!("failed to create {}: {error}", path.display()),
+        }
+    }
 }
 
 fn run(mut command: Command, context: &str) {
