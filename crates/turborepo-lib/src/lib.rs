@@ -1,8 +1,5 @@
 #![feature(box_patterns)]
-#![feature(error_generic_member_access)]
-#![feature(once_cell_try)]
 #![feature(try_blocks)]
-#![feature(impl_trait_in_assoc_type)]
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]

@@ -1,14 +1,17 @@
 //! Turborepo's terminal UI library. Handles elements like spinners, colors,
 //! logging sinks, and the TUI. Includes a `ColorSelector` that lets multiple
 //! concurrent resources get an assigned color.
-#![feature(deadline_api)]
 
 mod color_selector;
+#[cfg(feature = "tui")]
 mod log_sinks;
 mod logs;
+#[cfg(feature = "tui")]
 pub mod sender;
 mod terminal_sink;
+#[cfg(feature = "tui")]
 pub mod tui;
+#[cfg(feature = "tui")]
 mod tui_sink;
 
 use std::{borrow::Cow, env, f64::consts::PI, io::IsTerminal, sync::LazyLock, time::Duration};
@@ -19,9 +22,12 @@ use thiserror::Error;
 
 pub use crate::{
     color_selector::ColorSelector,
-    log_sinks::LogSinks,
     logs::{LogWriter, replay_logs},
     terminal_sink::TerminalSink,
+};
+#[cfg(feature = "tui")]
+pub use crate::{
+    log_sinks::LogSinks,
     tui::{TaskTable, TerminalPane, panic_handler::restore_terminal_on_panic},
     tui_sink::TuiSink,
 };
@@ -47,6 +53,7 @@ pub use crate::{
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[cfg(feature = "tui")]
     #[error(transparent)]
     Tui(#[from] tui::Error),
     #[error("Cannot read logs: {0}")]

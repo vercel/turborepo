@@ -394,6 +394,9 @@ jobs:
           # we want more specific settings
           cache: false
 
+      - name: Setup Zig
+        uses: ./.github/actions/setup-zig
+
       - name: Build Setup
         if: ${{ matrix.settings.setup }}
         run: ${{ matrix.settings.setup }}
