@@ -53,7 +53,7 @@ In general, there are two major areas in the repository:
 ## Building Turborepo
 
 1. Run `pnpm install` at the root of the repository
-3. Run `cargo build`
+2. Run `cargo build`
 
 ### TLS Implementation
 
