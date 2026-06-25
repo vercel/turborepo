@@ -296,6 +296,16 @@ fn fetch_ghostty(out_dir: &Path) -> PathBuf {
         .current_dir(&src_dir);
     run(longpaths, "git enable long paths for ghostty checkout");
 
+    let mut sparse_checkout = Command::new("git");
+    sparse_checkout
+        .arg("sparse-checkout")
+        .arg("set")
+        .arg("--no-cone")
+        .arg("/*")
+        .arg("!/test/fuzz-libghostty/")
+        .current_dir(&src_dir);
+    run(sparse_checkout, "git configure ghostty sparse checkout");
+
     let mut checkout = Command::new("git");
     checkout
         .arg("checkout")
