@@ -1,4 +1,4 @@
-use libghostty_vt::style::{self, Underline};
+use crate::style::{self, Underline};
 use ratatui::style::{Color, Modifier, Style};
 
 pub fn rgb_color(c: style::RgbColor) -> Color {

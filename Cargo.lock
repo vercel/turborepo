@@ -3423,23 +3423,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bcc35a38544a891a5f7c865aca548a982ccb3b8650a5b06d0fd33a10283c56fc"
 
 [[package]]
-name = "libghostty-vt"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04c77176dd05b2b5718046d807e786473f463ea6d478d56f8c0105e2fe6f71f5"
-dependencies = [
- "bitflags 2.13.0",
- "int-enum",
- "libghostty-vt-sys",
-]
-
-[[package]]
-name = "libghostty-vt-sys"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "404671567c0ac43389a69ae424eefc89390a25d3a5386a54249cdaf13e01b411"
-
-[[package]]
 name = "libloading"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7684,10 +7667,16 @@ dependencies = [
 name = "turborepo-ghostty"
 version = "0.1.0"
 dependencies = [
- "libghostty-vt",
+ "bitflags 2.13.0",
+ "int-enum",
  "ratatui",
  "thiserror 2.0.18",
+ "turborepo-ghostty-sys",
 ]
+
+[[package]]
+name = "turborepo-ghostty-sys"
+version = "0.1.0"
 
 [[package]]
 name = "turborepo-gitignore"

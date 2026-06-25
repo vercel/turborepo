@@ -1,7 +1,7 @@
-use libghostty_vt::render::{CellIterator, CursorVisualStyle, RowIterator};
-use libghostty_vt::style::RgbColor;
-use libghostty_vt::terminal::Terminal;
-use libghostty_vt::{RenderState, render::CursorViewport};
+use crate::render::{CellIterator, CursorVisualStyle, RowIterator};
+use crate::style::RgbColor;
+use crate::terminal::Terminal;
+use crate::{RenderState, render::CursorViewport};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Color;

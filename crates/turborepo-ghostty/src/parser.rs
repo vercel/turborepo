@@ -1,11 +1,10 @@
-use libghostty_vt::{
-    RenderState, Terminal, TerminalOptions,
+use crate::{
+    error::Error as GhosttyInnerError,
     fmt::{Format, Formatter, FormatterOptions},
     selection::{FormatOptions, Selection},
-    terminal::{Point, PointCoordinate, ScrollViewport},
+    terminal::{Point, PointCoordinate, ScrollViewport, Terminal},
+    Error, RenderState, Result,
 };
-
-use crate::{Error, Result};
 
 const DEFAULT_CELL_WIDTH_PX: u32 = 8;
 const DEFAULT_CELL_HEIGHT_PX: u32 = 16;
@@ -25,7 +24,7 @@ impl Parser {
     }
 
     pub fn try_new(rows: u16, cols: u16, scrollback_len: usize) -> Result<Self> {
-        let terminal = Terminal::new(TerminalOptions {
+        let terminal = Terminal::new(crate::terminal::Options {
             cols,
             rows,
             max_scrollback: scrollback_len,
@@ -64,10 +63,10 @@ impl Parser {
     pub fn scroll_by(&mut self, up: bool, magnitude: usize) -> Result<()> {
         let delta = if up {
             -(isize::try_from(magnitude).map_err(|_| {
-                Error::Ghostty(libghostty_vt::Error::InvalidValue)
+                Error::Ghostty(GhosttyInnerError::InvalidValue)
             })?)
         } else {
-            isize::try_from(magnitude).map_err(|_| Error::Ghostty(libghostty_vt::Error::InvalidValue))?
+            isize::try_from(magnitude).map_err(|_| Error::Ghostty(GhosttyInnerError::InvalidValue))?
         };
         self.terminal
             .scroll_viewport(ScrollViewport::Delta(delta));

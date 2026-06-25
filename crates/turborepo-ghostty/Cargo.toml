@@ -8,7 +8,12 @@ description = "Ghostty virtual terminal integration for the Turborepo TUI"
 [lints]
 workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
-libghostty-vt = "0.2.0"
+bitflags = "2.11.0"
+int-enum = "1.2.0"
 ratatui = { workspace = true }
 thiserror = { workspace = true }
+turborepo-ghostty-sys = { path = "../turborepo-ghostty-sys" }
