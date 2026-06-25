@@ -22,7 +22,7 @@ turborepo-cache = { path = "../turborepo-cache" }
 turborepo-run-cache = { path = "../turborepo-run-cache" }
 
 # UI
-turborepo-ui = { path = "../turborepo-ui" }
+turborepo-ui = { path = "../turborepo-ui", features = ["tui"] }
 
 # Command execution
 turborepo-env = { workspace = true }

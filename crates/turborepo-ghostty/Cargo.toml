@@ -1,0 +1,19 @@
+[package]
+name = "turborepo-ghostty"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "Ghostty virtual terminal integration for the Turborepo TUI"
+
+[lints]
+workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+bitflags = "2.11.0"
+int-enum = "1.2.0"
+ratatui = { workspace = true }
+thiserror = { workspace = true }
+turborepo-ghostty-sys = { path = "../turborepo-ghostty-sys" }
