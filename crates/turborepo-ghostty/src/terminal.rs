@@ -208,7 +208,7 @@ use crate::{
 ///         .set_default_cursor_color(Some(
 ///             RgbColor { r: 0xF5, g: 0xE0, b: 0xDC }
 ///         ))?;
-///     
+///
 ///     // Set a custom palette — start from the built-in default and override
 ///     // the first 8 entries with a custom dark theme.
 ///     let mut palette = terminal.default_color_palette()?;
@@ -220,7 +220,7 @@ use crate::{
 ///     palette[PaletteIndex::MAGENTA.0 as usize] = RgbColor { r: 0xF5, g: 0xC2, b: 0xE7 };
 ///     palette[PaletteIndex::CYAN.0 as usize]    = RgbColor { r: 0x94, g: 0xE2, b: 0xD5 };
 ///     palette[PaletteIndex::WHITE.0 as usize]   = RgbColor { r: 0xBA, g: 0xC2, b: 0xDE };
-///     
+///
 ///     terminal.set_default_color_palette(Some(palette))?;
 ///     Ok(())
 /// }
@@ -311,7 +311,7 @@ impl<'alloc: 'cb, 'cb> Terminal<'alloc, 'cb> {
     /// are logged internally but do not cause this function to fail because
     /// this input is assumed to be untrusted and from an external source; so
     /// the primary goal is to keep the terminal state consistent and not allow
-    /// malformed input to corrupt or crash.    
+    /// malformed input to corrupt or crash.
     pub fn vt_write(&mut self, data: &[u8]) {
         unsafe { ffi::ghostty_terminal_vt_write(self.inner.as_raw(), data.as_ptr(), data.len()) }
     }

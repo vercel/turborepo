@@ -442,7 +442,7 @@ pub enum CellContentTag {
 pub enum CellWide {
     /// Not a wide character, cell width 1.
     Narrow = ffi::CellWide::NARROW,
-    /// Wide character, cell width 2.  
+    /// Wide character, cell width 2.
     Wide = ffi::CellWide::WIDE,
     /// Spacer after wide character. Do not render.
     SpacerTail = ffi::CellWide::SPACER_TAIL,
