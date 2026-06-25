@@ -34,6 +34,7 @@ runs:
         case "${{ runner.os }}" in
           Linux)
             archive="zig-${arch}-linux-${version}"
+            executable="${zig_dir}/zig"
             curl --fail --show-error --silent --location \
               --output zig.tar.xz \
               "https://ziglang.org/download/${version}/${archive}.tar.xz"
@@ -42,6 +43,7 @@ runs:
             ;;
           macOS)
             archive="zig-${arch}-macos-${version}"
+            executable="${zig_dir}/zig"
             curl --fail --show-error --silent --location \
               --output zig.tar.xz \
               "https://ziglang.org/download/${version}/${archive}.tar.xz"
@@ -50,6 +52,7 @@ runs:
             ;;
           Windows)
             archive="zig-${arch}-windows-${version}"
+            executable="${zig_dir}/zig.exe"
             curl --fail --show-error --silent --location \
               --output zig.zip \
               "https://ziglang.org/download/${version}/${archive}.zip"
@@ -66,8 +69,8 @@ runs:
 
         # Prefer this toolchain over any preinstalled `zig` on the runner.
         echo "${zig_dir}" >> "$GITHUB_PATH"
-        echo "ZIG_EXECUTABLE=${zig_dir}/zig" >> "$GITHUB_ENV"
+        echo "ZIG_EXECUTABLE=${executable}" >> "$GITHUB_ENV"
         echo "ZIG_GLOBAL_CACHE_DIR=${zig_dir}/global-cache" >> "$GITHUB_ENV"
         mkdir -p "${zig_dir}/global-cache"
 
-        "${zig_dir}/zig" version
+        "${executable}" version

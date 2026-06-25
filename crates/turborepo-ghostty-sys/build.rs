@@ -283,6 +283,14 @@ fn fetch_ghostty(out_dir: &Path) -> PathBuf {
         .arg(&src_dir);
     run(clone, "git clone ghostty");
 
+    let mut longpaths = Command::new("git");
+    longpaths
+        .arg("config")
+        .arg("core.longpaths")
+        .arg("true")
+        .current_dir(&src_dir);
+    run(longpaths, "git enable long paths for ghostty checkout");
+
     let mut checkout = Command::new("git");
     checkout
         .arg("checkout")
