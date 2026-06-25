@@ -306,6 +306,15 @@ fn fetch_ghostty(out_dir: &Path) -> PathBuf {
         .current_dir(&src_dir);
     run(sparse_checkout, "git configure ghostty sparse checkout");
 
+    let mut fetch_commit = Command::new("git");
+    fetch_commit
+        .arg("fetch")
+        .arg("--filter=blob:none")
+        .arg("origin")
+        .arg(GHOSTTY_COMMIT)
+        .current_dir(&src_dir);
+    run(fetch_commit, "git fetch ghostty commit");
+
     let mut checkout = Command::new("git");
     checkout
         .arg("checkout")
