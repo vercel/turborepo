@@ -30,6 +30,13 @@ pub struct Allocator<'ctx> {
     _phan: PhantomData<&'ctx ()>,
 }
 
+// Turborepo's TUI drives Ghostty from a single task, but the containing `App`
+// is moved into `tokio::task::spawn` and must be `Send`. These types are safe
+// to move across threads as long as they are only accessed from one thread at
+// a time, which the TUI guarantees.
+unsafe impl Send for Allocator<'static> {}
+unsafe impl Sync for Allocator<'static> {}
+
 impl Allocator<'_> {
     pub(crate) fn to_raw(&self) -> *const ffi::Allocator {
         std::ptr::from_ref(&self.inner)
@@ -62,6 +69,9 @@ impl<T> Object<'_, T> {
         self.ptr.as_ptr()
     }
 }
+
+unsafe impl<T> Send for Object<'static, T> {}
+unsafe impl<T> Sync for Object<'static, T> {}
 
 /// Borrowed version of `Object`.
 #[derive(Debug)]
@@ -354,13 +364,14 @@ unsafe extern "C" fn _remap<A: alloc::Allocator>(
 ///
 /// # Safety
 ///
-/// This function only behaves correctly if called by one of the vtable functions.
-/// In particular, it expects the vtable function to be used correctly, which means
-/// libghostty must have received a valid allocator object from elsewhere in this
-/// crate. If any of these preconditions are unmet, this will definitely cause
-/// Undefined Behavior.
+/// This function only behaves correctly if called by one of the vtable
+/// functions. In particular, it expects the vtable function to be used
+/// correctly, which means libghostty must have received a valid allocator
+/// object from elsewhere in this crate. If any of these preconditions are
+/// unmet, this will definitely cause Undefined Behavior.
 ///
-/// The returned allocator must **never** be smuggled outside the lifetime of the caller.
+/// The returned allocator must **never** be smuggled outside the lifetime of
+/// the caller.
 #[inline(always)]
 #[cfg(feature = "allocator_api")]
 unsafe fn get_allocator<'a, A: alloc::Allocator>(ptr: *mut c_void) -> Option<&'a A> {

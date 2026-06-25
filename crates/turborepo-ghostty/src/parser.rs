@@ -1,9 +1,9 @@
 use crate::{
+    Error, RenderState, Result,
     error::Error as GhosttyInnerError,
     fmt::{Format, Formatter, FormatterOptions},
     selection::{FormatOptions, Selection},
     terminal::{Point, PointCoordinate, ScrollViewport, Terminal},
-    Error, RenderState, Result,
 };
 
 const DEFAULT_CELL_WIDTH_PX: u32 = 8;
@@ -14,15 +14,15 @@ pub struct Parser {
     pub terminal: Terminal<'static, 'static>,
     pub render_state: RenderState<'static>,
     selection_start: Option<(u16, u16)>,
-    /// Last viewport selection endpoints, used to refresh grid refs before copy.
+    /// Last viewport selection endpoints, used to refresh grid refs before
+    /// copy.
     selection_range: Option<(u16, u16, u16, u16)>,
     max_scrollback: usize,
 }
 
 impl Parser {
     pub fn new(rows: u16, cols: u16, scrollback_len: usize) -> Self {
-        Self::try_new(rows, cols, scrollback_len)
-            .expect("failed to initialize ghostty terminal")
+        Self::try_new(rows, cols, scrollback_len).expect("failed to initialize ghostty terminal")
     }
 
     pub fn try_new(rows: u16, cols: u16, scrollback_len: usize) -> Result<Self> {
@@ -53,26 +53,21 @@ impl Parser {
     pub fn resize(&mut self, rows: u16, cols: u16) -> Result<()> {
         let current = self.size()?;
         if current != (rows, cols) {
-            self.terminal.resize(
-                cols,
-                rows,
-                DEFAULT_CELL_WIDTH_PX,
-                DEFAULT_CELL_HEIGHT_PX,
-            )?;
+            self.terminal
+                .resize(cols, rows, DEFAULT_CELL_WIDTH_PX, DEFAULT_CELL_HEIGHT_PX)?;
         }
         Ok(())
     }
 
     pub fn scroll_by(&mut self, up: bool, magnitude: usize) -> Result<()> {
         let delta = if up {
-            -(isize::try_from(magnitude).map_err(|_| {
-                Error::Ghostty(GhosttyInnerError::InvalidValue)
-            })?)
+            -(isize::try_from(magnitude)
+                .map_err(|_| Error::Ghostty(GhosttyInnerError::InvalidValue))?)
         } else {
-            isize::try_from(magnitude).map_err(|_| Error::Ghostty(GhosttyInnerError::InvalidValue))?
+            isize::try_from(magnitude)
+                .map_err(|_| Error::Ghostty(GhosttyInnerError::InvalidValue))?
         };
-        self.terminal
-            .scroll_viewport(ScrollViewport::Delta(delta));
+        self.terminal.scroll_viewport(ScrollViewport::Delta(delta));
         Ok(())
     }
 

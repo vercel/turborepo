@@ -1,8 +1,10 @@
 #![allow(clippy::expect_used)]
 
-use std::env;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::{
+    env,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 /// Pinned ghostty commit. Update this to pull a newer version.
 const GHOSTTY_REPO: &str = "https://github.com/ghostty-org/ghostty.git";
@@ -202,7 +204,8 @@ fn warn_unused_xcframework(lib_dir: &Path) {
     let xcframework = lib_dir.join("ghostty-vt.xcframework");
     if xcframework.exists() {
         println!(
-            "cargo:warning=unused libghostty-vt XCFramework emitted at {}; Cargo links the dylib or archive directly",
+            "cargo:warning=unused libghostty-vt XCFramework emitted at {}; Cargo links the dylib \
+             or archive directly",
             xcframework.display()
         );
     }
@@ -220,13 +223,13 @@ fn emit_include_metadata(include_paths: &[PathBuf]) {
 
 /// Decide which Zig `OptimizeMode` to pass to `zig build`.
 ///
-/// The `TURBOREPO_GHOSTTY_SYS_OPTIMIZE` environment variable overrides this unconditionally; accepted
-/// values are the four Zig `OptimizeMode` names (`Debug`, `ReleaseSafe`, `ReleaseFast`,
-/// `ReleaseSmall`).
+/// The `TURBOREPO_GHOSTTY_SYS_OPTIMIZE` environment variable overrides this
+/// unconditionally; accepted values are the four Zig `OptimizeMode` names
+/// (`Debug`, `ReleaseSafe`, `ReleaseFast`, `ReleaseSmall`).
 ///
-/// Defaults to `ReleaseFast` for optimized builds. If `DEBUG` is `true` (as cargo sets for the
-/// `dev` profile), `Debug` mode is used. Otherwise, if `OPT_LEVEL` is `s` or `z`, `ReleaseSmall`
-/// is used.
+/// Defaults to `ReleaseFast` for optimized builds. If `DEBUG` is `true` (as
+/// cargo sets for the `dev` profile), `Debug` mode is used. Otherwise, if
+/// `OPT_LEVEL` is `s` or `z`, `ReleaseSmall` is used.
 fn zig_optimize_mode() -> &'static str {
     if let Ok(override_mode) = env::var("TURBOREPO_GHOSTTY_SYS_OPTIMIZE") {
         return match override_mode.as_str() {
@@ -235,7 +238,8 @@ fn zig_optimize_mode() -> &'static str {
             "ReleaseFast" => "ReleaseFast",
             "ReleaseSmall" => "ReleaseSmall",
             other => panic!(
-                "TURBOREPO_GHOSTTY_SYS_OPTIMIZE must be one of Debug, ReleaseSafe, ReleaseFast, ReleaseSmall (got '{other}')"
+                "TURBOREPO_GHOSTTY_SYS_OPTIMIZE must be one of Debug, ReleaseSafe, ReleaseFast, \
+                 ReleaseSmall (got '{other}')"
             ),
         };
     }

@@ -183,13 +183,15 @@ impl TrackedGridRef {
 
     /// Snapshot a tracked grid reference into a regular [`GridRef`].
     ///
-    /// The returned [`GridRef`] is an untracked snapshot and has the same lifetime
-    /// rules as [`Terminal::grid_ref`]: it is only valid until the next terminal update.
-    /// Snapshot immediately before calling [`GridRef::cell`], [`GridRef::row`],
-    /// [`GridRef::graphemes`], [`GridRef::hyperlink_uri`], or [`GridRef::style`],
+    /// The returned [`GridRef`] is an untracked snapshot and has the same
+    /// lifetime rules as [`Terminal::grid_ref`]: it is only valid until the
+    /// next terminal update. Snapshot immediately before calling
+    /// [`GridRef::cell`], [`GridRef::row`], [`GridRef::graphemes`],
+    /// [`GridRef::hyperlink_uri`], or [`GridRef::style`],
     ///
     /// If the tracked reference no longer has a meaningful value, this returns
-    /// `Ok(None)`. This includes references whose owning terminal has been dropped.
+    /// `Ok(None)`. This includes references whose owning terminal has been
+    /// dropped.
     pub fn snapshot<'t>(&self, terminal: &'t Terminal<'_, '_>) -> Result<Option<GridRef<'t>>> {
         // The C ghostty_tracked_grid_ref_snapshot does not take a terminal, so
         // we validate the pairing here to keep the returned GridRef's lifetime
@@ -213,7 +215,8 @@ impl TrackedGridRef {
         })
     }
 
-    /// Convert a tracked grid reference to a point in the requested coordinate space.
+    /// Convert a tracked grid reference to a point in the requested coordinate
+    /// space.
     ///
     /// This is the tracked equivalent of [`Terminal::point_from_grid_ref`].
     /// Unlike snapshotting, this does not expose an intermediate untracked
@@ -225,9 +228,9 @@ impl TrackedGridRef {
     /// set, this may be different from the terminal's currently active screen.
     ///
     /// If the tracked reference no longer has a meaningful value, this returns
-    /// `Ok(None)`. `Ok(None` is also returned when the reference cannot be represented
-    /// in the requested coordinate space, including after the terminal that
-    /// created the tracked reference has been dropped.
+    /// `Ok(None)`. `Ok(None` is also returned when the reference cannot be
+    /// represented in the requested coordinate space, including after the
+    /// terminal that created the tracked reference has been dropped.
     pub fn point(&self, space: PointSpace) -> Result<Option<PointCoordinate>> {
         let mut point = MaybeUninit::<ffi::PointCoordinate>::zeroed();
         let result = unsafe {
@@ -244,14 +247,15 @@ impl TrackedGridRef {
     /// Move an existing tracked grid reference to a new terminal point.
     ///
     /// On success, the tracked reference begins tracking the new point and any
-    /// prior "no value" state is cleared. On `Err(Error::OutOfMemory)`, the original
-    /// tracked reference is left unchanged.
+    /// prior "no value" state is cleared. On `Err(Error::OutOfMemory)`, the
+    /// original tracked reference is left unchanged.
     ///
-    /// The terminal must be the same terminal that created the tracked reference.
-    /// The point is resolved against the terminal screen/page-list that is active
-    /// at the time this function is called. If the terminal has switched between
-    /// primary and alternate screens, this may move the tracked reference from
-    /// one screen/page-list to the other.
+    /// The terminal must be the same terminal that created the tracked
+    /// reference. The point is resolved against the terminal
+    /// screen/page-list that is active at the time this function is called.
+    /// If the terminal has switched between primary and alternate screens,
+    /// this may move the tracked reference from one screen/page-list to the
+    /// other.
     pub fn set(&mut self, terminal: &mut Terminal<'_, '_>, point: Point) -> Result<&mut Self> {
         // The C layer validates the terminal/tracked-ref pairing and returns
         // GHOSTTY_INVALID_VALUE on mismatch, so we don't duplicate the check
@@ -307,7 +311,8 @@ impl Row {
     pub fn is_styled(self) -> Result<bool> {
         self.get(ffi::RowData::STYLED)
     }
-    /// Whether any cells in this row have hyperlinks (may have false positives).
+    /// Whether any cells in this row have hyperlinks (may have false
+    /// positives).
     pub fn has_hyperlink(self) -> Result<bool> {
         self.get(ffi::RowData::HYPERLINK)
     }
@@ -385,7 +390,8 @@ impl Cell {
 
     /// The palette index for the cell's background color.
     ///
-    /// Only valid when [`Cell::content_tag`] is [`CellContentTag::BgColorPalette`].
+    /// Only valid when [`Cell::content_tag`] is
+    /// [`CellContentTag::BgColorPalette`].
     pub fn bg_color_palette(self) -> Result<PaletteIndex> {
         self.get(ffi::CellData::COLOR_PALETTE).map(PaletteIndex)
     }
@@ -399,7 +405,8 @@ impl Cell {
 
 /// Row semantic prompt state.
 ///
-/// Indicates whether any cells in a row are part of a shell prompt, as reported by OSC 133 sequences.
+/// Indicates whether any cells in a row are part of a shell prompt, as reported
+/// by OSC 133 sequences.
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, int_enum::IntEnum)]
 pub enum RowSemanticPrompt {

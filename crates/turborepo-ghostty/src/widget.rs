@@ -1,18 +1,22 @@
-use crate::render::{CellIterator, CursorVisualStyle, CursorViewport, RenderState, RowIterator};
-use crate::style::RgbColor;
-use crate::terminal::Terminal;
-use ratatui::buffer::Buffer;
-use ratatui::layout::{Position, Rect};
-use ratatui::style::{Color, Modifier};
-use ratatui::widgets::Widget;
+use ratatui::{
+    buffer::Buffer,
+    layout::{Position, Rect},
+    style::{Color, Modifier},
+    widgets::Widget,
+};
 
-use crate::convert;
+use crate::{
+    convert,
+    render::{CellIterator, CursorViewport, CursorVisualStyle, RenderState, RowIterator},
+    style::RgbColor,
+    terminal::Terminal,
+};
 
 /// Cursor information extracted during rendering.
 #[derive(Debug, Clone, Default)]
 pub struct CursorState {
-    /// Position relative to the widget's render area where the cursor should be drawn.
-    /// `None` when the cursor is hidden or outside the visible area.
+    /// Position relative to the widget's render area where the cursor should be
+    /// drawn. `None` when the cursor is hidden or outside the visible area.
     pub position: Option<Position>,
     pub style: CursorStyle,
     pub blinking: bool,
@@ -79,7 +83,9 @@ impl Widget for &mut TerminalWidget<'_, '_, '_> {
         self.cursor = CursorState::default();
         if self.focused
             && cursor_visible
-            && let Some(CursorViewport { x, y, at_wide_tail, .. }) = cursor_viewport
+            && let Some(CursorViewport {
+                x, y, at_wide_tail, ..
+            }) = cursor_viewport
             && !at_wide_tail
             && x < area.width
             && y < area.height
@@ -178,11 +184,7 @@ impl Widget for &mut TerminalWidget<'_, '_, '_> {
 
 #[cfg(test)]
 mod tests {
-    use ratatui::{
-        Terminal,
-        backend::TestBackend,
-        widgets::Widget,
-    };
+    use ratatui::{Terminal, backend::TestBackend, widgets::Widget};
 
     use super::*;
     use crate::Parser;
@@ -199,7 +201,8 @@ mod tests {
         parser_long.process(b"Line 1\r\nLine 2\r\nLine 3\r\nLine 4\r\nLine 5");
         terminal
             .draw(|frame| {
-                let mut widget = TerminalWidget::new(&mut parser_long.terminal, &mut parser_long.render_state);
+                let mut widget =
+                    TerminalWidget::new(&mut parser_long.terminal, &mut parser_long.render_state);
                 widget.render(frame.area(), frame.buffer_mut());
             })
             .expect("draw long");
@@ -208,10 +211,8 @@ mod tests {
         parser_short.process(b"Short");
         terminal
             .draw(|frame| {
-                let mut widget = TerminalWidget::new(
-                    &mut parser_short.terminal,
-                    &mut parser_short.render_state,
-                );
+                let mut widget =
+                    TerminalWidget::new(&mut parser_short.terminal, &mut parser_short.render_state);
                 widget.render(frame.area(), frame.buffer_mut());
             })
             .expect("draw short");

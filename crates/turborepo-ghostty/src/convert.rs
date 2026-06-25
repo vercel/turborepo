@@ -1,5 +1,6 @@
-use crate::style::{self, Underline};
 use ratatui::style::{Color, Modifier, Style};
+
+use crate::style::{self, Underline};
 
 pub fn rgb_color(c: style::RgbColor) -> Color {
     Color::Rgb(c.r, c.g, c.b)

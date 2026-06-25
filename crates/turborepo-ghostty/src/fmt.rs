@@ -27,7 +27,8 @@ pub struct FormatterOptions<'t, 's> {
     _phan: PhantomData<&'s Selection<'t>>,
 }
 impl<'t, 's> FormatterOptions<'t, 's> {
-    /// Create a new set of options for [creating a terminal formatter](Formatter::new).
+    /// Create a new set of options for [creating a terminal
+    /// formatter](Formatter::new).
     pub fn new() -> Self {
         Self {
             inner: ffi::FormatterTerminalOptions {
@@ -78,7 +79,8 @@ impl<'t, 's> FormatterOptions<'t, 's> {
         self.inner.extra.modes = value;
         self
     }
-    /// Specify whether to emit scrolling region state using DECSTBM and DECSLRM sequences.
+    /// Specify whether to emit scrolling region state using DECSTBM and DECSLRM
+    /// sequences.
     pub fn with_scrolling_region(mut self, value: bool) -> Self {
         self.inner.extra.scrolling_region = value;
         self
@@ -145,7 +147,8 @@ impl<'t, 'alloc: 'cb, 'cb: 't> Formatter<'t, 'alloc, 'cb> {
 
     /// Create a formatter for a terminal's active screen.
     ///
-    /// See the [crate-level documentation](crate#memory-management-and-lifetimes)
+    /// See the [crate-level
+    /// documentation](crate#memory-management-and-lifetimes)
     /// regarding custom memory management and lifetimes.
     pub fn new_with_alloc<'ctx: 'alloc>(
         alloc: &'alloc Allocator<'ctx>,
@@ -211,9 +214,10 @@ impl<'t, 'alloc: 'cb, 'cb: 't> Formatter<'t, 'alloc, 'cb> {
 
     /// Run the formatter and produce output into the caller-provided buffer.
     ///
-    /// Each call formats the current terminal state. If the buffer is too small,
-    /// returns `Err(Error::OutOfSpace { required })` where `required` is the
-    /// required size. The caller can then retry with a larger buffer.
+    /// Each call formats the current terminal state. If the buffer is too
+    /// small, returns `Err(Error::OutOfSpace { required })` where
+    /// `required` is the required size. The caller can then retry with a
+    /// larger buffer.
     pub fn format_buf(&mut self, buf: &mut [u8]) -> Result<usize> {
         let mut len = 0usize;
         let result = unsafe {

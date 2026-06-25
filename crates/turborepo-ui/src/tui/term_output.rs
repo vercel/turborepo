@@ -150,12 +150,8 @@ impl<W> TerminalOutput<W> {
             }
             crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
                 if let Some((start_row, start_col)) = self.selection_start {
-                    self.parser.update_selection(
-                        start_row,
-                        start_col,
-                        event.row,
-                        event.column,
-                    )?;
+                    self.parser
+                        .update_selection(start_row, start_col, event.row, event.column)?;
                 }
             }
             crossterm::event::MouseEventKind::ScrollDown => (),

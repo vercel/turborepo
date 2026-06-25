@@ -2,6 +2,8 @@
 
 use std::{convert::Into, marker::PhantomData, mem::MaybeUninit};
 
+pub use ffi::RenderStateRowSelection as RowSelection;
+
 use crate::{
     alloc::{Allocator, Object},
     error::{Error, Result, from_optional_result, from_result},
@@ -10,8 +12,6 @@ use crate::{
     style::{RgbColor, Style},
     terminal::Terminal,
 };
-
-pub use ffi::RenderStateRowSelection as RowSelection;
 
 /// Represents the state required to render a visible screen (a viewport) of
 /// a terminal instance.
@@ -266,8 +266,8 @@ pub struct CellIterator<'alloc>(Object<'alloc, ffi::RenderStateRowCellsImpl>);
 /// An active iteration over the cells on a given row
 /// within the render state.
 ///
-/// Cell iterations are created by [updating](CellIterator::update) row iterators
-/// at a given [row](RowIteration). The borrow checker statically
+/// Cell iterations are created by [updating](CellIterator::update) row
+/// iterators at a given [row](RowIteration). The borrow checker statically
 /// guarantees that all accesses of the data do not outlive the given snapshot,
 /// at the cost of added lifetime annotations.
 #[derive(Debug)]
@@ -289,7 +289,8 @@ impl<'alloc> RenderState<'alloc> {
 
     /// Create a new render state instance with a custom allocator.
     ///
-    /// See the [crate-level documentation](crate#memory-management-and-lifetimes)
+    /// See the [crate-level
+    /// documentation](crate#memory-management-and-lifetimes)
     /// regarding custom memory management and lifetimes.
     pub fn new_with_alloc<'ctx: 'alloc>(alloc: &'alloc Allocator<'ctx>) -> Result<Self> {
         // SAFETY: Borrow checking should forbid invalid allocators
@@ -366,7 +367,8 @@ impl Snapshot<'_, '_> {
         self.get(ffi::RenderStateData::ROWS)
     }
 
-    /// Get the cursor color that may have been explicitly set by the terminal state.
+    /// Get the cursor color that may have been explicitly set by the terminal
+    /// state.
     pub fn cursor_color(&self) -> Result<Option<RgbColor>> {
         let has_value = self.get(ffi::RenderStateData::COLOR_CURSOR_HAS_VALUE)?;
         if has_value {
@@ -451,7 +453,8 @@ impl<'alloc> RowIterator<'alloc> {
 
     /// Create a new cell iterator instance with a custom allocator.
     ///
-    /// See the [crate-level documentation](crate#memory-management-and-lifetimes)
+    /// See the [crate-level
+    /// documentation](crate#memory-management-and-lifetimes)
     /// regarding custom memory management and lifetimes.
     pub fn new_with_alloc<'ctx: 'alloc>(alloc: &'alloc Allocator<'ctx>) -> Result<Self> {
         // SAFETY: Borrow checking should forbid invalid allocators
@@ -572,7 +575,8 @@ impl<'alloc> CellIterator<'alloc> {
 
     /// Create a new cell iterator instance with a custom allocator.
     ///
-    /// See the [crate-level documentation](crate#memory-management-and-lifetimes)
+    /// See the [crate-level
+    /// documentation](crate#memory-management-and-lifetimes)
     /// regarding custom memory management and lifetimes.
     pub fn new_with_alloc<'ctx: 'alloc>(alloc: &'alloc Allocator<'ctx>) -> Result<Self> {
         // SAFETY: Borrow checking should forbid invalid allocators

@@ -13,7 +13,8 @@ use crate::{
 /// Style identifier type.
 ///
 /// Used to look up the full style from a grid reference.
-/// Obtain this from a cell via [`Cell::style_id`][crate::screen::Cell::style_id].
+/// Obtain this from a cell via
+/// [`Cell::style_id`][crate::screen::Cell::style_id].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Id(pub(crate) ffi::StyleId);
 

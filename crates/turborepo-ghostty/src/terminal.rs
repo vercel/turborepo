@@ -2,6 +2,9 @@
 
 use std::{mem::MaybeUninit, ptr::NonNull};
 
+#[doc(inline)]
+pub use ffi::{SizeReportSize, TerminalScrollbar as Scrollbar};
+
 use crate::{
     alloc::{Allocator, Object},
     error::{Error, Result, from_optional_result_uninit, from_result},
@@ -10,9 +13,6 @@ use crate::{
     screen::{GridRef, Screen, TrackedGridRef},
     style::{self, RgbColor},
 };
-
-#[doc(inline)]
-pub use ffi::{SizeReportSize, TerminalScrollbar as Scrollbar};
 
 /// Complete terminal emulator state and rendering.
 ///
@@ -165,14 +165,14 @@ pub use ffi::{SizeReportSize, TerminalScrollbar as Scrollbar};
 /// ## Default colors
 ///
 /// Use [`Terminal::set_default_fg_color`], [`Terminal::set_default_bg_color`],
-/// [`Terminal::set_default_cursor_color`] and [`Terminal::set_default_color_palette`]
-/// to configure the default colors. These represent the theme or configuration
-/// chosen by the embedder. Passing `None` clears the default, leaving the color
-/// unset.
+/// [`Terminal::set_default_cursor_color`] and
+/// [`Terminal::set_default_color_palette`] to configure the default colors.
+/// These represent the theme or configuration chosen by the embedder. Passing
+/// `None` clears the default, leaving the color unset.
 ///
 /// For the palette, passing `None` resets to the built-in default palette.
-/// The palette set operation preserves any per-index OSC overrides that programs
-/// have applied; only unmodified indices are updated.
+/// The palette set operation preserves any per-index OSC overrides that
+/// programs have applied; only unmodified indices are updated.
 ///
 /// ## Reading colors
 ///
@@ -225,7 +225,6 @@ pub use ffi::{SizeReportSize, TerminalScrollbar as Scrollbar};
 ///     Ok(())
 /// }
 /// ```
-///
 #[derive(Debug)]
 pub struct Terminal<'alloc: 'cb, 'cb> {
     pub(crate) inner: Object<'alloc, ffi::TerminalImpl>,
@@ -279,7 +278,8 @@ impl<'alloc: 'cb, 'cb> Terminal<'alloc, 'cb> {
 
     /// Create a new terminal instance with a custom allocator.
     ///
-    /// See the [crate-level documentation](crate#memory-management-and-lifetimes)
+    /// See the [crate-level
+    /// documentation](crate#memory-management-and-lifetimes)
     /// regarding custom memory management and lifetimes.
     pub fn new_with_alloc<'ctx: 'alloc>(
         alloc: &'alloc Allocator<'ctx>,
@@ -320,7 +320,8 @@ impl<'alloc: 'cb, 'cb> Terminal<'alloc, 'cb> {
     ///
     /// Changes the number of columns and rows in the terminal. The primary
     /// screen will reflow content if wraparound mode is enabled; the alternate
-    /// screen does not reflow. If the dimensions are unchanged, this is a no-op.
+    /// screen does not reflow. If the dimensions are unchanged, this is a
+    /// no-op.
     ///
     /// This also updates the terminal's pixel dimensions (used for image
     /// protocols and size reports), disables synchronized output mode (allowed
@@ -386,10 +387,10 @@ impl<'alloc: 'cb, 'cb> Terminal<'alloc, 'cb> {
 
     /// Create an owned tracked grid reference for a terminal point.
     ///
-    /// This is the tracked variant of [`Terminal::grid_ref`]. The returned handle
-    /// follows the referenced cell as the terminal's page list is modified:
-    /// scrolling, pruning, resize/reflow, and other page-list operations update
-    /// the tracked reference automatically.
+    /// This is the tracked variant of [`Terminal::grid_ref`]. The returned
+    /// handle follows the referenced cell as the terminal's page list is
+    /// modified: scrolling, pruning, resize/reflow, and other page-list
+    /// operations update the tracked reference automatically.
     ///
     /// The reference is attached to the terminal screen/page-list that is
     /// active at creation time.
@@ -412,13 +413,13 @@ impl<'alloc: 'cb, 'cb> Terminal<'alloc, 'cb> {
 
     /// Convert a grid reference back to a point in the given coordinate system.
     ///
-    /// This is the inverse of [`Terminal::grid_ref`]: given a grid reference, it
-    /// returns the x/y coordinates in the requested coordinate system (active,
-    /// viewport, screen, or history).
+    /// This is the inverse of [`Terminal::grid_ref`]: given a grid reference,
+    /// it returns the x/y coordinates in the requested coordinate system
+    /// (active, viewport, screen, or history).
     ///
-    /// The grid reference must have been obtained from the same terminal instance.
-    /// Like all grid references, it is only valid until the next mutating
-    /// terminal call.
+    /// The grid reference must have been obtained from the same terminal
+    /// instance. Like all grid references, it is only valid until the next
+    /// mutating terminal call.
     ///
     /// Not every grid reference is representable in every coordinate system.
     /// For example, a cell in scrollback history cannot be expressed in active
@@ -559,8 +560,8 @@ impl<'alloc: 'cb, 'cb> Terminal<'alloc, 'cb> {
     }
     /// Get whether any mouse tracking mode is active.
     ///
-    /// Returns true if any of the mouse tracking modes (X1inner, normal, button,
-    /// or any-event) are enabled.
+    /// Returns true if any of the mouse tracking modes (X1inner, normal,
+    /// button, or any-event) are enabled.
     pub fn is_mouse_tracking(&self) -> Result<bool> {
         self.get(Data::MOUSE_TRACKING)
     }
@@ -577,7 +578,8 @@ impl<'alloc: 'cb, 'cb> Terminal<'alloc, 'cb> {
         std::str::from_utf8(str).map_err(|_| Error::InvalidValue)
     }
 
-    /// Get the current working directory as set by escape sequences (e.g. OSC 7).
+    /// Get the current working directory as set by escape sequences (e.g. OSC
+    /// 7).
     ///
     /// Returns a borrowed string, valid until the next call to
     /// [`Terminal::vt_write`] or [`Terminal::reset`]. An empty string is
@@ -684,7 +686,8 @@ impl<'alloc: 'cb, 'cb> Terminal<'alloc, 'cb> {
     /// Set the maximum bytes the APC handler will buffer for all protocols.
     ///
     /// This prevents malicious input from causing unbounded memory allocation.
-    /// A `None` value removes all overrides, reverting to the built-in defaults.
+    /// A `None` value removes all overrides, reverting to the built-in
+    /// defaults.
     pub fn set_apc_max_bytes(&mut self, max: Option<usize>) -> Result<&mut Self> {
         self.set_optional(ffi::TerminalOption::APC_MAX_BYTES, max.as_ref())?;
         Ok(self)
@@ -1251,19 +1254,19 @@ macro_rules! handlers {
                 $(for<$lf>)? FnMut(
                     &$($lf)? $crate::terminal::Terminal<'alloc, 'cb>,
                     $($fty),*
-                ) $(-> $rty)? + 'cb {}
+                ) $(-> $rty)? + 'cb + Send {}
 
             impl<'alloc, 'cb, F> $fnty<'alloc, 'cb> for F
             where
                 F: $(for<$lf>)? FnMut(
                     &$($lf)? $crate::terminal::Terminal<'alloc, 'cb>,
                     $($fty),*
-                ) $(-> $rty)? + 'cb
+                ) $(-> $rty)? + 'cb + Send
             {}
         )*
 
         struct VTable<'alloc, 'cb> {
-            $($name: Option<::std::boxed::Box<dyn $fnty<'alloc, 'cb>>>),*
+            $($name: Option<::std::boxed::Box<dyn $fnty<'alloc, 'cb> + Send>>),*
         }
 
         impl ::core::fmt::Debug for VTable<'_, '_> {
@@ -1420,14 +1423,19 @@ handlers! {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        mem::ManuallyDrop,
+        sync::{
+            Arc, Mutex,
+            atomic::{AtomicUsize, Ordering},
+        },
+    };
+
     use super::*;
-    use crate::RenderState;
-    use crate::render::CursorVisualStyle;
-    use std::cell::{Cell, RefCell};
-    use std::mem::ManuallyDrop;
+    use crate::{RenderState, render::CursorVisualStyle};
 
     #[inline(never)]
-    fn build_terminal<'cb>(callback_count: &'cb RefCell<usize>) -> Terminal<'static, 'cb> {
+    fn build_terminal(callback_count: Arc<AtomicUsize>) -> Terminal<'static, 'static> {
         let mut terminal = Terminal::new(Options {
             cols: 80,
             rows: 24,
@@ -1437,7 +1445,7 @@ mod tests {
 
         terminal
             .on_device_attributes(move |_term| {
-                *callback_count.borrow_mut() += 1;
+                callback_count.fetch_add(1, Ordering::SeqCst);
                 Some(DeviceAttributes {
                     primary: PrimaryDeviceAttributes::new(
                         ConformanceLevel::VT220,
@@ -1502,8 +1510,10 @@ mod tests {
     fn title_changed_callback_returns_correct_title() {
         // The callback bound on `on_title_changed` is `'cb`, not `'static`,
         // so the closure can borrow stack locals directly – no Rc needed.
-        let captured_title: RefCell<String> = RefCell::new(String::new());
-        let callback_count: Cell<usize> = Cell::new(0);
+        let captured_title = Arc::new(Mutex::new(String::new()));
+        let captured_title_for_callback = Arc::clone(&captured_title);
+        let callback_count = Arc::new(AtomicUsize::new(0));
+        let callback_count_for_callback = Arc::clone(&callback_count);
 
         let mut terminal = Terminal::new(Options {
             cols: 80,
@@ -1513,32 +1523,48 @@ mod tests {
         .expect("terminal should initialize");
 
         terminal
-            .on_title_changed(|term| {
-                callback_count.set(callback_count.get() + 1);
+            .on_title_changed(move |term| {
+                callback_count_for_callback.fetch_add(1, Ordering::SeqCst);
                 let title = term
                     .title()
                     .expect("title() should succeed inside callback");
-                *captured_title.borrow_mut() = title.to_owned();
+                *captured_title_for_callback
+                    .lock()
+                    .expect("title mutex should not be poisoned") = title.to_owned();
             })
             .expect("callback should register");
 
         // OSC 2 (set title) should invoke on_title_changed.
         terminal.vt_write(b"\x1b]2;Hello Effects\x1b\\");
-        assert_eq!(callback_count.get(), 1);
-        assert_eq!(*captured_title.borrow(), "Hello Effects");
+        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            captured_title
+                .lock()
+                .expect("title mutex should not be poisoned")
+                .as_str(),
+            "Hello Effects"
+        );
 
         // A second title change should fire the callback again.
         terminal.vt_write(b"\x1b]2;Second Title\x1b\\");
-        assert_eq!(callback_count.get(), 2);
-        assert_eq!(*captured_title.borrow(), "Second Title");
+        assert_eq!(callback_count.load(Ordering::SeqCst), 2);
+        assert_eq!(
+            captured_title
+                .lock()
+                .expect("title mutex should not be poisoned")
+                .as_str(),
+            "Second Title"
+        );
     }
 
     /// Send an OSC 7 current-directory sequence, then verify `term.pwd()`
     /// returns the correct value inside the `on_pwd_changed` callback.
     #[test]
     fn pwd_changed_callback_returns_correct_pwd() {
-        let captured_pwd: RefCell<String> = RefCell::new(String::new());
-        let callback_count: Cell<usize> = Cell::new(0);
+        let captured_pwd = Arc::new(Mutex::new(String::new()));
+        let captured_pwd_for_callback = Arc::clone(&captured_pwd);
+        let callback_count = Arc::new(AtomicUsize::new(0));
+        let callback_count_for_callback = Arc::clone(&callback_count);
 
         let mut terminal = Terminal::new(Options {
             cols: 80,
@@ -1548,20 +1574,34 @@ mod tests {
         .expect("terminal should initialize");
 
         terminal
-            .on_pwd_changed(|term| {
-                callback_count.set(callback_count.get() + 1);
+            .on_pwd_changed(move |term| {
+                callback_count_for_callback.fetch_add(1, Ordering::SeqCst);
                 let pwd = term.pwd().expect("pwd() should succeed inside callback");
-                *captured_pwd.borrow_mut() = pwd.to_owned();
+                *captured_pwd_for_callback
+                    .lock()
+                    .expect("pwd mutex should not be poisoned") = pwd.to_owned();
             })
             .expect("callback should register");
 
         terminal.vt_write(b"\x1b]7;file://localhost/tmp/project\x1b\\");
-        assert_eq!(callback_count.get(), 1);
-        assert_eq!(*captured_pwd.borrow(), "file://localhost/tmp/project");
+        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            captured_pwd
+                .lock()
+                .expect("pwd mutex should not be poisoned")
+                .as_str(),
+            "file://localhost/tmp/project"
+        );
 
         terminal.vt_write(b"\x1b]7;file://localhost/tmp/other\x1b\\");
-        assert_eq!(callback_count.get(), 2);
-        assert_eq!(*captured_pwd.borrow(), "file://localhost/tmp/other");
+        assert_eq!(callback_count.load(Ordering::SeqCst), 2);
+        assert_eq!(
+            captured_pwd
+                .lock()
+                .expect("pwd mutex should not be poisoned")
+                .as_str(),
+            "file://localhost/tmp/other"
+        );
     }
 
     #[test]
@@ -1618,14 +1658,15 @@ mod tests {
     /// callback still fires through the stable VTable userdata pointer.
     #[test]
     fn callbacks_survive_explicit_relocation() {
-        let callback_count = RefCell::new(0usize);
-        let terminal = build_terminal(&callback_count);
+        let callback_count = Arc::new(AtomicUsize::new(0));
+        let callback_count_for_terminal = Arc::clone(&callback_count);
+        let terminal = build_terminal(callback_count_for_terminal);
         let (mut terminal, addr_before, addr_after) = relocate_into_new_box(terminal);
         assert_ne!(addr_before, addr_after);
 
         // Primary DA request (CSI c) should invoke on_device_attributes.
         terminal.vt_write(b"\x1b[c");
-        assert_eq!(*callback_count.borrow(), 1);
+        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
     }
 
     fn tiny_terminal() -> Terminal<'static, 'static> {
