@@ -2,8 +2,12 @@
 
 use std::{
     env,
+    fs::OpenOptions,
+    io::ErrorKind,
     path::{Path, PathBuf},
     process::Command,
+    thread,
+    time::Duration,
 };
 
 /// Pinned ghostty commit. Update this to pull a newer version.
@@ -255,6 +259,7 @@ fn zig_optimize_mode() -> &'static str {
 /// Clone ghostty at the pinned commit into OUT_DIR/ghostty-src.
 /// Reuses an existing clone if the commit matches.
 fn fetch_ghostty(out_dir: &Path) -> PathBuf {
+    let _lock = acquire_fetch_lock(&out_dir.join("ghostty-src.lock"));
     let src_dir = out_dir.join("ghostty-src");
     let stamp = src_dir.join(".ghostty-commit");
 
@@ -301,6 +306,32 @@ fn fetch_ghostty(out_dir: &Path) -> PathBuf {
     std::fs::write(&stamp, GHOSTTY_COMMIT).unwrap_or_else(|e| panic!("failed to write stamp: {e}"));
 
     src_dir
+}
+
+struct FetchLock {
+    path: PathBuf,
+}
+
+impl Drop for FetchLock {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+fn acquire_fetch_lock(path: &Path) -> FetchLock {
+    loop {
+        match OpenOptions::new().write(true).create_new(true).open(path) {
+            Ok(_) => {
+                return FetchLock {
+                    path: path.to_owned(),
+                };
+            }
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                thread::sleep(Duration::from_millis(100));
+            }
+            Err(error) => panic!("failed to create {}: {error}", path.display()),
+        }
+    }
 }
 
 fn run(mut command: Command, context: &str) {
