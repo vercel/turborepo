@@ -203,7 +203,7 @@ impl From<std::convert::Infallible> for Error {
 }
 
 static PACKAGE_MANAGER_PATTERN: Lazy<Regex> = lazy_regex!(
-    r"\A(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://.+)\z"
+    r"\A(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z"
 );
 
 impl PackageManager {
@@ -878,6 +878,20 @@ mod tests {
                 expected_manager: "npm".to_owned(),
                 expected_version: "https://some-npm-fork".to_owned(),
                 expected_error: false,
+            },
+            TestCase {
+                name: "errors with leading whitespace before URL manager".to_owned(),
+                package_manager: Spanned::new(" npm@https://some-npm-fork".to_owned()),
+                expected_manager: "".to_owned(),
+                expected_version: "".to_owned(),
+                expected_error: true,
+            },
+            TestCase {
+                name: "errors with trailing whitespace after URL".to_owned(),
+                package_manager: Spanned::new("npm@https://some-npm-fork ".to_owned()),
+                expected_manager: "".to_owned(),
+                expected_version: "".to_owned(),
+                expected_error: true,
             },
         ];
 
