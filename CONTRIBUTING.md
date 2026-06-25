@@ -31,8 +31,6 @@ You will need to have these dependencies installed on your machine to work on th
 - [protoc](https://grpc.io/docs/protoc-installation/)
 - [capnp](https://capnproto.org)
 - [Zig](https://ziglang.org/download/) 0.15.2 or newer — required to build `libghostty-vt` for the TUI (`turborepo-ghostty-sys`). The `zig` binary must be on your `PATH` when running `cargo build`.
-  - macOS/Linux/Windows: download a release from [ziglang.org](https://ziglang.org/download/) and add it to your `PATH`
-  - macOS (Homebrew): `brew install zig` (ensure the installed version is 0.15.2+)
 
 ### Optional dependencies
 
