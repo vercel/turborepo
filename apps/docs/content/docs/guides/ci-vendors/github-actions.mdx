@@ -270,9 +270,14 @@ jobs:
       - name: Set up Turborepo Remote Cache # [!code highlight]
         uses: vercel/setup-turborepo-remote-cache-action@v1 # [!code highlight]
         with: # [!code highlight]
-          team-id: ${{ vars.TURBO_TEAM }} # [!code highlight]
+          team: ${{ vars.TURBO_TEAM }} # [!code highlight]
     # ...
 ```
+
+<Callout type="info">
+  If more than one of your team's OIDC policies could match this workflow, pass
+  the policy ID with the `policy` input to disambiguate.
+</Callout>
 
 </Step>
 </Steps>

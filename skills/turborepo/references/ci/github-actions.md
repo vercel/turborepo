@@ -87,9 +87,9 @@ On vercel.com, go to your team's **Settings → Build and Deployment → OIDC Po
 
 Settings > Secrets and variables > Actions > Variables:
 
-- `TURBO_TEAM`: Your Vercel team ID (`team_123…`), from your team's General settings page.
+- `TURBO_TEAM`: Your Vercel team slug
 
-Use a repository variable rather than a secret so GitHub Actions doesn't censor your team ID in logs.
+Use a repository variable rather than a secret so GitHub Actions doesn't censor your team name in logs.
 
 #### 3. Add the Action to Your Workflow
 
@@ -108,10 +108,12 @@ jobs:
 
       - uses: vercel/setup-turborepo-remote-cache-action@v1
         with:
-          team-id: ${{ vars.TURBO_TEAM }}
+          team: ${{ vars.TURBO_TEAM }}
 ```
 
 The action requests a GitHub OIDC token, exchanges it for a short-lived Turborepo access token, and sets `TURBO_TOKEN` and `TURBO_TEAM` for subsequent steps. Must run before any step that invokes `turbo`.
+
+If more than one of your team's OIDC policies could match the workflow, pass the policy ID via the optional `policy` input to disambiguate. Most setups won't need it.
 
 ### Option B: Personal Access Token
 
@@ -193,7 +195,7 @@ jobs:
 
       - uses: vercel/setup-turborepo-remote-cache-action@v1
         with:
-          team-id: ${{ vars.TURBO_TEAM }}
+          team: ${{ vars.TURBO_TEAM }}
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
