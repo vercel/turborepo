@@ -1,0 +1,89 @@
+:root {
+  color: #f7f1de;
+  background: #14120f;
+  font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button {
+  border: 0;
+  border-radius: 6px;
+  background: #f6b352;
+  color: #191611;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 0.65rem 0.95rem;
+}
+
+.shell {
+  align-items: stretch;
+  background:
+    linear-gradient(135deg, rgba(246, 179, 82, 0.2), transparent 32%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(247, 241, 222, 0.06) 0,
+      rgba(247, 241, 222, 0.06) 1px,
+      transparent 1px,
+      transparent 48px
+    ),
+    #14120f;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  min-height: 100vh;
+  padding: clamp(18px, 5vw, 64px);
+}
+
+.card {
+  border: 1px solid rgba(247, 241, 222, 0.14);
+  border-radius: 8px;
+  min-height: 310px;
+  padding: 24px;
+}
+
+.host-card {
+  background: #244a54;
+  box-shadow: 10px 10px 0 #f6b352;
+}
+
+.remote-card {
+  background: #2f2a24;
+  box-shadow: 10px 10px 0 rgba(246, 179, 82, 0.45);
+}
+
+.eyebrow {
+  color: #f6b352;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.title {
+  font-size: clamp(2rem, 6vw, 4.5rem);
+  font-weight: 900;
+  line-height: 0.95;
+  margin-top: 18px;
+}
+
+.copy,
+.loading {
+  color: rgba(247, 241, 222, 0.78);
+  line-height: 1.5;
+  max-width: 32rem;
+}
+
+.loading {
+  border: 1px dashed rgba(247, 241, 222, 0.28);
+  border-radius: 8px;
+  display: grid;
+  min-height: 310px;
+  place-items: center;
+}

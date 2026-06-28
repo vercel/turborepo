@@ -1,0 +1,23 @@
+{
+  "name": "react-remote",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 4174",
+    "build": "vite build",
+    "preview": "vite preview --port 4174",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mf-vite-ssr-example/shared-ui": "workspace:*",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@module-federation/vite": "catalog:",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "4.4.1",
+    "typescript": "5.9.3",
+    "vite": "8.0.13"
+  }
+}

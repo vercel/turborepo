@@ -1,0 +1,31 @@
+{
+  "name": "react-host",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "PORT=4173 node .output/server/index.mjs",
+    "start": "node .output/server/index.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mf-vite-ssr-example/shared-ui": "workspace:*",
+    "@module-federation/runtime": "^2.6.0",
+    "@tanstack/react-router": "1.168.10",
+    "@tanstack/react-start": "1.167.16",
+    "@tanstack/start-plugin-core": "1.167.17",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "rxjs": "^7.8.2",
+    "vinxi": "0.5.3"
+  },
+  "devDependencies": {
+    "@module-federation/vite": "catalog:",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "4.4.1",
+    "nitro": "3.0.260311-beta",
+    "typescript": "5.9.3",
+    "vite": "8.0.13"
+  }
+}

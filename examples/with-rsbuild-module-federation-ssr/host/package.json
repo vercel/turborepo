@@ -1,0 +1,27 @@
+{
+  "name": "react-host",
+  "type": "module",
+  "scripts": {
+    "dev": "NODE_OPTIONS='--experimental-vm-modules' node ./server.mjs",
+    "build": "tsc && rsbuild build",
+    "preview": "node ./prod-server.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mf-rsbuild-ssr-example/shared-ui": "workspace:*",
+    "@module-federation/enhanced": "^2.6.0",
+    "express": "^5.2.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@module-federation/rsbuild-plugin": "catalog:",
+    "@rsbuild/core": "catalog:",
+    "@rsbuild/plugin-react": "catalog:",
+    "@types/express": "^5.0.6",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.9.3"
+  }
+}
