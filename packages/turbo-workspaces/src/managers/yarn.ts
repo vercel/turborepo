@@ -20,6 +20,8 @@ import {
   expandPaths,
   expandWorkspaces,
   getWorkspacePackageManager,
+  setPackageManagerDeclaration,
+  removePackageManagerDeclaration,
   parseWorkspacePackages,
   removeLockFile,
   bunLockToYarnLock
@@ -86,7 +88,7 @@ async function read(args: ReadArgs): Promise<Project> {
  *
  * Creating yarn workspaces involves:
  *  1. Adding the workspaces field in package.json
- *  2. Setting the packageManager field in package.json
+ *  2. Setting the devEngines.packageManager field in package.json
  *  3. Updating all workspace package.json dependencies to ensure correct format
  */
 // eslint-disable-next-line @typescript-eslint/require-await -- must match the create type signature
@@ -106,12 +108,16 @@ async function create(args: CreateArgs): Promise<void> {
 
   // package manager
   logger.rootStep(
-    `adding "packageManager" field to ${path.relative(
+    `adding "devEngines.packageManager" field to ${path.relative(
       project.paths.root,
       project.paths.packageJson
     )}`
   );
-  packageJson.packageManager = `${to.name}@${to.version}`;
+  setPackageManagerDeclaration({
+    packageJson,
+    packageManager: to.name,
+    version: to.version
+  });
 
   if (hasWorkspaces) {
     // workspaces field
@@ -174,9 +180,12 @@ async function remove(args: RemoveArgs): Promise<void> {
   }
 
   logger.subStep(
-    `removing "packageManager" field in ${project.name} root "package.json"`
+    `removing ${PACKAGE_MANAGER_DETAILS.name} package manager declarations in ${project.name} root "package.json"`
   );
-  delete packageJson.packageManager;
+  removePackageManagerDeclaration({
+    packageJson,
+    packageManager: PACKAGE_MANAGER_DETAILS.name
+  });
 
   if (!options?.dry) {
     fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
