@@ -85,6 +85,9 @@ struct FileWatching {
     _package_watcher: Arc<PackageWatcher>,
     // Kept alive to maintain the watcher background task.
     _package_changes_watcher: PackageChangesWatcher,
+    // Retained so startup-timeout diagnostics can report the slowest-to-hash
+    // files (the likely cause of a stalled initial hash).
+    hash_watcher: Arc<HashWatcher>,
 }
 
 /// Adapts `GlobWatcher` to the `OutputWatcher` trait so it can be passed
@@ -161,6 +164,32 @@ struct RunHandle {
     run_task: JoinHandle<Result<i32, run::Error>>,
 }
 
+/// Format the slowest-to-hash files reported by the [`HashWatcher`] into a
+/// leading-space hint for a stalled-startup message, e.g. " Slowest files to
+/// hash: foo.tmp (12.3s, still hashing), bar (4.1s)." Returns an empty string
+/// when nothing notable was recorded.
+fn slowest_files_hint(slowest: &[turborepo_scm::SlowestFile]) -> String {
+    // Cap how many we list so the message stays readable.
+    const MAX_LISTED: usize = 3;
+    let listed: Vec<String> = slowest
+        .iter()
+        .take(MAX_LISTED)
+        .map(|f| {
+            let secs = f.duration.as_secs_f64();
+            if f.in_flight {
+                format!("{} ({secs:.1}s, still hashing)", f.path)
+            } else {
+                format!("{} ({secs:.1}s)", f.path)
+            }
+        })
+        .collect();
+    if listed.is_empty() {
+        String::new()
+    } else {
+        format!(" Slowest files to hash: {}.", listed.join(", "))
+    }
+}
+
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("File watcher error: {0}")]
@@ -188,10 +217,11 @@ pub enum Error {
         span: SourceSpan,
     },
     #[error(
-        "Timed out waiting for the file watcher to become ready. Try running `turbo daemon clean` \
-         and retrying."
+        "Timed out after {0}s waiting for the file watcher to become ready. This usually means a \
+         large file is slowing the initial hash.{1} Remove or .gitignore it, or raise the limit \
+         with TURBO_WATCH_STARTUP_TIMEOUT (seconds)."
     )]
-    FileWatchingTimeout,
+    FileWatchingTimeout(u64, String),
     #[error("Failed to subscribe to signal handler. Shutting down.")]
     NoSignalHandler,
     #[error("Watch interrupted due to signal.")]
@@ -268,7 +298,7 @@ impl WatchClient {
         let package_changes_watcher = PackageChangesWatcher::new(
             base.repo_root.clone(),
             recv,
-            hash_watcher,
+            hash_watcher.clone(),
             custom_turbo_json_path,
             base.opts().run_opts.single_package,
             base.opts().repo_opts.allow_no_package_manager,
@@ -283,6 +313,7 @@ impl WatchClient {
             glob_watcher: glob_watcher.clone(),
             _package_watcher: package_watcher,
             _package_changes_watcher: package_changes_watcher,
+            hash_watcher,
         };
 
         let output_watcher: Arc<dyn OutputWatcher> =
@@ -371,13 +402,54 @@ impl WatchClient {
 
         // Wait for the initial Rediscover event, which signals that the file
         // watcher is ready. The PackageChangesWatcher emits this on startup.
-        let initial_event = tokio::time::timeout(std::time::Duration::from_secs(10), events.recv())
+        // The initial scan (recursive watch setup + package graph build +
+        // hashing) can be slow when a large file or tree lives in the repo, so
+        // poll with a short per-attempt timeout and keep retrying up to a
+        // generous cap rather than failing on the first stall. The channel
+        // stays alive between attempts, so no events are lost.
+        const STARTUP_ATTEMPT_SECS: u64 = 10;
+        // Shared with the package-changes subscriber's inner wait so the inner
+        // timeout is never shorter than this outer cap.
+        let startup_cap_secs = crate::package_changes_watcher::startup_timeout_secs();
+        let mut warned = false;
+        let mut waited_secs = 0;
+        let initial_event = loop {
+            match tokio::time::timeout(
+                Duration::from_secs(STARTUP_ATTEMPT_SECS),
+                events.recv(),
+            )
             .await
-            .map_err(|_| Error::FileWatchingTimeout)?;
-        let initial_event = match initial_event {
-            Ok(event) => event,
-            Err(broadcast::error::RecvError::Closed) => return Err(Error::PackageChangeClosed),
-            Err(broadcast::error::RecvError::Lagged(_)) => return Err(Error::PackageChangeLagged),
+            {
+                Ok(Ok(event)) => break event,
+                Ok(Err(broadcast::error::RecvError::Closed)) => {
+                    return Err(Error::PackageChangeClosed)
+                }
+                Ok(Err(broadcast::error::RecvError::Lagged(_))) => {
+                    return Err(Error::PackageChangeLagged)
+                }
+                Err(_) => {
+                    waited_secs += STARTUP_ATTEMPT_SECS;
+                    let slowest = self._watching.hash_watcher.slowest_files();
+                    if waited_secs >= startup_cap_secs {
+                        return Err(Error::FileWatchingTimeout(
+                            startup_cap_secs,
+                            slowest_files_hint(&slowest),
+                        ));
+                    }
+                    if !warned {
+                        warned = true;
+                        turborepo_log::warn(
+                            turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                            format!(
+                                "File watcher still initializing after {STARTUP_ATTEMPT_SECS}s, \
+                                 likely a large file is slowing the initial hash.{} Retrying...",
+                                slowest_files_hint(&slowest)
+                            ),
+                        )
+                        .emit();
+                    }
+                }
+            }
         };
 
         let signal_subscriber = self.handler.subscribe().ok_or(Error::NoSignalHandler)?;
@@ -1023,5 +1095,44 @@ mod test {
             }
             ChangedPackages::All => panic!("expected Some"),
         }
+    }
+
+    #[test]
+    fn slowest_files_hint_empty_when_nothing_recorded() {
+        assert_eq!(super::slowest_files_hint(&[]), "");
+    }
+
+    #[test]
+    fn slowest_files_hint_lists_files_and_flags_in_flight() {
+        use std::time::Duration;
+
+        use turbopath::AbsoluteSystemPathBuf;
+        use turborepo_scm::SlowestFile;
+
+        fn path(s: &str) -> AbsoluteSystemPathBuf {
+            #[cfg(windows)]
+            let s = format!("C:\\{s}");
+            #[cfg(not(windows))]
+            let s = format!("/{s}");
+            AbsoluteSystemPathBuf::new(s).unwrap()
+        }
+
+        let files = vec![
+            SlowestFile {
+                path: path("big.tmp"),
+                duration: Duration::from_millis(12300),
+                in_flight: true,
+            },
+            SlowestFile {
+                path: path("bar"),
+                duration: Duration::from_millis(4100),
+                in_flight: false,
+            },
+        ];
+        let hint = super::slowest_files_hint(&files);
+        assert!(hint.contains("big.tmp"), "got: {hint}");
+        assert!(hint.contains("still hashing"), "got: {hint}");
+        assert!(hint.contains("bar"), "got: {hint}");
+        assert!(hint.contains("12.3s"), "got: {hint}");
     }
 }

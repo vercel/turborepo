@@ -40,6 +40,22 @@ pub struct PackageChangesWatcher {
 /// A little arbitrary, so feel free to tune accordingly.
 const CHANGE_EVENT_CHANNEL_CAPACITY: usize = 50;
 
+/// Default ceiling (seconds) for waiting on the file watcher / initial hash to
+/// become ready during `turbo watch` startup. A large file dominating the
+/// initial hash can legitimately take a while, so this is generous.
+const DEFAULT_STARTUP_TIMEOUT_SECS: u64 = 120;
+
+/// Resolve the startup readiness timeout, honoring `TURBO_WATCH_STARTUP_TIMEOUT`
+/// (seconds). Shared by the package-changes subscriber and the watch client so
+/// the inner wait can never be shorter than the outer one — otherwise the
+/// subscriber would give up before the client's retry loop could report why.
+pub(crate) fn startup_timeout_secs() -> u64 {
+    std::env::var("TURBO_WATCH_STARTUP_TIMEOUT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(DEFAULT_STARTUP_TIMEOUT_SECS)
+}
+
 impl PackageChangesWatcher {
     pub fn new(
         repo_root: AbsoluteSystemPathBuf,
@@ -390,17 +406,18 @@ impl Subscriber {
     }
 
     async fn watch(mut self, exit_rx: oneshot::Receiver<()>) {
+        let timeout_secs = startup_timeout_secs();
         let file_events_result = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
+            std::time::Duration::from_secs(timeout_secs),
             self.file_events_lazy.get(),
         )
         .await;
         let Ok(mut file_events) = file_events_result
             .map_err(|_elapsed| {
                 tracing::warn!(
-                    "timed out waiting for file watching to become ready after 5s. This usually \
-                     means the daemon's file watcher failed to initialize. Try running `turbo \
-                     daemon clean` and retrying."
+                    "timed out waiting for file watching to become ready after {timeout_secs}s. \
+                     This usually means the file watcher backend failed to initialize, or a very \
+                     large file is slowing the initial hash."
                 );
             })
             .and_then(|r| {

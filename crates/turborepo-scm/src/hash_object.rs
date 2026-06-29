@@ -45,6 +45,7 @@ pub(crate) fn hash_objects(
     to_hash: Vec<RelativeUnixPathBuf>,
     hashes: &mut GitHashes,
     cached_attrs: Option<&crate::crlf::GitAttrs>,
+    slowest_files: Option<&std::sync::Arc<crate::SlowestFiles>>,
 ) -> Result<(), Error> {
     let pkg_prefix = git_root.anchor(pkg_path).ok().map(|a| a.to_unix());
 
@@ -67,9 +68,13 @@ pub(crate) fn hash_objects(
                     _ => crate::crlf::TextAttr::Unspecified,
                 };
 
+                let ticket = slowest_files.map(|sf| sf.start(full_file_path.clone()));
                 let hash_result = with_emfile_retry(|| {
                     crate::crlf::hash_file_maybe_normalized(&full_file_path, text_attr)
                 });
+                if let (Some(sf), Some(ticket)) = (slowest_files, ticket) {
+                    sf.finish(ticket);
+                }
 
                 match hash_result {
                     Ok(hash) => {
@@ -181,7 +186,7 @@ mod test {
             let expected_hashes = GitHashes::from_iter(file_hashes);
             let mut hashes = GitHashes::new();
             let to_hash = expected_hashes.keys().map(|k| pkg_prefix.join(k)).collect();
-            hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None).unwrap();
+            hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None, None).unwrap();
             assert_eq!(hashes, expected_hashes);
         }
 
@@ -201,7 +206,7 @@ mod test {
                 .collect();
 
             let mut hashes = GitHashes::new();
-            let result = hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None);
+            let result = hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None, None);
             assert!(result.is_err());
         }
     }
@@ -272,7 +277,7 @@ mod test {
             .map(|(name, _)| RelativeUnixPathBuf::new(*name).unwrap())
             .collect();
         let mut actual = GitHashes::new();
-        hash_objects(&tmp_path, &tmp_path, to_hash, &mut actual, None).unwrap();
+        hash_objects(&tmp_path, &tmp_path, to_hash, &mut actual, None, None).unwrap();
 
         assert_eq!(actual, expected, "blob hashes must match git hash-object");
     }
