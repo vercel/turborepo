@@ -34,6 +34,11 @@ interface PackageJson {
   optionalDependencies?: Record<string, string>;
 }
 
+interface DevEnginesPackageManagerDeclaration {
+  name: PackageManager;
+  version: string;
+}
+
 // adapted from https://github.com/nodejs/corepack/blob/cae770694e62f15fed33dd8023649d77d96023c1/sources/specUtils.ts#L14
 const PACKAGE_MANAGER_REGEX = /^(?!_)(?<manager>.+)@(?<version>.+)$/;
 const SUPPORTED_PACKAGE_MANAGERS = new Set<PackageManager>([
@@ -207,6 +212,80 @@ function invalidDevEnginesPackageManager(message: string): ConvertError {
     {
       type: "package_manager-unable_to_detect"
     }
+  );
+}
+
+function getPackageManagerFromPackageManagerField(
+  packageManager: string | undefined
+): PackageManager | undefined {
+  if (!packageManager) {
+    return undefined;
+  }
+
+  const match = PACKAGE_MANAGER_REGEX.exec(packageManager);
+  const manager = match?.groups?.manager;
+  return isPackageManager(manager) ? manager : undefined;
+}
+
+function setPackageManagerDeclaration({
+  packageJson,
+  packageManager,
+  version
+}: {
+  packageJson: PackageJson;
+  packageManager: PackageManager;
+  version: string;
+}): void {
+  delete packageJson.packageManager;
+  const devEngines =
+    packageJson.devEngines &&
+    typeof packageJson.devEngines === "object" &&
+    !Array.isArray(packageJson.devEngines)
+      ? packageJson.devEngines
+      : {};
+  packageJson.devEngines = {
+    ...devEngines,
+    packageManager: {
+      name: packageManager,
+      version
+    }
+  };
+}
+
+function removePackageManagerDeclaration({
+  packageJson,
+  packageManager
+}: {
+  packageJson: PackageJson;
+  packageManager: PackageManager;
+}): void {
+  if (
+    getPackageManagerFromPackageManagerField(packageJson.packageManager) ===
+    packageManager
+  ) {
+    delete packageJson.packageManager;
+  }
+
+  const devEnginesPackageManager = packageJson.devEngines?.packageManager;
+  if (
+    isDevEnginesPackageManagerDeclaration(devEnginesPackageManager) &&
+    devEnginesPackageManager.name === packageManager
+  ) {
+    delete packageJson.devEngines?.packageManager;
+  }
+}
+
+function isDevEnginesPackageManagerDeclaration(
+  value: unknown
+): value is DevEnginesPackageManagerDeclaration {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    "name" in value &&
+    isPackageManager(value.name) &&
+    "version" in value &&
+    typeof value.version === "string"
   );
 }
 
@@ -437,6 +516,8 @@ async function bunLockToYarnLock({
 export {
   getPackageJson,
   getWorkspacePackageManager,
+  setPackageManagerDeclaration,
+  removePackageManagerDeclaration,
   getWorkspaceInfo,
   expandPaths,
   expandWorkspaces,
