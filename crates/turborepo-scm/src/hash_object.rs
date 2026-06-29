@@ -68,13 +68,11 @@ pub(crate) fn hash_objects(
                     _ => crate::crlf::TextAttr::Unspecified,
                 };
 
-                let ticket = slowest_files.map(|sf| sf.start(filename.clone()));
+                let _guard = slowest_files.map(|sf| sf.start(filename.clone()));
                 let hash_result = with_emfile_retry(|| {
                     crate::crlf::hash_file_maybe_normalized(&full_file_path, text_attr)
                 });
-                if let (Some(sf), Some(ticket)) = (slowest_files, ticket) {
-                    sf.finish(ticket);
-                }
+                drop(_guard);
 
                 match hash_result {
                     Ok(hash) => {

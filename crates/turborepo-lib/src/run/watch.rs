@@ -85,8 +85,7 @@ struct FileWatching {
     _package_watcher: Arc<PackageWatcher>,
     // Kept alive to maintain the watcher background task.
     _package_changes_watcher: PackageChangesWatcher,
-    // Retained so startup-timeout diagnostics can report the slowest-to-hash
-    // files (the likely cause of a stalled initial hash).
+    // Used by startup-timeout diagnostics to report the slowest-to-hash files.
     hash_watcher: Arc<HashWatcher>,
 }
 
@@ -176,25 +175,23 @@ struct RunHandle {
 ///
 /// Returns an empty string when nothing notable was recorded.
 fn slowest_files_hint(slowest: &[turborepo_scm::SlowestFile]) -> String {
+    use std::fmt::Write as _;
+
     // Cap how many we list so the message stays readable.
     const MAX_LISTED: usize = 3;
-    let listed: Vec<String> = slowest
-        .iter()
-        .take(MAX_LISTED)
-        .map(|f| {
-            let secs = f.duration.as_secs_f64();
-            if f.in_flight {
-                format!("  {} ({secs:.1}s, still hashing)", f.path)
-            } else {
-                format!("  {} ({secs:.1}s)", f.path)
-            }
-        })
-        .collect();
-    if listed.is_empty() {
-        String::new()
-    } else {
-        format!(" Slowest files to hash:\n{}", listed.join("\n"))
+    if slowest.is_empty() {
+        return String::new();
     }
+    let mut hint = String::from(" Slowest files to hash:");
+    for f in slowest.iter().take(MAX_LISTED) {
+        let secs = f.duration.as_secs_f64();
+        if f.in_flight {
+            let _ = write!(hint, "\n  {} ({secs:.1}s, still hashing)", f.path);
+        } else {
+            let _ = write!(hint, "\n  {} ({secs:.1}s)", f.path);
+        }
+    }
+    hint
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -414,19 +411,14 @@ impl WatchClient {
         // poll with a short per-attempt timeout and keep retrying up to a
         // generous cap rather than failing on the first stall. The channel
         // stays alive between attempts, so no events are lost.
-        const STARTUP_ATTEMPT_SECS: u64 = 10;
+        const STARTUP_ATTEMPT: Duration = Duration::from_secs(10);
         // Shared with the package-changes subscriber's inner wait so the inner
         // timeout is never shorter than this outer cap.
-        let startup_cap_secs = crate::package_changes_watcher::startup_timeout_secs();
+        let startup_cap = Duration::from_secs(crate::package_changes_watcher::startup_timeout_secs());
+        let started = std::time::Instant::now();
         let mut warned = false;
-        let mut waited_secs = 0;
         let initial_event = loop {
-            match tokio::time::timeout(
-                Duration::from_secs(STARTUP_ATTEMPT_SECS),
-                events.recv(),
-            )
-            .await
-            {
+            match tokio::time::timeout(STARTUP_ATTEMPT, events.recv()).await {
                 Ok(Ok(event)) => break event,
                 Ok(Err(broadcast::error::RecvError::Closed)) => {
                     return Err(Error::PackageChangeClosed)
@@ -435,12 +427,10 @@ impl WatchClient {
                     return Err(Error::PackageChangeLagged)
                 }
                 Err(_) => {
-                    waited_secs += STARTUP_ATTEMPT_SECS;
-                    let slowest = self._watching.hash_watcher.slowest_files();
-                    if waited_secs >= startup_cap_secs {
+                    if started.elapsed() >= startup_cap {
                         return Err(Error::FileWatchingTimeout(
-                            startup_cap_secs,
-                            slowest_files_hint(&slowest),
+                            startup_cap.as_secs(),
+                            slowest_files_hint(&self._watching.hash_watcher.slowest_files()),
                         ));
                     }
                     if !warned {
@@ -448,9 +438,10 @@ impl WatchClient {
                         turborepo_log::warn(
                             turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
                             format!(
-                                "File watcher still initializing after {STARTUP_ATTEMPT_SECS}s, \
-                                 likely a large file is slowing the initial hash.{}\nRetrying...",
-                                slowest_files_hint(&slowest)
+                                "File watcher still initializing after {}s, likely a large file \
+                                 is slowing the initial hash.{}\nRetrying...",
+                                STARTUP_ATTEMPT.as_secs(),
+                                slowest_files_hint(&self._watching.hash_watcher.slowest_files())
                             ),
                         )
                         .emit();
@@ -1139,11 +1130,13 @@ mod test {
         assert!(hint.contains("12.3s"), "got: {hint}");
         // One file per line: each listed file should be on its own line.
         assert!(
-            hint.lines().any(|l| l.contains("big.tmp") && !l.contains("bar")),
+            hint.lines()
+                .any(|l| l.contains("big.tmp") && !l.contains("bar")),
             "files should be on separate lines, got: {hint:?}"
         );
         assert!(
-            hint.lines().any(|l| l.contains("bar") && !l.contains("big.tmp")),
+            hint.lines()
+                .any(|l| l.contains("bar") && !l.contains("big.tmp")),
             "files should be on separate lines, got: {hint:?}"
         );
     }

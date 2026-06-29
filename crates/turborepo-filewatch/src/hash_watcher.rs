@@ -147,10 +147,8 @@ impl HashWatcher {
         }
     }
 
-    /// Snapshot the files that are taking (or took) the longest to hash.
-    /// In-flight files are listed first, since a file still being hashed is the
-    /// likely cause of a stalled startup. Useful for diagnostics when a
-    /// consumer times out waiting for hashing to complete.
+    /// Snapshot the slowest-to-hash files, in-flight first. Used to diagnose a
+    /// startup that stalls on hashing a large file.
     pub fn slowest_files(&self) -> Vec<turborepo_scm::SlowestFile> {
         self.slowest_files.snapshot()
     }
