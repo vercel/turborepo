@@ -45,10 +45,11 @@ const CHANGE_EVENT_CHANNEL_CAPACITY: usize = 50;
 /// initial hash can legitimately take a while, so this is generous.
 const DEFAULT_STARTUP_TIMEOUT_SECS: u64 = 120;
 
-/// Resolve the startup readiness timeout, honoring `TURBO_WATCH_STARTUP_TIMEOUT`
-/// (seconds). Shared by the package-changes subscriber and the watch client so
-/// the inner wait can never be shorter than the outer one — otherwise the
-/// subscriber would give up before the client's retry loop could report why.
+/// Resolve the startup readiness timeout, honoring
+/// `TURBO_WATCH_STARTUP_TIMEOUT` (seconds). Shared by the package-changes
+/// subscriber and the watch client so the inner wait can never be shorter than
+/// the outer one — otherwise the subscriber would give up before the client's
+/// retry loop could report why.
 pub(crate) fn startup_timeout_secs() -> u64 {
     std::env::var("TURBO_WATCH_STARTUP_TIMEOUT")
         .ok()

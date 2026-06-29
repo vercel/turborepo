@@ -370,10 +370,7 @@ impl SCM {
     /// Attach a recorder that tracks the slowest-to-hash files. Long-running
     /// consumers (the file watcher) use this to diagnose a stalled startup
     /// caused by hashing a very large file. No-op for `SCM::Manual`.
-    pub fn with_slowest_files_recorder(
-        mut self,
-        recorder: std::sync::Arc<SlowestFiles>,
-    ) -> Self {
+    pub fn with_slowest_files_recorder(mut self, recorder: std::sync::Arc<SlowestFiles>) -> Self {
         if let SCM::Git(git) = &mut self {
             git.slowest_files = Some(recorder);
         }
