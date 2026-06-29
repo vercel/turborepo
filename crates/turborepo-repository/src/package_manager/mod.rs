@@ -9,13 +9,14 @@ pub mod yarnrc;
 use std::{
     fmt::{self, Display},
     fs,
+    ops::Range,
 };
 
 use bun::BunDetector;
 use itertools::{Either, Itertools};
 use lazy_regex::{Lazy, lazy_regex};
 use miette::{Diagnostic, NamedSource, SourceSpan};
-use node_semver::SemverError;
+use node_semver::{SemverError, Version};
 use npm::NpmDetector;
 use regex::Regex;
 use serde::Deserialize;
@@ -87,7 +88,8 @@ impl std::error::Error for NoPackageManager {}
 impl Display for NoPackageManager {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "We did not find a package manager specified in your root package.json. \
-        Please set the \"packageManager\" property in your root package.json (https://nodejs.org/api/packages.html#packagemanager) \
+        Please set the \"devEngines.packageManager\" property in your root package.json \
+        or the legacy \"packageManager\" property (https://nodejs.org/api/packages.html#packagemanager) \
         or run `npx @turbo/codemod add-package-manager` in the root of your monorepo.")
     }
 }
@@ -175,6 +177,28 @@ pub enum Error {
         #[source_code]
         text: NamedSource<String>,
     },
+    #[error("Invalid `devEngines.packageManager` field in package.json: {message}")]
+    #[diagnostic(code(invalid_dev_engines_package_manager_field))]
+    InvalidDevEnginesPackageManager {
+        message: String,
+        #[label("Invalid `devEngines.packageManager` field")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error(
+        "Package manager mismatch: `devEngines.packageManager` declares `{declared}`, but the \
+         lockfile indicates `{detected}`."
+    )]
+    #[diagnostic(code(package_manager_lockfile_mismatch))]
+    PackageManagerLockfileMismatch {
+        declared: String,
+        detected: String,
+        #[label("Declared package manager")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
     #[error(transparent)]
     WorkspaceGlob(#[from] crate::workspaces::Error),
     #[error(transparent)]
@@ -183,7 +207,7 @@ pub enum Error {
     LockfileMissing(AbsoluteSystemPathBuf),
     #[error("Discovering workspace: {0}")]
     WorkspaceDiscovery(#[from] discovery::Error),
-    #[error("Missing `packageManager` field in package.json")]
+    #[error("Missing `devEngines.packageManager` or legacy `packageManager` field in package.json")]
     MissingPackageManager,
     #[error(transparent)]
     Yarnrc(#[from] yarnrc::Error),
@@ -205,6 +229,9 @@ impl From<std::convert::Infallible> for Error {
 static PACKAGE_MANAGER_PATTERN: Lazy<Regex> = lazy_regex!(
     r"\A(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z"
 );
+
+static DEV_ENGINES_VERSION_PATTERN: Lazy<Regex> =
+    lazy_regex!(r"\A\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\z");
 
 impl PackageManager {
     pub fn supported_managers() -> &'static [Self] {
@@ -340,7 +367,7 @@ impl PackageManager {
         pkg: &PackageJson,
     ) -> Result<Self, Error> {
         let Some(package_manager) = &pkg.package_manager else {
-            return Err(Error::MissingPackageManager);
+            return Self::read_dev_engines_package_manager(repo_root, pkg);
         };
 
         let (manager, version) = Self::parse_package_manager_string(package_manager)?;
@@ -380,6 +407,359 @@ impl PackageManager {
         }
     }
 
+    fn read_dev_engines_package_manager(
+        repo_root: &AbsoluteSystemPath,
+        pkg: &PackageJson,
+    ) -> Result<Self, Error> {
+        let Some(dev_engines) = &pkg.dev_engines else {
+            return Err(Error::MissingPackageManager);
+        };
+        let Some(dev_engines_obj) = dev_engines.as_object() else {
+            return Err(Self::invalid_dev_engines_package_manager_at(
+                dev_engines,
+                &[],
+                "`devEngines` must be an object containing `packageManager`",
+            ));
+        };
+        let Some(package_manager) = dev_engines_obj.get("packageManager") else {
+            return Err(Error::MissingPackageManager);
+        };
+        let Some(package_manager_obj) = package_manager.as_object() else {
+            return Err(Self::invalid_dev_engines_package_manager_at(
+                dev_engines,
+                &["packageManager"],
+                "`devEngines.packageManager` must be an object",
+            ));
+        };
+
+        if package_manager_obj.is_empty() {
+            return Err(Self::invalid_dev_engines_package_manager_key_at(
+                dev_engines,
+                &["packageManager"],
+                "expected `{ \"name\": \"pnpm\", \"version\": \"9.12.3\" }`",
+            ));
+        }
+
+        let Some(name) = package_manager_obj.get("name") else {
+            return Err(Self::invalid_dev_engines_package_manager_key_at(
+                dev_engines,
+                &["packageManager"],
+                "`devEngines.packageManager.name` is required",
+            ));
+        };
+        let Some(name) = name.as_str() else {
+            return Err(Self::invalid_dev_engines_package_manager_at(
+                dev_engines,
+                &["packageManager", "name"],
+                "`devEngines.packageManager.name` must be a string",
+            ));
+        };
+        if name.is_empty() {
+            return Err(Self::invalid_dev_engines_package_manager_at(
+                dev_engines,
+                &["packageManager", "name"],
+                "`devEngines.packageManager.name` must not be empty",
+            ));
+        }
+        if name.trim() != name {
+            return Err(Self::invalid_dev_engines_package_manager_at(
+                dev_engines,
+                &["packageManager", "name"],
+                "`devEngines.packageManager.name` must not contain leading or trailing whitespace",
+            ));
+        }
+        if !matches!(name, "npm" | "pnpm" | "yarn" | "bun") {
+            return Err(Self::invalid_dev_engines_package_manager_at(
+                dev_engines,
+                &["packageManager", "name"],
+                "`devEngines.packageManager.name` must be one of `npm`, `pnpm`, `yarn`, or `bun`",
+            ));
+        }
+
+        let Some(version) = package_manager_obj.get("version") else {
+            return Err(Self::invalid_dev_engines_package_manager_key_at(
+                dev_engines,
+                &["packageManager"],
+                "`devEngines.packageManager.version` is required",
+            ));
+        };
+        let Some(version) = version.as_str() else {
+            return Err(Self::invalid_dev_engines_package_manager_at(
+                dev_engines,
+                &["packageManager", "version"],
+                "`devEngines.packageManager.version` must be a string",
+            ));
+        };
+        if version.is_empty() {
+            return Err(Self::invalid_dev_engines_package_manager_at(
+                dev_engines,
+                &["packageManager", "version"],
+                "`devEngines.packageManager.version` must not be empty",
+            ));
+        }
+        if version.trim() != version {
+            return Err(Self::invalid_dev_engines_package_manager_at(
+                dev_engines,
+                &["packageManager", "version"],
+                "`devEngines.packageManager.version` must not contain leading or trailing \
+                 whitespace",
+            ));
+        }
+        if !DEV_ENGINES_VERSION_PATTERN.is_match(version) {
+            return Err(Self::invalid_dev_engines_package_manager_at(
+                dev_engines,
+                &["packageManager", "version"],
+                "`devEngines.packageManager.version` must be an exact semantic version",
+            ));
+        }
+
+        let version = version.parse().map_err(|err: SemverError| {
+            Self::invalid_dev_engines_package_manager_at(
+                dev_engines,
+                &["packageManager", "version"],
+                format!("invalid semantic version: {err}"),
+            )
+        })?;
+        let declared = Self::package_manager_from_name_and_version(name, &version)?;
+        Self::validate_package_manager_lockfile_match(repo_root, &declared, dev_engines)?;
+
+        Ok(declared)
+    }
+
+    fn package_manager_from_name_and_version(name: &str, version: &Version) -> Result<Self, Error> {
+        match name {
+            "npm" => Ok(PackageManager::Npm),
+            "bun" => Ok(PackageManager::Bun),
+            "yarn" => YarnDetector::detect_berry_or_yarn(version),
+            "pnpm" => PnpmDetector::detect_pnpm6_or_pnpm(version),
+            _ => unreachable!("devEngines package manager name should have been validated"),
+        }
+    }
+
+    fn validate_package_manager_lockfile_match(
+        repo_root: &AbsoluteSystemPath,
+        declared: &Self,
+        span_source: &Spanned<serde_json::Value>,
+    ) -> Result<(), Error> {
+        let detected = match Self::detect_package_manager(repo_root) {
+            Ok(detected) => detected,
+            Err(Error::NoPackageManager(_)) => return Ok(()),
+            Err(err) => return Err(err),
+        };
+
+        if Self::same_lockfile_family(declared, &detected) {
+            Ok(())
+        } else {
+            let (span, text) =
+                Self::dev_engines_span_and_text(span_source, &["packageManager", "name"]);
+            Err(Error::PackageManagerLockfileMismatch {
+                declared: declared.command().to_string(),
+                detected: detected.command().to_string(),
+                span,
+                text,
+            })
+        }
+    }
+
+    fn same_lockfile_family(left: &Self, right: &Self) -> bool {
+        matches!(
+            (left, right),
+            (
+                PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9,
+                PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
+            ) | (PackageManager::Npm, PackageManager::Npm)
+                | (PackageManager::Bun, PackageManager::Bun)
+                | (PackageManager::Yarn, PackageManager::Yarn)
+                | (PackageManager::Berry, PackageManager::Berry)
+        )
+    }
+
+    fn invalid_dev_engines_package_manager_at(
+        span_source: &Spanned<serde_json::Value>,
+        path: &[&str],
+        message: impl Into<String>,
+    ) -> Error {
+        let (span, text) = Self::dev_engines_span_and_text(span_source, path);
+        Error::InvalidDevEnginesPackageManager {
+            message: message.into(),
+            span,
+            text,
+        }
+    }
+
+    fn invalid_dev_engines_package_manager_key_at(
+        span_source: &Spanned<serde_json::Value>,
+        path: &[&str],
+        message: impl Into<String>,
+    ) -> Error {
+        let (span, text) = Self::dev_engines_key_span_and_text(span_source, path);
+        Error::InvalidDevEnginesPackageManager {
+            message: message.into(),
+            span,
+            text,
+        }
+    }
+
+    fn dev_engines_key_span_and_text(
+        span_source: &Spanned<serde_json::Value>,
+        path: &[&str],
+    ) -> (Option<SourceSpan>, NamedSource<String>) {
+        let path_name = span_source
+            .path
+            .as_ref()
+            .map_or("package.json", |path| path.as_ref());
+        let Some(text) = span_source.text.as_ref() else {
+            return span_source.span_and_text("package.json");
+        };
+        let Some(mut range) = span_source.range.clone() else {
+            return span_source.span_and_text("package.json");
+        };
+
+        for (index, key) in path.iter().enumerate() {
+            let Some(key_range) = Self::json_property_key_range(text, range.clone(), key) else {
+                return span_source.span_and_text("package.json");
+            };
+            if index == path.len() - 1 {
+                return (
+                    Some(key_range.into()),
+                    NamedSource::new(path_name, text.to_string()),
+                );
+            }
+
+            let Some(value_range) = Self::json_property_value_range(text, range, key) else {
+                return span_source.span_and_text("package.json");
+            };
+            range = value_range;
+        }
+
+        span_source.span_and_text("package.json")
+    }
+
+    fn dev_engines_span_and_text(
+        span_source: &Spanned<serde_json::Value>,
+        path: &[&str],
+    ) -> (Option<SourceSpan>, NamedSource<String>) {
+        let path_name = span_source
+            .path
+            .as_ref()
+            .map_or("package.json", |path| path.as_ref());
+        let Some(text) = span_source.text.as_ref() else {
+            return span_source.span_and_text("package.json");
+        };
+        let Some(mut range) = span_source.range.clone() else {
+            return span_source.span_and_text("package.json");
+        };
+
+        for key in path {
+            let Some(nested_range) = Self::json_property_value_range(text, range, key) else {
+                return span_source.span_and_text("package.json");
+            };
+            range = nested_range;
+        }
+
+        (
+            Some(range.into()),
+            NamedSource::new(path_name, text.to_string()),
+        )
+    }
+
+    fn json_property_value_range(
+        text: &str,
+        containing_range: Range<usize>,
+        key: &str,
+    ) -> Option<Range<usize>> {
+        let key_range = Self::json_property_key_range(text, containing_range.clone(), key)?;
+        let mut cursor = key_range.end;
+        let bytes = text.as_bytes();
+
+        while cursor < containing_range.end && bytes[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+        if bytes.get(cursor) != Some(&b':') {
+            return None;
+        }
+        cursor += 1;
+        while cursor < containing_range.end && bytes[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+
+        let value_end = Self::json_value_end(text, cursor, containing_range.end)?;
+        Some(cursor..value_end)
+    }
+
+    fn json_property_key_range(
+        text: &str,
+        containing_range: Range<usize>,
+        key: &str,
+    ) -> Option<Range<usize>> {
+        let pattern = format!("\"{key}\"");
+        let search_text = text.get(containing_range.clone())?;
+        let key_start = containing_range.start + search_text.find(&pattern)?;
+        Some(key_start..key_start + pattern.len())
+    }
+
+    fn json_value_end(text: &str, start: usize, containing_end: usize) -> Option<usize> {
+        let bytes = text.as_bytes();
+        match bytes.get(start)? {
+            b'"' => Self::json_string_end(bytes, start, containing_end),
+            b'{' => Self::json_bracketed_value_end(bytes, start, containing_end, b'{', b'}'),
+            b'[' => Self::json_bracketed_value_end(bytes, start, containing_end, b'[', b']'),
+            _ => {
+                let mut end = start;
+                while end < containing_end
+                    && !matches!(bytes[end], b',' | b'}' | b']')
+                    && !bytes[end].is_ascii_whitespace()
+                {
+                    end += 1;
+                }
+                (end > start).then_some(end)
+            }
+        }
+    }
+
+    fn json_string_end(bytes: &[u8], start: usize, containing_end: usize) -> Option<usize> {
+        let mut cursor = start + 1;
+        let mut escaped = false;
+        while cursor < containing_end {
+            let byte = bytes[cursor];
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                return Some(cursor + 1);
+            }
+            cursor += 1;
+        }
+        None
+    }
+
+    fn json_bracketed_value_end(
+        bytes: &[u8],
+        start: usize,
+        containing_end: usize,
+        open: u8,
+        close: u8,
+    ) -> Option<usize> {
+        let mut cursor = start;
+        let mut depth = 0usize;
+        while cursor < containing_end {
+            match bytes[cursor] {
+                b'"' => cursor = Self::json_string_end(bytes, cursor, containing_end)? - 1,
+                byte if byte == open => depth += 1,
+                byte if byte == close => {
+                    depth = depth.checked_sub(1)?;
+                    if depth == 0 {
+                        return Some(cursor + 1);
+                    }
+                }
+                _ => {}
+            }
+            cursor += 1;
+        }
+        None
+    }
+
     /// Try to detect package manager based on configuration files and binaries
     /// installed on the system.
     pub fn detect_package_manager(repo_root: &AbsoluteSystemPath) -> Result<Self, Error> {
@@ -408,8 +788,12 @@ impl PackageManager {
         package_json: &PackageJson,
         repo_root: &AbsoluteSystemPath,
     ) -> Result<Self, Error> {
-        Self::get_package_manager(repo_root, package_json)
-            .or_else(|_| Self::detect_package_manager(repo_root))
+        Self::get_package_manager(repo_root, package_json).or_else(|err| match err {
+            Error::NoPackageManager(_)
+            | Error::InvalidPackageManager { .. }
+            | Error::InvalidVersion { .. } => Self::detect_package_manager(repo_root),
+            err => Err(err),
+        })
     }
 
     pub(crate) fn parse_package_manager_string(
@@ -673,10 +1057,14 @@ mod tests {
     use std::collections::HashSet;
 
     use pretty_assertions::assert_eq;
+    use serde_json::json;
     use tempfile::TempDir;
     use test_case::test_case;
 
     use super::*;
+    use crate::discovery::{
+        LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
+    };
 
     struct TestCase {
         name: String,
@@ -699,6 +1087,30 @@ mod tests {
             }
         }
         panic!("Couldn't find Turborepo root from {cwd}");
+    }
+
+    fn package_json(value: serde_json::Value) -> PackageJson {
+        PackageJson::from_value(value).unwrap()
+    }
+
+    fn dev_engines_package_manager(
+        name: serde_json::Value,
+        version: serde_json::Value,
+    ) -> PackageJson {
+        package_json(json!({
+            "devEngines": {
+                "packageManager": {
+                    "name": name,
+                    "version": version
+                }
+            }
+        }))
+    }
+
+    fn temp_repo_root() -> Result<(TempDir, AbsoluteSystemPathBuf), Error> {
+        let dir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path())?.to_owned();
+        Ok((dir, repo_root))
     }
 
     #[test]
@@ -942,6 +1354,190 @@ mod tests {
         let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
         assert_eq!(package_manager, PackageManager::Bun);
 
+        Ok(())
+    }
+
+    #[test_case("npm", "10.5.0", PackageManager::Npm ; "npm")]
+    #[test_case("bun", "1.1.0", PackageManager::Bun ; "bun")]
+    #[test_case("yarn", "1.22.22", PackageManager::Yarn ; "yarn classic")]
+    #[test_case("yarn", "4.5.0", PackageManager::Berry ; "yarn berry")]
+    #[test_case("pnpm", "6.35.1", PackageManager::Pnpm6 ; "pnpm6")]
+    #[test_case("pnpm", "8.15.9", PackageManager::Pnpm ; "pnpm")]
+    #[test_case("pnpm", "9.12.3", PackageManager::Pnpm9 ; "pnpm9")]
+    #[test_case("pnpm", "9.12.3-alpha.0", PackageManager::Pnpm ; "pnpm prerelease")]
+    fn test_read_dev_engines_package_manager(
+        name: &str,
+        version: &str,
+        expected: PackageManager,
+    ) -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        let package_json = dev_engines_package_manager(json!(name), json!(version));
+
+        let package_manager = PackageManager::read_package_manager(&repo_root, &package_json)?;
+
+        assert_eq!(package_manager, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_top_level_package_manager_takes_precedence_over_dev_engines() -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        let package_json = package_json(json!({
+            "packageManager": "npm@10.5.0",
+            "devEngines": {
+                "packageManager": {
+                    "name": "not-supported",
+                    "version": 1
+                }
+            }
+        }));
+
+        let package_manager = PackageManager::read_package_manager(&repo_root, &package_json)?;
+
+        assert_eq!(package_manager, PackageManager::Npm);
+        Ok(())
+    }
+
+    #[test_case(json!({"devEngines": []}), "`devEngines` must be an object" ; "devEngines array")]
+    #[test_case(json!({"devEngines": null}), "`devEngines` must be an object" ; "devEngines null")]
+    #[test_case(json!({"devEngines": {"packageManager": []}}), "`devEngines.packageManager` must be an object" ; "packageManager array")]
+    #[test_case(json!({"devEngines": {"packageManager": null}}), "`devEngines.packageManager` must be an object" ; "packageManager null")]
+    #[test_case(json!({"devEngines": {"packageManager": {}}}), "expected" ; "empty object")]
+    #[test_case(json!({"devEngines": {"packageManager": {"version": "9.12.3"}}}), "name` is required" ; "missing name")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": 1, "version": "9.12.3"}}}), "name` must be a string" ; "non-string name")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": "", "version": "9.12.3"}}}), "name` must not be empty" ; "empty name")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": " pnpm", "version": "9.12.3"}}}), "name` must not contain" ; "name whitespace")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": "pip", "version": 1}}}), "name` must be one of" ; "unsupported name before version")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm"}}}), "version` is required" ; "missing version")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": 1}}}), "version` must be a string" ; "non-string version")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": ""}}}), "version` must not be empty" ; "empty version")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": " 9.12.3"}}}), "version` must not contain" ; "version whitespace")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": "^9.0.0"}}}), "exact semantic version" ; "range version")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": "https://registry.npmjs.org/pnpm/-/pnpm-9.12.3.tgz"}}}), "exact semantic version" ; "url version")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": "9"}}}), "exact semantic version" ; "short version")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": "9.12.3+sha512.Purxi/Zex=="}}}), "exact semantic version" ; "integrity version")]
+    fn test_invalid_dev_engines_package_manager(
+        value: serde_json::Value,
+        expected_message: &str,
+    ) -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        let package_json = package_json(value);
+
+        let err = PackageManager::read_package_manager(&repo_root, &package_json).unwrap_err();
+
+        let Error::InvalidDevEnginesPackageManager { message, .. } = err else {
+            panic!("expected InvalidDevEnginesPackageManager, got {err:?}");
+        };
+        assert!(
+            message.contains(expected_message),
+            "expected {message:?} to contain {expected_message:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_missing_dev_engines_package_manager_version_span() -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        let contents = r#"{
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm"
+    }
+  }
+}"#;
+        let package_json = PackageJson::load_from_str(contents, "package.json").unwrap();
+
+        let err = PackageManager::read_package_manager(&repo_root, &package_json).unwrap_err();
+
+        let Error::InvalidDevEnginesPackageManager {
+            span: Some(span), ..
+        } = err
+        else {
+            panic!("expected InvalidDevEnginesPackageManager with span, got {err:?}");
+        };
+        let snippet = &contents[span.offset()..span.offset() + span.len()];
+        assert_eq!(snippet, "\"packageManager\"");
+        assert!(!snippet.contains("devEngines"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_missing_declarations_produces_missing_package_manager_error() -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        let package_json = package_json(json!({}));
+
+        let err = PackageManager::read_package_manager(&repo_root, &package_json).unwrap_err();
+
+        assert!(matches!(err, Error::MissingPackageManager));
+        assert!(err.to_string().contains("devEngines.packageManager"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_or_detect_does_not_infer_missing_declarations() -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        std::fs::write(repo_root.join_component(npm::LOCKFILE).as_std_path(), "{}")?;
+        let package_json = package_json(json!({}));
+
+        let err =
+            PackageManager::read_or_detect_package_manager(&package_json, &repo_root).unwrap_err();
+
+        assert!(matches!(err, Error::MissingPackageManager));
+        Ok(())
+    }
+
+    #[test]
+    fn test_dev_engines_package_manager_lockfile_mismatch() -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        std::fs::write(repo_root.join_component(npm::LOCKFILE).as_std_path(), "{}")?;
+        let package_json = dev_engines_package_manager(json!("pnpm"), json!("9.12.3"));
+
+        let err = PackageManager::read_package_manager(&repo_root, &package_json).unwrap_err();
+
+        assert!(matches!(
+            err,
+            Error::PackageManagerLockfileMismatch { declared, detected, .. }
+                if declared == "pnpm" && detected == "npm"
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn test_dev_engines_package_manager_multiple_lockfiles() -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        std::fs::write(repo_root.join_component(npm::LOCKFILE).as_std_path(), "{}")?;
+        std::fs::write(repo_root.join_component(pnpm::LOCKFILE).as_std_path(), "")?;
+        let package_json = dev_engines_package_manager(json!("pnpm"), json!("9.12.3"));
+
+        let err = PackageManager::read_package_manager(&repo_root, &package_json).unwrap_err();
+
+        assert!(matches!(err, Error::MultiplePackageManagers { .. }));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_allow_no_package_manager_bypasses_dev_engines_validation() -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        std::fs::write(repo_root.join_component(npm::LOCKFILE).as_std_path(), "{}")?;
+        std::fs::write(
+            repo_root.join_component("package.json").as_std_path(),
+            r#"{"workspaces":[]}"#,
+        )?;
+        let package_json = package_json(json!({
+            "devEngines": {
+                "packageManager": {
+                    "name": "pnpm",
+                    "version": "not-semver"
+                }
+            }
+        }));
+        let mut builder = LocalPackageDiscoveryBuilder::new(repo_root, None, Some(package_json));
+        builder.with_allow_no_package_manager(true);
+
+        let discovery = builder.build()?;
+        let response = discovery.discover_packages().await.unwrap();
+
+        assert_eq!(response.package_manager, PackageManager::Npm);
         Ok(())
     }
 

@@ -125,7 +125,7 @@ impl PackageDiscoveryBuilder for LocalPackageDiscoveryBuilder {
                     PackageJson::load(&self.repo_root.join_component("package.json"))
                 })?;
                 if self.allow_missing_package_manager {
-                    PackageManager::read_or_detect_package_manager(&package_json, &self.repo_root)?
+                    PackageManager::detect_package_manager(&self.repo_root)?
                 } else {
                     PackageManager::get_package_manager(&self.repo_root, &package_json)?
                 }
