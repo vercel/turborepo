@@ -95,10 +95,7 @@ function getWorkspacePackageManager({
     return undefined;
   }
 
-  const hasDevEngines = Object.prototype.hasOwnProperty.call(
-    packageJson,
-    "devEngines"
-  );
+  const hasDevEngines = Object.hasOwn(packageJson, "devEngines");
   if (
     hasDevEngines &&
     (!devEngines || typeof devEngines !== "object" || Array.isArray(devEngines))
