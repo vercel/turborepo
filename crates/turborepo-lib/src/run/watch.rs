@@ -165,9 +165,16 @@ struct RunHandle {
 }
 
 /// Format the slowest-to-hash files reported by the [`HashWatcher`] into a
-/// leading-space hint for a stalled-startup message, e.g. " Slowest files to
-/// hash: foo.tmp (12.3s, still hashing), bar (4.1s)." Returns an empty string
-/// when nothing notable was recorded.
+/// leading-newline hint for a stalled-startup message, with one file per line
+/// since the paths are long and hard to scan inline, e.g.:
+///
+/// ```text
+///  Slowest files to hash:
+///   foo.tmp (12.3s, still hashing)
+///   bar (4.1s)
+/// ```
+///
+/// Returns an empty string when nothing notable was recorded.
 fn slowest_files_hint(slowest: &[turborepo_scm::SlowestFile]) -> String {
     // Cap how many we list so the message stays readable.
     const MAX_LISTED: usize = 3;
@@ -177,16 +184,16 @@ fn slowest_files_hint(slowest: &[turborepo_scm::SlowestFile]) -> String {
         .map(|f| {
             let secs = f.duration.as_secs_f64();
             if f.in_flight {
-                format!("{} ({secs:.1}s, still hashing)", f.path)
+                format!("  {} ({secs:.1}s, still hashing)", f.path)
             } else {
-                format!("{} ({secs:.1}s)", f.path)
+                format!("  {} ({secs:.1}s)", f.path)
             }
         })
         .collect();
     if listed.is_empty() {
         String::new()
     } else {
-        format!(" Slowest files to hash: {}.", listed.join(", "))
+        format!(" Slowest files to hash:\n{}", listed.join("\n"))
     }
 }
 
@@ -218,7 +225,7 @@ pub enum Error {
     },
     #[error(
         "Timed out after {0}s waiting for the file watcher to become ready. This usually means a \
-         large file is slowing the initial hash.{1} Remove or .gitignore it, or raise the limit \
+         large file is slowing the initial hash.{1}\nRemove or .gitignore it, or raise the limit \
          with TURBO_WATCH_STARTUP_TIMEOUT (seconds)."
     )]
     FileWatchingTimeout(u64, String),
@@ -442,7 +449,7 @@ impl WatchClient {
                             turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
                             format!(
                                 "File watcher still initializing after {STARTUP_ATTEMPT_SECS}s, \
-                                 likely a large file is slowing the initial hash.{} Retrying...",
+                                 likely a large file is slowing the initial hash.{}\nRetrying...",
                                 slowest_files_hint(&slowest)
                             ),
                         )
@@ -1134,5 +1141,14 @@ mod test {
         assert!(hint.contains("still hashing"), "got: {hint}");
         assert!(hint.contains("bar"), "got: {hint}");
         assert!(hint.contains("12.3s"), "got: {hint}");
+        // One file per line: each listed file should be on its own line.
+        assert!(
+            hint.lines().any(|l| l.contains("big.tmp") && !l.contains("bar")),
+            "files should be on separate lines, got: {hint:?}"
+        );
+        assert!(
+            hint.lines().any(|l| l.contains("bar") && !l.contains("big.tmp")),
+            "files should be on separate lines, got: {hint:?}"
+        );
     }
 }
