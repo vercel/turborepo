@@ -28,7 +28,7 @@ export async function getWorkspaceDetails({
   }
 
   throw new ConvertError(
-    "Could not determine package manager. Add `packageManager` to `package.json` or ensure a lockfile is present.",
+    "Could not determine package manager. Add `devEngines.packageManager` or legacy `packageManager` to `package.json`, or ensure a lockfile is present.",
     {
       type: "package_manager-unable_to_detect"
     }

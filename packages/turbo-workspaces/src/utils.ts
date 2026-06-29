@@ -9,6 +9,7 @@ import {
 } from "fs-extra";
 import { sync as globSync } from "fast-glob";
 import yaml from "js-yaml";
+import semver from "semver";
 import type {
   PackageManager,
   Project,
@@ -23,6 +24,9 @@ interface PackageJson {
   version: string;
   description?: string;
   packageManager?: string;
+  devEngines?: {
+    packageManager?: unknown;
+  };
   workspaces?: Array<string> | { packages?: Array<string> };
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
@@ -32,6 +36,14 @@ interface PackageJson {
 
 // adapted from https://github.com/nodejs/corepack/blob/cae770694e62f15fed33dd8023649d77d96023c1/sources/specUtils.ts#L14
 const PACKAGE_MANAGER_REGEX = /^(?!_)(?<manager>.+)@(?<version>.+)$/;
+const SUPPORTED_PACKAGE_MANAGERS = new Set<PackageManager>([
+  "npm",
+  "pnpm",
+  "yarn",
+  "bun"
+]);
+const DEV_ENGINES_VERSION_REGEX =
+  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 function getPackageJson({
   workspaceRoot
@@ -67,20 +79,138 @@ function getWorkspacePackageManager({
   workspaceRoot
 }: {
   workspaceRoot: string;
-}): string | undefined {
-  const { packageManager } = getPackageJson({ workspaceRoot });
+}): PackageManager | undefined {
+  const packageJson = getPackageJson({ workspaceRoot });
+  const { packageManager, devEngines } = packageJson;
   if (packageManager) {
     try {
       const match = PACKAGE_MANAGER_REGEX.exec(packageManager);
       if (match) {
-        const [_, manager] = match;
-        return manager;
+        const manager = match.groups?.manager;
+        return isPackageManager(manager) ? manager : undefined;
       }
     } catch (err) {
       // this won't always exist.
     }
+    return undefined;
   }
-  return undefined;
+
+  const hasDevEngines = Object.prototype.hasOwnProperty.call(
+    packageJson,
+    "devEngines"
+  );
+  if (
+    hasDevEngines &&
+    (!devEngines || typeof devEngines !== "object" || Array.isArray(devEngines))
+  ) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines` must be an object containing `packageManager`"
+    );
+  }
+
+  if (!devEngines || !("packageManager" in devEngines)) {
+    return undefined;
+  }
+
+  const devEnginesPackageManager = devEngines.packageManager;
+  if (
+    !devEnginesPackageManager ||
+    typeof devEnginesPackageManager !== "object" ||
+    Array.isArray(devEnginesPackageManager)
+  ) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager` must be an object"
+    );
+  }
+
+  if (Object.keys(devEnginesPackageManager).length === 0) {
+    throw invalidDevEnginesPackageManager(
+      'expected `{ "name": "pnpm", "version": "9.12.3" }`'
+    );
+  }
+
+  if (!("name" in devEnginesPackageManager)) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.name` is required"
+    );
+  }
+
+  const { name } = devEnginesPackageManager;
+  if (typeof name !== "string") {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.name` must be a string"
+    );
+  }
+
+  if (name.length === 0) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.name` must not be empty"
+    );
+  }
+
+  if (name.trim() !== name) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.name` must not contain leading or trailing whitespace"
+    );
+  }
+
+  if (!isPackageManager(name)) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.name` must be one of `npm`, `pnpm`, `yarn`, or `bun`"
+    );
+  }
+
+  if (!("version" in devEnginesPackageManager)) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.version` is required"
+    );
+  }
+
+  const { version } = devEnginesPackageManager;
+  if (typeof version !== "string") {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.version` must be a string"
+    );
+  }
+
+  if (version.length === 0) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.version` must not be empty"
+    );
+  }
+
+  if (version.trim() !== version) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.version` must not contain leading or trailing whitespace"
+    );
+  }
+
+  if (
+    !DEV_ENGINES_VERSION_REGEX.test(version) ||
+    semver.valid(version) === null
+  ) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.version` must be an exact semantic version"
+    );
+  }
+
+  return name;
+}
+
+function isPackageManager(value: unknown): value is PackageManager {
+  return (
+    typeof value === "string" &&
+    SUPPORTED_PACKAGE_MANAGERS.has(value as PackageManager)
+  );
+}
+
+function invalidDevEnginesPackageManager(message: string): ConvertError {
+  return new ConvertError(
+    `Invalid \`devEngines.packageManager\` field in package.json: ${message}`,
+    {
+      type: "package_manager-unable_to_detect"
+    }
+  );
 }
 
 function getWorkspaceInfo({
