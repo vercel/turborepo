@@ -870,8 +870,10 @@ impl<'a> Visitor<'a> {
         // the ExecutionTracker is dropped.
         let mut internal_errors = Vec::new();
         while let Some(result) = tasks.next().await {
-            if let Err(e) = result.unwrap_or_else(|e| panic!("task executor panicked: {e}")) {
-                internal_errors.push(e);
+            match result {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => internal_errors.push(e.to_string()),
+                Err(e) => internal_errors.push(format!("task executor panicked: {e}")),
             }
         }
         drop(factory);
@@ -890,9 +892,7 @@ impl<'a> Visitor<'a> {
         engine_result?;
 
         if !internal_errors.is_empty() {
-            return Err(Error::InternalErrors(
-                internal_errors.into_iter().map(|e| e.to_string()).join(","),
-            ));
+            return Err(Error::InternalErrors(internal_errors.into_iter().join(",")));
         }
 
         // Write out the traced-config.json file if we have one
