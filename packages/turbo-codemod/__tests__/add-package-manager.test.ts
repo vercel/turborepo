@@ -4,7 +4,6 @@ import * as turboUtils from "@turbo/utils";
 import { setupTestFixtures } from "@turbo/test-utils";
 import { describe, it, expect, jest } from "@jest/globals";
 import { transformer } from "../src/transforms/add-package-manager";
-import type { TransformerResults } from "../src/runner";
 import type { TransformerOptions } from "../src/types";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
@@ -17,10 +16,20 @@ interface TestCase {
   name: string;
   fixture: string;
   existingPackageManagerString: string | undefined;
+  existingDevEnginesPackageManager:
+    | { name: string; version: string }
+    | undefined;
   packageManager: turboUtils.PackageManager;
   packageManagerVersion: string;
   options: TransformerOptions;
-  result: TransformerResults;
+  result: {
+    changes: Record<
+      string,
+      {
+        action: "modified" | "skipped" | "unchanged" | "error";
+      }
+    >;
+  };
 }
 
 const TEST_CASES: Array<TestCase> = [
@@ -28,15 +37,14 @@ const TEST_CASES: Array<TestCase> = [
     name: "basic",
     fixture: "no-package-manager",
     existingPackageManagerString: undefined,
+    existingDevEnginesPackageManager: undefined,
     packageManager: "npm",
     packageManagerVersion: "7.0.0",
     options: { force: false, dryRun: false, print: false },
     result: {
       changes: {
         "package.json": {
-          action: "modified",
-          additions: 1,
-          deletions: 0
+          action: "modified"
         }
       }
     }
@@ -45,15 +53,14 @@ const TEST_CASES: Array<TestCase> = [
     name: "dry",
     fixture: "no-package-manager",
     existingPackageManagerString: undefined,
+    existingDevEnginesPackageManager: undefined,
     packageManager: "npm",
     packageManagerVersion: "7.0.0",
     options: { force: false, dryRun: true, print: false },
     result: {
       changes: {
         "package.json": {
-          action: "skipped",
-          additions: 1,
-          deletions: 0
+          action: "skipped"
         }
       }
     }
@@ -62,15 +69,14 @@ const TEST_CASES: Array<TestCase> = [
     name: "print",
     fixture: "no-package-manager",
     existingPackageManagerString: undefined,
+    existingDevEnginesPackageManager: undefined,
     packageManager: "yarn",
     packageManagerVersion: "1.2.3",
     options: { force: false, dryRun: false, print: true },
     result: {
       changes: {
         "package.json": {
-          action: "modified",
-          additions: 1,
-          deletions: 0
+          action: "modified"
         }
       }
     }
@@ -79,15 +85,14 @@ const TEST_CASES: Array<TestCase> = [
     name: "print & dry",
     fixture: "no-package-manager",
     existingPackageManagerString: undefined,
+    existingDevEnginesPackageManager: undefined,
     packageManager: "pnpm",
     packageManagerVersion: "1.2.3",
     options: { force: false, dryRun: true, print: true },
     result: {
       changes: {
         "package.json": {
-          action: "skipped",
-          additions: 1,
-          deletions: 0
+          action: "skipped"
         }
       }
     }
@@ -96,6 +101,7 @@ const TEST_CASES: Array<TestCase> = [
     name: "basic",
     fixture: "has-package-manager",
     existingPackageManagerString: "npm@1.2.3",
+    existingDevEnginesPackageManager: undefined,
     packageManager: "npm",
     packageManagerVersion: "1.2.3",
     options: { force: false, dryRun: false, print: false },
@@ -107,11 +113,40 @@ const TEST_CASES: Array<TestCase> = [
     name: "basic",
     fixture: "wrong-package-manager",
     existingPackageManagerString: "turbo@1.7.0",
+    existingDevEnginesPackageManager: undefined,
     packageManager: "pnpm",
     packageManagerVersion: "1.2.3",
     options: { force: false, dryRun: false, print: false },
     result: {
       changes: {}
+    }
+  },
+  {
+    name: "basic",
+    fixture: "has-dev-engines-package-manager",
+    existingPackageManagerString: undefined,
+    existingDevEnginesPackageManager: { name: "npm", version: "1.2.3" },
+    packageManager: "npm",
+    packageManagerVersion: "1.2.3",
+    options: { force: false, dryRun: false, print: false },
+    result: {
+      changes: {}
+    }
+  },
+  {
+    name: "merge devEngines",
+    fixture: "has-dev-engines",
+    existingPackageManagerString: undefined,
+    existingDevEnginesPackageManager: undefined,
+    packageManager: "pnpm",
+    packageManagerVersion: "9.12.3",
+    options: { force: false, dryRun: false, print: false },
+    result: {
+      changes: {
+        "package.json": {
+          action: "modified"
+        }
+      }
     }
   }
 ];
@@ -127,6 +162,7 @@ describe("add-package-manager-2", () => {
     async ({
       fixture,
       existingPackageManagerString,
+      existingDevEnginesPackageManager,
       packageManager,
       packageManagerVersion,
       options,
@@ -155,8 +191,12 @@ describe("add-package-manager-2", () => {
         );
 
       // verify package manager
-      expect(JSON.parse(read("package.json") || "{}").packageManager).toEqual(
+      const beforePackageJson = JSON.parse(read("package.json") || "{}");
+      expect(beforePackageJson.packageManager).toEqual(
         existingPackageManagerString
+      );
+      expect(beforePackageJson.devEngines?.packageManager).toEqual(
+        existingDevEnginesPackageManager
       );
 
       // run the transformer
@@ -165,17 +205,32 @@ describe("add-package-manager-2", () => {
         options
       });
 
-      if (existingPackageManagerString === undefined) {
+      if (
+        existingPackageManagerString === undefined &&
+        existingDevEnginesPackageManager === undefined
+      ) {
         expect(mockGetAvailablePackageManagers).toHaveBeenCalled();
         expect(mockGetWorkspaceDetails).toHaveBeenCalled();
       }
 
-      expect(JSON.parse(read("package.json") || "{}").packageManager).toEqual(
-        options.dryRun
-          ? undefined
-          : existingPackageManagerString ||
-              `${packageManager}@${packageManagerVersion}`
+      const afterPackageJson = JSON.parse(read("package.json") || "{}");
+      expect(afterPackageJson.packageManager).toEqual(
+        existingPackageManagerString
       );
+      expect(afterPackageJson.devEngines?.packageManager).toEqual(
+        options.dryRun || existingPackageManagerString
+          ? existingDevEnginesPackageManager
+          : existingDevEnginesPackageManager || {
+              name: packageManager,
+              version: packageManagerVersion
+            }
+      );
+      if (fixture === "has-dev-engines" && !options.dryRun) {
+        expect(afterPackageJson.devEngines.runtime).toEqual({
+          name: "node",
+          version: "22.0.0"
+        });
+      }
 
       // result should be correct
       expect(transformerResult.changes).toMatchObject(result.changes);
