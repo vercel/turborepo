@@ -88,19 +88,19 @@ impl SlowestFiles {
         };
         let elapsed = started.elapsed();
 
-        // `completed` is kept ascending by duration, so index 0 is the cheapest
-        // (eviction candidate). Skip entirely if we're full and this file isn't
-        // slower than the current minimum.
+        // `completed` is kept descending by duration, so the cheapest (the
+        // eviction candidate) is last and can be dropped with an O(1) pop.
+        // Skip entirely if we're full and this file isn't slower than it.
         if inner.completed.len() == TOP_N_COMPLETED {
-            match inner.completed.first() {
+            match inner.completed.last() {
                 Some((_, min)) if elapsed <= *min => return,
                 _ => {
-                    inner.completed.remove(0);
+                    inner.completed.pop();
                 }
             }
         }
-        // Insertion sort: small N, and the common case appends near the end.
-        let pos = inner.completed.partition_point(|(_, d)| *d <= elapsed);
+        // Insert in the sorted (descending) location.
+        let pos = inner.completed.partition_point(|(_, d)| *d > elapsed);
         inner.completed.insert(pos, (path, elapsed));
     }
 
