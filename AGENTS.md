@@ -63,4 +63,4 @@ docs: Update installation instructions
 - Canary VS Code extension packages use `--pre-release`.
 - Non-dry-run releases publish the VS Code extension through the `LSP` workflow using `publish=true`, `dry_run=false`, and a `VSCE_PAT` secret on the protected `vscode-marketplace` environment. This publish path must not block release PR creation or cleanup published npm release state.
 - The `Release` workflow signs and notarizes macOS `turbo` binaries during `build-rust` using static GitHub secrets and `apple-codesign`/`rcodesign`.
-- The `Release` workflow installs Zig during `build-rust` because `turbo` links vendored `libghostty-vt` through `turborepo-ghostty-sys`.
+- The `Release` and `LSP` workflows install Zig during `build-rust` because `turbo` and `turborepo-lsp` link vendored `libghostty-vt` through `turborepo-ghostty-sys`.
