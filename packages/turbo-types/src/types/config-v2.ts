@@ -135,7 +135,7 @@ export interface RootSchema extends BaseSchema {
   concurrency?: string;
 
   /**
-   * Disable check for `packageManager` in root `package.json`
+   * Disable package manager declaration checks in root `package.json`.
    *
    * This is highly discouraged as it leaves `turbo` dependent on system
    * configuration to infer the correct package manager.
@@ -366,7 +366,7 @@ export interface GlobalConfig {
   concurrency?: string;
 
   /**
-   * Disable check for `packageManager` in root `package.json`.
+   * Disable package manager declaration checks in root `package.json`.
    *
    * @defaultValue `false`
    */

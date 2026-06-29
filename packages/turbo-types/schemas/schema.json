@@ -82,7 +82,7 @@
       ]
     },
     "dangerouslyDisablePackageManagerCheck": {
-      "description": "Disable check for `packageManager` in root `package.json`.\n\nThis is highly discouraged as it leaves `turbo` dependent on system configuration to infer the correct package manager. Some turbo features are disabled if this is set to true.",
+      "description": "Disable package manager declaration checks in root `package.json`.\n\nThis is highly discouraged as it leaves `turbo` dependent on system configuration to infer the correct package manager. Some turbo features are disabled if this is set to true.",
       "anyOf": [
         {
           "$ref": "#/definitions/Boolean"
@@ -392,7 +392,7 @@
           ]
         },
         "dangerouslyDisablePackageManagerCheck": {
-          "description": "Disable check for `packageManager` in root `package.json`.",
+          "description": "Disable package manager declaration checks in root `package.json`.",
           "anyOf": [
             {
               "$ref": "#/definitions/Boolean"
