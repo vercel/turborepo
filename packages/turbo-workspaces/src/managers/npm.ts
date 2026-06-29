@@ -35,7 +35,7 @@ const PACKAGE_MANAGER_DETAILS: Manager = {
  * Check if a given project is using npm workspaces
  * Verify by checking for the existence of:
  *  1. package-lock.json
- *  2. packageManager field in package.json
+ *  2. Package manager declaration in package.json
  */
 // eslint-disable-next-line @typescript-eslint/require-await -- must match the detect type signature
 async function detect(args: DetectArgs): Promise<boolean> {

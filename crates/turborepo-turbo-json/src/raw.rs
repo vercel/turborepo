@@ -314,7 +314,7 @@ pub struct RawGlobalConfig {
     #[ts(optional)]
     pub ui: Option<Spanned<UIMode>>,
 
-    /// Disable check for `packageManager` in root `package.json`.
+    /// Disable package manager declaration checks in root `package.json`.
     #[serde(
         skip_serializing_if = "Option::is_none",
         rename = "dangerouslyDisablePackageManagerCheck"
@@ -538,7 +538,7 @@ pub struct RawTurboJson {
     #[ts(optional)]
     pub ui: Option<Spanned<UIMode>>,
 
-    /// Disable check for `packageManager` in root `package.json`.
+    /// Disable package manager declaration checks in root `package.json`.
     ///
     /// This is highly discouraged as it leaves `turbo` dependent on system
     /// configuration to infer the correct package manager. Some turbo features

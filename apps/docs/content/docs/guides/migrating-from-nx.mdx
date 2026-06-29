@@ -236,9 +236,9 @@ const nextConfig = {};
 module.exports = nextConfig;
 ```
 
-### Step 5: Add the `packageManager` field
+### Step 5: Add `devEngines.packageManager`
 
-The root package.json needs to have the `packageManager` field. This ensures developers in the repository use the correct package manager, and that Turborepo can optimize your package graph based on your lockfile.
+The root package.json needs to have a package manager declaration. We recommend `devEngines.packageManager`. This ensures developers in the repository use the correct package manager, and that Turborepo can optimize your package graph based on your lockfile.
 
 <PackageManagerTabs>
 
@@ -246,7 +246,12 @@ The root package.json needs to have the `packageManager` field. This ensures dev
 
 ```json title="./package.json"
 {
-  "packageManager": "pnpm@9.0.0"
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "9.0.0"
+    }
+  }
 }
 ```
 
@@ -256,7 +261,12 @@ The root package.json needs to have the `packageManager` field. This ensures dev
 
 ```json title="./package.json"
 {
-  "packageManager": "yarn@1.22.19"
+  "devEngines": {
+    "packageManager": {
+      "name": "yarn",
+      "version": "1.22.19"
+    }
+  }
 }
 ```
 
@@ -266,7 +276,12 @@ The root package.json needs to have the `packageManager` field. This ensures dev
 
 ```json title="./package.json"
 {
-  "packageManager": "npm@10.0.0"
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "10.0.0"
+    }
+  }
 }
 ```
 
@@ -276,7 +291,12 @@ The root package.json needs to have the `packageManager` field. This ensures dev
 
 ```json title="./package.json"
 {
-  "packageManager": "bun@1.2.0"
+  "devEngines": {
+    "packageManager": {
+      "name": "bun",
+      "version": "1.2.0"
+    }
+  }
 }
 ```
 

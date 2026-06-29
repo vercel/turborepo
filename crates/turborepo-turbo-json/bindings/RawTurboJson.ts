@@ -78,7 +78,7 @@ remoteCache?: RemoteCache,
  */
 ui?: UI, 
 /**
- * Disable check for `packageManager` in root `package.json`.
+ * Disable package manager declaration checks in root `package.json`.
  *
  * This is highly discouraged as it leaves `turbo` dependent on system
  * configuration to infer the correct package manager. Some turbo features
