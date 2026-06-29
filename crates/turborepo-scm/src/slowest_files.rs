@@ -6,10 +6,11 @@
 //! files that are *still being hashed* (the most likely cause of a hang).
 
 use std::{
+    cmp::Reverse,
     collections::HashMap,
     sync::{
-        atomic::{AtomicU64, Ordering},
         Mutex,
+        atomic::{AtomicU64, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -99,22 +100,19 @@ impl SlowestFiles {
             }
         }
         // Insertion sort: small N, and the common case appends near the end.
-        let pos = inner
-            .completed
-            .partition_point(|(_, d)| *d <= elapsed);
+        let pos = inner.completed.partition_point(|(_, d)| *d <= elapsed);
         inner.completed.insert(pos, (path, elapsed));
     }
 
-    /// Snapshot the slowest files: every in-flight file (with elapsed-so-far)
-    /// plus the top-N completed. In-flight files are listed first (they are the
-    /// likely cause of a hang), then both groups by descending duration.
+    /// Snapshot the slowest files by duration including in-flight files (using
+    /// its elapsed-so-far) plus the [`TOP_N_COMPLETED`], sorted slowest-first.
     pub fn snapshot(&self) -> Vec<SlowestFile> {
         let now = Instant::now();
         let Ok(inner) = self.inner.lock() else {
             return Vec::new();
         };
 
-        let mut files: Vec<SlowestFile> = inner
+        let mut files: Vec<_> = inner
             .live
             .values()
             .map(|(path, started)| SlowestFile {
@@ -128,8 +126,8 @@ impl SlowestFiles {
                 in_flight: false,
             }))
             .collect();
-        // In-flight first, then slowest first within each group.
-        files.sort_by_key(|f| (!f.in_flight, std::cmp::Reverse(f.duration)));
+        // Sort purely by duration.
+        files.sort_by_key(|f| Reverse(f.duration));
         files
     }
 }
@@ -174,12 +172,29 @@ mod test {
     }
 
     #[test]
-    fn in_flight_listed_before_completed() {
+    fn longest_running_in_flight_file_ranks_first() {
+        // A file that has been hashing for a while should outrank a fast
+        // completed one, on duration alone.
         let sf = SlowestFiles::new();
-        drop(sf.start(p("done")));
-        let _live = sf.start(p("live"));
+        let _slow = sf.start(p("slow"));
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        drop(sf.start(p("fast"))); // completes near-instantly
         let snap = sf.snapshot();
+        assert_eq!(snap[0].path, p("slow"));
         assert!(snap[0].in_flight);
-        assert_eq!(snap[0].path, p("live"));
+    }
+
+    #[test]
+    fn slow_completed_file_outranks_fresh_in_flight() {
+        // A genuinely slow completed file should not be displaced by a small
+        // file that merely happens to be mid-hash at snapshot time.
+        let sf = SlowestFiles::new();
+        let slow = sf.start(p("slow"));
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        drop(slow); // completes with ~20ms recorded
+        let _fresh = sf.start(p("fresh")); // just started, ~0ms elapsed
+        let snap = sf.snapshot();
+        assert_eq!(snap[0].path, p("slow"));
+        assert!(!snap[0].in_flight);
     }
 }
