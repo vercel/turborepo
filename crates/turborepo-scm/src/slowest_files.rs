@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::RelativeUnixPathBuf;
 
 /// Number of completed entries to retain, ranked by hashing duration.
 const TOP_N_COMPLETED: usize = 5;
@@ -26,7 +26,9 @@ pub struct HashTicket(u64);
 
 #[derive(Debug, Clone)]
 pub struct SlowestFile {
-    pub path: AbsoluteSystemPathBuf,
+    /// Path relative to the git root (i.e. project-relative), as recorded by
+    /// the hashing loop.
+    pub path: RelativeUnixPathBuf,
     /// Final hashing duration, or for an in-flight file the time elapsed so
     /// far at the moment of the snapshot.
     pub duration: Duration,
@@ -37,10 +39,10 @@ pub struct SlowestFile {
 #[derive(Debug)]
 struct Inner {
     /// Files currently being hashed, keyed by ticket id.
-    live: Vec<(u64, AbsoluteSystemPathBuf, Instant)>,
+    live: Vec<(u64, RelativeUnixPathBuf, Instant)>,
     /// Top-N completed files by hashing duration, ascending so the cheapest
     /// (the eviction candidate) is first.
-    completed: Vec<(AbsoluteSystemPathBuf, Duration)>,
+    completed: Vec<(RelativeUnixPathBuf, Duration)>,
 }
 
 /// Tracks the slowest-to-hash files. Cheap to share via `Arc`; the hot path
@@ -71,7 +73,7 @@ impl SlowestFiles {
 
     /// Record that hashing of `path` has started. Returns a ticket to pass to
     /// [`finish`](Self::finish) on completion.
-    pub fn start(&self, path: AbsoluteSystemPathBuf) -> HashTicket {
+    pub fn start(&self, path: RelativeUnixPathBuf) -> HashTicket {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let now = Instant::now();
         if let Ok(mut inner) = self.inner.lock() {
@@ -145,16 +147,12 @@ impl SlowestFiles {
 mod test {
     use std::sync::Arc;
 
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::RelativeUnixPathBuf;
 
     use super::{SlowestFiles, TOP_N_COMPLETED};
 
-    fn p(s: &str) -> AbsoluteSystemPathBuf {
-        #[cfg(windows)]
-        let s = format!("C:\\{s}");
-        #[cfg(not(windows))]
-        let s = format!("/{s}");
-        AbsoluteSystemPathBuf::new(s).unwrap()
+    fn p(s: &str) -> RelativeUnixPathBuf {
+        RelativeUnixPathBuf::new(s).unwrap()
     }
 
     #[test]

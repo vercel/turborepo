@@ -1113,15 +1113,11 @@ mod test {
     fn slowest_files_hint_lists_files_and_flags_in_flight() {
         use std::time::Duration;
 
-        use turbopath::AbsoluteSystemPathBuf;
+        use turbopath::RelativeUnixPathBuf;
         use turborepo_scm::SlowestFile;
 
-        fn path(s: &str) -> AbsoluteSystemPathBuf {
-            #[cfg(windows)]
-            let s = format!("C:\\{s}");
-            #[cfg(not(windows))]
-            let s = format!("/{s}");
-            AbsoluteSystemPathBuf::new(s).unwrap()
+        fn path(s: &str) -> RelativeUnixPathBuf {
+            RelativeUnixPathBuf::new(s).unwrap()
         }
 
         let files = vec![
