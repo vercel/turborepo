@@ -24,6 +24,7 @@ pub const BUILTIN_PASS_THROUGH_ENV: &[&str] = &[
     "LANG",
     "SHELL",
     "PWD",
+    "XDG_DATA_*",
     "XDG_RUNTIME_DIR",
     "XAUTHORITY",
     "DBUS_SESSION_BUS_ADDRESS",
