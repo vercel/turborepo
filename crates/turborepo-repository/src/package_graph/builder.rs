@@ -408,7 +408,11 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             ..
         } = self;
 
-        let package_manager = package_discovery.discover_packages().await?.package_manager;
+        let package_manager = package_discovery
+            .discover_packages()
+            .await?
+            .package_manager
+            .with_resolved_nub_lockfile(repo_root);
 
         debug_assert!(single, "expected single package graph");
         Ok(PackageGraph {
@@ -498,7 +502,8 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             .package_discovery
             .discover_packages()
             .await?
-            .package_manager;
+            .package_manager
+            .with_resolved_nub_lockfile(self.repo_root);
 
         match self.lockfile.take() {
             Some(lockfile) => Ok(lockfile),
@@ -527,7 +532,8 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             .package_discovery
             .discover_packages()
             .await?
-            .package_manager;
+            .package_manager
+            .with_resolved_nub_lockfile(self.repo_root);
         turborepo_rayon_compat::block_in_place(|| {
             self.connect_internal_dependencies(&package_manager)
         })?;
@@ -641,7 +647,8 @@ impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
             .discover_packages()
             .instrument(tracing::debug_span!("package discovery"))
             .await?
-            .package_manager;
+            .package_manager
+            .with_resolved_nub_lockfile(self.repo_root);
         let Self {
             workspaces,
             workspace_graph,
