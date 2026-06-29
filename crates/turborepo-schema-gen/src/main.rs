@@ -637,7 +637,7 @@ fn generate_root_schema_interface() -> String {
   concurrency?: string;
 
   /**
-   * Disable check for `packageManager` in root `package.json`
+   * Disable package manager declaration checks in root `package.json`.
    *
    * This is highly discouraged as it leaves `turbo` dependent on system
    * configuration to infer the correct package manager.
@@ -874,7 +874,7 @@ fn generate_global_config_interface() -> String {
   concurrency?: string;
 
   /**
-   * Disable check for `packageManager` in root `package.json`.
+   * Disable package manager declaration checks in root `package.json`.
    *
    * @defaultValue `false`
    */

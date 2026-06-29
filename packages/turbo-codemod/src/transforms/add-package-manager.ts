@@ -8,8 +8,20 @@ import type { Transformer, TransformerArgs } from "../types";
 
 // transformer details
 const TRANSFORMER = "add-package-manager";
-const DESCRIPTION = "Set the `packageManager` key in root `package.json` file";
+const DESCRIPTION =
+  "Set the `devEngines.packageManager` key in root `package.json` file";
 const INTRODUCED_IN = "1.1.0";
+
+interface DevEnginesPackageManager {
+  name: string;
+  version: string;
+}
+
+interface PackageJsonWithDevEngines extends PackageJson {
+  devEngines?: Record<string, unknown> & {
+    packageManager?: DevEnginesPackageManager;
+  };
+}
 
 export async function transformer({
   root,
@@ -22,13 +34,21 @@ export async function transformer({
   });
 
   const rootPackageJsonPath = path.join(root, "package.json");
-  const rootPackageJson = fs.readJsonSync(rootPackageJsonPath) as PackageJson;
+  const rootPackageJson = fs.readJsonSync(
+    rootPackageJsonPath
+  ) as PackageJsonWithDevEngines;
   if ("packageManager" in rootPackageJson) {
     log.info(`"packageManager" already set in root "package.json"`);
     return runner.finish();
   }
+  if (rootPackageJson.devEngines?.packageManager) {
+    log.info(`"devEngines.packageManager" already set in root "package.json"`);
+    return runner.finish();
+  }
 
-  log.info(`Set "packageManager" key in root "package.json" file...`);
+  log.info(
+    `Set "devEngines.packageManager" key in root "package.json" file...`
+  );
   let project: Project;
   try {
     project = await getWorkspaceDetails({ root });
@@ -49,7 +69,6 @@ export async function transformer({
     });
   }
 
-  const pkgManagerString = `${packageManager}@${version}`;
   const allWorkspaces = [
     {
       name: "package.json",
@@ -63,7 +82,16 @@ export async function transformer({
 
   for (const workspace of allWorkspaces) {
     const { packageJsonPath, ...pkgJson } = workspace.packageJson;
-    const newJson = { ...pkgJson, packageManager: pkgManagerString };
+    const newJson = {
+      ...pkgJson,
+      devEngines: {
+        ...pkgJson.devEngines,
+        packageManager: {
+          name: packageManager,
+          version
+        }
+      }
+    };
     runner.modifyFile({
       filePath: packageJsonPath,
       after: newJson

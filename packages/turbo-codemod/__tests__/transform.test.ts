@@ -12,6 +12,23 @@ jest.mock<typeof import("@turbo/workspaces")>("@turbo/workspaces", () => ({
   ...jest.requireActual("@turbo/workspaces")
 }));
 
+function expectedPackageJsonWithPackageManager() {
+  return {
+    dependencies: {},
+    devDependencies: {
+      turbo: "1.0.0"
+    },
+    devEngines: {
+      packageManager: {
+        name: "pnpm",
+        version: "1.2.3"
+      }
+    },
+    name: "transform-basic",
+    version: "1.0.0"
+  };
+}
+
 describe("transform", () => {
   const mockExit = spyExit();
   const { useFixture } = setupTestFixtures({
@@ -56,15 +73,9 @@ describe("transform", () => {
       print: false
     });
 
-    expect(readJson("package.json")).toStrictEqual({
-      dependencies: {},
-      devDependencies: {
-        turbo: "1.0.0"
-      },
-      name: "transform-basic",
-      packageManager: "pnpm@1.2.3",
-      version: "1.0.0"
-    });
+    expect(readJson("package.json")).toStrictEqual(
+      expectedPackageJsonWithPackageManager()
+    );
 
     // verify mocks were called
     expect(mockedCheckGitStatus).toHaveBeenCalled();
