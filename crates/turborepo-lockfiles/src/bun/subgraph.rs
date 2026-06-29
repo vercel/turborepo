@@ -747,19 +747,58 @@ impl BunLockfile {
                 })
                 .collect();
 
-            pruned_data.packages.retain(|key, entry| {
-                if PackageKey::parse(key).parent().is_none() {
-                    return true;
-                }
-                let ident = PackageIdent::parse(&entry.ident);
-                if ident.is_workspace() {
-                    return true;
-                }
-                match hoisted_idents.get(ident.name()) {
-                    Some(hoisted_ident) => &entry.ident != hoisted_ident,
-                    None => true,
-                }
-            });
+            // A nested entry that matches the hoisted top-level is redundant ONLY
+            // if removing it would not change resolution. Bun resolves a nested
+            // package by walking up parent scopes (nearest ancestor wins). If an
+            // INTERMEDIATE ancestor scope pins a different version of the same
+            // package, the nested entry shadows it and must be kept — otherwise
+            // bun resolves to the intermediate (wrong) version instead of the
+            // hoisted one. See vercel/turborepo#12962 follow-up: a 3-level split
+            // such as `@vite-pwa/nuxt/@nuxt/kit/pathe@2` sitting above
+            // `@vite-pwa/nuxt/pathe@1` was incorrectly dropped.
+            let redundant_keys: Vec<String> = pruned_data
+                .packages
+                .iter()
+                .filter_map(|(key, entry)| {
+                    if PackageKey::parse(key).parent().is_none() {
+                        return None;
+                    }
+                    let ident = PackageIdent::parse(&entry.ident);
+                    if ident.is_workspace() {
+                        return None;
+                    }
+                    let name = ident.name();
+                    // Only a candidate if it matches the hoisted top-level ident.
+                    match hoisted_idents.get(name) {
+                        Some(hoisted_ident) if hoisted_ident == &entry.ident => {}
+                        _ => return None,
+                    }
+                    let suffix = format!("/{name}");
+                    let parent_scope = key.strip_suffix(&suffix)?;
+                    // Find the nearest ancestor scope (longest strict prefix-scope
+                    // of parent_scope) that also provides `name`.
+                    let nearest = pruned_data
+                        .packages
+                        .iter()
+                        .filter_map(|(other_key, other_entry)| {
+                            let anc = other_key.strip_suffix(&suffix)?;
+                            let descends = parent_scope == anc
+                                || parent_scope.starts_with(&format!("{anc}/"));
+                            (anc.len() < parent_scope.len() && descends)
+                                .then_some((anc.len(), &other_entry.ident))
+                        })
+                        .max_by_key(|(len, _)| *len)
+                        .map(|(_, ident)| ident);
+                    // Without this entry, resolution falls to the nearest ancestor
+                    // (or the hoisted top-level when none). Redundant only if that
+                    // resolves to the same ident.
+                    let resolves_to = nearest.unwrap_or(&entry.ident);
+                    (resolves_to == &entry.ident).then(|| key.clone())
+                })
+                .collect();
+            for key in redundant_keys {
+                pruned_data.packages.remove(&key);
+            }
         }
 
         // De-aliasing can turn a workspace-scoped package key like

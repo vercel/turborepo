@@ -2186,3 +2186,66 @@ fn test_subgraph_preserves_patch_when_patched_version_missing_from_lockfile_keys
         "nested is-odd@2.0.0 should remain under pkg-old"
     );
 }
+
+/// Regression for a 3-level nested version split that `turbo prune` drops.
+///
+/// `@vite-pwa/nuxt@1` depends on `pathe@^1` (direct) AND `@nuxt/kit@^3`, while
+/// the workspace also depends on `@nuxt/kit@^4`. The hoisted `@nuxt/kit@4` keeps
+/// `@nuxt/kit@3` nested under `@vite-pwa/nuxt`, and that nested `@nuxt/kit@3`
+/// needs `pathe@^2` — recorded at the 3-level key
+/// `@vite-pwa/nuxt/@nuxt/kit/pathe`. Prune must preserve that key, otherwise bun
+/// resolves the nested `@nuxt/kit@3`'s pathe to the nearest ancestor
+/// `@vite-pwa/nuxt/pathe@1.1.2` (wrong major).
+#[test]
+fn test_prune_preserves_three_level_nested_version() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": { "name": "root" },
+            "apps/web": {
+                "name": "web",
+                "dependencies": {
+                    "@nuxt/kit": "^4.4.8",
+                    "@vite-pwa/nuxt": "1.1.1"
+                }
+            }
+        },
+        "packages": {
+            "@nuxt/kit": ["@nuxt/kit@4.4.8", "", { "dependencies": { "pathe": "^2.0.3" } }, "sha512-a"],
+            "@vite-pwa/nuxt": ["@vite-pwa/nuxt@1.1.1", "", { "dependencies": { "@nuxt/kit": "^3.9.0", "pathe": "^1.1.1" } }, "sha512-b"],
+            "pathe": ["pathe@2.0.3", "", {}, "sha512-c"],
+            "@vite-pwa/nuxt/@nuxt/kit": ["@nuxt/kit@3.21.8", "", { "dependencies": { "pathe": "^2.0.3" } }, "sha512-d"],
+            "@vite-pwa/nuxt/pathe": ["pathe@1.1.2", "", {}, "sha512-e"],
+            "@vite-pwa/nuxt/@nuxt/kit/pathe": ["pathe@2.0.3", "", {}, "sha512-c"]
+        }
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+    let unresolved_deps: std::collections::BTreeMap<String, String> = [
+        ("@nuxt/kit".to_string(), "^4.4.8".to_string()),
+        ("@vite-pwa/nuxt".to_string(), "1.1.1".to_string()),
+    ]
+    .into_iter()
+    .collect();
+    let closure = crate::transitive_closure(&lockfile, "apps/web", unresolved_deps, false).unwrap();
+    let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+
+    let subgraph = lockfile
+        .subgraph(&["apps/web".into()], &package_idents)
+        .unwrap();
+    let pruned = subgraph.lockfile().unwrap();
+
+    assert!(
+        pruned.packages.contains_key("@vite-pwa/nuxt/@nuxt/kit/pathe"),
+        "3-level nested pathe@2.0.3 must be preserved so the nested @nuxt/kit@3 \
+         resolves pathe@2, not the sibling @vite-pwa/nuxt/pathe@1.1.2. \
+         pruned pathe keys: {:?}",
+        pruned
+            .packages
+            .keys()
+            .filter(|k| k.ends_with("pathe"))
+            .collect::<Vec<_>>()
+    );
+}
