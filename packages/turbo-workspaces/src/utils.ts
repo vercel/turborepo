@@ -46,7 +46,8 @@ const SUPPORTED_PACKAGE_MANAGERS = new Set<PackageManager>([
   "pnpm",
   "yarn",
   "bun",
-  "nub"
+  "nub",
+  "aube"
 ]);
 const DEV_ENGINES_VERSION_REGEX =
   /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
@@ -159,7 +160,7 @@ function getWorkspacePackageManager({
 
   if (!isPackageManager(name)) {
     throw invalidDevEnginesPackageManager(
-      "`devEngines.packageManager.name` must be one of `npm`, `pnpm`, `yarn`, `bun`, or `nub`"
+      "`devEngines.packageManager.name` must be one of `npm`, `pnpm`, `yarn`, `bun`, `nub`, or `aube`"
     );
   }
 
@@ -312,7 +313,31 @@ function getPnpmWorkspaces({
 }: {
   workspaceRoot: string;
 }): Array<string> {
-  const workspaceFile = path.join(workspaceRoot, "pnpm-workspace.yaml");
+  return getYamlWorkspaces({
+    workspaceRoot,
+    workspaceFileName: "pnpm-workspace.yaml"
+  });
+}
+
+function getAubeWorkspaces({
+  workspaceRoot
+}: {
+  workspaceRoot: string;
+}): Array<string> {
+  return getYamlWorkspaces({
+    workspaceRoot,
+    workspaceFileName: "aube-workspace.yaml"
+  });
+}
+
+function getYamlWorkspaces({
+  workspaceRoot,
+  workspaceFileName
+}: {
+  workspaceRoot: string;
+  workspaceFileName: string;
+}): Array<string> {
+  const workspaceFile = path.join(workspaceRoot, workspaceFileName);
   if (existsSync(workspaceFile)) {
     try {
       const workspaceConfig = yaml.load(readFileSync(workspaceFile, "utf8"));
@@ -418,14 +443,14 @@ function expandWorkspaces({
     });
 }
 
-type LockfilePackageManager = Exclude<PackageManager, "nub">;
+type LockfilePackageManager = Exclude<PackageManager, "nub" | "aube">;
 
 const LOCKFILE_PROBE_ORDER: Array<{
   manager: LockfilePackageManager;
   lockfiles: Array<string>;
 }> = [
   { manager: "bun", lockfiles: ["bun.lock", "bun.lockb"] },
-  { manager: "pnpm", lockfiles: ["pnpm-lock.yaml"] },
+  { manager: "pnpm", lockfiles: ["aube-lock.yaml", "pnpm-lock.yaml"] },
   { manager: "yarn", lockfiles: ["yarn.lock"] },
   { manager: "npm", lockfiles: ["package-lock.json"] }
 ];
@@ -463,6 +488,9 @@ function getUnderlyingLockfileName({
       return "bun.lockb";
     }
     case "pnpm": {
+      if (existsSync(path.join(workspaceRoot, "aube-lock.yaml"))) {
+        return "aube-lock.yaml";
+      }
       return "pnpm-lock.yaml";
     }
     case "yarn": {
@@ -580,6 +608,7 @@ export {
   expandPaths,
   expandWorkspaces,
   parseWorkspacePackages,
+  getAubeWorkspaces,
   getPnpmWorkspaces,
   getUnderlyingLockfileManager,
   getUnderlyingLockfileName,

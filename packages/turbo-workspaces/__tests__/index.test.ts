@@ -209,7 +209,8 @@ describe("Node entrypoint", () => {
             yarn: "1.22.19",
             pnpm: "7.29.1",
             bun: "1.0.1",
-            nub: "0.1.0"
+            nub: "0.1.0",
+            aube: "0.1.0"
           });
 
         const { root } = useFixture({
@@ -252,7 +253,8 @@ describe("Node entrypoint", () => {
             yarn: "1.22.19",
             pnpm: "7.29.1",
             bun: "1.0.1",
-            nub: "0.1.0"
+            nub: "0.1.0",
+            aube: "0.1.0"
           });
 
         const { root } = useFixture({

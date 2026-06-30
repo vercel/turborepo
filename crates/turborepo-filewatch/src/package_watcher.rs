@@ -178,7 +178,10 @@ enum State {
 // or going from no package manager to some package manager.
 const INVALIDATION_PATHS: &[&str] = &[
     "package.json",
+    package_manager::aube::WORKSPACE_CONFIGURATION_PATH,
+    package_manager::aube::LOCKFILE,
     "pnpm-workspace.yaml",
+    package_manager::nub::LOCKFILE,
     package_manager::pnpm::LOCKFILE,
     package_manager::npm::LOCKFILE,
     package_manager::yarn::LOCKFILE,

@@ -150,6 +150,7 @@ pub fn display_update_check(config: UpdateCheckConfig) -> Result<(), UpdateNotif
             }
             PackageManager::Bun => style("bunx @turbo/codemod@latest update").cyan().bold(),
             PackageManager::Nub { .. } => style("nubx @turbo/codemod@latest update").cyan().bold(),
+            PackageManager::Aube { .. } => style("aubx @turbo/codemod@latest update").cyan().bold(),
         };
 
         let msg = format!(

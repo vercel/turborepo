@@ -73,7 +73,8 @@ describe("migrate", () => {
         npm: undefined,
         yarn: undefined,
         bun: undefined,
-        nub: undefined
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -158,7 +159,8 @@ describe("migrate", () => {
         npm: undefined,
         yarn: undefined,
         bun: undefined,
-        nub: undefined
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -228,7 +230,8 @@ describe("migrate", () => {
         npm: undefined,
         yarn: undefined,
         bun: undefined,
-        nub: undefined
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -311,7 +314,8 @@ describe("migrate", () => {
         npm: undefined,
         yarn: undefined,
         bun: undefined,
-        nub: undefined
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -513,7 +517,8 @@ describe("migrate", () => {
         npm: undefined,
         yarn: undefined,
         bun: undefined,
-        nub: undefined
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -619,7 +624,8 @@ describe("migrate", () => {
         npm: undefined,
         yarn: undefined,
         bun: undefined,
-        nub: undefined
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -854,7 +860,8 @@ describe("migrate", () => {
         npm: undefined,
         yarn: undefined,
         bun: undefined,
-        nub: undefined
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -969,7 +976,8 @@ describe("migrate", () => {
         npm: undefined,
         yarn: undefined,
         bun: undefined,
-        nub: undefined
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
