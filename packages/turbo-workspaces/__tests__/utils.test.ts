@@ -5,7 +5,8 @@ import fs from "fs-extra";
 import type { Project } from "../src/types";
 import {
   getWorkspacePackageManager,
-  isCompatibleWithBunWorkspaces
+  isCompatibleWithBunWorkspaces,
+  setPackageManagerDeclaration
 } from "../src/utils";
 
 function makeWorkspace(packageJson: unknown): string {
@@ -17,6 +18,27 @@ function makeWorkspace(packageJson: unknown): string {
 }
 
 describe("utils", () => {
+  describe("setPackageManagerDeclaration", () => {
+    it("normalizes a leading v from package manager versions", () => {
+      const packageJson: {
+        name: string;
+        version: string;
+        devEngines?: { packageManager?: unknown };
+      } = { name: "test", version: "0.0.0" };
+
+      setPackageManagerDeclaration({
+        packageJson,
+        packageManager: "nub",
+        version: "v0.2.10"
+      });
+
+      expect(packageJson.devEngines?.packageManager).toEqual({
+        name: "nub",
+        version: "0.2.10"
+      });
+    });
+  });
+
   describe("isCompatibleWithBunWorkspace", () => {
     it.each([
       { globs: ["apps/*"], expected: true },
