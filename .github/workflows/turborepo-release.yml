@@ -351,9 +351,9 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          - host: macos-15-xlarge
+          - host: macos-15-large
             target: "x86_64-apple-darwin"
-          - host: macos-15-xlarge
+          - host: macos-15-large
             target: "aarch64-apple-darwin"
           - host: ubuntu-24.04
             target: "x86_64-unknown-linux-musl"
