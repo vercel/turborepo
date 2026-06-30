@@ -218,7 +218,8 @@ jobs:
           fi
 
   rust_test_macos:
-    runs-on: macos-latest-xlarge
+    # Zig 0.15.2 fails to link its macOS build runner on macOS 26/Tahoe.
+    runs-on: macos-15-xlarge
     timeout-minutes: 15
     env:
       CARGO_INCREMENTAL: 0
