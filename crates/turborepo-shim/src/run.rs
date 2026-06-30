@@ -229,7 +229,7 @@ where
     // global turbo having handled the inference. We can run without any
     // concerns.
     if args.skip_infer {
-        return run_cli(runtime, None, color_config);
+        return run_cli(runtime, repo_state_for_skip_infer(&args), color_config);
     }
 
     // If the TURBO_BINARY_PATH is set, we do inference but we do not use
@@ -264,6 +264,18 @@ where
             run_cli(runtime, None, color_config)
         }
     }
+}
+
+fn repo_state_for_skip_infer(args: &ShimArgs) -> Option<RepoState> {
+    if !args
+        .remaining_turbo_args
+        .iter()
+        .any(|arg| arg == "--single-package")
+    {
+        return None;
+    }
+
+    RepoState::infer(&args.cwd).ok()
 }
 
 /// Helper to run the CLI through the runtime's runner.
@@ -632,8 +644,28 @@ fn try_check_for_updates(
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
     use crate::DefaultChildSpawner;
+
+    fn shim_args(cwd: AbsoluteSystemPathBuf, remaining_turbo_args: Vec<String>) -> ShimArgs {
+        ShimArgs {
+            invocation_dir: cwd.clone(),
+            cwd,
+            skip_infer: true,
+            verbosity: 0,
+            force_update_check: false,
+            remaining_turbo_args,
+            forwarded_args: Vec::new(),
+            color: false,
+            no_color: false,
+            root_turbo_json: None,
+            profile: None,
+            anon_profile: None,
+            heap: None,
+        }
+    }
 
     // Mock implementations for testing
     struct MockRunner;
@@ -684,5 +716,39 @@ mod tests {
             std::env::remove_var("TURBO_BINARY_PATH");
         }
         assert!(!is_turbo_binary_path_set());
+    }
+
+    #[test]
+    fn skip_infer_recovers_repo_state_for_single_package_hint() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(
+            tmp.path().join("package.json"),
+            r#"{
+  "devEngines": {
+    "packageManager": {
+      "name": "nub",
+      "version": "0.2.10"
+    }
+  },
+  "workspaces": ["apps/*"]
+}"#,
+        )
+        .unwrap();
+        fs::write(tmp.path().join("lock.yaml"), "lockfileVersion: '9.0'\n").unwrap();
+        let cwd = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let args = shim_args(cwd, vec!["build".into(), "--single-package".into()]);
+
+        let repo_state = repo_state_for_skip_infer(&args).unwrap();
+
+        assert_eq!(repo_state.mode, RepoMode::MultiPackage);
+    }
+
+    #[test]
+    fn skip_infer_without_single_package_hint_does_not_infer_repo_state() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cwd = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let args = shim_args(cwd, vec!["build".into()]);
+
+        assert!(repo_state_for_skip_infer(&args).is_none());
     }
 }
