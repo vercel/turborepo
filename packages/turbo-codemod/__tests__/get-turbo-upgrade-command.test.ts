@@ -271,6 +271,36 @@ const LOCAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManagerVersion: "4.1.0",
     fixture: "single-package",
     expected: "yarn add turbo@latest"
+  },
+  // nub - workspaces
+  {
+    version: "latest",
+    packageManager: "nub",
+    packageManagerVersion: "0.1.0",
+    fixture: "pnpm-workspaces-dev-install",
+    expected: "nub add turbo@latest --save-dev -w"
+  },
+  {
+    version: "latest",
+    packageManager: "nub",
+    packageManagerVersion: "0.1.0",
+    fixture: "pnpm-workspaces",
+    expected: "nub add turbo@latest -w"
+  },
+  // nub - single package
+  {
+    version: "latest",
+    packageManager: "nub",
+    packageManagerVersion: "0.1.0",
+    fixture: "single-package-dev-install",
+    expected: "nub add turbo@latest --save-dev"
+  },
+  {
+    version: "latest",
+    packageManager: "nub",
+    packageManagerVersion: "0.1.0",
+    fixture: "single-package",
+    expected: "nub add turbo@latest"
   }
 ];
 
@@ -483,6 +513,21 @@ const GLOBAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManagerVersion: "4.1.0",
     fixture: "single-package-dev-install",
     expected: "yarn add turbo@latest --dev"
+  },
+  // nub
+  {
+    version: "latest",
+    packageManager: "nub",
+    packageManagerVersion: "0.1.0",
+    fixture: "pnpm-workspaces-dev-install",
+    expected: "nub add turbo@latest --global"
+  },
+  {
+    version: "latest",
+    packageManager: "nub",
+    packageManagerVersion: "0.1.0",
+    fixture: "single-package",
+    expected: "nub add turbo@latest --global"
   }
 ];
 
@@ -689,6 +734,28 @@ describe("get-turbo-upgrade-command", () => {
       });
 
       expect(upgradeCommand).toEqual("npm install");
+    });
+
+    it("returns nub install when catalog is used with nub", async () => {
+      const { root } = useFixture({ fixture: "pnpm-catalog-default" });
+
+      const project = getWorkspaceDetailsMockReturnValue({
+        root,
+        packageManager: "nub"
+      });
+
+      const catalogInfo: CatalogInfo = {
+        catalogName: null,
+        catalogFile: path.join(root, "pnpm-workspace.yaml"),
+        installType: "devDependencies"
+      };
+
+      const upgradeCommand = await getTurboUpgradeCommand({
+        project,
+        catalogInfo
+      });
+
+      expect(upgradeCommand).toEqual("nub install");
     });
   });
 
