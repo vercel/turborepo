@@ -269,8 +269,8 @@ fn expand_symlinked_output_roots(
 /// symlinks among the intermediate segments, so a symlink that is not the final
 /// literal segment would otherwise be reported as a plain directory and missed.
 /// This happens in practice for workspace packages located behind symlinked
-/// directories (e.g. `packages/nested` -> `../external/nested`), where an output
-/// glob like `packages/nested/deep-pkg/dist/**` has its symlink at an
+/// directories (e.g. `packages/nested` -> `../external/nested`), where an
+/// output glob like `packages/nested/deep-pkg/dist/**` has its symlink at an
 /// intermediate segment.
 fn split_at_deepest_symlinked_prefix(
     repo_root: &AbsoluteSystemPath,
