@@ -169,12 +169,11 @@ fn set_run_flags<'a>(
             execution_args,
         }
         | Command::Watch { execution_args, .. } => {
-            // Don't overwrite the flag if it's already been set for whatever reason
-            execution_args.single_package = execution_args.single_package
-                || repo_state
-                    .as_ref()
-                    .map(|repo_state| matches!(repo_state.mode, RepoMode::SinglePackage))
-                    .unwrap_or(false);
+            execution_args.single_package = corrected_single_package_mode(
+                execution_args.single_package,
+                repo_state,
+                cli_args.cwd.as_deref(),
+            );
             // If this is a run command, and we know the actual invocation path, set the
             // inference root, as long as the user hasn't overridden the cwd
             if cli_args.cwd.is_none() {
@@ -201,6 +200,34 @@ fn set_run_flags<'a>(
         _ => {}
     }
     Ok(command)
+}
+
+fn corrected_single_package_mode(
+    requested_single_package: bool,
+    repo_state: &Option<RepoState>,
+    cwd: Option<&Utf8Path>,
+) -> bool {
+    match repo_state.as_ref().map(|repo_state| &repo_state.mode) {
+        Some(RepoMode::SinglePackage) => true,
+        Some(RepoMode::MultiPackage) => false,
+        None if requested_single_package => match infer_repo_mode(cwd) {
+            Some(RepoMode::SinglePackage) => true,
+            Some(RepoMode::MultiPackage) => false,
+            None => requested_single_package,
+        },
+        None => false,
+    }
+}
+
+fn infer_repo_mode(cwd: Option<&Utf8Path>) -> Option<RepoMode> {
+    let cwd = match cwd {
+        Some(cwd) => AbsoluteSystemPathBuf::from_cwd(cwd).ok()?,
+        None => AbsoluteSystemPathBuf::cwd().ok()?,
+    };
+
+    RepoState::infer(&cwd)
+        .ok()
+        .map(|repo_state| repo_state.mode)
 }
 
 fn inferred_package_root(

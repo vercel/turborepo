@@ -1,4 +1,4 @@
-use std::{assert_matches, ffi::OsString};
+use std::{assert_matches, ffi::OsString, fs};
 
 use camino::Utf8PathBuf;
 use clap::{CommandFactory, Parser};
@@ -38,6 +38,48 @@ fn inferred_package_root_returns_repo_relative_invocation_path(
         super::inferred_package_root(invocation_path, &repo_root),
         expected.map(str::to_string)
     );
+}
+
+#[test]
+fn stale_single_package_flag_is_cleared_for_nub_workspace() {
+    let tmp = tempfile::tempdir().unwrap();
+    fs::write(
+        tmp.path().join("package.json"),
+        r#"{
+  "devEngines": {
+    "packageManager": {
+      "name": "nub",
+      "version": "0.2.10"
+    }
+  },
+  "workspaces": ["apps/*"]
+}"#,
+    )
+    .unwrap();
+    fs::write(tmp.path().join("lock.yaml"), "lockfileVersion: '9.0'\n").unwrap();
+
+    let cwd = camino::Utf8Path::from_path(tmp.path()).unwrap();
+
+    assert!(!super::corrected_single_package_mode(
+        true,
+        &None,
+        Some(cwd)
+    ));
+}
+
+#[test]
+fn single_package_flag_is_kept_for_single_package_repo() {
+    let tmp = tempfile::tempdir().unwrap();
+    fs::write(
+        tmp.path().join("package.json"),
+        r#"{"name":"single","packageManager":"npm@10.5.0"}"#,
+    )
+    .unwrap();
+    fs::write(tmp.path().join("package-lock.json"), "{}").unwrap();
+
+    let cwd = camino::Utf8Path::from_path(tmp.path()).unwrap();
+
+    assert!(super::corrected_single_package_mode(true, &None, Some(cwd)));
 }
 
 #[test_case::test_case(vec!["turbo", "run", "build"], None ; "missing")]

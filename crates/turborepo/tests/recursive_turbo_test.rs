@@ -77,4 +77,21 @@ fn test_nub_workspace_root_script_does_not_trigger_recursive_turbo_invocation() 
         !combined.contains("recursive_turbo_invocations"),
         "did not expect recursive turbo invocation error, got: {combined}"
     );
+
+    let mut command = common::turbo_command(tempdir.path());
+    command
+        .args(["--skip-infer", "build", "--single-package", "--"])
+        .env("PATH", setup::prepend_to_path(&fake_bin_dir));
+    let output = command.output().unwrap();
+    let combined = combined_output(&output);
+
+    assert!(
+        output.status.success(),
+        "expected stale shim arguments to be corrected, got: {combined}"
+    );
+    assert!(
+        !combined.contains("recursive_turbo_invocations"),
+        "did not expect stale shim arguments to trigger recursive turbo invocation, got: \
+         {combined}"
+    );
 }
