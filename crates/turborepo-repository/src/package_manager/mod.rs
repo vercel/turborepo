@@ -1,3 +1,4 @@
+pub mod aube;
 pub mod berry;
 pub mod bun;
 pub mod npm;
@@ -79,6 +80,12 @@ pub enum PackageManager {
     Nub {
         lockfile: Box<PackageManager>,
     },
+    /// aube (<https://aube.jdx.dev>) reads and writes existing lockfile formats
+    /// in place. `lockfile` holds the concrete package manager whose lockfile
+    /// is present in the repository, which lockfile operations delegate to.
+    Aube {
+        lockfile: Box<PackageManager>,
+    },
 }
 
 #[derive(Debug)]
@@ -124,6 +131,10 @@ impl Display for MissingWorkspaceError {
             PackageManager::Nub { .. } => {
                 "package.json: no workspaces found. Turborepo requires workspaces to be defined in \
                  the root package.json"
+            }
+            PackageManager::Aube { .. } => {
+                "aube-workspace.yaml or package.json: no packages found. Turborepo requires \
+                 workspaces to be defined in the root aube-workspace.yaml or package.json"
             }
         };
         write!(f, "{err}")
@@ -239,7 +250,7 @@ impl From<std::convert::Infallible> for Error {
 }
 
 static PACKAGE_MANAGER_PATTERN: Lazy<Regex> = lazy_regex!(
-    r"\A(?P<manager>bun|npm|nub|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z"
+    r"\A(?P<manager>aube|bun|npm|nub|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z"
 );
 
 static DEV_ENGINES_VERSION_PATTERN: Lazy<Regex> =
@@ -249,6 +260,7 @@ impl PackageManager {
     /// Returns the package manager responsible for lockfile operations.
     pub fn lockfile_manager(&self) -> &PackageManager {
         match self {
+            PackageManager::Aube { lockfile } => lockfile.as_ref(),
             PackageManager::Nub { lockfile } => lockfile.as_ref(),
             other => other,
         }
@@ -262,11 +274,14 @@ impl PackageManager {
         )
     }
 
-    /// Re-resolves the underlying lockfile manager for [`PackageManager::Nub`]
-    /// from disk. No-op for other variants. Call after daemon proto round-trips
-    /// that cannot carry the underlying lockfile type.
+    /// Re-resolves the underlying lockfile manager for wrapper managers from
+    /// disk. No-op for other variants. Call after daemon proto round-trips that
+    /// cannot carry the underlying lockfile type.
     pub fn with_resolved_nub_lockfile(self, repo_root: &AbsoluteSystemPath) -> Self {
         match self {
+            PackageManager::Aube { .. } => PackageManager::Aube {
+                lockfile: Box::new(aube::underlying_lockfile_manager(repo_root)),
+            },
             PackageManager::Nub { .. } => PackageManager::Nub {
                 lockfile: Box::new(nub::underlying_lockfile_manager(repo_root)),
             },
@@ -297,6 +312,7 @@ impl PackageManager {
             PackageManager::Yarn => "yarn",
             PackageManager::Bun => "bun",
             PackageManager::Nub { .. } => "nub",
+            PackageManager::Aube { .. } => "aube",
         }
     }
 
@@ -307,6 +323,7 @@ impl PackageManager {
             PackageManager::Yarn | PackageManager::Berry => "yarn",
             PackageManager::Bun => "bun",
             PackageManager::Nub { .. } => "nub",
+            PackageManager::Aube { .. } => "aube",
         }
     }
 
@@ -334,7 +351,9 @@ impl PackageManager {
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
                 pnpm::get_default_exclusions()
             }
-            PackageManager::Npm | PackageManager::Nub { .. } => ["**/node_modules/**"].as_slice(),
+            PackageManager::Npm | PackageManager::Nub { .. } | PackageManager::Aube { .. } => {
+                ["**/node_modules/**"].as_slice()
+            }
             PackageManager::Bun => ["**/node_modules", "**/.git"].as_slice(),
             PackageManager::Berry => ["**/node_modules", "**/.git", "**/.yarn"].as_slice(),
             PackageManager::Yarn => [].as_slice(), // yarn does its own handling above
@@ -369,6 +388,39 @@ impl PackageManager {
             }
             PackageManager::Nub { lockfile } => {
                 if lockfile.is_pnpm_family()
+                    && root_path
+                        .join_component(pnpm::WORKSPACE_CONFIGURATION_PATH)
+                        .exists()
+                {
+                    pnpm::get_configured_workspace_globs(root_path).ok_or_else(|| {
+                        Error::Workspace(MissingWorkspaceError::from(self.clone()))
+                    })?
+                } else {
+                    let package_json_text =
+                        fs::read_to_string(root_path.join_component("package.json"))?;
+                    let package_json: PackageJsonWorkspaces =
+                        serde_json::from_str(&package_json_text).map_err(|_| {
+                            Error::Workspace(MissingWorkspaceError::from(self.clone()))
+                        })?;
+
+                    if package_json.workspaces.as_ref().is_empty() {
+                        return Err(MissingWorkspaceError::from(self.clone()).into());
+                    } else {
+                        package_json.workspaces.into()
+                    }
+                }
+            }
+            PackageManager::Aube { lockfile } => {
+                if root_path
+                    .join_component(aube::WORKSPACE_CONFIGURATION_PATH)
+                    .exists()
+                {
+                    pnpm::get_configured_workspace_globs_from_path(
+                        root_path,
+                        aube::WORKSPACE_CONFIGURATION_PATH,
+                    )
+                    .ok_or_else(|| Error::Workspace(MissingWorkspaceError::from(self.clone())))?
+                } else if lockfile.is_pnpm_family()
                     && root_path
                         .join_component(pnpm::WORKSPACE_CONFIGURATION_PATH)
                         .exists()
@@ -440,6 +492,9 @@ impl PackageManager {
         // if version is a https attempt to check that instead
         if version.starts_with("http") {
             match manager {
+                "aube" => Ok(PackageManager::Aube {
+                    lockfile: Box::new(aube::underlying_lockfile_manager(repo_root)),
+                }),
                 "npm" => Ok(PackageManager::Npm),
                 "bun" => Ok(PackageManager::Bun),
                 "nub" => Ok(PackageManager::Nub {
@@ -465,6 +520,9 @@ impl PackageManager {
                 }
             })?;
             match manager {
+                "aube" => Ok(PackageManager::Aube {
+                    lockfile: Box::new(aube::underlying_lockfile_manager(repo_root)),
+                }),
                 "npm" => Ok(PackageManager::Npm),
                 "bun" => Ok(PackageManager::Bun),
                 "nub" => Ok(PackageManager::Nub {
@@ -540,12 +598,12 @@ impl PackageManager {
                 "`devEngines.packageManager.name` must not contain leading or trailing whitespace",
             ));
         }
-        if !matches!(name, "npm" | "pnpm" | "yarn" | "bun" | "nub") {
+        if !matches!(name, "npm" | "pnpm" | "yarn" | "bun" | "nub" | "aube") {
             return Err(Self::invalid_dev_engines_package_manager_at(
                 dev_engines,
                 &["packageManager", "name"],
-                "`devEngines.packageManager.name` must be one of `npm`, `pnpm`, `yarn`, `bun`, or \
-                 `nub`",
+                "`devEngines.packageManager.name` must be one of `npm`, `pnpm`, `yarn`, `bun`, \
+                 `nub`, or `aube`",
             ));
         }
 
@@ -605,6 +663,9 @@ impl PackageManager {
         version: &Version,
     ) -> Result<Self, Error> {
         match name {
+            "aube" => Ok(PackageManager::Aube {
+                lockfile: Box::new(aube::underlying_lockfile_manager(repo_root)),
+            }),
             "npm" => Ok(PackageManager::Npm),
             "bun" => Ok(PackageManager::Bun),
             "nub" => Ok(PackageManager::Nub {
@@ -847,6 +908,13 @@ impl PackageManager {
     /// Try to detect package manager based on configuration files and binaries
     /// installed on the system.
     pub fn detect_package_manager(repo_root: &AbsoluteSystemPath) -> Result<Self, Error> {
+        let native_aube =
+            repo_root
+                .join_component(aube::LOCKFILE)
+                .exists()
+                .then(|| PackageManager::Aube {
+                    lockfile: Box::new(aube::underlying_lockfile_manager(repo_root)),
+                });
         let native_nub =
             repo_root
                 .join_component(nub::LOCKFILE)
@@ -854,8 +922,9 @@ impl PackageManager {
                 .then(|| PackageManager::Nub {
                     lockfile: Box::new(nub::underlying_lockfile_manager(repo_root)),
                 });
-        let detected_package_managers = native_nub
+        let detected_package_managers = native_aube
             .into_iter()
+            .chain(native_nub)
             .map(Ok)
             .chain(PnpmDetector::new(repo_root))
             .chain(NpmDetector::new(repo_root))
@@ -921,6 +990,7 @@ impl PackageManager {
             PackageManager::Bun => bun::LOCKFILE,
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => pnpm::LOCKFILE,
             PackageManager::Yarn | PackageManager::Berry => yarn::LOCKFILE,
+            PackageManager::Aube { lockfile } => lockfile.lockfile_name(),
             // nub uses the lockfile of whichever package manager the project
             // already uses; delegate to the resolved underlying manager.
             PackageManager::Nub { lockfile } => lockfile.lockfile_name(),
@@ -935,6 +1005,7 @@ impl PackageManager {
             PackageManager::Nub { lockfile } if lockfile.is_pnpm_family() => {
                 Some(pnpm::WORKSPACE_CONFIGURATION_PATH)
             }
+            PackageManager::Aube { .. } => Some(aube::WORKSPACE_CONFIGURATION_PATH),
             PackageManager::Npm
             | PackageManager::Berry
             | PackageManager::Yarn
@@ -950,9 +1021,14 @@ impl PackageManager {
         root_path: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
     ) -> Result<Box<dyn Lockfile>, Error> {
-        if let PackageManager::Nub { lockfile } = self {
-            if root_path.join_component(nub::LOCKFILE).exists() {
-                let contents = root_path.join_component(nub::LOCKFILE).read()?;
+        if let PackageManager::Nub { lockfile } | PackageManager::Aube { lockfile } = self {
+            let native_lockfile = match self {
+                PackageManager::Nub { .. } => nub::LOCKFILE,
+                PackageManager::Aube { .. } => aube::LOCKFILE,
+                _ => unreachable!(),
+            };
+            if root_path.join_component(native_lockfile).exists() {
+                let contents = root_path.join_component(native_lockfile).read()?;
                 return lockfile.parse_lockfile(root_package_json, &contents, None);
             }
             return lockfile.read_lockfile(root_path, root_package_json);
@@ -1022,7 +1098,7 @@ impl PackageManager {
                 )?)
             }
             // nub delegates to the parser of the lockfile actually present.
-            PackageManager::Nub { lockfile } => {
+            PackageManager::Nub { lockfile } | PackageManager::Aube { lockfile } => {
                 return lockfile.parse_lockfile(root_package_json, contents, yarnrc);
             }
         })
@@ -1044,7 +1120,7 @@ impl PackageManager {
                 unreachable!("npm and yarn 1 don't have a concept of patches")
             }
             // nub delegates patch pruning to the underlying package manager.
-            PackageManager::Nub { lockfile } => {
+            PackageManager::Nub { lockfile } | PackageManager::Aube { lockfile } => {
                 lockfile.prune_patched_packages(package_json, patches, repo_root)
             }
         }
@@ -1122,6 +1198,11 @@ impl PackageManager {
         {
             return turbo_root.join_component(nub::LOCKFILE);
         }
+        if matches!(self, PackageManager::Aube { .. })
+            && turbo_root.join_component(aube::LOCKFILE).exists()
+        {
+            return turbo_root.join_component(aube::LOCKFILE);
+        }
 
         turbo_root.join_component(self.lockfile_name())
     }
@@ -1145,7 +1226,8 @@ impl PackageManager {
             PackageManager::Pnpm
             | PackageManager::Pnpm9
             | PackageManager::Berry
-            | PackageManager::Nub { .. } => None,
+            | PackageManager::Nub { .. }
+            | PackageManager::Aube { .. } => None,
         }
     }
 
@@ -1166,7 +1248,9 @@ impl PackageManager {
             PackageManager::Yarn | PackageManager::Bun | PackageManager::Npm => true,
             // nub links workspace packages by default, delegating to the
             // underlying manager's behavior where it has one.
-            PackageManager::Nub { lockfile } => lockfile.link_workspace_packages(repo_root),
+            PackageManager::Nub { lockfile } | PackageManager::Aube { lockfile } => {
+                lockfile.link_workspace_packages(repo_root)
+            }
         }
     }
 
@@ -1175,7 +1259,15 @@ impl PackageManager {
     pub fn read_catalogs(&self, repo_root: &AbsoluteSystemPath) -> Option<pnpm::PnpmCatalogs> {
         match self.lockfile_manager() {
             PackageManager::Pnpm9 | PackageManager::Pnpm | PackageManager::Pnpm6 => {
-                pnpm::read_catalogs(repo_root)
+                if matches!(self, PackageManager::Aube { .. })
+                    && repo_root
+                        .join_component(aube::WORKSPACE_CONFIGURATION_PATH)
+                        .exists()
+                {
+                    pnpm::read_catalogs_from_path(repo_root, aube::WORKSPACE_CONFIGURATION_PATH)
+                } else {
+                    pnpm::read_catalogs(repo_root)
+                }
             }
             // Berry catalogs are handled during lockfile parsing, not here.
             // Bun catalogs are handled during lockfile parsing, not here.
@@ -1315,7 +1407,7 @@ mod tests {
                     "**/bower_components/**",
                     "packages/skip",
                 ],
-                PackageManager::Nub { .. } => &["**/node_modules/**"],
+                PackageManager::Nub { .. } | PackageManager::Aube { .. } => &["**/node_modules/**"],
             };
             let expected: HashSet<String> =
                 HashSet::from_iter(expected.iter().map(|s| s.to_string()));
@@ -1425,6 +1517,13 @@ mod tests {
                 expected_error: false,
             },
             TestCase {
+                name: "supports aube".to_owned(),
+                package_manager: Spanned::new("aube@0.1.0".to_owned()),
+                expected_manager: "aube".to_owned(),
+                expected_version: "0.1.0".to_owned(),
+                expected_error: false,
+            },
+            TestCase {
                 name: "supports custom URL".to_owned(),
                 package_manager: Spanned::new("npm@https://some-npm-fork".to_owned()),
                 expected_manager: "npm".to_owned(),
@@ -1505,6 +1604,15 @@ mod tests {
             }
         );
 
+        package_json.package_manager = Some(Spanned::new("aube@0.1.0".to_string()));
+        let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
+        assert_eq!(
+            package_manager,
+            PackageManager::Aube {
+                lockfile: Box::new(PackageManager::Npm)
+            }
+        );
+
         Ok(())
     }
 
@@ -1517,6 +1625,7 @@ mod tests {
     #[test_case("pnpm", "9.12.3", PackageManager::Pnpm9 ; "pnpm9")]
     #[test_case("pnpm", "9.12.3-alpha.0", PackageManager::Pnpm ; "pnpm prerelease")]
     #[test_case("nub", "0.1.0", PackageManager::Nub { lockfile: Box::new(PackageManager::Npm) } ; "nub")]
+    #[test_case("aube", "0.1.0", PackageManager::Aube { lockfile: Box::new(PackageManager::Npm) } ; "aube")]
     fn test_read_dev_engines_package_manager(
         name: &str,
         version: &str,
@@ -1677,6 +1786,78 @@ mod tests {
             PackageManager::detect_package_manager(&repo_root),
             Err(Error::MultiplePackageManagers { .. })
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn test_native_aube_lockfile_detects_aube() -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        std::fs::write(
+            repo_root.join_component(aube::LOCKFILE).as_std_path(),
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\n",
+        )?;
+
+        assert_eq!(
+            PackageManager::detect_package_manager(&repo_root)?,
+            PackageManager::Aube {
+                lockfile: Box::new(PackageManager::Pnpm9)
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_dev_engines_aube_native_workspace_file() -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        std::fs::create_dir_all(repo_root.join_components(&["apps", "web"]).as_std_path())?;
+        std::fs::write(
+            repo_root.join_component("package.json").as_std_path(),
+            r#"{
+  "devEngines": {
+    "packageManager": {
+      "name": "aube",
+      "version": "0.1.0"
+    }
+  }
+}"#,
+        )?;
+        std::fs::write(
+            repo_root
+                .join_components(&["apps", "web", "package.json"])
+                .as_std_path(),
+            r#"{"name":"web"}"#,
+        )?;
+        std::fs::write(
+            repo_root
+                .join_component(aube::WORKSPACE_CONFIGURATION_PATH)
+                .as_std_path(),
+            "packages:\n  - apps/*\n",
+        )?;
+        std::fs::write(
+            repo_root.join_component(aube::LOCKFILE).as_std_path(),
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\n",
+        )?;
+        let package_json = PackageJson::load(&repo_root.join_component("package.json"))?;
+
+        let package_manager = PackageManager::read_package_manager(&repo_root, &package_json)?;
+        let found: HashSet<AbsoluteSystemPathBuf> =
+            HashSet::from_iter(package_manager.get_package_jsons(&repo_root)?);
+
+        assert_eq!(
+            package_manager,
+            PackageManager::Aube {
+                lockfile: Box::new(PackageManager::Pnpm9)
+            }
+        );
+        assert_eq!(
+            found,
+            HashSet::from_iter([repo_root.join_components(&["apps", "web", "package.json"])])
+        );
+        assert_eq!(
+            package_manager.lockfile_path(&repo_root),
+            repo_root.join_component(aube::LOCKFILE)
+        );
+        package_manager.read_lockfile(&repo_root, &package_json)?;
         Ok(())
     }
 

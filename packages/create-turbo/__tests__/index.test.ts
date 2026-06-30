@@ -63,7 +63,8 @@ describe("create-turbo", () => {
           yarn: "1.22.10",
           pnpm: "7.22.2",
           bun: "1.0.1",
-          nub: "0.1.0"
+          nub: "0.1.0",
+          aube: "0.1.0"
         });
 
       const mockCreateProject = jest
@@ -144,7 +145,8 @@ describe("create-turbo", () => {
     { packageManager: "npm" },
     { packageManager: "pnpm" },
     { packageManager: "bun" },
-    { packageManager: "nub" }
+    { packageManager: "nub" },
+    { packageManager: "aube" }
   ])(
     "outputs expected console messages when using $packageManager (arg)",
     async ({ packageManager }) => {
@@ -159,7 +161,8 @@ describe("create-turbo", () => {
           yarn: "1.22.10",
           pnpm: "7.22.2",
           bun: "1.0.1",
-          nub: "0.1.0"
+          nub: "0.1.0",
+          aube: "0.1.0"
         });
 
       const mockCreateProject = jest
@@ -244,7 +247,8 @@ describe("create-turbo", () => {
         yarn: "1.22.10",
         pnpm: "7.22.2",
         bun: "1.0.1",
-        nub: "0.1.0"
+        nub: "0.1.0",
+        aube: "0.1.0"
       });
 
     const mockCreateProject = jest
@@ -308,7 +312,8 @@ describe("create-turbo", () => {
         yarn: "1.22.10",
         pnpm: "7.22.2",
         bun: "1.0.1",
-        nub: "0.1.0"
+        nub: "0.1.0",
+        aube: "0.1.0"
       });
 
     const mockCreateProject = jest
@@ -370,7 +375,8 @@ describe("create-turbo", () => {
         yarn: "1.22.10",
         pnpm: "7.22.2",
         bun: "1.0.1",
-        nub: "0.1.0"
+        nub: "0.1.0",
+        aube: "0.1.0"
       });
 
     const mockCreateProject = jest

@@ -1,6 +1,6 @@
 import type { Logger } from "./logger";
 
-export type PackageManager = "npm" | "yarn" | "pnpm" | "bun" | "nub";
+export type PackageManager = "npm" | "yarn" | "pnpm" | "bun" | "nub" | "aube";
 
 export interface Manager {
   name: PackageManager;

@@ -72,6 +72,10 @@ fn turbo_gen_command(package_manager: &PackageManager, tag: &str) -> PackageMana
             executable: "nubx",
             args: vec![package],
         },
+        PackageManager::Aube { .. } => PackageManagerCommand {
+            executable: "aubx",
+            args: vec![package],
+        },
     }
 }
 

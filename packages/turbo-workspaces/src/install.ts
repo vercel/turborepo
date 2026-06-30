@@ -91,6 +91,18 @@ export const PACKAGE_MANAGERS: Record<
       semver: "*",
       default: true
     }
+  ],
+  aube: [
+    {
+      name: "aube",
+      template: "aube",
+      command: "aube",
+      installArgs: ["install"],
+      version: "latest",
+      executable: "aube",
+      semver: "*",
+      default: true
+    }
   ]
 };
 

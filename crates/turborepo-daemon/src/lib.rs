@@ -228,6 +228,9 @@ pub mod proto {
                 PackageManager::Nub => Self::Nub {
                     lockfile: Box::new(Self::Npm),
                 },
+                PackageManager::Aube => Self::Aube {
+                    lockfile: Box::new(Self::Npm),
+                },
             }
         }
     }
@@ -243,6 +246,7 @@ pub mod proto {
                 turborepo_repository::package_manager::PackageManager::Pnpm9 => Self::Pnpm9,
                 turborepo_repository::package_manager::PackageManager::Bun => Self::Bun,
                 turborepo_repository::package_manager::PackageManager::Nub { .. } => Self::Nub,
+                turborepo_repository::package_manager::PackageManager::Aube { .. } => Self::Aube,
             }
         }
     }
