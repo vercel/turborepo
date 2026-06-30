@@ -313,7 +313,10 @@ function getPnpmWorkspaces({
 }: {
   workspaceRoot: string;
 }): Array<string> {
-  return getYamlWorkspaces({ workspaceRoot, workspaceFileName: "pnpm-workspace.yaml" });
+  return getYamlWorkspaces({
+    workspaceRoot,
+    workspaceFileName: "pnpm-workspace.yaml"
+  });
 }
 
 function getAubeWorkspaces({
@@ -321,7 +324,10 @@ function getAubeWorkspaces({
 }: {
   workspaceRoot: string;
 }): Array<string> {
-  return getYamlWorkspaces({ workspaceRoot, workspaceFileName: "aube-workspace.yaml" });
+  return getYamlWorkspaces({
+    workspaceRoot,
+    workspaceFileName: "aube-workspace.yaml"
+  });
 }
 
 function getYamlWorkspaces({
