@@ -162,6 +162,15 @@ async function getYarnBinPath(projectRoot: string) {
   }
 }
 
+async function getNubBinPath() {
+  const nubBinaryPath = await exec("which", ["nub"]);
+  if (!nubBinaryPath) {
+    return undefined;
+  }
+
+  return path.dirname(nubBinaryPath);
+}
+
 export async function getAvailablePackageManagers(
   options: PackageManagerDetectionOptions = {}
 ): Promise<Record<PackageManager, string | undefined>> {
@@ -192,7 +201,7 @@ export async function getPackageManagersBinPaths(
     exec("npm", ["config", "get", "prefix"]),
     exec("pnpm", ["bin", "--global"]),
     exec("bun", ["pm", "--g", "bin"]),
-    exec("which", ["nub"])
+    getNubBinPath()
   ]);
 
   return {

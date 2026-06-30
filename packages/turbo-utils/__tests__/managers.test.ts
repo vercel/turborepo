@@ -187,7 +187,7 @@ describe("managers", () => {
         npm: "/usr/local/bin",
         pnpm: "/usr/local/pnpm",
         bun: "/usr/local/bun",
-        nub: "/usr/local/bin/nub"
+        nub: "/usr/local/bin"
       });
     });
 
@@ -225,7 +225,7 @@ describe("managers", () => {
       expect(result.npm).toBe("/usr/local/bin");
       expect(result.pnpm).toBe("/usr/local/pnpm");
       expect(result.bun).toBe("/usr/local/bun");
-      expect(result.nub).toBe("/usr/local/bin/nub");
+      expect(result.nub).toBe("/usr/local/bin");
     });
 
     test("should return undefined for failed package manager checks", async () => {
@@ -303,7 +303,7 @@ describe("managers", () => {
         npm: "/usr/local/bin",
         pnpm: "/usr/local/pnpm",
         bun: "/usr/local/bun",
-        nub: "/usr/local/bin/nub"
+        nub: "/usr/local/bin"
       });
       expect(mockExeca.mock.calls.map(([command]) => command)).toEqual([
         "npm",
