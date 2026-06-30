@@ -13,6 +13,7 @@ pub mod incremental;
 use std::{
     collections::HashSet,
     io::Write,
+    str::FromStr,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -216,6 +217,81 @@ impl RunCache {
         // Ignore errors coming from cache already shutting down
         self.cache.start_shutdown().await
     }
+}
+
+fn expand_symlinked_output_roots(
+    repo_root: &AbsoluteSystemPath,
+    inclusions: &[globwalk::ValidatedGlob],
+    exclusions: &[globwalk::ValidatedGlob],
+) -> Result<HashSet<AbsoluteSystemPathBuf>, Error> {
+    let mut followed_outputs = HashSet::new();
+
+    for inclusion in inclusions {
+        let Some((prefix, suffix)) = split_at_literal_prefix(inclusion.as_str()) else {
+            continue;
+        };
+
+        let prefix_path = AnchoredSystemPath::new(&prefix)?;
+        let absolute_prefix = repo_root.resolve(prefix_path);
+        let Ok(metadata) = absolute_prefix.symlink_metadata() else {
+            continue;
+        };
+        if !metadata.file_type().is_symlink() {
+            continue;
+        }
+
+        let Ok(real_prefix) = absolute_prefix.to_realpath() else {
+            continue;
+        };
+        if !repo_root.contains(&real_prefix) || !real_prefix.as_std_path().is_dir() {
+            continue;
+        }
+
+        let include = [globwalk::ValidatedGlob::from_str(&suffix)?];
+        let exclude = exclusions_for_symlinked_prefix(&prefix, exclusions)?;
+        for real_output in
+            globwalk::globwalk(&real_prefix, &include, &exclude, globwalk::WalkType::All)?
+        {
+            let relative_output =
+                AnchoredSystemPathBuf::relative_path_between(&real_prefix, &real_output);
+            followed_outputs.extend([absolute_prefix.resolve(&relative_output)]);
+        }
+    }
+
+    Ok(followed_outputs)
+}
+
+fn split_at_literal_prefix(pattern: &str) -> Option<(String, String)> {
+    let segments = pattern.split('/').collect::<Vec<_>>();
+    let first_glob = segments
+        .iter()
+        .position(|segment| globwalk::is_glob_pattern(segment))?;
+    if first_glob == 0 || first_glob == segments.len() {
+        return None;
+    }
+
+    Some((
+        segments[..first_glob].join("/"),
+        segments[first_glob..].join("/"),
+    ))
+}
+
+fn exclusions_for_symlinked_prefix(
+    prefix: &str,
+    exclusions: &[globwalk::ValidatedGlob],
+) -> Result<Vec<globwalk::ValidatedGlob>, Error> {
+    let prefix_with_separator = format!("{prefix}/");
+
+    exclusions
+        .iter()
+        .filter_map(|exclusion| {
+            exclusion
+                .as_str()
+                .strip_prefix(&prefix_with_separator)
+                .map(globwalk::ValidatedGlob::from_str)
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
 }
 
 /// Cache state for a specific task execution.
@@ -553,15 +629,20 @@ impl TaskCache {
 
         let validated_inclusions = self.repo_relative_globs.validated_inclusions()?;
         let validated_exclusions = self.repo_relative_globs.validated_exclusions()?;
-        let files_to_be_cached = globwalk::globwalk_with_settings(
+        let files_to_be_cached = globwalk::globwalk(
             &self.run_cache.repo_root,
             &validated_inclusions,
             &validated_exclusions,
             globwalk::WalkType::All,
-            globwalk::Settings::default()
-                .follow_links()
-                .ignore_link_cycles(),
         )?;
+        let files_to_be_cached = files_to_be_cached
+            .into_iter()
+            .chain(expand_symlinked_output_roots(
+                &self.run_cache.repo_root,
+                &validated_inclusions,
+                &validated_exclusions,
+            )?)
+            .collect::<HashSet<_>>();
 
         for path in &files_to_be_cached {
             if !self.run_cache.repo_root.contains(path) {
@@ -1418,6 +1499,46 @@ mod test {
         assert!(
             cached.is_none(),
             "symlinked output outside repo root should not write a cache artifact"
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn save_outputs_follows_internal_symlinked_output_root() {
+        let temp = tempdir().unwrap();
+        let repo_dir = temp.path().join("repo");
+        let package_dir = repo_dir.join("pkg");
+        std::fs::create_dir_all(package_dir.join("actual-dist")).unwrap();
+        std::fs::write(package_dir.join("actual-dist/output.txt"), b"output").unwrap();
+        std::os::unix::fs::symlink("actual-dist", package_dir.join("dist")).unwrap();
+
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_dir.as_path()).unwrap();
+        let mut task_cache = task_cache_for_outputs(&repo_root, vec!["pkg/dist/**".to_string()]);
+        let telemetry = PackageTaskEventBuilder::new("pkg", "build");
+
+        task_cache
+            .save_outputs(Duration::from_millis(10), &telemetry)
+            .await
+            .unwrap();
+
+        task_cache.run_cache.cache.wait().await.unwrap();
+        let (_metadata, cached_files) = task_cache
+            .run_cache
+            .cache
+            .fetch(&repo_root, "test-hash")
+            .await
+            .unwrap()
+            .expect("symlinked output root should be cached");
+
+        assert!(
+            cached_files.contains(
+                &AnchoredSystemPathBuf::from_raw(format!(
+                    "pkg{}dist{}output.txt",
+                    std::path::MAIN_SEPARATOR,
+                    std::path::MAIN_SEPARATOR
+                ))
+                .unwrap()
+            )
         );
     }
 
