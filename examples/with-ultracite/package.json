@@ -10,12 +10,17 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.11",
-    "turbo": "^2.9.6",
+    "turbo": "^2.10.1",
     "typescript": "5.9.2",
     "ultracite": "latest"
   },
-  "packageManager": "pnpm@9.0.0",
   "engines": {
     "node": ">=18"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "9.0.0"
+    }
   }
 }

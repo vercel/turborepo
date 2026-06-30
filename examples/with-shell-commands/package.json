@@ -2,8 +2,13 @@
   "name": "my-turborepo",
   "description": "A barebones Turborepo example for working with Task Graphs.",
   "private": true,
-  "packageManager": "pnpm@8.15.6",
   "devDependencies": {
-    "turbo": "^2.9.6"
+    "turbo": "^2.10.1"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "8.15.6"
+    }
   }
 }

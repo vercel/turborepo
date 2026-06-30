@@ -1,10 +1,21 @@
 import { execSync } from "child_process";
-import { readdirSync, existsSync, readFileSync } from "fs";
+import { readdirSync, existsSync, readFileSync, rmSync } from "fs";
 import * as path from "path";
+import { getPackageManagerInfo, getPackageManagerInstallCommand } from "./package-manager";
 
-/** Script to update the "turbo" package across all example directories */
+/** Script to refresh lockfiles after updating the "turbo" package across all examples */
 
 const examplesDir = path.dirname(new URL(import.meta.url).pathname);
+const commandEnv = {
+  ...process.env,
+  CI: "true",
+  COREPACK_ENABLE_STRICT: "0",
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+};
+
+function runCommand(command: string, cwd: string): void {
+  execSync(command, { stdio: "inherit", cwd, env: commandEnv, shell: "/bin/bash" });
+}
 
 /** Get all directories in the examples folder */
 const exampleDirs = readdirSync(examplesDir).filter((dir) =>
@@ -16,44 +27,28 @@ exampleDirs.forEach((dir) => {
 
   try {
     const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+    const { name: packageManager, version } = getPackageManagerInfo(packageJson);
 
-    // Check the packageManager field and run the correct update command
-    const packageManager: string = packageJson.packageManager;
-    if (!packageManager) {
-      throw new Error(`Missing packageManager field in ${packageJsonPath}`);
+    if (!packageJson.devDependencies?.turbo) {
+      console.log(`Skipping ${dir} (no turbo dependency)...`);
+      return;
     }
 
-    let updateCmd: string;
-
-    if (packageManager.startsWith("pnpm")) {
-      updateCmd = "pnpm update turbo";
-    } else if (packageManager.startsWith("yarn")) {
-      // Extract version from packageManager field (e.g., "yarn@1.22.19" -> "1")
-      const yarnVersion = packageManager.split("@")[1]?.split(".")[0];
-      if (yarnVersion && parseInt(yarnVersion, 10) >= 2) {
-        // Yarn Berry (2.x+) uses "up" command
-        updateCmd = "yarn up turbo";
-      } else {
-        // Yarn Classic (1.x) uses "upgrade" command
-        updateCmd = "yarn upgrade turbo";
-      }
-    } else if (packageManager.startsWith("npm")) {
-      updateCmd = "npm update turbo";
-    } else {
+    const installCmd = getPackageManagerInstallCommand(packageManager, version, {
+      updateLockfile: true
+    });
+    if (!installCmd) {
       throw new Error(`Unknown package manager "${packageManager}" in ${dir}`);
     }
 
     const cwd = path.join(examplesDir, dir);
-
-    // Yarn Classic refuses to upgrade if the lockfile is out of sync.
-    // Sync it first so the upgrade command can proceed.
-    if (packageManager.startsWith("yarn")) {
-      console.log(`Running yarn install in ${dir} (syncing lockfile)...`);
-      execSync("yarn install", { stdio: "inherit", cwd });
+    const nodeModulesPath = path.join(cwd, "node_modules");
+    if (existsSync(nodeModulesPath)) {
+      rmSync(nodeModulesPath, { recursive: true, force: true });
     }
 
-    console.log(`Running ${updateCmd} in ${dir}...`);
-    execSync(updateCmd, { stdio: "inherit", cwd });
+    console.log(`Running ${installCmd} in ${dir}...`);
+    runCommand(installCmd, cwd);
   } catch (error) {
     throw new Error(`Failed to process ${packageJsonPath}: ${error}`);
   }

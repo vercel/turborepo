@@ -11,11 +11,16 @@
   "devDependencies": {
     "@biomejs/biome": "2.3.8",
     "prettier": "^3.6.2",
-    "turbo": "^2.9.6",
+    "turbo": "^2.10.1",
     "typescript": "5.9.2"
   },
-  "packageManager": "pnpm@9.0.0",
   "engines": {
     "node": ">=18"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "9.0.0"
+    }
   }
 }

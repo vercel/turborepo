@@ -19,15 +19,20 @@
     "prettier": "^3.2.5",
     "prisma": "latest",
     "tsx": "4.21.0",
-    "turbo": "2.9.6"
+    "turbo": "2.10.1"
   },
   "engines": {
     "node": ">=18"
   },
-  "packageManager": "pnpm@9.15.1",
   "name": "with-prisma",
   "dependencies": {
     "@prisma/adapter-pg": "^7.2.0",
     "@prisma/client": "latest"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "9.15.1"
+    }
   }
 }

@@ -14,11 +14,16 @@
     "@changesets/cli": "^2.27.1",
     "eslint": "^8.57.0",
     "prettier": "^3.2.5",
-    "turbo": "^2.9.6"
+    "turbo": "^2.10.1"
   },
-  "packageManager": "pnpm@8.15.6",
   "engines": {
     "node": ">=18"
   },
-  "name": "with-changesets"
+  "name": "with-changesets",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "8.15.6"
+    }
+  }
 }
