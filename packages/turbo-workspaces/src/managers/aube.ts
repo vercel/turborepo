@@ -24,7 +24,6 @@ import {
   removePackageManagerDeclaration,
   parseWorkspacePackages,
   getAubeWorkspaces,
-  getPnpmWorkspaces,
   getUnderlyingLockfileManager,
   getUnderlyingLockfileName,
   removeLockFile
@@ -77,7 +76,6 @@ async function read(args: ReadArgs): Promise<Project> {
     workspaceRoot: args.workspaceRoot
   });
   const aubeGlobs = getAubeWorkspaces(args);
-  const pnpmGlobs = getPnpmWorkspaces(args);
   let workspaceConfig: string | undefined;
   let workspaceGlobs = parseWorkspacePackages({
     workspaces: packageJson.workspaces
@@ -85,9 +83,6 @@ async function read(args: ReadArgs): Promise<Project> {
   if (aubeGlobs.length > 0) {
     workspaceConfig = "aube-workspace.yaml";
     workspaceGlobs = aubeGlobs;
-  } else if (underlying === "pnpm" && pnpmGlobs.length > 0) {
-    workspaceConfig = "pnpm-workspace.yaml";
-    workspaceGlobs = pnpmGlobs;
   }
 
   return {

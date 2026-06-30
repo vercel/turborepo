@@ -7,7 +7,7 @@
 
 use turbopath::AbsoluteSystemPath;
 
-use crate::package_manager::{PackageManager, bun, npm, pnpm, yarn, yarn::YarnDetector};
+use crate::package_manager::{PackageManager, bun, pnpm, yarn, yarn::YarnDetector};
 
 pub const LOCKFILE: &str = "aube-lock.yaml";
 pub const WORKSPACE_CONFIGURATION_PATH: &str = "aube-workspace.yaml";
@@ -31,8 +31,6 @@ pub fn underlying_lockfile_manager(repo_root: &AbsoluteSystemPath) -> PackageMan
         YarnDetector::new(repo_root)
             .detect_from_lockfile()
             .unwrap_or(PackageManager::Yarn)
-    } else if repo_root.join_component(npm::LOCKFILE).exists() {
-        PackageManager::Npm
     } else {
         PackageManager::Npm
     }
