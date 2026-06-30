@@ -369,7 +369,7 @@ fn open_dir_at_allowing_internal_symlink(
 ) -> Result<(fs::File, AbsoluteSystemPathBuf), CacheError> {
     match open_dir_at(parent_fd, component) {
         Ok(file) => {
-            let path = parent_path.join_component(component).to_realpath()?;
+            let path = parent_path.join_component(component);
             Ok((file, path))
         }
         Err(CacheError::IO(err, _)) if err.kind() == std::io::ErrorKind::NotADirectory => {
