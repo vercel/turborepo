@@ -223,8 +223,8 @@ pub mod proto {
                 PackageManager::Pnpm9 => Self::Pnpm9,
                 PackageManager::Bun => Self::Bun,
                 // The wire format does not carry nub's underlying lockfile
-                // manager. Default to npm's lockfile here; the daemon re-resolves
-                // the concrete package manager from disk on the server side.
+                // manager. Clients must call [`PackageManager::with_resolved_nub_lockfile`]
+                // after deserializing to re-resolve from disk.
                 PackageManager::Nub => Self::Nub {
                     lockfile: Box::new(Self::Npm),
                 },

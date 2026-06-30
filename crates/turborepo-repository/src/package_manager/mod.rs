@@ -246,6 +246,34 @@ static DEV_ENGINES_VERSION_PATTERN: Lazy<Regex> =
     lazy_regex!(r"\A\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\z");
 
 impl PackageManager {
+    /// Returns the package manager responsible for lockfile operations.
+    pub fn lockfile_manager(&self) -> &PackageManager {
+        match self {
+            PackageManager::Nub { lockfile } => lockfile.as_ref(),
+            other => other,
+        }
+    }
+
+    /// Whether this package manager uses a pnpm-family lockfile.
+    pub fn is_pnpm_family(&self) -> bool {
+        matches!(
+            self.lockfile_manager(),
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
+        )
+    }
+
+    /// Re-resolves the underlying lockfile manager for [`PackageManager::Nub`]
+    /// from disk. No-op for other variants. Call after daemon proto round-trips
+    /// that cannot carry the underlying lockfile type.
+    pub fn with_resolved_nub_lockfile(self, repo_root: &AbsoluteSystemPath) -> Self {
+        match self {
+            PackageManager::Nub { .. } => PackageManager::Nub {
+                lockfile: Box::new(nub::underlying_lockfile_manager(repo_root)),
+            },
+            other => other,
+        }
+    }
+
     pub fn supported_managers() -> &'static [Self] {
         [
             Self::Npm,
@@ -328,16 +356,39 @@ impl PackageManager {
             PackageManager::Berry
             | PackageManager::Npm
             | PackageManager::Yarn
-            | PackageManager::Bun
-            | PackageManager::Nub { .. } => {
+            | PackageManager::Bun => {
                 let package_json_text = fs::read_to_string(self.workspace_glob_source(root_path))?;
                 let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)
-                    .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self.clone())))?; // Make sure to convert this to a missing workspace error
+                    .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self.clone())))?;
 
                 if package_json.workspaces.as_ref().is_empty() {
                     return Err(MissingWorkspaceError::from(self.clone()).into());
                 } else {
                     package_json.workspaces.into()
+                }
+            }
+            PackageManager::Nub { lockfile } => {
+                if lockfile.is_pnpm_family()
+                    && root_path
+                        .join_component(pnpm::WORKSPACE_CONFIGURATION_PATH)
+                        .exists()
+                {
+                    pnpm::get_configured_workspace_globs(root_path).ok_or_else(|| {
+                        Error::Workspace(MissingWorkspaceError::from(self.clone()))
+                    })?
+                } else {
+                    let package_json_text =
+                        fs::read_to_string(self.workspace_glob_source(root_path))?;
+                    let package_json: PackageJsonWorkspaces =
+                        serde_json::from_str(&package_json_text).map_err(|_| {
+                            Error::Workspace(MissingWorkspaceError::from(self.clone()))
+                        })?;
+
+                    if package_json.workspaces.as_ref().is_empty() {
+                        return Err(MissingWorkspaceError::from(self.clone()).into());
+                    } else {
+                        package_json.workspaces.into()
+                    }
                 }
             }
         };
@@ -489,11 +540,12 @@ impl PackageManager {
                 "`devEngines.packageManager.name` must not contain leading or trailing whitespace",
             ));
         }
-        if !matches!(name, "npm" | "pnpm" | "yarn" | "bun") {
+        if !matches!(name, "npm" | "pnpm" | "yarn" | "bun" | "nub") {
             return Err(Self::invalid_dev_engines_package_manager_at(
                 dev_engines,
                 &["packageManager", "name"],
-                "`devEngines.packageManager.name` must be one of `npm`, `pnpm`, `yarn`, or `bun`",
+                "`devEngines.packageManager.name` must be one of `npm`, `pnpm`, `yarn`, `bun`, or \
+                 `nub`",
             ));
         }
 
@@ -541,16 +593,23 @@ impl PackageManager {
                 format!("invalid semantic version: {err}"),
             )
         })?;
-        let declared = Self::package_manager_from_name_and_version(name, &version)?;
+        let declared = Self::package_manager_from_name_and_version(repo_root, name, &version)?;
         Self::validate_package_manager_lockfile_match(repo_root, &declared, dev_engines)?;
 
         Ok(declared)
     }
 
-    fn package_manager_from_name_and_version(name: &str, version: &Version) -> Result<Self, Error> {
+    fn package_manager_from_name_and_version(
+        repo_root: &AbsoluteSystemPath,
+        name: &str,
+        version: &Version,
+    ) -> Result<Self, Error> {
         match name {
             "npm" => Ok(PackageManager::Npm),
             "bun" => Ok(PackageManager::Bun),
+            "nub" => Ok(PackageManager::Nub {
+                lockfile: Box::new(nub::underlying_lockfile_manager(repo_root)),
+            }),
             "yarn" => YarnDetector::detect_berry_or_yarn(version),
             "pnpm" => PnpmDetector::detect_pnpm6_or_pnpm(version),
             _ => unreachable!("devEngines package manager name should have been validated"),
@@ -583,6 +642,10 @@ impl PackageManager {
     }
 
     fn same_lockfile_family(left: &Self, right: &Self) -> bool {
+        Self::same_concrete_lockfile_family(left.lockfile_manager(), right.lockfile_manager())
+    }
+
+    fn same_concrete_lockfile_family(left: &Self, right: &Self) -> bool {
         matches!(
             (left, right),
             (
@@ -859,11 +922,14 @@ impl PackageManager {
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
                 Some(pnpm::WORKSPACE_CONFIGURATION_PATH)
             }
+            PackageManager::Nub { lockfile } if lockfile.is_pnpm_family() => {
+                Some(pnpm::WORKSPACE_CONFIGURATION_PATH)
+            }
             PackageManager::Npm
             | PackageManager::Berry
             | PackageManager::Yarn
             | PackageManager::Bun
-            // nub reads `workspaces` from package.json, like npm/yarn/bun.
+            // nub with a non-pnpm underlying lockfile reads `workspaces` from package.json.
             | PackageManager::Nub { .. } => None,
         }
     }
@@ -874,6 +940,10 @@ impl PackageManager {
         root_path: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
     ) -> Result<Box<dyn Lockfile>, Error> {
+        if let PackageManager::Nub { lockfile } = self {
+            return lockfile.read_lockfile(root_path, root_package_json);
+        }
+
         // For pnpm, check if per-workspace lockfiles are configured
         if matches!(
             self,
@@ -1083,7 +1153,7 @@ impl PackageManager {
     /// Read catalog definitions from the package manager's configuration.
     /// Currently only pnpm supports catalogs in pnpm-workspace.yaml.
     pub fn read_catalogs(&self, repo_root: &AbsoluteSystemPath) -> Option<pnpm::PnpmCatalogs> {
-        match self {
+        match self.lockfile_manager() {
             PackageManager::Pnpm9 | PackageManager::Pnpm | PackageManager::Pnpm6 => {
                 pnpm::read_catalogs(repo_root)
             }
@@ -1426,6 +1496,7 @@ mod tests {
     #[test_case("pnpm", "8.15.9", PackageManager::Pnpm ; "pnpm")]
     #[test_case("pnpm", "9.12.3", PackageManager::Pnpm9 ; "pnpm9")]
     #[test_case("pnpm", "9.12.3-alpha.0", PackageManager::Pnpm ; "pnpm prerelease")]
+    #[test_case("nub", "0.1.0", PackageManager::Nub { lockfile: Box::new(PackageManager::Npm) } ; "nub")]
     fn test_read_dev_engines_package_manager(
         name: &str,
         version: &str,
@@ -1544,6 +1615,23 @@ mod tests {
             PackageManager::read_or_detect_package_manager(&package_json, &repo_root).unwrap_err();
 
         assert!(matches!(err, Error::MissingPackageManager));
+        Ok(())
+    }
+
+    #[test]
+    fn test_dev_engines_nub_matches_underlying_pnpm_lockfile() -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        repo_root.join_component(pnpm::LOCKFILE).create()?;
+        let package_json = dev_engines_package_manager(json!("nub"), json!("0.1.0"));
+
+        let package_manager = PackageManager::read_package_manager(&repo_root, &package_json)?;
+
+        assert_eq!(
+            package_manager,
+            PackageManager::Nub {
+                lockfile: Box::new(PackageManager::Pnpm)
+            }
+        );
         Ok(())
     }
 

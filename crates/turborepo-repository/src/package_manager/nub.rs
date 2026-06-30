@@ -15,7 +15,7 @@
 
 use turbopath::AbsoluteSystemPath;
 
-use crate::package_manager::{PackageManager, bun, pnpm, yarn};
+use crate::package_manager::{PackageManager, bun, pnpm, yarn, yarn::YarnDetector};
 
 /// Determine which package manager's lockfile is present in the repository
 /// root, in priority order. Defaults to npm when no lockfile is found yet (e.g.
@@ -25,9 +25,11 @@ pub fn underlying_lockfile_manager(repo_root: &AbsoluteSystemPath) -> PackageMan
     if repo_root.join_component(bun::LOCKFILE).exists() {
         PackageManager::Bun
     } else if repo_root.join_component(pnpm::LOCKFILE).exists() {
-        PackageManager::Pnpm
+        pnpm::detect_from_lockfile(repo_root).unwrap_or(PackageManager::Pnpm)
     } else if repo_root.join_component(yarn::LOCKFILE).exists() {
-        PackageManager::Yarn
+        YarnDetector::new(repo_root)
+            .detect_from_lockfile()
+            .unwrap_or(PackageManager::Yarn)
     } else {
         // npm's lockfile, or no lockfile at all -> treat as npm.
         PackageManager::Npm
@@ -82,5 +84,40 @@ mod tests {
         // bun takes priority when multiple are present.
         repo_root.join_component(bun::LOCKFILE).create().unwrap();
         assert_eq!(underlying_lockfile_manager(&repo_root), PackageManager::Bun);
+    }
+
+    #[test]
+    fn test_nub_underlying_lockfile_detects_berry() {
+        let dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(dir.path()).unwrap();
+
+        repo_root
+            .join_component(yarn::LOCKFILE)
+            .create_with_contents(
+                "__metadata:\n  version: 6\n  cacheKey: 8\n\n\"@pkg/foo@npm:1.0.0\":\n  version: \
+                 1.0.0\n",
+            )
+            .unwrap();
+
+        assert_eq!(
+            underlying_lockfile_manager(&repo_root),
+            PackageManager::Berry
+        );
+    }
+
+    #[test]
+    fn test_nub_underlying_lockfile_detects_pnpm9() {
+        let dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(dir.path()).unwrap();
+
+        repo_root
+            .join_component(pnpm::LOCKFILE)
+            .create_with_contents("lockfileVersion: '9.0'\n")
+            .unwrap();
+
+        assert_eq!(
+            underlying_lockfile_manager(&repo_root),
+            PackageManager::Pnpm9
+        );
     }
 }
