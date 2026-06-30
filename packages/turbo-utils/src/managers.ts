@@ -182,7 +182,7 @@ async function getAubeBinPath() {
 
 export async function getAvailablePackageManagers(
   options: PackageManagerDetectionOptions = {}
-): Promise<Partial<Record<PackageManager, string | undefined>>> {
+): Promise<Record<PackageManager, string | undefined>> {
   const projectRoot = options.projectRoot ?? process.cwd();
   const [yarn, npm, pnpm, bun, nub, aube] = await Promise.all([
     getYarnVersion(projectRoot),
@@ -205,7 +205,7 @@ export async function getAvailablePackageManagers(
 
 export async function getPackageManagersBinPaths(
   options: PackageManagerDetectionOptions = {}
-): Promise<Partial<Record<PackageManager, string | undefined>>> {
+): Promise<Record<PackageManager, string | undefined>> {
   const projectRoot = options.projectRoot ?? process.cwd();
   const [yarn, npm, pnpm, bun, nub, aube] = await Promise.all([
     getYarnBinPath(projectRoot),

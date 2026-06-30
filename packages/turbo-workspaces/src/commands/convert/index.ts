@@ -15,7 +15,7 @@ function isPackageManagerDisabled({
 }: {
   packageManager: PackageManager;
   currentWorkspaceManger: PackageManager;
-  availablePackageManagers: Partial<Record<PackageManager, string | undefined>>;
+  availablePackageManagers: Record<PackageManager, string | undefined>;
 }) {
   if (currentWorkspaceManger === packageManager) {
     return "already in use";

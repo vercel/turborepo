@@ -179,7 +179,8 @@ describe("add-package-manager-2", () => {
           npm: packageManager === "npm" ? packageManagerVersion : undefined,
           yarn: packageManager === "yarn" ? packageManagerVersion : undefined,
           bun: packageManager === "bun" ? packageManagerVersion : undefined,
-          nub: packageManager === "nub" ? packageManagerVersion : undefined
+          nub: packageManager === "nub" ? packageManagerVersion : undefined,
+          aube: packageManager === "aube" ? packageManagerVersion : undefined
         });
 
       const mockGetWorkspaceDetails = jest
@@ -289,7 +290,8 @@ describe("add-package-manager-2", () => {
           npm: undefined,
           yarn: undefined,
           bun: undefined,
-          nub: undefined
+          nub: undefined,
+          aube: undefined
         });
 
       const mockGetWorkspaceDetails = jest
@@ -338,7 +340,8 @@ describe("add-package-manager-2", () => {
           npm: undefined,
           yarn: undefined,
           bun: undefined,
-          nub: undefined
+          nub: undefined,
+          aube: undefined
         });
 
       const mockGetWorkspaceDetails = jest
