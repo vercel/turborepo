@@ -80,6 +80,24 @@ describe("managers", () => {
       });
     });
 
+    test("should parse package manager versions from verbose output", async () => {
+      mockExeca
+        .mockResolvedValueOnce({ stdout: "1.22.19" } as any) // yarn
+        .mockResolvedValueOnce({ stdout: "9.5.0" } as any) // npm
+        .mockResolvedValueOnce({ stdout: "8.6.7" } as any) // pnpm
+        .mockResolvedValueOnce({ stdout: "1.0.0" } as any) // bun
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any) // nub
+        .mockResolvedValueOnce({
+          stdout: "1.25.1 macos-arm64 (2026-06-30)"
+        } as any); // aube
+
+      const result = await getAvailablePackageManagers({
+        projectRoot: MISSING_PROJECT_ROOT
+      });
+
+      expect(result.aube).toBe("1.25.1");
+    });
+
     test("should return undefined for unavailable package managers", async () => {
       mockExeca
         .mockResolvedValueOnce({ stdout: "1.22.19" } as any) // yarn

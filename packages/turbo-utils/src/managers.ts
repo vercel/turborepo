@@ -7,6 +7,7 @@ import type { PackageManager } from "./types";
 
 const EXEC_TIMEOUT = 5000;
 const SEMVER_VERSION = "\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?";
+const PACKAGE_MANAGER_VERSION = new RegExp(`(?<version>${SEMVER_VERSION})`);
 const YARN_PACKAGE_MANAGER_VERSION = new RegExp(
   `^yarn@(?<version>${SEMVER_VERSION})(?:\\+[0-9A-Za-z.-]+)?$`
 );
@@ -39,6 +40,10 @@ async function exec(command: string, args: Array<string> = [], opts?: Options) {
   } catch {
     return undefined;
   }
+}
+
+function parsePackageManagerVersion(output: string | undefined) {
+  return output?.match(PACKAGE_MANAGER_VERSION)?.groups?.version;
 }
 
 function readFile(filePath: string): string | undefined {
@@ -194,12 +199,12 @@ export async function getAvailablePackageManagers(
   ]);
 
   return {
-    yarn,
-    pnpm,
-    npm,
-    bun,
-    nub,
-    aube
+    yarn: parsePackageManagerVersion(yarn),
+    pnpm: parsePackageManagerVersion(pnpm),
+    npm: parsePackageManagerVersion(npm),
+    bun: parsePackageManagerVersion(bun),
+    nub: parsePackageManagerVersion(nub),
+    aube: parsePackageManagerVersion(aube)
   };
 }
 
