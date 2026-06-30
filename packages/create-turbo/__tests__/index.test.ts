@@ -47,7 +47,8 @@ describe("create-turbo", () => {
     { packageManager: "yarn" },
     { packageManager: "npm" },
     { packageManager: "pnpm" },
-    { packageManager: "bun" }
+    { packageManager: "bun" },
+    { packageManager: "nub" }
   ])(
     "outputs expected console messages when using $packageManager (option)",
     async ({ packageManager }) => {
@@ -142,7 +143,8 @@ describe("create-turbo", () => {
     { packageManager: "yarn" },
     { packageManager: "npm" },
     { packageManager: "pnpm" },
-    { packageManager: "bun" }
+    { packageManager: "bun" },
+    { packageManager: "nub" }
   ])(
     "outputs expected console messages when using $packageManager (arg)",
     async ({ packageManager }) => {
