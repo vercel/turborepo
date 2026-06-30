@@ -155,9 +155,13 @@ where
 
         // If no pre-supplied lockfile, start reading it on a blocking thread
         // concurrently with package discovery + JSON parsing.
-        let known_pm = self.package_manager.take().or_else(|| {
-            PackageManager::get_package_manager(self.repo_root, &self.root_package_json).ok()
-        });
+        let known_pm = self
+            .package_manager
+            .take()
+            .or_else(|| {
+                PackageManager::get_package_manager(self.repo_root, &self.root_package_json).ok()
+            })
+            .map(|pm| pm.with_resolved_nub_lockfile(self.repo_root));
         let lockfile_future = if !is_single_package && self.lockfile.is_none() {
             if let Some(pm) = known_pm {
                 let repo_root = self.repo_root.to_owned();

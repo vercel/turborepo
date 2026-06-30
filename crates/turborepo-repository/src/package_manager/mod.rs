@@ -378,7 +378,7 @@ impl PackageManager {
                     })?
                 } else {
                     let package_json_text =
-                        fs::read_to_string(self.workspace_glob_source(root_path))?;
+                        fs::read_to_string(root_path.join_component("package.json"))?;
                     let package_json: PackageJsonWorkspaces =
                         serde_json::from_str(&package_json_text).map_err(|_| {
                             Error::Workspace(MissingWorkspaceError::from(self.clone()))
@@ -847,7 +847,17 @@ impl PackageManager {
     /// Try to detect package manager based on configuration files and binaries
     /// installed on the system.
     pub fn detect_package_manager(repo_root: &AbsoluteSystemPath) -> Result<Self, Error> {
-        let detected_package_managers = PnpmDetector::new(repo_root)
+        let native_nub =
+            repo_root
+                .join_component(nub::LOCKFILE)
+                .exists()
+                .then(|| PackageManager::Nub {
+                    lockfile: Box::new(nub::underlying_lockfile_manager(repo_root)),
+                });
+        let detected_package_managers = native_nub
+            .into_iter()
+            .map(Ok)
+            .chain(PnpmDetector::new(repo_root))
             .chain(NpmDetector::new(repo_root))
             .chain(YarnDetector::new(repo_root))
             .chain(BunDetector::new(repo_root))
@@ -941,6 +951,10 @@ impl PackageManager {
         root_package_json: &PackageJson,
     ) -> Result<Box<dyn Lockfile>, Error> {
         if let PackageManager::Nub { lockfile } = self {
+            if root_path.join_component(nub::LOCKFILE).exists() {
+                let contents = root_path.join_component(nub::LOCKFILE).read()?;
+                return lockfile.parse_lockfile(root_package_json, &contents, None);
+            }
             return lockfile.read_lockfile(root_path, root_package_json);
         }
 
@@ -1103,6 +1117,12 @@ impl PackageManager {
     }
 
     pub fn lockfile_path(&self, turbo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
+        if matches!(self, PackageManager::Nub { .. })
+            && turbo_root.join_component(nub::LOCKFILE).exists()
+        {
+            return turbo_root.join_component(nub::LOCKFILE);
+        }
+
         turbo_root.join_component(self.lockfile_name())
     }
 
@@ -1619,6 +1639,48 @@ mod tests {
     }
 
     #[test]
+    fn test_native_nub_lockfile_does_not_affect_existing_lockfile_detection() -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        std::fs::write(repo_root.join_component(npm::LOCKFILE).as_std_path(), "{}")?;
+
+        assert_eq!(
+            PackageManager::detect_package_manager(&repo_root)?,
+            PackageManager::Npm
+        );
+
+        std::fs::remove_file(repo_root.join_component(npm::LOCKFILE).as_std_path())?;
+        std::fs::write(
+            repo_root.join_component(pnpm::LOCKFILE).as_std_path(),
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\n",
+        )?;
+
+        assert_eq!(
+            PackageManager::detect_package_manager(&repo_root)?,
+            PackageManager::Pnpm
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_native_nub_lockfile_with_existing_lockfile_is_ambiguous() -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        std::fs::write(
+            repo_root.join_component(nub::LOCKFILE).as_std_path(),
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\n",
+        )?;
+        std::fs::write(
+            repo_root.join_component(pnpm::LOCKFILE).as_std_path(),
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\n",
+        )?;
+
+        assert!(matches!(
+            PackageManager::detect_package_manager(&repo_root),
+            Err(Error::MultiplePackageManagers { .. })
+        ));
+        Ok(())
+    }
+
+    #[test]
     fn test_dev_engines_nub_matches_underlying_pnpm_lockfile() -> Result<(), Error> {
         let (_dir, repo_root) = temp_repo_root()?;
         repo_root.join_component(pnpm::LOCKFILE).create()?;
@@ -1632,6 +1694,56 @@ mod tests {
                 lockfile: Box::new(PackageManager::Pnpm)
             }
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_dev_engines_nub_native_lockfile_uses_package_json_workspaces() -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        std::fs::create_dir_all(repo_root.join_components(&["apps", "web"]).as_std_path())?;
+        std::fs::write(
+            repo_root.join_component("package.json").as_std_path(),
+            r#"{
+  "devEngines": {
+    "packageManager": {
+      "name": "nub",
+      "version": "0.2.10"
+    }
+  },
+  "workspaces": ["apps/*"]
+}"#,
+        )?;
+        std::fs::write(
+            repo_root
+                .join_components(&["apps", "web", "package.json"])
+                .as_std_path(),
+            r#"{"name":"web"}"#,
+        )?;
+        std::fs::write(
+            repo_root.join_component(nub::LOCKFILE).as_std_path(),
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\n",
+        )?;
+        let package_json = PackageJson::load(&repo_root.join_component("package.json"))?;
+
+        let package_manager = PackageManager::read_package_manager(&repo_root, &package_json)?;
+        let found: HashSet<AbsoluteSystemPathBuf> =
+            HashSet::from_iter(package_manager.get_package_jsons(&repo_root)?);
+
+        assert_eq!(
+            package_manager,
+            PackageManager::Nub {
+                lockfile: Box::new(PackageManager::Pnpm9)
+            }
+        );
+        assert_eq!(
+            found,
+            HashSet::from_iter([repo_root.join_components(&["apps", "web", "package.json"])])
+        );
+        assert_eq!(
+            package_manager.lockfile_path(&repo_root),
+            repo_root.join_component(nub::LOCKFILE)
+        );
+        package_manager.read_lockfile(&repo_root, &package_json)?;
         Ok(())
     }
 
@@ -1687,6 +1799,41 @@ mod tests {
         let response = discovery.discover_packages().await.unwrap();
 
         assert_eq!(response.package_manager, PackageManager::Npm);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_allow_no_package_manager_uses_valid_dev_engines_nub() -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        std::fs::write(
+            repo_root.join_component("package.json").as_std_path(),
+            r#"{
+  "devEngines": {
+    "packageManager": {
+      "name": "nub",
+      "version": "0.2.10"
+    }
+  },
+  "workspaces": []
+}"#,
+        )?;
+        std::fs::write(
+            repo_root.join_component(nub::LOCKFILE).as_std_path(),
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\n",
+        )?;
+        let package_json = dev_engines_package_manager(json!("nub"), json!("0.2.10"));
+        let mut builder = LocalPackageDiscoveryBuilder::new(repo_root, None, Some(package_json));
+        builder.with_allow_no_package_manager(true);
+
+        let discovery = builder.build()?;
+        let response = discovery.discover_packages().await.unwrap();
+
+        assert_eq!(
+            response.package_manager,
+            PackageManager::Nub {
+                lockfile: Box::new(PackageManager::Pnpm9)
+            }
+        );
         Ok(())
     }
 
