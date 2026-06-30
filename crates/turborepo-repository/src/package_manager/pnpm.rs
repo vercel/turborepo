@@ -174,13 +174,21 @@ pub fn patch_paths_for_keys(
 }
 
 pub fn link_workspace_packages(pnpm_version: PnpmVersion, repo_root: &AbsoluteSystemPath) -> bool {
+    link_workspace_packages_from_path(pnpm_version, repo_root, WORKSPACE_CONFIGURATION_PATH)
+}
+
+pub fn link_workspace_packages_from_path(
+    pnpm_version: PnpmVersion,
+    repo_root: &AbsoluteSystemPath,
+    workspace_configuration_path: &str,
+) -> bool {
     let npmrc_config = npmrc::NpmRc::from_file(repo_root)
         .inspect_err(|e| debug!("unable to read npmrc: {e}"))
         .unwrap_or_default();
     let workspace_config = matches!(pnpm_version, PnpmVersion::Pnpm9)
         .then(|| {
-            PnpmWorkspace::from_file(repo_root, WORKSPACE_CONFIGURATION_PATH)
-                .inspect_err(|e| debug!("unable to read {WORKSPACE_CONFIGURATION_PATH}: {e}"))
+            PnpmWorkspace::from_file(repo_root, workspace_configuration_path)
+                .inspect_err(|e| debug!("unable to read {workspace_configuration_path}: {e}"))
                 .ok()
         })
         .flatten()

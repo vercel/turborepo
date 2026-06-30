@@ -1248,9 +1248,26 @@ impl PackageManager {
             PackageManager::Yarn | PackageManager::Bun | PackageManager::Npm => true,
             // nub links workspace packages by default, delegating to the
             // underlying manager's behavior where it has one.
-            PackageManager::Nub { lockfile } | PackageManager::Aube { lockfile } => {
-                lockfile.link_workspace_packages(repo_root)
-            }
+            PackageManager::Nub { lockfile } => lockfile.link_workspace_packages(repo_root),
+            PackageManager::Aube { lockfile } => match lockfile.as_ref() {
+                PackageManager::Pnpm9 | PackageManager::Pnpm | PackageManager::Pnpm6 => {
+                    let pnpm_version = pnpm::PnpmVersion::try_from(lockfile.as_ref())
+                        .expect("attempted to extract pnpm version from non-pnpm package manager");
+                    if repo_root
+                        .join_component(aube::WORKSPACE_CONFIGURATION_PATH)
+                        .exists()
+                    {
+                        pnpm::link_workspace_packages_from_path(
+                            pnpm_version,
+                            repo_root,
+                            aube::WORKSPACE_CONFIGURATION_PATH,
+                        )
+                    } else {
+                        lockfile.link_workspace_packages(repo_root)
+                    }
+                }
+                _ => lockfile.link_workspace_packages(repo_root),
+            },
         }
     }
 
@@ -2158,5 +2175,21 @@ mod tests {
             actual,
             "all package managers without a special implementation should use workspace packages"
         );
+    }
+
+    #[test]
+    fn test_aube_link_workspace_packages_reads_aube_workspace_yaml() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        repo_root
+            .join_component(aube::WORKSPACE_CONFIGURATION_PATH)
+            .create_with_contents("packages:\n  - packages/*\nlinkWorkspacePackages: true\n")
+            .unwrap();
+
+        let package_manager = PackageManager::Aube {
+            lockfile: Box::new(PackageManager::Pnpm9),
+        };
+
+        assert!(package_manager.link_workspace_packages(repo_root));
     }
 }
