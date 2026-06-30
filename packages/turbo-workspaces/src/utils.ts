@@ -237,6 +237,7 @@ function setPackageManagerDeclaration({
   packageManager: PackageManager;
   version: string;
 }): void {
+  const normalizedVersion = semver.valid(version) ?? version;
   delete packageJson.packageManager;
   const devEngines =
     packageJson.devEngines &&
@@ -248,7 +249,7 @@ function setPackageManagerDeclaration({
     ...devEngines,
     packageManager: {
       name: packageManager,
-      version
+      version: normalizedVersion
     }
   };
 }
