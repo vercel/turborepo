@@ -29,7 +29,11 @@ debug = 0
 opt-level = 0
 
 [profile.release]
-lto = "off"
+# Thin lto delivers some small runtime optimizations but massive binary size wins.
+# Coupling it with codegen-units=1 means we can distribute much of the work to the crate
+# level builds and have fewer objects to merge at the root.
+lto = "thin"
+codegen-units = 1
 
 [profile.release-turborepo-lsp]
 inherits = "release"
