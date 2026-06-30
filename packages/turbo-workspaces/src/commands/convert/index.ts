@@ -82,7 +82,7 @@ export async function convertCommand(
         { pm: "npm", label: "npm" },
         { pm: "pnpm", label: "pnpm" },
         { pm: "yarn", label: "yarn" },
-        { pm: "bun", label: "Bun (beta)" },
+        { pm: "bun", label: "bun" },
         { pm: "nub", label: "nub" }
       ].map(({ pm, label }) => ({
         name: label,
