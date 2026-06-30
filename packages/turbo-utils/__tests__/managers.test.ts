@@ -192,7 +192,10 @@ describe("managers", () => {
     });
 
     test("should handle yarn v1 global bin path", async () => {
-      mockExeca.mockImplementation(((command: string, args?: readonly string[]) => {
+      mockExeca.mockImplementation(((
+        command: string,
+        args?: readonly string[]
+      ) => {
         if (command === "yarnpkg") {
           return Promise.resolve({ stdout: "1.22.19" } as any);
         }

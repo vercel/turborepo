@@ -180,7 +180,9 @@ describe("nub", () => {
         logger: new Logger({ dry: false, interactive: false })
       });
 
-      const packageJson = fs.readJsonSync(path.join(workspaceRoot, "package.json"));
+      const packageJson = fs.readJsonSync(
+        path.join(workspaceRoot, "package.json")
+      );
       expect(packageJson.workspaces).toBeUndefined();
       expect(packageJson.devEngines?.packageManager).toBeUndefined();
     });
@@ -221,9 +223,9 @@ describe("nub", () => {
         logger: new Logger({ dry: false, interactive: false })
       });
 
-      expect(
-        fs.existsSync(path.join(workspaceRoot, "pnpm-lock.yaml"))
-      ).toEqual(false);
+      expect(fs.existsSync(path.join(workspaceRoot, "pnpm-lock.yaml"))).toEqual(
+        false
+      );
     });
 
     it("reads workspace data via the underlying lockfile manager", async () => {
@@ -272,7 +274,9 @@ describe("nub", () => {
         logger: new Logger({ dry: false, interactive: false })
       });
 
-      const packageJson = fs.readJsonSync(path.join(workspaceRoot, "package.json"));
+      const packageJson = fs.readJsonSync(
+        path.join(workspaceRoot, "package.json")
+      );
       expect(packageJson.devEngines?.packageManager).toEqual({
         name: "nub",
         version: "0.1.0"

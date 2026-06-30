@@ -773,7 +773,7 @@ describe("get-turbo-upgrade-command", () => {
             npm: undefined,
             yarn: undefined,
             bun: undefined,
-          nub: undefined
+            nub: undefined
           });
 
         const project = getWorkspaceDetailsMockReturnValue({
