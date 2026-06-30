@@ -97,8 +97,12 @@ describe("nub", () => {
         "package-lock.json": "{}"
       });
 
-      expect(await MANAGERS.nub.detect({ workspaceRoot })).toEqual(false);
-      expect(await MANAGERS.npm.detect({ workspaceRoot })).toEqual(true);
+      await expect(MANAGERS.nub.detect({ workspaceRoot })).resolves.toEqual(
+        false
+      );
+      await expect(MANAGERS.npm.detect({ workspaceRoot })).resolves.toEqual(
+        true
+      );
     });
 
     it("detects nub when packageManager field is set", async () => {
@@ -107,7 +111,9 @@ describe("nub", () => {
         "package-lock.json": "{}"
       });
 
-      expect(await MANAGERS.nub.detect({ workspaceRoot })).toEqual(true);
+      await expect(MANAGERS.nub.detect({ workspaceRoot })).resolves.toEqual(
+        true
+      );
     });
   });
 
