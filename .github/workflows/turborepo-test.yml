@@ -218,7 +218,7 @@ jobs:
           fi
 
   rust_test_macos:
-    runs-on: macos-latest-xlarge
+    runs-on: macos-15-xlarge
     timeout-minutes: 15
     env:
       CARGO_INCREMENTAL: 0
