@@ -29,7 +29,12 @@ debug = 0
 opt-level = 0
 
 [profile.release]
-lto = "off"
+# Crate-local fat LTO + cross-crate thin LTO. codegen-units=1 lets LLVM fully
+# optimize each crate into a single object before the thin cross-crate merge,
+# which shrinks the shipped binary ~23% (48MB -> 37MB) for a ~12% build-time
+# cost on top of plain thin LTO. See profiling in the PR description.
+lto = "thin"
+codegen-units = 1
 
 [profile.release-turborepo-lsp]
 inherits = "release"
