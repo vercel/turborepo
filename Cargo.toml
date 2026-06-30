@@ -29,10 +29,9 @@ debug = 0
 opt-level = 0
 
 [profile.release]
-# Crate-local fat LTO + cross-crate thin LTO. codegen-units=1 lets LLVM fully
-# optimize each crate into a single object before the thin cross-crate merge,
-# which shrinks the shipped binary ~23% (48MB -> 37MB) for a ~12% build-time
-# cost on top of plain thin LTO. See profiling in the PR description.
+# Thin lto delivers some small runtime optimizations but massive binary size wins.
+# Coupling it with codegen-units=1 means we can distribute much of the work to the crate
+# level builds and have fewer objects to merge at the root.
 lto = "thin"
 codegen-units = 1
 
