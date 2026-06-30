@@ -45,11 +45,13 @@ describe("packPlatform", () => {
     const mockCopyFile = mock.fn((_src: string, _dst: string) =>
       Promise.resolve()
     );
+    const mockReaddir = mock.fn(() => Promise.resolve(["ghostty-vt.dll"]));
     const mockStat = mock.fn(() => Promise.resolve({ mode: 0 }));
     const mockChmod = mock.fn();
 
     t.mock.method(native, "generateNativePackage", mockGenerateNativePackage);
     t.mock.method(fs, "mkdir", mockMkdir);
+    t.mock.method(fs, "readdir", mockReaddir);
     t.mock.method(fs, "stat", mockStat);
     t.mock.method(fs, "chmod", mockChmod);
     t.mock.method(fs, "copyFile", mockCopyFile);
@@ -74,9 +76,17 @@ describe("packPlatform", () => {
       mockCopyFile.mock.calls[0].arguments[1].endsWith("turbo.exe"),
       "destination ends with .exe"
     );
+    assert.ok(
+      mockCopyFile.mock.calls[1].arguments[0].endsWith("ghostty-vt.dll"),
+      "source includes DLL sidecar"
+    );
+    assert.ok(
+      mockCopyFile.mock.calls[1].arguments[1].endsWith("ghostty-vt.dll"),
+      "destination includes DLL sidecar"
+    );
     assert.equal(mockGenerateNativePackage.mock.calls.length, 1);
     assert.equal(mockMkdir.mock.calls.length, 1);
-    assert.equal(mockCopyFile.mock.calls.length, 1);
+    assert.equal(mockCopyFile.mock.calls.length, 2);
     assert.equal(mockChmod.mock.calls.length, 1);
     assert.equal(mockChmod.mock.calls[0].arguments[1], 0o111);
   });
