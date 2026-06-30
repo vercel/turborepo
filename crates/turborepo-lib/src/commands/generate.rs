@@ -68,6 +68,10 @@ fn turbo_gen_command(package_manager: &PackageManager, tag: &str) -> PackageMana
             executable: "bun",
             args: vec!["x".to_string(), package],
         },
+        PackageManager::Nub { .. } => PackageManagerCommand {
+            executable: "nubx",
+            args: vec![package],
+        },
     }
 }
 

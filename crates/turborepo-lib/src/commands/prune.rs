@@ -314,12 +314,7 @@ pub async fn prune(
 
     // Prune pnpm-workspace.yaml's patchedDependencies so it only
     // references patches that are actually in the pruned output.
-    if matches!(
-        package_manager,
-        turborepo_repository::package_manager::PackageManager::Pnpm
-            | turborepo_repository::package_manager::PackageManager::Pnpm6
-            | turborepo_repository::package_manager::PackageManager::Pnpm9
-    ) {
+    if package_manager.is_pnpm_family() {
         let ws_config = turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH;
         let ws_path = AnchoredSystemPathBuf::from_raw(ws_config)?;
         let out_ws = prune.out_directory.resolve(&ws_path);
@@ -379,10 +374,7 @@ fn collect_patch_paths(
     if !patch_keys.is_empty() {
         patches.extend(package_json_patch_paths(root_package_json, &patch_keys));
 
-        if matches!(
-            package_manager,
-            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
-        ) {
+        if package_manager.is_pnpm_family() {
             let workspace_yaml_path = repo_root.join_component(
                 turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH,
             );
@@ -536,15 +528,11 @@ impl<'a> Prune<'a> {
             return Err(Error::MissingLockfile);
         }
 
-        let uses_per_workspace_lockfiles = matches!(
-            package_graph.package_manager(),
-            turborepo_repository::package_manager::PackageManager::Pnpm
-                | turborepo_repository::package_manager::PackageManager::Pnpm6
-                | turborepo_repository::package_manager::PackageManager::Pnpm9
-        ) && NpmRc::from_file(&base.repo_root)
-            .unwrap_or_default()
-            .shared_workspace_lockfile
-            == Some(false);
+        let uses_per_workspace_lockfiles = package_graph.package_manager().is_pnpm_family()
+            && NpmRc::from_file(&base.repo_root)
+                .unwrap_or_default()
+                .shared_workspace_lockfile
+                == Some(false);
 
         full_directory.resolve(package_json()).ensure_dir()?;
         if docker {

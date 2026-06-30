@@ -52,6 +52,41 @@ impl<'a> PnpmDetector<'a> {
     }
 }
 
+/// Detect the pnpm variant from a `pnpm-lock.yaml` on disk.
+pub fn detect_from_lockfile(repo_root: &AbsoluteSystemPath) -> Result<PackageManager, Error> {
+    let lockfile_path = repo_root.join_component(LOCKFILE);
+    let contents = lockfile_path.read()?;
+    Ok(detect_from_lockfile_contents(&contents))
+}
+
+pub(crate) fn detect_from_lockfile_contents(contents: &[u8]) -> PackageManager {
+    #[derive(Deserialize)]
+    struct PnpmLockfileHeader {
+        #[serde(rename = "lockfileVersion")]
+        lockfile_version: String,
+    }
+
+    let header: PnpmLockfileHeader =
+        serde_yaml_ng::from_slice(contents).unwrap_or(PnpmLockfileHeader {
+            lockfile_version: String::new(),
+        });
+    detect_pnpm_from_lockfile_version(&header.lockfile_version)
+}
+
+fn detect_pnpm_from_lockfile_version(version: &str) -> PackageManager {
+    let major = version
+        .trim_matches('\'')
+        .trim_matches('"')
+        .split('.')
+        .next()
+        .unwrap_or_default();
+    match major {
+        "9" => PackageManager::Pnpm9,
+        "6" => PackageManager::Pnpm6,
+        _ => PackageManager::Pnpm,
+    }
+}
+
 impl Iterator for PnpmDetector<'_> {
     type Item = Result<PackageManager, Error>;
 
@@ -274,7 +309,8 @@ impl TryFrom<&'_ PackageManager> for PnpmVersion {
             PackageManager::Berry
             | PackageManager::Yarn
             | PackageManager::Npm
-            | PackageManager::Bun => Err(NotPnpmError {
+            | PackageManager::Bun
+            | PackageManager::Nub { .. } => Err(NotPnpmError {
                 package_manager: value.clone(),
             }),
         }
