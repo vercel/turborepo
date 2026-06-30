@@ -760,9 +760,7 @@ impl BunLockfile {
                 .packages
                 .iter()
                 .filter_map(|(key, entry)| {
-                    if PackageKey::parse(key).parent().is_none() {
-                        return None;
-                    }
+                    PackageKey::parse(key).parent()?;
                     let ident = PackageIdent::parse(&entry.ident);
                     if ident.is_workspace() {
                         return None;
