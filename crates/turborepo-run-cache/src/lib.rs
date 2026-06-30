@@ -225,6 +225,7 @@ fn expand_symlinked_output_roots(
     exclusions: &[globwalk::ValidatedGlob],
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, Error> {
     let mut followed_outputs = HashSet::new();
+    let real_repo_root = repo_root.to_realpath()?;
 
     for inclusion in inclusions {
         let Some((prefix, suffix)) =
@@ -239,7 +240,7 @@ fn expand_symlinked_output_roots(
         let Ok(real_prefix) = absolute_prefix.to_realpath() else {
             continue;
         };
-        if !repo_root.contains(&real_prefix) || !real_prefix.as_std_path().is_dir() {
+        if !real_repo_root.contains(&real_prefix) || !real_prefix.as_std_path().is_dir() {
             continue;
         }
 
