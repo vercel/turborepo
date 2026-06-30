@@ -227,18 +227,14 @@ fn expand_symlinked_output_roots(
     let mut followed_outputs = HashSet::new();
 
     for inclusion in inclusions {
-        let Some((prefix, suffix)) = split_at_literal_prefix(inclusion.as_str()) else {
+        let Some((prefix, suffix)) =
+            split_at_deepest_symlinked_prefix(repo_root, inclusion.as_str())?
+        else {
             continue;
         };
 
         let prefix_path = AnchoredSystemPath::new(&prefix)?;
         let absolute_prefix = repo_root.resolve(prefix_path);
-        let Ok(metadata) = absolute_prefix.symlink_metadata() else {
-            continue;
-        };
-        if !metadata.file_type().is_symlink() {
-            continue;
-        }
 
         let Ok(real_prefix) = absolute_prefix.to_realpath() else {
             continue;
@@ -261,19 +257,60 @@ fn expand_symlinked_output_roots(
     Ok(followed_outputs)
 }
 
-fn split_at_literal_prefix(pattern: &str) -> Option<(String, String)> {
+/// Finds the deepest literal segment of `pattern` that is itself a symlink and
+/// splits the pattern there.
+///
+/// The portion up to and including that symlinked segment becomes the `prefix`
+/// (which is later resolved to its real path), and the remainder — including
+/// any further literal segments and the glob — becomes the `suffix`.
+///
+/// We must inspect *every* literal segment rather than only the deepest literal
+/// prefix: a `symlink_metadata` (lstat) on the full literal prefix follows any
+/// symlinks among the intermediate segments, so a symlink that is not the final
+/// literal segment would otherwise be reported as a plain directory and missed.
+/// This happens in practice for workspace packages located behind symlinked
+/// directories (e.g. `packages/nested` -> `../external/nested`), where an output
+/// glob like `packages/nested/deep-pkg/dist/**` has its symlink at an
+/// intermediate segment.
+fn split_at_deepest_symlinked_prefix(
+    repo_root: &AbsoluteSystemPath,
+    pattern: &str,
+) -> Result<Option<(String, String)>, Error> {
     let segments = pattern.split('/').collect::<Vec<_>>();
-    let first_glob = segments
+    let Some(first_glob) = segments
         .iter()
-        .position(|segment| globwalk::is_glob_pattern(segment))?;
-    if first_glob == 0 || first_glob == segments.len() {
-        return None;
+        .position(|segment| globwalk::is_glob_pattern(segment))
+    else {
+        return Ok(None);
+    };
+    if first_glob == 0 {
+        return Ok(None);
     }
 
-    Some((
-        segments[..first_glob].join("/"),
-        segments[first_glob..].join("/"),
-    ))
+    // Walk the literal segments from shallowest to deepest, recording the deepest
+    // one that is a symlink. Intermediate symlinks are followed when lstat'ing
+    // deeper segments, which is exactly why we need to check each segment.
+    let mut deepest_symlink_split = None;
+    for split in 1..=first_glob {
+        let prefix = segments[..split].join("/");
+        let prefix_path = AnchoredSystemPath::new(&prefix)?;
+        let absolute_prefix = repo_root.resolve(prefix_path);
+        let Ok(metadata) = absolute_prefix.symlink_metadata() else {
+            continue;
+        };
+        if metadata.file_type().is_symlink() {
+            deepest_symlink_split = Some(split);
+        }
+    }
+
+    let Some(split) = deepest_symlink_split else {
+        return Ok(None);
+    };
+
+    Ok(Some((
+        segments[..split].join("/"),
+        segments[split..].join("/"),
+    )))
 }
 
 fn exclusions_for_symlinked_prefix(
@@ -1539,6 +1576,57 @@ mod test {
                 ))
                 .unwrap()
             )
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn save_outputs_follows_intermediate_symlinked_dir() {
+        // A workspace package located behind a symlinked directory: `packages/nested`
+        // is a symlink to `external/nested`, while `deep-pkg/dist` underneath it are
+        // real directories. The symlink is an *intermediate* literal segment of the
+        // output glob, so it must still be followed when caching outputs.
+        let temp = tempdir().unwrap();
+        let repo_dir = temp.path().join("repo");
+        std::fs::create_dir_all(repo_dir.join("external/nested/deep-pkg/dist")).unwrap();
+        std::fs::write(
+            repo_dir.join("external/nested/deep-pkg/dist/output.txt"),
+            b"output",
+        )
+        .unwrap();
+        std::fs::create_dir_all(repo_dir.join("packages")).unwrap();
+        std::os::unix::fs::symlink("../external/nested", repo_dir.join("packages/nested")).unwrap();
+
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_dir.as_path()).unwrap();
+        let mut task_cache = task_cache_for_outputs(
+            &repo_root,
+            vec!["packages/nested/deep-pkg/dist/**".to_string()],
+        );
+        let telemetry = PackageTaskEventBuilder::new("nested", "build");
+
+        task_cache
+            .save_outputs(Duration::from_millis(10), &telemetry)
+            .await
+            .unwrap();
+
+        task_cache.run_cache.cache.wait().await.unwrap();
+        let (_metadata, cached_files) = task_cache
+            .run_cache
+            .cache
+            .fetch(&repo_root, "test-hash")
+            .await
+            .unwrap()
+            .expect("output behind intermediate symlinked dir should be cached");
+
+        assert!(
+            cached_files.contains(
+                &AnchoredSystemPathBuf::from_raw(format!(
+                    "packages{0}nested{0}deep-pkg{0}dist{0}output.txt",
+                    std::path::MAIN_SEPARATOR,
+                ))
+                .unwrap()
+            ),
+            "expected output behind intermediate symlink to be cached, got: {cached_files:?}"
         );
     }
 
