@@ -17,6 +17,7 @@ use turborepo_unescape::UnescapedString;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DependencyKind {
     Normal,
+    Dev,
     Peer { optional: bool },
 }
 
@@ -233,9 +234,13 @@ impl PackageJson {
             .dependencies
             .iter()
             .flatten()
-            .chain(self.dev_dependencies.iter().flatten())
             .chain(self.optional_dependencies.iter().flatten())
             .map(|(name, version)| (name, version, DependencyKind::Normal));
+        let dev = self
+            .dev_dependencies
+            .iter()
+            .flatten()
+            .map(|(name, version)| (name, version, DependencyKind::Dev));
         let peer = self
             .peer_dependencies
             .iter()
@@ -249,7 +254,7 @@ impl PackageJson {
                     },
                 )
             });
-        normal.chain(peer)
+        normal.chain(dev).chain(peer)
     }
 
     pub fn is_optional_peer_dependency(&self, name: &str) -> bool {
@@ -347,5 +352,22 @@ mod test {
             .collect();
         // dependencies must come first, then devDependencies, then peer
         assert_eq!(versions, vec!["2.0.0", "1.0.0", "*"]);
+    }
+
+    #[test]
+    fn dependencies_with_kind_assigns_dev_kind() {
+        let json = json!({
+            "name": "test",
+            "dependencies": { "prod-pkg": "1.0.0", "shared-pkg": "2.0.0" },
+            "devDependencies": { "dev-pkg": "1.0.0", "shared-pkg": "1.0.0" }
+        });
+        let pkg: PackageJson = PackageJson::from_value(json).unwrap();
+        let mut kinds = std::collections::HashMap::new();
+        for (name, _, kind) in pkg.dependencies_with_kind() {
+            kinds.entry(name.as_str()).or_insert(kind);
+        }
+        assert_eq!(kinds.get("prod-pkg"), Some(&DependencyKind::Normal));
+        assert_eq!(kinds.get("dev-pkg"), Some(&DependencyKind::Dev));
+        assert_eq!(kinds.get("shared-pkg"), Some(&DependencyKind::Normal));
     }
 }
