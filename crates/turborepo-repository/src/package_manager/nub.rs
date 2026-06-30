@@ -4,9 +4,9 @@
 //! Node and ships a pnpm-compatible package-manager command surface. Unlike the
 //! other supported package managers, nub does not define its own lockfile
 //! format: it is lockfile-compatible with whatever the project already uses
-//! (npm, pnpm, yarn, or bun). For that reason nub is recognized only through
-//! the `packageManager` field in `package.json` (`"nub@x.y.z"`); there is no
-//! file-based detector, since a bare foreign lockfile alone does not imply nub.
+//! (npm, pnpm, yarn, or bun). For that reason nub is recognized through the
+//! `packageManager` field in `package.json` (`"nub@x.y.z"`) or nub's native
+//! `lock.yaml`; a bare foreign lockfile alone does not imply nub.
 //!
 //! Because Turborepo needs a parsed lockfile for pruning and cache hashing, the
 //! [`PackageManager::Nub`] variant carries the concrete package manager whose
@@ -17,6 +17,8 @@ use turbopath::AbsoluteSystemPath;
 
 use crate::package_manager::{PackageManager, bun, pnpm, yarn, yarn::YarnDetector};
 
+pub const LOCKFILE: &str = "lock.yaml";
+
 /// Determine which package manager's lockfile is present in the repository
 /// root, in priority order. Defaults to npm when no lockfile is found yet (e.g.
 /// a fresh nub project before the first install), matching nub's npm-compatible
@@ -24,6 +26,12 @@ use crate::package_manager::{PackageManager, bun, pnpm, yarn, yarn::YarnDetector
 pub fn underlying_lockfile_manager(repo_root: &AbsoluteSystemPath) -> PackageManager {
     if repo_root.join_component(bun::LOCKFILE).exists() {
         PackageManager::Bun
+    } else if repo_root.join_component(LOCKFILE).exists() {
+        repo_root
+            .join_component(LOCKFILE)
+            .read()
+            .map(|contents| pnpm::detect_from_lockfile_contents(&contents))
+            .unwrap_or(PackageManager::Pnpm)
     } else if repo_root.join_component(pnpm::LOCKFILE).exists() {
         pnpm::detect_from_lockfile(repo_root).unwrap_or(PackageManager::Pnpm)
     } else if repo_root.join_component(yarn::LOCKFILE).exists() {
@@ -58,7 +66,7 @@ mod tests {
         let detected = PackageManager::detect_package_manager(&repo_root).unwrap();
         assert_eq!(detected, PackageManager::Npm);
 
-        // The `packageManager` field is the only signal for nub.
+        // A foreign lockfile alone must not imply nub.
         let package_json = PackageJson {
             package_manager: Some(Spanned::new("nub@0.1.0".to_string())),
             ..Default::default()
@@ -118,6 +126,40 @@ mod tests {
         assert_eq!(
             underlying_lockfile_manager(&repo_root),
             PackageManager::Pnpm9
+        );
+    }
+
+    #[test]
+    fn test_nub_underlying_native_lockfile_detects_pnpm9() {
+        let dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(dir.path()).unwrap();
+
+        repo_root
+            .join_component(LOCKFILE)
+            .create_with_contents("lockfileVersion: '9.0'\n")
+            .unwrap();
+
+        assert_eq!(
+            underlying_lockfile_manager(&repo_root),
+            PackageManager::Pnpm9
+        );
+    }
+
+    #[test]
+    fn test_nub_detected_from_native_lockfile() {
+        let dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(dir.path()).unwrap();
+
+        repo_root
+            .join_component(LOCKFILE)
+            .create_with_contents("lockfileVersion: '9.0'\n")
+            .unwrap();
+
+        assert_eq!(
+            PackageManager::detect_package_manager(&repo_root).unwrap(),
+            PackageManager::Nub {
+                lockfile: Box::new(PackageManager::Pnpm9)
+            }
         );
     }
 }
