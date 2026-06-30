@@ -94,6 +94,16 @@ async function packPlatform({
   const destPath = path.join(scaffoldDir, "bin", binaryName);
   await fs.mkdir(path.dirname(destPath), { recursive: true });
   await fs.copyFile(sourcePath, destPath);
+  if (os === "windows") {
+    for (const file of await fs.readdir(path.dirname(sourcePath))) {
+      if (file.toLowerCase().endsWith(".dll")) {
+        await fs.copyFile(
+          path.join(path.dirname(sourcePath), file),
+          path.join(scaffoldDir, "bin", file)
+        );
+      }
+    }
+  }
   const stat = await fs.stat(destPath);
   const currMode = stat.mode;
   // eslint-disable-next-line no-bitwise -- necessary for enabling the executable bits
