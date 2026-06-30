@@ -33,7 +33,7 @@ pub struct PackageGraphBuilder<'a, T> {
 
 #[derive(Debug, Diagnostic, thiserror::Error)]
 pub enum Error {
-    #[error("Could not resolve workspaces.")]
+    #[error("Could not resolve workspace.")]
     #[diagnostic(transparent)]
     PackageManager(#[from] crate::package_manager::Error),
     #[error(
