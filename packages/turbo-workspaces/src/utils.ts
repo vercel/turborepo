@@ -45,7 +45,8 @@ const SUPPORTED_PACKAGE_MANAGERS = new Set<PackageManager>([
   "npm",
   "pnpm",
   "yarn",
-  "bun"
+  "bun",
+  "nub"
 ]);
 const DEV_ENGINES_VERSION_REGEX =
   /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
@@ -158,7 +159,7 @@ function getWorkspacePackageManager({
 
   if (!isPackageManager(name)) {
     throw invalidDevEnginesPackageManager(
-      "`devEngines.packageManager.name` must be one of `npm`, `pnpm`, `yarn`, or `bun`"
+      "`devEngines.packageManager.name` must be one of `npm`, `pnpm`, `yarn`, `bun`, or `nub`"
     );
   }
 
@@ -416,6 +417,62 @@ function expandWorkspaces({
     });
 }
 
+type LockfilePackageManager = Exclude<PackageManager, "nub">;
+
+const LOCKFILE_PROBE_ORDER: Array<{
+  manager: LockfilePackageManager;
+  lockfiles: Array<string>;
+}> = [
+  { manager: "bun", lockfiles: ["bun.lock", "bun.lockb"] },
+  { manager: "pnpm", lockfiles: ["pnpm-lock.yaml"] },
+  { manager: "yarn", lockfiles: ["yarn.lock"] },
+  { manager: "npm", lockfiles: ["package-lock.json"] }
+];
+
+function getUnderlyingLockfileManager({
+  workspaceRoot
+}: {
+  workspaceRoot: string;
+}): LockfilePackageManager {
+  for (const { manager, lockfiles } of LOCKFILE_PROBE_ORDER) {
+    if (
+      lockfiles.some((lockfile) =>
+        existsSync(path.join(workspaceRoot, lockfile))
+      )
+    ) {
+      return manager;
+    }
+  }
+
+  return "npm";
+}
+
+function getUnderlyingLockfileName({
+  workspaceRoot
+}: {
+  workspaceRoot: string;
+}): string {
+  const manager = getUnderlyingLockfileManager({ workspaceRoot });
+
+  switch (manager) {
+    case "bun": {
+      if (existsSync(path.join(workspaceRoot, "bun.lock"))) {
+        return "bun.lock";
+      }
+      return "bun.lockb";
+    }
+    case "pnpm": {
+      return "pnpm-lock.yaml";
+    }
+    case "yarn": {
+      return "yarn.lock";
+    }
+    case "npm": {
+      return "package-lock.json";
+    }
+  }
+}
+
 function directoryInfo({ directory }: { directory: string }) {
   const dir = path.resolve(process.cwd(), directory);
   return { exists: existsSync(dir), absolute: dir };
@@ -523,6 +580,8 @@ export {
   expandWorkspaces,
   parseWorkspacePackages,
   getPnpmWorkspaces,
+  getUnderlyingLockfileManager,
+  getUnderlyingLockfileName,
   directoryInfo,
   getMainStep,
   isCompatibleWithBunWorkspaces,

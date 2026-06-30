@@ -271,6 +271,36 @@ const LOCAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManagerVersion: "4.1.0",
     fixture: "single-package",
     expected: "yarn add turbo@latest"
+  },
+  // nub - workspaces
+  {
+    version: "latest",
+    packageManager: "nub",
+    packageManagerVersion: "0.1.0",
+    fixture: "pnpm-workspaces-dev-install",
+    expected: "nub add turbo@latest --save-dev -w"
+  },
+  {
+    version: "latest",
+    packageManager: "nub",
+    packageManagerVersion: "0.1.0",
+    fixture: "pnpm-workspaces",
+    expected: "nub add turbo@latest -w"
+  },
+  // nub - single package
+  {
+    version: "latest",
+    packageManager: "nub",
+    packageManagerVersion: "0.1.0",
+    fixture: "single-package-dev-install",
+    expected: "nub add turbo@latest --save-dev"
+  },
+  {
+    version: "latest",
+    packageManager: "nub",
+    packageManagerVersion: "0.1.0",
+    fixture: "single-package",
+    expected: "nub add turbo@latest"
   }
 ];
 
@@ -483,6 +513,21 @@ const GLOBAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManagerVersion: "4.1.0",
     fixture: "single-package-dev-install",
     expected: "yarn add turbo@latest --dev"
+  },
+  // nub
+  {
+    version: "latest",
+    packageManager: "nub",
+    packageManagerVersion: "0.1.0",
+    fixture: "pnpm-workspaces-dev-install",
+    expected: "nub add turbo@latest --global"
+  },
+  {
+    version: "latest",
+    packageManager: "nub",
+    packageManagerVersion: "0.1.0",
+    fixture: "single-package",
+    expected: "nub add turbo@latest --global"
   }
 ];
 
@@ -523,7 +568,8 @@ describe("get-turbo-upgrade-command", () => {
           pnpm: undefined,
           npm: undefined,
           yarn: undefined,
-          bun: undefined
+          bun: undefined,
+          nub: undefined
         });
       const mockGetAvailablePackageManagers = jest
         .spyOn(turboUtils, "getAvailablePackageManagers")
@@ -531,7 +577,8 @@ describe("get-turbo-upgrade-command", () => {
           pnpm: packageManager === "pnpm" ? packageManagerVersion : undefined,
           npm: packageManager === "npm" ? packageManagerVersion : undefined,
           yarn: packageManager === "yarn" ? packageManagerVersion : undefined,
-          bun: packageManager === "bun" ? packageManagerVersion : undefined
+          bun: packageManager === "bun" ? packageManagerVersion : undefined,
+          nub: packageManager === "nub" ? packageManagerVersion : undefined
         });
 
       const project = getWorkspaceDetailsMockReturnValue({
@@ -585,7 +632,8 @@ describe("get-turbo-upgrade-command", () => {
           pnpm: `/global/pnpm/bin`,
           npm: `/global/npm/bin`,
           yarn: `/global/yarn/bin`,
-          bun: `/global/bun/bin`
+          bun: `/global/bun/bin`,
+          nub: `/global/nub/bin`
         });
 
       const mockGetAvailablePackageManagers = jest
@@ -594,7 +642,8 @@ describe("get-turbo-upgrade-command", () => {
           pnpm: packageManager === "pnpm" ? packageManagerVersion : undefined,
           npm: packageManager === "npm" ? packageManagerVersion : undefined,
           yarn: packageManager === "yarn" ? packageManagerVersion : undefined,
-          bun: packageManager === "bun" ? packageManagerVersion : undefined
+          bun: packageManager === "bun" ? packageManagerVersion : undefined,
+          nub: packageManager === "nub" ? packageManagerVersion : undefined
         });
 
       const project = getWorkspaceDetailsMockReturnValue({
@@ -686,6 +735,28 @@ describe("get-turbo-upgrade-command", () => {
 
       expect(upgradeCommand).toEqual("npm install");
     });
+
+    it("returns nub install when catalog is used with nub", async () => {
+      const { root } = useFixture({ fixture: "pnpm-catalog-default" });
+
+      const project = getWorkspaceDetailsMockReturnValue({
+        root,
+        packageManager: "nub"
+      });
+
+      const catalogInfo: CatalogInfo = {
+        catalogName: null,
+        catalogFile: path.join(root, "pnpm-workspace.yaml"),
+        installType: "devDependencies"
+      };
+
+      const upgradeCommand = await getTurboUpgradeCommand({
+        project,
+        catalogInfo
+      });
+
+      expect(upgradeCommand).toEqual("nub install");
+    });
   });
 
   describe("errors", () => {
@@ -709,7 +780,8 @@ describe("get-turbo-upgrade-command", () => {
           pnpm: "8.0.0",
           npm: undefined,
           yarn: undefined,
-          bun: undefined
+          bun: undefined,
+          nub: undefined
         });
 
       const project = getWorkspaceDetailsMockReturnValue({
@@ -767,7 +839,8 @@ describe("get-turbo-upgrade-command", () => {
             pnpm: "8.0.0",
             npm: undefined,
             yarn: undefined,
-            bun: undefined
+            bun: undefined,
+            nub: undefined
           });
 
         const project = getWorkspaceDetailsMockReturnValue({

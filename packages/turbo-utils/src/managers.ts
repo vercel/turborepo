@@ -162,22 +162,33 @@ async function getYarnBinPath(projectRoot: string) {
   }
 }
 
+async function getNubBinPath() {
+  const nubBinaryPath = await exec("which", ["nub"]);
+  if (!nubBinaryPath) {
+    return undefined;
+  }
+
+  return path.dirname(nubBinaryPath);
+}
+
 export async function getAvailablePackageManagers(
   options: PackageManagerDetectionOptions = {}
 ): Promise<Record<PackageManager, string | undefined>> {
   const projectRoot = options.projectRoot ?? process.cwd();
-  const [yarn, npm, pnpm, bun] = await Promise.all([
+  const [yarn, npm, pnpm, bun, nub] = await Promise.all([
     getYarnVersion(projectRoot),
     exec("npm", ["--version"]),
     exec("pnpm", ["--version"]),
-    exec("bun", ["--version"])
+    exec("bun", ["--version"]),
+    exec("nub", ["--version"])
   ]);
 
   return {
     yarn,
     pnpm,
     npm,
-    bun
+    bun,
+    nub
   };
 }
 
@@ -185,17 +196,19 @@ export async function getPackageManagersBinPaths(
   options: PackageManagerDetectionOptions = {}
 ): Promise<Record<PackageManager, string | undefined>> {
   const projectRoot = options.projectRoot ?? process.cwd();
-  const [yarn, npm, pnpm, bun] = await Promise.all([
+  const [yarn, npm, pnpm, bun, nub] = await Promise.all([
     getYarnBinPath(projectRoot),
     exec("npm", ["config", "get", "prefix"]),
     exec("pnpm", ["bin", "--global"]),
-    exec("bun", ["pm", "--g", "bin"])
+    exec("bun", ["pm", "--g", "bin"]),
+    getNubBinPath()
   ]);
 
   return {
     yarn,
     pnpm,
     npm,
-    bun
+    bun,
+    nub
   };
 }
