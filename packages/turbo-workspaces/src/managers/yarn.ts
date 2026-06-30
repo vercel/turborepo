@@ -266,6 +266,10 @@ async function convertLock(args: ConvertArgs): Promise<void> {
       // we're already using yarn, so we don't need to convert
       break;
     }
+    case "nub": {
+      removeLockFile({ project, options });
+      break;
+    }
   }
 }
 

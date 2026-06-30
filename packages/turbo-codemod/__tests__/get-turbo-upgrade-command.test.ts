@@ -523,7 +523,8 @@ describe("get-turbo-upgrade-command", () => {
           pnpm: undefined,
           npm: undefined,
           yarn: undefined,
-          bun: undefined
+          bun: undefined,
+          nub: undefined
         });
       const mockGetAvailablePackageManagers = jest
         .spyOn(turboUtils, "getAvailablePackageManagers")
@@ -531,7 +532,8 @@ describe("get-turbo-upgrade-command", () => {
           pnpm: packageManager === "pnpm" ? packageManagerVersion : undefined,
           npm: packageManager === "npm" ? packageManagerVersion : undefined,
           yarn: packageManager === "yarn" ? packageManagerVersion : undefined,
-          bun: packageManager === "bun" ? packageManagerVersion : undefined
+          bun: packageManager === "bun" ? packageManagerVersion : undefined,
+          nub: packageManager === "nub" ? packageManagerVersion : undefined
         });
 
       const project = getWorkspaceDetailsMockReturnValue({
@@ -585,7 +587,8 @@ describe("get-turbo-upgrade-command", () => {
           pnpm: `/global/pnpm/bin`,
           npm: `/global/npm/bin`,
           yarn: `/global/yarn/bin`,
-          bun: `/global/bun/bin`
+          bun: `/global/bun/bin`,
+          nub: `/global/nub/bin`
         });
 
       const mockGetAvailablePackageManagers = jest
@@ -594,7 +597,8 @@ describe("get-turbo-upgrade-command", () => {
           pnpm: packageManager === "pnpm" ? packageManagerVersion : undefined,
           npm: packageManager === "npm" ? packageManagerVersion : undefined,
           yarn: packageManager === "yarn" ? packageManagerVersion : undefined,
-          bun: packageManager === "bun" ? packageManagerVersion : undefined
+          bun: packageManager === "bun" ? packageManagerVersion : undefined,
+          nub: packageManager === "nub" ? packageManagerVersion : undefined
         });
 
       const project = getWorkspaceDetailsMockReturnValue({
@@ -709,7 +713,8 @@ describe("get-turbo-upgrade-command", () => {
           pnpm: "8.0.0",
           npm: undefined,
           yarn: undefined,
-          bun: undefined
+          bun: undefined,
+          nub: undefined
         });
 
       const project = getWorkspaceDetailsMockReturnValue({
@@ -767,7 +772,8 @@ describe("get-turbo-upgrade-command", () => {
             pnpm: "8.0.0",
             npm: undefined,
             yarn: undefined,
-            bun: undefined
+            bun: undefined,
+          nub: undefined
           });
 
         const project = getWorkspaceDetailsMockReturnValue({

@@ -41,7 +41,8 @@ describe("utils", () => {
       ["npm", "10.5.0"],
       ["pnpm", "9.12.3"],
       ["yarn", "4.5.0+sha224.abc"],
-      ["bun", "1.1.0"]
+      ["bun", "1.1.0"],
+      ["nub", "0.1.0"]
     ] as const)("reads %s from devEngines.packageManager", (name, version) => {
       const workspaceRoot = makeWorkspace({
         devEngines: {

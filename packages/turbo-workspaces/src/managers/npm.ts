@@ -256,6 +256,10 @@ async function convertLock(args: ConvertArgs): Promise<void> {
       removeLockFile({ project, options });
       break;
     }
+    case "nub": {
+      removeLockFile({ project, options });
+      break;
+    }
   }
 }
 
