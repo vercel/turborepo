@@ -45,7 +45,7 @@ createTurboCli
     new Option(
       "-m, --package-manager <package-manager>",
       "Specify the package manager to use"
-    ).choices(["npm", "yarn", "pnpm", "bun", "nub", "aube"])
+    ).choices(["npm", "yarn", "pnpm", "bun", "nub", "aube", "utoo"])
   )
   .option(
     "--skip-install",

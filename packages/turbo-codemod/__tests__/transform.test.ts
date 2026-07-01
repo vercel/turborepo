@@ -56,7 +56,8 @@ describe("transform", () => {
         yarn: undefined,
         bun: undefined,
         nub: undefined,
-        aube: undefined
+        aube: undefined,
+        utoo: undefined
       });
 
     const mockGetWorkspaceDetails = jest
@@ -110,7 +111,8 @@ describe("transform", () => {
         yarn: undefined,
         bun: undefined,
         nub: undefined,
-        aube: undefined
+        aube: undefined,
+        utoo: undefined
       });
 
     const mockGetWorkspaceDetails = jest

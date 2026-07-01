@@ -1,6 +1,13 @@
 import type { Logger } from "./logger";
 
-export type PackageManager = "npm" | "yarn" | "pnpm" | "bun" | "nub" | "aube";
+export type PackageManager =
+  | "npm"
+  | "yarn"
+  | "pnpm"
+  | "bun"
+  | "nub"
+  | "aube"
+  | "utoo";
 
 export interface Manager {
   name: PackageManager;
@@ -99,7 +106,7 @@ export interface Options {
 export interface PackageManagerInstallDetails {
   name: string;
   template: string;
-  command: PackageManager;
+  command: string;
   installArgs: Array<string>;
   version: string;
   executable: string;

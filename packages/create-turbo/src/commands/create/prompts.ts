@@ -53,7 +53,8 @@ export async function packageManager({
       { pm: "yarn", label: "yarn" },
       { pm: "bun", label: "bun" },
       { pm: "nub", label: "nub" },
-      { pm: "aube", label: "aube" }
+      { pm: "aube", label: "aube" },
+      { pm: "utoo", label: "utoo" }
     ]
       .sort((a, b) => {
         const aInstalled = Boolean(
