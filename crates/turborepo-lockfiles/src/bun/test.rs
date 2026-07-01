@@ -2189,19 +2189,6 @@ fn test_subgraph_preserves_patch_when_patched_version_missing_from_lockfile_keys
 
 #[test]
 fn test_parses_v2_lockfile_and_resolves_workspace_and_external() {
-    // Regression for https://github.com/vercel/turborepo/issues/13117.
-    //
-    // Bun 1.4.0 / canary writes `lockfileVersion: 2` with a sibling
-    // `configVersion: 1`. The on-disk schema for the surfaces turbo reads
-    // (workspaces, packages, catalogs, overrides, patched dependencies) is
-    // byte-compatible with V1 — only the version tag changes. Before this
-    // fix `LockfileVersion::from_i32` rejected 2 and `BunLockfile::from_str`
-    // bailed with `UnsupportedBunVersion(2)`, dropping the workspace graph
-    // for every Bun 1.4 consumer.
-    //
-    // This payload is the bun.lock produced by `bun@1.4.0 install` on a
-    // workspace with a single child package, one transitive dep, and an
-    // override target, then minimized to the fields the parser exercises.
     let contents = serde_json::to_string(&json!({
         "lockfileVersion": 2,
         "configVersion": 1,
