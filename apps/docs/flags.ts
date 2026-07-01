@@ -6,5 +6,8 @@ const adapter = process.env.FLAGS ? vercelAdapter() : undefined;
 export const enableDevtools = flag({
   key: "enable-devtools",
   defaultValue: process.env.NODE_ENV === "development",
-  adapter
+  adapter,
+  decide() {
+    return process.env.NODE_ENV === "development";
+  }
 });

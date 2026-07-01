@@ -419,7 +419,11 @@ export async function streamingExtract({
       }
     });
 
-    await pipeline(body, createGunzip(), parser);
+    await pipeline(
+      body,
+      createGunzip(),
+      parser as unknown as NodeJS.ReadWriteStream
+    );
 
     // Wait for all file writes to complete
     await Promise.all(fileWritePromises);
@@ -450,7 +454,7 @@ export async function downloadAndExtractRepo(
   // Extract from file (sync but fast)
   let rootPath: string | null = null;
   try {
-    await writeFile(tempFile, buffer, { flag: "wx" });
+    await writeFile(tempFile, Uint8Array.from(buffer), { flag: "wx" });
     await extract({
       file: tempFile,
       cwd: root,
