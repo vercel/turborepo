@@ -211,6 +211,12 @@ Default: `true`
 
 Respect `.gitignore` file(s) when copying files to the output directory.
 
+#### `--production`
+
+Default: `false`
+
+Exclude in-workspace packages listed only in `devDependencies` when selecting which packages to include in the pruned output. Only workspace packages reachable through `dependencies` (and non-optional peer workspace dependencies) are included.
+
 ### Including `globalDependencies`
 
 By default, `turbo prune` does not copy files referenced by [`globalDependencies`](/docs/reference/configuration#globaldependencies) into the output directory. The `globalDependencies` field is preserved in the pruned `turbo.json`, but the files themselves (e.g., a root `tsconfig.json` or `.env`) are not included.

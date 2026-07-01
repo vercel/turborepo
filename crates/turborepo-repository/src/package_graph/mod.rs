@@ -606,6 +606,36 @@ impl PackageGraph {
         )
     }
 
+    /// Like [`Self::transitive_closure`], but only follows edges with
+    /// [`DependencyKind::Production`].
+    pub fn production_transitive_closure<'a, 'b, I: IntoIterator<Item = &'b PackageNode>>(
+        &'a self,
+        nodes: I,
+    ) -> HashSet<&'a PackageNode> {
+        let mut visited = HashSet::new();
+        let mut stack: Vec<NodeIndex> = nodes
+            .into_iter()
+            .filter_map(|node| self.node_lookup.get(node).cloned())
+            .collect();
+
+        while let Some(index) = stack.pop() {
+            let Some(node) = self.graph.node_weight(index) else {
+                continue;
+            };
+            if !visited.insert(node) {
+                continue;
+            }
+
+            for edge in self.graph.edges(index) {
+                if matches!(*edge.weight(), DependencyKind::Production) {
+                    stack.push(edge.target());
+                }
+            }
+        }
+
+        visited
+    }
+
     pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a PackageName>>(
         &self,
         packages: I,
