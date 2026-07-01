@@ -560,11 +560,11 @@ expression: query_output
         },
         {
           "kind": "OBJECT",
-          "name": "DependentChanged",
+          "name": "DependencyKindGraphQL",
           "description": null,
           "fields": [
             {
-              "name": "dependentName",
+              "name": "kind",
               "description": null,
               "args": [],
               "type": {
@@ -587,11 +587,11 @@ expression: query_output
         },
         {
           "kind": "OBJECT",
-          "name": "DependencyKindGraphQL",
+          "name": "DependentChanged",
           "description": null,
           "fields": [
             {
-              "name": "kind",
+              "name": "dependentName",
               "description": null,
               "args": [],
               "type": {
