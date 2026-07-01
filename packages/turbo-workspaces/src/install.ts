@@ -87,7 +87,7 @@ export const PACKAGE_MANAGERS: Record<
       command: "nub",
       installArgs: ["install"],
       version: "latest",
-      executable: "nub",
+      executable: "nub exec",
       semver: "*",
       default: true
     }

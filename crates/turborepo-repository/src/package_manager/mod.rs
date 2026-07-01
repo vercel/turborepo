@@ -994,16 +994,15 @@ impl PackageManager {
                 .then(|| PackageManager::Aube {
                     lockfile: Box::new(aube::underlying_lockfile_manager(repo_root)),
                 });
-        let native_nub =
-            repo_root
-                .join_component(nub::LOCKFILE)
-                .exists()
-                .then(|| PackageManager::Nub {
-                    lockfile: Box::new(nub::underlying_lockfile_manager(repo_root)),
-                });
+        // nub is recognized ONLY through the `packageManager` field /
+        // `devEngines.packageManager` (handled in `get_package_manager`), never
+        // from the presence of its `lock.yaml`: nub's lockfile name is
+        // deliberately neutral and nub is lockfile-compatible with whatever the
+        // project already uses, so the file's presence is not a reliable nub
+        // signal. Lockfile parsing still happens once nub is detected via the
+        // field — only the name-based *detection* is dropped here.
         let detected_package_managers = native_aube
             .into_iter()
-            .chain(native_nub)
             .map(Ok)
             .chain(PnpmDetector::new(repo_root))
             .chain(NpmDetector::new(repo_root))
@@ -1325,9 +1324,13 @@ impl PackageManager {
                 pnpm::link_workspace_packages(pnpm_version, repo_root)
             }
             PackageManager::Yarn | PackageManager::Bun | PackageManager::Npm => true,
-            // nub links workspace packages by default, delegating to the
-            // underlying manager's behavior where it has one.
-            PackageManager::Nub { lockfile } => lockfile.link_workspace_packages(repo_root),
+            // nub links a local workspace package for a bare version specifier
+            // (e.g. `"@repo/ui": "*"`), like npm/yarn/bun and unlike pnpm. It
+            // does not require the `workspace:` protocol. Delegating to the
+            // underlying lockfile format (pnpm) would default this to false and
+            // drop every internal workspace edge declared without `workspace:`,
+            // so resolve it from nub's own behavior instead.
+            PackageManager::Nub { .. } => true,
             PackageManager::Aube { lockfile } => match lockfile.as_ref() {
                 PackageManager::Pnpm9 | PackageManager::Pnpm | PackageManager::Pnpm6 => {
                     let pnpm_version = pnpm::PnpmVersion::try_from(lockfile.as_ref())
@@ -1878,8 +1881,11 @@ mod tests {
     }
 
     #[test]
-    fn test_native_nub_lockfile_with_existing_lockfile_is_ambiguous() -> Result<(), Error> {
+    fn test_native_nub_lockfile_is_ignored_by_detection() -> Result<(), Error> {
         let (_dir, repo_root) = temp_repo_root()?;
+        // A native `lock.yaml` does not participate in detection (nub is
+        // field-only), so a co-present `pnpm-lock.yaml` resolves cleanly to pnpm
+        // rather than producing an ambiguous multi-manager result.
         std::fs::write(
             repo_root.join_component(nub::LOCKFILE).as_std_path(),
             "lockfileVersion: '9.0'\nimporters:\n  .: {}\n",
@@ -1889,10 +1895,28 @@ mod tests {
             "lockfileVersion: '9.0'\nimporters:\n  .: {}\n",
         )?;
 
-        assert!(matches!(
-            PackageManager::detect_package_manager(&repo_root),
-            Err(Error::MultiplePackageManagers { .. })
-        ));
+        assert_eq!(
+            PackageManager::detect_package_manager(&repo_root)?,
+            PackageManager::Pnpm
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_nub_links_workspace_packages_unlike_underlying_pnpm() -> Result<(), Error> {
+        let (_dir, repo_root) = temp_repo_root()?;
+        // A pnpm9 manager with no workspace config defaults link-workspace-packages
+        // to false; nub links bare specifiers (`"*"`) to local workspace packages,
+        // so the Nub variant must report true regardless of its pnpm9 lockfile.
+        // Without this, every internal workspace edge declared without the
+        // `workspace:` protocol is dropped from the graph.
+        assert!(!PackageManager::Pnpm9.link_workspace_packages(&repo_root));
+        assert!(
+            PackageManager::Nub {
+                lockfile: Box::new(PackageManager::Pnpm9)
+            }
+            .link_workspace_packages(&repo_root)
+        );
         Ok(())
     }
 
