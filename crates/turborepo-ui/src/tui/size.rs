@@ -29,7 +29,8 @@ impl SizeInfo {
         self.rows
             // Account for header and footer in layout
             .saturating_sub(2)
-            // Always allocate at least one row as vt100 crashes if emulating a zero area terminal
+            // Always allocate at least one row as the terminal backend requires
+            // a non-zero render area.
             .max(1)
     }
 

@@ -576,11 +576,14 @@ impl Run {
     pub fn stopper(&self) -> RunStopper {
         RunStopper {
             manager: self.processes.clone(),
+            run_cache: self.run_cache.clone(),
+            skip_cache_writes: self.opts.cache_opts.cache.skip_writes(),
         }
     }
 
     async fn start_proxy_if_needed(
         &self,
+        register_shutdown_handler: bool,
     ) -> Result<
         Option<(
             tokio::sync::broadcast::Sender<()>,
@@ -603,8 +606,11 @@ impl Run {
         let config = self.load_proxy_config(mfe_configs).await?;
         let (mut server, shutdown_handle) = self.start_proxy_server(config).await?;
 
-        let signal_handler_complete_rx =
-            self.setup_shutdown_handlers(&mut server, shutdown_handle.clone());
+        let signal_handler_complete_rx = self.setup_shutdown_handlers(
+            &mut server,
+            shutdown_handle.clone(),
+            register_shutdown_handler,
+        );
 
         tokio::spawn(async move {
             if let Err(e) = server.run().await {
@@ -664,23 +670,30 @@ impl Run {
         &self,
         server: &mut ProxyServer,
         shutdown_handle: tokio::sync::broadcast::Sender<()>,
+        register_signal_handler: bool,
     ) -> tokio::sync::oneshot::Receiver<()> {
         let (proxy_shutdown_complete_tx, proxy_shutdown_complete_rx) =
             tokio::sync::oneshot::channel();
         let (cleanup_complete_tx, cleanup_complete_rx) = tokio::sync::oneshot::channel();
-        let (signal_handler_complete_tx, signal_handler_complete_rx) =
-            tokio::sync::oneshot::channel();
+        let (signal_handler_complete_tx, signal_handler_complete_rx) = register_signal_handler
+            .then(tokio::sync::oneshot::channel)
+            .map(|(tx, rx)| (Some(tx), Some(rx)))
+            .unwrap_or((None, None));
 
         server.set_shutdown_complete_tx(proxy_shutdown_complete_tx);
 
         tokio::spawn(async move {
             if proxy_shutdown_complete_rx.await.is_ok() {
                 let _ = cleanup_complete_tx.send(());
-                let _ = signal_handler_complete_tx.send(());
+                if let Some(signal_handler_complete_tx) = signal_handler_complete_tx {
+                    let _ = signal_handler_complete_tx.send(());
+                }
             }
         });
 
-        self.register_proxy_signal_handler(shutdown_handle, signal_handler_complete_rx);
+        if let Some(signal_handler_complete_rx) = signal_handler_complete_rx {
+            self.register_proxy_signal_handler(shutdown_handle, signal_handler_complete_rx);
+        }
 
         cleanup_complete_rx
     }
@@ -1166,13 +1179,15 @@ impl Run {
 
     #[instrument(skip_all)]
     pub async fn run(&self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
-        let proxy_shutdown = self.start_proxy_if_needed().await?;
-        self.setup_cache_shutdown_handler();
+        let proxy_shutdown = self.start_proxy_if_needed(!is_watch).await?;
+        if !is_watch {
+            self.setup_cache_shutdown_handler();
+        }
 
         // If there's no proxy, we need a fallback signal handler for the process
         // manager When a proxy is present, register_proxy_signal_handler
         // handles process manager shutdown
-        if proxy_shutdown.is_none() {
+        if proxy_shutdown.is_none() && !is_watch {
             self.setup_process_manager_shutdown_handler();
         }
 
@@ -1203,14 +1218,49 @@ impl Run {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RunStopper {
     manager: ProcessManager,
+    run_cache: Arc<RunCache>,
+    skip_cache_writes: bool,
 }
 
 impl RunStopper {
     pub async fn stop(&self) {
         self.manager.stop().await;
+    }
+
+    pub async fn shutdown(
+        &self,
+        force_shutdown_timeout: Option<Duration>,
+        in_process_signals: Option<tokio::sync::broadcast::Receiver<()>>,
+    ) {
+        let process_manager = self.manager.clone();
+        let graceful_process_manager = process_manager.clone();
+        let graceful_shutdown = async move {
+            graceful_process_manager.shutdown(None).await;
+        };
+        Run::wait_for_process_manager_shutdown(
+            process_manager,
+            force_shutdown_timeout,
+            in_process_signals,
+            graceful_shutdown,
+        )
+        .await;
+    }
+
+    pub async fn shutdown_cache(&self) {
+        if self.skip_cache_writes {
+            return;
+        }
+
+        if let Ok((_status, closed)) = self.run_cache.shutdown_cache().await {
+            let _ = closed.await;
+        }
+    }
+
+    pub fn cache_writes_enabled(&self) -> bool {
+        !self.skip_cache_writes
     }
 
     pub async fn stop_tasks(&self, task_ids: &[turborepo_task_id::TaskId<'static>]) {

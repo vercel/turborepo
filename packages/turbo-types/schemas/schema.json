@@ -82,7 +82,7 @@
       ]
     },
     "dangerouslyDisablePackageManagerCheck": {
-      "description": "Disable check for `packageManager` in root `package.json`.\n\nThis is highly discouraged as it leaves `turbo` dependent on system configuration to infer the correct package manager. Some turbo features are disabled if this is set to true.",
+      "description": "Disable package manager declaration checks in root `package.json`.\n\nThis is highly discouraged as it leaves `turbo` dependent on system configuration to infer the correct package manager. Some turbo features are disabled if this is set to true.",
       "anyOf": [
         {
           "$ref": "#/definitions/Boolean"
@@ -392,7 +392,7 @@
           ]
         },
         "dangerouslyDisablePackageManagerCheck": {
-          "description": "Disable check for `packageManager` in root `package.json`.",
+          "description": "Disable package manager declaration checks in root `package.json`.",
           "anyOf": [
             {
               "$ref": "#/definitions/Boolean"
@@ -581,7 +581,7 @@
           "description": "The set of glob patterns to consider as inputs to this task.\n\nChanges to files covered by these globs will cause a cache miss and the task will be rerun. If a file has been changed that is **not** included in the set of globs, it will not cause a cache miss. If omitted or empty, all files in the package are considered as inputs.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#inputs",
           "type": ["array", "null"],
           "items": {
-            "$ref": "#/definitions/String"
+            "$ref": "#/definitions/TaskInput"
           }
         },
         "interactive": {
@@ -759,6 +759,43 @@
     "String": {
       "type": "string"
     },
+    "StructuredInput": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": ["array", "null"],
+          "items": {
+            "$ref": "#/definitions/String"
+          }
+        },
+        "globs": {
+          "type": ["array", "null"],
+          "items": {
+            "$ref": "#/definitions/String"
+          }
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "withDefaults": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
     "TagRules": {
       "description": "Boundary rules for a tag.\n\nRestricts which packages a tag can import and which packages can import this tag.",
       "type": "object",
@@ -786,6 +823,16 @@
           ]
         }
       }
+    },
+    "TaskInput": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/String"
+        },
+        {
+          "$ref": "#/definitions/StructuredInput"
+        }
+      ]
     },
     "UI": {
       "description": "Enable use of the UI for `turbo`.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#ui",

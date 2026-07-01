@@ -24,7 +24,7 @@ use turborepo_repository::package_graph::PackageName;
 use turborepo_run_cache::{OutputWatcher, OutputWatcherError};
 use turborepo_scm::SCM;
 use turborepo_scope::target_selector::InvalidSelectorError;
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_signals::{listeners::get_signal, ShutdownReason, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{sender::UISender, LogSinks};
 
@@ -522,15 +522,69 @@ impl WatchClient {
     }
 
     pub async fn shutdown(&mut self) {
+        let force_shutdown_timeout = Run::force_shutdown_timeout();
+        let graceful_shutdown = self.handler.shutdown_reason() == Some(ShutdownReason::Signal);
+        if graceful_shutdown {
+            Run::emit_shutdown_started_once(
+                self.run.shutdown_started_emitted.as_ref(),
+                force_shutdown_timeout,
+            );
+        }
+
+        let mut stoppers = self.background_stoppers.drain(..).collect::<Vec<_>>();
+        for stopper in &stoppers {
+            if graceful_shutdown {
+                stopper
+                    .shutdown(
+                        force_shutdown_timeout,
+                        Some(self.handler.subscribe_in_process_signals()),
+                    )
+                    .await;
+            } else {
+                stopper.stop().await;
+            }
+        }
+
+        for handle in self.active_runs.drain(..) {
+            let RunHandle { stopper, run_task } = handle;
+            if graceful_shutdown {
+                stopper
+                    .shutdown(
+                        force_shutdown_timeout,
+                        Some(self.handler.subscribe_in_process_signals()),
+                    )
+                    .await;
+            } else {
+                stopper.stop().await;
+            }
+            let _ = run_task.await;
+            stoppers.push(stopper);
+        }
+
+        if stoppers
+            .iter()
+            .any(|stopper| stopper.cache_writes_enabled())
+        {
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
+                "Finishing writing to cache...",
+            )
+            .emit();
+        }
+
+        for stopper in &stoppers {
+            stopper.shutdown_cache().await;
+        }
+
         if let Some(sender) = &self.ui_sender {
             sender.stop().await;
         }
-        for stopper in self.background_stoppers.drain(..) {
-            stopper.stop().await;
-        }
-        for handle in self.active_runs.drain(..) {
-            handle.stopper.stop().await;
-            let _ = handle.run_task.await;
+        if let Some(handle) = self.ui_handle.take() {
+            match handle.await {
+                Ok(Err(err)) => tracing::error!("error encountered rendering tui: {err}"),
+                Err(err) => tracing::error!("render thread panicked: {err}"),
+                Ok(Ok(())) => {}
+            }
         }
     }
 

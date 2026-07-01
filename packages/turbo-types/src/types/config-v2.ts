@@ -135,7 +135,7 @@ export interface RootSchema extends BaseSchema {
   concurrency?: string;
 
   /**
-   * Disable check for `packageManager` in root `package.json`
+   * Disable package manager declaration checks in root `package.json`.
    *
    * This is highly discouraged as it leaves `turbo` dependent on system
    * configuration to infer the correct package manager.
@@ -366,7 +366,7 @@ export interface GlobalConfig {
   concurrency?: string;
 
   /**
-   * Disable check for `packageManager` in root `package.json`.
+   * Disable package manager declaration checks in root `package.json`.
    *
    * @defaultValue `false`
    */
@@ -425,6 +425,24 @@ export interface GlobalConfig {
    * @defaultValue `false`
    */
   noUpdateNotifier?: boolean;
+}
+
+export interface StartupInput {
+  mode: "startup";
+  globs?: Array<string>;
+  withDefaults?: boolean;
+}
+
+export interface JitInput {
+  mode: "jit";
+  globs?: Array<string>;
+  withDefaults?: boolean;
+}
+
+export interface DependencyOutputsInput {
+  mode: "dependencyOutputs";
+  from?: Array<string>;
+  globs?: Array<string>;
 }
 
 export interface Pipeline {
@@ -518,7 +536,7 @@ export interface Pipeline {
    *
    * @defaultValue `[]`
    */
-  inputs?: Array<string>;
+  inputs?: Array<string | StartupInput | JitInput | DependencyOutputsInput>;
 
   /**
    * Output mode for the task.

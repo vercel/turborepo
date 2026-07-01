@@ -96,6 +96,7 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
         let inputs = processed
             .inputs
             .map(|inputs| TaskInputs::from_processed(inputs, path_to_repo_root))
+            .transpose()?
             .unwrap_or_default();
 
         let pass_through_env = processed.pass_through_env.map(|env| env.vars);

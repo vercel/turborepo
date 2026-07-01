@@ -9,9 +9,10 @@ export const NON_FATAL_ERRORS: NonFatalErrors = {
   },
   NO_PACKAGE_MANAGER: {
     regex: [
-      /run failed: We did not detect an in-use package manager for your project/i
+      /run failed: We did not detect an in-use package manager for your project/i,
+      /run failed: We did not find a package manager specified in your root package.json/i
     ],
-    message: `turbo-ignore could not complete - no package manager detected, please commit a lockfile, or set "packageManager" in your root "package.json"`
+    message: `turbo-ignore could not complete - no package manager detected, please commit a lockfile, or set "devEngines.packageManager" in your root "package.json"`
   },
   UNREACHABLE_PARENT: {
     regex: [/failed to resolve packages to run: commit HEAD\^ does not exist/i],

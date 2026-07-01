@@ -718,6 +718,9 @@ impl Backend {
     }
 
     pub async fn package_discovery(&self) -> Result<DiscoveryResponse, discovery::Error> {
+        let repo_root = lock_or_recover(&self.repo_root)
+            .clone()
+            .ok_or(discovery::Error::Unavailable)?;
         let daemon = {
             let mut daemon = self.daemon.clone();
             let daemon = daemon
@@ -730,7 +733,7 @@ impl Backend {
             daemon.clone()
         };
 
-        DaemonPackageDiscovery::new(daemon)
+        DaemonPackageDiscovery::new(daemon, repo_root)
             .discover_packages_blocking()
             .await
     }

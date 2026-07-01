@@ -26,11 +26,13 @@ mod dep_splitter;
 
 pub use builder::{Error, PackageGraphBuilder};
 
+pub use crate::package_json::DependencyKind;
+
 pub const ROOT_PKG_NAME: &str = "//";
 
 #[derive(Debug)]
 pub struct PackageGraph {
-    graph: petgraph::Graph<PackageNode, ()>,
+    graph: petgraph::Graph<PackageNode, DependencyKind>,
     root_node_index: NodeIndex,
     root_workspace_index: NodeIndex,
     #[allow(dead_code)]
@@ -369,8 +371,40 @@ impl PackageGraph {
         self.graph.node_indices()
     }
 
-    pub fn edges(&self) -> &[Edge<()>] {
+    pub fn edges(&self) -> &[Edge<DependencyKind>] {
         self.graph.raw_edges()
+    }
+
+    /// Returns the dependency kind for a directed edge between two workspace
+    /// packages, if one exists.
+    pub fn dependency_kind(&self, from: &PackageNode, to: &PackageNode) -> Option<DependencyKind> {
+        let from_index = self.node_lookup.get(from)?;
+        let to_index = self.node_lookup.get(to)?;
+        self.graph
+            .edges_connecting(*from_index, *to_index)
+            .next()
+            .map(|edge| *edge.weight())
+    }
+
+    /// Like [`Self::immediate_dependencies`], but includes the dependency kind
+    /// for each outgoing edge.
+    pub fn immediate_dependencies_with_kinds(
+        &self,
+        package: &PackageNode,
+    ) -> Option<HashMap<&PackageNode, DependencyKind>> {
+        let index = self.node_lookup.get(package)?;
+        Some(
+            self.graph
+                .edges(*index)
+                .map(|edge| {
+                    let target = self
+                        .graph
+                        .node_weight(edge.target())
+                        .expect("node index from neighbors should be present");
+                    (target, *edge.weight())
+                })
+                .collect(),
+        )
     }
 
     pub fn packages(&self) -> impl Iterator<Item = (&PackageName, &PackageInfo)> {
@@ -570,6 +604,36 @@ impl PackageGraph {
                 .flat_map(|node| self.node_lookup.get(node).cloned()),
             petgraph::Direction::Outgoing,
         )
+    }
+
+    /// Like [`Self::transitive_closure`], but only follows edges with
+    /// [`DependencyKind::Production`].
+    pub fn production_transitive_closure<'a, 'b, I: IntoIterator<Item = &'b PackageNode>>(
+        &'a self,
+        nodes: I,
+    ) -> HashSet<&'a PackageNode> {
+        let mut visited = HashSet::new();
+        let mut stack: Vec<NodeIndex> = nodes
+            .into_iter()
+            .filter_map(|node| self.node_lookup.get(node).cloned())
+            .collect();
+
+        while let Some(index) = stack.pop() {
+            let Some(node) = self.graph.node_weight(index) else {
+                continue;
+            };
+            if !visited.insert(node) {
+                continue;
+            }
+
+            for edge in self.graph.edges(index) {
+                if matches!(*edge.weight(), DependencyKind::Production) {
+                    stack.push(edge.target());
+                }
+            }
+        }
+
+        visited
     }
 
     pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a PackageName>>(

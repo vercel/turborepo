@@ -87,6 +87,9 @@ jobs:
           github-token: ${{ github.token }}
           targets: ${{ matrix.settings.target }}
 
+      - name: Setup Zig
+        uses: ./.github/actions/setup-zig
+
       - name: Build Setup
         shell: bash
         if: ${{ matrix.settings.setup }}

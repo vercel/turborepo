@@ -68,6 +68,14 @@ fn turbo_gen_command(package_manager: &PackageManager, tag: &str) -> PackageMana
             executable: "bun",
             args: vec!["x".to_string(), package],
         },
+        PackageManager::Nub { .. } => PackageManagerCommand {
+            executable: "nubx",
+            args: vec![package],
+        },
+        PackageManager::Aube { .. } => PackageManagerCommand {
+            executable: "aubx",
+            args: vec![package],
+        },
     }
 }
 
@@ -161,7 +169,7 @@ mod tests {
     }
 
     #[test]
-    fn detects_pnpm_from_lockfile_without_package_manager_field() {
+    fn detects_pnpm_from_dev_engines_package_manager() {
         let tempdir = tempfile::tempdir().unwrap();
         std::fs::write(
             tempdir.path().join("package.json"),
@@ -173,7 +181,7 @@ mod tests {
 
         assert_eq!(
             package_manager_for_generate(&repo_root),
-            PackageManager::Pnpm
+            PackageManager::Pnpm9
         );
     }
 }

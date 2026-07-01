@@ -597,7 +597,8 @@ impl BoundariesChecker {
                 "**/*.svelte".parse()?,
                 "**/*.vue".parse()?,
             ];
-            let exclude_patterns: [ValidatedGlob; 1] = ["**/node_modules/**".parse()?];
+            let exclude_patterns: [ValidatedGlob; 2] =
+                ["node_modules/**".parse()?, "**/node_modules/**".parse()?];
 
             globwalk::globwalk_with_settings(
                 &package_root,
@@ -857,6 +858,12 @@ mod tests {
         for pkg in &["pkg-a", "pkg-b"] {
             let pkg_dir = repo_root.join_components(&["packages", pkg]);
             std::fs::create_dir_all(pkg_dir.as_std_path()).unwrap();
+            std::fs::create_dir_all(
+                pkg_dir
+                    .join_components(&["node_modules", "dep"])
+                    .as_std_path(),
+            )
+            .unwrap();
             std::fs::write(
                 pkg_dir.join_component("package.json").as_std_path(),
                 format!(r#"{{"name": "{pkg}"}}"#),
@@ -865,6 +872,13 @@ mod tests {
             std::fs::write(
                 pkg_dir.join_component("index.ts").as_std_path(),
                 "import './local';\n",
+            )
+            .unwrap();
+            std::fs::write(
+                pkg_dir
+                    .join_components(&["node_modules", "dep", "index.ts"])
+                    .as_std_path(),
+                "import 'missing';\n",
             )
             .unwrap();
         }

@@ -16,7 +16,8 @@ use turborepo_unescape::UnescapedString;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DependencyKind {
-    Normal,
+    Production,
+    Development,
     Peer { optional: bool },
 }
 
@@ -29,6 +30,8 @@ pub struct PackageJson {
     pub version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub package_manager: Option<Spanned<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dev_engines: Option<Spanned<serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dependencies: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -65,6 +68,7 @@ pub struct RawPackageJson {
     pub name: Option<Spanned<UnescapedString>>,
     pub version: Option<UnescapedString>,
     pub package_manager: Option<Spanned<UnescapedString>>,
+    pub dev_engines: Option<Spanned<serde_json::Value>>,
     pub dependencies: Option<BTreeMap<String, UnescapedString>>,
     pub dev_dependencies: Option<BTreeMap<String, UnescapedString>>,
     pub optional_dependencies: Option<BTreeMap<String, UnescapedString>>,
@@ -102,6 +106,9 @@ impl WithMetadata for RawPackageJson {
         if let Some(ref mut package_manager) = self.package_manager {
             package_manager.add_text(text.clone());
         }
+        if let Some(ref mut dev_engines) = self.dev_engines {
+            dev_engines.add_text(text.clone());
+        }
         self.scripts
             .iter_mut()
             .for_each(|(_, v)| v.add_text(text.clone()));
@@ -110,6 +117,9 @@ impl WithMetadata for RawPackageJson {
     fn add_path(&mut self, path: Arc<str>) {
         if let Some(ref mut package_manager) = self.package_manager {
             package_manager.add_path(path.clone());
+        }
+        if let Some(ref mut dev_engines) = self.dev_engines {
+            dev_engines.add_path(path.clone());
         }
         self.scripts
             .iter_mut()
@@ -123,6 +133,7 @@ impl From<RawPackageJson> for PackageJson {
             name: raw.name.map(|s| s.map(|s| s.into())),
             version: raw.version.map(|s| s.into()),
             package_manager: raw.package_manager.map(|s| s.map(|s| s.into())),
+            dev_engines: raw.dev_engines,
             dependencies: raw
                 .dependencies
                 .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
@@ -223,9 +234,13 @@ impl PackageJson {
             .dependencies
             .iter()
             .flatten()
-            .chain(self.dev_dependencies.iter().flatten())
             .chain(self.optional_dependencies.iter().flatten())
-            .map(|(name, version)| (name, version, DependencyKind::Normal));
+            .map(|(name, version)| (name, version, DependencyKind::Production));
+        let dev = self
+            .dev_dependencies
+            .iter()
+            .flatten()
+            .map(|(name, version)| (name, version, DependencyKind::Development));
         let peer = self
             .peer_dependencies
             .iter()
@@ -239,7 +254,7 @@ impl PackageJson {
                     },
                 )
             });
-        normal.chain(peer)
+        normal.chain(dev).chain(peer)
     }
 
     pub fn is_optional_peer_dependency(&self, name: &str) -> bool {
@@ -289,6 +304,7 @@ mod test {
     #[test_case(json!({"name": "foo", "pnpm": {"another-field": 1}}) ; "pnpm without patches")]
     #[test_case(json!({"version": "1.2", "foo": "bar" }) ; "version")]
     #[test_case(json!({"packageManager": "npm@9", "foo": "bar"}) ; "package manager")]
+    #[test_case(json!({"devEngines": {"runtime": {"name": "node", "version": "22.0.0"}, "packageManager": {"name": "pnpm", "version": "9.12.3", "onFail": "warn", "future": true}}, "foo": "bar"}) ; "dev engines")]
     #[test_case(json!({"dependencies": { "turbo": "latest" }, "foo": "bar"}) ; "dependencies")]
     #[test_case(json!({"devDependencies": { "turbo": "latest" }, "foo": "bar"}) ; "dev dependencies")]
     #[test_case(json!({"optionalDependencies": { "turbo": "latest" }, "foo": "bar"}) ; "optional dependencies")]
@@ -336,5 +352,22 @@ mod test {
             .collect();
         // dependencies must come first, then devDependencies, then peer
         assert_eq!(versions, vec!["2.0.0", "1.0.0", "*"]);
+    }
+
+    #[test]
+    fn dependencies_with_kind_assigns_dev_kind() {
+        let json = json!({
+            "name": "test",
+            "dependencies": { "prod-pkg": "1.0.0", "shared-pkg": "2.0.0" },
+            "devDependencies": { "dev-pkg": "1.0.0", "shared-pkg": "1.0.0" }
+        });
+        let pkg: PackageJson = PackageJson::from_value(json).unwrap();
+        let mut kinds = std::collections::HashMap::new();
+        for (name, _, kind) in pkg.dependencies_with_kind() {
+            kinds.entry(name.as_str()).or_insert(kind);
+        }
+        assert_eq!(kinds.get("prod-pkg"), Some(&DependencyKind::Production));
+        assert_eq!(kinds.get("dev-pkg"), Some(&DependencyKind::Development));
+        assert_eq!(kinds.get("shared-pkg"), Some(&DependencyKind::Production));
     }
 }

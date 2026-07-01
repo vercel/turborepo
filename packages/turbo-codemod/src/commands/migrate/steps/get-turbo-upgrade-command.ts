@@ -41,6 +41,12 @@ function getGlobalUpgradeCommand({
     case "bun": {
       return `bun add turbo@${to} --global`;
     }
+    case "nub": {
+      return `nub add turbo@${to} --global`;
+    }
+    case "aube": {
+      return `aube add turbo@${to} --global`;
+    }
   }
 }
 
@@ -107,6 +113,24 @@ function getLocalUpgradeCommand({
         installType === "devDependencies" && "--dev"
       ]);
     }
+    case "nub": {
+      return renderCommand([
+        "nub",
+        "add",
+        `turbo@${to}`,
+        installType === "devDependencies" && "--save-dev",
+        isUsingWorkspaces && "-w"
+      ]);
+    }
+    case "aube": {
+      return renderCommand([
+        "aube",
+        "add",
+        `turbo@${to}`,
+        installType === "devDependencies" && "--save-dev",
+        isUsingWorkspaces && "-w"
+      ]);
+    }
   }
 }
 
@@ -127,6 +151,12 @@ function getInstallCommand({
     }
     case "bun": {
       return "bun install";
+    }
+    case "nub": {
+      return "nub install";
+    }
+    case "aube": {
+      return "aube install";
     }
   }
 }

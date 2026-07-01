@@ -134,8 +134,13 @@ where
             .hash_tracker
             .hash(task_id)
             .ok_or_else(|| Error::MissingHash(task_id.clone()))?;
-        let hash_reason =
-            (hash.as_ref() == "Deferred because $TURBO_JIT$ was used.").then(|| hash.to_string());
+        let hash_is_deferred = matches!(
+            hash.as_ref(),
+            "Deferred because JIT hashing mode was used."
+                | "Deferred because dependencyOutputs hashing mode was used."
+        );
+        let hash_reason = hash_is_deferred.then(|| hash.to_string());
+        let hash = (!hash_is_deferred).then_some(hash);
 
         let expanded_inputs: std::collections::BTreeMap<_, _> = self
             .hash_tracker

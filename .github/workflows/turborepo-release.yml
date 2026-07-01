@@ -351,9 +351,9 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          - host: macos-14
+          - host: macos-15-xlarge
             target: "x86_64-apple-darwin"
-          - host: macos-14
+          - host: macos-15-xlarge
             target: "aarch64-apple-darwin"
           - host: ubuntu-24.04
             target: "x86_64-unknown-linux-musl"
@@ -393,6 +393,9 @@ jobs:
           rustflags: ""
           # we want more specific settings
           cache: false
+
+      - name: Setup Zig
+        uses: ./.github/actions/setup-zig
 
       - name: Build Setup
         if: ${{ matrix.settings.setup }}

@@ -79,6 +79,30 @@ export const PACKAGE_MANAGERS: Record<
       semver: "^1.0.1",
       default: true
     }
+  ],
+  nub: [
+    {
+      name: "nub",
+      template: "nub",
+      command: "nub",
+      installArgs: ["install"],
+      version: "latest",
+      executable: "nub",
+      semver: "*",
+      default: true
+    }
+  ],
+  aube: [
+    {
+      name: "aube",
+      template: "aube",
+      command: "aube",
+      installArgs: ["install"],
+      version: "latest",
+      executable: "aube",
+      semver: "*",
+      default: true
+    }
   ]
 };
 

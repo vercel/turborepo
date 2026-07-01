@@ -22,6 +22,8 @@ import {
   getPnpmWorkspaces,
   getPackageJson,
   getWorkspacePackageManager,
+  setPackageManagerDeclaration,
+  removePackageManagerDeclaration,
   removeLockFile,
   bunLockToYarnLock
 } from "../utils";
@@ -87,7 +89,7 @@ async function read(args: ReadArgs): Promise<Project> {
  *
  * Creating pnpm workspaces involves:
  *  1. Create pnpm-workspace.yaml
- *  2. Setting the packageManager field in package.json
+ *  2. Setting the devEngines.packageManager field in package.json
  *  3. Updating all workspace package.json dependencies to ensure correct format
  */
 // eslint-disable-next-line @typescript-eslint/require-await -- must match the create type signature
@@ -105,9 +107,13 @@ async function create(args: CreateArgs): Promise<void> {
 
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
   logger.rootHeader();
-  packageJson.packageManager = `${to.name}@${to.version}`;
+  setPackageManagerDeclaration({
+    packageJson,
+    packageManager: to.name,
+    version: to.version
+  });
   logger.rootStep(
-    `adding "packageManager" field to ${project.name} root "package.json"`
+    `adding "devEngines.packageManager" field to ${project.name} root "package.json"`
   );
 
   // write the changes
@@ -172,9 +178,12 @@ async function remove(args: RemoveArgs): Promise<void> {
   }
 
   logger.subStep(
-    `removing "packageManager" field in ${project.name} root "package.json"`
+    `removing ${PACKAGE_MANAGER_DETAILS.name} package manager declarations in ${project.name} root "package.json"`
   );
-  delete packageJson.packageManager;
+  removePackageManagerDeclaration({
+    packageJson,
+    packageManager: PACKAGE_MANAGER_DETAILS.name
+  });
 
   if (!options?.dry) {
     fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
@@ -276,6 +285,14 @@ async function convertLock(args: ConvertArgs): Promise<void> {
       // convert yarn -> pnpm
       logLockConversionStep();
       await importLockfile();
+      break;
+    }
+    case "nub": {
+      removeLockFile({ project, options });
+      break;
+    }
+    case "aube": {
+      removeLockFile({ project, options });
       break;
     }
   }

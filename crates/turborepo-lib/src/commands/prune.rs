@@ -135,14 +135,25 @@ pub async fn prune(
     base: &CommandBase,
     scope: &[String],
     docker: bool,
+    production: bool,
     output_dir: &str,
     use_gitignore: bool,
     telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
     telemetry.track_arg_usage("docker", docker);
+    telemetry.track_arg_usage("production", production);
     telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
 
-    let prune = Prune::new(base, scope, docker, output_dir, use_gitignore, telemetry).await?;
+    let prune = Prune::new(
+        base,
+        scope,
+        docker,
+        production,
+        output_dir,
+        use_gitignore,
+        telemetry,
+    )
+    .await?;
 
     println!(
         "Generating pruned monorepo for {} in {}",
@@ -314,12 +325,7 @@ pub async fn prune(
 
     // Prune pnpm-workspace.yaml's patchedDependencies so it only
     // references patches that are actually in the pruned output.
-    if matches!(
-        package_manager,
-        turborepo_repository::package_manager::PackageManager::Pnpm
-            | turborepo_repository::package_manager::PackageManager::Pnpm6
-            | turborepo_repository::package_manager::PackageManager::Pnpm9
-    ) {
+    if package_manager.is_pnpm_family() {
         let ws_config = turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH;
         let ws_path = AnchoredSystemPathBuf::from_raw(ws_config)?;
         let out_ws = prune.out_directory.resolve(&ws_path);
@@ -379,10 +385,7 @@ fn collect_patch_paths(
     if !patch_keys.is_empty() {
         patches.extend(package_json_patch_paths(root_package_json, &patch_keys));
 
-        if matches!(
-            package_manager,
-            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
-        ) {
+        if package_manager.is_pnpm_family() {
             let workspace_yaml_path = repo_root.join_component(
                 turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH,
             );
@@ -460,6 +463,7 @@ struct Prune<'a> {
     out_directory: AbsoluteSystemPathBuf,
     full_directory: AbsoluteSystemPathBuf,
     docker: bool,
+    production: bool,
     scope: &'a [String],
     use_gitignore: bool,
     uses_per_workspace_lockfiles: bool,
@@ -479,6 +483,7 @@ impl<'a> Prune<'a> {
         base: &CommandBase,
         scope: &'a [String],
         docker: bool,
+        production: bool,
         output_dir: &str,
         use_gitignore: bool,
         telemetry: CommandEventBuilder,
@@ -510,6 +515,7 @@ impl<'a> Prune<'a> {
 
         trace!("scope: {}", scope.join(", "));
         trace!("docker: {}", docker);
+        trace!("production: {}", production);
         trace!("out directory: {}", &out_directory);
 
         for target in scope {
@@ -536,15 +542,11 @@ impl<'a> Prune<'a> {
             return Err(Error::MissingLockfile);
         }
 
-        let uses_per_workspace_lockfiles = matches!(
-            package_graph.package_manager(),
-            turborepo_repository::package_manager::PackageManager::Pnpm
-                | turborepo_repository::package_manager::PackageManager::Pnpm6
-                | turborepo_repository::package_manager::PackageManager::Pnpm9
-        ) && NpmRc::from_file(&base.repo_root)
-            .unwrap_or_default()
-            .shared_workspace_lockfile
-            == Some(false);
+        let uses_per_workspace_lockfiles = package_graph.package_manager().is_pnpm_family()
+            && NpmRc::from_file(&base.repo_root)
+                .unwrap_or_default()
+                .shared_workspace_lockfile
+                == Some(false);
 
         full_directory.resolve(package_json()).ensure_dir()?;
         if docker {
@@ -560,6 +562,7 @@ impl<'a> Prune<'a> {
             out_directory,
             full_directory,
             docker,
+            production,
             scope,
             use_gitignore,
             uses_per_workspace_lockfiles,
@@ -808,6 +811,17 @@ impl<'a> Prune<'a> {
         Ok(())
     }
 
+    fn workspace_transitive_closure<'graph, 'node, I: IntoIterator<Item = &'node PackageNode>>(
+        &'graph self,
+        nodes: I,
+    ) -> HashSet<&'graph PackageNode> {
+        if self.production {
+            self.package_graph.production_transitive_closure(nodes)
+        } else {
+            self.package_graph.transitive_closure(nodes)
+        }
+    }
+
     fn internal_dependencies(&self) -> Vec<PackageName> {
         let workspaces = std::iter::once(PackageNode::Workspace(PackageName::Root))
             .chain(
@@ -817,8 +831,7 @@ impl<'a> Prune<'a> {
             )
             .collect::<Vec<_>>();
         let mut names = self
-            .package_graph
-            .transitive_closure(workspaces.iter())
+            .workspace_transitive_closure(workspaces.iter())
             .into_iter()
             .filter_map(|node| match node {
                 PackageNode::Root => None,
@@ -854,8 +867,7 @@ impl<'a> Prune<'a> {
                 .map(PackageNode::Workspace)
                 .collect::<Vec<_>>();
             names.extend(
-                self.package_graph
-                    .transitive_closure(workspace_nodes.iter())
+                self.workspace_transitive_closure(workspace_nodes.iter())
                     .into_iter()
                     .filter_map(|node| match node {
                         PackageNode::Root => None,
@@ -1232,6 +1244,7 @@ mod tests {
             out_directory: out_directory.clone(),
             full_directory: out_directory,
             docker: false,
+            production: false,
             scope: &scope,
             use_gitignore: false,
             uses_per_workspace_lockfiles: false,
@@ -1243,6 +1256,87 @@ mod tests {
                 PackageName::Root,
                 PackageName::from("pkg-a"),
                 PackageName::from("pkg-b")
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn internal_dependencies_excludes_dev_dependencies_with_production() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let package_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({
+                "name": "repo",
+                "packageManager": "npm@10.5.0",
+                "devDependencies": {
+                    "root-tooling": "workspace:*"
+                }
+            }))
+            .unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(HashMap::from([
+            (
+                root.join_components(&["apps", "web", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("web".to_string())),
+                    dependencies: Some(BTreeMap::from([(
+                        "lib".to_string(),
+                        "workspace:*".to_string(),
+                    )])),
+                    dev_dependencies: Some(BTreeMap::from([(
+                        "tooling".to_string(),
+                        "workspace:*".to_string(),
+                    )])),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["packages", "lib", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("lib".to_string())),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["packages", "tooling", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("tooling".to_string())),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["packages", "root-tooling", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("root-tooling".to_string())),
+                    ..Default::default()
+                },
+            ),
+        ])))
+        .build()
+        .await
+        .unwrap();
+        let scope = vec!["web".to_string()];
+        let out_directory = root.join_component("out");
+        let prune = Prune {
+            package_graph,
+            root: root.clone(),
+            out_directory: out_directory.clone(),
+            full_directory: out_directory,
+            docker: false,
+            production: true,
+            scope: &scope,
+            use_gitignore: false,
+            uses_per_workspace_lockfiles: false,
+        };
+
+        assert_eq!(
+            prune.internal_dependencies(),
+            vec![
+                PackageName::Root,
+                PackageName::from("lib"),
+                PackageName::from("web"),
             ]
         );
     }
@@ -1309,6 +1403,86 @@ mod tests {
             out_directory: out_directory.clone(),
             full_directory: out_directory,
             docker: false,
+            production: false,
+            scope: &scope,
+            use_gitignore: false,
+            uses_per_workspace_lockfiles: false,
+        };
+
+        assert_eq!(
+            prune.internal_dependencies(),
+            vec![
+                PackageName::Root,
+                PackageName::from("pkg-b"),
+                PackageName::from("pkg-c"),
+                PackageName::from("pkg-d")
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn internal_dependencies_includes_non_optional_peer_workspaces_with_production() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let package_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({
+                "name": "repo",
+                "packageManager": "npm@10.5.0"
+            }))
+            .unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(HashMap::from([
+            (
+                root.join_components(&["packages", "pkg-b", "package.json"]),
+                PackageJson::from_value(json!({
+                    "name": "pkg-b",
+                    "peerDependencies": {
+                        "pkg-c": "*",
+                        "pkg-e": "*"
+                    },
+                    "peerDependenciesMeta": {
+                        "pkg-e": { "optional": true }
+                    }
+                }))
+                .unwrap(),
+            ),
+            (
+                root.join_components(&["packages", "pkg-c", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("pkg-c".to_string())),
+                    dependencies: Some(BTreeMap::from([("pkg-d".to_string(), "*".to_string())])),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["packages", "pkg-d", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("pkg-d".to_string())),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["packages", "pkg-e", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("pkg-e".to_string())),
+                    ..Default::default()
+                },
+            ),
+        ])))
+        .build()
+        .await
+        .unwrap();
+        let scope = vec!["pkg-b".to_string()];
+        let out_directory = root.join_component("out");
+        let prune = Prune {
+            package_graph,
+            root: root.clone(),
+            out_directory: out_directory.clone(),
+            full_directory: out_directory,
+            docker: false,
+            production: true,
             scope: &scope,
             use_gitignore: false,
             uses_per_workspace_lockfiles: false,

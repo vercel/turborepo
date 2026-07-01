@@ -22,8 +22,8 @@ pub enum Error {
     SelfDependency(String),
 }
 
-pub fn transitive_closure<N: Hash + Eq + PartialEq, I: IntoIterator<Item = NodeIndex>>(
-    graph: &Graph<N, ()>,
+pub fn transitive_closure<N: Hash + Eq + PartialEq, E, I: IntoIterator<Item = NodeIndex>>(
+    graph: &Graph<N, E>,
     indices: I,
     direction: petgraph::Direction,
 ) -> HashSet<&N> {

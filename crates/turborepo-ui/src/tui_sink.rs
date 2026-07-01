@@ -4,7 +4,7 @@ use turborepo_log::{Level, LogEvent, LogSink, OutputChannel, Source};
 
 use crate::tui::TuiSender;
 
-/// Normalize lone `\n` to `\r\n` for the TUI's VT100 terminal emulator.
+/// Normalize lone `\n` to `\r\n` for the TUI's virtual terminal emulator.
 ///
 /// Already-correct `\r\n` sequences are left as-is.
 fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
@@ -23,7 +23,7 @@ fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
 /// Format a task-scoped log event as a string for the task output pane.
 ///
 /// Produces output like `ERROR: command finished with error: exit code 1\r\n`
-/// that will be rendered by the TUI's VT100 parser in the task pane.
+/// that will be rendered by the TUI's virtual terminal parser in the task pane.
 fn format_task_event(event: &LogEvent) -> String {
     let badge = match event.level() {
         Level::Error => "ERROR: ",

@@ -23,8 +23,9 @@ use turborepo_turbo_json::{FutureFlags, TurboJson, Validator};
 use turborepo_types::TaskDefinition;
 
 use crate::{
-    BuilderError, Building, Engine, MissingPackageFromTaskError, MissingRootTaskInTurboJsonError,
-    MissingTaskError, TurboJsonLoader, validate_task_name,
+    BuilderError, Building, Built, Engine, MissingPackageFromTaskError,
+    MissingRootTaskInTurboJsonError, MissingTaskError, TaskNode, TurboJsonLoader,
+    validate_task_name,
 };
 
 mod definitions;
@@ -452,7 +453,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // execution. See #2559.
         graph::validate_graph(engine.task_graph_mut())?;
 
-        Ok(engine.seal())
+        let engine = engine.seal();
+        validate_dependency_outputs_inputs(&engine)?;
+        Ok(engine)
     }
 
     /// Returns the path from a task's package directory to the repo root
@@ -470,6 +473,170 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         )
         .to_unix())
     }
+}
+
+fn validate_dependency_outputs_inputs(
+    engine: &Engine<Built, TaskDefinition>,
+) -> Result<(), BuilderError> {
+    for task_id in engine.task_ids() {
+        let Some(task_definition) = engine.task_definition(task_id) else {
+            continue;
+        };
+        let Some(dependency_outputs) = task_definition.inputs.dependency_outputs.as_ref() else {
+            continue;
+        };
+
+        let selected = if let Some(from) = dependency_outputs.from.as_ref() {
+            let mut selected = Vec::new();
+            for selector in from {
+                let matches = engine.dependency_output_producers_for_selector(task_id, selector);
+                if matches.is_empty()
+                    && !selector_allows_empty_match(engine, task_id, task_definition, selector)
+                {
+                    return Err(structured_input_error(format!(
+                        "does not match any eligible dependency task node for this task: \
+                         \"dependencyOutputs.from\" contains \"{selector}\".\n\nAdd it to \
+                         dependsOn or remove it from dependencyOutputs.from."
+                    )));
+                }
+                selected.extend(matches);
+            }
+            selected.sort();
+            selected.dedup();
+            selected
+        } else {
+            let selected = engine.dependency_output_producers(task_id, None);
+            if selected.is_empty() && !has_configured_dependencies(task_definition) {
+                return Err(structured_input_error(format!(
+                    "dependencyOutputs mode was used for task \"{}\", but this task has no \
+                     dependency tasks to select.",
+                    task_id.task()
+                )));
+            }
+            selected
+        };
+
+        for selected_task in &selected {
+            let Some(selected_definition) = engine.task_definition(selected_task) else {
+                continue;
+            };
+            if selected_definition.outputs.inclusions.is_empty()
+                && selected_definition.outputs.exclusions.is_empty()
+            {
+                return Err(structured_input_error(format!(
+                    "Selected dependency task \"{}\" does not declare outputs, so it cannot \
+                     contribute dependency output inputs.\n\nAdd outputs to \"{}\" or remove it \
+                     from dependencyOutputs.from.",
+                    selected_task.task(),
+                    selected_task.task()
+                )));
+            }
+        }
+
+        if !selected.is_empty() && !dependency_outputs.globs.is_empty() {
+            validate_dependency_outputs_globs(&selected, engine, &dependency_outputs.globs)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn selector_allows_empty_match(
+    engine: &Engine<Built, TaskDefinition>,
+    task_id: &TaskId,
+    task_definition: &TaskDefinition,
+    selector: &str,
+) -> bool {
+    let has_dependency_tasks = engine
+        .dependencies(task_id)
+        .is_some_and(|deps| deps.iter().any(|node| matches!(node, TaskNode::Task(_))));
+
+    if has_dependency_tasks {
+        return false;
+    }
+
+    let Some(task) = selector.strip_prefix('^') else {
+        return false;
+    };
+
+    task_definition
+        .topological_dependencies
+        .iter()
+        .any(|dependency| dependency.task() == task)
+}
+
+fn has_configured_dependencies(task_definition: &TaskDefinition) -> bool {
+    !task_definition.topological_dependencies.is_empty()
+        || !task_definition.task_dependencies.is_empty()
+}
+
+fn validate_dependency_outputs_globs(
+    selected_tasks: &[TaskId<'static>],
+    engine: &Engine<Built, TaskDefinition>,
+    requested_globs: &[String],
+) -> Result<(), BuilderError> {
+    for requested_glob in requested_globs {
+        if requested_glob.starts_with('!') {
+            continue;
+        }
+
+        let requested_base = glob_base(requested_glob);
+        let matches_selected_outputs = selected_tasks.iter().any(|selected_task| {
+            let Some(selected_definition) = engine.task_definition(selected_task) else {
+                return false;
+            };
+            selected_definition
+                .outputs
+                .inclusions
+                .iter()
+                .any(|output_glob| glob_base(output_glob).is_prefix_of(&requested_base))
+        });
+
+        if !matches_selected_outputs {
+            return Err(structured_input_error(format!(
+                "dependencyOutputs.globs contains \"{requested_glob}\", but it is not covered by \
+                 any selected dependency task outputs.\n\nSelect files from declared outputs or \
+                 update the dependency task outputs."
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct GlobBase<'a>(&'a str);
+
+impl<'a> GlobBase<'a> {
+    fn is_prefix_of(&self, other: &GlobBase<'_>) -> bool {
+        self.0.is_empty()
+            || other.0 == self.0
+            || other
+                .0
+                .strip_prefix(self.0)
+                .is_some_and(|rest| rest.starts_with('/'))
+    }
+}
+
+fn glob_base(glob: &str) -> GlobBase<'_> {
+    let glob = glob.strip_prefix('!').unwrap_or(glob);
+    let wildcard = glob.find(['*', '?', '[', '{']).unwrap_or(glob.len());
+    if wildcard == glob.len() {
+        return GlobBase(glob.trim_end_matches('/'));
+    }
+    let base = glob[..wildcard]
+        .rsplit_once('/')
+        .map_or("", |(base, _)| base)
+        .trim_end_matches('/');
+    GlobBase(base)
+}
+
+fn structured_input_error(message: String) -> BuilderError {
+    BuilderError::TurboJson(turborepo_turbo_json::Error::StructuredInput {
+        message,
+        span: None,
+        text: miette::NamedSource::new("turbo.json", String::new()),
+    })
 }
 
 #[cfg(test)]

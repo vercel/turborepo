@@ -119,7 +119,7 @@ describe("turboIgnore()", () => {
     expect(mockConsole.warn).toHaveBeenNthCalledWith(
       3,
       "≫  ",
-      `turbo-ignore could not complete - no package manager detected, please commit a lockfile, or set "packageManager" in your root "package.json"`
+      `turbo-ignore could not complete - no package manager detected, please commit a lockfile, or set "devEngines.packageManager" in your root "package.json"`
     );
 
     expectBuild(mockExit);

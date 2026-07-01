@@ -697,6 +697,7 @@ async fn run_main(
             scope,
             scope_arg,
             docker,
+            production,
             output_dir,
             use_gitignore,
         } => {
@@ -708,6 +709,7 @@ async fn run_main(
                 .cloned()
                 .unwrap_or_default();
             let docker = *docker;
+            let production = *production;
             let output_dir = output_dir.clone();
             let use_gitignore = use_gitignore.unwrap_or(true);
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
@@ -717,6 +719,7 @@ async fn run_main(
                 &base,
                 &scope,
                 docker,
+                production,
                 &output_dir,
                 use_gitignore,
                 event_child,

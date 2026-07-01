@@ -554,11 +554,18 @@ pub struct TaskInputs {
     /// Glob patterns for files that should be hashed after task dependencies
     /// complete.
     pub jit_globs: Vec<String>,
-    /// Set when $TURBO_JIT$ is in inputs.
+    /// Set when structured JIT inputs include default package files.
     pub jit_default: bool,
+    pub dependency_outputs: Option<DependencyOutputsInput>,
     /// Whether eager file hashing should run. This is false for JIT-only
     /// inputs.
     pub eager: bool,
+}
+
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
+pub struct DependencyOutputsInput {
+    pub from: Option<Vec<String>>,
+    pub globs: Vec<String>,
 }
 
 impl Default for TaskInputs {
@@ -568,6 +575,7 @@ impl Default for TaskInputs {
             default: false,
             jit_globs: Vec::new(),
             jit_default: false,
+            dependency_outputs: None,
             eager: true,
         }
     }
@@ -581,6 +589,7 @@ impl TaskInputs {
             default: false,
             jit_globs: Vec::new(),
             jit_default: false,
+            dependency_outputs: None,
             eager: true,
         }
     }
@@ -593,6 +602,14 @@ impl TaskInputs {
 
     pub fn has_jit_inputs(&self) -> bool {
         self.jit_default || !self.jit_globs.is_empty()
+    }
+
+    pub fn has_dependency_outputs(&self) -> bool {
+        self.dependency_outputs.is_some()
+    }
+
+    pub fn has_deferred_inputs(&self) -> bool {
+        self.has_jit_inputs() || self.has_dependency_outputs()
     }
 }
 

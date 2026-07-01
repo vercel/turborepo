@@ -20,6 +20,7 @@
 //! `_tx`/`_rx` suffixes indicate that this variable is respectively a `Sender`
 //! or `Receiver`.
 
+#![allow(unused_features, reason = "impl_trait_in_assoc_type is actually used")]
 #![feature(impl_trait_in_assoc_type)]
 #![deny(clippy::all)]
 #![allow(clippy::needless_lifetimes)]
@@ -221,6 +222,15 @@ pub mod proto {
                 PackageManager::Pnpm6 => Self::Pnpm6,
                 PackageManager::Pnpm9 => Self::Pnpm9,
                 PackageManager::Bun => Self::Bun,
+                // The wire format does not carry nub's underlying lockfile
+                // manager. Clients must call [`PackageManager::with_resolved_nub_lockfile`]
+                // after deserializing to re-resolve from disk.
+                PackageManager::Nub => Self::Nub {
+                    lockfile: Box::new(Self::Npm),
+                },
+                PackageManager::Aube => Self::Aube {
+                    lockfile: Box::new(Self::Npm),
+                },
             }
         }
     }
@@ -235,6 +245,8 @@ pub mod proto {
                 turborepo_repository::package_manager::PackageManager::Pnpm6 => Self::Pnpm6,
                 turborepo_repository::package_manager::PackageManager::Pnpm9 => Self::Pnpm9,
                 turborepo_repository::package_manager::PackageManager::Bun => Self::Bun,
+                turborepo_repository::package_manager::PackageManager::Nub { .. } => Self::Nub,
+                turborepo_repository::package_manager::PackageManager::Aube { .. } => Self::Aube,
             }
         }
     }
