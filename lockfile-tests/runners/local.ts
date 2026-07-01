@@ -64,6 +64,56 @@ function readLockfile(cwd: string, lockfileName: string): Buffer | null {
   return fs.readFileSync(lockfilePath);
 }
 
+function listWorkspacePackageNames(outDir: string): string[] {
+  const names: string[] = [];
+
+  function walk(dir: string) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (
+        entry.name === "node_modules" ||
+        entry.name === ".git" ||
+        entry.name === "out"
+      ) {
+        continue;
+      }
+
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        const pkgPath = path.join(full, "package.json");
+        if (fs.existsSync(pkgPath)) {
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+          if (pkg.name) {
+            names.push(pkg.name);
+          }
+        }
+        walk(full);
+      }
+    }
+  }
+
+  walk(outDir);
+  return names.sort();
+}
+
+function assertExcludedWorkspaces(
+  outDir: string,
+  excludedWorkspaces: string[]
+): string | null {
+  if (excludedWorkspaces.length === 0) {
+    return null;
+  }
+
+  const present = new Set(listWorkspacePackageNames(outDir));
+  const found = excludedWorkspaces.filter((name) => present.has(name));
+  if (found.length === 0) {
+    return null;
+  }
+
+  return `Production prune included workspace packages that should have been excluded: ${found.join(
+    ", "
+  )}`;
+}
+
 function copyDirSync(src: string, dest: string): void {
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
@@ -458,7 +508,7 @@ export class LocalRunner {
           // turbo prune
           const pruneCommand = `turbo prune ${targetWorkspace.name}${
             tc.docker ? " --docker" : ""
-          }`;
+          }${tc.production ? " --production" : ""}`;
           log(`[${label}] ${pruneCommand}`);
           const pruneResult = await exec(pruneCommand, tmpDir, {
             PATH: fullPath
@@ -479,11 +529,35 @@ export class LocalRunner {
           result.pruneSuccess = true;
           log(`[${label}] Prune succeeded`);
 
-          // Validate the pruned lockfile without downloading packages.
           const outDir = tc.docker
             ? path.join(tmpDir, "out", "json")
             : path.join(tmpDir, "out");
           const outLabel = tc.docker ? "out/json" : "out";
+
+          const exclusionError = assertExcludedWorkspaces(
+            outDir,
+            tc.excludedWorkspaces ?? []
+          );
+          if (exclusionError) {
+            log(`[${label}] PRODUCTION EXCLUSION CHECK FAILED`);
+            result.error = exclusionError;
+            result.durationMs = Date.now() - startTime;
+            results.push(result);
+            continue;
+          }
+
+          if (tc.production && !tc.productionValidateLockfile) {
+            result.validationSuccess = true;
+            result.success = true;
+            log(
+              `[${label}] PASSED (production exclusion check; lockfile validation skipped)`
+            );
+            result.durationMs = Date.now() - startTime;
+            results.push(result);
+            continue;
+          }
+
+          // Validate the pruned lockfile without downloading packages.
           const validation = lockfileValidationCommand(
             fixture.packageManager,
             outDir,

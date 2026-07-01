@@ -16,6 +16,7 @@
  *   pnpm check-lockfiles --pm pnpm                               # Only pnpm fixtures
  *   pnpm check-lockfiles --fixture pnpm8 --workspace a           # Specific target
  *   pnpm check-lockfiles --turbo-path ./path/to/turbo            # Custom turbo binary
+ *   pnpm check-production-prune                                # Production prune cases only
  */
 
 import * as fs from "node:fs";
@@ -46,6 +47,22 @@ interface FixtureMeta {
   validateResolution?: boolean;
   /** Workspace names where pruning or lockfile validation is known to fail. */
   expectedFailures?: string[];
+  /**
+   * Workspaces to additionally test with `turbo prune --production`.
+   * Lockfile validation still runs on the pruned output.
+   */
+  productionPruneTargets?: string[];
+  /**
+   * Workspace package names that must be absent from production prune output.
+   * Keyed by production prune target workspace name.
+   */
+  productionExcludedWorkspaces?: Record<string, string[]>;
+  /**
+   * When true, production prune cases also validate the pruned lockfile.
+   * Defaults to false because production prune currently does not strip
+   * workspace devDependencies from copied package.json files.
+   */
+  productionValidateLockfile?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -58,6 +75,7 @@ interface CliArgs {
   workspace?: string;
   turboPath?: string;
   concurrency: number;
+  productionOnly?: boolean;
 }
 
 function parseArgs(): CliArgs {
@@ -96,6 +114,8 @@ function parseArgs(): CliArgs {
     } else if (arg === "--concurrency" && next) {
       args.concurrency = Number.parseInt(next, 10);
       i++;
+    } else if (arg === "--production-only") {
+      args.productionOnly = true;
     }
   }
 
@@ -225,7 +245,48 @@ function buildTestCases(
         docker: fixture.meta.docker,
         expectedFailure: isExpected
       });
+
+      const productionTargets = fixture.meta.productionPruneTargets ?? [];
+      if (!productionTargets.includes(target)) {
+        continue;
+      }
+
+      const productionLabel = `${fixture.name} → ${target} (production)`;
+      const productionExpected = expectedSet.has(`${target} (production)`);
+      if (productionExpected) {
+        expectedFailures.add(productionLabel);
+      }
+
+      cases.push({
+        fixture: {
+          filename: fixture.name,
+          filepath: fixture.dir,
+          packageManager: fixture.meta.packageManager,
+          lockfileName: fixture.meta.lockfileName,
+          packageManagerVersion: fixture.meta.packageManagerVersion,
+          validateResolution: fixture.meta.validateResolution
+        },
+        targetWorkspace: { name: target },
+        label: productionLabel,
+        docker: fixture.meta.docker,
+        production: true,
+        productionValidateLockfile: fixture.meta.productionValidateLockfile,
+        excludedWorkspaces:
+          fixture.meta.productionExcludedWorkspaces?.[target] ?? [],
+        expectedFailure: productionExpected
+      });
     }
+  }
+
+  if (args.productionOnly) {
+    const productionCases = cases.filter((tc) => tc.production);
+    const productionLabels = new Set(productionCases.map((tc) => tc.label));
+    return {
+      cases: productionCases,
+      expectedFailures: new Set(
+        [...expectedFailures].filter((label) => productionLabels.has(label))
+      )
+    };
   }
 
   return { cases, expectedFailures };

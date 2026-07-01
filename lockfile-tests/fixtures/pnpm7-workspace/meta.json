@@ -3,5 +3,9 @@
   "packageManagerVersion": "pnpm@7.33.0",
   "lockfileName": "pnpm-lock.yaml",
   "frozenInstallCommand": ["pnpm", "install", "--frozen-lockfile"],
-  "expectedFailures": []
+  "expectedFailures": [],
+  "productionPruneTargets": ["web"],
+  "productionExcludedWorkspaces": {
+    "web": ["eslint-config-custom", "tsconfig"]
+  }
 }

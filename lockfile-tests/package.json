@@ -2,7 +2,8 @@
   "name": "lockfile-tests",
   "private": true,
   "scripts": {
-    "check-lockfiles": "tsx check-lockfiles.ts"
+    "check-lockfiles": "tsx check-lockfiles.ts",
+    "check-production-prune": "tsx check-lockfiles.ts --production-only"
   },
   "devDependencies": {
     "tsx": "4.21.0"
