@@ -34,6 +34,8 @@ const notifyUpdate = createNotifyUpdate({
         return "nub add -g @turbo/codemod";
       } else if (packageManager === "aube") {
         return "aube add -g @turbo/codemod";
+      } else if (packageManager === "utoo") {
+        return "ut add -g @turbo/codemod";
       }
       return "npm i -g @turbo/codemod";
     } catch {
