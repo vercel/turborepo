@@ -1,7 +1,17 @@
 import { flag } from "flags/next";
 import { vercelAdapter } from "@flags-sdk/vercel";
 
-const adapter = process.env.FLAGS ? vercelAdapter() : undefined;
+function getVercelAdapter() {
+  const flags = process.env.FLAGS;
+
+  if (!flags?.startsWith("vf_") && !flags?.startsWith("flags:")) {
+    return undefined;
+  }
+
+  return vercelAdapter();
+}
+
+const adapter = getVercelAdapter();
 
 export const enableDevtools = flag({
   key: "enable-devtools",
