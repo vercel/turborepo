@@ -274,6 +274,11 @@ async function convertLock(args: ConvertArgs): Promise<void> {
       removeLockFile({ project, options });
       break;
     }
+    case "utoo": {
+      // can't convert from utoo/package-lock to yarn - just remove the lock
+      removeLockFile({ project, options });
+      break;
+    }
   }
 }
 

@@ -47,7 +47,8 @@ const SUPPORTED_PACKAGE_MANAGERS = new Set<PackageManager>([
   "yarn",
   "bun",
   "nub",
-  "aube"
+  "aube",
+  "utoo"
 ]);
 const DEV_ENGINES_VERSION_REGEX =
   /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
@@ -160,7 +161,7 @@ function getWorkspacePackageManager({
 
   if (!isPackageManager(name)) {
     throw invalidDevEnginesPackageManager(
-      "`devEngines.packageManager.name` must be one of `npm`, `pnpm`, `yarn`, `bun`, `nub`, or `aube`"
+      "`devEngines.packageManager.name` must be one of `npm`, `pnpm`, `yarn`, `bun`, `nub`, `aube`, or `utoo`"
     );
   }
 
@@ -443,7 +444,7 @@ function expandWorkspaces({
     });
 }
 
-type LockfilePackageManager = Exclude<PackageManager, "nub" | "aube">;
+type LockfilePackageManager = Exclude<PackageManager, "nub" | "aube" | "utoo">;
 
 const LOCKFILE_PROBE_ORDER: Array<{
   manager: LockfilePackageManager;

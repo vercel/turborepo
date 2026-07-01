@@ -264,6 +264,10 @@ async function convertLock(args: ConvertArgs): Promise<void> {
       removeLockFile({ project, options });
       break;
     }
+    case "utoo": {
+      // utoo uses package-lock.json, so there is no lockfile conversion.
+      break;
+    }
   }
 }
 

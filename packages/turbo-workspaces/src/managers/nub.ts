@@ -245,6 +245,9 @@ async function convertLock(args: ConvertArgs): Promise<void> {
     case "aube": {
       break;
     }
+    case "utoo": {
+      break;
+    }
   }
 }
 

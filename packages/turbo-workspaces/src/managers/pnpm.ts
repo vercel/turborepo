@@ -295,6 +295,12 @@ async function convertLock(args: ConvertArgs): Promise<void> {
       removeLockFile({ project, options });
       break;
     }
+    case "utoo": {
+      // convert package-lock.json -> pnpm
+      logLockConversionStep();
+      await importLockfile();
+      break;
+    }
   }
 }
 

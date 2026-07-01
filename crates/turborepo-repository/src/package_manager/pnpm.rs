@@ -336,7 +336,8 @@ impl TryFrom<&'_ PackageManager> for PnpmVersion {
             | PackageManager::Npm
             | PackageManager::Bun
             | PackageManager::Nub { .. }
-            | PackageManager::Aube { .. } => Err(NotPnpmError {
+            | PackageManager::Aube { .. }
+            | PackageManager::Utoo { .. } => Err(NotPnpmError {
                 package_manager: value.clone(),
             }),
         }
