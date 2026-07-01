@@ -4,6 +4,8 @@ mod exec;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
+    error::Error as StdError,
+    fmt,
     sync::{Arc, Mutex},
 };
 
@@ -12,7 +14,7 @@ use exec::ExecContextFactory;
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, task::JoinError};
 use tracing::{debug, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_engine::{TaskError, TaskWarning};
@@ -23,7 +25,9 @@ use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker, TaskTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
-use turborepo_task_executor::{command_invokes_turbo, TaskOutput};
+use turborepo_task_executor::{
+    command_invokes_turbo, InternalError as TaskInternalError, TaskOutput,
+};
 use turborepo_task_hash::{
     Error as TaskHashError, GlobalHashableInputs, PackageInputsHashes, TaskHashTrackerState,
 };
@@ -119,11 +123,77 @@ pub enum Error {
     #[error(transparent)]
     RunSummary(#[from] summary::Error),
     #[error("Internal errors encountered: {0}")]
-    InternalErrors(String),
+    InternalErrors(InternalErrors),
     #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
     #[error(transparent)]
     CommandProvider(#[from] turborepo_task_executor::CommandProviderError),
+}
+
+#[derive(Debug)]
+pub struct InternalErrors(Vec<InternalVisitorError>);
+
+impl InternalErrors {
+    fn new(errors: Vec<InternalVisitorError>) -> Self {
+        Self(errors)
+    }
+}
+
+impl From<String> for InternalErrors {
+    fn from(message: String) -> Self {
+        Self(vec![InternalVisitorError::Message(message)])
+    }
+}
+
+impl From<&str> for InternalErrors {
+    fn from(message: &str) -> Self {
+        Self::from(message.to_string())
+    }
+}
+
+impl fmt::Display for InternalErrors {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.iter().format(","))
+    }
+}
+
+#[derive(Debug)]
+enum InternalVisitorError {
+    EngineJoin(JoinError),
+    Task(TaskInternalError),
+    TaskJoin(JoinError),
+    Message(String),
+}
+
+impl fmt::Display for InternalVisitorError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EngineJoin(err) => write_join_error(f, "engine execution", err),
+            Self::Task(err) => write!(f, "{err}"),
+            Self::TaskJoin(err) => write_join_error(f, "task executor", err),
+            Self::Message(message) => write!(f, "{message}"),
+        }
+    }
+}
+
+impl StdError for InternalVisitorError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            Self::EngineJoin(err) | Self::TaskJoin(err) => Some(err),
+            Self::Task(err) => Some(err),
+            Self::Message(_) => None,
+        }
+    }
+}
+
+fn write_join_error(f: &mut fmt::Formatter<'_>, context: &str, err: &JoinError) -> fmt::Result {
+    if err.is_panic() {
+        write!(f, "{context} panicked: {err}")
+    } else if err.is_cancelled() {
+        write!(f, "{context} was cancelled: {err}")
+    } else {
+        write!(f, "{context} join failed: {err}")
+    }
 }
 
 impl<'a> Visitor<'a> {
@@ -862,16 +932,20 @@ impl<'a> Visitor<'a> {
         // Always wait for the engine, even after a dispatch error. If we broke
         // early the engine will see the closed channel and return
         // Err(ExecuteError::Visitor), which is expected — not a real error.
-        let engine_result = engine_handle
-            .await
-            .map_err(|err| Error::InternalErrors(format!("engine execution panicked: {err}")))?;
+        let engine_result = engine_handle.await.map_err(|err| {
+            Error::InternalErrors(InternalErrors::new(vec![InternalVisitorError::EngineJoin(
+                err,
+            )]))
+        })?;
 
         // Always drain spawned tasks so every TaskTracker is consumed before
         // the ExecutionTracker is dropped.
         let mut internal_errors = Vec::new();
         while let Some(result) = tasks.next().await {
-            if let Err(e) = result.unwrap_or_else(|e| panic!("task executor panicked: {e}")) {
-                internal_errors.push(e);
+            match result {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => internal_errors.push(InternalVisitorError::Task(e)),
+                Err(e) => internal_errors.push(InternalVisitorError::TaskJoin(e)),
             }
         }
         drop(factory);
@@ -890,9 +964,7 @@ impl<'a> Visitor<'a> {
         engine_result?;
 
         if !internal_errors.is_empty() {
-            return Err(Error::InternalErrors(
-                internal_errors.into_iter().map(|e| e.to_string()).join(","),
-            ));
+            return Err(Error::InternalErrors(InternalErrors::new(internal_errors)));
         }
 
         // Write out the traced-config.json file if we have one
