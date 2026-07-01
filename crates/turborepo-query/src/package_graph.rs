@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_graphql::{Object, SimpleObject};
 use itertools::Itertools;
-use turborepo_repository::package_graph::{PackageName, PackageNode, DependencyKind};
+use turborepo_repository::package_graph::{DependencyKind, PackageName, PackageNode};
 
 use crate::{package::Package, Array, Error, PackagePredicate, QueryRun};
 

@@ -258,7 +258,11 @@ where
         let root_node_index = workspace_graph.add_node(PackageNode::Root);
         let root_workspace = PackageNode::Workspace(PackageName::Root);
         let root_workspace_index = workspace_graph.add_node(root_workspace.clone());
-        workspace_graph.add_edge(root_workspace_index, root_node_index, DependencyKind::Production);
+        workspace_graph.add_edge(
+            root_workspace_index,
+            root_node_index,
+            DependencyKind::Production,
+        );
 
         let mut node_lookup = HashMap::new();
         node_lookup.insert(PackageNode::Root, root_node_index);

@@ -377,11 +377,7 @@ impl PackageGraph {
 
     /// Returns the dependency kind for a directed edge between two workspace
     /// packages, if one exists.
-    pub fn dependency_kind(
-        &self,
-        from: &PackageNode,
-        to: &PackageNode,
-    ) -> Option<DependencyKind> {
+    pub fn dependency_kind(&self, from: &PackageNode, to: &PackageNode) -> Option<DependencyKind> {
         let from_index = self.node_lookup.get(from)?;
         let to_index = self.node_lookup.get(to)?;
         self.graph
