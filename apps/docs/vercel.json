@@ -1,5 +1,5 @@
 {
-  "installCommand": "pnpm install --filter docs...",
+  "installCommand": "pnpm install",
   "buildCommand": "echo \"pnpm store package count: $(ls ../../node_modules/.pnpm | wc -l)\" && ls ../agents/node_modules 2>&1; turbo build",
   "build": {
     "env": {
