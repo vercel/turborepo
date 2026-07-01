@@ -16,8 +16,8 @@ use turborepo_unescape::UnescapedString;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DependencyKind {
-    Normal,
-    Dev,
+    Production,
+    Development,
     Peer { optional: bool },
 }
 
@@ -235,12 +235,12 @@ impl PackageJson {
             .iter()
             .flatten()
             .chain(self.optional_dependencies.iter().flatten())
-            .map(|(name, version)| (name, version, DependencyKind::Normal));
+            .map(|(name, version)| (name, version, DependencyKind::Production));
         let dev = self
             .dev_dependencies
             .iter()
             .flatten()
-            .map(|(name, version)| (name, version, DependencyKind::Dev));
+            .map(|(name, version)| (name, version, DependencyKind::Development));
         let peer = self
             .peer_dependencies
             .iter()
@@ -366,8 +366,8 @@ mod test {
         for (name, _, kind) in pkg.dependencies_with_kind() {
             kinds.entry(name.as_str()).or_insert(kind);
         }
-        assert_eq!(kinds.get("prod-pkg"), Some(&DependencyKind::Normal));
-        assert_eq!(kinds.get("dev-pkg"), Some(&DependencyKind::Dev));
-        assert_eq!(kinds.get("shared-pkg"), Some(&DependencyKind::Normal));
+        assert_eq!(kinds.get("prod-pkg"), Some(&DependencyKind::Production));
+        assert_eq!(kinds.get("dev-pkg"), Some(&DependencyKind::Development));
+        assert_eq!(kinds.get("shared-pkg"), Some(&DependencyKind::Production));
     }
 }

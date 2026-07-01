@@ -44,8 +44,8 @@ impl From<DependencyKind> for DependencyKindGraphQL {
     fn from(kind: DependencyKind) -> Self {
         Self {
             kind: match kind {
-                DependencyKind::Normal => "normal".to_string(),
-                DependencyKind::Dev => "dev".to_string(),
+                DependencyKind::Production => "production".to_string(),
+                DependencyKind::Development => "development".to_string(),
                 DependencyKind::Peer { optional } => {
                     if optional {
                         "optionalPeer".to_string()

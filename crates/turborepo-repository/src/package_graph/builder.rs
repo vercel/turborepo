@@ -258,7 +258,7 @@ where
         let root_node_index = workspace_graph.add_node(PackageNode::Root);
         let root_workspace = PackageNode::Workspace(PackageName::Root);
         let root_workspace_index = workspace_graph.add_node(root_workspace.clone());
-        workspace_graph.add_edge(root_workspace_index, root_node_index, DependencyKind::Normal);
+        workspace_graph.add_edge(root_workspace_index, root_node_index, DependencyKind::Production);
 
         let mut node_lookup = HashMap::new();
         node_lookup.insert(PackageNode::Root, root_node_index);
@@ -485,7 +485,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                     .get(&PackageNode::Root)
                     .expect("root node should have index");
                 self.workspace_graph
-                    .add_edge(*node_idx, *root_idx, DependencyKind::Normal);
+                    .add_edge(*node_idx, *root_idx, DependencyKind::Production);
             }
             for (dependency, kind) in internal {
                 let dependency_idx = self
@@ -718,7 +718,7 @@ impl Dependencies {
             match kind {
                 // Peers are provided by consumers and are not package graph inputs.
                 DependencyKind::Peer { .. } => {}
-                DependencyKind::Normal | DependencyKind::Dev => {
+                DependencyKind::Production | DependencyKind::Development => {
                     if let Some(workspace) = splitter.is_internal(name, version) {
                         internal.entry(workspace).or_insert(kind);
                     } else {
@@ -992,11 +992,11 @@ mod test {
 
         assert_eq!(
             graph.dependency_kind(&web, &lib),
-            Some(DependencyKind::Normal)
+            Some(DependencyKind::Production)
         );
         assert_eq!(
             graph.dependency_kind(&web, &tooling),
-            Some(DependencyKind::Dev)
+            Some(DependencyKind::Development)
         );
     }
 
@@ -1053,7 +1053,7 @@ mod test {
 
         assert_eq!(
             graph.dependency_kind(&web, &shared),
-            Some(DependencyKind::Normal)
+            Some(DependencyKind::Production)
         );
     }
 
