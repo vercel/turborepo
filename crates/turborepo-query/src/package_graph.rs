@@ -35,7 +35,7 @@ pub(crate) struct Edge {
     kind: DependencyKindGraphQL,
 }
 
-#[derive(Debug, Clone, Copy, SimpleObject, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, SimpleObject, Hash, PartialEq, Eq)]
 pub(crate) struct DependencyKindGraphQL {
     kind: String,
 }
@@ -152,7 +152,7 @@ impl PackageGraph {
                         return Some(Edge {
                             source: source_node.as_package_name().to_string(),
                             target: target_node.as_package_name().to_string(),
-                            kind: (*edge.weight()).into(),
+                            kind: edge.weight.into(),
                         });
                     }
                 }
@@ -165,7 +165,7 @@ impl PackageGraph {
                 Some(Edge {
                     source: source_node.as_package_name().to_string(),
                     target: target_node.as_package_name().to_string(),
-                    kind: (*edge.weight()).into(),
+                    kind: edge.weight.into(),
                 })
             })
             .dedup()
