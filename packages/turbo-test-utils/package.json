@@ -17,7 +17,7 @@
   },
   "main": "src/index.ts",
   "scripts": {
-    "check-types": "tsc --noEmit",
+    "check-types": "node ../../node_modules/typescript-7/bin/tsc --noEmit",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettier-ignore"
   },
   "dependencies": {
@@ -25,7 +25,7 @@
     "js-yaml": "4.1.1",
     "json5": "2.2.3",
     "ts-jest": "29.4.11",
-    "typescript": "5.9.3"
+    "typescript": "npm:@typescript/typescript6@^6.0.1"
   },
   "devDependencies": {
     "@jest/globals": "30.3.0",

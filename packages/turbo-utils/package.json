@@ -24,7 +24,7 @@
   "types": "src/index.ts",
   "scripts": {
     "test": "jest",
-    "check-types": "tsc --noEmit",
+    "check-types": "node ../../node_modules/typescript-7/bin/tsc --noEmit",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "dependencies": {
@@ -53,7 +53,6 @@
     "ora": "4.1.1",
     "picocolors": "1.0.1",
     "tar": "7.5.11",
-    "typescript": "7.0.1-rc",
     "update-check": "1.5.4"
   }
 }

@@ -26,8 +26,8 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "test": "jest",
-    "build": "tsdown && tsc -p tsconfig.build.json",
-    "check-types": "tsc --noEmit",
+    "build": "tsdown && node ../../node_modules/typescript-7/bin/tsc -p tsconfig.build.json",
+    "check-types": "node ../../node_modules/typescript-7/bin/tsc --noEmit",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "dependencies": {
@@ -45,8 +45,7 @@
     "eslint": "10.2.0",
     "jest": "30.3.0",
     "json5": "2.2.3",
-    "tsdown": "0.12.0",
-    "typescript": "7.0.1-rc"
+    "tsdown": "0.12.0"
   },
   "peerDependencies": {
     "eslint": ">6.6.0",

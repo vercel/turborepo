@@ -21,7 +21,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "jest",
-    "check-types": "tsc --noEmit",
+    "check-types": "node ../../node_modules/typescript-7/bin/tsc --noEmit",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "dependencies": {
@@ -43,7 +43,6 @@
     "@types/node": "18.17.4",
     "@types/semver": "7.3.12",
     "jest": "30.3.0",
-    "tsdown": "0.12.0",
-    "typescript": "7.0.1-rc"
+    "tsdown": "0.12.0"
   }
 }

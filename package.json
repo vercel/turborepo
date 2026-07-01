@@ -5,7 +5,7 @@
   "scripts": {
     "build": "turbo run build",
     "build:turbo": "pnpm run --filter=@turbo/cli build",
-    "build:ts": "tsc -b tsconfig.project.json",
+    "build:ts": "node node_modules/typescript-7/bin/tsc -b tsconfig.project.json",
     "lint": "pnpm exec oxlint --deny-warnings .",
     "lint:fix": "pnpm exec oxlint --fix .",
     "format": "oxfmt --check",
@@ -30,7 +30,8 @@
     "oxfmt": "^0.34.0",
     "oxlint": "^1.49.0",
     "semver": "7.5.2",
-    "typescript": "7.0.1-rc",
+    "typescript": "npm:@typescript/typescript6@^6.0.1",
+    "typescript-7": "npm:typescript@7.0.1-rc",
     "ultracite": "7.4.3"
   },
   "lint-staged": {

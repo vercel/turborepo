@@ -21,10 +21,10 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown && tsc -p tsconfig.build.json",
+    "build": "tsdown && node ../../node_modules/typescript-7/bin/tsc -p tsconfig.build.json",
     "build:embed": "node scripts/embed-templates.mjs",
     "test": "jest",
-    "check-types": "tsc --noEmit"
+    "check-types": "node ../../node_modules/typescript-7/bin/tsc --noEmit"
   },
   "dependencies": {
     "@inquirer/prompts": "^7.10.1",
@@ -50,7 +50,6 @@
     "picocolors": "1.0.1",
     "proxy-agent": "8.0.1",
     "tsdown": "0.12.0",
-    "typescript": "7.0.1-rc",
     "update-check": "1.5.4",
     "validate-npm-package-name": "5.0.0"
   }

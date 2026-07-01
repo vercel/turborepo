@@ -23,7 +23,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node ../../node_modules/typescript-7/bin/tsc",
     "lint:prettier": "prettier -c . --cache",
     "generate-schema": "cargo run -p turborepo-schema-gen -- schema -o schemas/schema.json && cargo run -p turborepo-schema-gen -- typescript -o src/types/config-v2.ts && pnpm exec oxfmt schemas/schema.json src/types/config-v2.ts",
     "generate-schema:legacy": "tsx scripts/generate-schema.ts",
@@ -36,6 +36,7 @@
     "@turbo/tsconfig": "workspace:*",
     "@types/node": "20.11.30",
     "ts-json-schema-generator": "2.5.0",
-    "tsx": "4.21.0"
+    "tsx": "4.21.0",
+    "typescript": "npm:@typescript/typescript6@^6.0.1"
   }
 }
