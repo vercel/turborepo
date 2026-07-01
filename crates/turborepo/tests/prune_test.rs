@@ -15,6 +15,65 @@ fn ls_dir(dir: &Path) -> Vec<String> {
     entries
 }
 
+#[test]
+fn test_prune_production_excludes_dev_dependencies() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--production"]);
+    assert!(
+        output.status.success(),
+        "prune --production failed: {}",
+        combined_output(&output)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Added web"));
+    assert!(stdout.contains("Added shared"));
+    assert!(!stdout.contains("Added util"));
+
+    let packages_dir = tempdir.path().join("out/packages");
+    let package_entries = ls_dir(&packages_dir);
+    assert_eq!(package_entries, vec!["shared".to_string()]);
+    assert!(!packages_dir.join("util").exists());
+}
+
+#[test]
+fn test_prune_production_docker_excludes_dev_dependencies() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["prune", "web", "--production", "--docker"],
+    );
+    assert!(
+        output.status.success(),
+        "prune --production --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let full_packages = ls_dir(&tempdir.path().join("out/full/packages"));
+    assert_eq!(full_packages, vec!["shared".to_string()]);
+    assert!(!tempdir.path().join("out/full/packages/util").exists());
+
+    let json_packages = ls_dir(&tempdir.path().join("out/json/packages"));
+    assert_eq!(json_packages, vec!["shared".to_string()]);
+    assert!(!tempdir.path().join("out/json/packages/util").exists());
+}
+
 // --- docker.t ---
 
 #[test]

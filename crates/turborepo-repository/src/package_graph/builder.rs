@@ -1002,6 +1002,11 @@ mod test {
             graph.dependency_kind(&web, &tooling),
             Some(DependencyKind::Development)
         );
+
+        let web_closure = graph.production_transitive_closure([&web]);
+        assert!(web_closure.contains(&web));
+        assert!(web_closure.contains(&lib));
+        assert!(!web_closure.contains(&tooling));
     }
 
     #[tokio::test]
