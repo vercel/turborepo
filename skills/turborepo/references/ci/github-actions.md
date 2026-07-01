@@ -72,13 +72,58 @@ jobs:
 
 ## Remote Cache Setup
 
-### 1. Create Vercel Access Token
+Two options for authenticating to [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching):
+
+- **OIDC (recommended)**: GitHub OIDC token exchanged for a short-lived Turborepo access token. No long-lived secrets in your workflow.
+- **Personal Access Token (PAT)**: Long-lived token stored as a GitHub secret.
+
+### Option A: OpenID Connect (recommended)
+
+#### 1. Create a Turborepo CLI OIDC Policy
+
+On vercel.com, go to your team's **Settings → Build and Deployment → OIDC Policies for CLI Access**. Click **Add** next to **Turborepo CLI Policies** and fill out the form (policy name, GitHub account, repository). You can optionally restrict to a specific workflow or branch and customize the audience.
+
+#### 2. Add `TURBO_TEAM` Repository Variable
+
+Settings > Secrets and variables > Actions > Variables:
+
+- `TURBO_TEAM`: Your Vercel team slug
+
+Use a repository variable rather than a secret so GitHub Actions doesn't censor your team name in logs.
+
+#### 3. Add the Action to Your Workflow
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: vercel/setup-turborepo-remote-cache-action@v1
+        with:
+          team: ${{ vars.TURBO_TEAM }}
+```
+
+The action requests a GitHub OIDC token, exchanges it for a short-lived Turborepo access token, and sets `TURBO_TOKEN` and `TURBO_TEAM` for subsequent steps. Must run before any step that invokes `turbo`.
+
+If more than one of your team's OIDC policies could match the workflow, pass the policy ID via the optional `policy` input to disambiguate. Most setups won't need it.
+
+### Option B: Personal Access Token
+
+#### 1. Create Vercel Access Token
 
 1. Go to [Vercel Dashboard](https://vercel.com/account/tokens)
 2. Create a new token with appropriate scope
 3. Copy the token value
 
-### 2. Add Secrets and Variables
+#### 2. Add Secrets and Variables
 
 In your GitHub repository settings:
 
@@ -90,7 +135,7 @@ In your GitHub repository settings:
 
 - `TURBO_TEAM`: Your Vercel team slug
 
-### 3. Add to Workflow
+#### 3. Add to Workflow
 
 ```yaml
 jobs:
@@ -130,9 +175,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -147,6 +192,10 @@ jobs:
         with:
           node-version: 20
           cache: "pnpm"
+
+      - uses: vercel/setup-turborepo-remote-cache-action@v1
+        with:
+          team: ${{ vars.TURBO_TEAM }}
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
