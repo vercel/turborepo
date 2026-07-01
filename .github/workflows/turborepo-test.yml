@@ -25,7 +25,6 @@ jobs:
       rest: ${{ steps.filter.outputs.rest }}
       rust: ${{ steps.filter.outputs.rust }}
       native-lib: ${{ steps.filter.outputs.native-lib }}
-      prune: ${{ steps.filter.outputs.prune }}
     steps:
       # Detect automated release PRs which only contain generated release updates.
       # These PRs are created by the release workflow after code has already
@@ -180,18 +179,6 @@ jobs:
           else
             echo "rust=false" >> $GITHUB_OUTPUT
             echo "No Rust/core changes detected (JS-only change)"
-          fi
-
-          PRUNE_PATTERNS="^(crates/turborepo-lib/src/commands/prune\.rs|crates/turborepo-repository/src/package_graph/|crates/turborepo-graph-utils/|lockfile-tests/)"
-          PRUNE_CHANGES=$(echo "$CHANGED_FILES" | grep -E "$PRUNE_PATTERNS" || true)
-
-          if [ -n "$PRUNE_CHANGES" ]; then
-            echo "prune=true" >> $GITHUB_OUTPUT
-            echo "Prune-related changes detected:"
-            echo "$PRUNE_CHANGES"
-          else
-            echo "prune=false" >> $GITHUB_OUTPUT
-            echo "No prune-related changes detected"
           fi
 
   turbo_types_check:
@@ -469,12 +456,12 @@ jobs:
         run: pnpm check-lockfiles
         working-directory: lockfile-tests
 
-  check-production-prune:
-    name: Integration - Production prune
-    timeout-minutes: 10
+  check-lockfiles-production:
+    name: Integration - Lockfile parsers (production)
+    timeout-minutes: 15
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.prune == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' }}
     runs-on: ubuntu-latest
     env:
       TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
@@ -498,8 +485,8 @@ jobs:
       - name: Build turbo binary
         run: cargo build
 
-      - name: Run production prune tests
-        run: pnpm check-production-prune --fixture bun-v1-1 --workspace web
+      - name: Run production lockfile tests
+        run: pnpm check-lockfiles-production
         working-directory: lockfile-tests
 
   js_native_packages:
@@ -567,7 +554,7 @@ jobs:
       - rust_test_ubuntu
       - check-examples
       - check-lockfiles
-      - check-production-prune
+      - check-lockfiles-production
       - js_native_packages
     steps:
       - name: Fail if change detection failed
@@ -601,7 +588,7 @@ jobs:
           subjob ${{needs.rust_test_ubuntu.result}}
           subjob ${{needs.check-examples.result}}
           subjob ${{needs.check-lockfiles.result}}
-          subjob ${{needs.check-production-prune.result}}
+          subjob ${{needs.check-lockfiles-production.result}}
           subjob ${{needs.js_native_packages.result}}
 
           if [ "$cancelled" = "true" ]; then

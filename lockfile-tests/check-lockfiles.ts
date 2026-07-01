@@ -16,8 +16,7 @@
  *   pnpm check-lockfiles --pm pnpm                               # Only pnpm fixtures
  *   pnpm check-lockfiles --fixture pnpm8 --workspace a           # Specific target
  *   pnpm check-lockfiles --turbo-path ./path/to/turbo            # Custom turbo binary
- *   pnpm check-production-prune                                # Production prune cases only
- *   pnpm check-lockfiles --include-production                  # Also run production cases
+ *   pnpm check-lockfiles-production                              # All fixtures, --production
  */
 
 import * as fs from "node:fs";
@@ -48,22 +47,6 @@ interface FixtureMeta {
   validateResolution?: boolean;
   /** Workspace names where pruning or lockfile validation is known to fail. */
   expectedFailures?: string[];
-  /**
-   * Workspaces to additionally test with `turbo prune --production`.
-   * Lockfile validation still runs on the pruned output.
-   */
-  productionPruneTargets?: string[];
-  /**
-   * Workspace package names that must be absent from production prune output.
-   * Keyed by production prune target workspace name.
-   */
-  productionExcludedWorkspaces?: Record<string, string[]>;
-  /**
-   * When true, production prune cases also validate the pruned lockfile.
-   * Defaults to false because production prune currently does not strip
-   * workspace devDependencies from copied package.json files.
-   */
-  productionValidateLockfile?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,8 +59,7 @@ interface CliArgs {
   workspace?: string;
   turboPath?: string;
   concurrency: number;
-  productionOnly?: boolean;
-  includeProduction?: boolean;
+  production?: boolean;
 }
 
 function parseArgs(): CliArgs {
@@ -116,10 +98,8 @@ function parseArgs(): CliArgs {
     } else if (arg === "--concurrency" && next) {
       args.concurrency = Number.parseInt(next, 10);
       i++;
-    } else if (arg === "--production-only") {
-      args.productionOnly = true;
-    } else if (arg === "--include-production") {
-      args.includeProduction = true;
+    } else if (arg === "--production") {
+      args.production = true;
     }
   }
 
@@ -230,7 +210,8 @@ function buildTestCases(
     const expectedSet = new Set(fixture.meta.expectedFailures ?? []);
 
     for (const target of targets) {
-      const label = `${fixture.name} → ${target}`;
+      const labelSuffix = args.production ? " (production)" : "";
+      const label = `${fixture.name} → ${target}${labelSuffix}`;
       const isExpected = expectedSet.has(target);
       if (isExpected) {
         expectedFailures.add(label);
@@ -247,52 +228,10 @@ function buildTestCases(
         targetWorkspace: { name: target },
         label,
         docker: fixture.meta.docker,
+        production: args.production,
         expectedFailure: isExpected
       });
-
-      const productionTargets = fixture.meta.productionPruneTargets ?? [];
-      const shouldIncludeProduction =
-        args.productionOnly || args.includeProduction;
-      if (!shouldIncludeProduction || !productionTargets.includes(target)) {
-        continue;
-      }
-
-      const productionLabel = `${fixture.name} → ${target} (production)`;
-      const productionExpected = expectedSet.has(`${target} (production)`);
-      if (productionExpected) {
-        expectedFailures.add(productionLabel);
-      }
-
-      cases.push({
-        fixture: {
-          filename: fixture.name,
-          filepath: fixture.dir,
-          packageManager: fixture.meta.packageManager,
-          lockfileName: fixture.meta.lockfileName,
-          packageManagerVersion: fixture.meta.packageManagerVersion,
-          validateResolution: fixture.meta.validateResolution
-        },
-        targetWorkspace: { name: target },
-        label: productionLabel,
-        docker: fixture.meta.docker,
-        production: true,
-        productionValidateLockfile: fixture.meta.productionValidateLockfile,
-        excludedWorkspaces:
-          fixture.meta.productionExcludedWorkspaces?.[target] ?? [],
-        expectedFailure: productionExpected
-      });
     }
-  }
-
-  if (args.productionOnly) {
-    const productionCases = cases.filter((tc) => tc.production);
-    const productionLabels = new Set(productionCases.map((tc) => tc.label));
-    return {
-      cases: productionCases,
-      expectedFailures: new Set(
-        [...expectedFailures].filter((label) => productionLabels.has(label))
-      )
-    };
   }
 
   return { cases, expectedFailures };
@@ -372,6 +311,12 @@ async function main(): Promise<void> {
 
   const { cases: testCases, expectedFailures } = buildTestCases(fixtures, args);
   console.log(`${testCases.length} test cases\n`);
+
+  if (args.production) {
+    console.log(
+      "Production mode: running turbo prune --production for all cases (lockfile validation skipped)\n"
+    );
+  }
 
   if (expectedFailures.size > 0) {
     console.log(`Expected failures (known bugs): ${expectedFailures.size}`);

@@ -21,10 +21,6 @@ export interface TestCase {
   docker?: boolean;
   /** Run `turbo prune --production`. */
   production?: boolean;
-  /** Validate the pruned lockfile for production cases. */
-  productionValidateLockfile?: boolean;
-  /** Workspace package names that must not appear in the pruned output. */
-  excludedWorkspaces?: string[];
   expectedFailure?: boolean;
 }
 
