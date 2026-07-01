@@ -21,7 +21,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && tsc -p tsconfig.build.json",
     "build:embed": "node scripts/embed-templates.mjs",
     "test": "jest",
     "check-types": "tsc --noEmit"
