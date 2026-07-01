@@ -5,7 +5,7 @@
   "scripts": {
     "build": "turbo run build",
     "build:turbo": "pnpm run --filter=@turbo/cli build",
-    "build:ts": "node node_modules/typescript-7/bin/tsc -b tsconfig.project.json",
+    "build:ts": "tsc -b tsconfig.project.json",
     "lint": "pnpm exec oxlint --deny-warnings .",
     "lint:fix": "pnpm exec oxlint --fix .",
     "format": "oxfmt --check",
@@ -44,7 +44,8 @@
   "packageManager": "pnpm@10.28.0",
   "pnpm": {
     "overrides": {
-      "esbuild": "0.28.1"
+      "esbuild": "0.28.1",
+      "typescript": "npm:@typescript/typescript6@^6.0.1"
     }
   }
 }

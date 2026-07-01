@@ -20,7 +20,7 @@
   "types": "src/index.ts",
   "scripts": {
     "test": "node --import tsx --test src/*.test.ts",
-    "check-types": "node ../../node_modules/typescript-7/bin/tsc --noEmit",
+    "check-types": "tsc --noEmit",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "dependencies": {
@@ -36,7 +36,9 @@
     "@turbo/utils": "workspace:*",
     "@types/node": "20.11.30",
     "dirs-next": "0.0.1-canary.1",
-    "tsx": "4.21.0"
+    "tsx": "4.21.0",
+    "typescript": "npm:@typescript/typescript6@^6.0.1",
+    "typescript-7": "npm:typescript@7.0.1-rc"
   },
   "peerDependencies": {
     "commander": "^11.0.0"

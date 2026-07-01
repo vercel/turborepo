@@ -6,6 +6,7 @@ settings:
 
 overrides:
   esbuild: 0.28.1
+  typescript: npm:@typescript/typescript6@^6.0.1
 
 importers:
 
@@ -265,6 +266,9 @@ importers:
       typescript:
         specifier: npm:@typescript/typescript6@^6.0.1
         version: '@typescript/typescript6@6.0.1'
+      typescript-7:
+        specifier: npm:typescript@7.0.1-rc
+        version: typescript@7.0.1-rc
 
   cli:
     dependencies:
@@ -306,8 +310,8 @@ importers:
         specifier: 22.7.8
         version: 22.7.8
       typescript:
-        specifier: 5.5.4
-        version: 5.5.4
+        specifier: npm:@typescript/typescript6@^6.0.1
+        version: '@typescript/typescript6@6.0.1'
 
   examples:
     devDependencies:
@@ -374,10 +378,16 @@ importers:
         version: 7.3.12
       jest:
         specifier: 30.3.0
-        version: 30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3))
+        version: 30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(@typescript/typescript6@6.0.1))
       tsdown:
         specifier: 0.12.0
-        version: 0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))(typescript@5.9.3)
+        version: 0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(@typescript/typescript6@6.0.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))
+      typescript:
+        specifier: npm:@typescript/typescript6@^6.0.1
+        version: '@typescript/typescript6@6.0.1'
+      typescript-7:
+        specifier: npm:typescript@7.0.1-rc
+        version: typescript@7.0.1-rc
 
   packages/eslint-config-turbo:
     dependencies:
@@ -448,13 +458,19 @@ importers:
         version: 10.2.0(jiti@2.6.1)
       jest:
         specifier: 30.3.0
-        version: 30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3))
+        version: 30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(@typescript/typescript6@6.0.1))
       json5:
         specifier: 2.2.3
         version: 2.2.3
       tsdown:
         specifier: 0.12.0
-        version: 0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))(typescript@5.9.3)
+        version: 0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(@typescript/typescript6@6.0.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))
+      typescript:
+        specifier: npm:@typescript/typescript6@^6.0.1
+        version: '@typescript/typescript6@6.0.1'
+      typescript-7:
+        specifier: npm:typescript@7.0.1-rc
+        version: typescript@7.0.1-rc
 
   packages/tsconfig: {}
 
@@ -544,10 +560,16 @@ importers:
         version: 4.2.2
       jest:
         specifier: 30.3.0
-        version: 30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3))
+        version: 30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(@typescript/typescript6@6.0.1))
       tsdown:
         specifier: 0.12.0
-        version: 0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))(typescript@5.9.3)
+        version: 0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(@typescript/typescript6@6.0.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))
+      typescript:
+        specifier: npm:@typescript/typescript6@^6.0.1
+        version: '@typescript/typescript6@6.0.1'
+      typescript-7:
+        specifier: npm:typescript@7.0.1-rc
+        version: typescript@7.0.1-rc
 
   packages/turbo-gen:
     dependencies:
@@ -599,7 +621,7 @@ importers:
         version: 4.7.9
       jest:
         specifier: 30.3.0
-        version: 30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3))
+        version: 30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(@typescript/typescript6@6.0.1))
       minimatch:
         specifier: 9.0.7
         version: 9.0.7
@@ -614,7 +636,13 @@ importers:
         version: 8.0.1
       tsdown:
         specifier: 0.12.0
-        version: 0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))(typescript@5.9.3)
+        version: 0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(@typescript/typescript6@6.0.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))
+      typescript:
+        specifier: npm:@typescript/typescript6@^6.0.1
+        version: '@typescript/typescript6@6.0.1'
+      typescript-7:
+        specifier: npm:typescript@7.0.1-rc
+        version: typescript@7.0.1-rc
       update-check:
         specifier: 1.5.4
         version: 1.5.4
@@ -654,10 +682,16 @@ importers:
         version: 11.0.0
       jest:
         specifier: 30.3.0
-        version: 30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3))
+        version: 30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(@typescript/typescript6@6.0.1))
       tsdown:
         specifier: 0.12.0
-        version: 0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))(typescript@5.9.3)
+        version: 0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(@typescript/typescript6@6.0.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))
+      typescript:
+        specifier: npm:@typescript/typescript6@^6.0.1
+        version: '@typescript/typescript6@6.0.1'
+      typescript-7:
+        specifier: npm:typescript@7.0.1-rc
+        version: typescript@7.0.1-rc
 
   packages/turbo-releaser:
     dependencies:
@@ -676,10 +710,16 @@ importers:
         version: 20.11.30
       tsdown:
         specifier: 0.12.0
-        version: 0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))(typescript@5.9.3)
+        version: 0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(@typescript/typescript6@6.0.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))
       tsx:
         specifier: 4.21.0
         version: 4.21.0
+      typescript:
+        specifier: npm:@typescript/typescript6@^6.0.1
+        version: '@typescript/typescript6@6.0.1'
+      typescript-7:
+        specifier: npm:typescript@7.0.1-rc
+        version: typescript@7.0.1-rc
 
   packages/turbo-repository:
     devDependencies:
@@ -738,6 +778,12 @@ importers:
       tsx:
         specifier: 4.21.0
         version: 4.21.0
+      typescript:
+        specifier: npm:@typescript/typescript6@^6.0.1
+        version: '@typescript/typescript6@6.0.1'
+      typescript-7:
+        specifier: npm:typescript@7.0.1-rc
+        version: typescript@7.0.1-rc
 
   packages/turbo-test-utils:
     dependencies:
@@ -756,6 +802,9 @@ importers:
       typescript:
         specifier: npm:@typescript/typescript6@^6.0.1
         version: '@typescript/typescript6@6.0.1'
+      typescript-7:
+        specifier: npm:typescript@7.0.1-rc
+        version: typescript@7.0.1-rc
     devDependencies:
       '@jest/globals':
         specifier: 30.3.0
@@ -799,6 +848,9 @@ importers:
       typescript:
         specifier: npm:@typescript/typescript6@^6.0.1
         version: '@typescript/typescript6@6.0.1'
+      typescript-7:
+        specifier: npm:typescript@7.0.1-rc
+        version: typescript@7.0.1-rc
 
   packages/turbo-utils:
     dependencies:
@@ -872,6 +924,12 @@ importers:
       tar:
         specifier: 7.5.11
         version: 7.5.11
+      typescript:
+        specifier: npm:@typescript/typescript6@^6.0.1
+        version: '@typescript/typescript6@6.0.1'
+      typescript-7:
+        specifier: npm:typescript@7.0.1-rc
+        version: typescript@7.0.1-rc
       update-check:
         specifier: 1.5.4
         version: 1.5.4
@@ -969,10 +1027,16 @@ importers:
         version: 7.5.8
       jest:
         specifier: 30.3.0
-        version: 30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3))
+        version: 30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(@typescript/typescript6@6.0.1))
       tsdown:
         specifier: 0.12.0
-        version: 0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))(typescript@5.9.3)
+        version: 0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(@typescript/typescript6@6.0.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))
+      typescript:
+        specifier: npm:@typescript/typescript6@^6.0.1
+        version: '@typescript/typescript6@6.0.1'
+      typescript-7:
+        specifier: npm:typescript@7.0.1-rc
+        version: typescript@7.0.1-rc
 
   turborepo-tests/helpers:
     dependencies:
@@ -9681,26 +9745,6 @@ packages:
   typed-rest-client@1.8.11:
     resolution: {integrity: sha512-5UvfMpd1oelmUPRbbaVnq+rHP7ng2cE4qoQkQeAqxRL6PklkxsM0g32/HL0yfvruK6ojQ5x8EE+HF4YV6DtuCA==}
 
-  typescript@5.5.4:
-    resolution: {integrity: sha512-Mtq29sKDAEYP7aljRgtPOpTvOfbwRWlS6dPRzwjdE+C0R4brX/GUyhHSecbHMFLNBLcJIPt9nl9yG5TZ1weH+Q==}
-    engines: {node: '>=14.17'}
-    hasBin: true
-
-  typescript@5.6.1-rc:
-    resolution: {integrity: sha512-E3b2+1zEFu84jB0YQi9BORDjz9+jGbwwy1Zi3G0LUNw7a7cePUrHMRNy8aPh53nXpkFGVHSxIZo5vKTfYaFiBQ==}
-    engines: {node: '>=14.17'}
-    hasBin: true
-
-  typescript@5.9.3:
-    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
-    engines: {node: '>=14.17'}
-    hasBin: true
-
-  typescript@6.0.3:
-    resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
-    engines: {node: '>=14.17'}
-    hasBin: true
-
   typescript@7.0.1-rc:
     resolution: {integrity: sha512-drEP77wK7CCDlPfXZH4e008UUQOsw1DFmHmZOZjuNA+yoDLLnSNMZRXi90NbV/1LVo7SbNLq1bs3jjvk49TEqQ==}
     engines: {node: '>=16.20.0'}
@@ -10246,7 +10290,7 @@ snapshots:
       fflate: 0.8.2
       lru-cache: 11.3.3
       semver: 7.7.3
-      typescript: 5.6.1-rc
+      typescript: '@typescript/typescript6@6.0.1'
       validate-npm-package-name: 5.0.0
 
   '@azu/format-text@1.0.2': {}
@@ -11070,41 +11114,6 @@ snapshots:
       graceful-fs: 4.2.11
       jest-changed-files: 30.3.0
       jest-config: 30.3.0(@types/node@24.10.11)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(@typescript/typescript6@6.0.1))
-      jest-haste-map: 30.3.0
-      jest-message-util: 30.3.0
-      jest-regex-util: 30.0.1
-      jest-resolve: 30.3.0
-      jest-resolve-dependencies: 30.3.0
-      jest-runner: 30.3.0
-      jest-runtime: 30.3.0
-      jest-snapshot: 30.3.0
-      jest-util: 30.3.0
-      jest-validate: 30.3.0
-      jest-watcher: 30.3.0
-      pretty-format: 30.3.0
-      slash: 3.0.0
-    transitivePeerDependencies:
-      - babel-plugin-macros
-      - esbuild-register
-      - supports-color
-      - ts-node
-
-  '@jest/core@30.3.0(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3))':
-    dependencies:
-      '@jest/console': 30.3.0
-      '@jest/pattern': 30.0.1
-      '@jest/reporters': 30.3.0
-      '@jest/test-result': 30.3.0
-      '@jest/transform': 30.3.0
-      '@jest/types': 30.3.0
-      '@types/node': 24.10.11
-      ansi-escapes: 4.3.2
-      chalk: 4.1.2
-      ci-info: 4.4.0
-      exit-x: 0.2.2
-      graceful-fs: 4.2.11
-      jest-changed-files: 30.3.0
-      jest-config: 30.3.0(@types/node@24.10.11)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3))
       jest-haste-map: 30.3.0
       jest-message-util: 30.3.0
       jest-regex-util: 30.0.1
@@ -14028,9 +14037,7 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.1-rc':
     optional: true
 
-  '@typescript/typescript6@6.0.1':
-    dependencies:
-      typescript: 6.0.3
+  '@typescript/typescript6@6.0.1': {}
 
   '@typespec/ts-http-runtime@0.3.5':
     dependencies:
@@ -16460,25 +16467,6 @@ snapshots:
       - supports-color
       - ts-node
 
-  jest-cli@30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3)):
-    dependencies:
-      '@jest/core': 30.3.0(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3))
-      '@jest/test-result': 30.3.0
-      '@jest/types': 30.3.0
-      chalk: 4.1.2
-      exit-x: 0.2.2
-      import-local: 3.2.0
-      jest-config: 30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3))
-      jest-util: 30.3.0
-      jest-validate: 30.3.0
-      yargs: 17.7.2
-    transitivePeerDependencies:
-      - '@types/node'
-      - babel-plugin-macros
-      - esbuild-register
-      - supports-color
-      - ts-node
-
   jest-config@30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(@typescript/typescript6@6.0.1)):
     dependencies:
       '@babel/core': 7.29.7
@@ -16511,38 +16499,6 @@ snapshots:
       - babel-plugin-macros
       - supports-color
 
-  jest-config@30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3)):
-    dependencies:
-      '@babel/core': 7.29.7
-      '@jest/get-type': 30.1.0
-      '@jest/pattern': 30.0.1
-      '@jest/test-sequencer': 30.3.0
-      '@jest/types': 30.3.0
-      babel-jest: 30.3.0(@babel/core@7.29.7)
-      chalk: 4.1.2
-      ci-info: 4.4.0
-      deepmerge: 4.3.1
-      glob: 10.5.0
-      graceful-fs: 4.2.11
-      jest-circus: 30.3.0
-      jest-docblock: 30.2.0
-      jest-environment-node: 30.3.0
-      jest-regex-util: 30.0.1
-      jest-resolve: 30.3.0
-      jest-runner: 30.3.0
-      jest-util: 30.3.0
-      jest-validate: 30.3.0
-      parse-json: 5.2.0
-      pretty-format: 30.3.0
-      slash: 3.0.0
-      strip-json-comments: 3.1.1
-    optionalDependencies:
-      '@types/node': 18.17.4
-      ts-node: 10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3)
-    transitivePeerDependencies:
-      - babel-plugin-macros
-      - supports-color
-
   jest-config@30.3.0(@types/node@24.10.11)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(@typescript/typescript6@6.0.1)):
     dependencies:
       '@babel/core': 7.29.7
@@ -16571,38 +16527,6 @@ snapshots:
     optionalDependencies:
       '@types/node': 24.10.11
       ts-node: 10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(@typescript/typescript6@6.0.1)
-    transitivePeerDependencies:
-      - babel-plugin-macros
-      - supports-color
-
-  jest-config@30.3.0(@types/node@24.10.11)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3)):
-    dependencies:
-      '@babel/core': 7.29.7
-      '@jest/get-type': 30.1.0
-      '@jest/pattern': 30.0.1
-      '@jest/test-sequencer': 30.3.0
-      '@jest/types': 30.3.0
-      babel-jest: 30.3.0(@babel/core@7.29.7)
-      chalk: 4.1.2
-      ci-info: 4.4.0
-      deepmerge: 4.3.1
-      glob: 10.5.0
-      graceful-fs: 4.2.11
-      jest-circus: 30.3.0
-      jest-docblock: 30.2.0
-      jest-environment-node: 30.3.0
-      jest-regex-util: 30.0.1
-      jest-resolve: 30.3.0
-      jest-runner: 30.3.0
-      jest-util: 30.3.0
-      jest-validate: 30.3.0
-      parse-json: 5.2.0
-      pretty-format: 30.3.0
-      slash: 3.0.0
-      strip-json-comments: 3.1.1
-    optionalDependencies:
-      '@types/node': 24.10.11
-      ts-node: 10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3)
     transitivePeerDependencies:
       - babel-plugin-macros
       - supports-color
@@ -16843,19 +16767,6 @@ snapshots:
       '@jest/types': 30.3.0
       import-local: 3.2.0
       jest-cli: 30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(@typescript/typescript6@6.0.1))
-    transitivePeerDependencies:
-      - '@types/node'
-      - babel-plugin-macros
-      - esbuild-register
-      - supports-color
-      - ts-node
-
-  jest@30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3)):
-    dependencies:
-      '@jest/core': 30.3.0(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3))
-      '@jest/types': 30.3.0
-      import-local: 3.2.0
-      jest-cli: 30.3.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3))
     transitivePeerDependencies:
       - '@types/node'
       - babel-plugin-macros
@@ -18825,7 +18736,7 @@ snapshots:
 
   rfdc@1.4.1: {}
 
-  rolldown-plugin-dts@0.13.14(@typescript/native-preview@7.0.0-dev.20260523.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))(rolldown@1.0.0-beta.9)(typescript@5.9.3):
+  rolldown-plugin-dts@0.13.14(@typescript/native-preview@7.0.0-dev.20260523.1)(@typescript/typescript6@6.0.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))(rolldown@1.0.0-beta.9):
     dependencies:
       '@babel/generator': 7.29.1
       '@babel/parser': 7.29.2
@@ -18838,7 +18749,7 @@ snapshots:
       rolldown: 1.0.0-beta.9
     optionalDependencies:
       '@typescript/native-preview': 7.0.0-dev.20260523.1
-      typescript: 5.9.3
+      typescript: '@typescript/typescript6@6.0.1'
     transitivePeerDependencies:
       - oxc-resolver
       - supports-color
@@ -19477,7 +19388,7 @@ snapshots:
       normalize-path: 3.0.0
       safe-stable-stringify: 2.5.0
       tslib: 2.8.1
-      typescript: 5.9.3
+      typescript: '@typescript/typescript6@6.0.1'
 
   ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(@typescript/typescript6@6.0.1):
     dependencies:
@@ -19500,28 +19411,7 @@ snapshots:
       '@swc/core': 1.15.11(@swc/helpers@0.5.18)
     optional: true
 
-  ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.9.3):
-    dependencies:
-      '@cspotcode/source-map-support': 0.8.1
-      '@tsconfig/node10': 1.0.12
-      '@tsconfig/node12': 1.0.11
-      '@tsconfig/node14': 1.0.3
-      '@tsconfig/node16': 1.0.4
-      '@types/node': 18.17.4
-      acorn: 8.17.0
-      acorn-walk: 8.3.5
-      arg: 4.1.3
-      create-require: 1.1.1
-      diff: 4.0.4
-      make-error: 1.3.6
-      typescript: 5.9.3
-      v8-compile-cache-lib: 3.0.1
-      yn: 3.1.1
-    optionalDependencies:
-      '@swc/core': 1.15.11(@swc/helpers@0.5.18)
-    optional: true
-
-  tsdown@0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))(typescript@5.9.3):
+  tsdown@0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(@typescript/typescript6@6.0.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)):
     dependencies:
       ansis: 4.2.0
       cac: 6.7.14
@@ -19531,13 +19421,13 @@ snapshots:
       empathic: 1.1.0
       hookable: 5.5.3
       rolldown: 1.0.0-beta.9
-      rolldown-plugin-dts: 0.13.14(@typescript/native-preview@7.0.0-dev.20260523.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))(rolldown@1.0.0-beta.9)(typescript@5.9.3)
+      rolldown-plugin-dts: 0.13.14(@typescript/native-preview@7.0.0-dev.20260523.1)(@typescript/typescript6@6.0.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))(rolldown@1.0.0-beta.9)
       semver: 7.7.3
       tinyexec: 1.1.1
       tinyglobby: 0.2.16
       unconfig: 7.5.0
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: '@typescript/typescript6@6.0.1'
     transitivePeerDependencies:
       - '@oxc-project/runtime'
       - '@typescript/native-preview'
@@ -19613,14 +19503,6 @@ snapshots:
       qs: 6.15.1
       tunnel: 0.0.6
       underscore: 1.13.8
-
-  typescript@5.5.4: {}
-
-  typescript@5.6.1-rc: {}
-
-  typescript@5.9.3: {}
-
-  typescript@6.0.3: {}
 
   typescript@7.0.1-rc:
     optionalDependencies:
