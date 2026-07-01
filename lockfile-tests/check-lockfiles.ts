@@ -17,6 +17,7 @@
  *   pnpm check-lockfiles --fixture pnpm8 --workspace a           # Specific target
  *   pnpm check-lockfiles --turbo-path ./path/to/turbo            # Custom turbo binary
  *   pnpm check-production-prune                                # Production prune cases only
+ *   pnpm check-lockfiles --include-production                  # Also run production cases
  */
 
 import * as fs from "node:fs";
@@ -76,6 +77,7 @@ interface CliArgs {
   turboPath?: string;
   concurrency: number;
   productionOnly?: boolean;
+  includeProduction?: boolean;
 }
 
 function parseArgs(): CliArgs {
@@ -116,6 +118,8 @@ function parseArgs(): CliArgs {
       i++;
     } else if (arg === "--production-only") {
       args.productionOnly = true;
+    } else if (arg === "--include-production") {
+      args.includeProduction = true;
     }
   }
 
@@ -247,7 +251,9 @@ function buildTestCases(
       });
 
       const productionTargets = fixture.meta.productionPruneTargets ?? [];
-      if (!productionTargets.includes(target)) {
+      const shouldIncludeProduction =
+        args.productionOnly || args.includeProduction;
+      if (!shouldIncludeProduction || !productionTargets.includes(target)) {
         continue;
       }
 
