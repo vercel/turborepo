@@ -1,4 +1,9 @@
 {
   "installCommand": "pnpm install --filter docs...",
-  "buildCommand": "echo \"pnpm store package count: $(ls ../../node_modules/.pnpm | wc -l)\" && ls ../agents/node_modules 2>&1; turbo build"
+  "buildCommand": "echo \"pnpm store package count: $(ls ../../node_modules/.pnpm | wc -l)\" && ls ../agents/node_modules 2>&1; turbo build",
+  "build": {
+    "env": {
+      "VERCEL_FORCE_NO_BUILD_CACHE": "1"
+    }
+  }
 }
