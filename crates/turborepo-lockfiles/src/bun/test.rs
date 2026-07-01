@@ -2187,6 +2187,57 @@ fn test_subgraph_preserves_patch_when_patched_version_missing_from_lockfile_keys
     );
 }
 
+#[test]
+fn test_parses_v2_lockfile_and_resolves_workspace_and_external() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 2,
+        "configVersion": 1,
+        "workspaces": {
+            "": {
+                "name": "root",
+                "devDependencies": { "is-odd": "3.0.1" },
+            },
+            "packages/a": {
+                "name": "a",
+                "version": "0.0.0",
+                "dependencies": { "is-number": "^6.0.0" },
+            },
+        },
+        "packages": {
+            "a": ["a@workspace:packages/a"],
+            "is-number": ["is-number@6.0.0", "", {}, "sha512-stub"],
+            "is-odd": [
+                "is-odd@3.0.1",
+                "",
+                { "dependencies": { "is-number": "^6.0.0" } },
+                "sha512-stub",
+            ],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).expect("Bun lockfileVersion 2 should parse");
+    assert_eq!(lockfile.data.lockfile_version, 2);
+    assert_eq!(lockfile.data.config_version, Some(1));
+
+    // Workspace-direct resolution (the V1 optimization path) is gated on
+    // `lockfile_version >= 1`, so it must keep firing for V2.
+    // `VersionSpec::Workspace` is parsed from a bare workspace path; matches
+    // how every other test exercises it.
+    let workspace_dep = lockfile
+        .resolve_package("", "a", "packages/a")
+        .unwrap()
+        .expect("workspace dep resolves on V2");
+    assert_eq!(workspace_dep.key, "a@0.0.0");
+
+    // Hoisted external resolution is shared with V1; spot-check one entry.
+    let external = lockfile
+        .resolve_package("packages/a", "is-number", "^6.0.0")
+        .unwrap()
+        .expect("hoisted external resolves on V2");
+    assert_eq!(external.version, "6.0.0");
+}
+
 /// Regression for a 3-level nested version split that `turbo prune` drops.
 ///
 /// `@vite-pwa/nuxt@1` depends on `pathe@^1` (direct) AND `@nuxt/kit@^3`, while
