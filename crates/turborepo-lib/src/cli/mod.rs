@@ -699,6 +699,7 @@ async fn run_main(
             docker,
             output_dir,
             use_gitignore,
+            production,
         } => {
             let event = CommandEventBuilder::new("prune").with_parent(&root_telemetry);
             event.track_call();
@@ -710,6 +711,7 @@ async fn run_main(
             let docker = *docker;
             let output_dir = output_dir.clone();
             let use_gitignore = use_gitignore.unwrap_or(true);
+            let production = *production;
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
@@ -719,6 +721,7 @@ async fn run_main(
                 docker,
                 &output_dir,
                 use_gitignore,
+                production,
                 event_child,
             )
             .await?;

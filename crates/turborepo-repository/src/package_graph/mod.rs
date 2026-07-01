@@ -606,6 +606,22 @@ impl PackageGraph {
         )
     }
 
+    /// Like [`Self::transitive_closure`], but only follows production
+    /// dependency edges.
+    pub fn transitive_production_closure<'a, 'b, I: IntoIterator<Item = &'b PackageNode>>(
+        &'a self,
+        nodes: I,
+    ) -> HashSet<&'a PackageNode> {
+        turborepo_graph_utils::transitive_closure_filtered(
+            &self.graph,
+            nodes
+                .into_iter()
+                .flat_map(|node| self.node_lookup.get(node).cloned()),
+            petgraph::Direction::Outgoing,
+            |kind| matches!(kind, DependencyKind::Production),
+        )
+    }
+
     pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a PackageName>>(
         &self,
         packages: I,

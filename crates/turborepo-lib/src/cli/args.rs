@@ -704,6 +704,9 @@ pub enum Command {
         scope_arg: Option<Vec<String>>,
         #[clap(long)]
         docker: bool,
+        /// Exclude workspace packages reachable only through devDependencies
+        #[clap(long)]
+        production: bool,
         #[clap(long = "out-dir", default_value_t = String::from(prune::DEFAULT_OUTPUT_DIR), value_parser)]
         output_dir: String,
         /// Respect `.gitignore` when copying files to <OUT-DIR>

@@ -1053,3 +1053,33 @@ fn test_prune_pnpm_v11_multi_document_lockfile() {
         "pruned lockfile should still trim workspaces from the dependency document"
     );
 }
+
+#[test]
+fn test_prune_production_excludes_dev_only_workspace_packages() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--production"]);
+    assert!(
+        output.status.success(),
+        "prune --production failed: {}",
+        combined_output(&output)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Added web"));
+    assert!(stdout.contains("Added shared"));
+    assert!(!stdout.contains("Added util"));
+
+    let package_dirs: Vec<String> = fs::read_dir(tempdir.path().join("out/packages"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
+        .collect();
+    assert_eq!(package_dirs, vec!["shared"]);
+}

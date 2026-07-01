@@ -27,6 +27,21 @@ pub fn transitive_closure<N: Hash + Eq + PartialEq, E, I: IntoIterator<Item = No
     indices: I,
     direction: petgraph::Direction,
 ) -> HashSet<&N> {
+    transitive_closure_filtered(graph, indices, direction, |_| true)
+}
+
+pub fn transitive_closure_filtered<
+    N: Hash + Eq + PartialEq,
+    E,
+    I: IntoIterator<Item = NodeIndex>,
+    F: Fn(&E) -> bool,
+>(
+    graph: &Graph<N, E>,
+    indices: I,
+    direction: petgraph::Direction,
+    edge_filter: F,
+) -> HashSet<&N> {
+    let filtered = EdgeFiltered::from_fn(graph, |edge| edge_filter(edge.weight()));
     let mut visited = HashSet::new();
 
     let visitor = |event| {
@@ -38,8 +53,8 @@ pub fn transitive_closure<N: Hash + Eq + PartialEq, E, I: IntoIterator<Item = No
     };
 
     match direction {
-        petgraph::Direction::Outgoing => depth_first_search(&graph, indices, visitor),
-        petgraph::Direction::Incoming => depth_first_search(Reversed(&graph), indices, visitor),
+        petgraph::Direction::Outgoing => depth_first_search(&filtered, indices, visitor),
+        petgraph::Direction::Incoming => depth_first_search(Reversed(&filtered), indices, visitor),
     };
 
     visited
@@ -236,6 +251,40 @@ mod test {
     use petgraph::graph::Graph;
 
     use super::*;
+
+    #[test]
+    fn test_transitive_closure_filtered() {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum Kind {
+            Production,
+            Development,
+        }
+
+        let mut g = Graph::new();
+        let app = g.add_node("app");
+        let lib = g.add_node("lib");
+        let tooling = g.add_node("tooling");
+        let shared = g.add_node("shared");
+
+        g.add_edge(app, lib, Kind::Production);
+        g.add_edge(app, tooling, Kind::Development);
+        g.add_edge(tooling, shared, Kind::Production);
+
+        let all = transitive_closure(&g, [app], petgraph::Direction::Outgoing);
+        assert_eq!(all.len(), 4);
+        assert!(all.contains(&&"app"));
+        assert!(all.contains(&&"lib"));
+        assert!(all.contains(&&"tooling"));
+        assert!(all.contains(&&"shared"));
+
+        let production =
+            transitive_closure_filtered(&g, [app], petgraph::Direction::Outgoing, |kind| {
+                matches!(kind, Kind::Production)
+            });
+        assert_eq!(production.len(), 2);
+        assert!(production.contains(&&"app"));
+        assert!(production.contains(&&"lib"));
+    }
 
     #[test]
     fn test_cycle_err_message() {

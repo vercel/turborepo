@@ -1227,6 +1227,7 @@ fn test_parse_prune() {
         scope: None,
         scope_arg: Some(vec!["foo".into()]),
         docker: false,
+        production: false,
         output_dir: "out".to_string(),
         use_gitignore: None,
     };
@@ -1258,6 +1259,7 @@ fn test_parse_prune() {
                 scope: Some(vec!["bar".to_string()]),
                 scope_arg: None,
                 docker: false,
+                production: false,
                 output_dir: "out".to_string(),
                 use_gitignore: None,
             }),
@@ -1272,6 +1274,7 @@ fn test_parse_prune() {
                 scope: None,
                 scope_arg: Some(vec!["foo".to_string(), "bar".to_string()]),
                 docker: false,
+                production: false,
                 output_dir: "out".to_string(),
                 use_gitignore: None,
             }),
@@ -1286,6 +1289,7 @@ fn test_parse_prune() {
                 scope: None,
                 scope_arg: Some(vec!["foo".into()]),
                 docker: true,
+                production: false,
                 output_dir: "out".to_string(),
                 use_gitignore: None,
             }),
@@ -1300,6 +1304,7 @@ fn test_parse_prune() {
                 scope: None,
                 scope_arg: Some(vec!["foo".into()]),
                 docker: false,
+                production: false,
                 output_dir: "dist".to_string(),
                 use_gitignore: None,
             }),
@@ -1316,6 +1321,7 @@ fn test_parse_prune() {
                 scope: None,
                 scope_arg: Some(vec!["foo".into()]),
                 docker: true,
+                production: false,
                 output_dir: "dist".to_string(),
                 use_gitignore: None,
             }),
@@ -1333,6 +1339,7 @@ fn test_parse_prune() {
                 scope: None,
                 scope_arg: Some(vec!["foo".into()]),
                 docker: true,
+                production: false,
                 output_dir: "dist".to_string(),
                 use_gitignore: None,
             }),
@@ -1355,6 +1362,7 @@ fn test_parse_prune() {
                 scope: Some(vec!["foo".to_string()]),
                 scope_arg: None,
                 docker: true,
+                production: false,
                 output_dir: "dist".to_string(),
                 use_gitignore: None,
             }),
@@ -1372,6 +1380,7 @@ fn test_parse_prune() {
                 scope: None,
                 scope_arg: Some(vec!["foo".to_string()]),
                 docker: false,
+                production: false,
                 output_dir: "out".to_string(),
                 use_gitignore: Some(true),
             }),
@@ -1389,6 +1398,7 @@ fn test_parse_prune() {
                 scope: None,
                 scope_arg: Some(vec!["foo".to_string()]),
                 docker: false,
+                production: false,
                 output_dir: "out".to_string(),
                 use_gitignore: Some(true),
             }),
@@ -1406,6 +1416,7 @@ fn test_parse_prune() {
                 scope: None,
                 scope_arg: Some(vec!["foo".to_string()]),
                 docker: false,
+                production: false,
                 output_dir: "out".to_string(),
                 use_gitignore: Some(false),
             }),
@@ -1413,6 +1424,21 @@ fn test_parse_prune() {
         },
     }
     .test();
+
+    assert_eq!(
+        Args::try_parse_from(["turbo", "prune", "--production", "foo"]).unwrap(),
+        Args {
+            command: Some(Command::Prune {
+                scope: None,
+                scope_arg: Some(vec!["foo".into()]),
+                docker: false,
+                production: true,
+                output_dir: "out".to_string(),
+                use_gitignore: None,
+            }),
+            ..Args::default()
+        }
+    );
 }
 
 #[test]
