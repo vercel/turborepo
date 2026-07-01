@@ -11,7 +11,7 @@
 //! - Simple workspace support
 //! - Limited override functionality
 //!
-//! ### Version 1
+//! ### Version 1 (Bun <1.4)
 //! - Enhanced workspace dependency resolution with optimized lookup strategies
 //! - Improved catalog support with multiple catalog types
 //! - Advanced override functionality with precedence rules
