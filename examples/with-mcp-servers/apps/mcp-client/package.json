@@ -1,0 +1,26 @@
+{
+  "name": "mcp-client",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "lint": "eslint src/",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@repo/mcp-calculator": "workspace:*",
+    "@repo/mcp-file-reader": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.39.1",
+    "typescript": "5.9.2"
+  }
+}
