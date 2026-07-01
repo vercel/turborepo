@@ -253,9 +253,6 @@ static PACKAGE_MANAGER_PATTERN: Lazy<Regex> = lazy_regex!(
     r"\A(?P<manager>aube|bun|npm|nub|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z"
 );
 
-static DEV_ENGINES_VERSION_PATTERN: Lazy<Regex> =
-    lazy_regex!(r"\A\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\z");
-
 impl PackageManager {
     /// Returns the package manager responsible for lockfile operations.
     pub fn lockfile_manager(&self) -> &PackageManager {
@@ -636,25 +633,107 @@ impl PackageManager {
                  whitespace",
             ));
         }
-        if !DEV_ENGINES_VERSION_PATTERN.is_match(version) {
-            return Err(Self::invalid_dev_engines_package_manager_at(
-                dev_engines,
-                &["packageManager", "version"],
-                "`devEngines.packageManager.version` must be an exact semantic version",
-            ));
-        }
-
-        let version = version.parse().map_err(|err: SemverError| {
+        // Per the devEngines spec, `packageManager.version` is a semver RANGE
+        // (https://nodejs.org/api/packages.html#packagemanager), not a single
+        // pinned version. We accept ranges only when they target a single major:
+        // the declaration is still explicit enough to validate against the
+        // repository lockfile instead of silently inferring intent.
+        let range = node_semver::Range::parse(version).map_err(|err: SemverError| {
             Self::invalid_dev_engines_package_manager_at(
                 dev_engines,
                 &["packageManager", "version"],
-                format!("invalid semantic version: {err}"),
+                format!(
+                    "`devEngines.packageManager.version` must be a valid semantic version range: \
+                     {err}"
+                ),
             )
         })?;
+        let version = Self::package_manager_range_min_version(version, &range, dev_engines)?;
         let declared = Self::package_manager_from_name_and_version(repo_root, name, &version)?;
         Self::validate_package_manager_lockfile_match(repo_root, &declared, dev_engines)?;
 
         Ok(declared)
+    }
+
+    fn package_manager_range_min_version(
+        raw_range: &str,
+        range: &node_semver::Range,
+        span_source: &Spanned<serde_json::Value>,
+    ) -> Result<Version, Error> {
+        let min_version = Self::range_min_version(range, span_source)?;
+        let major = min_version.major;
+
+        for disjunct in raw_range.split("||") {
+            let disjunct_range =
+                node_semver::Range::parse(disjunct.trim()).map_err(|err: SemverError| {
+                    Self::invalid_dev_engines_package_manager_at(
+                        span_source,
+                        &["packageManager", "version"],
+                        format!(
+                            "`devEngines.packageManager.version` must be a valid semantic version \
+                             range: {err}"
+                        ),
+                    )
+                })?;
+            let disjunct_min_version = Self::range_min_version(&disjunct_range, span_source)?;
+            if disjunct_min_version.major != major
+                || Self::range_allows_next_major(
+                    &disjunct_range,
+                    disjunct_min_version.major,
+                    span_source,
+                )?
+            {
+                return Err(Self::invalid_dev_engines_package_manager_at(
+                    span_source,
+                    &["packageManager", "version"],
+                    "`devEngines.packageManager.version` must only allow versions within one \
+                     major version",
+                ));
+            }
+        }
+
+        Ok(min_version)
+    }
+
+    fn range_min_version(
+        range: &node_semver::Range,
+        span_source: &Spanned<serde_json::Value>,
+    ) -> Result<Version, Error> {
+        range.min_version().ok_or_else(|| {
+            Self::invalid_dev_engines_package_manager_at(
+                span_source,
+                &["packageManager", "version"],
+                "`devEngines.packageManager.version` must admit at least one version",
+            )
+        })
+    }
+
+    fn range_allows_next_major(
+        range: &node_semver::Range,
+        major: u64,
+        span_source: &Spanned<serde_json::Value>,
+    ) -> Result<bool, Error> {
+        let next_major = major.checked_add(1).ok_or_else(|| {
+            Self::invalid_dev_engines_package_manager_at(
+                span_source,
+                &["packageManager", "version"],
+                "`devEngines.packageManager.version` major version is too large",
+            )
+        })?;
+        let next_major = format!("{next_major}.0.0")
+            .parse()
+            .map_err(|err: SemverError| {
+                Self::invalid_dev_engines_package_manager_at(
+                    span_source,
+                    &["packageManager", "version"],
+                    format!(
+                        "`devEngines.packageManager.version` must be a valid semantic version \
+                         range: {err}"
+                    ),
+                )
+            })?;
+
+        Ok(range.satisfies(&next_major))
     }
 
     fn package_manager_from_name_and_version(
@@ -1643,6 +1722,15 @@ mod tests {
     #[test_case("pnpm", "9.12.3-alpha.0", PackageManager::Pnpm ; "pnpm prerelease")]
     #[test_case("nub", "0.1.0", PackageManager::Nub { lockfile: Box::new(PackageManager::Npm) } ; "nub")]
     #[test_case("aube", "0.1.0", PackageManager::Aube { lockfile: Box::new(PackageManager::Npm) } ; "aube")]
+    // `devEngines.packageManager.version` is a semver range; the variant is
+    // selected from the range's minimum satisfying version.
+    #[test_case("pnpm", "^9.0.0", PackageManager::Pnpm9 ; "pnpm9 caret range")]
+    #[test_case("pnpm", "9", PackageManager::Pnpm9 ; "pnpm9 major-only range")]
+    #[test_case("pnpm", ">=9.0.0 <10.0.0", PackageManager::Pnpm9 ; "pnpm9 comparator range")]
+    #[test_case("pnpm", ">=9.0.0 <10.0.0 || >=9.5.0 <10.0.0", PackageManager::Pnpm9 ; "pnpm9 same-major or range")]
+    #[test_case("pnpm", "^6.35.1", PackageManager::Pnpm6 ; "pnpm6 caret range")]
+    #[test_case("yarn", "^4.0.0", PackageManager::Berry ; "yarn berry range")]
+    #[test_case("yarn", "^1.22.0", PackageManager::Yarn ; "yarn classic range")]
     fn test_read_dev_engines_package_manager(
         name: &str,
         version: &str,
@@ -1690,10 +1778,12 @@ mod tests {
     #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": 1}}}), "version` must be a string" ; "non-string version")]
     #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": ""}}}), "version` must not be empty" ; "empty version")]
     #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": " 9.12.3"}}}), "version` must not contain" ; "version whitespace")]
-    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": "^9.0.0"}}}), "exact semantic version" ; "range version")]
-    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": "https://registry.npmjs.org/pnpm/-/pnpm-9.12.3.tgz"}}}), "exact semantic version" ; "url version")]
-    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": "9"}}}), "exact semantic version" ; "short version")]
-    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": "9.12.3+sha512.Purxi/Zex=="}}}), "exact semantic version" ; "integrity version")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": "https://registry.npmjs.org/pnpm/-/pnpm-9.12.3.tgz"}}}), "valid semantic version range" ; "url version")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": "9.12.3+sha512.Purxi/Zex=="}}}), "valid semantic version range" ; "integrity version")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": "*"}}}), "one major version" ; "any range")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": ">=9.0.0"}}}), "one major version" ; "open-ended range")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": ">=6.0.0 <10.0.0"}}}), "one major version" ; "cross-major comparator range")]
+    #[test_case(json!({"devEngines": {"packageManager": {"name": "pnpm", "version": "9 || 10"}}}), "one major version" ; "cross-major or range")]
     fn test_invalid_dev_engines_package_manager(
         value: serde_json::Value,
         expected_message: &str,
