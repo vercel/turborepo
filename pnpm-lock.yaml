@@ -6,7 +6,6 @@ settings:
 
 overrides:
   esbuild: 0.28.1
-  typescript: npm:@typescript/typescript6@^6.0.1
 
 importers:
 
@@ -310,8 +309,8 @@ importers:
         specifier: 22.7.8
         version: 22.7.8
       typescript:
-        specifier: npm:@typescript/typescript6@^6.0.1
-        version: '@typescript/typescript6@6.0.1'
+        specifier: 5.5.4
+        version: 5.5.4
 
   examples:
     devDependencies:
@@ -9745,6 +9744,26 @@ packages:
   typed-rest-client@1.8.11:
     resolution: {integrity: sha512-5UvfMpd1oelmUPRbbaVnq+rHP7ng2cE4qoQkQeAqxRL6PklkxsM0g32/HL0yfvruK6ojQ5x8EE+HF4YV6DtuCA==}
 
+  typescript@5.5.4:
+    resolution: {integrity: sha512-Mtq29sKDAEYP7aljRgtPOpTvOfbwRWlS6dPRzwjdE+C0R4brX/GUyhHSecbHMFLNBLcJIPt9nl9yG5TZ1weH+Q==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
+  typescript@5.6.1-rc:
+    resolution: {integrity: sha512-E3b2+1zEFu84jB0YQi9BORDjz9+jGbwwy1Zi3G0LUNw7a7cePUrHMRNy8aPh53nXpkFGVHSxIZo5vKTfYaFiBQ==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
+  typescript@5.9.3:
+    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
+  typescript@6.0.3:
+    resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
   typescript@7.0.1-rc:
     resolution: {integrity: sha512-drEP77wK7CCDlPfXZH4e008UUQOsw1DFmHmZOZjuNA+yoDLLnSNMZRXi90NbV/1LVo7SbNLq1bs3jjvk49TEqQ==}
     engines: {node: '>=16.20.0'}
@@ -10290,7 +10309,7 @@ snapshots:
       fflate: 0.8.2
       lru-cache: 11.3.3
       semver: 7.7.3
-      typescript: '@typescript/typescript6@6.0.1'
+      typescript: 5.6.1-rc
       validate-npm-package-name: 5.0.0
 
   '@azu/format-text@1.0.2': {}
@@ -14037,7 +14056,9 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.1-rc':
     optional: true
 
-  '@typescript/typescript6@6.0.1': {}
+  '@typescript/typescript6@6.0.1':
+    dependencies:
+      typescript: 6.0.3
 
   '@typespec/ts-http-runtime@0.3.5':
     dependencies:
@@ -19388,7 +19409,7 @@ snapshots:
       normalize-path: 3.0.0
       safe-stable-stringify: 2.5.0
       tslib: 2.8.1
-      typescript: '@typescript/typescript6@6.0.1'
+      typescript: 5.9.3
 
   ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(@typescript/typescript6@6.0.1):
     dependencies:
@@ -19503,6 +19524,14 @@ snapshots:
       qs: 6.15.1
       tunnel: 0.0.6
       underscore: 1.13.8
+
+  typescript@5.5.4: {}
+
+  typescript@5.6.1-rc: {}
+
+  typescript@5.9.3: {}
+
+  typescript@6.0.3: {}
 
   typescript@7.0.1-rc:
     optionalDependencies:
