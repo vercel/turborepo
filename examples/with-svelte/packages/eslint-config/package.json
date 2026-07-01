@@ -5,16 +5,23 @@
   "publishConfig": {
     "access": "public"
   },
+  "exports": {
+    ".": {
+      "default": "./index.js"
+    }
+  },
   "devDependencies": {
-    "@eslint/compat": "^2.0.3",
+    "@eslint/config-helpers": "^0.6.0",
     "@eslint/eslintrc": "^3.3.5",
-    "@eslint/js": "^9.39.4",
-    "eslint": "^9.39.4",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.5.0",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-config-turbo": "^2.8.20",
-    "eslint-plugin-storybook": "^10.3.1",
-    "eslint-plugin-svelte": "^3.16.0",
-    "globals": "^17.4.0",
-    "typescript-eslint": "^8.57.1"
+    "eslint-config-turbo": "^2.9.18",
+    "eslint-plugin-prettier": "^5.5.6",
+    "eslint-plugin-storybook": "^10.4.6",
+    "eslint-plugin-svelte": "catalog:sveltejs",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.4",
+    "typescript-eslint": "^8.61.1"
   }
 }

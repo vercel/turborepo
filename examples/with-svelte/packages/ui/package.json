@@ -6,6 +6,7 @@
     "dev": "svelte-kit sync && svelte-package --watch --input=src",
     "build": "svelte-kit sync && svelte-package --input=src",
     "lint": "eslint .",
+    "lint:package": "publint",
     "check-types": "svelte-check --tsconfig ./tsconfig.json"
   },
   "files": [
@@ -22,39 +23,38 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts",
       "svelte": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "default": "./dist/index.js"
     }
   },
   "peerDependencies": {
     "svelte": "^5.0.0"
   },
   "devDependencies": {
-    "@eslint/compat": "^2.0.3",
-    "@eslint/js": "^9.39.4",
+    "@eslint/js": "^10.0.1",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@sveltejs/adapter-auto": "^7.0.1",
-    "@sveltejs/kit": "^2.55.0",
-    "@sveltejs/package": "^2.5.7",
-    "@sveltejs/vite-plugin-svelte": "^7.0.0",
-    "@types/node": "^24.12.0",
-    "@vitest/browser-playwright": "^4.1.0",
-    "eslint": "^9.39.4",
+    "@sveltejs/adapter-auto": "catalog:sveltejs",
+    "@sveltejs/kit": "catalog:sveltejs",
+    "@sveltejs/package": "catalog:sveltejs",
+    "@sveltejs/vite-plugin-svelte": "catalog:sveltejs",
+    "@types/node": "^24.13.2",
+    "@vitest/browser-playwright": "^4.1.9",
+    "eslint": "^10.5.0",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-svelte": "^3.16.0",
-    "globals": "^17.4.0",
-    "playwright": "^1.58.2",
-    "prettier": "^3.8.1",
-    "prettier-plugin-svelte": "^3.5.1",
-    "publint": "^0.3.18",
-    "svelte": "^5.54.1",
-    "svelte-check": "^4.4.5",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.57.1",
-    "vite": "^8.0.1",
-    "vitest": "^4.1.0",
-    "vitest-browser-svelte": "^2.1.0"
+    "eslint-plugin-svelte": "catalog:sveltejs",
+    "globals": "^17.6.0",
+    "playwright": "^1.61.0",
+    "prettier": "^3.8.4",
+    "prettier-plugin-svelte": "catalog:sveltejs",
+    "publint": "^0.3.21",
+    "svelte": "catalog:sveltejs",
+    "svelte-check": "catalog:sveltejs",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.1",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.9",
+    "vitest-browser-svelte": "^2.1.1"
   }
 }
