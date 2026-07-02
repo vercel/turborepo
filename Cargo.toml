@@ -196,3 +196,7 @@ which = "4.4.0"
 # Schema generation
 schemars = "0.8.16"
 ts-rs = { version = "11.1.0", features = ["serde-compat"] }
+
+[patch.crates-io]
+# Upstream 0.2.0 links ghostty-vt.lib (MSVC DLL import lib) instead of ghostty-vt-static.lib.
+libghostty-vt-sys = { path = "crates/libghostty-vt-sys" }
