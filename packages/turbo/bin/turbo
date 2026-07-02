@@ -37,6 +37,39 @@ function hasPackage(sourceObject, packageName) {
   return !!sourceObject[packageName] || !!sourceObject[`node_modules/${packageName}`];
 }
 
+// When invoked through a package manager's scripts (or npx/pnpm dlx/etc.),
+// the package manager identifies itself in npm_config_user_agent,
+// e.g. "pnpm/9.1.0 npm/? node/v20.11.0 darwin arm64".
+function detectPackageManager() {
+  const userAgent = process.env.npm_config_user_agent;
+  if (!userAgent) {
+    return null;
+  }
+
+  const match = userAgent.match(/^(\S+)\/(\d+)/);
+  if (!match) {
+    return null;
+  }
+
+  return { name: match[1], majorVersion: Number(match[2]) };
+}
+
+function repairInstructions(packageManager) {
+  switch (packageManager.name) {
+    case 'pnpm':
+      return 'pnpm install --force';
+    case 'bun':
+      return 'bun install --force';
+    case 'yarn':
+      if (packageManager.majorVersion === 1) {
+        return 'yarn install --check-files';
+      }
+      return 'yarn install (after deleting your repository\'s node_modules directory)';
+    default:
+      return `${packageManager.name} install (after deleting your repository's node_modules directory)`;
+  }
+}
+
 // Binary packages were renamed from `turbo-<os>-<arch>` to `@turbo/<os>-<arch>`.
 // We try the scoped name first, then fall back to the legacy unscoped name so
 // that upgrades across the rename boundary still work without re-installing.
@@ -127,8 +160,33 @@ function getBinaryPath() {
         console.warn('Installation has succeeded.');
         return resolvedPath;
       }
-    } catch (e) {}
-    console.warn('Installation has failed.');
+      console.warn('Installation has failed.');
+      console.warn();
+      console.warn('npm reported success, but the binary is still missing.');
+      console.warn('npm skips failed optional dependencies without reporting an error.');
+      console.warn('The reason for the failure is recorded in the debug log of your npm cache\'s _logs directory (see `npm config get cache`).');
+    } catch (e) {
+      console.warn('Installation has failed.');
+
+      // Show the underlying error so that failures are diagnosable.
+      const stderr = e?.stderr?.toString().trim();
+      const reason = stderr || e?.message;
+      if (reason) {
+        console.warn();
+        console.warn('The installation attempt reported:');
+        console.warn(reason);
+      }
+    }
+
+    // The repair attempt above uses npm regardless of the package manager
+    // that installed this tree. If the user came through a different package
+    // manager, point them at its equivalent repair command.
+    const packageManager = detectPackageManager();
+    if (packageManager !== null && packageManager.name !== 'npm') {
+      console.warn();
+      console.warn(`It looks like your project uses ${packageManager.name}. To reinstall the missing binary, run:`);
+      console.warn(repairInstructions(packageManager));
+    }
   }
 
   // 3. Both Windows and macOS ARM boxes can run x64 binaries. Attempt to run under emulation.
@@ -219,6 +277,14 @@ function getBinaryPath() {
     console.error('Turborepo checked to see if binaries for another platform are installed.');
     console.error('This typically indicates an error in sharing of pre-resolved node_modules across platforms.');
     console.error('One common reason for this is copying files to Docker.');
+
+    if (platform === 'windows' && otherInstalled.some((binaryPath) => binaryPath.includes('linux'))) {
+      console.error();
+      console.error('Turborepo found Linux binaries, but you are running on Windows.');
+      console.error('This usually means dependencies were installed from WSL in a directory shared with Windows.');
+      console.error('To fix this, delete your node_modules directory and reinstall your dependencies in the environment where you run turbo.');
+    }
+
     console.error();
     console.error(`We found these unnecessary binaries:`);
     console.error(otherInstalled.join('\n'));
