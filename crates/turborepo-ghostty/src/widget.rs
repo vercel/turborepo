@@ -1,3 +1,8 @@
+use libghostty_vt::{
+    RenderState, Terminal,
+    render::{CellIterator, CursorViewport, CursorVisualStyle, RowIterator},
+    style::RgbColor,
+};
 use ratatui::{
     buffer::Buffer,
     layout::{Position, Rect},
@@ -5,12 +10,7 @@ use ratatui::{
     widgets::Widget,
 };
 
-use crate::{
-    convert,
-    render::{CellIterator, CursorViewport, CursorVisualStyle, RenderState, RowIterator},
-    style::RgbColor,
-    terminal::Terminal,
-};
+use crate::convert;
 
 /// Cursor information extracted during rendering.
 #[derive(Debug, Clone, Default)]

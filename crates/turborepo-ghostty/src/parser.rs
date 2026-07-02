@@ -1,10 +1,12 @@
-use crate::{
-    Error, RenderState, Result,
+use libghostty_vt::{
+    RenderState, Terminal,
     error::Error as GhosttyInnerError,
     fmt::{Format, Formatter, FormatterOptions},
     selection::{FormatOptions, Selection},
-    terminal::{Point, PointCoordinate, ScrollViewport, Terminal},
+    terminal::{Options as TerminalOptions, Point, PointCoordinate, ScrollViewport},
 };
+
+use crate::{Error, Result};
 
 const DEFAULT_CELL_WIDTH_PX: u32 = 8;
 const DEFAULT_CELL_HEIGHT_PX: u32 = 16;
@@ -26,7 +28,7 @@ impl Parser {
     }
 
     pub fn try_new(rows: u16, cols: u16, scrollback_len: usize) -> Result<Self> {
-        let terminal = Terminal::new(crate::terminal::Options {
+        let terminal = Terminal::new(TerminalOptions {
             cols,
             rows,
             max_scrollback: scrollback_len,
