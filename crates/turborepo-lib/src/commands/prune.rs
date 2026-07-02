@@ -8,7 +8,7 @@ use std::{
 
 use globwalk::{ValidatedGlob, WalkType};
 use miette::Diagnostic;
-use tracing::trace;
+use tracing::{trace, warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
     RelativeUnixPath, RelativeUnixPathBuf,
@@ -141,6 +141,16 @@ pub async fn prune(
 ) -> Result<(), Error> {
     telemetry.track_arg_usage("docker", docker);
     telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
+
+    // Prune's package graph is JS-only: it copies manifests/lockfiles with
+    // package.json semantics, which don't hold for Cargo crates. Warn loudly
+    // so users of the experiment know crates are absent from pruned output.
+    if crate::run::builder::experimental_cargo_enabled() {
+        warn!(
+            "TURBO_EXPERIMENTAL_CARGO is enabled, but `turbo prune` does not support Cargo \
+             crates; the pruned output will not include any Rust packages"
+        );
+    }
 
     let prune = Prune::new(base, scope, docker, output_dir, use_gitignore, telemetry).await?;
 

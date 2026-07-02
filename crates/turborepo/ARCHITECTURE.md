@@ -6,7 +6,7 @@ This document serves as a sketch of the architecture of the `turbo run` command
 
 A run consists of the following steps:
 
-1. Build a package graph based on the Javascript package manager settings
+1. Build a package graph based on the JavaScript package manager settings (and, behind `TURBO_EXPERIMENTAL_CARGO`, Cargo workspace crates)
 2. Build a task graph based on package dependencies and configuration
 3. Determine global/task hashes
 4. Execute tasks in topological order
@@ -144,6 +144,82 @@ this aligns with how npm, pnpm, and yarn handle cyclic workspace deps. Cycle
 detection is deferred to the task graph layer (engine builder), since
 package-level cycles only matter when they produce task-level cycles via
 topological (`^`) dependencies.
+
+#### Experimental Cargo Support (`crates/turborepo-repository/src/cargo.rs`)
+
+Behind the `TURBO_EXPERIMENTAL_CARGO` environment variable (truthy = set,
+non-empty, and not a case-insensitive `0`/`false`/`off`/`no`), `turbo run`
+also discovers Rust crates from a Cargo workspace at the repo root and adds
+them to the package graph. The flag deliberately bypasses
+`ConfigurationOptions` while experimental; it must be routed through the
+config funnel before stabilizing.
+
+Turborepo does not replace Cargo. Cargo is itself a build system with its
+own dependency graph, scheduler, and incremental cache (`target/`), so the
+division of labor is: **Turborepo decides which crates are in scope and
+whether anything changed; Cargo decides how and in what order to build.**
+All Cargo knowledge lives in `turborepo_repository::cargo`:
+
+- **Discovery** (`discover_crates`) shells out to `cargo metadata --no-deps`
+  — Cargo is the only correct implementation of its own membership semantics
+  (member globs, automatic path-dependency members, excludes, target-specific
+  dependency tables, renames). Dev-dependency edges that would form a cycle
+  are dropped (Cargo permits dev-dep cycles; the graph must stay a DAG).
+  Manifests outside the repository root are skipped, crate names are
+  validated, and duplicate names hard-error.
+- **Package shapes**: crates are classified via `CargoPackageKind`.
+  *Entrypoints* (crates with `bin`/`cdylib`/`staticlib` targets) are the
+  workspace's deliverables. *Libraries* exist in the package graph — so
+  `--filter` and `--affected` propagate through them — but their tasks are
+  no-ops: Cargo builds them implicitly as part of an entrypoint's closure. A
+  synthetic *workspace* package (named `cargo`) depends on every crate and
+  hosts workspace-scoped verbs.
+- **Execution** (`CargoCommandProvider` in `turborepo-task-executor`):
+  entrypoint `build`/`run`/`dev` tasks run
+  `cargo <verb> --package=<crate>` — one cargo process that builds the
+  crate's whole dependency closure with Cargo's own parallelism, avoiding
+  the target-dir lock contention that per-crate processes cause.
+  Verification verbs run once at workspace scope: `cargo#test` →
+  `cargo test --workspace`, `cargo#lint` → `cargo clippy --workspace`, etc.
+  Provider ordering matters: it must precede the package.json script
+  provider. Run summaries derive display commands from the same verb tables.
+- **Hashing** (`turborepo-engine/src/builder/definitions.rs`): entrypoint
+  tasks hash their own sources plus their transitive dependency crates'
+  sources (flattened, so invalidation doesn't depend on `dependsOn` wiring),
+  the workspace files (`Cargo.lock`, root `Cargo.toml`, `.cargo/config*`,
+  `rust-toolchain*`), and cargo-relevant env vars (`RUSTFLAGS`,
+  `RUSTC_WRAPPER`, `CARGO_TARGET_DIR`, `CARGO_BUILD_TARGET`). The workspace
+  package hashes all crate directories instead of default-hashing the repo
+  root.
+- **Caching**: task caches store logs plus, for entrypoint builds, the bin
+  deliverables (`target/debug/<bin>`). Cargo's internal `target/` state is
+  deliberately never cached — it is Cargo's own incremental cache, and
+  tarballing it fights Cargo instead of leaning on it (it is also
+  multi-gigabyte). For fine-grained remote compile caching, use sccache via
+  `RUSTC_WRAPPER` (with `CARGO_INCREMENTAL=0`): that is the layer where
+  per-compilation caching is sound, and it cooperates with Cargo's
+  fingerprints. `RUSTC_WRAPPER` participates in task hashes so toggling it
+  invalidates caches.
+
+Known limitations of the experiment:
+
+- Without a committed `rust-toolchain`/`rust-toolchain.toml`, the compiler
+  version is not hashed — sharing a remote cache across machines with
+  different toolchains is unsound.
+- Any `Cargo.lock` change invalidates every Cargo task, and `--affected`
+  attributes `Cargo.lock` changes to the root package rather than to crates.
+- Bin output caching assumes the default `target/debug` layout; declare
+  explicit `outputs` for `--release` or custom target dirs.
+- Cargo commands (except `cargo run`) execute in a mutually-exclusive serial
+  group: concurrent cargo processes serialize on Cargo's build-directory lock
+  anyway, so Turborepo runs one at a time — each using all cores — instead of
+  spawning processes that sit blocked emitting lock warnings.
+- Only `turbo run` builds a Cargo-aware graph; `prune` (which warns), `query`,
+  `ls`, watch mode, and the daemon do not see crates, and the daemon's file
+  watching does not exclude `target/`.
+- Pass-through args after `--` are forwarded to the harness/binary for
+  `test`/`bench`/`run`/`clippy`; for `build`/`check`/`doc` they are appended
+  as cargo flags instead.
 
 ### 3. Task Graph (`crates/turborepo-lib/src/engine/`)
 

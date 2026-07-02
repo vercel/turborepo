@@ -9,6 +9,7 @@ use console::StyledObject;
 use turborepo_engine::{TaskError, TaskErrorCollectorWrapper, TaskWarningCollectorWrapper};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_process::ProcessManager;
+use turborepo_repository::package_graph::PackageToolchain;
 use turborepo_task_executor::{DryRunExecutor, TaskExecutor};
 use turborepo_task_hash::TaskHashTracker;
 use turborepo_task_id::TaskId;
@@ -68,15 +69,22 @@ impl<'a> ExecContextFactory<'a> {
                 micro_frontends_configs,
             ));
         }
-        // Cargo crates resolve their commands to `cargo <verb> -p <crate>`. This
-        // must come before the package.json script provider, which would
-        // otherwise return nothing for a crate (no scripts) and leave the task a
-        // no-op.
-        command_factory.add_provider(turborepo_task_executor::CargoCommandProvider::new(
-            visitor.repo_root,
-            &visitor.package_graph,
-            visitor.run_opts.task_args(),
-        ));
+        // Cargo crates resolve their commands to `cargo <verb> --package
+        // <crate>`. This must come before the package.json script provider,
+        // which would otherwise return nothing for a crate (no scripts) and
+        // leave the task a no-op. Only registered when the graph actually
+        // contains Cargo packages so JS-only runs skip the provider entirely.
+        if visitor
+            .package_graph
+            .packages()
+            .any(|(_, info)| info.toolchain == PackageToolchain::Cargo)
+        {
+            command_factory.add_provider(turborepo_task_executor::CargoCommandProvider::new(
+                visitor.repo_root,
+                visitor.package_graph.as_ref(),
+                visitor.run_opts.task_args(),
+            ));
+        }
         command_factory.add_provider(pkg_graph_provider);
 
         Ok(Self {

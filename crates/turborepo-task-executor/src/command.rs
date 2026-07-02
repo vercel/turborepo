@@ -14,7 +14,8 @@ use turbopath::{AbsoluteSystemPath, PathError, RelativeUnixPath};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_process::Command;
 use turborepo_repository::{
-    package_graph::{PackageGraph, PackageInfo, PackageName, PackageToolchain},
+    cargo,
+    package_graph::{PackageGraph, PackageInfo, PackageName},
     package_manager::PackageManager,
 };
 use turborepo_task_id::TaskId;
@@ -304,90 +305,104 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
     }
 }
 
-/// Map a Turborepo task name to the Cargo subcommand that implements it.
+/// Command provider that runs Cargo subcommands for Rust packages.
 ///
-/// These are the conventional Cargo verbs; tasks without a Cargo equivalent
-/// return `None` so the provider falls through (and the task becomes a no-op
-/// for that crate, matching how a missing package.json script behaves).
-fn cargo_subcommand(task: &str) -> Option<&'static str> {
-    Some(match task {
-        "build" => "build",
-        "test" => "test",
-        "check" => "check",
-        "lint" | "clippy" => "clippy",
-        "doc" | "docs" => "doc",
-        "bench" => "bench",
-        "run" => "run",
-        _ => return None,
-    })
-}
-
-/// Command provider that runs Cargo subcommands for Rust crates.
+/// Turborepo leans on Cargo's own build graph instead of re-scheduling it:
 ///
-/// For packages whose toolchain is [`PackageToolchain::Cargo`], the task name
-/// is mapped to a Cargo subcommand (e.g. `build` -> `cargo build`) and run
-/// scoped to the crate via `-p <crate>`.
+/// * **Entrypoint crates** (bin/cdylib/staticlib targets) map `build`/`run`
+///   tasks to `cargo <verb> --package=<crate>`. Cargo builds the crate's
+///   dependency closure internally, in one process, with its own parallelism
+///   and incremental cache.
+/// * The synthetic **workspace package** maps verification verbs to `cargo
+///   <verb> --workspace` (e.g. `cargo#test` -> `cargo test --workspace`).
+/// * **Library crates** never produce commands — Cargo builds them implicitly,
+///   so their tasks are no-ops (like a missing package.json script).
+///
+/// The verb tables live in [`turborepo_repository::cargo`], shared with run
+/// summaries so display can't drift from execution. Pass-through args are
+/// placed after a `--` separator only for verbs that accept one (`test`,
+/// `bench`, `run`, `clippy`); for `build`/`check`/`doc` they are appended
+/// directly as cargo flags.
 #[derive(Debug)]
-pub struct CargoCommandProvider<'a> {
+pub struct CargoCommandProvider<'a, T = PackageGraph> {
     repo_root: &'a AbsoluteSystemPath,
-    package_graph: &'a PackageGraph,
-    cargo_binary: Result<PathBuf, which::Error>,
+    package_info: &'a T,
+    // Resolved lazily so runs without Cargo tasks never pay for a PATH scan.
+    cargo_binary: std::sync::OnceLock<Result<PathBuf, which::Error>>,
     task_args: TaskArgs<'a>,
 }
 
-impl<'a> CargoCommandProvider<'a> {
+impl<'a, T: PackageInfoProvider> CargoCommandProvider<'a, T> {
     pub fn new(
         repo_root: &'a AbsoluteSystemPath,
-        package_graph: &'a PackageGraph,
+        package_info: &'a T,
         task_args: TaskArgs<'a>,
     ) -> Self {
         Self {
             repo_root,
-            package_graph,
-            cargo_binary: which::which("cargo"),
+            package_info,
+            cargo_binary: std::sync::OnceLock::new(),
             task_args,
         }
     }
 }
 
-impl<E: From<CommandProviderError>> CommandProvider<E> for CargoCommandProvider<'_> {
+impl<T: PackageInfoProvider, E: From<CommandProviderError>> CommandProvider<E>
+    for CargoCommandProvider<'_, T>
+{
     fn command(
         &self,
         task_id: &TaskId,
         environment: &EnvironmentVariableMap,
     ) -> Result<Option<Command>, E> {
         let Some(info) = self
-            .package_graph
+            .package_info
             .package_info(&PackageName::from(task_id.package()))
         else {
             return Ok(None);
         };
-        if info.toolchain != PackageToolchain::Cargo {
+        let Some(details) = &info.cargo else {
             return Ok(None);
-        }
-        let Some(subcommand) = cargo_subcommand(task_id.task()) else {
+        };
+        let Some(subcommand) = cargo::task_subcommand(details.kind, task_id.task()) else {
             return Ok(None);
         };
 
-        let cargo = self
+        let cargo_binary = self
             .cargo_binary
+            .get_or_init(|| which::which("cargo"))
             .as_deref()
             .map_err(|e| CommandProviderError::from(*e))?;
 
-        let mut args: Vec<OsString> = vec![
-            OsString::from(subcommand),
-            OsString::from("-p"),
-            OsString::from(task_id.package()),
-        ];
+        let scope = match details.kind {
+            // `--package=<name>` as a single token so a hostile crate name
+            // can never be interpreted as a separate flag.
+            cargo::CargoPackageKind::Entrypoint => format!("--package={}", task_id.package()),
+            cargo::CargoPackageKind::Workspace => "--workspace".to_string(),
+            // Library kinds never map to a subcommand.
+            cargo::CargoPackageKind::Library => return Ok(None),
+        };
+        let mut args: Vec<OsString> = vec![OsString::from(subcommand), OsString::from(scope)];
         if let Some(pass_through_args) = self.task_args.args_for_task(task_id) {
-            args.push(OsString::from("--"));
+            if cargo::pass_through_uses_separator(subcommand) {
+                args.push(OsString::from("--"));
+            }
             args.extend(pass_through_args.iter().map(OsString::from));
         }
 
-        let mut cmd = Command::new(cargo);
+        let mut cmd = Command::new(cargo_binary);
         cmd.args(args);
-        // `-p` scopes the build to the crate, so we run from the workspace root.
+        // Scoping flags select the work, so we always run from the
+        // workspace root.
         cmd.current_dir(self.repo_root.to_owned());
+        // Concurrent cargo processes serialize on Cargo's build-directory
+        // lock anyway (while emitting "Blocking waiting for file lock"
+        // noise), so run them one at a time and let each cargo use all
+        // cores internally. `cargo run` is exempt: the process outlives its
+        // build phase (dev servers etc.) and would starve the group.
+        if subcommand != "run" {
+            cmd.serial_group("cargo");
+        }
         apply_environment(&mut cmd, environment);
         cmd.open_stdin();
 
@@ -664,7 +679,7 @@ mod tests {
             package_json_path: AnchoredSystemPathBuf::from_raw("web/package.json").unwrap(),
             unresolved_external_dependencies: None,
             transitive_dependencies: None,
-            toolchain: Default::default(),
+            ..Default::default()
         }
     }
 
@@ -882,6 +897,182 @@ mod tests {
 
         assert_eq!(program, npm_cmd.into_os_string());
         assert!(args.is_empty());
+    }
+
+    fn cargo_provider_fixture(
+        kind: cargo::CargoPackageKind,
+    ) -> (AbsoluteSystemPathBuf, MockPackageInfoProvider) {
+        use turborepo_repository::package_graph::PackageToolchain;
+
+        let repo_root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let provider = MockPackageInfoProvider {
+            package_info: PackageInfo {
+                package_json_path: AnchoredSystemPathBuf::from_raw(
+                    ["crates", "web", "Cargo.toml"].join(std::path::MAIN_SEPARATOR_STR),
+                )
+                .unwrap(),
+                toolchain: PackageToolchain::Cargo,
+                cargo: Some(cargo::CargoPackageDetails {
+                    kind,
+                    bins: vec!["web".to_string()],
+                }),
+                ..Default::default()
+            },
+            package_manager: PackageManager::Npm,
+        };
+        (repo_root, provider)
+    }
+
+    fn cargo_command(
+        kind: cargo::CargoPackageKind,
+        task: &str,
+        pass_through_args: &[String],
+        tasks: &[String],
+    ) -> Option<Command> {
+        let (repo_root, info_provider) = cargo_provider_fixture(kind);
+        let provider = CargoCommandProvider::new(
+            &repo_root,
+            &info_provider,
+            TaskArgs::new(pass_through_args, tasks),
+        );
+        CommandProvider::<CommandProviderError>::command(
+            &provider,
+            &TaskId::new("web", task),
+            &EnvironmentVariableMap::default(),
+        )
+        .unwrap()
+    }
+
+    fn command_args(cmd: &Command) -> Vec<String> {
+        cmd.args_slice()
+            .iter()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn test_cargo_provider_entrypoint_builds_scoped_to_crate() {
+        let cmd = cargo_command(cargo::CargoPackageKind::Entrypoint, "build", &[], &[])
+            .expect("entrypoint build maps to cargo build");
+        assert_eq!(command_args(&cmd), vec!["build", "--package=web"]);
+    }
+
+    #[test]
+    fn test_cargo_provider_entrypoint_dev_maps_to_run() {
+        let cmd = cargo_command(cargo::CargoPackageKind::Entrypoint, "dev", &[], &[])
+            .expect("dev maps to cargo run for entrypoints");
+        assert_eq!(command_args(&cmd), vec!["run", "--package=web"]);
+    }
+
+    #[test]
+    fn test_cargo_provider_workspace_verbs_run_workspace_scoped() {
+        let cmd = cargo_command(cargo::CargoPackageKind::Workspace, "lint", &[], &[])
+            .expect("lint maps to cargo clippy at workspace scope");
+        assert_eq!(command_args(&cmd), vec!["clippy", "--workspace"]);
+    }
+
+    #[test]
+    fn test_cargo_provider_entrypoint_verification_falls_through() {
+        // Verification verbs run at workspace scope, not per-entrypoint.
+        assert!(cargo_command(cargo::CargoPackageKind::Entrypoint, "test", &[], &[]).is_none());
+        assert!(cargo_command(cargo::CargoPackageKind::Entrypoint, "lint", &[], &[]).is_none());
+    }
+
+    #[test]
+    fn test_cargo_provider_library_tasks_are_noops() {
+        // Cargo builds libraries implicitly as part of an entrypoint's
+        // closure; their tasks never produce commands.
+        for task in ["build", "test", "run", "lint"] {
+            assert!(
+                cargo_command(cargo::CargoPackageKind::Library, task, &[], &[]).is_none(),
+                "library {task} task should be a no-op"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cargo_provider_falls_through_for_unmapped_task() {
+        assert!(cargo_command(cargo::CargoPackageKind::Entrypoint, "deploy", &[], &[]).is_none());
+    }
+
+    #[test]
+    fn test_cargo_provider_falls_through_for_js_package() {
+        let (repo_root, mut info_provider) =
+            cargo_provider_fixture(cargo::CargoPackageKind::Entrypoint);
+        info_provider.package_info.toolchain = Default::default();
+        info_provider.package_info.cargo = None;
+        let provider =
+            CargoCommandProvider::new(&repo_root, &info_provider, TaskArgs::new(&[], &[]));
+        let cmd = CommandProvider::<CommandProviderError>::command(
+            &provider,
+            &TaskId::new("web", "build"),
+            &EnvironmentVariableMap::default(),
+        )
+        .unwrap();
+        assert!(cmd.is_none());
+    }
+
+    #[test]
+    fn test_cargo_provider_falls_through_for_unknown_package() {
+        let (repo_root, info_provider) =
+            cargo_provider_fixture(cargo::CargoPackageKind::Entrypoint);
+        let provider =
+            CargoCommandProvider::new(&repo_root, &info_provider, TaskArgs::new(&[], &[]));
+        let cmd = CommandProvider::<CommandProviderError>::command(
+            &provider,
+            &TaskId::new("unknown", "build"),
+            &EnvironmentVariableMap::default(),
+        )
+        .unwrap();
+        assert!(cmd.is_none());
+    }
+
+    #[test]
+    fn test_cargo_provider_pass_through_args_direct_for_build() {
+        // `cargo build` rejects a `--` separator, so args are cargo flags.
+        let args = vec!["--release".to_string()];
+        let tasks = vec!["build".to_string()];
+        let cmd = cargo_command(cargo::CargoPackageKind::Entrypoint, "build", &args, &tasks)
+            .expect("build maps to build");
+        assert_eq!(
+            command_args(&cmd),
+            vec!["build", "--package=web", "--release"]
+        );
+    }
+
+    #[test]
+    fn test_cargo_provider_serializes_lock_holding_verbs() {
+        // Verbs that hold Cargo's build-directory lock for their whole
+        // lifetime run one at a time.
+        for (kind, task) in [
+            (cargo::CargoPackageKind::Entrypoint, "build"),
+            (cargo::CargoPackageKind::Workspace, "test"),
+            (cargo::CargoPackageKind::Workspace, "lint"),
+        ] {
+            let cmd = cargo_command(kind, task, &[], &[]).expect("maps to a subcommand");
+            assert_eq!(cmd.serial_group_name(), Some("cargo"), "{task}");
+        }
+        // `cargo run` outlives its build phase (dev servers), so it must not
+        // hold the group.
+        for task in ["run", "dev"] {
+            let cmd = cargo_command(cargo::CargoPackageKind::Entrypoint, task, &[], &[])
+                .expect("maps to cargo run");
+            assert_eq!(cmd.serial_group_name(), None, "{task}");
+        }
+    }
+
+    #[test]
+    fn test_cargo_provider_pass_through_args_separated_for_test() {
+        // `cargo test` forwards post-`--` args to the test harness.
+        let args = vec!["--nocapture".to_string()];
+        let tasks = vec!["test".to_string()];
+        let cmd = cargo_command(cargo::CargoPackageKind::Workspace, "test", &args, &tasks)
+            .expect("test maps to test");
+        assert_eq!(
+            command_args(&cmd),
+            vec!["test", "--workspace", "--", "--nocapture"]
+        );
     }
 
     #[tokio::test]

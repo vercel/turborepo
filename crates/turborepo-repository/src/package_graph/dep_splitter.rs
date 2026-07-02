@@ -5,11 +5,16 @@ use turbopath::{
     RelativeUnixPathBuf,
 };
 
-use super::{PackageInfo, PackageName};
+use super::{PackageInfo, PackageName, PackageToolchain};
 use crate::package_manager::pnpm::PnpmCatalogs;
 
 /// Reverse index from package path to package name, built once and shared
 /// across all `DependencySplitter` instances.
+///
+/// Cargo packages are excluded: JS `workspace:`/`file:` path specifiers can
+/// never target a crate, and the synthetic Cargo workspace package lives at
+/// the repo root, which would otherwise collide with the Root package's
+/// path.
 pub struct WorkspacePathIndex<'a>(HashMap<&'a AnchoredSystemPath, &'a PackageName>);
 
 impl<'a> WorkspacePathIndex<'a> {
@@ -17,6 +22,7 @@ impl<'a> WorkspacePathIndex<'a> {
         Self(
             workspaces
                 .iter()
+                .filter(|(_, info)| info.toolchain != PackageToolchain::Cargo)
                 .map(|(name, info)| (info.package_path(), name))
                 .collect(),
         )
@@ -331,7 +337,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
-                    toolchain: Default::default(),
+                    ..Default::default()
                 },
             );
             map.insert(
@@ -347,7 +353,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
-                    toolchain: Default::default(),
+                    ..Default::default()
                 },
             );
             map.insert(
@@ -363,7 +369,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
-                    toolchain: Default::default(),
+                    ..Default::default()
                 },
             );
             map.insert(
@@ -379,7 +385,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
-                    toolchain: Default::default(),
+                    ..Default::default()
                 },
             );
             map
@@ -471,7 +477,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
-                    toolchain: Default::default(),
+                    ..Default::default()
                 },
             );
             map
@@ -516,7 +522,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
-                    toolchain: Default::default(),
+                    ..Default::default()
                 },
             );
             map
@@ -561,7 +567,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
-                    toolchain: Default::default(),
+                    ..Default::default()
                 },
             );
             map
@@ -631,7 +637,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
-                    toolchain: Default::default(),
+                    ..Default::default()
                 },
             );
             map
@@ -673,7 +679,7 @@ mod test {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
-                    toolchain: Default::default(),
+                    ..Default::default()
                 },
             );
             map

@@ -880,7 +880,7 @@ mod tests {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
-                    toolchain: Default::default(),
+                    ..Default::default()
                 },
             ),
             (
@@ -893,7 +893,7 @@ mod tests {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
-                    toolchain: Default::default(),
+                    ..Default::default()
                 },
             ),
         ];

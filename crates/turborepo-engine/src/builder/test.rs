@@ -272,6 +272,7 @@ fn task_names(tasks: &[Spanned<TaskName<'static>>]) -> Vec<String> {
         .collect()
 }
 
+mod cargo;
 mod core;
 mod extends;
 mod inheritance;

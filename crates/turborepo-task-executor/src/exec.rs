@@ -8,7 +8,9 @@
 //! - Result types (`ExecOutcome`, `SuccessOutcome`, `InternalError`)
 
 use std::{
+    collections::HashMap,
     io::Write,
+    sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
@@ -27,6 +29,18 @@ use turborepo_types::{ContinueMode, StopExecution, UIMode};
 use turborepo_ui::ColorConfig;
 
 use crate::{TaskAccessProvider, TaskOutput};
+
+/// Per-group mutexes for commands marked with a serial group (see
+/// [`Command::serial_group`]). At most one command per group runs at a time,
+/// process-wide.
+fn serial_group_lock(group: &str) -> Arc<tokio::sync::Mutex<()>> {
+    static GROUPS: OnceLock<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> = OnceLock::new();
+    let mut groups = GROUPS
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    groups.entry(group.to_string()).or_default().clone()
+}
 
 /// Windows NT status codes that indicate out-of-memory conditions.
 /// These are the signed i32 representations of the unsigned NT status codes.
@@ -406,6 +420,15 @@ where
                 ));
             }
         }
+
+        // Commands in a serial group run one at a time: their tools hold
+        // global locks (e.g. Cargo's build directory), so concurrent
+        // processes can't make progress and just emit "waiting for file
+        // lock" noise. The guard is held until the process exits.
+        let _serial_group_guard = match self.cmd.serial_group_name() {
+            Some(group) => Some(serial_group_lock(group).lock_owned().await),
+            None => None,
+        };
 
         // Spawn the process
         let cmd = self.cmd.clone();

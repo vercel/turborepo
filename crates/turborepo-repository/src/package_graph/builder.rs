@@ -6,15 +6,15 @@ use tracing::{Instrument, warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
-use turborepo_lockfiles::Lockfile;
-
 use turborepo_errors::Spanned;
+use turborepo_lockfiles::Lockfile;
 
 use super::{
     PackageGraph, PackageInfo, PackageName, PackageNode, PackageToolchain,
     dep_splitter::{DependencySplitter, WorkspacePathIndex},
 };
 use crate::{
+    cargo,
     discovery::{
         self, CachingPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscovery,
         PackageDiscoveryBuilder,
@@ -61,6 +61,8 @@ pub enum Error {
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error(transparent)]
     Discovery(#[from] crate::discovery::Error),
+    #[error(transparent)]
+    Cargo(#[from] crate::cargo::Error),
 }
 
 /// Attempts to extract the file path that caused the error from the error chain
@@ -240,10 +242,8 @@ where
 {
     fn new(
         builder: PackageGraphBuilder<'a, T>,
-    ) -> Result<
-        BuildState<'a, ResolvedPackageManager, CachingPackageDiscovery<T::Output>>,
-        crate::package_manager::Error,
-    > {
+    ) -> Result<BuildState<'a, ResolvedPackageManager, CachingPackageDiscovery<T::Output>>, Error>
+    {
         let PackageGraphBuilder {
             repo_root,
             root_package_json,
@@ -276,37 +276,93 @@ where
 
         // Discover Rust crates from a Cargo workspace and add them as packages.
         // Their internal dependencies are expressed as `workspace:*` specifiers
-        // so the existing dependency splitter wires crate->crate edges, and the
-        // toolchain marker lets the executor run `cargo` instead of a package
-        // manager script. JS package discovery (parse_package_jsons) runs after
-        // this and will error on any name collision with a crate.
-        if cargo {
-            for cargo_crate in crate::cargo::discover_crates(repo_root) {
-                let name = PackageName::Other(cargo_crate.name.clone());
-                let manifest_path =
-                    AnchoredSystemPathBuf::relative_path_between(repo_root, &cargo_crate.manifest_path);
+        // so the existing dependency splitter wires crate->crate edges
+        // (powering `--filter`/`--affected`), and the Cargo details drive
+        // command resolution: entrypoint crates run
+        // `cargo build --package=<crate>`, library crates are no-ops (Cargo
+        // builds them implicitly as part of an entrypoint's closure), and a
+        // synthetic workspace package hosts workspace-scoped verification
+        // verbs like `cargo test --workspace`. Discovery only returns
+        // dependencies on other discovered crates, so every synthesized
+        // specifier resolves internally and Cargo edges never leak into the
+        // JS lockfile's unresolved externals. JS package discovery
+        // (parse_package_jsons) runs after this and will error on any name
+        // collision with a crate.
+        //
+        // Discovery spawns `cargo metadata` synchronously, so keep it off the
+        // async runtime like the package.json parsing path.
+        if cargo && !single {
+            let crates = turborepo_rayon_compat::block_in_place(|| {
+                crate::cargo::discover_crates(repo_root)
+            })?;
+            let mut crate_names = Vec::with_capacity(crates.len());
+            for cargo_crate in crates {
+                let manifest_path = AnchoredSystemPathBuf::relative_path_between(
+                    repo_root,
+                    &cargo_crate.manifest_path,
+                );
                 let dependencies = cargo_crate
                     .internal_dependencies
                     .iter()
                     .map(|dep| (dep.clone(), "workspace:*".to_string()))
                     .collect();
-                let package_json = PackageJson {
-                    name: Some(Spanned::new(cargo_crate.name.clone())),
-                    dependencies: Some(dependencies),
-                    ..Default::default()
-                };
                 let info = PackageInfo {
-                    package_json,
+                    package_json: PackageJson {
+                        name: Some(Spanned::new(cargo_crate.name.clone())),
+                        dependencies: Some(dependencies),
+                        ..Default::default()
+                    },
                     package_json_path: manifest_path,
                     toolchain: PackageToolchain::Cargo,
+                    cargo: Some(cargo::CargoPackageDetails {
+                        kind: if cargo_crate.entrypoint {
+                            cargo::CargoPackageKind::Entrypoint
+                        } else {
+                            cargo::CargoPackageKind::Library
+                        },
+                        bins: cargo_crate.bins,
+                    }),
                     ..Default::default()
                 };
-                if workspaces.insert(name.clone(), info).is_some() {
-                    tracing::warn!("duplicate Cargo crate name {name}, ignoring later definition");
-                    continue;
-                }
-                let idx = workspace_graph.add_node(PackageNode::Workspace(name.clone()));
-                node_lookup.insert(PackageNode::Workspace(name), idx);
+                crate_names.push(cargo_crate.name.clone());
+                insert_cargo_package(
+                    cargo_crate.name,
+                    info,
+                    &mut workspaces,
+                    &mut workspace_graph,
+                    &mut node_lookup,
+                )?;
+            }
+            // Synthetic workspace package hosting workspace-scoped verbs
+            // (`cargo#test` -> `cargo test --workspace`). It depends on every
+            // crate so `--affected` and dependent-filters propagate crate
+            // changes to it.
+            if !crate_names.is_empty() {
+                let dependencies = crate_names
+                    .iter()
+                    .map(|name| (name.clone(), "workspace:*".to_string()))
+                    .collect();
+                let info = PackageInfo {
+                    package_json: PackageJson {
+                        name: Some(Spanned::new(cargo::WORKSPACE_PACKAGE_NAME.to_string())),
+                        dependencies: Some(dependencies),
+                        ..Default::default()
+                    },
+                    package_json_path: AnchoredSystemPathBuf::from_raw(cargo::CARGO_TOML)?,
+                    toolchain: PackageToolchain::Cargo,
+                    cargo: Some(cargo::CargoPackageDetails {
+                        kind: cargo::CargoPackageKind::Workspace,
+                        bins: Vec::new(),
+                    }),
+                    ..Default::default()
+                };
+                insert_cargo_package(
+                    cargo::WORKSPACE_PACKAGE_NAME.to_string(),
+                    info,
+                    &mut workspaces,
+                    &mut workspace_graph,
+                    &mut node_lookup,
+                )?;
             }
         }
 
@@ -715,6 +771,32 @@ impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
             repo_root: repo_root.to_owned(),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
         })
+    }
+}
+
+/// Insert a Cargo-toolchain package into the build state, hard-erroring on
+/// name collisions (duplicate names are invalid in Cargo; fail loudly like
+/// JS package collisions do).
+fn insert_cargo_package(
+    name: String,
+    info: PackageInfo,
+    workspaces: &mut HashMap<PackageName, PackageInfo>,
+    workspace_graph: &mut Graph<PackageNode, ()>,
+    node_lookup: &mut HashMap<PackageNode, NodeIndex>,
+) -> Result<(), Error> {
+    match workspaces.entry(PackageName::Other(name)) {
+        std::collections::hash_map::Entry::Vacant(vacant) => {
+            let name = vacant.key().clone();
+            vacant.insert(info);
+            let idx = workspace_graph.add_node(PackageNode::Workspace(name.clone()));
+            node_lookup.insert(PackageNode::Workspace(name), idx);
+            Ok(())
+        }
+        std::collections::hash_map::Entry::Occupied(occupied) => Err(Error::DuplicateWorkspace {
+            name: occupied.key().to_string(),
+            path: info.package_json_path.to_string(),
+            existing_path: occupied.get().package_json_path.to_string(),
+        }),
     }
 }
 
@@ -1342,6 +1424,205 @@ mod test {
             map
         }));
         assert_matches!(builder.build().await, Err(Error::DuplicateWorkspace { .. }));
+    }
+
+    fn write_cargo_fixture(root: &AbsoluteSystemPathBuf, files: &[(&[&str], &str)]) {
+        for (rel, contents) in files {
+            let path = root.join_components(rel);
+            std::fs::create_dir_all(path.parent().unwrap().as_std_path()).unwrap();
+            std::fs::write(path.as_std_path(), contents).unwrap();
+        }
+    }
+
+    /// A small workspace with a bin entrypoint (`app`) depending on a library
+    /// crate (`lib-a`). Manifests must be valid for `cargo metadata`.
+    fn write_cargo_workspace(root: &AbsoluteSystemPathBuf) {
+        write_cargo_fixture(
+            root,
+            &[
+                (
+                    &["Cargo.toml"],
+                    "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n",
+                ),
+                (
+                    &["crates", "lib-a", "Cargo.toml"],
+                    "[package]\nname = \"lib-a\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+                ),
+                (&["crates", "lib-a", "src", "lib.rs"], ""),
+                (
+                    &["crates", "app", "Cargo.toml"],
+                    "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \
+                     \"2021\"\n\n[dependencies]\nlib-a = { path = \"../lib-a\" }\n",
+                ),
+                (&["crates", "app", "src", "main.rs"], "fn main() {}\n"),
+            ],
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cargo_crates_added_to_graph_with_edges() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        write_cargo_workspace(&root);
+
+        let graph = PackageGraphBuilder::new(
+            &root,
+            PackageJson {
+                name: Some(Spanned::new("root".into())),
+                ..Default::default()
+            },
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(HashMap::new()))
+        .with_cargo(true)
+        .build()
+        .await
+        .unwrap();
+
+        let app = PackageName::from("app");
+        let lib_a = PackageName::from("lib-a");
+        let app_info = graph.package_info(&app).expect("app should be a package");
+        assert_eq!(app_info.toolchain, PackageToolchain::Cargo);
+        assert!(
+            app_info.package_json_path.as_str().ends_with("Cargo.toml"),
+            "crate manifest path should be its Cargo.toml"
+        );
+        let app_details = app_info.cargo.as_ref().expect("cargo details");
+        assert_eq!(app_details.kind, crate::cargo::CargoPackageKind::Entrypoint);
+        assert_eq!(app_details.bins, vec!["app".to_string()]);
+
+        let lib_info = graph
+            .package_info(&lib_a)
+            .expect("lib-a should be a package");
+        assert_eq!(
+            lib_info.cargo.as_ref().map(|details| details.kind),
+            Some(crate::cargo::CargoPackageKind::Library)
+        );
+
+        let app_deps = graph
+            .immediate_dependencies(&PackageNode::Workspace(app.clone()))
+            .unwrap();
+        assert!(
+            app_deps.contains(&PackageNode::Workspace(lib_a.clone())),
+            "app should depend on lib-a, got: {app_deps:?}"
+        );
+
+        // The synthetic workspace package hosts workspace-scoped verbs and
+        // depends on every crate so affected/filtering propagate to it.
+        let workspace_pkg = PackageName::from(crate::cargo::WORKSPACE_PACKAGE_NAME);
+        let workspace_info = graph
+            .package_info(&workspace_pkg)
+            .expect("synthetic cargo workspace package should exist");
+        assert_eq!(
+            workspace_info.cargo.as_ref().map(|details| details.kind),
+            Some(crate::cargo::CargoPackageKind::Workspace)
+        );
+        let workspace_deps = graph
+            .immediate_dependencies(&PackageNode::Workspace(workspace_pkg.clone()))
+            .unwrap();
+        assert!(
+            workspace_deps.contains(&PackageNode::Workspace(app.clone()))
+                && workspace_deps.contains(&PackageNode::Workspace(lib_a.clone())),
+            "workspace package should depend on all crates, got: {workspace_deps:?}"
+        );
+
+        // Cargo crates must not leak dependencies into the JS lockfile's
+        // unresolved externals: their edges resolve internally by
+        // construction, and registry deps are invalidated via the Cargo.lock
+        // hash input instead.
+        let app_external = app_info.unresolved_external_dependencies.as_ref().unwrap();
+        assert!(
+            app_external.is_empty(),
+            "cargo crates should have no unresolved externals, got: {app_external:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_duplicate_cargo_crate_names_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        write_cargo_fixture(
+            &root,
+            &[
+                (
+                    &["Cargo.toml"],
+                    "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n",
+                ),
+                (
+                    &["crates", "a", "Cargo.toml"],
+                    "[package]\nname = \"dup\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+                ),
+                (&["crates", "a", "src", "lib.rs"], ""),
+                (
+                    &["crates", "b", "Cargo.toml"],
+                    "[package]\nname = \"dup\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+                ),
+                (&["crates", "b", "src", "lib.rs"], ""),
+            ],
+        );
+
+        let result = PackageGraphBuilder::new(
+            &root,
+            PackageJson {
+                name: Some(Spanned::new("root".into())),
+                ..Default::default()
+            },
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(HashMap::new()))
+        .with_cargo(true)
+        .build()
+        .await;
+        // Cargo itself rejects duplicate crate names within a workspace, so
+        // this surfaces as a discovery (metadata) error.
+        assert_matches!(
+            result,
+            Err(Error::Cargo(_) | Error::DuplicateWorkspace { .. })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cargo_crate_and_js_package_name_collision_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        write_cargo_fixture(
+            &root,
+            &[
+                (
+                    &["Cargo.toml"],
+                    "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n",
+                ),
+                (
+                    &["crates", "shared", "Cargo.toml"],
+                    "[package]\nname = \"shared\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+                ),
+                (&["crates", "shared", "src", "lib.rs"], ""),
+            ],
+        );
+
+        let result = PackageGraphBuilder::new(
+            &root,
+            PackageJson {
+                name: Some(Spanned::new("root".into())),
+                ..Default::default()
+            },
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut map = HashMap::new();
+            map.insert(
+                root.join_components(&["packages", "shared", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("shared".into())),
+                    ..Default::default()
+                },
+            );
+            map
+        }))
+        .with_cargo(true)
+        .build()
+        .await;
+        assert_matches!(result, Err(Error::DuplicateWorkspace { .. }));
     }
 
     #[test]

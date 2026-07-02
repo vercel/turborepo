@@ -67,15 +67,16 @@ impl WorkspacePackage {
     }
 }
 
-/// The language toolchain a package belongs to.
+/// The manifest ecosystem a package belongs to.
 ///
-/// Packages discovered from a `package.json` are [`PackageToolchain::Node`];
-/// crates discovered from a Cargo workspace are [`PackageToolchain::Cargo`].
-/// This drives how a task's command is resolved during execution.
+/// Packages discovered from a `package.json` (regardless of runtime or
+/// package manager) are [`PackageToolchain::JavaScript`]; crates discovered
+/// from a Cargo workspace are [`PackageToolchain::Cargo`]. This drives how a
+/// task's command is resolved during execution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PackageToolchain {
     #[default]
-    Node,
+    JavaScript,
     Cargo,
 }
 
@@ -83,11 +84,18 @@ pub enum PackageToolchain {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PackageInfo {
     pub package_json: PackageJson,
+    /// Path to the package's manifest, anchored to the repo root. For
+    /// JavaScript packages this is a `package.json`; for Cargo crates it is
+    /// the crate's `Cargo.toml` (and `package_json` is synthesized — only its
+    /// `name` and `dependencies` fields are meaningful).
     pub package_json_path: AnchoredSystemPathBuf,
     pub unresolved_external_dependencies: Option<BTreeMap<PackageKey, PackageVersion>>, /* name -> version */
     pub transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
-    /// The language toolchain this package belongs to.
+    /// The manifest ecosystem this package belongs to.
     pub toolchain: PackageToolchain,
+    /// Cargo-specific details, present iff `toolchain` is
+    /// [`PackageToolchain::Cargo`].
+    pub cargo: Option<crate::cargo::CargoPackageDetails>,
 }
 
 impl PackageInfo {

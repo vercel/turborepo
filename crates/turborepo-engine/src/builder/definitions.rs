@@ -2,7 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use miette::{NamedSource, SourceSpan};
 use turborepo_errors::Spanned;
-use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageToolchain};
+use turborepo_repository::{
+    cargo,
+    package_graph::{PackageGraph, PackageName, PackageNode, PackageToolchain},
+};
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{
     HasConfigBeyondExtends, ProcessedTaskDefinition, RawTaskDefinition, TurboJson,
@@ -15,51 +18,18 @@ use crate::{
     MissingTurboJsonExtends, TaskDefinitionFromProcessed, TaskDefinitionResult, TurboJsonLoader,
 };
 
-/// Output globs for a Cargo crate's `build` artifacts in the shared workspace
-/// `target/debug` directory, expressed relative to the crate directory via
-/// `prefix` (the path from the crate to the repo root, e.g. `../..`).
-///
-/// Exact filenames are used (rather than prefix wildcards) so artifacts of
-/// crates with overlapping name prefixes aren't captured. This covers library
-/// crates and the default binary; less common targets (examples, custom bin
-/// names) are simply not cached.
-/// Input globs whose changes should invalidate a Cargo crate's cache: the
-/// workspace lockfile and pinned toolchain files, expressed relative to the
-/// crate directory via `prefix`. Globs that don't match anything (e.g. a
-/// missing `rust-toolchain` file) simply contribute nothing.
-fn cargo_hash_input_globs(prefix: &str) -> Vec<String> {
-    let join = |rel: &str| {
-        if prefix.is_empty() {
-            rel.to_string()
-        } else {
-            format!("{prefix}/{rel}")
-        }
+/// Input globs covering a Cargo crate's sources, with Turborepo's own task
+/// log directory excluded. Explicit input globs hash the filesystem (unlike
+/// default hashing, which is git-index based), so without the exclusion the
+/// `.turbo/turbo-<task>.log` written by each run would invalidate the next
+/// run's hash.
+fn crate_source_globs(prefix: &str, crate_path: &str) -> [String; 2] {
+    let base = if prefix.is_empty() {
+        crate_path.to_string()
+    } else {
+        format!("{prefix}/{crate_path}")
     };
-    vec![
-        join("Cargo.lock"),
-        join("rust-toolchain.toml"),
-        join("rust-toolchain"),
-    ]
-}
-
-fn cargo_build_output_globs(prefix: &str, crate_name: &str) -> Vec<String> {
-    let join = |rel: String| {
-        if prefix.is_empty() {
-            rel
-        } else {
-            format!("{prefix}/{rel}")
-        }
-    };
-    let lib = crate_name.replace('-', "_");
-    vec![
-        join(format!("target/debug/lib{lib}.rlib")),
-        join(format!("target/debug/lib{lib}.rmeta")),
-        join(format!("target/debug/lib{lib}.so")),
-        join(format!("target/debug/lib{lib}.dylib")),
-        join(format!("target/debug/lib{lib}.dll")),
-        join(format!("target/debug/{crate_name}")),
-        join(format!("target/debug/{crate_name}.exe")),
-    ]
+    [format!("{base}/**"), format!("!{base}/.turbo/**")]
 }
 
 impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
@@ -234,19 +204,34 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             task_def.incremental = None;
         }
 
-        // Only prepend global inputs to tasks whose package actually has a
-        // script for this task. Phantom/transit tasks (packages without a
-        // matching script that exist solely for dependency ordering via
-        // `dependsOn: ["^task"]`) should not hash global input files — they
-        // don't execute, and including the files would cause their hash to
-        // change and cascade into downstream tasks that depend on them.
-        let package_has_script = self
+        let task_id_inner = task_id.as_inner();
+        let package_info = self
             .package_graph
-            .package_json(&PackageName::from(task_id.package()))
-            .and_then(|pj| pj.scripts.get(task_id.task()))
+            .package_info(&PackageName::from(task_id_inner.package()));
+
+        let cargo_details = package_info
+            .filter(|info| info.toolchain == PackageToolchain::Cargo)
+            .and_then(|info| info.cargo.as_ref());
+        // A Cargo task "has a script" when its task name maps to a Cargo
+        // subcommand for the package's kind: `build`/`run` for entrypoint
+        // crates, verification verbs for the workspace package, and nothing
+        // for library crates (Cargo builds those implicitly as part of an
+        // entrypoint's closure).
+        let cargo_subcommand = cargo_details
+            .and_then(|details| cargo::task_subcommand(details.kind, task_id_inner.task()));
+
+        // Only prepend global inputs to tasks that actually execute (a
+        // matching package.json script, or a Cargo verb for this package).
+        // Phantom/transit tasks (packages without a matching script that
+        // exist solely for dependency ordering via `dependsOn: ["^task"]`)
+        // should not hash global input files — they don't execute, and
+        // including the files would cause their hash to change and cascade
+        // into downstream tasks that depend on them.
+        let package_has_script = package_info
+            .and_then(|info| info.package_json.scripts.get(task_id_inner.task()))
             .is_some_and(|script| !script.is_empty());
 
-        if !self.global_deps.is_empty() && package_has_script {
+        if !self.global_deps.is_empty() && (package_has_script || cargo_subcommand.is_some()) {
             crate::task_definition::prepend_global_inputs(
                 &mut task_def.inputs,
                 had_explicit_inputs,
@@ -255,31 +240,112 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             );
         }
 
-        // Cargo crates need extra hashing/caching wiring relative to the crate
-        // directory (path_to_root, which globwalk collapses):
-        // - Hash the root Cargo.lock and pinned rust-toolchain files so a
-        //   dependency or toolchain change invalidates the cache. `default` is
-        //   kept true so the crate's own source files are still hashed.
-        // - For `build`, register the artifacts cargo writes into the shared
-        //   workspace `target/` dir as outputs so turbo can cache/restore them.
-        let task_id_inner = task_id.as_inner();
-        if self
-            .package_graph
-            .package_info(&PackageName::from(task_id_inner.package()))
-            .is_some_and(|info| info.toolchain == PackageToolchain::Cargo)
+        // Cargo tasks that will execute get hashing wiring: the workspace
+        // lockfile/manifest, Cargo config, and pinned rust-toolchain files
+        // are hashed (dependency, profile, or toolchain changes invalidate
+        // the cache), along with the env vars that change what Cargo builds.
+        // Explicit user `inputs` are respected.
+        if let Some(details) = cargo_details
+            && let Some(subcommand) = cargo_subcommand
         {
             let prefix = path_to_root.as_str();
-            task_def.inputs.default = true;
-            task_def.inputs.globs.extend(cargo_hash_input_globs(prefix));
-            if task_id_inner.task() == "build" {
-                task_def
-                    .outputs
-                    .inclusions
-                    .extend(cargo_build_output_globs(prefix, task_id_inner.package()));
+            task_def
+                .inputs
+                .globs
+                .extend(cargo::hash_input_globs(prefix));
+            for var in cargo::HASHED_ENV_VARS {
+                if !task_def.env.iter().any(|existing| existing == var) {
+                    task_def.env.push(var.to_string());
+                }
+            }
+            task_def.env.sort();
+
+            match details.kind {
+                // An entrypoint build compiles its whole dependency closure
+                // in one cargo process, so the closure's sources are
+                // flattened into this task's inputs — invalidation must not
+                // depend on users wiring up `dependsOn` between crates. The
+                // crate's bin artifacts are the deliverables and the only
+                // target/ contents worth caching; Cargo's internal target/
+                // state is its own incremental cache and is left alone.
+                cargo::CargoPackageKind::Entrypoint => {
+                    if !had_explicit_inputs {
+                        task_def.inputs.default = true;
+                        task_def
+                            .inputs
+                            .globs
+                            .extend(self.cargo_dependency_globs(task_id_inner.package(), prefix));
+                    }
+                    if subcommand == "build" {
+                        task_def
+                            .outputs
+                            .inclusions
+                            .extend(cargo::bin_output_globs(prefix, &details.bins));
+                    }
+                }
+                // The workspace package's directory is the repo root, so
+                // default hashing would pull in the entire repository
+                // (including JS packages). Hash the crate directories
+                // instead.
+                cargo::CargoPackageKind::Workspace => {
+                    if !had_explicit_inputs {
+                        task_def.inputs.default = false;
+                        task_def.inputs.globs.extend(self.cargo_crate_globs());
+                    }
+                }
+                // Library tasks never map to a subcommand, so this branch is
+                // unreachable while `cargo_subcommand` is `Some`.
+                cargo::CargoPackageKind::Library => {}
             }
         }
 
         Ok(task_def)
+    }
+
+    /// Source globs for a Cargo entrypoint crate's transitive internal
+    /// dependencies, relative to the entrypoint's directory via `prefix`.
+    /// Cargo compiles these sources as part of the entrypoint's task, so
+    /// they participate in its hash.
+    fn cargo_dependency_globs(&self, package: &str, prefix: &str) -> Vec<String> {
+        let node = PackageNode::Workspace(PackageName::from(package));
+        let mut globs: Vec<String> =
+            self.package_graph
+                .dependencies(&node)
+                .into_iter()
+                .filter_map(|dep| match dep {
+                    PackageNode::Workspace(name) => self.package_graph.package_info(name),
+                    _ => None,
+                })
+                .filter(|info| {
+                    info.toolchain == PackageToolchain::Cargo
+                        && info.cargo.as_ref().is_some_and(|details| {
+                            details.kind != cargo::CargoPackageKind::Workspace
+                        })
+                })
+                .flat_map(|info| crate_source_globs(prefix, info.package_path().to_unix().as_str()))
+                .collect();
+        globs.sort();
+        globs
+    }
+
+    /// Source globs for every Cargo crate, relative to the repo root (the
+    /// synthetic workspace package's directory). Used to hash the workspace
+    /// package's tasks without pulling the whole repository into the hash.
+    fn cargo_crate_globs(&self) -> Vec<String> {
+        let mut globs: Vec<String> = self
+            .package_graph
+            .packages()
+            .filter(|(_, info)| {
+                info.toolchain == PackageToolchain::Cargo
+                    && info
+                        .cargo
+                        .as_ref()
+                        .is_some_and(|details| details.kind != cargo::CargoPackageKind::Workspace)
+            })
+            .flat_map(|(_, info)| crate_source_globs("", info.package_path().to_unix().as_str()))
+            .collect();
+        globs.sort();
+        globs
     }
 
     /// Like `task_definition_chain` but caches the turbo.json chain per

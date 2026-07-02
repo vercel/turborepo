@@ -477,15 +477,10 @@ impl RunBuilder {
         }
 
         let mut pkg_dep_graph = {
-            // Experimental: discover Rust crates from a Cargo workspace at the
-            // repo root and run their tasks via `cargo`. Off by default so
-            // JS-only repos are unaffected.
-            let cargo_enabled = std::env::var("TURBO_EXPERIMENTAL_CARGO")
-                .is_ok_and(|v| !v.is_empty() && v != "0" && v != "false");
             let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.opts.run_opts.single_package)
                 .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager)
-                .with_cargo(cargo_enabled);
+                .with_cargo(experimental_cargo_enabled());
 
             let graph = builder
                 .build()
@@ -1067,6 +1062,28 @@ impl RunBuilder {
     }
 }
 
+/// Whether experimental Cargo package support is enabled.
+///
+/// Deliberately read straight from the environment rather than through
+/// `ConfigurationOptions` while this remains an experiment: the flag should
+/// be trivially greppable and removable, and not become part of the public
+/// configuration surface until the feature's caching semantics are settled.
+/// Route it through the configuration funnel before stabilizing.
+pub(crate) fn experimental_cargo_enabled() -> bool {
+    env_flag_enabled(std::env::var("TURBO_EXPERIMENTAL_CARGO").ok().as_deref())
+}
+
+/// Standard truthiness for turbo boolean env flags: set, non-empty, and not
+/// a case-insensitive "0"/"false"/"off"/"no".
+fn env_flag_enabled(value: Option<&str>) -> bool {
+    value.is_some_and(|value| {
+        !value.is_empty()
+            && !["0", "false", "off", "no"]
+                .iter()
+                .any(|falsy| value.eq_ignore_ascii_case(falsy))
+    })
+}
+
 fn origins_match(url1: &str, url2: &str) -> bool {
     let (Ok(url1), Ok(url2)) = (Url::parse(url1), Url::parse(url2)) else {
         return false;
@@ -1081,6 +1098,35 @@ fn origins_match(url1: &str, url2: &str) -> bool {
 
 fn has_userinfo(url: &Url) -> bool {
     !url.username().is_empty() || url.password().is_some()
+}
+
+#[cfg(test)]
+mod env_flag_tests {
+    use super::env_flag_enabled;
+
+    #[test]
+    fn test_env_flag_truthiness() {
+        for falsy in [
+            None,
+            Some(""),
+            Some("0"),
+            Some("false"),
+            Some("FALSE"),
+            Some("off"),
+            Some("No"),
+        ] {
+            assert!(!env_flag_enabled(falsy), "{falsy:?} should be disabled");
+        }
+        for truthy in [
+            Some("1"),
+            Some("true"),
+            Some("TRUE"),
+            Some("on"),
+            Some("anything"),
+        ] {
+            assert!(env_flag_enabled(truthy), "{truthy:?} should be enabled");
+        }
+    }
 }
 
 #[cfg(test)]

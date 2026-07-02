@@ -371,15 +371,24 @@ impl GitRepo {
             let mut literal_to_hash = Vec::new();
             let mut glob_buf = String::with_capacity(package_unix_path.len() + 1 + 64);
 
+            // Exclusions must apply to the filesystem walk itself, not just
+            // the in-memory filter below: the walk can discover files the
+            // in-memory filter misses (its raw patterns don't collapse `..`
+            // segments, so cross-package exclusions like
+            // `!../../crates/dep/.turbo/**` only match here, where
+            // `ValidatedGlob` normalizes the joined path).
+            for exclude in &excludes {
+                glob_buf.clear();
+                glob_buf.push_str(package_unix_path);
+                glob_buf.push('/');
+                glob_buf.push_str(exclude.trim_start_matches('/'));
+                glob_exclusions.push(ValidatedGlob::from_str(&glob_buf)?);
+            }
+
             let all = includes.iter().copied().chain(CONFIG_FILES.iter().copied());
             for raw_glob in all {
                 glob_buf.clear();
-                if let Some(exclusion) = raw_glob.strip_prefix('!') {
-                    glob_buf.push_str(package_unix_path);
-                    glob_buf.push('/');
-                    glob_buf.push_str(exclusion.trim_start_matches('/'));
-                    glob_exclusions.push(ValidatedGlob::from_str(&glob_buf)?);
-                } else if !globwalk::is_glob_pattern(raw_glob) {
+                if !globwalk::is_glob_pattern(raw_glob) {
                     // Literal file path — resolve directly via stat instead of
                     // compiling a glob and walking directories.
                     let resolved =
@@ -955,6 +964,69 @@ mod tests {
                 OidHash::from_hex_str(hash),
             )
         }))
+    }
+
+    /// Regression test for cross-package input globs with exclusions, as
+    /// generated for Cargo entrypoint tasks: a crate task hashes a sibling
+    /// dependency crate's sources via `../../crates/<dep>/**` but must not
+    /// hash the gitignored `.turbo` log directory, which is excluded via
+    /// `!../../crates/<dep>/.turbo/**`. Without the exclusion taking effect,
+    /// every run's log write would invalidate the next run's hash.
+    #[test]
+    fn test_cross_package_input_glob_exclusions() -> Result<(), Error> {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        let app_dir = repo_root.join_components(&["crates", "app"]);
+        let lib_dir = repo_root.join_components(&["crates", "lib"]);
+        app_dir.create_dir_all()?;
+        lib_dir.create_dir_all()?;
+
+        repo_root
+            .join_component(".gitignore")
+            .create_with_contents(".turbo\n")?;
+        app_dir
+            .join_component("committed-file")
+            .create_with_contents("committed bytes")?;
+        let lib_src = lib_dir.join_components(&["src", "lib.rs"]);
+        lib_src.ensure_dir()?;
+        lib_src.create_with_contents("committed bytes")?;
+
+        setup_repository(&repo_root);
+        commit_all(&repo_root);
+
+        // Simulate a prior run's task log in the dependency crate.
+        let lib_log = lib_dir.join_components(&[".turbo", "turbo-build.log"]);
+        lib_log.ensure_dir()?;
+        lib_log.create_with_contents("cache miss, executing abc123")?;
+
+        let SCM::Git(git) = SCM::new(&repo_root) else {
+            panic!("expected git SCM");
+        };
+        let package_path =
+            AnchoredSystemPathBuf::from_raw(["crates", "app"].join(std::path::MAIN_SEPARATOR_STR))?;
+
+        let hashes = git.get_package_file_hashes(
+            &repo_root,
+            &package_path,
+            &["../../crates/lib/**", "!../../crates/lib/.turbo/**"],
+            true,
+            None,
+        )?;
+
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("committed-file").unwrap()),
+            "default hashing should cover the package's own files, got {hashes:?}"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("../lib/src/lib.rs").unwrap()),
+            "dependency crate sources should be hashed, got {hashes:?}"
+        );
+        assert!(
+            !hashes
+                .keys()
+                .any(|key| key.as_str().contains("turbo-build.log")),
+            "excluded .turbo logs must not be hashed, got {hashes:?}"
+        );
+        Ok(())
     }
 
     /// Regression test: for LF-only files, the git path and manual path must

@@ -1,43 +1,224 @@
-//! Parsing of Cargo manifests (`Cargo.toml`).
+//! Cargo workspace discovery and Turborepo's knowledge of Cargo.
 //!
-//! This is the foundational building block for treating Rust crates as
-//! Turborepo packages. It deliberately knows nothing about the existing
-//! [`crate::package_manager::PackageManager`] / [`crate::package_json`]
-//! machinery — wiring Cargo crates into package discovery and the package
-//! graph happens in later iterations. For now this module just turns a
-//! `Cargo.toml` on disk into the three things downstream code needs:
+//! Turborepo does not replace Cargo — Cargo is itself a build system with
+//! its own dependency graph, scheduler, and incremental cache. Turborepo's
+//! job is orchestration: decide *which* crates are in scope and *whether*
+//! anything changed, then hand the work to a single `cargo` invocation and
+//! get out of the way.
 //!
-//! * the crate's package name (if it is a package),
-//! * the workspace member/exclude globs (if it is a workspace root),
-//! * its internal (path-based) dependencies on other crates.
+//! Discovery shells out to `cargo metadata`, because Cargo is the only
+//! correct implementation of its own workspace-membership semantics (member
+//! globs, automatic path-dependency members, excludes, target-specific
+//! dependency tables, renames). Crates are classified into two shapes:
+//!
+//! * **Entrypoints** — crates with `bin`/`cdylib`/`staticlib` targets: the
+//!   deliverables of the workspace. These get real `build`/`run` tasks (`cargo
+//!   build --package=<crate>`); Cargo builds their dependency closure
+//!   internally in one process.
+//! * **Libraries** — everything else. They exist in the package graph (so
+//!   `--filter` and `--affected` propagate through them) but get no commands:
+//!   being buildable is not the same as being an entrypoint.
+//!
+//! Verification verbs (`test`, `check`, `lint`, `doc`, `bench`) run once at
+//! workspace scope (`cargo <verb> --workspace`) on a synthetic package named
+//! [`WORKSPACE_PACKAGE_NAME`], matching how Cargo users actually run them.
+//!
+//! This module also owns the task-name → Cargo verb mapping (shared by the
+//! executor and run summaries so display can't drift from execution) and the
+//! input globs / env vars that participate in Cargo task hashes.
 
-use std::{collections::BTreeMap, io, str::FromStr};
+use std::{
+    collections::{BTreeSet, HashMap, HashSet},
+    io,
+};
 
-use globwalk::ValidatedGlob;
 use serde::Deserialize;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 /// The conventional file name for a Cargo manifest.
 pub const CARGO_TOML: &str = "Cargo.toml";
 
+/// Name of the synthetic package that hosts workspace-scoped Cargo tasks
+/// (`cargo#test`, `cargo#lint`, ...). A real workspace member with this name
+/// collides and hard-errors, like any other duplicate package name.
+pub const WORKSPACE_PACKAGE_NAME: &str = "cargo";
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("failed to read {path}: {source}")]
-    Read {
-        path: String,
-        #[source]
-        source: io::Error,
-    },
-    #[error("failed to parse {path}: {source}")]
-    Parse {
-        path: String,
-        #[source]
-        source: toml::de::Error,
-    },
-    #[error(transparent)]
-    Glob(#[from] globwalk::GlobError),
-    #[error(transparent)]
-    Walk(#[from] globwalk::WalkError),
+    #[error("failed to run `cargo metadata`: {0}")]
+    MetadataSpawn(#[source] io::Error),
+    #[error("`cargo metadata` failed: {stderr}")]
+    Metadata { stderr: String },
+    #[error("failed to parse `cargo metadata` output: {0}")]
+    Parse(#[from] serde_json::Error),
+}
+
+/// Map a Turborepo task name to the Cargo subcommand that implements it for
+/// an entrypoint crate. Entrypoints only build and run — verification verbs
+/// happen at workspace scope.
+pub fn entrypoint_subcommand(task: &str) -> Option<&'static str> {
+    match task {
+        "build" => Some("build"),
+        "run" | "dev" => Some("run"),
+        _ => None,
+    }
+}
+
+/// Map a Turborepo task name to the Cargo subcommand that implements it at
+/// workspace scope (the synthetic [`WORKSPACE_PACKAGE_NAME`] package).
+///
+/// `build` is deliberately absent: building is entrypoint-scoped
+/// (`cargo build --package=<crate>`), and a workspace-wide build would
+/// duplicate that work in a second cargo process.
+pub fn workspace_subcommand(task: &str) -> Option<&'static str> {
+    match task {
+        "test" => Some("test"),
+        "check" => Some("check"),
+        "lint" | "clippy" => Some("clippy"),
+        "doc" | "docs" => Some("doc"),
+        "bench" => Some("bench"),
+        _ => None,
+    }
+}
+
+/// The Cargo subcommand a task resolves to for a package, given its
+/// [`CargoPackageKind`]. `None` means the task is a no-op for this package
+/// (like a missing package.json script).
+pub fn task_subcommand(kind: CargoPackageKind, task: &str) -> Option<&'static str> {
+    match kind {
+        CargoPackageKind::Entrypoint => entrypoint_subcommand(task),
+        CargoPackageKind::Workspace => workspace_subcommand(task),
+        CargoPackageKind::Library => None,
+    }
+}
+
+/// The command displayed for a Cargo task in run summaries and dry-runs.
+/// Derived from the same tables the executor uses, so summaries always show
+/// the command that actually runs.
+pub fn display_command(kind: CargoPackageKind, task: &str, package: &str) -> Option<String> {
+    let verb = task_subcommand(kind, task)?;
+    Some(match kind {
+        CargoPackageKind::Entrypoint => format!("cargo {verb} --package={package}"),
+        CargoPackageKind::Workspace => format!("cargo {verb} --workspace"),
+        CargoPackageKind::Library => return None,
+    })
+}
+
+/// Whether pass-through args for this Cargo subcommand must be placed after
+/// a `--` separator.
+///
+/// `cargo test`/`bench`/`run` forward post-`--` args to the test harness or
+/// binary, and `cargo clippy` forwards them to rustc. The remaining verbs
+/// (`build`, `check`, `doc`) reject a `--` separator outright, so their
+/// pass-through args are appended directly as cargo flags (e.g.
+/// `turbo build -- --release` becomes `cargo build --package=x --release`).
+pub fn pass_through_uses_separator(subcommand: &str) -> bool {
+    matches!(subcommand, "test" | "bench" | "run" | "clippy")
+}
+
+/// Environment variables that change what Cargo builds or where it writes
+/// artifacts. These participate in a crate task's hash so flipping them
+/// invalidates the cache. `RUSTC_WRAPPER` is included so enabling a compile
+/// cache like sccache invalidates prior task results.
+pub const HASHED_ENV_VARS: &[&str] = &[
+    "RUSTFLAGS",
+    "RUSTC_WRAPPER",
+    "CARGO_TARGET_DIR",
+    "CARGO_BUILD_TARGET",
+];
+
+/// Input globs whose changes should invalidate a Cargo task's cache: the
+/// workspace lockfile, the workspace root manifest (profiles, lints, and
+/// feature unification all live there), Cargo config files, and pinned
+/// toolchain files — expressed relative to the task's package directory via
+/// `prefix` (the path from the package to the repo root, e.g. `../..`;
+/// empty for the workspace package). Globs that don't match anything (e.g. a
+/// missing `rust-toolchain` file) simply contribute nothing.
+///
+/// Note: without a committed `rust-toolchain`/`rust-toolchain.toml` file the
+/// compiler version is not part of the hash, so sharing a remote cache
+/// across machines with different toolchains is unsound. For fine-grained
+/// remote compile caching, use sccache (`RUSTC_WRAPPER`) — that is the layer
+/// where per-compilation caching is sound, and it cooperates with Cargo
+/// rather than competing with it.
+pub fn hash_input_globs(prefix: &str) -> Vec<String> {
+    [
+        "Cargo.lock",
+        "Cargo.toml",
+        ".cargo/config.toml",
+        ".cargo/config",
+        "rust-toolchain.toml",
+        "rust-toolchain",
+    ]
+    .iter()
+    .map(|rel| join_prefix(prefix, rel))
+    .collect()
+}
+
+/// Output globs for an entrypoint crate's `build` task: the binaries Cargo
+/// uplifts into `target/debug/`. These are the workspace's deliverables —
+/// the only artifacts worth caching at the task level. Cargo's internal
+/// `target/` state (deps, fingerprints) is deliberately not cached: it is
+/// Cargo's own incremental cache, and tarballing it fights Cargo instead of
+/// leaning on it.
+///
+/// Builds using `--release`, `CARGO_TARGET_DIR`, or `--target` write
+/// elsewhere; declare explicit `outputs` in turbo.json for those layouts.
+pub fn bin_output_globs(prefix: &str, bins: &[String]) -> Vec<String> {
+    bins.iter()
+        .flat_map(|bin| {
+            [
+                join_prefix(prefix, &format!("target/debug/{bin}")),
+                join_prefix(prefix, &format!("target/debug/{bin}.exe")),
+            ]
+        })
+        .collect()
+}
+
+fn join_prefix(prefix: &str, rel: &str) -> String {
+    if prefix.is_empty() {
+        rel.to_string()
+    } else {
+        format!("{prefix}/{rel}")
+    }
+}
+
+/// Whether `name` is a valid Cargo package name (`[A-Za-z0-9_-]+`).
+///
+/// Cargo enforces this itself, but manifests are untrusted input and crate
+/// names flow into `cargo --package=<name>` argv and cache output glob
+/// patterns, so we validate at the discovery boundary instead of relying on
+/// downstream consumers.
+pub fn is_valid_crate_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+}
+
+/// How a Cargo-toolchain package participates in task execution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CargoPackageKind {
+    /// An internal library crate: present in the package graph for
+    /// `--filter`/`--affected` propagation, but tasks are no-ops — Cargo
+    /// builds libraries implicitly as part of an entrypoint's closure.
+    Library,
+    /// A crate with `bin`/`cdylib`/`staticlib` targets: a deliverable.
+    /// `build`/`run` tasks execute `cargo <verb> --package=<crate>`.
+    Entrypoint,
+    /// The synthetic [`WORKSPACE_PACKAGE_NAME`] package hosting
+    /// workspace-scoped verification verbs (`cargo test --workspace`, ...).
+    Workspace,
+}
+
+/// Cargo-specific details attached to a [`super::package_graph::PackageInfo`]
+/// when its toolchain is Cargo.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CargoPackageDetails {
+    pub kind: CargoPackageKind,
+    /// Names of the crate's `bin` targets (empty for libraries and the
+    /// workspace package). Used to derive cacheable output paths.
+    pub bins: Vec<String>,
 }
 
 /// A single Rust crate discovered within a Cargo workspace.
@@ -47,308 +228,278 @@ pub struct CargoCrate {
     pub name: String,
     /// Absolute path to the crate's `Cargo.toml`.
     pub manifest_path: AbsoluteSystemPathBuf,
-    /// Names of other workspace crates this crate depends on (path
-    /// dependencies, including workspace-inherited ones).
+    /// Names of other workspace crates this crate depends on, resolved by
+    /// Cargo itself (`cargo metadata`). Dev-dependency edges that would form
+    /// a cycle are dropped, since Cargo permits dev-dep cycles but the
+    /// package graph must remain a DAG.
     pub internal_dependencies: Vec<String>,
+    /// Whether this crate is an entrypoint (has `bin`/`cdylib`/`staticlib`
+    /// targets).
+    pub entrypoint: bool,
+    /// Names of the crate's `bin` targets.
+    pub bins: Vec<String>,
 }
 
-/// Discover all Rust crates in the Cargo workspace rooted at `repo_root`.
+/// Discover all Rust crates in the Cargo workspace rooted at `repo_root` by
+/// invoking `cargo metadata --no-deps`.
 ///
-/// Returns an empty vec if `repo_root` is not a Cargo workspace (no readable
-/// `Cargo.toml`). Individual member manifests that fail to parse are skipped
-/// with a debug log rather than failing the whole discovery — a single broken
-/// `Cargo.toml` should not break `turbo run`.
-pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Vec<CargoCrate> {
-    discover_crates_inner(repo_root).unwrap_or_else(|err| {
-        tracing::warn!("failed to discover Cargo crates: {err}");
-        Vec::new()
-    })
-}
-
-fn discover_crates_inner(repo_root: &AbsoluteSystemPath) -> Result<Vec<CargoCrate>, Error> {
+/// Returns an empty vec if `repo_root` has no `Cargo.toml`. A root manifest
+/// that exists but that Cargo rejects is an error — the user opted into
+/// Cargo support, so silently discovering nothing would be misleading.
+/// `--no-deps` skips registry resolution, so no lockfile or network access
+/// is required.
+///
+/// Crates whose manifests live outside the repository root, or whose names
+/// are invalid, are skipped with a warning. A `[package]` in the root
+/// manifest is skipped too: its directory would be the entire repository.
+pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Result<Vec<CargoCrate>, Error> {
     let root_manifest_path = repo_root.join_component(CARGO_TOML);
-    let Ok(root_manifest) = CargoManifest::from_file(&root_manifest_path) else {
-        // Not a Cargo workspace (or unreadable root manifest); nothing to do.
+    if !root_manifest_path.exists() {
         return Ok(Vec::new());
-    };
-
-    let mut crates = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-
-    // The root manifest may itself declare a `[package]` (a "root crate").
-    if root_manifest.package_name().is_some() {
-        crates.push(build_crate(&root_manifest_path, &root_manifest, &root_manifest));
-        seen.insert(root_manifest_path.clone());
     }
 
-    if let Some(members) = root_manifest.workspace_members() {
-        let inclusions = members
-            .iter()
-            .map(|member| manifest_glob(member))
-            .collect::<Result<Vec<_>, _>>()?;
-        let exclusions = root_manifest
-            .workspace_exclude()
-            .unwrap_or(&[])
-            .iter()
-            .map(|member| manifest_glob(member))
-            .collect::<Result<Vec<_>, _>>()?;
+    let output = std::process::Command::new("cargo")
+        .args([
+            "metadata",
+            "--format-version",
+            "1",
+            "--no-deps",
+            "--manifest-path",
+            root_manifest_path.as_str(),
+        ])
+        .current_dir(repo_root.as_std_path())
+        .output()
+        .map_err(Error::MetadataSpawn)?;
+    if !output.status.success() {
+        return Err(Error::Metadata {
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        });
+    }
+    let metadata: Metadata = serde_json::from_slice(&output.stdout)?;
 
-        let manifest_paths = globwalk::globwalk_with_settings(
-            repo_root,
-            &inclusions,
-            &exclusions,
-            globwalk::WalkType::Files,
-            globwalk::Settings::default().follow_links(),
-        )?;
+    connect_crates(parse_members(repo_root, &root_manifest_path, metadata))
+}
 
-        for manifest_path in manifest_paths {
-            if !seen.insert(manifest_path.clone()) {
+/// A workspace member parsed from `cargo metadata`, before dependency edges
+/// are resolved to crate names.
+struct ParsedCrate {
+    name: String,
+    manifest_path: AbsoluteSystemPathBuf,
+    dependencies: Vec<ResolvedDep>,
+    entrypoint: bool,
+    bins: Vec<String>,
+}
+
+/// A path dependency resolved to the directory Cargo reports for it.
+struct ResolvedDep {
+    dir: AbsoluteSystemPathBuf,
+    dev: bool,
+}
+
+fn parse_members(
+    repo_root: &AbsoluteSystemPath,
+    root_manifest_path: &AbsoluteSystemPath,
+    metadata: Metadata,
+) -> Vec<ParsedCrate> {
+    let mut parsed = Vec::new();
+    for package in metadata.packages {
+        let Ok(manifest_path) = AbsoluteSystemPathBuf::new(package.manifest_path.clone()) else {
+            tracing::warn!(
+                "skipping Cargo crate {}: non-absolute manifest path {}",
+                package.name,
+                package.manifest_path
+            );
+            continue;
+        };
+        if &*manifest_path == root_manifest_path {
+            tracing::warn!(
+                "ignoring [package] in the root Cargo.toml: a crate at the repository root is not \
+                 supported as a Turborepo package"
+            );
+            continue;
+        }
+        if !repo_root.contains(&manifest_path) {
+            tracing::warn!(
+                "skipping Cargo crate {}: manifest {manifest_path} is outside the repository",
+                package.name
+            );
+            continue;
+        }
+        if !is_valid_crate_name(&package.name) {
+            tracing::warn!(
+                "skipping Cargo manifest {manifest_path}: invalid crate name {:?}",
+                package.name
+            );
+            continue;
+        }
+        if package.name == WORKSPACE_PACKAGE_NAME {
+            tracing::warn!(
+                "skipping Cargo crate {:?}: the name is reserved for Turborepo's synthetic \
+                 workspace package",
+                package.name
+            );
+            continue;
+        }
+
+        // A target's `kind` distinguishes real bins from tests/benches/
+        // build scripts (which share the `bin` crate-type).
+        let bins: Vec<String> = package
+            .targets
+            .iter()
+            .filter(|target| target.kind.iter().any(|kind| kind == "bin"))
+            .map(|target| target.name.clone())
+            .collect();
+        let entrypoint = !bins.is_empty()
+            || package.targets.iter().any(|target| {
+                target
+                    .kind
+                    .iter()
+                    .any(|kind| kind == "cdylib" || kind == "staticlib")
+            });
+
+        let dependencies = package
+            .dependencies
+            .into_iter()
+            .filter_map(|dep| {
+                let path = dep.path?;
+                let dir = AbsoluteSystemPathBuf::new(path).ok()?;
+                Some(ResolvedDep {
+                    dir,
+                    dev: dep.kind.as_deref() == Some("dev"),
+                })
+            })
+            .collect();
+
+        parsed.push(ParsedCrate {
+            name: package.name,
+            manifest_path,
+            dependencies,
+            entrypoint,
+            bins,
+        });
+    }
+    parsed
+}
+
+/// Resolve dependency edges to crate names by manifest directory and drop
+/// dev-dependency edges that would form a cycle (Cargo permits dev-dep
+/// cycles; the package graph is a DAG).
+fn connect_crates(parsed: Vec<ParsedCrate>) -> Result<Vec<CargoCrate>, Error> {
+    let dir_to_name: HashMap<&AbsoluteSystemPath, &str> = parsed
+        .iter()
+        .filter_map(|c| Some((c.manifest_path.parent()?, c.name.as_str())))
+        .collect();
+
+    let mut adjacency: HashMap<&str, BTreeSet<&str>> = HashMap::new();
+    let mut dev_edges: Vec<(&str, &str)> = Vec::new();
+    for parsed_crate in &parsed {
+        let from = parsed_crate.name.as_str();
+        adjacency.entry(from).or_default();
+        for dep in &parsed_crate.dependencies {
+            let Some(&to) = dir_to_name.get(&*dep.dir) else {
+                // Path dependency on a non-member (e.g. outside the repo).
+                continue;
+            };
+            if to == from {
                 continue;
             }
-            match CargoManifest::from_file(&manifest_path) {
-                Ok(manifest) if manifest.package_name().is_some() => {
-                    crates.push(build_crate(&manifest_path, &manifest, &root_manifest));
-                }
-                // Virtual manifest (nested workspace with no package) — skip.
-                Ok(_) => {}
-                Err(err) => tracing::debug!("skipping Cargo manifest {manifest_path}: {err}"),
+            if dep.dev {
+                dev_edges.push((from, to));
+            } else {
+                adjacency.entry(from).or_default().insert(to);
             }
         }
     }
-
-    Ok(crates)
-}
-
-/// Build the inclusion/exclusion glob for a workspace member directory,
-/// matching the member's `Cargo.toml` (mirrors how JS workspace globs target
-/// `package.json`).
-fn manifest_glob(member: &str) -> Result<ValidatedGlob, globwalk::GlobError> {
-    let mut pattern = member.to_string();
-    if !pattern.ends_with('/') {
-        pattern.push('/');
+    // Deterministic order so the same dev edge always wins when a cycle must
+    // be broken.
+    dev_edges.sort_unstable();
+    dev_edges.dedup();
+    for (from, to) in dev_edges {
+        if reaches(&adjacency, to, from) {
+            tracing::debug!(
+                "dropping dev-dependency edge {from} -> {to}: it would create a cycle in the \
+                 package graph"
+            );
+        } else {
+            adjacency.entry(from).or_default().insert(to);
+        }
     }
-    pattern.push_str(CARGO_TOML);
-    ValidatedGlob::from_str(&pattern)
-}
 
-fn build_crate(
-    manifest_path: &AbsoluteSystemPath,
-    manifest: &CargoManifest,
-    workspace_root: &CargoManifest,
-) -> CargoCrate {
-    let name = manifest
-        .package_name()
-        .expect("caller guarantees a package name")
-        .to_string();
-    let mut internal_dependencies: Vec<String> = manifest
-        .internal_dependencies(Some(workspace_root))
+    let mut edges: HashMap<String, Vec<String>> = adjacency
         .into_iter()
-        .map(|dep| dep.name)
+        .map(|(name, deps)| {
+            (
+                name.to_string(),
+                deps.into_iter().map(String::from).collect(),
+            )
+        })
         .collect();
-    internal_dependencies.sort();
-    internal_dependencies.dedup();
-    CargoCrate {
-        name,
-        manifest_path: manifest_path.to_owned(),
-        internal_dependencies,
-    }
+
+    Ok(parsed
+        .into_iter()
+        .map(|parsed_crate| CargoCrate {
+            internal_dependencies: edges.remove(parsed_crate.name.as_str()).unwrap_or_default(),
+            name: parsed_crate.name,
+            manifest_path: parsed_crate.manifest_path,
+            entrypoint: parsed_crate.entrypoint,
+            bins: parsed_crate.bins,
+        })
+        .collect())
 }
 
-/// A parsed `Cargo.toml`.
-///
-/// A single manifest can be a package (`[package]`), a workspace root
-/// (`[workspace]`), or both (a "root crate").
-#[derive(Debug, Clone, PartialEq)]
-pub struct CargoManifest {
-    raw: RawManifest,
-}
-
-/// A workspace-internal dependency: a dependency on another crate by path.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PathDependency {
-    /// The dependency key as written in the manifest (or its `package`
-    /// rename target, when present).
-    pub name: String,
-    /// The relative path as written in `path = "..."`.
-    pub path: String,
-    /// What [`PathDependency::path`] is relative to.
-    pub base: PathBase,
-}
-
-/// What a [`PathDependency`]'s path is anchored to.
-///
-/// Direct `path = "..."` dependencies are relative to the directory
-/// containing the crate's `Cargo.toml`, whereas paths pulled in via
-/// `dep = { workspace = true }` are declared in `[workspace.dependencies]`
-/// and are therefore relative to the workspace root. Resolving these to
-/// absolute paths is the job of a later discovery step, which is why we
-/// preserve the anchor here rather than joining eagerly.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PathBase {
-    /// Relative to the directory containing this crate's `Cargo.toml`.
-    Crate,
-    /// Relative to the workspace root.
-    Workspace,
-}
-
-impl CargoManifest {
-    /// Read and parse a `Cargo.toml` from disk.
-    pub fn from_file(path: &AbsoluteSystemPath) -> Result<Self, Error> {
-        let contents = path.read_to_string().map_err(|source| Error::Read {
-            path: path.to_string(),
-            source,
-        })?;
-        Self::from_str(&contents, path.as_str())
+/// Whether `target` is reachable from `start` in the current adjacency map.
+fn reaches(adjacency: &HashMap<&str, BTreeSet<&str>>, start: &str, target: &str) -> bool {
+    if start == target {
+        return true;
     }
-
-    /// Parse a `Cargo.toml` from its string contents. `name` is used only for
-    /// error messages.
-    pub fn from_str(contents: &str, name: &str) -> Result<Self, Error> {
-        let raw = toml::from_str(contents).map_err(|source| Error::Parse {
-            path: name.to_string(),
-            source,
-        })?;
-        Ok(Self { raw })
-    }
-
-    /// The crate's package name, if this manifest declares a `[package]`.
-    ///
-    /// A virtual manifest (workspace root with no `[package]`) returns
-    /// `None`.
-    pub fn package_name(&self) -> Option<&str> {
-        self.raw.package.as_ref().map(|pkg| pkg.name.as_str())
-    }
-
-    /// Whether this manifest declares a `[workspace]`.
-    pub fn is_workspace_root(&self) -> bool {
-        self.raw.workspace.is_some()
-    }
-
-    /// The `[workspace].members` globs, if this is a workspace root.
-    pub fn workspace_members(&self) -> Option<&[String]> {
-        self.raw.workspace.as_ref().map(|ws| ws.members.as_slice())
-    }
-
-    /// The `[workspace].exclude` globs, if this is a workspace root.
-    pub fn workspace_exclude(&self) -> Option<&[String]> {
-        self.raw.workspace.as_ref().map(|ws| ws.exclude.as_slice())
-    }
-
-    /// All internal (path-based) dependencies of this crate.
-    ///
-    /// Direct `path = "..."` dependencies are always returned. Dependencies
-    /// declared as `{ workspace = true }` are resolved against
-    /// `workspace_root`'s `[workspace.dependencies]` table (when provided)
-    /// and included only if that table gives them a `path`.
-    pub fn internal_dependencies(
-        &self,
-        workspace_root: Option<&CargoManifest>,
-    ) -> Vec<PathDependency> {
-        let mut deps = Vec::new();
-        for table in [
-            &self.raw.dependencies,
-            &self.raw.dev_dependencies,
-            &self.raw.build_dependencies,
-        ] {
-            for (key, value) in table {
-                match classify(value) {
-                    DepKind::Path(path) => deps.push(PathDependency {
-                        name: rename(value).unwrap_or(key).to_string(),
-                        path,
-                        base: PathBase::Crate,
-                    }),
-                    DepKind::Workspace => {
-                        if let Some(path) = workspace_root.and_then(|root| {
-                            root.workspace_dependency_path(rename(value).unwrap_or(key))
-                        }) {
-                            deps.push(PathDependency {
-                                name: rename(value).unwrap_or(key).to_string(),
-                                path,
-                                base: PathBase::Workspace,
-                            });
-                        }
-                    }
-                    DepKind::External => {}
+    let mut stack = vec![start];
+    let mut visited = HashSet::new();
+    while let Some(node) = stack.pop() {
+        if !visited.insert(node) {
+            continue;
+        }
+        if let Some(next) = adjacency.get(node) {
+            for &dep in next {
+                if dep == target {
+                    return true;
                 }
+                stack.push(dep);
             }
         }
-        deps
     }
-
-    /// Look up a path for `name` in this manifest's `[workspace.dependencies]`.
-    fn workspace_dependency_path(&self, name: &str) -> Option<String> {
-        let deps = &self.raw.workspace.as_ref()?.dependencies;
-        match deps.get(name).map(classify) {
-            Some(DepKind::Path(path)) => Some(path),
-            _ => None,
-        }
-    }
+    false
 }
 
-/// How a single dependency entry resolves for the purposes of building the
-/// internal package graph.
-enum DepKind {
-    /// A direct `path = "..."` dependency, value is the path.
-    Path(String),
-    /// A `{ workspace = true }` dependency to be resolved against the
-    /// workspace root.
-    Workspace,
-    /// A registry/git/version dependency we don't track as an internal edge.
-    External,
+/// The subset of `cargo metadata --no-deps` output we consume. With
+/// `--no-deps`, `packages` contains exactly the workspace members.
+#[derive(Debug, Deserialize)]
+struct Metadata {
+    packages: Vec<MetadataPackage>,
 }
 
-/// Classify a raw dependency value (`toml::Value`) without committing to a
-/// rigid schema. Dependencies come in many shapes (`"1.0"`,
-/// `{ version = "1" }`, `{ path = ".." }`, `{ workspace = true }`, …) so we
-/// inspect the value directly rather than relying on an untagged enum, which
-/// `toml` deserializes inconsistently.
-fn classify(value: &toml::Value) -> DepKind {
-    let Some(table) = value.as_table() else {
-        // A bare version string, e.g. `serde = "1.0"`.
-        return DepKind::External;
-    };
-    if table.get("workspace").and_then(toml::Value::as_bool) == Some(true) {
-        return DepKind::Workspace;
-    }
-    match table.get("path").and_then(toml::Value::as_str) {
-        Some(path) => DepKind::Path(path.to_string()),
-        None => DepKind::External,
-    }
-}
-
-/// The `package = "..."` rename target of a dependency, if present. This is
-/// the crate's real name, which is what `[workspace.dependencies]` is keyed
-/// by.
-fn rename(value: &toml::Value) -> Option<&str> {
-    value.as_table()?.get("package")?.as_str()
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-struct RawManifest {
-    package: Option<RawPackage>,
-    workspace: Option<RawWorkspace>,
-    #[serde(default)]
-    dependencies: BTreeMap<String, toml::Value>,
-    #[serde(default, rename = "dev-dependencies")]
-    dev_dependencies: BTreeMap<String, toml::Value>,
-    #[serde(default, rename = "build-dependencies")]
-    build_dependencies: BTreeMap<String, toml::Value>,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-struct RawPackage {
-    // `package.name` cannot itself be workspace-inherited, so a plain string.
+#[derive(Debug, Deserialize)]
+struct MetadataPackage {
     name: String,
+    manifest_path: String,
+    #[serde(default)]
+    dependencies: Vec<MetadataDependency>,
+    #[serde(default)]
+    targets: Vec<MetadataTarget>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-struct RawWorkspace {
-    #[serde(default)]
-    members: Vec<String>,
-    #[serde(default)]
-    exclude: Vec<String>,
-    #[serde(default)]
-    dependencies: BTreeMap<String, toml::Value>,
+#[derive(Debug, Deserialize)]
+struct MetadataDependency {
+    /// Absolute path to the dependency's directory, present only for path
+    /// dependencies.
+    path: Option<String>,
+    /// `null` for normal deps, `"dev"` or `"build"` otherwise.
+    kind: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MetadataTarget {
+    name: String,
+    kind: Vec<String>,
 }
 
 #[cfg(test)]
@@ -357,240 +508,267 @@ mod test {
 
     use super::*;
 
-    fn parse(contents: &str) -> CargoManifest {
-        CargoManifest::from_str(contents, "Cargo.toml").unwrap()
-    }
-
-    #[test]
-    fn test_virtual_workspace_root() {
-        let manifest = parse(
-            r#"
-            [workspace]
-            members = ["crates/*", "apps/server"]
-            exclude = ["crates/legacy"]
-            "#,
-        );
-        assert!(manifest.is_workspace_root());
-        assert_eq!(manifest.package_name(), None);
-        assert_eq!(
-            manifest.workspace_members(),
-            Some(["crates/*".to_string(), "apps/server".to_string()].as_slice())
-        );
-        assert_eq!(
-            manifest.workspace_exclude(),
-            Some(["crates/legacy".to_string()].as_slice())
-        );
-    }
-
-    #[test]
-    fn test_plain_package() {
-        let manifest = parse(
-            r#"
-            [package]
-            name = "my-crate"
-            version = "0.1.0"
-            "#,
-        );
-        assert!(!manifest.is_workspace_root());
-        assert_eq!(manifest.package_name(), Some("my-crate"));
-        assert!(manifest.workspace_members().is_none());
-    }
-
-    #[test]
-    fn test_root_crate_is_both() {
-        let manifest = parse(
-            r#"
-            [package]
-            name = "root-crate"
-
-            [workspace]
-            members = ["crates/*"]
-            "#,
-        );
-        assert!(manifest.is_workspace_root());
-        assert_eq!(manifest.package_name(), Some("root-crate"));
-    }
-
-    #[test]
-    fn test_direct_path_dependencies() {
-        let manifest = parse(
-            r#"
-            [package]
-            name = "app"
-
-            [dependencies]
-            serde = "1.0"
-            lib-a = { path = "../lib-a" }
-            lib-b = { version = "0.2", path = "../lib-b" }
-
-            [dev-dependencies]
-            test-util = { path = "../test-util" }
-
-            [build-dependencies]
-            codegen = { path = "../codegen" }
-            "#,
-        );
-        let mut deps = manifest.internal_dependencies(None);
-        deps.sort_by(|a, b| a.name.cmp(&b.name));
-        assert_eq!(
-            deps,
-            vec![
-                PathDependency {
-                    name: "codegen".into(),
-                    path: "../codegen".into(),
-                    base: PathBase::Crate,
-                },
-                PathDependency {
-                    name: "lib-a".into(),
-                    path: "../lib-a".into(),
-                    base: PathBase::Crate,
-                },
-                PathDependency {
-                    name: "lib-b".into(),
-                    path: "../lib-b".into(),
-                    base: PathBase::Crate,
-                },
-                PathDependency {
-                    name: "test-util".into(),
-                    path: "../test-util".into(),
-                    base: PathBase::Crate,
-                },
-            ]
-        );
-    }
-
-    #[test]
-    fn test_external_dependencies_ignored() {
-        let manifest = parse(
-            r#"
-            [package]
-            name = "app"
-
-            [dependencies]
-            serde = "1.0"
-            tokio = { version = "1", features = ["full"] }
-            rand = { git = "https://github.com/rust-random/rand" }
-            "#,
-        );
-        assert!(manifest.internal_dependencies(None).is_empty());
-    }
-
-    #[test]
-    fn test_workspace_inherited_path_dependency() {
-        let root = parse(
-            r#"
-            [workspace]
-            members = ["crates/*"]
-
-            [workspace.dependencies]
-            lib-a = { path = "crates/lib-a" }
-            serde = "1.0"
-            "#,
-        );
-        let crate_manifest = parse(
-            r#"
-            [package]
-            name = "app"
-
-            [dependencies]
-            lib-a = { workspace = true }
-            serde = { workspace = true }
-            "#,
-        );
-        let deps = crate_manifest.internal_dependencies(Some(&root));
-        // `lib-a` resolves to a workspace-rooted path; `serde` is external.
-        assert_eq!(
-            deps,
-            vec![PathDependency {
-                name: "lib-a".into(),
-                path: "crates/lib-a".into(),
-                base: PathBase::Workspace,
-            }]
-        );
-    }
-
-    #[test]
-    fn test_workspace_inherited_without_root_is_skipped() {
-        let crate_manifest = parse(
-            r#"
-            [package]
-            name = "app"
-
-            [dependencies]
-            lib-a = { workspace = true }
-            "#,
-        );
-        // Without the workspace root we cannot resolve the path, so it's
-        // omitted rather than guessed.
-        assert!(crate_manifest.internal_dependencies(None).is_empty());
-    }
-
-    #[test]
-    fn test_discover_crates() {
+    fn tempdir_root() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
+        let root = AbsoluteSystemPathBuf::new(
+            tmp.path()
+                .canonicalize()
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+        )
+        .unwrap();
+        (tmp, root)
+    }
 
-        let write = |rel: &[&str], contents: &str| {
-            let path = root.join_components(rel);
-            std::fs::create_dir_all(path.parent().unwrap().as_std_path()).unwrap();
-            std::fs::write(path.as_std_path(), contents).unwrap();
-        };
+    fn write(root: &AbsoluteSystemPathBuf, rel: &[&str], contents: &str) {
+        let path = root.join_components(rel);
+        std::fs::create_dir_all(path.parent().unwrap().as_std_path()).unwrap();
+        std::fs::write(path.as_std_path(), contents).unwrap();
+    }
 
+    /// Write a small workspace: `app` (bin) depends on `lib-a` (lib), plus a
+    /// dev-dep cycle between `lib-a` and `lib-a-test-util`.
+    fn write_fixture_workspace(root: &AbsoluteSystemPathBuf) {
         write(
+            root,
             &["Cargo.toml"],
-            r#"
-            [workspace]
-            members = ["crates/*"]
-            exclude = ["crates/ignored"]
-
-            [workspace.dependencies]
-            lib-a = { path = "crates/lib-a" }
-            "#,
+            "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n",
         );
-        write(&["crates", "lib-a", "Cargo.toml"], "[package]\nname = \"lib-a\"\n");
         write(
+            root,
             &["crates", "app", "Cargo.toml"],
-            r#"
-            [package]
-            name = "app"
-
-            [dependencies]
-            lib-a = { workspace = true }
-            serde = "1.0"
-            "#,
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \
+             \"2021\"\n\n[dependencies]\nlib-a = { path = \"../lib-a\" }\n",
         );
-        write(&["crates", "ignored", "Cargo.toml"], "[package]\nname = \"ignored\"\n");
+        write(root, &["crates", "app", "src", "main.rs"], "fn main() {}\n");
+        write(
+            root,
+            &["crates", "lib-a", "Cargo.toml"],
+            "[package]\nname = \"lib-a\"\nversion = \"0.1.0\"\nedition = \
+             \"2021\"\n\n[dev-dependencies]\nlib-a-test-util = { path = \"../lib-a-test-util\" }\n",
+        );
+        write(root, &["crates", "lib-a", "src", "lib.rs"], "");
+        write(
+            root,
+            &["crates", "lib-a-test-util", "Cargo.toml"],
+            "[package]\nname = \"lib-a-test-util\"\nversion = \"0.1.0\"\nedition = \
+             \"2021\"\n\n[dependencies]\nlib-a = { path = \"../lib-a\" }\n",
+        );
+        write(root, &["crates", "lib-a-test-util", "src", "lib.rs"], "");
+    }
 
-        let mut crates = discover_crates(&root);
+    #[test]
+    fn test_discover_crates_via_metadata() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+
+        let mut crates = discover_crates(&root).unwrap();
         crates.sort_by(|a, b| a.name.cmp(&b.name));
 
-        assert_eq!(crates.len(), 2, "expected app and lib-a, got {crates:?}");
-        assert_eq!(crates[0].name, "app");
-        assert_eq!(crates[0].internal_dependencies, vec!["lib-a".to_string()]);
-        assert_eq!(crates[1].name, "lib-a");
-        assert!(crates[1].internal_dependencies.is_empty());
+        assert_eq!(
+            crates.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
+            vec!["app", "lib-a", "lib-a-test-util"]
+        );
+
+        let app = &crates[0];
+        assert!(app.entrypoint, "bin crate should be an entrypoint");
+        assert_eq!(app.bins, vec!["app".to_string()]);
+        assert_eq!(app.internal_dependencies, vec!["lib-a".to_string()]);
+
+        let lib_a = &crates[1];
+        assert!(!lib_a.entrypoint, "plain lib crate is not an entrypoint");
+        assert!(lib_a.bins.is_empty());
+        // The dev-dep edge lib-a -> lib-a-test-util closes a cycle with the
+        // normal edge lib-a-test-util -> lib-a, so it must be dropped.
+        assert!(
+            lib_a.internal_dependencies.is_empty(),
+            "cycle-closing dev edge should be dropped, got {:?}",
+            lib_a.internal_dependencies
+        );
+
+        let test_util = &crates[2];
+        assert_eq!(test_util.internal_dependencies, vec!["lib-a".to_string()]);
     }
 
     #[test]
     fn test_discover_crates_not_a_workspace() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
-        assert!(discover_crates(&root).is_empty());
+        let (_tmp, root) = tempdir_root();
+        assert!(discover_crates(&root).unwrap().is_empty());
     }
 
     #[test]
-    fn test_renamed_dependency_uses_real_crate_name() {
-        let manifest = parse(
-            r#"
-            [package]
-            name = "app"
-
-            [dependencies]
-            my-alias = { path = "../real-crate", package = "real-crate" }
-            "#,
+    fn test_discover_crates_malformed_root_errors() {
+        let (_tmp, root) = tempdir_root();
+        write(&root, &["Cargo.toml"], "[workspace\nmembers = [");
+        assert!(
+            discover_crates(&root).is_err(),
+            "a broken root manifest should surface an error, not silently discover nothing"
         );
-        let deps = manifest.internal_dependencies(None);
-        assert_eq!(deps[0].name, "real-crate");
-        assert_eq!(deps[0].path, "../real-crate");
+    }
+
+    #[test]
+    fn test_discover_crates_skips_root_crate() {
+        let (_tmp, root) = tempdir_root();
+        write(
+            &root,
+            &["Cargo.toml"],
+            "[package]\nname = \"root-crate\"\nversion = \"0.1.0\"\nedition = \
+             \"2021\"\n\n[workspace]\nmembers = [\"crates/*\"]\n",
+        );
+        write(&root, &["src", "lib.rs"], "");
+        write(
+            &root,
+            &["crates", "member", "Cargo.toml"],
+            "[package]\nname = \"member\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(&root, &["crates", "member", "src", "lib.rs"], "");
+
+        let crates = discover_crates(&root).unwrap();
+        assert_eq!(
+            crates.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
+            vec!["member"],
+            "the root crate's directory is the whole repository, so it is not a package"
+        );
+    }
+
+    #[test]
+    fn test_discover_crates_auto_includes_path_dependency_members() {
+        // `tools/helper` matches no `members` glob but is a path dependency
+        // of a member; Cargo treats it as an automatic workspace member and
+        // so must we (via `cargo metadata`).
+        let (_tmp, root) = tempdir_root();
+        write(
+            &root,
+            &["Cargo.toml"],
+            "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n",
+        );
+        write(
+            &root,
+            &["crates", "app", "Cargo.toml"],
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \
+             \"2021\"\n\n[dependencies]\nhelper = { path = \"../../tools/helper\" }\n",
+        );
+        write(&root, &["crates", "app", "src", "lib.rs"], "");
+        write(
+            &root,
+            &["tools", "helper", "Cargo.toml"],
+            "[package]\nname = \"helper\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(&root, &["tools", "helper", "src", "lib.rs"], "");
+
+        let mut crates = discover_crates(&root).unwrap();
+        crates.sort_by(|a, b| a.name.cmp(&b.name));
+        assert_eq!(
+            crates.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
+            vec!["app", "helper"]
+        );
+        assert_eq!(crates[0].internal_dependencies, vec!["helper".to_string()]);
+    }
+
+    #[test]
+    fn test_entrypoint_subcommand_mapping() {
+        assert_eq!(entrypoint_subcommand("build"), Some("build"));
+        assert_eq!(entrypoint_subcommand("run"), Some("run"));
+        assert_eq!(entrypoint_subcommand("dev"), Some("run"));
+        assert_eq!(entrypoint_subcommand("test"), None);
+        assert_eq!(entrypoint_subcommand("lint"), None);
+    }
+
+    #[test]
+    fn test_workspace_subcommand_mapping() {
+        assert_eq!(
+            workspace_subcommand("build"),
+            None,
+            "build is entrypoint-scoped; a workspace build would duplicate it"
+        );
+        assert_eq!(workspace_subcommand("test"), Some("test"));
+        assert_eq!(workspace_subcommand("check"), Some("check"));
+        assert_eq!(workspace_subcommand("lint"), Some("clippy"));
+        assert_eq!(workspace_subcommand("clippy"), Some("clippy"));
+        assert_eq!(workspace_subcommand("doc"), Some("doc"));
+        assert_eq!(workspace_subcommand("docs"), Some("doc"));
+        assert_eq!(workspace_subcommand("bench"), Some("bench"));
+        assert_eq!(workspace_subcommand("run"), None);
+        assert_eq!(workspace_subcommand("deploy"), None);
+    }
+
+    #[test]
+    fn test_library_tasks_are_noops() {
+        for task in ["build", "test", "run", "lint"] {
+            assert_eq!(task_subcommand(CargoPackageKind::Library, task), None);
+        }
+    }
+
+    #[test]
+    fn test_display_command_matches_execution_tables() {
+        assert_eq!(
+            display_command(CargoPackageKind::Entrypoint, "build", "app").as_deref(),
+            Some("cargo build --package=app")
+        );
+        assert_eq!(
+            display_command(CargoPackageKind::Workspace, "lint", WORKSPACE_PACKAGE_NAME).as_deref(),
+            Some("cargo clippy --workspace")
+        );
+        assert_eq!(
+            display_command(CargoPackageKind::Entrypoint, "lint", "app"),
+            None
+        );
+        assert_eq!(
+            display_command(CargoPackageKind::Library, "build", "lib-a"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_pass_through_separator_per_verb() {
+        // Harness-forwarding verbs take args after `--`.
+        for verb in ["test", "bench", "run", "clippy"] {
+            assert!(pass_through_uses_separator(verb), "{verb}");
+        }
+        // These verbs hard-error on a `--` separator.
+        for verb in ["build", "check", "doc"] {
+            assert!(!pass_through_uses_separator(verb), "{verb}");
+        }
+    }
+
+    #[test]
+    fn test_hash_input_globs_prefixing() {
+        assert_eq!(
+            hash_input_globs("../.."),
+            vec![
+                "../../Cargo.lock",
+                "../../Cargo.toml",
+                "../../.cargo/config.toml",
+                "../../.cargo/config",
+                "../../rust-toolchain.toml",
+                "../../rust-toolchain",
+            ]
+        );
+        assert_eq!(hash_input_globs("")[0], "Cargo.lock");
+    }
+
+    #[test]
+    fn test_bin_output_globs() {
+        assert_eq!(
+            bin_output_globs("../..", &["app".to_string(), "helper".to_string()]),
+            vec![
+                "../../target/debug/app",
+                "../../target/debug/app.exe",
+                "../../target/debug/helper",
+                "../../target/debug/helper.exe",
+            ]
+        );
+        assert!(bin_output_globs("../..", &[]).is_empty());
+    }
+
+    #[test]
+    fn test_is_valid_crate_name() {
+        assert!(is_valid_crate_name("my-crate"));
+        assert!(is_valid_crate_name("my_crate2"));
+        assert!(!is_valid_crate_name(""));
+        assert!(!is_valid_crate_name("../escape"));
+        assert!(!is_valid_crate_name("a*b"));
+        assert!(!is_valid_crate_name("a b"));
     }
 }
