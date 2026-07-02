@@ -184,7 +184,11 @@ impl<W> TerminalOutput<W> {
             }
             crossterm::event::MouseEventKind::ScrollDown => (),
             crossterm::event::MouseEventKind::ScrollUp => (),
-            crossterm::event::MouseEventKind::Moved => (),
+            // Hover means the button is up; drop any stale drag anchor from
+            // a release that the terminal never delivered to us.
+            crossterm::event::MouseEventKind::Moved => {
+                self.selection_start = None;
+            }
             crossterm::event::MouseEventKind::Down(_) => (),
             crossterm::event::MouseEventKind::Drag(_) => (),
             crossterm::event::MouseEventKind::ScrollLeft

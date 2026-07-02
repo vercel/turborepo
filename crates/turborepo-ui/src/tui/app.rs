@@ -156,10 +156,11 @@ impl<W> App<W> {
     }
 
     fn input_options(&self) -> Result<InputOptions<'_>, Error> {
-        let has_selection = self.get_full_task()?.has_selection();
+        let task = self.get_full_task()?;
         Ok(InputOptions {
             focus: &self.section_focus,
-            has_selection,
+            has_selection: task.has_selection(),
+            is_selecting: task.is_selecting(),
             is_help_popup_open: self.showing_help_popup,
             is_log_panel_open: self.showing_log_panel,
         })
@@ -729,6 +730,15 @@ impl<W> App<W> {
             if was_selecting && task.has_selection() && !shift_held {
                 self.copy_selection()?;
             }
+            return Ok(());
+        }
+
+        // A hover event can only arrive while the button is up, so if a drag
+        // is still live we missed the release (the terminal swallowed the
+        // shifted mouse events). End the drag and keep the selection, the
+        // same outcome as an observed shift-release.
+        if matches!(event.kind, crossterm::event::MouseEventKind::Moved) {
+            self.get_full_task_mut()?.handle_mouse(event)?;
             return Ok(());
         }
 
@@ -3117,6 +3127,52 @@ mod test {
         app.copy_selection()?;
         assert!(app.clipboard_notice_expiry.is_some());
         assert!(!app.get_full_task()?.has_selection());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_after_swallowed_release_ends_drag_and_keeps_selection() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseEvent, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        app.start_task("a", OutputLogs::Full)?;
+        app.process_output("a", b"hello world\r\n")?;
+
+        let pane_column = app.size.task_list_width();
+        let mouse = |kind, column| MouseEvent {
+            kind,
+            column,
+            row: 1,
+            modifiers: KeyModifiers::empty(),
+        };
+
+        app.handle_mouse(mouse(
+            MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            pane_column,
+        ))?;
+        app.handle_mouse(mouse(
+            MouseEventKind::Drag(crossterm::event::MouseButton::Left),
+            pane_column + 4,
+        ))?;
+        assert!(app.get_full_task()?.is_selecting());
+
+        // The user held shift and released: the terminal swallowed the
+        // shifted release, so the next thing we see is a hover event.
+        app.handle_mouse(mouse(MouseEventKind::Moved, pane_column + 4))?;
+        assert!(!app.get_full_task()?.is_selecting());
+        assert!(app.get_full_task()?.has_selection());
+        assert!(app.clipboard_notice_expiry.is_none());
 
         Ok(())
     }
