@@ -23,6 +23,7 @@ use std::{
     any::Any,
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
+    sync::Arc,
 };
 
 pub use berry::{Error as BerryError, *};
@@ -37,7 +38,11 @@ use turbopath::RelativeUnixPathBuf;
 pub use yarn1::{Yarn1Lockfile, yarn_subgraph};
 
 type ResolveCache = DashMap<String, Option<Package>>;
-type DepsCache = DashMap<String, Option<BTreeMap<String, String>>>;
+// Dependency maps are shared behind an `Arc` so cache hits are a refcount bump
+// instead of a deep clone of the map. The cache is shared across all
+// workspaces, so each package's dependency map would otherwise be cloned once
+// per workspace whose closure contains it.
+type DepsCache = DashMap<String, Option<Arc<BTreeMap<String, String>>>>;
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
 pub struct Package {
@@ -299,7 +304,7 @@ impl<L: Lockfile + ?Sized> ClosureContext<'_, L> {
                 let deps = self
                     .lockfile
                     .all_dependencies(&pkg.key)?
-                    .map(|cow| cow.into_owned());
+                    .map(|cow| Arc::new(cow.into_owned()));
                 self.deps_cache.insert(pkg.key.clone(), deps.clone());
                 deps
             };
