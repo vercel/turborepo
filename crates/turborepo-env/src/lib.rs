@@ -6,8 +6,10 @@ use std::{
     collections::HashMap,
     env,
     ops::{Deref, DerefMut},
+    sync::Arc,
 };
 
+use dashmap::DashMap;
 use regex::{Regex, RegexBuilder};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -164,6 +166,30 @@ pub struct DetailedMap {
     pub by_source: BySource,
 }
 
+impl DetailedMap {
+    /// Combines framework-inferred env vars with the user's task env matches,
+    /// giving user exclusions primacy over inferred inclusions.
+    pub fn from_task_env_parts(inference: &EnvironmentVariableMap, user: &WildcardMaps) -> Self {
+        let mut all = EnvironmentVariableMap::default();
+        all.union(&user.inclusions);
+        all.union(inference);
+        all.difference(&user.exclusions);
+
+        let mut explicit = EnvironmentVariableMap::default();
+        explicit.union(&user.inclusions);
+        explicit.difference(&user.exclusions);
+
+        let mut matching = EnvironmentVariableMap::default();
+        matching.union(inference);
+        matching.difference(&user.exclusions);
+
+        DetailedMap {
+            all,
+            by_source: BySource { explicit, matching },
+        }
+    }
+}
+
 // A list of "k=v" strings for env variables and their values
 pub type EnvironmentVariablePairs = Vec<String>;
 
@@ -180,6 +206,44 @@ impl WildcardMaps {
         let mut output = self.inclusions;
         output.difference(&self.exclusions);
         output
+    }
+}
+
+/// The result of matching one wildcard pattern list against an environment.
+pub struct WildcardMatch {
+    /// The inclusions and exclusions matched by the patterns.
+    pub maps: WildcardMaps,
+    /// `maps` collapsed into a single map (inclusions minus exclusions).
+    pub resolved: EnvironmentVariableMap,
+}
+
+/// Memoizes wildcard matches against a fixed environment, keyed by pattern
+/// list.
+///
+/// Task env configurations repeat heavily across the tasks in a run, so this
+/// avoids recompiling regexes and rescanning the environment for every task.
+/// Only valid for as long as the underlying environment map is unchanged;
+/// callers are expected to match one cache to one environment snapshot.
+#[derive(Default)]
+pub struct WildcardMapCache {
+    cache: DashMap<Box<[String]>, Arc<WildcardMatch>>,
+}
+
+impl WildcardMapCache {
+    pub fn get_or_compute(
+        &self,
+        env: &EnvironmentVariableMap,
+        patterns: &[String],
+    ) -> Result<Arc<WildcardMatch>, Error> {
+        if let Some(hit) = self.cache.get(patterns) {
+            return Ok(hit.clone());
+        }
+        let maps = env.wildcard_map_from_wildcards_unresolved(patterns)?;
+        let mut resolved = maps.inclusions.clone();
+        resolved.difference(&maps.exclusions);
+        let entry = Arc::new(WildcardMatch { maps, resolved });
+        self.cache.insert(patterns.into(), entry.clone());
+        Ok(entry)
     }
 }
 
@@ -369,51 +433,12 @@ impl EnvironmentVariableMap {
         computed_wildcards: &[String],
         task_env: &[String],
     ) -> Result<DetailedMap, Error> {
-        let mut explicit_env_var_map = EnvironmentVariableMap::default();
-        let mut all_env_var_map = EnvironmentVariableMap::default();
-        let mut matching_env_var_map = EnvironmentVariableMap::default();
         let inference_env_var_map = self.from_wildcards(computed_wildcards)?;
-
         let user_env_var_set = self.wildcard_map_from_wildcards_unresolved(task_env)?;
-
-        all_env_var_map.union(&user_env_var_set.inclusions);
-        all_env_var_map.union(&inference_env_var_map);
-        all_env_var_map.difference(&user_env_var_set.exclusions);
-
-        explicit_env_var_map.union(&user_env_var_set.inclusions);
-        explicit_env_var_map.difference(&user_env_var_set.exclusions);
-
-        matching_env_var_map.union(&inference_env_var_map);
-        matching_env_var_map.difference(&user_env_var_set.exclusions);
-
-        Ok(DetailedMap {
-            all: all_env_var_map,
-            by_source: BySource {
-                explicit: explicit_env_var_map,
-                matching: matching_env_var_map,
-            },
-        })
-    }
-
-    /// Constructs an environment map that contains pass through environment
-    /// variables
-    pub fn pass_through_env(
-        &self,
-        builtins: &[&str],
-        global_env: &Self,
-        task_pass_through: &[impl AsRef<str>],
-    ) -> Result<Self, Error> {
-        let mut pass_through_env = EnvironmentVariableMap::default();
-        let default_env_var_pass_through_map = self.from_wildcards(builtins)?;
-        let task_pass_through_env =
-            self.wildcard_map_from_wildcards_unresolved(task_pass_through)?;
-
-        pass_through_env.union(&default_env_var_pass_through_map);
-        pass_through_env.union(global_env);
-        pass_through_env.union(&task_pass_through_env.inclusions);
-        pass_through_env.difference(&task_pass_through_env.exclusions);
-
-        Ok(pass_through_env)
+        Ok(DetailedMap::from_task_env_parts(
+            &inference_env_var_map,
+            &user_env_var_set,
+        ))
     }
 
     /// Like `from_wildcards` but uses pre-compiled regexes.
@@ -434,26 +459,23 @@ impl EnvironmentVariableMap {
         }
         output
     }
+}
 
-    /// Like `pass_through_env` but uses pre-compiled builtin wildcards.
-    pub fn pass_through_env_compiled(
-        &self,
-        compiled_builtins: &CompiledWildcards,
-        global_env: &Self,
-        task_pass_through: &[impl AsRef<str>],
-    ) -> Result<Self, Error> {
-        let default_env_var_pass_through_map = self.from_compiled_wildcards(compiled_builtins);
-        let task_pass_through_env =
-            self.wildcard_map_from_wildcards_unresolved(task_pass_through)?;
-
-        let mut pass_through_env = EnvironmentVariableMap::default();
-        pass_through_env.union(&default_env_var_pass_through_map);
-        pass_through_env.union(global_env);
-        pass_through_env.union(&task_pass_through_env.inclusions);
-        pass_through_env.difference(&task_pass_through_env.exclusions);
-
-        Ok(pass_through_env)
-    }
+/// Constructs an environment map that contains pass through environment
+/// variables from pre-matched parts. `builtin_pass_through` and the task's
+/// `WildcardMaps` are expected to have been matched against the same
+/// environment snapshot.
+pub fn pass_through_env_from_parts(
+    builtin_pass_through: &EnvironmentVariableMap,
+    global_env: &EnvironmentVariableMap,
+    task_pass_through: &WildcardMaps,
+) -> EnvironmentVariableMap {
+    let mut pass_through_env = EnvironmentVariableMap::default();
+    pass_through_env.union(builtin_pass_through);
+    pass_through_env.union(global_env);
+    pass_through_env.union(&task_pass_through.inclusions);
+    pass_through_env.difference(&task_pass_through.exclusions);
+    pass_through_env
 }
 
 const WILDCARD: char = '*';
@@ -638,38 +660,7 @@ mod tests {
     #[test_case(&["!FOO"], &["PATH"] ; "remove global")]
     #[test_case(&["!PATH"], &["FOO"] ; "remove builtin")]
     #[test_case(&["FOO*", "!FOOD"], &["FOO", "FOOBAR", "PATH"] ; "mixing negations")]
-    fn test_pass_through_env(task: &[&str], expected: &[&str]) {
-        let env_at_start = EnvironmentVariableMap(
-            vec![
-                ("PATH", "of"),
-                ("FOO", "bar"),
-                ("FOOBAR", "baz"),
-                ("FOOD", "cheese"),
-                ("BAR", "nuts"),
-            ]
-            .into_iter()
-            .map(|(k, v)| (k.to_owned(), v.to_owned()))
-            .collect(),
-        );
-        let global_env = EnvironmentVariableMap(
-            vec![("FOO", "bar")]
-                .into_iter()
-                .map(|(k, v)| (k.to_owned(), v.to_owned()))
-                .collect(),
-        );
-        let output = env_at_start
-            .pass_through_env(&["PATH"], &global_env, task)
-            .unwrap();
-        let mut actual: Vec<_> = output.keys().map(|s| s.as_str()).collect();
-        actual.sort();
-        assert_eq!(actual, expected);
-    }
-
-    #[test_case(&["FOO*"], &["FOO", "FOOBAR", "FOOD", "PATH"] ; "folds 3 sources")]
-    #[test_case(&["!FOO"], &["PATH"] ; "remove global")]
-    #[test_case(&["!PATH"], &["FOO"] ; "remove builtin")]
-    #[test_case(&["FOO*", "!FOOD"], &["FOO", "FOOBAR", "PATH"] ; "mixing negations")]
-    fn test_pass_through_env_compiled_matches_original(task: &[&str], expected: &[&str]) {
+    fn test_pass_through_env_from_parts(task: &[&str], expected: &[&str]) {
         let env_at_start = EnvironmentVariableMap(
             vec![
                 ("PATH", "of"),
@@ -690,12 +681,61 @@ mod tests {
         );
         let builtins: &[&str] = &["PATH"];
         let compiled = CompiledWildcards::compile(builtins).unwrap();
-        let output = env_at_start
-            .pass_through_env_compiled(&compiled, &global_env, task)
+        let builtin_pass_through = env_at_start.from_compiled_wildcards(&compiled);
+        let task: Vec<String> = task.iter().map(|s| s.to_string()).collect();
+        let task_pass_through = env_at_start
+            .wildcard_map_from_wildcards_unresolved(&task)
             .unwrap();
+        let output =
+            pass_through_env_from_parts(&builtin_pass_through, &global_env, &task_pass_through);
         let mut actual: Vec<_> = output.keys().map(|s| s.as_str()).collect();
         actual.sort();
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_wildcard_map_cache_matches_uncached() {
+        let env = EnvironmentVariableMap(
+            vec![("FOO", "1"), ("FOOBAR", "2"), ("FOOD", "3"), ("BAR", "4")]
+                .into_iter()
+                .map(|(k, v)| (k.to_owned(), v.to_owned()))
+                .collect(),
+        );
+
+        let patterns: Vec<String> = vec!["FOO*".to_string(), "!FOOD".to_string()];
+        let cache = WildcardMapCache::default();
+
+        // Hit the cache twice to exercise both the miss and hit paths.
+        for _ in 0..2 {
+            let cached = cache.get_or_compute(&env, &patterns).unwrap();
+            let uncached = env.from_wildcards(&patterns).unwrap();
+
+            let mut cached_keys: Vec<_> = cached.resolved.keys().cloned().collect();
+            let mut uncached_keys: Vec<_> = uncached.keys().cloned().collect();
+            cached_keys.sort();
+            uncached_keys.sort();
+            assert_eq!(cached_keys, uncached_keys);
+            assert_eq!(cached_keys, vec!["FOO", "FOOBAR"]);
+
+            let mut exclusion_keys: Vec<_> = cached.maps.exclusions.keys().cloned().collect();
+            exclusion_keys.sort();
+            assert_eq!(exclusion_keys, vec!["FOOD"]);
+        }
+    }
+
+    #[test]
+    fn test_wildcard_map_cache_empty_patterns() {
+        let env = EnvironmentVariableMap(
+            vec![("FOO", "bar")]
+                .into_iter()
+                .map(|(k, v)| (k.to_owned(), v.to_owned()))
+                .collect(),
+        );
+        let cache = WildcardMapCache::default();
+        let cached = cache.get_or_compute(&env, &[]).unwrap();
+        assert!(cached.resolved.is_empty());
+        assert!(cached.maps.inclusions.is_empty());
+        assert!(cached.maps.exclusions.is_empty());
     }
 
     #[test]
