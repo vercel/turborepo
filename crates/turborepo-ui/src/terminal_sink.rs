@@ -25,6 +25,27 @@ struct TaskRenderState {
     line_buffer: Vec<u8>,
 }
 
+/// How the single-task stream filter treats a task's output.
+#[derive(Debug, PartialEq, Eq)]
+enum StreamDisposition {
+    /// Another task is being streamed; drop this output.
+    Suppress,
+    /// This is the single streamed task; write its bytes exactly as the TUI
+    /// pane would show them, with no per-line prefix.
+    Verbatim,
+    /// No filter is active; write with the usual per-task colored prefix.
+    Prefixed,
+}
+
+/// Decide how to render `task`'s output given the active stream filter.
+fn stream_disposition(filter: Option<String>, task: &str) -> StreamDisposition {
+    match filter.as_deref() {
+        Some(selected) if selected == task => StreamDisposition::Verbatim,
+        Some(_) => StreamDisposition::Suppress,
+        None => StreamDisposition::Prefixed,
+    }
+}
+
 /// Routes [`LogEvent`]s and task output to the appropriate file
 /// descriptor with color styling:
 ///
@@ -58,9 +79,10 @@ pub struct TerminalSink {
     /// the user has switched to streamed logs). Output must then convert
     /// lone `\n` to `\r\n` to avoid staircased text.
     raw_terminal: AtomicBool,
-    /// When `Some(task)`, only output for that task is emitted. Used when
+    /// When `Some(task)`, only output for that task is emitted, verbatim
+    /// (no per-task prefix), exactly as the TUI pane shows it. Used when
     /// the user streams a single selected task's logs. `None` streams all
-    /// tasks.
+    /// tasks with prefixes.
     stream_filter: Mutex<Option<String>>,
 }
 
@@ -127,14 +149,14 @@ impl TerminalSink {
     /// Returns `true` if output for `task` should be suppressed by the
     /// current single-task stream filter.
     fn filtered_out(&self, task: &str) -> bool {
-        match &*self
-            .stream_filter
+        stream_disposition(self.stream_filter(), task) == StreamDisposition::Suppress
+    }
+
+    fn stream_filter(&self) -> Option<String> {
+        self.stream_filter
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-        {
-            Some(filter) => filter != task,
-            None => false,
-        }
+            .clone()
     }
 
     /// Write `bytes` to `handle`, converting lone `\n` to `\r\n` when the
@@ -259,10 +281,17 @@ impl LogSink for TerminalSink {
         if self.mode.load(Ordering::Relaxed) == MODE_DISABLED {
             return;
         }
-        if self.filtered_out(task) {
-            return;
+        match stream_disposition(self.stream_filter(), task) {
+            StreamDisposition::Suppress => {}
+            // Single-task streaming shows the task's output verbatim —
+            // no per-line prefix — matching what the TUI pane displays.
+            StreamDisposition::Verbatim => {
+                let stdout = io::stdout();
+                let mut handle = stdout.lock();
+                self.write_bytes(&mut handle, bytes);
+            }
+            StreamDisposition::Prefixed => self.write_task_output(task, bytes),
         }
-        self.write_task_output(task, bytes);
     }
 
     fn register_task(&self, task: &str, prefix: &str) {
@@ -444,6 +473,25 @@ mod tests {
 
         sink.set_stream_filter(None);
         assert!(!sink.filtered_out("b"), "clearing the filter restores all");
+    }
+
+    #[test]
+    fn single_task_stream_is_verbatim_and_all_tasks_are_prefixed() {
+        assert_eq!(
+            stream_disposition(None, "a"),
+            StreamDisposition::Prefixed,
+            "no filter streams every task with its prefix"
+        );
+        assert_eq!(
+            stream_disposition(Some("a".to_string()), "a"),
+            StreamDisposition::Verbatim,
+            "the selected task's output is shown exactly as in the TUI"
+        );
+        assert_eq!(
+            stream_disposition(Some("a".to_string()), "b"),
+            StreamDisposition::Suppress,
+            "other tasks are dropped while a single task is streamed"
+        );
     }
 
     #[test]

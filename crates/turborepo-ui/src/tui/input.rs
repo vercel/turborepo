@@ -126,8 +126,9 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         }
         // Fall through if we aren't in interactive mode
         KeyCode::Char('l') => Some(Event::ToggleLogPanel),
-        // `h` streams the selected task's logs (toggle); `s` streams all
-        // tasks. Pressing the same key again returns to the TUI.
+        // `h` leaves the alt screen and shows only the selected task's logs,
+        // verbatim (no prefixes); `s` streams all tasks with prefixes.
+        // Pressing the same key again returns to the TUI.
         KeyCode::Char('h') => Some(Event::ToggleStream {
             scope: StreamScope::SelectedTask,
         }),

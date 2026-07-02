@@ -18,6 +18,7 @@ use tokio::{
 };
 use tracing::{debug, trace};
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_log::LogSink;
 
 use crate::tui::popup::{popup, popup_area};
 
@@ -68,6 +69,10 @@ pub struct App<W> {
     scroll_momentum: ScrollMomentum,
     log_events: Vec<turborepo_log::LogEvent>,
     showing_log_panel: bool,
+    /// How many bytes of each task's output have already been emitted to the
+    /// stream sink. Lets repeated TUI<->stream toggles backfill only the new
+    /// output instead of re-printing the whole history each time.
+    replayed_offsets: BTreeMap<String, usize>,
 }
 
 impl<W> App<W> {
@@ -126,6 +131,7 @@ impl<W> App<W> {
             scroll_momentum: ScrollMomentum::new(),
             log_events: Vec::new(),
             showing_log_panel: false,
+            replayed_offsets: BTreeMap::new(),
         }
     }
 
@@ -640,6 +646,40 @@ impl<W> App<W> {
         Ok(())
     }
 
+    /// Replay each started task's buffered output through the sink so that
+    /// switching from the TUI to streamed logs shows the history that was
+    /// printed while the TUI owned the screen, not just output from the
+    /// moment of the switch onward.
+    ///
+    /// Tasks are replayed in displayed order. The sink applies its own
+    /// per-task prefix and single-task stream filter, so only the relevant
+    /// task's history is emitted when a filter is active.
+    ///
+    /// A per-task watermark tracks how many bytes have already been emitted to
+    /// the sink, so repeated TUI<->stream toggles only backfill the output
+    /// produced since the previous excursion rather than re-printing the whole
+    /// history each time. If a task's buffer shrinks (e.g. logs were cleared)
+    /// the watermark resets and the remaining output is replayed in full.
+    pub fn replay_to_sink(&mut self, sink: &TerminalSink) {
+        for task_name in self.tasks_by_status.tasks_started() {
+            let Some(task) = self.tasks.get(&task_name) else {
+                continue;
+            };
+            let output = task.raw_output();
+            let already =
+                replay_offset(self.replayed_offsets.get(&task_name).copied(), output.len());
+
+            let pending = &output[already..];
+            self.replayed_offsets
+                .insert(task_name.clone(), output.len());
+
+            if pending.is_empty() {
+                continue;
+            }
+            sink.task_output(&task_name, turborepo_log::OutputChannel::Stdout, pending);
+        }
+    }
+
     #[tracing::instrument(skip(self))]
     pub fn set_status(
         &mut self,
@@ -868,6 +908,18 @@ pub async fn run_app(
     result
 }
 
+/// Determine where to resume replaying a task's buffered output, given the
+/// byte count emitted on a previous excursion (`previous`) and the task's
+/// current buffer length (`len`).
+///
+/// Returns `previous` when the buffer has only grown, so repeated toggles
+/// backfill only the new output. Returns `0` when the buffer shrank below the
+/// watermark (e.g. logs were cleared), so the remaining output replays in
+/// full.
+fn replay_offset(previous: Option<usize>, len: usize) -> usize {
+    previous.filter(|&offset| offset <= len).unwrap_or(0)
+}
+
 /// Check if an event indicates we need to start rendering the TUI.
 /// We start rendering when we receive a cache miss (meaning a task will
 /// actually run) or when tasks are updated (which only happens in watch mode,
@@ -920,7 +972,7 @@ async fn run_app_inner(
         // Toggling between TUI and streamed logs has terminal/sink side effects
         // that must happen here (not in `update`, which only mutates `App`).
         if let Event::ToggleStream { scope } = &event {
-            handle_toggle_stream(terminal, display, app, terminal_sink, scope)?;
+            handle_toggle_stream(terminal, display, app, terminal_sink, scope, color_config)?;
             last_render = Instant::now();
             continue;
         }
@@ -980,6 +1032,7 @@ fn handle_toggle_stream(
     app: &mut App<Box<dyn io::Write + Send>>,
     terminal_sink: &TerminalSink,
     scope: &StreamScope,
+    color_config: ColorConfig,
 ) -> Result<(), Error> {
     match *display {
         DisplayState::Tui => {
@@ -994,7 +1047,10 @@ fn handle_toggle_stream(
             leave_alt_screen(term)?;
             terminal_sink.set_stream_filter(filter.clone());
             terminal_sink.enable();
-            print_stream_banner(filter.as_deref());
+            print_stream_banner(color_config, filter.as_deref());
+            // Backfill the history printed while the TUI owned the screen so
+            // the user sees the full log, not just output from this moment on.
+            app.replay_to_sink(terminal_sink);
             *display = DisplayState::Streaming;
         }
         DisplayState::Streaming => {
@@ -1014,15 +1070,16 @@ fn handle_toggle_stream(
     Ok(())
 }
 
-/// Print a separator marking the boundary where streamed logs begin. Always
-/// uses `\r\n` because raw mode is enabled whenever we stream.
-fn print_stream_banner(task: Option<&str>) {
+/// Print a light-grey line marking the boundary where streamed logs begin.
+/// Always uses `\r\n` because raw mode is enabled whenever we stream.
+fn print_stream_banner(color_config: ColorConfig, task: Option<&str>) {
     let label = match task {
-        Some(task) => format!("streaming logs for {task} — press h to return to the TUI"),
-        None => "streaming all logs — press s to return to the TUI".to_string(),
+        Some(task) => format!("Streaming logs for {task}. Press h to return to the TUI."),
+        None => "Streaming logs for all tasks. Press s to return to the TUI.".to_string(),
     };
+    let styled = color_config.apply(crate::GREY.apply_to(label));
     let mut stdout = io::stdout();
-    let _ = write!(stdout, "\r\n── {label} ──\r\n");
+    let _ = write!(stdout, "\r\n{styled}\r\n");
     let _ = stdout.flush();
 }
 
@@ -1456,7 +1513,58 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
-    use crate::tui::event::CacheResult;
+    use crate::{ColorConfig, tui::event::CacheResult};
+
+    #[test]
+    fn replay_offset_resumes_from_watermark_when_buffer_grows() {
+        // No prior excursion: start from the beginning.
+        assert_eq!(replay_offset(None, 10), 0);
+        // Buffer grew past the watermark: resume from the watermark.
+        assert_eq!(replay_offset(Some(4), 10), 4);
+        // Buffer unchanged: nothing new to replay.
+        assert_eq!(replay_offset(Some(10), 10), 10);
+        // Buffer shrank (logs cleared): replay everything remaining.
+        assert_eq!(replay_offset(Some(10), 3), 0);
+    }
+
+    #[test]
+    fn replay_to_sink_advances_watermark_for_started_tasks() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        // The sink is disabled so the test never writes to the real stdout.
+        let sink = TerminalSink::new(ColorConfig::new(true));
+        sink.disable();
+
+        app.start_task("a", OutputLogs::Full)?;
+        app.process_output("a", b"hello\r\n")?;
+
+        // First excursion replays all of task "a"'s output and records the
+        // watermark. Task "b" hasn't started, so it gets no watermark.
+        app.replay_to_sink(&sink);
+        assert_eq!(app.replayed_offsets.get("a"), Some(&7));
+        assert_eq!(app.replayed_offsets.get("b"), None);
+
+        // More output arrives; the next excursion advances the watermark by
+        // exactly the new bytes (no re-replay of the earlier history).
+        app.process_output("a", b"world\r\n")?;
+        app.replay_to_sink(&sink);
+        assert_eq!(app.replayed_offsets.get("a"), Some(&14));
+
+        // No new output: the watermark holds steady.
+        app.replay_to_sink(&sink);
+        assert_eq!(app.replayed_offsets.get("a"), Some(&14));
+
+        Ok(())
+    }
 
     #[test]
     fn test_scroll() -> Result<(), Error> {

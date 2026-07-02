@@ -1120,10 +1120,12 @@ impl Run {
             .max()
             .unwrap_or(if errors.is_empty() { 0 } else { 1 });
 
+        // Task-scoped so sinks can attribute the failure to its task — e.g.
+        // the single-task stream filter drops errors from other tasks.
         for err in &errors {
             turborepo_log::error(
-                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-                err.to_string(),
+                turborepo_log::Source::task(err.task_id()),
+                err.cause().to_string(),
             )
             .emit();
         }

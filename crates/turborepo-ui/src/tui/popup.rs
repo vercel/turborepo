@@ -11,7 +11,7 @@ const BIND_LIST: &[&str] = [
     "m       - Toggle this help popup",
     "↑ or k  - Select previous task",
     "↓ or j  - Select next task",
-    "h       - Stream selected task logs (toggle)",
+    "h       - Show selected task logs full-screen (toggle)",
     "s       - Stream all task logs (toggle)",
     "Shift+h - Toggle task list",
     "p       - Toggle pinned task selection",
