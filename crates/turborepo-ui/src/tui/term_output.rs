@@ -155,6 +155,13 @@ impl<W> TerminalOutput<W> {
         self.selection_start.is_some()
     }
 
+    /// Clears the selection highlight and any pending selection anchor.
+    pub fn clear_selection(&mut self) -> Result<(), Error> {
+        self.parser.clear_selection()?;
+        self.selection_start = None;
+        Ok(())
+    }
+
     pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
         match event.kind {
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
@@ -291,7 +298,8 @@ mod newline_tests {
             row: 0,
             modifiers: crossterm::event::KeyModifiers::empty(),
         })?;
-        // Release ends the drag but keeps the selection highlighted.
+        // Release ends the drag. The selection itself survives at this
+        // layer so `App` can copy it before clearing the highlight.
         assert!(!output.is_selecting());
         assert!(output.has_selection());
         Ok(())

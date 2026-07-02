@@ -723,6 +723,9 @@ impl<W> App<W> {
             if was_selecting && task.has_selection() {
                 self.copy_selection()?;
             }
+            // The selection has served its purpose once the button is up:
+            // it was either copied or cancelled. Drop the highlight.
+            self.get_full_task_mut()?.clear_selection()?;
             return Ok(());
         }
 
@@ -3042,9 +3045,10 @@ mod test {
             pane_column + 4,
             KeyModifiers::empty(),
         ))?;
-        // Releasing the button copies the selection and shows the notice.
+        // Releasing the button copies the selection, clears the highlight,
+        // and shows the notice.
         assert!(app.clipboard_notice_expiry.is_some());
-        assert!(app.get_full_task()?.has_selection());
+        assert!(!app.get_full_task()?.has_selection());
         assert!(!app.get_full_task()?.is_selecting());
         assert!(!app.clear_expired_clipboard_notice());
 

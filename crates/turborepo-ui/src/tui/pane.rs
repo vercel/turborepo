@@ -10,7 +10,6 @@ use super::{PANE_LEFT_PADDING_WITH_SIDEBAR, TerminalOutput, app::LayoutSections}
 
 const EXIT_INTERACTIVE_HINT: &str = "Ctrl-z - Stop interacting";
 const ENTER_INTERACTIVE_HINT: &str = "i - Interact";
-const HAS_SELECTION: &str = "c - Copy selection";
 const CANCEL_SELECTION: &str = "hold shift - Cancel selection";
 const COPIED_TO_CLIPBOARD: &str = "Copied to clipboard";
 const SCROLL_LOGS: &str = "u/d - Scroll logs";
@@ -48,6 +47,26 @@ impl<'a, W> TerminalPane<'a, W> {
     }
 
     fn footer(&self) -> Line<'_> {
+        let format_messages = |messages: &[&str]| -> Line {
+            // Spaces are used to pad the footer text for aesthetics
+            let formatted_messages = format!("   {}", messages.join("   "));
+
+            Line::styled(
+                formatted_messages,
+                Style::default().add_modifier(Modifier::DIM),
+            )
+            .left_aligned()
+        };
+
+        // While the user is dragging out a selection, and right after a
+        // copy, the one relevant message replaces the usual key binds.
+        if self.terminal_output.is_selecting() {
+            return format_messages(&[CANCEL_SELECTION]);
+        }
+        if self.show_copied_notice {
+            return format_messages(&[COPIED_TO_CLIPBOARD]);
+        }
+
         let build_message_vec = |footer_text: &[&str]| -> Line {
             let mut messages = Vec::new();
             messages.extend_from_slice(footer_text);
@@ -56,26 +75,7 @@ impl<'a, W> TerminalPane<'a, W> {
                 messages.push(TASK_LIST_HIDDEN);
             }
 
-            // Selection hints, in priority order: while the user is dragging
-            // out a selection, tell them how to cancel it; right after a
-            // copy, confirm it happened; otherwise advertise the copy bind
-            // for the selection they have.
-            if self.terminal_output.is_selecting() {
-                messages.push(CANCEL_SELECTION);
-            } else if self.show_copied_notice {
-                messages.push(COPIED_TO_CLIPBOARD);
-            } else if self.terminal_output.has_selection() {
-                messages.push(HAS_SELECTION);
-            }
-
-            // Spaces are used to pad the footer text for aesthetics
-            let formatted_messages = format!("   {}", messages.join("   "));
-
-            Line::styled(
-                formatted_messages.to_string(),
-                Style::default().add_modifier(Modifier::DIM),
-            )
-            .left_aligned()
+            format_messages(&messages)
         };
 
         match self.section {
@@ -162,11 +162,7 @@ mod test {
     fn test_footer_copied_notice() {
         let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
         let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, true);
-        assert_eq!(
-            String::from(pane.footer()),
-            "   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom   Copied to \
-             clipboard"
-        );
+        assert_eq!(String::from(pane.footer()), "   Copied to clipboard");
     }
 
     #[test]
@@ -193,8 +189,7 @@ mod test {
         let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, false);
         assert_eq!(
             String::from(pane.footer()),
-            "   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom   hold shift - \
-             Cancel selection"
+            "   hold shift - Cancel selection"
         );
     }
 
