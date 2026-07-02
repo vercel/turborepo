@@ -1,6 +1,6 @@
 # Turborepo starter
 
-This Turborepo starter is maintained by the Turborepo core team.
+This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
 
 ## Using this example
 
