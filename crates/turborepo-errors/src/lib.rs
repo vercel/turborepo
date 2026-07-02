@@ -6,6 +6,8 @@
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 
+pub mod json;
+
 use std::{
     fmt::Display,
     iter,

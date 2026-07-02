@@ -8,7 +8,7 @@ use std::{backtrace, collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use biome_deserialize::{
     Deserializable, DeserializableValue, DeserializationDiagnostic, DeserializationVisitor,
-    VisitableType, json::deserialize_from_json_str,
+    VisitableType,
 };
 use biome_diagnostics::DiagnosticExt;
 use biome_json_parser::JsonParserOptions;
@@ -584,7 +584,7 @@ pub fn parse_turbo_json<T: Deserializable + WithMetadata>(
     text: &str,
     file_path: &str,
 ) -> Result<T, BiomeParseError> {
-    let result = deserialize_from_json_str::<T>(
+    let (deserialized, errors) = turborepo_errors::json::deserialize_from_json_str::<T>(
         text,
         JsonParserOptions::default()
             .with_allow_comments()
@@ -592,9 +592,8 @@ pub fn parse_turbo_json<T: Deserializable + WithMetadata>(
         file_path,
     );
 
-    if !result.diagnostics().is_empty() {
-        let diagnostics = result
-            .into_diagnostics()
+    if !errors.is_empty() {
+        let diagnostics = errors
             .into_iter()
             .map(|d| {
                 d.with_file_source_code(text)
@@ -607,9 +606,7 @@ pub fn parse_turbo_json<T: Deserializable + WithMetadata>(
         return Err(BiomeParseError::new(diagnostics));
     }
 
-    let mut turbo_json = result
-        .into_deserialized()
-        .ok_or_else(BiomeParseError::empty)?;
+    let mut turbo_json = deserialized.ok_or_else(BiomeParseError::empty)?;
     turbo_json.add_text(Arc::from(text));
     turbo_json.add_path(Arc::from(file_path));
 
@@ -639,6 +636,15 @@ mod tests {
     fn test_biome_parse_error_display() {
         let err = BiomeParseError::empty();
         assert_eq!(err.to_string(), "Failed to parse turbo.json.");
+    }
+
+    // Regression tests for https://github.com/vercel/turborepo/issues/13197
+    // Unterminated string literals used to panic inside biome during
+    // deserialization instead of producing a parse error.
+    #[test_case("{\"tasks\": {\"build\": {\"persistent\": \"\n}}}"; "quote before newline")]
+    #[test_case("{\"tasks\": {\"build\": {\"dependsOn\": [\""; "quote at eof")]
+    fn test_unterminated_string_reports_parse_error(json: &str) {
+        assert!(RawRootTurboJson::parse(json, "turbo.json").is_err());
     }
 
     #[test_case(r#"{"daemon": true}"#; "daemon in package turbo.json")]

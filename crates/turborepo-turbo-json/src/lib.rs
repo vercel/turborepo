@@ -466,13 +466,13 @@ pub fn task_outputs_from_processed(
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use biome_deserialize::json::deserialize_from_json_str;
     use biome_json_parser::JsonParserOptions;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use test_case::test_case;
     use turbopath::RelativeUnixPath;
     use turborepo_boundaries::BoundariesConfig;
+    use turborepo_errors::json::deserialize_from_json_str;
     use turborepo_task_id::TaskName;
     use turborepo_types::{OutputLogsMode, TaskOutputs, UIMode};
     use turborepo_unescape::UnescapedString;
@@ -688,12 +688,12 @@ mod tests {
             }
         }"#;
 
-        let deserialized_result = deserialize_from_json_str(
+        let (deserialized, _) = deserialize_from_json_str(
             json,
             JsonParserOptions::default().with_allow_comments(),
             "turbo.json",
         );
-        let raw_turbo_json: RawTurboJson = deserialized_result.into_deserialized().unwrap();
+        let raw_turbo_json: RawTurboJson = deserialized.unwrap();
 
         // Try to convert to TurboJson - this should fail
         let turbo_json_result = TurboJson::try_from(raw_turbo_json);
@@ -716,12 +716,12 @@ mod tests {
             }
         }"#;
 
-        let deserialized_result = deserialize_from_json_str(
+        let (deserialized, _) = deserialize_from_json_str(
             json,
             JsonParserOptions::default().with_allow_comments(),
             "turbo.json",
         );
-        let raw_turbo_json: RawTurboJson = deserialized_result.into_deserialized().unwrap();
+        let raw_turbo_json: RawTurboJson = deserialized.unwrap();
 
         // Verify that futureFlags is parsed correctly (empty now that flags are
         // removed)
@@ -746,12 +746,12 @@ mod tests {
             }
         }"#;
 
-        let deserialized_result = deserialize_from_json_str(
+        let (deserialized, _) = deserialize_from_json_str(
             json,
             JsonParserOptions::default().with_allow_comments(),
             "turbo.json",
         );
-        let raw_turbo_json: RawTurboJson = deserialized_result.into_deserialized().unwrap();
+        let raw_turbo_json: RawTurboJson = deserialized.unwrap();
 
         // Verify that futureFlags is parsed correctly
         assert!(raw_turbo_json.future_flags.is_some());
@@ -776,12 +776,12 @@ mod tests {
             }
         }"#;
 
-        let deserialized_result = deserialize_from_json_str(
+        let (deserialized, _) = deserialize_from_json_str(
             json,
             JsonParserOptions::default().with_allow_comments(),
             "turbo.json",
         );
-        let raw_turbo_json: RawTurboJson = deserialized_result.into_deserialized().unwrap();
+        let raw_turbo_json: RawTurboJson = deserialized.unwrap();
 
         assert!(raw_turbo_json.future_flags.is_some());
         let future_flags = raw_turbo_json.future_flags.as_ref().unwrap();
@@ -833,7 +833,7 @@ mod tests {
     #[test_case("{}", "empty boundaries")]
     #[test_case(r#"{"tags": {} }"#, "empty tags")]
     #[test_case(
-        r#"{"tags": { "my-tag": { "dependencies": { "allow": ["my-package"] } } }"#,
+        r#"{"tags": { "my-tag": { "dependencies": { "allow": ["my-package"] } } } }"#,
         "tags and dependencies"
     )]
     #[test_case(
@@ -891,13 +891,16 @@ mod tests {
         "package rule"
     )]
     fn test_deserialize_boundaries(json: &str, name: &str) {
-        let deserialized_result = deserialize_from_json_str(
+        // Match the options used by parse_turbo_json: production turbo.json
+        // parsing allows comments and trailing commas.
+        let (deserialized, _) = deserialize_from_json_str(
             json,
-            JsonParserOptions::default().with_allow_comments(),
+            JsonParserOptions::default()
+                .with_allow_comments()
+                .with_allow_trailing_commas(),
             "turbo.json",
         );
-        let raw_boundaries_config: BoundariesConfig =
-            deserialized_result.into_deserialized().unwrap();
+        let raw_boundaries_config: BoundariesConfig = deserialized.unwrap();
         insta::assert_json_snapshot!(name.replace(' ', "_"), raw_boundaries_config);
     }
 
