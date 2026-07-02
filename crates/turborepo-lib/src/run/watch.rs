@@ -359,7 +359,7 @@ impl WatchClient {
 
         sinks.disable_for_tui();
 
-        let (ui_sender, ui_handle) = run.start_ui()?.unzip();
+        let (ui_sender, ui_handle) = run.start_ui(sinks.terminal.clone())?.unzip();
 
         if let Some(UISender::Tui(ref tui_sender)) = ui_sender {
             sinks.tui.connect(tui_sender.clone());

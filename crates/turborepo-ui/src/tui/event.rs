@@ -62,6 +62,12 @@ pub enum Event {
     ToggleSidebar,
     ToggleHelpPopup,
     TogglePinnedTask,
+    /// Toggle between the TUI and streamed logs. `scope` selects whether
+    /// all tasks or only the selected task are streamed. Pressing again
+    /// while streaming returns to the TUI.
+    ToggleStream {
+        scope: StreamScope,
+    },
     SearchEnter,
     SearchExit {
         restore_scroll: bool,
@@ -78,6 +84,15 @@ pub enum Event {
 pub enum Direction {
     Up,
     Down,
+}
+
+/// Which task output to stream when leaving the TUI for streamed logs.
+#[derive(Clone, PartialEq, Eq)]
+pub enum StreamScope {
+    /// Stream every task's output, interleaved with per-task prefixes.
+    All,
+    /// Stream only the task that was selected in the TUI.
+    SelectedTask,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Enum)]

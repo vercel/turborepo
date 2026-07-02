@@ -8,7 +8,7 @@ use std::{
 
 use ratatui::{
     Frame, Terminal,
-    backend::{Backend, CrosstermBackend},
+    backend::CrosstermBackend,
     layout::{Constraint, Layout},
     widgets::{Clear, TableState},
 };
@@ -18,6 +18,7 @@ use tokio::{
 };
 use tracing::{debug, trace};
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_log::LogSink;
 
 use crate::tui::popup::{popup, popup_area};
 
@@ -26,13 +27,13 @@ const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 
 use super::{
     AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
-    event::{CacheResult, Direction, OutputLogs, PaneSize, TaskResult},
+    event::{CacheResult, Direction, OutputLogs, PaneSize, StreamScope, TaskResult},
     input,
     preferences::PreferenceLoader,
     search::SearchResults,
 };
 use crate::{
-    ColorConfig,
+    ColorConfig, TerminalSink,
     tui::{
         scroll::ScrollMomentum,
         task::{Task, TasksByStatus},
@@ -68,6 +69,10 @@ pub struct App<W> {
     scroll_momentum: ScrollMomentum,
     log_events: Vec<turborepo_log::LogEvent>,
     showing_log_panel: bool,
+    /// How many bytes of each task's output have already been emitted to the
+    /// stream sink. Lets repeated TUI<->stream toggles backfill only the new
+    /// output instead of re-printing the whole history each time.
+    replayed_offsets: BTreeMap<String, usize>,
 }
 
 impl<W> App<W> {
@@ -126,6 +131,7 @@ impl<W> App<W> {
             scroll_momentum: ScrollMomentum::new(),
             log_events: Vec::new(),
             showing_log_panel: false,
+            replayed_offsets: BTreeMap::new(),
         }
     }
 
@@ -640,6 +646,45 @@ impl<W> App<W> {
         Ok(())
     }
 
+    /// Replay each started task's buffered output through the sink so that
+    /// switching from the TUI to streamed logs shows the history that was
+    /// printed while the TUI owned the screen, not just output from the
+    /// moment of the switch onward.
+    ///
+    /// Tasks are replayed in displayed order. When `filter` is `Some`, only
+    /// that task is replayed; other tasks are skipped entirely so their
+    /// watermarks don't advance for output that never reached the screen.
+    /// `filter` must match the sink's active stream filter, otherwise the
+    /// sink would drop bytes the watermark records as emitted.
+    ///
+    /// A per-task watermark tracks how many bytes have already been emitted to
+    /// the sink, so repeated TUI<->stream toggles only backfill the output
+    /// produced since the previous excursion rather than re-printing the whole
+    /// history each time. If a task's buffer shrinks (e.g. logs were cleared)
+    /// the watermark resets and the remaining output is replayed in full.
+    pub fn replay_to_sink(&mut self, sink: &TerminalSink, filter: Option<&str>) {
+        for task_name in self.tasks_by_status.tasks_started() {
+            if filter.is_some_and(|selected| selected != task_name) {
+                continue;
+            }
+            let Some(task) = self.tasks.get(&task_name) else {
+                continue;
+            };
+            let output = task.raw_output();
+            let already =
+                replay_offset(self.replayed_offsets.get(&task_name).copied(), output.len());
+
+            let pending = &output[already..];
+            self.replayed_offsets
+                .insert(task_name.clone(), output.len());
+
+            if pending.is_empty() {
+                continue;
+            }
+            sink.task_output(&task_name, turborepo_log::OutputChannel::Stdout, pending);
+        }
+    }
+
     #[tracing::instrument(skip(self))]
     pub fn set_status(
         &mut self,
@@ -797,6 +842,24 @@ impl<W: Write> App<W> {
     }
 }
 
+/// Logical display state of the render loop.
+///
+/// The user can switch between the interactive TUI (alternate screen) and
+/// streamed plain logs (main screen) repeatedly within one invocation. The
+/// allocated ratatui `Terminal` is kept alive across stream excursions; only
+/// the alternate-screen escape sequences are toggled. Raw mode stays enabled
+/// the whole time (decoupled from this state) so the toggle hotkey is always
+/// catchable.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum DisplayState {
+    /// Nothing rendered yet (before the first non-cached task starts).
+    Inactive,
+    /// TUI is active and owns the alternate screen.
+    Tui,
+    /// Streaming plain logs to the main screen via `TerminalSink`.
+    Streaming,
+}
+
 /// Handle the rendering of the `App` widget based on events received by
 /// `receiver`
 pub async fn run_app(
@@ -806,6 +869,7 @@ pub async fn run_app(
     repo_root: &AbsoluteSystemPathBuf,
     scrollback_len: u64,
     interrupt: Option<Arc<dyn Fn() + Send + Sync>>,
+    terminal_sink: Arc<TerminalSink>,
 ) -> Result<(), Error> {
     // Get terminal size before potentially entering alternate screen
     let size = crossterm::terminal::size()?;
@@ -816,16 +880,23 @@ pub async fn run_app(
     let (crossterm_tx, crossterm_rx) = mpsc::channel(1024);
     input::start_crossterm_stream(crossterm_tx);
 
-    // Terminal is lazily initialized - only started when a non-cached task runs
+    // Terminal is lazily initialized - only started when a non-cached task runs.
+    // Once allocated it is kept alive across TUI<->stream toggles.
     let mut terminal: Option<Terminal<CrosstermBackend<Stdout>>> = None;
+    let mut display = DisplayState::Inactive;
+    // Raw mode is enabled once on first activation and disabled once at the end.
+    let mut raw_mode_enabled = false;
 
     let (result, callback) = match run_app_inner(
         &mut terminal,
+        &mut display,
+        &mut raw_mode_enabled,
         &mut app,
         receiver,
         crossterm_rx,
         color_config,
         interrupt.as_deref(),
+        &terminal_sink,
     )
     .await
     {
@@ -836,22 +907,28 @@ pub async fn run_app(
         }
     };
 
-    // Only cleanup terminal if we actually started it
-    if let Some(terminal) = terminal {
-        cleanup(terminal, app, callback)?;
-    } else {
-        // Even if TUI never started, still persist task output and flush preferences
-        let tasks_started = app.tasks_by_status.tasks_started();
-        app.persist_tasks(tasks_started)?;
-        app.persist_summary()?;
-        app.preferences.flush_to_disk().ok();
-        if let Some(callback) = callback {
-            // Signal completion even if we never started the terminal
-            callback.send(()).ok();
-        }
-    }
+    final_cleanup(
+        terminal,
+        display,
+        raw_mode_enabled,
+        app,
+        callback,
+        &terminal_sink,
+    )?;
 
     result
+}
+
+/// Determine where to resume replaying a task's buffered output, given the
+/// byte count emitted on a previous excursion (`previous`) and the task's
+/// current buffer length (`len`).
+///
+/// Returns `previous` when the buffer has only grown, so repeated toggles
+/// backfill only the new output. Returns `0` when the buffer shrank below the
+/// watermark (e.g. logs were cleared), so the remaining output replays in
+/// full.
+fn replay_offset(previous: Option<usize>, len: usize) -> usize {
+    previous.filter(|&offset| offset <= len).unwrap_or(0)
 }
 
 /// Check if an event indicates we need to start rendering the TUI.
@@ -870,13 +947,17 @@ fn should_start_terminal(event: &Event) -> bool {
 
 // Break out inner loop so we can use `?` without worrying about cleaning up the
 // terminal.
+#[allow(clippy::too_many_arguments)]
 async fn run_app_inner(
     terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>,
+    display: &mut DisplayState,
+    raw_mode_enabled: &mut bool,
     app: &mut App<Box<dyn io::Write + Send>>,
     mut receiver: AppReceiver,
     mut crossterm_rx: mpsc::Receiver<crossterm::event::Event>,
     color_config: ColorConfig,
     interrupt: Option<&(dyn Fn() + Send + Sync)>,
+    terminal_sink: &TerminalSink,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
     let mut last_render = Instant::now();
     let mut resize_debouncer = Debouncer::new(RESIZE_DEBOUNCE_DELAY);
@@ -884,15 +965,28 @@ async fn run_app_inner(
     let mut needs_rerender = true;
 
     while let Some(event) = poll(app.input_options()?, &mut receiver, &mut crossterm_rx).await {
-        // Check if we need to start the terminal (on first cache miss)
-        if terminal.is_none() && should_start_terminal(&event) {
-            let term = startup(color_config)?;
-            *terminal = Some(term);
+        // Check if we need to start the terminal (on first cache miss). The
+        // first activation always enters the TUI (the default mode).
+        if *display == DisplayState::Inactive && should_start_terminal(&event) {
+            if !*raw_mode_enabled {
+                enable_input(color_config, terminal_sink)?;
+                *raw_mode_enabled = true;
+            }
+            enter_alt_screen(terminal)?;
+            *display = DisplayState::Tui;
             // Render initial state to paint the screen
             if let Some(terminal) = terminal.as_mut() {
                 terminal.draw(|f| view(app, f))?;
             }
             last_render = Instant::now();
+        }
+
+        // Toggling between TUI and streamed logs has terminal/sink side effects
+        // that must happen here (not in `update`, which only mutates `App`).
+        if let Event::ToggleStream { scope } = &event {
+            handle_toggle_stream(terminal, display, app, terminal_sink, scope, color_config)?;
+            last_render = Instant::now();
+            continue;
         }
 
         // If we only receive ticks, then there's been no state change so no update
@@ -909,7 +1003,8 @@ async fn run_app_inner(
             resize_event = resize_debouncer.update(event);
         }
         if let Some(resize) = resize_event.take().or_else(|| resize_debouncer.query()) {
-            // If we got a resize event, make sure to update ratatui backend.
+            // If we got a resize event, make sure to update ratatui backend even
+            // while streaming, so the view is correct when we return to the TUI.
             if let Some(term) = terminal.as_mut() {
                 term.autoresize()?;
             }
@@ -918,14 +1013,16 @@ async fn run_app_inner(
         if let Some(event) = event {
             callback = update(app, event, interrupt)?;
             if callback.is_some() {
-                drain_after_stop(terminal, app, &mut receiver, &mut last_render).await?;
+                drain_after_stop(terminal, *display, app, &mut receiver, &mut last_render).await?;
                 break;
             }
             if app.done {
                 break;
             }
-            // Only render if the terminal has been started
-            if let Some(term) = terminal.as_mut()
+            // Only render the TUI when it owns the screen. While streaming, the
+            // `TerminalSink` produces output directly and we must not draw.
+            if *display == DisplayState::Tui
+                && let Some(term) = terminal.as_mut()
                 && FRAMERATE <= last_render.elapsed()
                 && needs_rerender
             {
@@ -939,14 +1036,77 @@ async fn run_app_inner(
     Ok(callback)
 }
 
+/// Switch between the TUI and streamed logs. The allocated `Terminal` is kept
+/// alive; only the alternate screen and the stream sink's mode are toggled.
+fn handle_toggle_stream(
+    terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>,
+    display: &mut DisplayState,
+    app: &mut App<Box<dyn io::Write + Send>>,
+    terminal_sink: &TerminalSink,
+    scope: &StreamScope,
+    color_config: ColorConfig,
+) -> Result<(), Error> {
+    match *display {
+        DisplayState::Tui => {
+            let Some(term) = terminal.as_mut() else {
+                return Ok(());
+            };
+            // Capture the selected task before leaving the TUI.
+            let filter = match scope {
+                StreamScope::All => None,
+                StreamScope::SelectedTask => app.active_task().ok().map(|task| task.to_owned()),
+            };
+            leave_alt_screen(term)?;
+            terminal_sink.set_stream_filter(filter.clone());
+            terminal_sink.enable();
+            print_stream_banner(color_config, filter.as_deref());
+            // Backfill the history printed while the TUI owned the screen so
+            // the user sees the full log, not just output from this moment on.
+            app.replay_to_sink(terminal_sink, filter.as_deref());
+            *display = DisplayState::Streaming;
+        }
+        DisplayState::Streaming => {
+            // Stop streaming before re-entering the alternate screen so the two
+            // writers never contend for stdout.
+            terminal_sink.disable();
+            terminal_sink.set_stream_filter(None);
+            enter_alt_screen(terminal)?;
+            if let Some(term) = terminal.as_mut() {
+                term.draw(|f| view(app, f))?;
+            }
+            *display = DisplayState::Tui;
+        }
+        // Nothing is rendering yet; ignore until the first task runs.
+        DisplayState::Inactive => {}
+    }
+    Ok(())
+}
+
+/// Print a light-grey line marking the boundary where streamed logs begin.
+/// Always uses `\r\n` because raw mode is enabled whenever we stream.
+fn print_stream_banner(color_config: ColorConfig, task: Option<&str>) {
+    let label = match task {
+        Some(task) => format!("Streaming logs for {task}. Press h to return to the TUI."),
+        None => "Streaming logs for all tasks. Press s to return to the TUI.".to_string(),
+    };
+    let styled = color_config.apply(crate::GREY.apply_to(label));
+    let mut stdout = io::stdout();
+    let _ = write!(stdout, "\r\n{styled}\r\n");
+    let _ = stdout.flush();
+}
+
 async fn drain_after_stop(
     terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>,
+    display: DisplayState,
     app: &mut App<Box<dyn io::Write + Send>>,
     receiver: &mut AppReceiver,
     last_render: &mut Instant,
 ) -> Result<(), Error> {
     receiver.close();
     let mut needs_rerender = false;
+    // Only draw if the TUI currently owns the screen; while streaming the
+    // `TerminalSink` has already emitted everything.
+    let drawing = display == DisplayState::Tui;
 
     while let Some(event) = receiver.recv().await {
         if !matches!(event, Event::Tick) {
@@ -954,7 +1114,8 @@ async fn drain_after_stop(
         }
         update(app, event, None)?;
 
-        if let Some(term) = terminal.as_mut()
+        if drawing
+            && let Some(term) = terminal.as_mut()
             && FRAMERATE <= last_render.elapsed()
             && needs_rerender
         {
@@ -964,7 +1125,8 @@ async fn drain_after_stop(
         }
     }
 
-    if let Some(term) = terminal.as_mut()
+    if drawing
+        && let Some(term) = terminal.as_mut()
         && needs_rerender
     {
         term.draw(|f| view(app, f))?;
@@ -1015,13 +1177,26 @@ pub fn terminal_big_enough() -> Result<bool, Error> {
     Ok(width >= MIN_WIDTH && height >= MIN_HEIGHT)
 }
 
-/// Configures terminal for rendering App
-#[tracing::instrument]
-fn startup(color_config: ColorConfig) -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
+/// Enable raw mode and configure color output. Called once, lazily, the first
+/// time the render loop takes ownership of terminal input. Raw mode then stays
+/// on for the rest of the run (across TUI<->stream toggles) so the toggle
+/// hotkey is always catchable.
+#[tracing::instrument(skip(terminal_sink))]
+fn enable_input(color_config: ColorConfig, terminal_sink: &TerminalSink) -> io::Result<()> {
     if color_config.should_strip_ansi {
         crossterm::style::force_color_output(false);
     }
     crossterm::terminal::enable_raw_mode()?;
+    // Stream output must be `\r\n`-normalized while raw mode is on.
+    terminal_sink.set_raw_terminal(true);
+    super::panic_handler::set_raw_mode_enabled();
+    Ok(())
+}
+
+/// Enter the alternate screen, building the ratatui `Terminal` on first use and
+/// reusing it (forcing a full repaint) on subsequent re-entries. Does not touch
+/// raw mode.
+fn enter_alt_screen(terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>) -> io::Result<()> {
     let mut stdout = io::stdout();
     // Ensure all pending writes are flushed before we switch to alternative screen
     stdout.flush()?;
@@ -1033,30 +1208,35 @@ fn startup(color_config: ColorConfig) -> io::Result<Terminal<CrosstermBackend<St
     )?;
     // Track that mouse capture was enabled (important for Windows cleanup)
     super::panic_handler::set_mouse_capture_enabled();
-
     // Mark TUI as active so panic handler knows to restore terminal state
     super::panic_handler::set_tui_active();
 
-    let backend = CrosstermBackend::new(stdout);
+    match terminal.as_mut() {
+        // Re-entering after a stream excursion: force a full repaint.
+        Some(term) => {
+            term.clear()?;
+            term.hide_cursor()?;
+        }
+        None => {
+            let backend = CrosstermBackend::new(stdout);
+            let mut term = Terminal::with_options(
+                backend,
+                ratatui::TerminalOptions {
+                    viewport: ratatui::Viewport::Fullscreen,
+                },
+            )?;
+            term.hide_cursor()?;
+            *terminal = Some(term);
+        }
+    }
 
-    let mut terminal = Terminal::with_options(
-        backend,
-        ratatui::TerminalOptions {
-            viewport: ratatui::Viewport::Fullscreen,
-        },
-    )?;
-    terminal.hide_cursor()?;
-
-    Ok(terminal)
+    Ok(())
 }
 
-/// Restores terminal to expected state
-#[tracing::instrument(skip_all)]
-fn cleanup<B: Backend<Error = io::Error> + io::Write>(
-    mut terminal: Terminal<B>,
-    mut app: App<Box<dyn io::Write + Send>>,
-    callback: Option<oneshot::Sender<()>>,
-) -> io::Result<()> {
+/// Leave the alternate screen, returning to the main screen with the cursor
+/// visible and mouse capture off (so native terminal scrollback/selection
+/// works while streaming). Does not touch raw mode.
+fn leave_alt_screen(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
     terminal.clear()?;
 
     // On Windows, we must only call DisableMouseCapture if EnableMouseCapture
@@ -1095,12 +1275,47 @@ fn cleanup<B: Backend<Error = io::Error> + io::Write>(
         super::panic_handler::set_mouse_capture_disabled();
     }
 
+    terminal.show_cursor()?;
+    // TUI no longer owns the screen; a panic now should not try to leave the
+    // alternate screen.
+    super::panic_handler::set_tui_inactive();
+    terminal.backend_mut().flush()?;
+    Ok(())
+}
+
+/// Restores terminal to expected state at the end of the run, handling both the
+/// case where we exit from the TUI (must leave the alternate screen) and from
+/// streamed logs (already on the main screen).
+#[tracing::instrument(skip_all)]
+fn final_cleanup(
+    terminal: Option<Terminal<CrosstermBackend<Stdout>>>,
+    display: DisplayState,
+    raw_mode_enabled: bool,
+    mut app: App<Box<dyn io::Write + Send>>,
+    callback: Option<oneshot::Sender<()>>,
+    terminal_sink: &TerminalSink,
+) -> io::Result<()> {
+    if let Some(mut terminal) = terminal
+        && display == DisplayState::Tui
+    {
+        // Only leave the alternate screen if we're currently in it. When
+        // streaming we're already on the main screen with the cursor shown.
+        leave_alt_screen(&mut terminal)?;
+    }
+
+    // Return the stream sink to a quiescent state.
+    terminal_sink.set_stream_filter(None);
+
     let tasks_started = app.tasks_by_status.tasks_started();
     app.persist_tasks(tasks_started)?;
     app.persist_summary()?;
     app.preferences.flush_to_disk().ok();
-    crossterm::terminal::disable_raw_mode()?;
-    terminal.show_cursor()?;
+
+    if raw_mode_enabled {
+        terminal_sink.set_raw_terminal(false);
+        crossterm::terminal::disable_raw_mode()?;
+        super::panic_handler::set_raw_mode_disabled();
+    }
 
     // Mark TUI as inactive - cleanup is complete
     super::panic_handler::set_tui_inactive();
@@ -1211,6 +1426,9 @@ fn update(
         Event::ToggleSidebar => {
             app.update_sidebar_toggle();
         }
+        // Stream toggles are handled in the render loop (they have terminal
+        // and sink side effects); nothing to do at the `App` level.
+        Event::ToggleStream { .. } => {}
         Event::ToggleHelpPopup => {
             app.showing_help_popup = !app.showing_help_popup;
         }
@@ -1316,7 +1534,93 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
-    use crate::tui::event::CacheResult;
+    use crate::{ColorConfig, tui::event::CacheResult};
+
+    #[test]
+    fn replay_offset_resumes_from_watermark_when_buffer_grows() {
+        // No prior excursion: start from the beginning.
+        assert_eq!(replay_offset(None, 10), 0);
+        // Buffer grew past the watermark: resume from the watermark.
+        assert_eq!(replay_offset(Some(4), 10), 4);
+        // Buffer unchanged: nothing new to replay.
+        assert_eq!(replay_offset(Some(10), 10), 10);
+        // Buffer shrank (logs cleared): replay everything remaining.
+        assert_eq!(replay_offset(Some(10), 3), 0);
+    }
+
+    #[test]
+    fn replay_to_sink_advances_watermark_for_started_tasks() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        // The sink is disabled so the test never writes to the real stdout.
+        let sink = TerminalSink::new(ColorConfig::new(true));
+        sink.disable();
+
+        app.start_task("a", OutputLogs::Full)?;
+        app.process_output("a", b"hello\r\n")?;
+
+        // First excursion replays all of task "a"'s output and records the
+        // watermark. Task "b" hasn't started, so it gets no watermark.
+        app.replay_to_sink(&sink, None);
+        assert_eq!(app.replayed_offsets.get("a"), Some(&7));
+        assert_eq!(app.replayed_offsets.get("b"), None);
+
+        // More output arrives; the next excursion advances the watermark by
+        // exactly the new bytes (no re-replay of the earlier history).
+        app.process_output("a", b"world\r\n")?;
+        app.replay_to_sink(&sink, None);
+        assert_eq!(app.replayed_offsets.get("a"), Some(&14));
+
+        // No new output: the watermark holds steady.
+        app.replay_to_sink(&sink, None);
+        assert_eq!(app.replayed_offsets.get("a"), Some(&14));
+
+        Ok(())
+    }
+
+    #[test]
+    fn single_task_replay_preserves_other_tasks_backlog() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        // The sink is disabled so the test never writes to the real stdout.
+        let sink = TerminalSink::new(ColorConfig::new(true));
+        sink.disable();
+
+        app.start_task("a", OutputLogs::Full)?;
+        app.start_task("b", OutputLogs::Full)?;
+        app.process_output("a", b"a-history\r\n")?;
+        app.process_output("b", b"b-history\r\n")?;
+
+        // Streaming only task "a" must not advance task "b"'s watermark:
+        // "b"'s bytes never reached the screen.
+        app.replay_to_sink(&sink, Some("a"));
+        assert_eq!(app.replayed_offsets.get("a"), Some(&11));
+        assert_eq!(app.replayed_offsets.get("b"), None);
+
+        // A later stream-all excursion still replays task "b"'s full backlog.
+        app.replay_to_sink(&sink, None);
+        assert_eq!(app.replayed_offsets.get("b"), Some(&11));
+
+        Ok(())
+    }
 
     #[test]
     fn test_scroll() -> Result<(), Error> {
@@ -2704,7 +3008,14 @@ mod test {
         update(&mut app, Event::Stop(callback_tx), None)?;
         let mut terminal = None;
         let mut last_render = Instant::now();
-        drain_after_stop(&mut terminal, &mut app, &mut receiver, &mut last_render).await?;
+        drain_after_stop(
+            &mut terminal,
+            DisplayState::Inactive,
+            &mut app,
+            &mut receiver,
+            &mut last_render,
+        )
+        .await?;
 
         assert!(app.done);
         assert!(app.tasks_by_status.running.is_empty());
