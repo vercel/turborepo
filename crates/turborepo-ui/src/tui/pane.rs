@@ -12,6 +12,7 @@ const EXIT_INTERACTIVE_HINT: &str = "Ctrl-z - Stop interacting";
 const ENTER_INTERACTIVE_HINT: &str = "i - Interact";
 const CANCEL_SELECTION: &str = "Hold Shift - Prevent copy";
 const COPIED_TO_CLIPBOARD: &str = "Copied to clipboard!";
+const HAS_SELECTION: &str = "c - Copy to clipboard | Click to unselect";
 const SCROLL_LOGS: &str = "u/d - Scroll logs";
 const PAGE_LOGS: &str = "U/D - Page logs";
 const JUMP_IN_LOGS: &str = "t/b - Jump to top/bottom";
@@ -58,13 +59,18 @@ impl<'a, W> TerminalPane<'a, W> {
             .left_aligned()
         };
 
-        // While the user is dragging out a selection, and right after a
-        // copy, the one relevant message replaces the usual key binds.
+        // Selection flows replace the usual key binds with the one relevant
+        // message: how to prevent the copy while dragging, confirmation
+        // right after a copy, and the options for a selection that was kept
+        // by releasing with shift held.
         if self.terminal_output.is_selecting() {
             return format_messages(&[CANCEL_SELECTION]);
         }
         if self.show_copied_notice {
             return format_messages(&[COPIED_TO_CLIPBOARD]);
+        }
+        if self.terminal_output.has_selection() {
+            return format_messages(&[HAS_SELECTION]);
         }
 
         let build_message_vec = |footer_text: &[&str]| -> Line {
@@ -188,6 +194,43 @@ mod test {
 
         let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, false);
         assert_eq!(String::from(pane.footer()), "   Hold Shift - Prevent copy");
+    }
+
+    #[test]
+    fn test_footer_held_selection_offers_copy_and_unselect() {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
+        term.process(b"hello world\r\n");
+        term.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })
+        .unwrap();
+        term.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })
+        .unwrap();
+        term.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::SHIFT,
+        })
+        .unwrap();
+        assert!(term.has_selection());
+        assert!(!term.is_selecting());
+
+        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, false);
+        assert_eq!(
+            String::from(pane.footer()),
+            "   c - Copy to clipboard | Click to unselect"
+        );
     }
 
     #[test]

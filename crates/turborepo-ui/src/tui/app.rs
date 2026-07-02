@@ -717,15 +717,18 @@ impl<W> App<W> {
             event.kind,
             crossterm::event::MouseEventKind::Up(crossterm::event::MouseButton::Left)
         ) {
+            let shift_held = event
+                .modifiers
+                .contains(crossterm::event::KeyModifiers::SHIFT);
             let task = self.get_full_task_mut()?;
             let was_selecting = task.is_selecting();
             task.handle_mouse(event)?;
-            if was_selecting && task.has_selection() {
+            // Shift prevents the automatic copy, leaving the selection in
+            // place so the user can still copy it with `c` or dismiss it by
+            // clicking.
+            if was_selecting && task.has_selection() && !shift_held {
                 self.copy_selection()?;
             }
-            // The selection has served its purpose once the button is up:
-            // it was either copied or cancelled. Drop the highlight.
-            self.get_full_task_mut()?.clear_selection()?;
             return Ok(());
         }
 
@@ -791,6 +794,8 @@ impl<W> App<W> {
             return Ok(());
         };
         super::copy_to_clipboard(&text);
+        // The selection has served its purpose; drop the highlight.
+        task.clear_selection()?;
         self.clipboard_notice_expiry = Some(Instant::now() + CLIPBOARD_NOTICE_DURATION);
         Ok(())
     }
@@ -3061,7 +3066,7 @@ mod test {
     }
 
     #[test]
-    fn test_mouse_release_with_shift_does_not_copy() -> Result<(), Error> {
+    fn test_mouse_release_with_shift_keeps_selection_for_manual_copy() -> Result<(), Error> {
         use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
         let repo_root_tmp = tempdir()?;
@@ -3103,7 +3108,14 @@ mod test {
             pane_column + 4,
             KeyModifiers::SHIFT,
         ))?;
+        // No automatic copy, but the selection is kept so it can still be
+        // copied with `c`.
         assert!(app.clipboard_notice_expiry.is_none());
+        assert!(app.get_full_task()?.has_selection());
+
+        // `c` copies the held selection, then drops the highlight.
+        app.copy_selection()?;
+        assert!(app.clipboard_notice_expiry.is_some());
         assert!(!app.get_full_task()?.has_selection());
 
         Ok(())
