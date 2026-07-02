@@ -166,7 +166,15 @@ impl<W> TerminalOutput<W> {
         match event.kind {
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
                 self.parser.clear_selection()?;
-                self.selection_start = Some((event.row, event.column));
+                // Shift held at click time means the user is preventing the
+                // copy before it starts, so don't anchor a selection. Most
+                // terminals never deliver shifted mouse events (shift
+                // bypasses mouse capture for native selection), but honor
+                // them when they do arrive.
+                self.selection_start = (!event
+                    .modifiers
+                    .contains(crossterm::event::KeyModifiers::SHIFT))
+                .then_some((event.row, event.column));
             }
             crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
                 // Holding shift mid-drag cancels the selection so releasing
@@ -339,6 +347,31 @@ mod newline_tests {
         output.handle_mouse(MouseEvent {
             kind: MouseEventKind::Drag(MouseButton::Left),
             column: 8,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        assert!(!output.has_selection());
+        Ok(())
+    }
+
+    #[test]
+    fn shift_on_click_does_not_start_selection() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let mut output: TerminalOutput<()> = TerminalOutput::new(10, 40, None, 100);
+        output.process(b"hello world\r\n");
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::SHIFT,
+        })?;
+        assert!(!output.is_selecting());
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 4,
             row: 0,
             modifiers: KeyModifiers::empty(),
         })?;
