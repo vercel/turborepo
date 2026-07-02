@@ -181,6 +181,7 @@ impl GitRepo {
             to_hash,
             &mut hashes,
             self.git_attrs(),
+            self.slowest_files.as_ref(),
         )?;
         Ok(hashes)
     }
@@ -206,6 +207,7 @@ impl GitRepo {
             to_hash,
             &mut hashes,
             self.git_attrs(),
+            self.slowest_files.as_ref(),
         )?;
         Ok(hashes)
     }
@@ -259,6 +261,7 @@ impl GitRepo {
                 to_hash,
                 &mut new_hashes,
                 self.git_attrs(),
+                self.slowest_files.as_ref(),
             )?;
             hashes.extend(new_hashes);
         }
@@ -543,7 +546,7 @@ mod tests {
         let mut hashes = GitHashes::new();
         // FIXME: This test verifies a bug: we don't hash symlinks.
         // TODO: update this test to point at get_package_file_hashes
-        hash_objects(&git_root, &git_root, to_hash, &mut hashes, None).unwrap();
+        hash_objects(&git_root, &git_root, to_hash, &mut hashes, None, None).unwrap();
         assert!(hashes.is_empty());
 
         let pkg_path = git_root.anchor(&git_root).unwrap();
