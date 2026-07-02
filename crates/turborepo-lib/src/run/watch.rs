@@ -414,7 +414,7 @@ impl WatchClient {
         const STARTUP_ATTEMPT: Duration = Duration::from_secs(10);
         // Shared with the package-changes subscriber's inner wait so the inner
         // timeout is never shorter than this outer cap.
-        let startup_cap = 
+        let startup_cap =
             Duration::from_secs(crate::package_changes_watcher::startup_timeout_secs());
         let started = std::time::Instant::now();
         let mut warned = false;
