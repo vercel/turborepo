@@ -990,14 +990,13 @@ pub fn spawn_run_app(
     terminal_sink: Arc<TerminalSink>,
 ) -> Result<tokio::task::JoinHandle<Result<(), crate::Error>>, Error> {
     let (done_tx, done_rx) = oneshot::channel();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
 
     std::thread::Builder::new()
         .name("turbo-tui".into())
         .spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("failed to create TUI tokio runtime");
             let result = runtime.block_on(run_app(
                 tasks,
                 receiver,
