@@ -155,22 +155,38 @@ pub fn hash_input_globs(prefix: &str) -> Vec<String> {
     .collect()
 }
 
-/// Output globs for an entrypoint crate's `build` task: the binaries Cargo
-/// uplifts into `target/debug/`. These are the workspace's deliverables —
-/// the only artifacts worth caching at the task level. Cargo's internal
-/// `target/` state (deps, fingerprints) is deliberately not cached: it is
-/// Cargo's own incremental cache, and tarballing it fights Cargo instead of
-/// leaning on it.
+/// Output globs for an entrypoint crate's `build` task: the artifacts Cargo
+/// places in `target/debug/` — uplifted binaries plus cdylib/staticlib
+/// libraries. These are the workspace's deliverables — the only artifacts
+/// worth caching at the task level. Cargo's internal `target/` state (deps,
+/// fingerprints) is deliberately not cached: it is Cargo's own incremental
+/// cache, and tarballing it fights Cargo instead of leaning on it.
+///
+/// Every platform's file name is emitted for each deliverable (`.so`,
+/// `.dylib`, `.dll`, ...); globs that match nothing contribute nothing, and
+/// task hashes already segment by platform via the artifacts themselves.
 ///
 /// Builds using `--release`, `CARGO_TARGET_DIR`, or `--target` write
 /// elsewhere; declare explicit `outputs` in turbo.json for those layouts.
-pub fn bin_output_globs(prefix: &str, bins: &[String]) -> Vec<String> {
-    bins.iter()
-        .flat_map(|bin| {
-            [
-                join_prefix(prefix, &format!("target/debug/{bin}")),
-                join_prefix(prefix, &format!("target/debug/{bin}.exe")),
-            ]
+pub fn deliverable_output_globs(prefix: &str, deliverables: &[Deliverable]) -> Vec<String> {
+    deliverables
+        .iter()
+        .flat_map(|deliverable| {
+            let name = &deliverable.name;
+            let basenames = match deliverable.kind {
+                DeliverableKind::Bin => vec![name.clone(), format!("{name}.exe")],
+                DeliverableKind::Cdylib => vec![
+                    format!("lib{name}.so"),
+                    format!("lib{name}.dylib"),
+                    format!("{name}.dll"),
+                ],
+                DeliverableKind::Staticlib => {
+                    vec![format!("lib{name}.a"), format!("{name}.lib")]
+                }
+            };
+            basenames
+                .into_iter()
+                .map(move |basename| join_prefix(prefix, &format!("target/debug/{basename}")))
         })
         .collect()
 }
@@ -211,14 +227,38 @@ pub enum CargoPackageKind {
     Workspace,
 }
 
+/// A deliverable artifact an entrypoint crate produces: the target name plus
+/// the artifact flavor, which determines the file names Cargo writes to
+/// `target/debug/`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Deliverable {
+    /// The target name as reported by `cargo metadata`. Bin targets keep
+    /// their manifest spelling; lib-flavored targets are already
+    /// snake_cased, matching the artifact file name.
+    pub name: String,
+    pub kind: DeliverableKind,
+}
+
+/// The artifact flavor of a [`Deliverable`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeliverableKind {
+    /// An executable: `<name>` / `<name>.exe`.
+    Bin,
+    /// A C-compatible dynamic library: `lib<name>.so` / `lib<name>.dylib` /
+    /// `<name>.dll`.
+    Cdylib,
+    /// A C-compatible static archive: `lib<name>.a` / `<name>.lib`.
+    Staticlib,
+}
+
 /// Cargo-specific details attached to a [`super::package_graph::PackageInfo`]
 /// when its toolchain is Cargo.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CargoPackageDetails {
     pub kind: CargoPackageKind,
-    /// Names of the crate's `bin` targets (empty for libraries and the
+    /// The crate's deliverable targets (empty for libraries and the
     /// workspace package). Used to derive cacheable output paths.
-    pub bins: Vec<String>,
+    pub deliverables: Vec<Deliverable>,
 }
 
 /// A single Rust crate discovered within a Cargo workspace.
@@ -233,11 +273,17 @@ pub struct CargoCrate {
     /// a cycle are dropped, since Cargo permits dev-dep cycles but the
     /// package graph must remain a DAG.
     pub internal_dependencies: Vec<String>,
-    /// Whether this crate is an entrypoint (has `bin`/`cdylib`/`staticlib`
-    /// targets).
-    pub entrypoint: bool,
-    /// Names of the crate's `bin` targets.
-    pub bins: Vec<String>,
+    /// The crate's deliverable targets. Non-empty exactly when the crate is
+    /// an entrypoint (has `bin`/`cdylib`/`staticlib` targets).
+    pub deliverables: Vec<Deliverable>,
+}
+
+impl CargoCrate {
+    /// Whether this crate is an entrypoint: it produces deliverable
+    /// artifacts, so it gets real `build`/`run` tasks.
+    pub fn is_entrypoint(&self) -> bool {
+        !self.deliverables.is_empty()
+    }
 }
 
 /// Discover all Rust crates in the Cargo workspace rooted at `repo_root` by
@@ -286,8 +332,7 @@ struct ParsedCrate {
     name: String,
     manifest_path: AbsoluteSystemPathBuf,
     dependencies: Vec<ResolvedDep>,
-    entrypoint: bool,
-    bins: Vec<String>,
+    deliverables: Vec<Deliverable>,
 }
 
 /// A path dependency resolved to the directory Cargo reports for it.
@@ -342,20 +387,28 @@ fn parse_members(
         }
 
         // A target's `kind` distinguishes real bins from tests/benches/
-        // build scripts (which share the `bin` crate-type).
-        let bins: Vec<String> = package
+        // build scripts (which share the `bin` crate-type). A single lib
+        // target can carry multiple flavors (`crate-type = ["lib",
+        // "cdylib", "staticlib"]`), so each flavor becomes its own
+        // deliverable.
+        let deliverables: Vec<Deliverable> = package
             .targets
             .iter()
-            .filter(|target| target.kind.iter().any(|kind| kind == "bin"))
-            .map(|target| target.name.clone())
+            .flat_map(|target| {
+                target.kind.iter().filter_map(|kind| {
+                    let kind = match kind.as_str() {
+                        "bin" => DeliverableKind::Bin,
+                        "cdylib" => DeliverableKind::Cdylib,
+                        "staticlib" => DeliverableKind::Staticlib,
+                        _ => return None,
+                    };
+                    Some(Deliverable {
+                        name: target.name.clone(),
+                        kind,
+                    })
+                })
+            })
             .collect();
-        let entrypoint = !bins.is_empty()
-            || package.targets.iter().any(|target| {
-                target
-                    .kind
-                    .iter()
-                    .any(|kind| kind == "cdylib" || kind == "staticlib")
-            });
 
         let dependencies = package
             .dependencies
@@ -374,8 +427,7 @@ fn parse_members(
             name: package.name,
             manifest_path,
             dependencies,
-            entrypoint,
-            bins,
+            deliverables,
         });
     }
     parsed
@@ -441,8 +493,7 @@ fn connect_crates(parsed: Vec<ParsedCrate>) -> Result<Vec<CargoCrate>, Error> {
             internal_dependencies: edges.remove(parsed_crate.name.as_str()).unwrap_or_default(),
             name: parsed_crate.name,
             manifest_path: parsed_crate.manifest_path,
-            entrypoint: parsed_crate.entrypoint,
-            bins: parsed_crate.bins,
+            deliverables: parsed_crate.deliverables,
         })
         .collect())
 }
@@ -572,13 +623,22 @@ mod test {
         );
 
         let app = &crates[0];
-        assert!(app.entrypoint, "bin crate should be an entrypoint");
-        assert_eq!(app.bins, vec!["app".to_string()]);
+        assert!(app.is_entrypoint(), "bin crate should be an entrypoint");
+        assert_eq!(
+            app.deliverables,
+            vec![Deliverable {
+                name: "app".to_string(),
+                kind: DeliverableKind::Bin,
+            }]
+        );
         assert_eq!(app.internal_dependencies, vec!["lib-a".to_string()]);
 
         let lib_a = &crates[1];
-        assert!(!lib_a.entrypoint, "plain lib crate is not an entrypoint");
-        assert!(lib_a.bins.is_empty());
+        assert!(
+            !lib_a.is_entrypoint(),
+            "plain lib crate is not an entrypoint"
+        );
+        assert!(lib_a.deliverables.is_empty());
         // The dev-dep edge lib-a -> lib-a-test-util closes a cycle with the
         // normal edge lib-a-test-util -> lib-a, so it must be dropped.
         assert!(
@@ -749,17 +809,34 @@ mod test {
     }
 
     #[test]
-    fn test_bin_output_globs() {
+    fn test_deliverable_output_globs() {
+        let deliverables = vec![
+            Deliverable {
+                name: "app".to_string(),
+                kind: DeliverableKind::Bin,
+            },
+            Deliverable {
+                name: "my_native".to_string(),
+                kind: DeliverableKind::Cdylib,
+            },
+            Deliverable {
+                name: "my_archive".to_string(),
+                kind: DeliverableKind::Staticlib,
+            },
+        ];
         assert_eq!(
-            bin_output_globs("../..", &["app".to_string(), "helper".to_string()]),
+            deliverable_output_globs("../..", &deliverables),
             vec![
                 "../../target/debug/app",
                 "../../target/debug/app.exe",
-                "../../target/debug/helper",
-                "../../target/debug/helper.exe",
+                "../../target/debug/libmy_native.so",
+                "../../target/debug/libmy_native.dylib",
+                "../../target/debug/my_native.dll",
+                "../../target/debug/libmy_archive.a",
+                "../../target/debug/my_archive.lib",
             ]
         );
-        assert!(bin_output_globs("../..", &[]).is_empty());
+        assert!(deliverable_output_globs("../..", &[]).is_empty());
     }
 
     #[test]

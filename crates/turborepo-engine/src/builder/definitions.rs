@@ -260,16 +260,24 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             }
             task_def.env.sort();
 
+            // For Cargo packages, `$TURBO_DEFAULT$` means "everything turbo
+            // hashes automatically" (own sources plus the flattened crate
+            // closure), so users can append extra inputs — e.g. a file
+            // embedded via `include_str!` from outside any crate directory —
+            // without forfeiting automatic invalidation. Explicit inputs
+            // without `$TURBO_DEFAULT$` take full control.
+            let wants_automatic_inputs = !had_explicit_inputs || task_def.inputs.default;
             match details.kind {
                 // An entrypoint build compiles its whole dependency closure
                 // in one cargo process, so the closure's sources are
                 // flattened into this task's inputs — invalidation must not
                 // depend on users wiring up `dependsOn` between crates. The
-                // crate's bin artifacts are the deliverables and the only
-                // target/ contents worth caching; Cargo's internal target/
-                // state is its own incremental cache and is left alone.
+                // crate's bin/cdylib/staticlib artifacts are the
+                // deliverables and the only target/ contents worth caching;
+                // Cargo's internal target/ state is its own incremental
+                // cache and is left alone.
                 cargo::CargoPackageKind::Entrypoint => {
-                    if !had_explicit_inputs {
+                    if wants_automatic_inputs {
                         task_def.inputs.default = true;
                         task_def
                             .inputs
@@ -277,18 +285,18 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                             .extend(self.cargo_dependency_globs(task_id_inner.package(), prefix));
                     }
                     if subcommand == "build" {
-                        task_def
-                            .outputs
-                            .inclusions
-                            .extend(cargo::bin_output_globs(prefix, &details.bins));
+                        task_def.outputs.inclusions.extend(
+                            cargo::deliverable_output_globs(prefix, &details.deliverables),
+                        );
                     }
                 }
                 // The workspace package's directory is the repo root, so
                 // default hashing would pull in the entire repository
                 // (including JS packages). Hash the crate directories
-                // instead.
+                // instead — `$TURBO_DEFAULT$` resolves to those, not to the
+                // repo root's default hash.
                 cargo::CargoPackageKind::Workspace => {
-                    if !had_explicit_inputs {
+                    if wants_automatic_inputs {
                         task_def.inputs.default = false;
                         task_def.inputs.globs.extend(self.cargo_crate_globs());
                     }

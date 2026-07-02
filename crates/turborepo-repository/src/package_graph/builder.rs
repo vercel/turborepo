@@ -315,12 +315,12 @@ where
                     package_json_path: manifest_path,
                     toolchain: PackageToolchain::Cargo,
                     cargo: Some(cargo::CargoPackageDetails {
-                        kind: if cargo_crate.entrypoint {
+                        kind: if cargo_crate.is_entrypoint() {
                             cargo::CargoPackageKind::Entrypoint
                         } else {
                             cargo::CargoPackageKind::Library
                         },
-                        bins: cargo_crate.bins,
+                        deliverables: cargo_crate.deliverables,
                     }),
                     ..Default::default()
                 };
@@ -352,7 +352,7 @@ where
                     toolchain: PackageToolchain::Cargo,
                     cargo: Some(cargo::CargoPackageDetails {
                         kind: cargo::CargoPackageKind::Workspace,
-                        bins: Vec::new(),
+                        deliverables: Vec::new(),
                     }),
                     ..Default::default()
                 };
@@ -1489,7 +1489,13 @@ mod test {
         );
         let app_details = app_info.cargo.as_ref().expect("cargo details");
         assert_eq!(app_details.kind, crate::cargo::CargoPackageKind::Entrypoint);
-        assert_eq!(app_details.bins, vec!["app".to_string()]);
+        assert_eq!(
+            app_details.deliverables,
+            vec![crate::cargo::Deliverable {
+                name: "app".to_string(),
+                kind: crate::cargo::DeliverableKind::Bin,
+            }]
+        );
 
         let lib_info = graph
             .package_info(&lib_a)

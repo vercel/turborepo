@@ -191,8 +191,11 @@ All Cargo knowledge lives in `turborepo_repository::cargo`:
   `RUSTC_WRAPPER`, `CARGO_TARGET_DIR`, `CARGO_BUILD_TARGET`). The workspace
   package hashes all crate directories instead of default-hashing the repo
   root.
-- **Caching**: task caches store logs plus, for entrypoint builds, the bin
-  deliverables (`target/debug/<bin>`). Cargo's internal `target/` state is
+- **Caching**: task caches store logs plus, for entrypoint builds, the
+  deliverables: bins (`target/debug/<bin>`) and cdylib/staticlib artifacts
+  (`target/debug/lib<name>.{so,dylib,a}`, `<name>.{dll,lib}` — all platform
+  spellings are emitted; unmatched globs contribute nothing). Cargo's
+  internal `target/` state is
   deliberately never cached — it is Cargo's own incremental cache, and
   tarballing it fights Cargo instead of leaning on it (it is also
   multi-gigabyte). For fine-grained remote compile caching, use sccache via

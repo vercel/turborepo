@@ -915,7 +915,10 @@ mod tests {
                 toolchain: PackageToolchain::Cargo,
                 cargo: Some(cargo::CargoPackageDetails {
                     kind,
-                    bins: vec!["web".to_string()],
+                    deliverables: vec![cargo::Deliverable {
+                        name: "web".to_string(),
+                        kind: cargo::DeliverableKind::Bin,
+                    }],
                 }),
                 ..Default::default()
             },

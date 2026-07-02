@@ -227,6 +227,64 @@ fn test_cargo_entrypoint_respects_explicit_inputs() {
 }
 
 #[test]
+fn test_cargo_entrypoint_turbo_default_keeps_automatic_inputs() {
+    let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+    let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+    let package_graph = cargo_package_graph(&repo_root);
+
+    let loader = TestTurboJsonLoader::new(root_turbo_jsons(
+        json!({ "build": { "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/version.txt"] } }),
+    ));
+    let engine = cargo_engine(&repo_root, &package_graph, &loader, "build", Vec::new());
+
+    let def = task_definition(&engine, "app#build");
+    // `$TURBO_DEFAULT$` opts back into everything turbo hashes
+    // automatically for the crate — its own sources and the flattened
+    // dependency closure — so extra inputs (e.g. a file embedded via
+    // `include_str!` from outside any crate directory) are additive.
+    assert!(def.inputs.default);
+    for input in [
+        "../../version.txt",
+        "../../crates/lib-a/**",
+        "../../Cargo.lock",
+    ] {
+        assert!(
+            def.inputs.globs.iter().any(|glob| glob == input),
+            "missing input glob {input}, got {:?}",
+            def.inputs.globs
+        );
+    }
+}
+
+#[test]
+fn test_cargo_workspace_turbo_default_keeps_crate_globs() {
+    let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+    let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+    let package_graph = cargo_package_graph(&repo_root);
+
+    let loader = TestTurboJsonLoader::new(root_turbo_jsons(
+        json!({ "test": { "inputs": ["$TURBO_DEFAULT$", "testdata/**"] } }),
+    ));
+    let engine = cargo_engine(&repo_root, &package_graph, &loader, "test", Vec::new());
+
+    let def = task_definition(&engine, "cargo#test");
+    // For the workspace package, `$TURBO_DEFAULT$` resolves to the crate
+    // directories — never to default-hashing the repo root, which would
+    // pull every JS package into the hash.
+    assert!(
+        !def.inputs.default,
+        "workspace tasks must not default-hash the repo root even with $TURBO_DEFAULT$"
+    );
+    for input in ["crates/app/**", "crates/lib-a/**", "testdata/**"] {
+        assert!(
+            def.inputs.globs.iter().any(|glob| glob == input),
+            "missing input glob {input}, got {:?}",
+            def.inputs.globs
+        );
+    }
+}
+
+#[test]
 fn test_cargo_tasks_receive_global_inputs() {
     let repo_root_dir = TempDir::with_prefix("repo").unwrap();
     let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
