@@ -1,7 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const workspaceRoot = path.resolve(import.meta.dirname, "../../../..");
+const workspaceRoot = fileURLToPath(new URL("../../../..", import.meta.url));
 const destinationDir = path.join(process.cwd(), "coverage/merged-blob");
 const workspaceDirs = ["apps", "packages"];
 
