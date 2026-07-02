@@ -18,7 +18,7 @@ First, install dependencies and build the shared configuration package:
 
 ```bash
 pnpm install
-pnpm build --filter=@repo/vitest-config
+pnpm --filter=@repo/vitest-config build
 ```
 
 ## Available Commands
@@ -26,7 +26,8 @@ pnpm build --filter=@repo/vitest-config
 - `pnpm test`: Runs tests in each package using Turborepo (leverages caching)
 - `pnpm test:projects`: Runs tests using Vitest's projects feature
 - `pnpm test:projects:watch`: Runs tests using Vitest's projects feature in watch mode
-- `pnpm view-report`: Collects coverage from each package and shows it in a merged report
+- `pnpm report`: Merges package coverage with Vitest's native `--merge-reports` command
+- `pnpm view-report`: Creates the merged coverage report and opens it in your browser
 
 ## Configuration Structure
 
@@ -35,6 +36,17 @@ The example uses a shared `@repo/vitest-config` package that exports:
 - `sharedConfig`: Base configuration with coverage settings
 - `baseConfig`: For Node.js packages (like `math`)
 - `uiConfig`: For packages requiring jsdom environment (like `web`, `docs`)
+
+## Merged Coverage Reports
+
+Package-level test tasks write Vitest blob reports to each package's `coverage/blob` directory, so Turborepo can cache each package's coverage blob independently. After running tests, use Vitest's native merge command to create a combined HTML and text coverage report:
+
+```bash
+pnpm test
+pnpm report
+```
+
+The `merge-blob-reports` task stages the package blobs into `packages/vitest-config/coverage/merged-blob`, then the `report` task runs `vitest --merge-reports` to write the merged HTML report to `packages/vitest-config/coverage/report`.
 
 ### Remote Caching
 
