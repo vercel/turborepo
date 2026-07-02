@@ -651,17 +651,22 @@ impl<W> App<W> {
     /// printed while the TUI owned the screen, not just output from the
     /// moment of the switch onward.
     ///
-    /// Tasks are replayed in displayed order. The sink applies its own
-    /// per-task prefix and single-task stream filter, so only the relevant
-    /// task's history is emitted when a filter is active.
+    /// Tasks are replayed in displayed order. When `filter` is `Some`, only
+    /// that task is replayed; other tasks are skipped entirely so their
+    /// watermarks don't advance for output that never reached the screen.
+    /// `filter` must match the sink's active stream filter, otherwise the
+    /// sink would drop bytes the watermark records as emitted.
     ///
     /// A per-task watermark tracks how many bytes have already been emitted to
     /// the sink, so repeated TUI<->stream toggles only backfill the output
     /// produced since the previous excursion rather than re-printing the whole
     /// history each time. If a task's buffer shrinks (e.g. logs were cleared)
     /// the watermark resets and the remaining output is replayed in full.
-    pub fn replay_to_sink(&mut self, sink: &TerminalSink) {
+    pub fn replay_to_sink(&mut self, sink: &TerminalSink, filter: Option<&str>) {
         for task_name in self.tasks_by_status.tasks_started() {
+            if filter.is_some_and(|selected| selected != task_name) {
+                continue;
+            }
             let Some(task) = self.tasks.get(&task_name) else {
                 continue;
             };
@@ -1057,7 +1062,7 @@ fn handle_toggle_stream(
             print_stream_banner(color_config, filter.as_deref());
             // Backfill the history printed while the TUI owned the screen so
             // the user sees the full log, not just output from this moment on.
-            app.replay_to_sink(terminal_sink);
+            app.replay_to_sink(terminal_sink, filter.as_deref());
             *display = DisplayState::Streaming;
         }
         DisplayState::Streaming => {
@@ -1565,19 +1570,54 @@ mod test {
 
         // First excursion replays all of task "a"'s output and records the
         // watermark. Task "b" hasn't started, so it gets no watermark.
-        app.replay_to_sink(&sink);
+        app.replay_to_sink(&sink, None);
         assert_eq!(app.replayed_offsets.get("a"), Some(&7));
         assert_eq!(app.replayed_offsets.get("b"), None);
 
         // More output arrives; the next excursion advances the watermark by
         // exactly the new bytes (no re-replay of the earlier history).
         app.process_output("a", b"world\r\n")?;
-        app.replay_to_sink(&sink);
+        app.replay_to_sink(&sink, None);
         assert_eq!(app.replayed_offsets.get("a"), Some(&14));
 
         // No new output: the watermark holds steady.
-        app.replay_to_sink(&sink);
+        app.replay_to_sink(&sink, None);
         assert_eq!(app.replayed_offsets.get("a"), Some(&14));
+
+        Ok(())
+    }
+
+    #[test]
+    fn single_task_replay_preserves_other_tasks_backlog() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        // The sink is disabled so the test never writes to the real stdout.
+        let sink = TerminalSink::new(ColorConfig::new(true));
+        sink.disable();
+
+        app.start_task("a", OutputLogs::Full)?;
+        app.start_task("b", OutputLogs::Full)?;
+        app.process_output("a", b"a-history\r\n")?;
+        app.process_output("b", b"b-history\r\n")?;
+
+        // Streaming only task "a" must not advance task "b"'s watermark:
+        // "b"'s bytes never reached the screen.
+        app.replay_to_sink(&sink, Some("a"));
+        assert_eq!(app.replayed_offsets.get("a"), Some(&11));
+        assert_eq!(app.replayed_offsets.get("b"), None);
+
+        // A later stream-all excursion still replays task "b"'s full backlog.
+        app.replay_to_sink(&sink, None);
+        assert_eq!(app.replayed_offsets.get("b"), Some(&11));
 
         Ok(())
     }
