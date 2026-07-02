@@ -3,8 +3,12 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "dependsOn": ["@turbo/cli#rust-src"],
-      "env": ["NODE_VERSION", "CARGO_BUILD_JOBS", "RUSTFLAGS"],
+      // The napi crate is a real Turborepo package: depending on its build
+      // task invalidates this one whenever the crate's transitive Rust
+      // sources change. CARGO_BUILD_JOBS only affects parallelism, not
+      // artifacts, so it no longer participates in the hash.
+      "dependsOn": ["turborepo-napi#build"],
+      "env": ["NODE_VERSION", "RUSTFLAGS"],
       "outputs": ["js/dist/**/*", "native/**/*"]
     },
     "test": {

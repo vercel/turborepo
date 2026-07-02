@@ -71,6 +71,12 @@
       ],
       "dependsOn": ["^build"]
     },
+    // turborepo-lib embeds version.txt via include_str!; it lives outside
+    // every crate directory, so the automatic crate-closure hashing can't
+    // see it. $TURBO_DEFAULT$ keeps the automatic inputs and appends it.
+    "turbo#build": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/version.txt"]
+    },
     "package-checks": {
       "dependsOn": ["package:types"]
     },

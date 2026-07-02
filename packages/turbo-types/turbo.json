@@ -11,6 +11,20 @@
     "copy-schema": {
       "dependsOn": ["build"],
       "outputs": ["$TURBO_ROOT$/packages/turbo/schema.json"]
+    },
+    // Both schema tasks shell out to the turborepo-schema-gen crate;
+    // depending on its build task re-runs them whenever the generator's
+    // Rust sources change.
+    "generate-schema": {
+      "dependsOn": ["turborepo-schema-gen#build"],
+      // Writes generated files into the source tree, so it is not a
+      // cacheable artifact producer.
+      "cache": false
+    },
+    "verify-schema": {
+      "dependsOn": ["turborepo-schema-gen#build"],
+      // Regenerates in place and diffs against git, so it must not cache.
+      "cache": false
     }
   }
 }
