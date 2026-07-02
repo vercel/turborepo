@@ -5,10 +5,7 @@
 //!
 //! [`libghostty-vt`]: https://github.com/Uzaaft/libghostty-rs
 
-pub use libghostty_vt::{
-    RenderState, Terminal,
-    terminal::Options as TerminalOptions,
-};
+pub use libghostty_vt::{RenderState, Terminal, terminal::Options as TerminalOptions};
 
 mod convert;
 mod parser;

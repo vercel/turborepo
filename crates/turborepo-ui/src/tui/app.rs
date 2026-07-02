@@ -854,6 +854,48 @@ pub async fn run_app(
     result
 }
 
+/// Spawn the TUI on a dedicated thread.
+///
+/// Ghostty's terminal types are `!Send`, so the TUI must not run on the main
+/// Tokio worker pool. This helper owns a single-threaded runtime on a dedicated
+/// OS thread and returns a `JoinHandle` that can be awaited from any task.
+pub fn spawn_run_app(
+    tasks: Vec<String>,
+    receiver: AppReceiver,
+    color_config: crate::ColorConfig,
+    repo_root: AbsoluteSystemPathBuf,
+    scrollback_len: u64,
+    interrupt: Option<Arc<dyn Fn() + Send + Sync>>,
+) -> Result<tokio::task::JoinHandle<Result<(), crate::Error>>, Error> {
+    let (done_tx, done_rx) = oneshot::channel();
+
+    std::thread::Builder::new()
+        .name("turbo-tui".into())
+        .spawn(move || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("failed to create TUI tokio runtime");
+            let result = runtime.block_on(run_app(
+                tasks,
+                receiver,
+                color_config,
+                &repo_root,
+                scrollback_len,
+                interrupt,
+            ));
+            done_tx.send(result).ok();
+        })
+        .map_err(Error::ThreadSpawn)?;
+
+    Ok(tokio::spawn(async move {
+        done_rx
+            .await
+            .map_err(|_| Error::ThreadJoin)?
+            .map_err(crate::Error::Tui)
+    }))
+}
+
 /// Check if an event indicates we need to start rendering the TUI.
 /// We start rendering when we receive a cache miss (meaning a task will
 /// actually run) or when tasks are updated (which only happens in watch mode,
