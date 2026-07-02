@@ -127,7 +127,8 @@ mod test {
 
     #[test]
     fn test_footer_interactive() {
-        let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, Some(Vec::new()), 2048);
+        let mut term: TerminalOutput<Vec<u8>> =
+            TerminalOutput::new(16, 16, Some(Vec::new()), 2048).expect("terminal output");
         let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true);
         assert_eq!(
             String::from(pane.footer()),
@@ -137,7 +138,8 @@ mod test {
 
     #[test]
     fn test_footer_non_interactive() {
-        let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
+        let mut term: TerminalOutput<Vec<u8>> =
+            TerminalOutput::new(16, 16, None, 2048).expect("terminal output");
         let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true);
         assert_eq!(
             String::from(pane.footer()),
@@ -147,7 +149,8 @@ mod test {
 
     #[test]
     fn test_content_area_pads_when_sidebar_visible() {
-        let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
+        let mut term: TerminalOutput<Vec<u8>> =
+            TerminalOutput::new(16, 16, None, 2048).expect("terminal output");
         let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true);
 
         assert_eq!(
@@ -158,7 +161,8 @@ mod test {
 
     #[test]
     fn test_content_area_has_no_padding_when_sidebar_hidden() {
-        let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
+        let mut term: TerminalOutput<Vec<u8>> =
+            TerminalOutput::new(16, 16, None, 2048).expect("terminal output");
         let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, false);
 
         assert_eq!(

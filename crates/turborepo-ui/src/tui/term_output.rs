@@ -29,10 +29,10 @@ enum LogBehavior {
 }
 
 impl<W> TerminalOutput<W> {
-    pub fn new(rows: u16, cols: u16, stdin: Option<W>, scrollback_len: u64) -> Self {
-        Self {
+    pub fn new(rows: u16, cols: u16, stdin: Option<W>, scrollback_len: u64) -> Result<Self, Error> {
+        Ok(Self {
             output: Vec::new(),
-            parser: ghostty::Parser::new(rows, cols, scrollback_len as usize),
+            parser: ghostty::Parser::try_new(rows, cols, scrollback_len as usize)?,
             stdin,
             status: None,
             output_logs: None,
@@ -40,7 +40,7 @@ impl<W> TerminalOutput<W> {
             cache_result: None,
             scrollback_len,
             selection_start: None,
-        }
+        })
     }
 
     /// The raw (newline-normalized) byte stream this task has produced so
@@ -245,7 +245,8 @@ mod newline_tests {
     fn mouse_drag_selection_can_be_copied() -> Result<(), Error> {
         use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
-        let mut output: TerminalOutput<()> = TerminalOutput::new(10, 40, None, 100);
+        let mut output: TerminalOutput<()> =
+            TerminalOutput::new(10, 40, None, 100).expect("terminal output");
         output.process(b"hello world\r\n");
 
         output.handle_mouse(MouseEvent {

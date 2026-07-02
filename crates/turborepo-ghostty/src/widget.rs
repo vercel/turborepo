@@ -197,7 +197,7 @@ mod tests {
         let backend = TestBackend::new(cols, rows);
         let mut terminal = Terminal::new(backend).expect("terminal");
 
-        let mut parser_long = Parser::new(rows, cols, 0);
+        let mut parser_long = Parser::try_new(rows, cols, 0).expect("parser");
         parser_long.process(b"Line 1\r\nLine 2\r\nLine 3\r\nLine 4\r\nLine 5");
         terminal
             .draw(|frame| {
@@ -207,7 +207,7 @@ mod tests {
             })
             .expect("draw long");
 
-        let mut parser_short = Parser::new(rows, cols, 0);
+        let mut parser_short = Parser::try_new(rows, cols, 0).expect("parser");
         parser_short.process(b"Short");
         terminal
             .draw(|frame| {

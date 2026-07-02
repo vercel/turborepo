@@ -23,10 +23,6 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(rows: u16, cols: u16, scrollback_len: usize) -> Self {
-        Self::try_new(rows, cols, scrollback_len).expect("failed to initialize ghostty terminal")
-    }
-
     pub fn try_new(rows: u16, cols: u16, scrollback_len: usize) -> Result<Self> {
         let terminal = Terminal::new(TerminalOptions {
             cols,
@@ -192,7 +188,7 @@ mod tests {
 
     #[test]
     fn bare_lf_is_normalized_by_caller_and_renders_on_new_line() {
-        let mut parser = Parser::new(5, 20, 0);
+        let mut parser = Parser::try_new(5, 20, 0).expect("parser");
         parser.process(b"hello\r\nworld");
         let formatted = parser.format_screen_vt().expect("format screen");
         let output = String::from_utf8_lossy(&formatted);
@@ -202,7 +198,7 @@ mod tests {
 
     #[test]
     fn resize_reflows_existing_output() {
-        let mut parser = Parser::new(5, 10, 0);
+        let mut parser = Parser::try_new(5, 10, 0).expect("parser");
         parser.process(b"hello world");
         parser.resize(5, 20).expect("resize");
         assert_eq!(parser.size().expect("size"), (5, 20));
@@ -215,7 +211,7 @@ mod selection_tests {
 
     #[test]
     fn drag_selection_returns_text() {
-        let mut parser = Parser::new(10, 40, 100);
+        let mut parser = Parser::try_new(10, 40, 100).expect("parser");
         parser.process(b"hello world\r\n");
         parser
             .update_selection(0, 0, 0, 4)
@@ -227,7 +223,7 @@ mod selection_tests {
 
     #[test]
     fn selection_survives_additional_output() {
-        let mut parser = Parser::new(10, 40, 100);
+        let mut parser = Parser::try_new(10, 40, 100).expect("parser");
         parser.process(b"hello world\r\n");
         parser
             .update_selection(0, 0, 0, 4)
