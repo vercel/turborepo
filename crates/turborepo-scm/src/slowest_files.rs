@@ -36,8 +36,8 @@ pub struct SlowestFile {
 struct Inner {
     /// Files currently being hashed, keyed by the id held by their guard.
     live: HashMap<u64, (RelativeUnixPathBuf, Instant)>,
-    /// Top-N completed files by hashing duration, ascending so the cheapest
-    /// (the eviction candidate) is first.
+    /// Top-N completed files by hashing duration, descending so the cheapest
+    /// (the eviction candidate) is last.
     completed: Vec<(RelativeUnixPathBuf, Duration)>,
 }
 
