@@ -713,7 +713,6 @@ impl<W> App<W> {
         };
         let pane_left_padding = self.size.pane_left_padding_with_sidebar(has_sidebar);
         debug!("original mouse event: {event:?}, table_width: {table_width}");
-        // Only handle mouse event if it happens inside of pane
         // We give a 1 cell buffer to make it easier to select the first column of a row
         if event.row > 0 && event.column >= table_width {
             // Subtract 1 from the y axis due to the title of the pane
@@ -726,9 +725,39 @@ impl<W> App<W> {
 
             let task = self.get_full_task_mut()?;
             task.handle_mouse(event)?;
+        } else if event.column < table_width
+            && matches!(
+                event.kind,
+                crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+            )
+        {
+            self.handle_task_list_click(event.row);
         }
 
         Ok(())
+    }
+
+    /// Selects the task whose row in the task list was clicked. Clicks on the
+    /// header, the key-binds footer, or empty space below the last task leave
+    /// the selection unchanged.
+    fn handle_task_list_click(&mut self, clicked_row: u16) {
+        // Row 0 is the table header.
+        let Some(row_in_list) = clicked_row.checked_sub(1) else {
+            return;
+        };
+        if row_in_list >= self.size.task_list_visible_task_rows() {
+            return;
+        }
+        // The table scrolls when tasks overflow the screen, so translate the
+        // clicked row into an index in the full task list.
+        let index = self.task_list_scroll.offset() + usize::from(row_in_list);
+        if index >= self.tasks_by_status.count_all() {
+            return;
+        }
+        self.selected_task_index = index;
+        self.task_list_scroll.select(Some(index));
+        self.is_task_selection_pinned = true;
+        self.persist_active_task().ok();
     }
 
     pub fn copy_selection(&mut self) -> Result<(), Error> {
@@ -2815,6 +2844,111 @@ mod test {
                 "terminal output {name} should be resized back when sidebar is shown"
             );
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_click_task_list_row_selects_task() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        assert!(app.size.task_list_width() > 0);
+        assert_eq!(app.active_task()?, "a");
+        assert!(!app.is_task_selection_pinned);
+
+        let click = |row| MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row,
+            modifiers: KeyModifiers::empty(),
+        };
+
+        // Row 0 is the header; clicking it leaves the selection alone.
+        app.handle_mouse(click(0))?;
+        assert_eq!(app.active_task()?, "a");
+        assert!(!app.is_task_selection_pinned);
+
+        // Rows 1..=3 map to the three tasks.
+        app.handle_mouse(click(2))?;
+        assert_eq!(app.active_task()?, "b");
+        assert_eq!(app.task_list_scroll.selected(), Some(1));
+        assert!(app.is_task_selection_pinned);
+        assert_eq!(app.preferences.active_task(), Some("b"));
+
+        app.handle_mouse(click(1))?;
+        assert_eq!(app.active_task()?, "a");
+
+        app.handle_mouse(click(3))?;
+        assert_eq!(app.active_task()?, "c");
+
+        // Clicking empty space below the last task leaves the selection alone.
+        app.handle_mouse(click(4))?;
+        assert_eq!(app.active_task()?, "c");
+
+        // Clicks at or right of the table edge belong to the pane, not the
+        // task list.
+        app.start_task("a", OutputLogs::Full)?;
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: app.size.task_list_width(),
+            row: 1,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        assert_eq!(app.active_task()?, "c");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_click_task_list_accounts_for_scroll_and_footer() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        // 6 rows on screen: header, 3 task rows, 2 footer rows.
+        let mut app: App<()> = App::new(
+            6,
+            100,
+            (0..10).map(|i| format!("task-{i}")).collect(),
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        assert_eq!(app.size.task_list_visible_task_rows(), 3);
+
+        let click = |row| MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row,
+            modifiers: KeyModifiers::empty(),
+        };
+
+        // Scrolled down two rows, so the first visible task row is task-2.
+        *app.task_list_scroll.offset_mut() = 2;
+        app.handle_mouse(click(1))?;
+        assert_eq!(app.active_task()?, "task-2");
+        app.handle_mouse(click(3))?;
+        assert_eq!(app.active_task()?, "task-4");
+
+        // Rows 4 and 5 are the key-binds footer; clicking there leaves the
+        // selection alone even though more tasks exist below the fold.
+        app.handle_mouse(click(4))?;
+        assert_eq!(app.active_task()?, "task-4");
+        app.handle_mouse(click(5))?;
+        assert_eq!(app.active_task()?, "task-4");
 
         Ok(())
     }
