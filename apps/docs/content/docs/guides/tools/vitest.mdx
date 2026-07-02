@@ -163,35 +163,103 @@ turbo run test:watch
   started with it quickly using `npx create-turbo@latest --example with-vitest`.
 </Callout>
 
-To do this, you'll follow a few general steps:
+To do this with Vitest's native reporter merging, you'll follow a few general steps:
 
-1. Run `turbo run test` to create the coverage reports.
-2. Merge the coverage reports with [`nyc merge`](https://github.com/istanbuljs/nyc?tab=readme-ov-file#what-about-nyc-merge).
-3. Create a report using `nyc report`.
+1. Configure package-level Vitest runs to write blob reports.
+2. Run `turbo run test` to create or restore each package's cached blob report.
+3. Stage the package-local blob files into one flat directory.
+4. Merge the blob reports with [`vitest --merge-reports`](https://vitest.dev/guide/cli.html#merge-reports).
 
-Turborepo tasks to accomplish will look like:
+Start by enabling the `blob` reporter in your shared Vitest configuration:
+
+```ts title="./packages/vitest-config/src/index.ts"
+export const sharedConfig = {
+  test: {
+    reporters: ["default", "blob"],
+    outputFile: {
+      blob: "coverage/blob/report.json",
+    },
+    coverage: {
+      provider: "istanbul" as const,
+      enabled: true,
+    },
+  },
+};
+```
+
+Because the blob output path is package-relative, each package's `test` task owns only its own `coverage/blob/**` output. This lets Turborepo restore package coverage blobs independently from cache.
+
+Then configure Turborepo's task outputs:
 
 ```json title="./turbo.json"
 {
   "tasks": {
     "test": {
-      "dependsOn": ["^test", "@repo/vitest-config#build"],
-      "outputs": ["coverage.json"]
+      "dependsOn": ["transit", "@repo/vitest-config#build"],
+      "outputs": ["coverage/blob/**"]
     },
-    "merge-json-reports": {
-      "inputs": ["coverage/raw/**"],
-      "outputs": ["coverage/merged/**"]
+    "transit": {
+      "dependsOn": ["^transit"]
+    }
+  }
+}
+```
+
+Vitest's `--merge-reports` command expects all blob files to be direct children of the directory passed to the flag. If your blobs are package-local for caching, add a small script that copies them into a flat staging directory before invoking Vitest:
+
+```json title="./packages/vitest-config/package.json"
+{
+  "scripts": {
+    "merge-blob-reports": "node dist/scripts/merge-blob-reports.js",
+    "report": "vitest --merge-reports coverage/merged-blob --passWithNoTests --coverage --coverage.provider=istanbul --coverage.reporter=html --coverage.reporter=text --coverage.reportsDirectory=coverage/report"
+  }
+}
+```
+
+The report package can then cache the staging step separately from the final coverage report:
+
+```json title="./packages/vitest-config/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "merge-blob-reports": {
+      "dependsOn": ["build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/*/coverage/blob/**",
+        "$TURBO_ROOT$/packages/*/coverage/blob/**"
+      ],
+      "outputs": ["coverage/merged-blob/**"]
     },
     "report": {
-      "dependsOn": ["merge-json-reports"],
-      "inputs": ["coverage/merge"],
+      "dependsOn": ["merge-blob-reports"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/*/coverage/blob/**",
+        "$TURBO_ROOT$/packages/*/coverage/blob/**"
+      ],
       "outputs": ["coverage/report/**"]
     }
   }
 }
 ```
 
-With this in place, run `turbo test && turbo report` to create a merged coverage report.
+<Callout type="info">
+  Turborepo uses `inputs` to hash a task, but `inputs` do not restore another
+  task's outputs. Run the package `test` tasks before `report` so Turborepo can
+  restore each package's `coverage/blob/**` output before the report task hashes
+  and merges those files.
+</Callout>
+
+With this in place, use a root script that runs tests before the report task:
+
+```json title="./package.json"
+{
+  "scripts": {
+    "report": "turbo run test && turbo run report"
+  }
+}
+```
 
 ### Using Vitest's Projects feature
 
