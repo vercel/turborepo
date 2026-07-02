@@ -10,8 +10,8 @@ use super::{PANE_LEFT_PADDING_WITH_SIDEBAR, TerminalOutput, app::LayoutSections}
 
 const EXIT_INTERACTIVE_HINT: &str = "Ctrl-z - Stop interacting";
 const ENTER_INTERACTIVE_HINT: &str = "i - Interact";
-const CANCEL_SELECTION: &str = "hold shift - Cancel selection";
-const COPIED_TO_CLIPBOARD: &str = "Copied to clipboard";
+const CANCEL_SELECTION: &str = "Hold Shift - Prevent copy";
+const COPIED_TO_CLIPBOARD: &str = "Copied to clipboard!";
 const SCROLL_LOGS: &str = "u/d - Scroll logs";
 const PAGE_LOGS: &str = "U/D - Page logs";
 const JUMP_IN_LOGS: &str = "t/b - Jump to top/bottom";
@@ -162,7 +162,7 @@ mod test {
     fn test_footer_copied_notice() {
         let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
         let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, true);
-        assert_eq!(String::from(pane.footer()), "   Copied to clipboard");
+        assert_eq!(String::from(pane.footer()), "   Copied to clipboard!");
     }
 
     #[test]
@@ -187,10 +187,7 @@ mod test {
         .unwrap();
 
         let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, false);
-        assert_eq!(
-            String::from(pane.footer()),
-            "   hold shift - Cancel selection"
-        );
+        assert_eq!(String::from(pane.footer()), "   Hold Shift - Prevent copy");
     }
 
     #[test]
