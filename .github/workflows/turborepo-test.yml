@@ -15,7 +15,7 @@ jobs:
   find-changes:
     name: Find path changes
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read
@@ -187,7 +187,7 @@ jobs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -218,8 +218,8 @@ jobs:
           fi
 
   rust_test_macos:
-    runs-on: macos-latest-xlarge
-    timeout-minutes: 90
+    runs-on: macos-15-xlarge
+    timeout-minutes: 15
     env:
       CARGO_INCREMENTAL: 0
     needs:
@@ -248,7 +248,7 @@ jobs:
           tool: nextest
 
       - name: Run tests
-        timeout-minutes: 90
+        timeout-minutes: 15
         run: |
           cargo nextest run --workspace \
             --exclude turborepo-lsp \
@@ -259,7 +259,7 @@ jobs:
 
   rust_test_windows:
     runs-on: windows-latest-8-core-oss
-    timeout-minutes: 180
+    timeout-minutes: 15
     env:
       CARGO_INCREMENTAL: 0
     needs:
@@ -322,7 +322,7 @@ jobs:
           tar -xf "%TEMP%\nextest.zip" -C "%USERPROFILE%\.cargo\bin"
 
       - name: Run tests
-        timeout-minutes: 180
+        timeout-minutes: 15
         run: |
           cargo nextest run --workspace \
             --exclude turborepo-lsp \
@@ -335,7 +335,7 @@ jobs:
 
   rust_test_ubuntu:
     runs-on: ubuntu-latest-8-core-oss
-    timeout-minutes: 90
+    timeout-minutes: 15
     env:
       CARGO_INCREMENTAL: 0
     needs:
@@ -364,7 +364,7 @@ jobs:
           tool: nextest
 
       - name: Run tests
-        timeout-minutes: 90
+        timeout-minutes: 15
         run: |
           cargo nextest run --workspace \
             --exclude turborepo-lsp \
@@ -461,7 +461,7 @@ jobs:
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.native-lib == 'true' }}
-    timeout-minutes: 30
+    timeout-minutes: 15
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -511,7 +511,7 @@ jobs:
   summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     if: always()
     needs:
       - find-changes

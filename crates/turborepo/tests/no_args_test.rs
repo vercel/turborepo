@@ -7,7 +7,7 @@ use common::{run_turbo, run_turbo_with_env, setup, turbo_output_filters};
 #[test]
 fn test_no_args_prints_help() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &[]);
     assert!(!output.status.success());
@@ -23,7 +23,7 @@ fn test_no_args_prints_help() {
 #[test]
 fn test_run_no_tasks_shows_potential_tasks() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run"]);
     assert!(!output.status.success());
@@ -37,7 +37,7 @@ fn test_run_no_tasks_shows_potential_tasks() {
 #[test]
 fn test_run_no_tasks_with_filter() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "--filter", "my-app"]);
     assert!(!output.status.success());
@@ -51,7 +51,7 @@ fn test_run_no_tasks_with_filter() {
 #[test]
 fn test_watch_no_tasks_shows_potential_tasks() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["watch"]);
     assert!(!output.status.success());
@@ -65,7 +65,7 @@ fn test_watch_no_tasks_shows_potential_tasks() {
 #[test]
 fn test_env_var_for_run_does_not_change_no_args() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo_with_env(tempdir.path(), &[], &[("TURBO_LOG_ORDER", "stream")]);
     assert!(!output.status.success());
@@ -81,7 +81,8 @@ fn test_env_var_for_run_does_not_change_no_args() {
 #[test]
 fn test_composable_config_run_no_tasks() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(tempdir.path(), &["run"]);
     assert!(!output.status.success());
@@ -95,7 +96,8 @@ fn test_composable_config_run_no_tasks() {
 #[test]
 fn test_composable_config_watch_no_tasks() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "composable_config", "npm@10.5.0", false)
+        .unwrap();
 
     let output = run_turbo(tempdir.path(), &["watch"]);
     assert!(!output.status.success());

@@ -89,9 +89,10 @@ impl PackageWatcher {
         root: AbsoluteSystemPathBuf,
         recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
         cookie_writer: CookieWriter,
+        allow_no_package_manager: bool,
     ) -> Result<Self, package_manager::Error> {
         let (exit_tx, exit_rx) = oneshot::channel();
-        let subscriber = Subscriber::new(root, cookie_writer)?;
+        let subscriber = Subscriber::new(root, cookie_writer, allow_no_package_manager)?;
         let package_discovery_lazy = subscriber.package_discovery();
         let handle = tokio::spawn(subscriber.watch(exit_rx, recv));
         Ok(Self {
@@ -145,6 +146,7 @@ struct Subscriber {
     package_discovery_lazy: CookiedOptionalWatch<DiscoveryData, ()>,
     cookie_tx: CookieRegister,
     next_version: AtomicUsize,
+    allow_no_package_manager: bool,
 }
 
 /// PackageWatcher state. We either don't have a valid package manager,
@@ -176,7 +178,10 @@ enum State {
 // or going from no package manager to some package manager.
 const INVALIDATION_PATHS: &[&str] = &[
     "package.json",
+    package_manager::aube::WORKSPACE_CONFIGURATION_PATH,
+    package_manager::aube::LOCKFILE,
     "pnpm-workspace.yaml",
+    package_manager::nub::LOCKFILE,
     package_manager::pnpm::LOCKFILE,
     package_manager::npm::LOCKFILE,
     package_manager::yarn::LOCKFILE,
@@ -192,6 +197,7 @@ impl Subscriber {
     fn new(
         repo_root: AbsoluteSystemPathBuf,
         writer: CookieWriter,
+        allow_no_package_manager: bool,
     ) -> Result<Self, package_manager::Error> {
         let (package_discovery_tx, cookie_tx, package_discovery_lazy) =
             CookiedOptionalWatch::new(writer);
@@ -206,6 +212,7 @@ impl Subscriber {
             package_discovery_lazy,
             cookie_tx,
             next_version: AtomicUsize::new(0),
+            allow_no_package_manager,
         })
     }
 
@@ -226,9 +233,10 @@ impl Subscriber {
         let debouncer = Arc::new(debouncer);
         let debouncer_copy = debouncer.clone();
         let repo_root = self.repo_root.clone();
+        let allow_no_package_manager = self.allow_no_package_manager;
         tokio::task::spawn(async move {
             debouncer_copy.debounce().await;
-            let state = discover_packages(repo_root).await;
+            let state = discover_packages(repo_root, allow_no_package_manager).await;
             let _ = package_state_tx
                 .send(DiscoveryResult { version, state })
                 .await;
@@ -531,10 +539,15 @@ impl Subscriber {
     }
 }
 
-async fn discover_packages(repo_root: AbsoluteSystemPathBuf) -> PackageState {
+async fn discover_packages(
+    repo_root: AbsoluteSystemPathBuf,
+    allow_no_package_manager: bool,
+) -> PackageState {
     // If we're rediscovering everything, we need to rediscover the package manager.
     // It may have changed if a lockfile changed or package.json changed.
-    let discovery = match LocalPackageDiscoveryBuilder::new(repo_root.clone(), None, None).build() {
+    let mut builder = LocalPackageDiscoveryBuilder::new(repo_root.clone(), None, None);
+    builder.with_allow_no_package_manager(allow_no_package_manager);
+    let discovery = match builder.build() {
         Ok(discovery) => discovery,
         Err(e) => return PackageState::NoPackageManager(e.to_string()),
     };
@@ -631,7 +644,8 @@ mod test {
             recv.clone(),
         );
 
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher =
+            PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
 
         let mut data = package_watcher.discover_packages_blocking().await.unwrap();
         data.workspaces
@@ -736,7 +750,8 @@ mod test {
             recv.clone(),
         );
 
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher =
+            PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
 
         let mut data = package_watcher.discover_packages_blocking().await.unwrap();
         data.workspaces
@@ -843,7 +858,8 @@ mod test {
             recv.clone(),
         );
 
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher =
+            PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
 
         package_watcher
             .discover_packages_blocking()
@@ -912,7 +928,8 @@ mod test {
             recv.clone(),
         );
 
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher =
+            PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
         // expect an error, we don't have a workspaces glob
         package_watcher
             .discover_packages_blocking()
@@ -982,7 +999,8 @@ mod test {
             recv.clone(),
         );
 
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher =
+            PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
 
         let resp = package_watcher.discover_packages_blocking().await.unwrap();
         assert_eq!(resp.package_manager, PackageManager::Pnpm);
@@ -1008,5 +1026,44 @@ mod test {
             .unwrap();
         let resp = package_watcher.discover_packages_blocking().await.unwrap();
         assert_eq!(resp.package_manager, PackageManager::Npm);
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn allow_no_package_manager_infers_from_lockfile() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+
+        // Root package.json without a `packageManager` field.
+        repo_root
+            .join_component("package.json")
+            .create_with_contents(r#"{"name": "root"}"#)
+            .unwrap();
+        // A pnpm workspace + lockfile, so pnpm can be inferred.
+        repo_root
+            .join_component("pnpm-workspace.yaml")
+            .create_with_contents(r#"packages: ["foo/*"]"#)
+            .unwrap();
+        repo_root
+            .join_component("pnpm-lock.yaml")
+            .create_with_contents("")
+            .unwrap();
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(
+            watcher.cookie_dir(),
+            Duration::from_millis(100),
+            recv.clone(),
+        );
+
+        let package_watcher =
+            PackageWatcher::new(repo_root.clone(), recv, cookie_writer, true).unwrap();
+
+        let resp = package_watcher.discover_packages_blocking().await.unwrap();
+        assert_eq!(resp.package_manager, PackageManager::Pnpm);
     }
 }

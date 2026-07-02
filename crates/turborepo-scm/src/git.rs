@@ -205,6 +205,14 @@ impl GitRepo {
         Ok(output.trim().to_owned())
     }
 
+    fn validate_git_ref(git_ref: &str) -> Result<(), Error> {
+        if git_ref.starts_with('-') {
+            return Err(Error::InvalidGitRef(git_ref.to_string()));
+        }
+
+        Ok(())
+    }
+
     /// Compute a hash summarizing all uncommitted state in the working tree.
     /// Uses `git status --porcelain -z` (which files are dirty/untracked) and
     /// `git diff HEAD` (the actual content changes for tracked files) as inputs
@@ -346,15 +354,19 @@ impl GitRepo {
 
     fn resolve_base(&self, base_override: Option<&str>, env: CIEnv) -> Result<String, Error> {
         if let Some(valid_from) = base_override {
+            Self::validate_git_ref(valid_from)?;
             return Ok(valid_from.to_string());
         }
 
         if let Some(github_base_ref) = Self::get_github_base_ref(env) {
+            Self::validate_git_ref(&github_base_ref)?;
             // we don't fall through to checking against main or master
             // because at this point we know we're in a GITHUB CI environment
             // and we should really know by now what the base ref is
             // so it's better to just error if something went wrong
-            return match self.execute_git_command(&["rev-parse", &github_base_ref], "") {
+            return match self
+                .execute_git_command(&["rev-parse", "--end-of-options", &github_base_ref], "")
+            {
                 Ok(_) => {
                     eprintln!("Resolved base ref from GitHub Actions event: {github_base_ref}");
                     Ok(github_base_ref)
@@ -369,16 +381,7 @@ impl GitRepo {
             };
         }
 
-        let main_result = self.execute_git_command(&["rev-parse", "main"], "");
-        if main_result.is_ok() {
-            return Ok("main".to_string());
-        }
-
-        let master_result = self.execute_git_command(&["rev-parse", "master"], "");
-        if master_result.is_ok() {
-            return Ok("master".to_string());
-        }
-        Err(Error::UnableToResolveRef)
+        default_base_ref(|branch| self.execute_git_command(&["rev-parse", branch], "").is_ok())
     }
 
     fn changed_files(
@@ -399,19 +402,14 @@ impl GitRepo {
         // If a to commit is not specified for `diff-tree` it will change the comparison
         // to be between the provided commit and it's parent
         let to_commit = to_commit.unwrap_or("HEAD");
-        let mut args = vec![
-            "diff-tree",
-            "-r",
-            "--name-only",
-            "--no-commit-id",
-            "-z",
-            &valid_from,
-            to_commit,
-        ];
+        Self::validate_git_ref(to_commit)?;
+        let mut args = vec!["diff-tree", "-r", "--name-only", "--no-commit-id", "-z"];
 
         if merge_base {
             args.push("--merge-base");
         }
+
+        args.extend(["--end-of-options", &valid_from, to_commit]);
 
         let output = self.execute_git_command(&args, pathspec)?;
         self.add_files_from_stdout(&mut files, turbo_root, output)?;
@@ -500,8 +498,20 @@ impl GitRepo {
         let valid_from = self.resolve_base(from_commit, CIEnv::new())?;
         let arg = format!("{}:{}", valid_from, anchored_file_path.as_str());
 
-        self.execute_git_command(&["show", &arg], "")
+        self.execute_git_command(&["show", "--end-of-options", &arg], "")
     }
+}
+
+fn default_base_ref(mut branch_exists: impl FnMut(&str) -> bool) -> Result<String, Error> {
+    if branch_exists("main") {
+        return Ok("main".to_string());
+    }
+
+    if branch_exists("master") {
+        return Ok("master".to_string());
+    }
+
+    Err(Error::UnableToResolveRef)
 }
 
 /// Finds the content of a file at a previous commit. Assumes file is in a git
@@ -548,7 +558,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
     use which::which;
 
-    use super::{CIEnv, InvalidRange, previous_content};
+    use super::{CIEnv, InvalidRange, default_base_ref, previous_content};
     use crate::{
         Error, GitRepo, SCM,
         git::{GitHubCommit, GitHubEvent},
@@ -1110,43 +1120,98 @@ mod tests {
         Ok(())
     }
 
-    #[test_case(vec!["main"],                      None,            Some("main"))]
-    #[test_case(vec!["master"],                    None,            Some("master"))]
-    #[test_case(vec!["ziltoid"],                   None,            None)]
-    #[test_case(vec!["ziltoid", "main"],           Some("ziltoid"), Some("ziltoid"))]
-    #[test_case(vec!["ziltoid", "main"],           Some("main"),    Some("main"))]
-    #[test_case(vec!["ziltoid", "main"],           None,            Some("main"))]
-    #[test_case(vec!["ziltoid", "master"],         Some("ziltoid"), Some("ziltoid"))]
-    #[test_case(vec!["ziltoid", "master"],         Some("master"),  Some("master"))]
-    #[test_case(vec!["ziltoid", "master"],         None,            Some("master"))]
-    #[test_case(vec!["ziltoid", "master", "main"], Some("ziltoid"), Some("ziltoid"))]
-    #[test_case(vec!["ziltoid", "master", "main"], Some("master"),  Some("master"))]
-    #[test_case(vec!["ziltoid", "master", "main"], Some("main"),    Some("main"))]
-    #[test_case(vec!["ziltoid", "master", "main"], None,            Some("main"))]
-    fn test_base_resolution(
-        branches_to_create: Vec<&str>,
-        target_branch: Option<&str>,
-        expected: Option<&str>,
-    ) -> Result<(), Error> {
-        let (first_branch, remaining_branches) = branches_to_create.split_first().unwrap();
+    #[test]
+    fn test_default_base_ref_resolution() {
+        for (branches, expected) in [
+            (vec!["main"], Some("main")),
+            (vec!["master"], Some("master")),
+            (vec!["ziltoid"], None),
+            (vec!["ziltoid", "main"], Some("main")),
+            (vec!["ziltoid", "master"], Some("master")),
+            (vec!["ziltoid", "master", "main"], Some("main")),
+        ] {
+            let branches = HashSet::<&str>::from_iter(branches);
+            let actual = default_base_ref(|branch| branches.contains(branch)).ok();
 
-        let (repo_root, repo_path) = setup_repository(Some(first_branch))?;
+            assert_eq!(actual.as_deref(), expected);
+        }
+    }
+
+    #[test]
+    fn test_base_resolution_uses_override_before_default_branches() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(Some("main"))?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
-        // WARNING:
-        // if you do not make a commit, git will show you that you have no branches.
         let file = root.join_component("todo.txt");
         file.create_with_contents("1. make async Rust good")?;
-        let first_commit_sha = commit_file(&repo_path, Path::new("todo.txt"), None);
+        commit_file(&repo_path, Path::new("todo.txt"), None);
 
-        for branch in remaining_branches {
-            run_git(&repo_path, &["branch", branch, &first_commit_sha]);
-        }
+        let git = GitRepo::find(&root).unwrap();
+        let actual = git.resolve_base(Some("ziltoid"), CIEnv::none())?;
 
-        let thing = GitRepo::find(&root).unwrap();
-        let actual = thing.resolve_base(target_branch, CIEnv::none()).ok();
+        assert_eq!(actual, "ziltoid");
 
-        assert_eq!(actual.as_deref(), expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_changed_files_rejects_option_like_refs() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(None)?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let file = root.join_component("todo.txt");
+        file.create_with_contents("1. reject git option injection")?;
+        commit_file(&repo_path, Path::new("todo.txt"), None);
+
+        let target = NamedTempFile::new()?;
+        fs::write(target.path(), "keep")?;
+        let injected_ref = format!("--output={}", target.path().display());
+
+        let scm = SCM::new(&root);
+        let base_result =
+            scm.changed_files(&root, Some(&injected_ref), Some("HEAD"), false, false, true);
+
+        assert_matches!(
+            base_result,
+            Err(Error::InvalidGitRef(ref git_ref)) if git_ref == &injected_ref
+        );
+        assert_eq!(fs::read_to_string(target.path())?, "keep");
+
+        let head_result =
+            scm.changed_files(&root, Some("HEAD"), Some(&injected_ref), false, false, true);
+
+        assert_matches!(
+            head_result,
+            Err(Error::InvalidGitRef(ref git_ref)) if git_ref == &injected_ref
+        );
+        assert_eq!(fs::read_to_string(target.path())?, "keep");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_previous_content_rejects_option_like_ref() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(None)?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let file = root.join_component("todo.txt");
+        file.create_with_contents("1. reject git option injection")?;
+        commit_file(&repo_path, Path::new("todo.txt"), None);
+
+        let target = NamedTempFile::new()?;
+        fs::write(target.path(), "keep")?;
+        let injected_ref = format!("--output={}", target.path().display());
+        let result = previous_content(
+            repo_root.path().to_path_buf(),
+            Some(&injected_ref),
+            file.to_string(),
+        );
+
+        assert_matches!(
+            result,
+            Err(Error::InvalidGitRef(ref git_ref)) if git_ref == &injected_ref
+        );
+        assert_eq!(fs::read_to_string(target.path())?, "keep");
 
         Ok(())
     }
@@ -1645,6 +1710,7 @@ mod tests {
             root: root.to_owned(),
             bin,
             attrs: std::sync::OnceLock::new(),
+            slowest_files: None,
         }
     }
 

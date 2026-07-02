@@ -9,7 +9,25 @@ use std::{
 
 use turborepo_log::{Level, LogEvent, LogSink, OutputChannel, Source};
 
-use crate::{ColorConfig, ColorSelector, tui_sink::normalize_newlines};
+use crate::{ColorConfig, ColorSelector};
+
+/// Normalize lone `\n` to `\r\n`.
+///
+/// Already-correct `\r\n` sequences are left as-is. Used by [`TerminalSink`]
+/// when streaming under raw mode (where a lone `\n` would staircase the
+/// output) and by the TUI's virtual terminal emulator.
+pub(crate) fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
+    let mut result = Vec::with_capacity(bytes.len());
+    let mut prev_cr = false;
+    for &b in bytes {
+        if b == b'\n' && !prev_cr {
+            result.push(b'\r');
+        }
+        result.push(b);
+        prev_cr = b == b'\r';
+    }
+    result
+}
 
 const MODE_DISABLED: u8 = 0;
 const MODE_STDERR_ONLY: u8 = 1;

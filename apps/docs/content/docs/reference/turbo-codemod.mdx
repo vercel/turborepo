@@ -303,7 +303,7 @@ npx @turbo/codemod set-default-outputs
     "build": {
       "dependsOn": ["^build"],
       "env": ["API_BASE"],
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
 -   "lint": {
 -     "outputs": []
@@ -343,7 +343,7 @@ npx @turbo/codemod migrate-env-var-dependencies
 -     "dependsOn": ["^build", "$API_BASE"],
 +     "dependsOn": ["^build"],
 +     "env": ["API_BASE"],
-      "outputs": [".next/**", "!.next/cache/**"],
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"],
     },
     "lint": {},
     "dev": {
@@ -356,7 +356,7 @@ npx @turbo/codemod migrate-env-var-dependencies
 
 </Accordion>
 <Accordion title="add-package-manager (1.1.0)" id="add-package-manager">
-Transforms the root `package.json` so that `packageManager` key as the detected package manager (`yarn`, `npm`, `pnpm`) and version (e.g. `yarn@1.22.17`). This key is now [supported by Node.js](https://nodejs.org/dist/latest-v17.x/docs/api/packages.html#packagemanager) and is used by Turborepo for faster package manager detection (vs. inferring from just the filesystem alone).
+Transforms the root `package.json` so that `devEngines.packageManager` declares the detected package manager (`yarn`, `npm`, `pnpm`, `bun`) and version. Turborepo uses this declaration for faster package manager detection, rather than inferring from the filesystem alone.
 
 ```bash title="Terminal"
 npx @turbo/codemod add-package-manager
@@ -369,7 +369,12 @@ npx @turbo/codemod add-package-manager
   "name": "turborepo-basic",
   "version": "0.0.0",
   "private": true,
-+  "packageManager": "yarn@1.22.17",
++  "devEngines": {
++    "packageManager": {
++      "name": "yarn",
++      "version": "1.22.17"
++    }
++  },
   "workspaces": [
     "apps/*",
     "packages/*"

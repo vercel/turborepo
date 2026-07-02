@@ -78,16 +78,20 @@ impl RawTurboJsonExt for RawTurboJson {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use biome_deserialize::json::deserialize_from_json_str;
     use biome_json_parser::JsonParserOptions;
     use pretty_assertions::assert_eq;
     use test_case::test_case;
     use turbopath::RelativeUnixPath;
     use turborepo_engine::TaskDefinitionFromProcessed;
-    use turborepo_errors::Spanned;
+    use turborepo_errors::{json::deserialize_from_json_str, Spanned};
+    use turborepo_turbo_json::raw::RawTaskInput;
     use turborepo_types::{TaskDefinition, TaskInputs, TaskOutputs};
 
     use super::RawTaskDefinition;
+
+    fn raw_input(value: &str) -> RawTaskInput {
+        RawTaskInput::String(turborepo_unescape::UnescapedString::from(value.to_string()))
+    }
 
     // This test must stay in turborepo-lib because it uses TaskDefinition::from_raw
     // which requires turborepo-engine (and turborepo-turbo-json cannot depend on
@@ -127,7 +131,7 @@ mod tests {
             pass_through_env: Some(vec![Spanned::<turborepo_unescape::UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(94..110)]),
             outputs: Some(vec![Spanned::<turborepo_unescape::UnescapedString>::new("package/a/dist".into()).with_range(135..151)]),
             cache: Some(Spanned::new(false).with_range(173..178)),
-            inputs: Some(vec![Spanned::<turborepo_unescape::UnescapedString>::new("package/a/src/**".into()).with_range(201..219)]),
+            inputs: Some(vec![Spanned::new(raw_input("package/a/src/**")).with_range(201..219)]),
             output_logs: Some(Spanned::new(turborepo_types::OutputLogsMode::Full).with_range(246..252)),
             persistent: Some(Spanned::new(true).with_range(278..282)),
             interactive: Some(Spanned::new(true).with_range(309..313)),
@@ -178,7 +182,7 @@ mod tests {
             pass_through_env: Some(vec![Spanned::<turborepo_unescape::UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(106..122)]),
             outputs: Some(vec![Spanned::<turborepo_unescape::UnescapedString>::new("package\\a\\dist".into()).with_range(151..169)]),
             cache: Some(Spanned::new(false).with_range(195..200)),
-            inputs: Some(vec![Spanned::<turborepo_unescape::UnescapedString>::new("package\\a\\src\\**".into()).with_range(227..248)]),
+            inputs: Some(vec![Spanned::new(raw_input("package\\a\\src\\**")).with_range(227..248)]),
             output_logs: Some(Spanned::new(turborepo_types::OutputLogsMode::Full).with_range(279..285)),
             persistent: Some(Spanned::new(true).with_range(315..319)),
             interruptible: Some(Spanned::new(true).with_range(352..356)),
@@ -215,7 +219,7 @@ mod tests {
             "outputs": ["$TURBO_ROOT$/coverage/**", "!$TURBO_ROOT$/coverage/index.html"]
         }"#,
         RawTaskDefinition {
-            inputs: Some(vec![Spanned::new(turborepo_unescape::UnescapedString::from("$TURBO_ROOT$/config.txt")).with_range(25..50)]),
+            inputs: Some(vec![Spanned::new(raw_input("$TURBO_ROOT$/config.txt")).with_range(25..50)]),
             outputs: Some(vec![
                 Spanned::new(turborepo_unescape::UnescapedString::from("$TURBO_ROOT$/coverage/**")).with_range(77..103),
                 Spanned::new(turborepo_unescape::UnescapedString::from("!$TURBO_ROOT$/coverage/index.html")).with_range(105..140),
@@ -253,13 +257,12 @@ mod tests {
         expected_raw_task_definition: RawTaskDefinition,
         expected_task_definition: TaskDefinition,
     ) -> Result<()> {
-        let deserialized_result = deserialize_from_json_str(
+        let (deserialized, _) = deserialize_from_json_str(
             task_definition_content,
             JsonParserOptions::default().with_allow_comments(),
             "turbo.json",
         );
-        let raw_task_definition: RawTaskDefinition =
-            deserialized_result.into_deserialized().unwrap();
+        let raw_task_definition: RawTaskDefinition = deserialized.unwrap();
         assert_eq!(raw_task_definition, expected_raw_task_definition);
 
         let task_definition =

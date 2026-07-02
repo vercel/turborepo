@@ -4,7 +4,7 @@ import { shouldWarn, NON_FATAL_ERRORS } from "../src/errors";
 describe("shouldWarn()", () => {
   it("it detects errors when packageManager is missing", () => {
     const result = shouldWarn({
-      err: `run failed: We did not detect an in-use package manager for your project. Please set the "packageManager" property in your root package.json (https://nodejs.org/api/packages.html#packagemanager) or run \`npx @turbo/codemod add-package-manager\` in the root of your monorepo.`
+      err: `run failed: We did not find a package manager specified in your root package.json. Please set the "devEngines.packageManager" property in your root package.json or the legacy "packageManager" property (https://nodejs.org/api/packages.html#packagemanager) or run \`npx @turbo/codemod add-package-manager\` in the root of your monorepo.`
     });
     expect(result.code).toBe("NO_PACKAGE_MANAGER");
     expect(result.level).toBe("warn");

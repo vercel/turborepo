@@ -118,13 +118,10 @@ pub fn setup_git(target_dir: &Path) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-/// Write the `packageManager` field into `package.json` and configure corepack.
-/// The corepack install directory is placed outside `target_dir` so corepack
-/// shims don't appear as task inputs.
+/// Write the `packageManager` field into `package.json`.
 pub fn setup_package_manager(
     target_dir: &Path,
     package_manager: &str,
-    corepack_dir: &Path,
 ) -> Result<(), anyhow::Error> {
     // Read, modify, and write package.json
     let pkg_json_path = target_dir.join("package.json");
@@ -143,9 +140,18 @@ pub fn setup_package_manager(
         &format!("Updated package manager to {package_manager}"),
     )?;
 
-    // Exercise package manager resolution through Corepack for every PM it
-    // supports, including npm. Keep Corepack state per test so parallel tests
-    // do not contend over the user's global Corepack cache/last-known-good data.
+    Ok(())
+}
+
+/// Configure Corepack for the package manager used by a fixture.
+///
+/// The install directory is placed outside `target_dir` so Corepack shims don't
+/// appear as task inputs.
+pub fn setup_corepack(
+    target_dir: &Path,
+    package_manager: &str,
+    corepack_dir: &Path,
+) -> Result<(), anyhow::Error> {
     let pm_name = package_manager.split('@').next().unwrap_or(package_manager);
     if !corepack_supports(pm_name) {
         return Ok(());
@@ -191,28 +197,8 @@ pub fn prepare_corepack_from_package_json(dir: &Path) {
         None => return,
     };
 
-    let pm_name = pm.split('@').next().unwrap_or(&pm);
-    if !corepack_supports(pm_name) {
-        return;
-    }
-
     let corepack_dir = corepack_dir_for_test_dir(dir);
-    fs::create_dir_all(&corepack_dir).expect("failed to create corepack dir");
-    let corepack_home = corepack_home();
-    fs::create_dir_all(&corepack_home).expect("failed to create corepack home");
-
-    run_corepack(
-        dir,
-        &corepack_home,
-        [
-            OsString::from("enable"),
-            OsString::from(pm_name),
-            OsString::from(format!("--install-directory={}", corepack_dir.display())),
-        ],
-    )
-    .expect("failed to enable corepack");
-
-    prepare_corepack_package_manager(dir, &corepack_home, &pm).expect("failed to prepare corepack");
+    setup_corepack(dir, &pm, &corepack_dir).expect("failed to configure corepack");
 }
 
 /// Install dependencies using the specified package manager.
@@ -288,13 +274,12 @@ pub fn setup_integration_test(
     package_manager: &str,
     install: bool,
 ) -> Result<(), anyhow::Error> {
-    let corepack_dir = corepack_dir_for_test_dir(target_dir);
-    fs::create_dir_all(&corepack_dir)?;
-
     copy_fixture(fixture, target_dir)?;
     setup_git(target_dir)?;
-    setup_package_manager(target_dir, package_manager, &corepack_dir)?;
+    setup_package_manager(target_dir, package_manager)?;
     if install {
+        let corepack_dir = corepack_dir_for_test_dir(target_dir);
+        setup_corepack(target_dir, package_manager, &corepack_dir)?;
         install_deps(target_dir, package_manager, &corepack_dir)?;
     }
     Ok(())

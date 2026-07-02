@@ -1,7 +1,7 @@
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet, HashSet},
     str::FromStr,
     sync::{LazyLock, OnceLock},
 };
@@ -10,8 +10,8 @@ use globwalk::{ValidatedGlob, WalkType};
 use miette::Diagnostic;
 use tracing::trace;
 use turbopath::{
-    AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
-    RelativeUnixPathBuf,
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
+    RelativeUnixPath, RelativeUnixPathBuf,
 };
 use turborepo_repository::{
     package_graph::{self, PackageGraph, PackageName, PackageNode},
@@ -54,6 +54,10 @@ pub enum Error {
     NoWorkspaceSpecified,
     #[error("Invalid scope. Package with name {0} in `package.json` not found.")]
     MissingWorkspace(PackageName),
+    #[error(
+        "Invalid patched dependency path `{0}`: path escapes the repository or output directory"
+    )]
+    InvalidPatchPath(RelativeUnixPathBuf),
     #[error("Cannot prune without parsed lockfile.")]
     MissingLockfile,
     #[error("Unable to read config: {0}")]
@@ -131,14 +135,25 @@ pub async fn prune(
     base: &CommandBase,
     scope: &[String],
     docker: bool,
+    production: bool,
     output_dir: &str,
     use_gitignore: bool,
     telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
     telemetry.track_arg_usage("docker", docker);
+    telemetry.track_arg_usage("production", production);
     telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
 
-    let prune = Prune::new(base, scope, docker, output_dir, use_gitignore, telemetry).await?;
+    let prune = Prune::new(
+        base,
+        scope,
+        docker,
+        production,
+        output_dir,
+        use_gitignore,
+        telemetry,
+    )
+    .await?;
 
     println!(
         "Generating pruned monorepo for {} in {}",
@@ -160,12 +175,7 @@ pub async fn prune(
     let mut workspace_paths = Vec::new();
     let mut workspace_names = Vec::new();
     let workspaces = prune.internal_dependencies();
-    let lockfile_keys: Vec<_> = prune
-        .package_graph
-        .transitive_external_dependencies(workspaces.iter())
-        .into_iter()
-        .map(|pkg| pkg.key.clone())
-        .collect();
+    let lockfile_keys = prune.lockfile_keys(&workspaces)?;
     for workspace in workspaces {
         let entry = prune
             .package_graph
@@ -309,35 +319,31 @@ pub async fn prune(
 
     if !original_patches.is_empty() {
         for patch in &pruned_patches {
-            prune.copy_file(
-                &patch.to_anchored_system_path_buf(),
-                Some(CopyDestination::Docker),
-            )?;
+            prune.copy_patch_file(patch)?;
         }
+    }
 
-        // Prune pnpm-workspace.yaml's patchedDependencies so it only
-        // references patches that are actually in the pruned output.
-        if matches!(
-            package_manager,
-            turborepo_repository::package_manager::PackageManager::Pnpm
-                | turborepo_repository::package_manager::PackageManager::Pnpm6
-                | turborepo_repository::package_manager::PackageManager::Pnpm9
-        ) {
-            let ws_config =
-                turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH;
-            let ws_path = AnchoredSystemPathBuf::from_raw(ws_config)?;
-            let full_ws = prune.full_directory.resolve(&ws_path);
+    // Prune pnpm-workspace.yaml's patchedDependencies so it only
+    // references patches that are actually in the pruned output.
+    if package_manager.is_pnpm_family() {
+        let ws_config = turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH;
+        let ws_path = AnchoredSystemPathBuf::from_raw(ws_config)?;
+        let out_ws = prune.out_directory.resolve(&ws_path);
+        turborepo_repository::package_manager::pnpm::prune_workspace_patches(
+            &out_ws,
+            &pruned_patches,
+        )?;
+        let full_ws = prune.full_directory.resolve(&ws_path);
+        turborepo_repository::package_manager::pnpm::prune_workspace_patches(
+            &full_ws,
+            &pruned_patches,
+        )?;
+        if prune.docker {
+            let docker_ws = prune.docker_directory().resolve(&ws_path);
             turborepo_repository::package_manager::pnpm::prune_workspace_patches(
-                &full_ws,
+                &docker_ws,
                 &pruned_patches,
             )?;
-            if prune.docker {
-                let docker_ws = prune.docker_directory().resolve(&ws_path);
-                turborepo_repository::package_manager::pnpm::prune_workspace_patches(
-                    &docker_ws,
-                    &pruned_patches,
-                )?;
-            }
         }
     }
 
@@ -379,10 +385,7 @@ fn collect_patch_paths(
     if !patch_keys.is_empty() {
         patches.extend(package_json_patch_paths(root_package_json, &patch_keys));
 
-        if matches!(
-            package_manager,
-            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
-        ) {
+        if package_manager.is_pnpm_family() {
             let workspace_yaml_path = repo_root.join_component(
                 turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH,
             );
@@ -397,7 +400,31 @@ fn collect_patch_paths(
 
     patches.sort();
     patches.dedup();
+    validate_patch_source_paths(repo_root, &patches)?;
     Ok(patches)
+}
+
+fn validate_patch_source_paths(
+    repo_root: &AbsoluteSystemPath,
+    patches: &[RelativeUnixPathBuf],
+) -> Result<(), Error> {
+    let repo_root_realpath = repo_root.to_realpath()?;
+
+    for patch in patches {
+        let patch_path = repo_root.join_unix_path(patch);
+        if !patch_path.starts_with(repo_root.as_std_path()) {
+            return Err(Error::InvalidPatchPath(patch.clone()));
+        }
+
+        if patch_path.try_exists()? {
+            let patch_realpath = patch_path.to_realpath()?;
+            if !patch_realpath.starts_with(repo_root_realpath.as_std_path()) {
+                return Err(Error::InvalidPatchPath(patch.clone()));
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn package_json_patch_paths(
@@ -436,6 +463,7 @@ struct Prune<'a> {
     out_directory: AbsoluteSystemPathBuf,
     full_directory: AbsoluteSystemPathBuf,
     docker: bool,
+    production: bool,
     scope: &'a [String],
     use_gitignore: bool,
     uses_per_workspace_lockfiles: bool,
@@ -455,6 +483,7 @@ impl<'a> Prune<'a> {
         base: &CommandBase,
         scope: &'a [String],
         docker: bool,
+        production: bool,
         output_dir: &str,
         use_gitignore: bool,
         telemetry: CommandEventBuilder,
@@ -486,6 +515,7 @@ impl<'a> Prune<'a> {
 
         trace!("scope: {}", scope.join(", "));
         trace!("docker: {}", docker);
+        trace!("production: {}", production);
         trace!("out directory: {}", &out_directory);
 
         for target in scope {
@@ -512,15 +542,11 @@ impl<'a> Prune<'a> {
             return Err(Error::MissingLockfile);
         }
 
-        let uses_per_workspace_lockfiles = matches!(
-            package_graph.package_manager(),
-            turborepo_repository::package_manager::PackageManager::Pnpm
-                | turborepo_repository::package_manager::PackageManager::Pnpm6
-                | turborepo_repository::package_manager::PackageManager::Pnpm9
-        ) && NpmRc::from_file(&base.repo_root)
-            .unwrap_or_default()
-            .shared_workspace_lockfile
-            == Some(false);
+        let uses_per_workspace_lockfiles = package_graph.package_manager().is_pnpm_family()
+            && NpmRc::from_file(&base.repo_root)
+                .unwrap_or_default()
+                .shared_workspace_lockfile
+                == Some(false);
 
         full_directory.resolve(package_json()).ensure_dir()?;
         if docker {
@@ -536,6 +562,7 @@ impl<'a> Prune<'a> {
             out_directory,
             full_directory,
             docker,
+            production,
             scope,
             use_gitignore,
             uses_per_workspace_lockfiles,
@@ -571,6 +598,50 @@ impl<'a> Prune<'a> {
             let docker_to = self.docker_directory().resolve(path);
             turborepo_fs::copy_file(&from_path, docker_to)?;
         }
+        Ok(())
+    }
+
+    fn copy_patch_file(&self, patch: &RelativeUnixPathBuf) -> Result<(), Error> {
+        self.validate_patch_destination_path(patch, &self.full_directory)?;
+        if self.docker {
+            self.validate_patch_destination_path(patch, &self.docker_directory())?;
+        }
+
+        self.copy_file(
+            &patch.to_anchored_system_path_buf(),
+            Some(CopyDestination::Docker),
+        )
+    }
+
+    fn validate_patch_destination_path(
+        &self,
+        patch: &RelativeUnixPathBuf,
+        destination_root: &AbsoluteSystemPath,
+    ) -> Result<(), Error> {
+        let destination_root_realpath = destination_root.to_realpath()?;
+        let patch_path = destination_root.join_unix_path(patch);
+
+        if !patch_path.starts_with(destination_root.as_std_path()) {
+            return Err(Error::InvalidPatchPath(patch.clone()));
+        }
+
+        if patch_path.symlink_metadata().is_ok() {
+            let patch_realpath = patch_path.to_realpath()?;
+            if !patch_realpath.starts_with(destination_root_realpath.as_std_path()) {
+                return Err(Error::InvalidPatchPath(patch.clone()));
+            }
+        }
+
+        for ancestor in patch_path.ancestors().skip(1) {
+            if ancestor.try_exists()? {
+                let ancestor_realpath = ancestor.to_realpath()?;
+                if !ancestor_realpath.starts_with(destination_root_realpath.as_std_path()) {
+                    return Err(Error::InvalidPatchPath(patch.clone()));
+                }
+                break;
+            }
+        }
+
         Ok(())
     }
 
@@ -740,6 +811,17 @@ impl<'a> Prune<'a> {
         Ok(())
     }
 
+    fn workspace_transitive_closure<'graph, 'node, I: IntoIterator<Item = &'node PackageNode>>(
+        &'graph self,
+        nodes: I,
+    ) -> HashSet<&'graph PackageNode> {
+        if self.production {
+            self.package_graph.production_transitive_closure(nodes)
+        } else {
+            self.package_graph.transitive_closure(nodes)
+        }
+    }
+
     fn internal_dependencies(&self) -> Vec<PackageName> {
         let workspaces = std::iter::once(PackageNode::Workspace(PackageName::Root))
             .chain(
@@ -748,17 +830,109 @@ impl<'a> Prune<'a> {
                     .map(|workspace| PackageNode::Workspace(PackageName::Other(workspace.clone()))),
             )
             .collect::<Vec<_>>();
-        let nodes = self.package_graph.transitive_closure(workspaces.iter());
-
-        let mut names: Vec<_> = nodes
+        let mut names = self
+            .workspace_transitive_closure(workspaces.iter())
             .into_iter()
             .filter_map(|node| match node {
                 PackageNode::Root => None,
                 PackageNode::Workspace(workspace) => Some(workspace.clone()),
             })
-            .collect();
+            .collect::<HashSet<_>>();
+
+        loop {
+            let mut changed = false;
+            for workspace in names.clone() {
+                let Some(info) = self.package_graph.package_info(&workspace) else {
+                    continue;
+                };
+                for (peer_name, _) in info.package_json.peer_dependencies.iter().flatten() {
+                    if info.package_json.is_optional_peer_dependency(peer_name) {
+                        continue;
+                    }
+
+                    let peer = PackageName::from(peer_name.as_str());
+                    if self.package_graph.package_info(&peer).is_some() && names.insert(peer) {
+                        changed = true;
+                    }
+                }
+            }
+
+            if !changed {
+                break;
+            }
+
+            let workspace_nodes = names
+                .iter()
+                .cloned()
+                .map(PackageNode::Workspace)
+                .collect::<Vec<_>>();
+            names.extend(
+                self.workspace_transitive_closure(workspace_nodes.iter())
+                    .into_iter()
+                    .filter_map(|node| match node {
+                        PackageNode::Root => None,
+                        PackageNode::Workspace(workspace) => Some(workspace.clone()),
+                    }),
+            );
+        }
+
+        let mut names = names.into_iter().collect::<Vec<_>>();
         names.sort();
         names
+    }
+
+    fn lockfile_keys(&self, workspaces: &[PackageName]) -> Result<Vec<String>, Error> {
+        let mut keys = self
+            .package_graph
+            .transitive_external_dependencies(workspaces.iter())
+            .into_iter()
+            .map(|pkg| pkg.key.clone())
+            .collect::<HashSet<_>>();
+
+        let lockfile = self
+            .package_graph
+            .lockfile()
+            .ok_or(Error::MissingLockfile)?;
+
+        for workspace in workspaces {
+            let Some(info) = self.package_graph.package_info(workspace) else {
+                continue;
+            };
+
+            let peer_dependencies = info
+                .package_json
+                .peer_dependencies
+                .iter()
+                .flatten()
+                .filter(|(name, _)| !info.package_json.is_optional_peer_dependency(name))
+                .filter(|(name, _)| {
+                    self.package_graph
+                        .package_info(&PackageName::from(name.as_str()))
+                        .is_none()
+                })
+                .map(|(name, version)| (name.clone(), version.clone()))
+                .collect::<BTreeMap<_, _>>();
+
+            if peer_dependencies.is_empty() {
+                continue;
+            }
+
+            let workspace_path = info.package_path().to_unix();
+            keys.extend(
+                turborepo_lockfiles::transitive_closure(
+                    lockfile,
+                    workspace_path.as_str(),
+                    peer_dependencies,
+                    false,
+                )?
+                .into_iter()
+                .map(|pkg| pkg.key),
+            );
+        }
+
+        let mut keys = keys.into_iter().collect::<Vec<_>>();
+        keys.sort();
+        Ok(keys)
     }
 
     /// Copy files matched by `globalDependencies` globs when the
@@ -896,12 +1070,41 @@ fn merge_preserving_key_order(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{BTreeMap, HashMap};
+
     use serde_json::json;
-    use turborepo_repository::package_json::PackageJson;
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_errors::Spanned;
+    use turborepo_repository::{
+        discovery::{DiscoveryResponse, PackageDiscovery},
+        package_graph::{PackageGraph, PackageName},
+        package_json::PackageJson,
+        package_manager::PackageManager,
+    };
 
     use super::{
-        bin_paths, merge_preserving_key_order, prune_package_json_workspaces, ADDITIONAL_FILES,
+        bin_paths, merge_preserving_key_order, prune_package_json_workspaces, Prune,
+        ADDITIONAL_FILES,
     };
+
+    struct MockDiscovery;
+
+    impl PackageDiscovery for MockDiscovery {
+        async fn discover_packages(
+            &self,
+        ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+            Ok(DiscoveryResponse {
+                package_manager: PackageManager::Npm,
+                workspaces: vec![],
+            })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+            self.discover_packages().await
+        }
+    }
 
     #[test]
     fn bin_paths_reads_string_bin() {
@@ -996,6 +1199,303 @@ mod tests {
         assert_eq!(
             package_json["workspaces"]["catalog"],
             json!({"react": "latest"})
+        );
+    }
+
+    #[tokio::test]
+    async fn internal_dependencies_includes_all_cycle_members() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let package_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({
+                "name": "repo",
+                "packageManager": "npm@10.5.0"
+            }))
+            .unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(HashMap::from([
+            (
+                root.join_components(&["packages", "pkg-a", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("pkg-a".to_string())),
+                    dependencies: Some(BTreeMap::from([("pkg-b".to_string(), "*".to_string())])),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["packages", "pkg-b", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("pkg-b".to_string())),
+                    dependencies: Some(BTreeMap::from([("pkg-a".to_string(), "*".to_string())])),
+                    ..Default::default()
+                },
+            ),
+        ])))
+        .build()
+        .await
+        .unwrap();
+        let scope = vec!["pkg-a".to_string()];
+        let out_directory = root.join_component("out");
+        let prune = Prune {
+            package_graph,
+            root: root.clone(),
+            out_directory: out_directory.clone(),
+            full_directory: out_directory,
+            docker: false,
+            production: false,
+            scope: &scope,
+            use_gitignore: false,
+            uses_per_workspace_lockfiles: false,
+        };
+
+        assert_eq!(
+            prune.internal_dependencies(),
+            vec![
+                PackageName::Root,
+                PackageName::from("pkg-a"),
+                PackageName::from("pkg-b")
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn internal_dependencies_excludes_dev_dependencies_with_production() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let package_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({
+                "name": "repo",
+                "packageManager": "npm@10.5.0",
+                "devDependencies": {
+                    "root-tooling": "workspace:*"
+                }
+            }))
+            .unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(HashMap::from([
+            (
+                root.join_components(&["apps", "web", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("web".to_string())),
+                    dependencies: Some(BTreeMap::from([(
+                        "lib".to_string(),
+                        "workspace:*".to_string(),
+                    )])),
+                    dev_dependencies: Some(BTreeMap::from([(
+                        "tooling".to_string(),
+                        "workspace:*".to_string(),
+                    )])),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["packages", "lib", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("lib".to_string())),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["packages", "tooling", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("tooling".to_string())),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["packages", "root-tooling", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("root-tooling".to_string())),
+                    ..Default::default()
+                },
+            ),
+        ])))
+        .build()
+        .await
+        .unwrap();
+        let scope = vec!["web".to_string()];
+        let out_directory = root.join_component("out");
+        let prune = Prune {
+            package_graph,
+            root: root.clone(),
+            out_directory: out_directory.clone(),
+            full_directory: out_directory,
+            docker: false,
+            production: true,
+            scope: &scope,
+            use_gitignore: false,
+            uses_per_workspace_lockfiles: false,
+        };
+
+        assert_eq!(
+            prune.internal_dependencies(),
+            vec![
+                PackageName::Root,
+                PackageName::from("lib"),
+                PackageName::from("web"),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn internal_dependencies_includes_non_optional_peer_workspaces() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let package_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({
+                "name": "repo",
+                "packageManager": "npm@10.5.0"
+            }))
+            .unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(HashMap::from([
+            (
+                root.join_components(&["packages", "pkg-b", "package.json"]),
+                PackageJson::from_value(json!({
+                    "name": "pkg-b",
+                    "peerDependencies": {
+                        "pkg-c": "*",
+                        "pkg-e": "*"
+                    },
+                    "peerDependenciesMeta": {
+                        "pkg-e": { "optional": true }
+                    }
+                }))
+                .unwrap(),
+            ),
+            (
+                root.join_components(&["packages", "pkg-c", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("pkg-c".to_string())),
+                    dependencies: Some(BTreeMap::from([("pkg-d".to_string(), "*".to_string())])),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["packages", "pkg-d", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("pkg-d".to_string())),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["packages", "pkg-e", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("pkg-e".to_string())),
+                    ..Default::default()
+                },
+            ),
+        ])))
+        .build()
+        .await
+        .unwrap();
+        let scope = vec!["pkg-b".to_string()];
+        let out_directory = root.join_component("out");
+        let prune = Prune {
+            package_graph,
+            root: root.clone(),
+            out_directory: out_directory.clone(),
+            full_directory: out_directory,
+            docker: false,
+            production: false,
+            scope: &scope,
+            use_gitignore: false,
+            uses_per_workspace_lockfiles: false,
+        };
+
+        assert_eq!(
+            prune.internal_dependencies(),
+            vec![
+                PackageName::Root,
+                PackageName::from("pkg-b"),
+                PackageName::from("pkg-c"),
+                PackageName::from("pkg-d")
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn internal_dependencies_includes_non_optional_peer_workspaces_with_production() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let package_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({
+                "name": "repo",
+                "packageManager": "npm@10.5.0"
+            }))
+            .unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(HashMap::from([
+            (
+                root.join_components(&["packages", "pkg-b", "package.json"]),
+                PackageJson::from_value(json!({
+                    "name": "pkg-b",
+                    "peerDependencies": {
+                        "pkg-c": "*",
+                        "pkg-e": "*"
+                    },
+                    "peerDependenciesMeta": {
+                        "pkg-e": { "optional": true }
+                    }
+                }))
+                .unwrap(),
+            ),
+            (
+                root.join_components(&["packages", "pkg-c", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("pkg-c".to_string())),
+                    dependencies: Some(BTreeMap::from([("pkg-d".to_string(), "*".to_string())])),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["packages", "pkg-d", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("pkg-d".to_string())),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["packages", "pkg-e", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("pkg-e".to_string())),
+                    ..Default::default()
+                },
+            ),
+        ])))
+        .build()
+        .await
+        .unwrap();
+        let scope = vec!["pkg-b".to_string()];
+        let out_directory = root.join_component("out");
+        let prune = Prune {
+            package_graph,
+            root: root.clone(),
+            out_directory: out_directory.clone(),
+            full_directory: out_directory,
+            docker: false,
+            production: true,
+            scope: &scope,
+            use_gitignore: false,
+            uses_per_workspace_lockfiles: false,
+        };
+
+        assert_eq!(
+            prune.internal_dependencies(),
+            vec![
+                PackageName::Root,
+                PackageName::from("pkg-b"),
+                PackageName::from("pkg-c"),
+                PackageName::from("pkg-d")
+            ]
         );
     }
 

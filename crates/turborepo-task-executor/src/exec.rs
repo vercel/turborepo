@@ -265,11 +265,7 @@ where
             }
             Ok(ExecOutcome::Task { .. }) => {
                 callback
-                    .send(match self.continue_on_error {
-                        ContinueMode::Always => Ok(()),
-                        ContinueMode::DependenciesSuccessful => Err(StopExecution::DependentTasks),
-                        ContinueMode::Never => Err(StopExecution::AllTasks),
-                    })
+                    .send(stop_execution_for_task_error(self.continue_on_error))
                     .ok();
             }
             Ok(ExecOutcome::Shutdown) | Err(_) => {
@@ -282,7 +278,7 @@ where
 
         // Cache save runs after the callback so dependent tasks can start
         // while we walk the filesystem and write to cache.
-        if let Ok(ExecOutcome::Success(SuccessOutcome::Run)) = &result
+        if should_save_outputs_after_execute(&result)
             && self
                 .task_access
                 .can_cache(&self.task_hash, &self.task_id_for_display)
@@ -462,10 +458,22 @@ where
             None
         };
 
-        // Close stdin for non-persistent tasks
-        if !self.takes_input && !self.manager.closing_stdin_ends_process() {
-            process.stdin();
-        }
+        // Close piped stdin for non-interactive tasks so tools that read stdin
+        // before starting don't hang. In PTY mode, keep stdin open without
+        // forwarding input: EOF on a PTY is observable and can shut down tools
+        // that treat it as a terminal/session close signal.
+        let _non_interactive_stdin_guard = if !self.takes_input {
+            if self.manager.use_pty() {
+                process.take_stdin()
+            } else if !self.manager.closing_stdin_ends_process() {
+                process.stdin();
+                None
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         // Create output writer and pipe outputs.
         // The stdout_writer is scoped so that TaskHandleWriter drops before
@@ -605,6 +613,18 @@ where
     }
 }
 
+fn stop_execution_for_task_error(continue_on_error: ContinueMode) -> Result<(), StopExecution> {
+    match continue_on_error {
+        ContinueMode::Always => Ok(()),
+        ContinueMode::DependenciesSuccessful => Err(StopExecution::DependentTasks),
+        ContinueMode::Never => Err(StopExecution::AllTasks),
+    }
+}
+
+fn should_save_outputs_after_execute(result: &Result<ExecOutcome, InternalError>) -> bool {
+    matches!(result, Ok(ExecOutcome::Success(SuccessOutcome::Run)))
+}
+
 /// Execution context for dry runs.
 ///
 /// A simplified executor for dry run mode that only checks cache status.
@@ -623,5 +643,44 @@ impl<H: HashTrackerProvider> DryRunExecutor<H> {
         }
         tracker.dry_run().await;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn task_error_stop_signal_matches_continue_mode() {
+        assert_eq!(stop_execution_for_task_error(ContinueMode::Always), Ok(()));
+        assert_eq!(
+            stop_execution_for_task_error(ContinueMode::DependenciesSuccessful),
+            Err(StopExecution::DependentTasks)
+        );
+        assert_eq!(
+            stop_execution_for_task_error(ContinueMode::Never),
+            Err(StopExecution::AllTasks)
+        );
+    }
+
+    #[test]
+    fn only_successful_task_runs_save_outputs() {
+        assert!(should_save_outputs_after_execute(&Ok(
+            ExecOutcome::Success(SuccessOutcome::Run)
+        )));
+
+        for result in [
+            Ok(ExecOutcome::Success(SuccessOutcome::CacheHit)),
+            Ok(ExecOutcome::Success(SuccessOutcome::RunOutputError)),
+            Ok(ExecOutcome::Task {
+                exit_code: Some(1),
+                message: "failed".to_string(),
+            }),
+            Ok(ExecOutcome::Shutdown),
+            Ok(ExecOutcome::Restarted),
+            Err(InternalError::UnknownChildExit),
+        ] {
+            assert!(!should_save_outputs_after_execute(&result));
+        }
     }
 }

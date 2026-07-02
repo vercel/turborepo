@@ -16,7 +16,7 @@ permissions:
 jobs:
   cleanup:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     if: ${{ github.ref != 'refs/heads/main' }}
     steps:
       - name: Cleanup

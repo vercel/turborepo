@@ -7,7 +7,7 @@ use common::{run_turbo, setup, turbo_output_filters};
 #[test]
 fn test_unnamed_packages_are_filtered() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "nested_packages", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "nested_packages", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["build"]);
     assert!(output.status.success());

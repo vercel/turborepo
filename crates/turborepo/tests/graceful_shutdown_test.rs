@@ -420,6 +420,16 @@ while true; do sleep 0.2 || true; done
             cleanup_idx < cleanup_done_idx,
             "cleanup completion log should appear after cleanup starts\n{transcript}"
         );
+        assert!(
+            !transcript.contains("^C^C"),
+            "single Ctrl+C should only display one terminal interrupt marker\n{transcript}"
+        );
+        assert!(
+            transcript.contains(
+                " - Shutting down Turborepo tasks...Press CTRL+C again to exit forcefully."
+            ),
+            "interactive shutdown banner should follow the terminal Ctrl+C marker\n{transcript}"
+        );
     }
 
     #[test]
@@ -599,7 +609,7 @@ while true; do sleep 0.2 || true; done
         let task_child_pid = wait_for_pid_file(&child_pid_file, START_TIMEOUT);
 
         child.send_ctrl_c();
-        thread::sleep(Duration::from_millis(500));
+        thread::sleep(Duration::from_millis(2500));
         child.send_ctrl_c();
 
         let transcript = child.finish(Duration::from_secs(5));
@@ -608,6 +618,31 @@ while true; do sleep 0.2 || true; done
         assert!(
             transcript.contains("stubborn ready child="),
             "expected task output to remain visible in the TUI transcript\n{transcript}"
+        );
+        assert!(
+            transcript.contains(
+                " - Shutting down Turborepo tasks...Press CTRL+C again to exit forcefully."
+            ),
+            "expected interactive shutdown banner to include force-exit prompt\n{transcript}"
+        );
+        assert!(
+            transcript
+                .matches("Press CTRL+C again to exit forcefully.")
+                .count()
+                == 1,
+            "force-exit prompt should only appear on the initial shutdown banner\n{transcript}"
+        );
+        assert!(
+            transcript.contains("1 task shutting down..."),
+            "expected repeated shutdown status after the initial banner\n{transcript}"
+        );
+        assert!(
+            transcript.contains(" - Force killed Turborepo tasks: app-a#dev"),
+            "expected force-kill status after second Ctrl+C\n{transcript}"
+        );
+        assert!(
+            !transcript.contains(" WARNING "),
+            "force-kill status should not use warning styling\n{transcript}"
         );
     }
 
@@ -655,17 +690,20 @@ while true; do sleep 0.2 || true; done
             "expected non-interactive shutdown banner\n{combined}"
         );
         assert!(
-            combined
-                .contains("Some tasks in your Turborepo are taking awhile to shut down: app-a#dev"),
-            "expected slow-task warning before the forced shutdown\n{combined}"
+            combined.matches("1 task shutting down...").count() >= 2,
+            "expected repeated shutdown status while waiting for force timeout\n{combined}"
         );
         assert!(
-            combined.contains("Shutting down forcibly in 7s..."),
-            "expected remaining timeout warning before the forced shutdown\n{combined}"
+            !combined.contains("Press CTRL+C again to exit forcefully."),
+            "non-interactive timeout shutdown should not emit force-exit prompt\n{combined}"
+        );
+        assert!(
+            !combined.contains("Some tasks in your Turborepo are taking awhile to shut down"),
+            "old warning should not be emitted\n{combined}"
         );
         assert!(
             combined
-                .contains("Graceful shutdown timed out. Force killing Turborepo tasks: app-a#dev"),
+                .contains("Graceful shutdown timed out. Force killed Turborepo tasks: app-a#dev"),
             "expected auto-force banner after timeout\n{combined}"
         );
     }

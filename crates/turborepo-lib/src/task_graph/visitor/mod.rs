@@ -3,7 +3,9 @@ mod exec;
 
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
+    error::Error as StdError,
+    fmt,
     sync::{Arc, Mutex},
 };
 
@@ -12,9 +14,9 @@ use exec::ExecContextFactory;
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, task::JoinError};
 use tracing::{debug, Instrument, Span};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_engine::{TaskError, TaskWarning};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_errors::TURBO_SITE;
@@ -22,8 +24,10 @@ use turborepo_log::grouping::{GroupingLayer, GroupingMode};
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker, TaskTracker};
-use turborepo_scm::SCM;
-use turborepo_task_executor::{command_invokes_turbo, TaskOutput};
+use turborepo_scm::{RepoGitIndex, SCM};
+use turborepo_task_executor::{
+    command_invokes_turbo, InternalError as TaskInternalError, TaskOutput,
+};
 use turborepo_task_hash::{
     Error as TaskHashError, GlobalHashableInputs, PackageInputsHashes, TaskHashTrackerState,
 };
@@ -33,9 +37,10 @@ use turborepo_telemetry::events::{
 };
 use turborepo_types::{EnvMode, ResolvedLogOrder, ResolvedLogPrefix};
 use turborepo_ui::{sender::UISender, ColorConfig, ColorSelector};
+use wax::Program;
 
 use crate::{
-    engine::{Engine, ExecutionOptions},
+    engine::{Engine, ExecutionOptions, TaskNode},
     microfrontends::MicrofrontendsConfigs,
     opts::RunOpts,
     run::{task_access::TaskAccess, RunCache},
@@ -56,6 +61,8 @@ pub struct Visitor<'a> {
     run_tracker: RunTracker,
     task_access: &'a TaskAccess,
     task_hasher: TaskHasher<'a>,
+    scm: &'a SCM,
+    repo_index: Option<&'a RepoGitIndex>,
     color_config: ColorConfig,
     is_watch: bool,
     ui_sender: Option<UISender>,
@@ -89,6 +96,14 @@ pub struct RecursiveTurboError {
     pub text: NamedSource<String>,
 }
 
+enum PrecomputedTask {
+    Ready {
+        task_hash: String,
+        execution_env: EnvironmentVariableMap,
+    },
+    Deferred,
+}
+
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
     #[error("Cannot find package {package_name} for task {task_id}.")]
@@ -108,11 +123,77 @@ pub enum Error {
     #[error(transparent)]
     RunSummary(#[from] summary::Error),
     #[error("Internal errors encountered: {0}")]
-    InternalErrors(String),
+    InternalErrors(InternalErrors),
     #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
     #[error(transparent)]
     CommandProvider(#[from] turborepo_task_executor::CommandProviderError),
+}
+
+#[derive(Debug)]
+pub struct InternalErrors(Vec<InternalVisitorError>);
+
+impl InternalErrors {
+    fn new(errors: Vec<InternalVisitorError>) -> Self {
+        Self(errors)
+    }
+}
+
+impl From<String> for InternalErrors {
+    fn from(message: String) -> Self {
+        Self(vec![InternalVisitorError::Message(message)])
+    }
+}
+
+impl From<&str> for InternalErrors {
+    fn from(message: &str) -> Self {
+        Self::from(message.to_string())
+    }
+}
+
+impl fmt::Display for InternalErrors {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.iter().format(","))
+    }
+}
+
+#[derive(Debug)]
+enum InternalVisitorError {
+    EngineJoin(JoinError),
+    Task(TaskInternalError),
+    TaskJoin(JoinError),
+    Message(String),
+}
+
+impl fmt::Display for InternalVisitorError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EngineJoin(err) => write_join_error(f, "engine execution", err),
+            Self::Task(err) => write!(f, "{err}"),
+            Self::TaskJoin(err) => write_join_error(f, "task executor", err),
+            Self::Message(message) => write!(f, "{message}"),
+        }
+    }
+}
+
+impl StdError for InternalVisitorError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            Self::EngineJoin(err) | Self::TaskJoin(err) => Some(err),
+            Self::Task(err) => Some(err),
+            Self::Message(_) => None,
+        }
+    }
+}
+
+fn write_join_error(f: &mut fmt::Formatter<'_>, context: &str, err: &JoinError) -> fmt::Result {
+    if err.is_panic() {
+        write!(f, "{context} panicked: {err}")
+    } else if err.is_cancelled() {
+        write!(f, "{context} was cancelled: {err}")
+    } else {
+        write!(f, "{context} join failed: {err}")
+    }
 }
 
 impl<'a> Visitor<'a> {
@@ -132,6 +213,8 @@ impl<'a> Visitor<'a> {
         color_config: ColorConfig,
         manager: ProcessManager,
         repo_root: &'a AbsoluteSystemPath,
+        scm: &'a SCM,
+        repo_index: Option<&'a RepoGitIndex>,
         global_env: EnvironmentVariableMap,
         global_env_patterns: &'a [String],
         ui_sender: Option<UISender>,
@@ -190,6 +273,8 @@ impl<'a> Visitor<'a> {
             run_tracker,
             task_access,
             task_hasher,
+            scm,
+            repo_index,
             color_config,
             ui_sender,
             is_watch,
@@ -202,15 +287,229 @@ impl<'a> Visitor<'a> {
     /// parallel. Tasks are processed in topological waves so dependency
     /// hashes are always available when needed. Returns a map from TaskId
     /// to (hash, execution_env).
+    fn precompute_ready_task_hash(
+        &self,
+        engine: &Engine,
+        telemetry: &GenericEventBuilder,
+        task_id: &TaskId<'static>,
+    ) -> Result<PrecomputedTask, Error> {
+        let package_name = PackageName::from(task_id.package());
+        let workspace_info = self
+            .package_graph
+            .package_info(&package_name)
+            .ok_or_else(|| Error::MissingPackage {
+                package_name: package_name.clone(),
+                task_id: task_id.clone(),
+            })?;
+
+        let task_definition = engine
+            .task_definition(task_id)
+            .ok_or(Error::MissingDefinition)?;
+
+        let task_env_mode = task_definition.env_mode.unwrap_or(self.global_env_mode);
+
+        let dependency_set = engine
+            .dependencies(task_id)
+            .ok_or(Error::MissingDefinition)?;
+
+        let package_task_event =
+            PackageTaskEventBuilder::new(task_id.package(), task_id.task()).with_parent(telemetry);
+        package_task_event.track_env_mode(&task_env_mode.to_string());
+
+        let task_hash_telemetry = package_task_event.child();
+        let task_hash = self.task_hasher.calculate_task_hash(
+            task_id,
+            task_definition,
+            task_env_mode,
+            workspace_info,
+            &dependency_set,
+            task_hash_telemetry,
+        )?;
+
+        let execution_env = self
+            .task_hasher
+            .env(task_id, task_env_mode, task_definition)?;
+
+        Ok(PrecomputedTask::Ready {
+            task_hash,
+            execution_env,
+        })
+    }
+
+    fn dependency_hashes_available(
+        &self,
+        engine: &Engine,
+        task_id: &TaskId<'static>,
+    ) -> Result<bool, Error> {
+        let dependency_set = engine
+            .dependencies(task_id)
+            .ok_or(Error::MissingDefinition)?;
+        let task_hash_tracker = self.task_hasher.task_hash_tracker();
+
+        Ok(dependency_set.iter().all(|dependency| {
+            let TaskNode::Task(dependency_task_id) = dependency else {
+                return true;
+            };
+
+            task_hash_tracker.hash(dependency_task_id).is_some()
+        }))
+    }
+
+    fn dependency_output_hashes(
+        &self,
+        engine: &Engine,
+        task_id: &TaskId<'static>,
+    ) -> Result<
+        (
+            Option<Arc<turborepo_hash::FileHashes>>,
+            HashSet<TaskId<'static>>,
+        ),
+        Error,
+    > {
+        let Some(task_definition) = engine.task_definition(task_id) else {
+            return Err(Error::MissingDefinition);
+        };
+        let Some(dependency_outputs) = task_definition.inputs.dependency_outputs.as_ref() else {
+            return Ok((None, HashSet::new()));
+        };
+
+        let selected_tasks =
+            engine.dependency_output_producers(task_id, dependency_outputs.from.as_deref());
+        let selected_task_set = selected_tasks.iter().cloned().collect::<HashSet<_>>();
+
+        let mut combined = BTreeMap::new();
+        let mut selected_any = false;
+        for producer_task_id in selected_tasks {
+            selected_any = true;
+            let producer_package = PackageName::from(producer_task_id.package());
+            let Some(producer_workspace) = self.package_graph.package_info(&producer_package)
+            else {
+                return Err(Error::MissingPackage {
+                    package_name: producer_package,
+                    task_id: producer_task_id,
+                });
+            };
+            let Some(producer_definition) = engine.task_definition(&producer_task_id) else {
+                return Err(Error::MissingDefinition);
+            };
+
+            let declared_output_globs = producer_definition
+                .outputs
+                .inclusions
+                .iter()
+                .cloned()
+                .chain(
+                    producer_definition
+                        .outputs
+                        .exclusions
+                        .iter()
+                        .map(|glob| format!("!{glob}")),
+                )
+                .collect::<Vec<_>>();
+
+            let output_hashes = if dependency_outputs.globs.is_empty() {
+                turborepo_task_hash::file_hashes_for_inputs(
+                    self.scm,
+                    self.repo_root,
+                    producer_workspace.package_path(),
+                    &declared_output_globs,
+                    false,
+                    self.repo_index,
+                )?
+            } else {
+                let requested_hashes = turborepo_task_hash::file_hashes_for_inputs(
+                    self.scm,
+                    self.repo_root,
+                    producer_workspace.package_path(),
+                    &dependency_outputs.globs,
+                    false,
+                    self.repo_index,
+                )?;
+                filter_hashes_to_declared_outputs(&requested_hashes, &declared_output_globs)
+            };
+
+            for (path, hash) in output_hashes.0.iter() {
+                let full_output_path = self
+                    .repo_root
+                    .resolve(producer_workspace.package_path())
+                    .join_unix_path(path);
+                let repo_relative_path =
+                    AnchoredSystemPathBuf::relative_path_between(self.repo_root, &full_output_path)
+                        .to_unix();
+                combined.insert(repo_relative_path, *hash);
+            }
+        }
+
+        if selected_any {
+            Ok((
+                Some(Arc::new(turborepo_hash::FileHashes(
+                    combined.into_iter().collect(),
+                ))),
+                selected_task_set,
+            ))
+        } else {
+            Ok((None, selected_task_set))
+        }
+    }
+
+    fn precompute_unblocked_deferred_hashes(
+        &self,
+        engine: &Engine,
+        telemetry: &GenericEventBuilder,
+        precomputed: &mut HashMap<TaskId<'static>, PrecomputedTask>,
+    ) -> Result<(), Error> {
+        use rayon::prelude::*;
+
+        loop {
+            let ready_to_hash = precomputed
+                .iter()
+                .filter_map(|(task_id, precomputed_task)| {
+                    if !matches!(precomputed_task, PrecomputedTask::Deferred) {
+                        return None;
+                    }
+
+                    let Some(task_definition) = engine.task_definition(task_id) else {
+                        return Some(Err(Error::MissingDefinition));
+                    };
+                    if task_definition.inputs.has_deferred_inputs() {
+                        return None;
+                    }
+
+                    match self.dependency_hashes_available(engine, task_id) {
+                        Ok(true) => Some(Ok(task_id.clone())),
+                        Ok(false) => None,
+                        Err(err) => Some(Err(err)),
+                    }
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            if ready_to_hash.is_empty() {
+                return Ok(());
+            }
+
+            type HashResult = Result<(TaskId<'static>, PrecomputedTask), Error>;
+            let hash_results: Vec<HashResult> = ready_to_hash
+                .par_iter()
+                .map(|task_id| {
+                    self.precompute_ready_task_hash(engine, telemetry, task_id)
+                        .map(|precomputed_task| (task_id.clone(), precomputed_task))
+                })
+                .collect();
+
+            for result in hash_results {
+                let (task_id, precomputed_task) = result?;
+                precomputed.insert(task_id, precomputed_task);
+            }
+        }
+    }
+
     fn precompute_task_hashes(
         &self,
         engine: &Engine,
         telemetry: &GenericEventBuilder,
-    ) -> Result<HashMap<TaskId<'static>, (String, EnvironmentVariableMap)>, Error> {
+    ) -> Result<HashMap<TaskId<'static>, PrecomputedTask>, Error> {
         use petgraph::algo::toposort;
         use rayon::prelude::*;
-        use turborepo_engine::TaskNode;
-
         let graph = engine.task_graph();
         let mut sorted = toposort(graph, None).map_err(|_| Error::MissingDefinition)?;
         // toposort returns dependents before dependencies (edges point
@@ -244,14 +543,13 @@ impl<'a> Visitor<'a> {
             waves[d].push(node_idx);
         }
 
-        let results: Arc<Mutex<HashMap<TaskId<'static>, (String, EnvironmentVariableMap)>>> =
+        let results: Arc<Mutex<HashMap<TaskId<'static>, PrecomputedTask>>> =
             Arc::new(Mutex::new(HashMap::with_capacity(sorted.len())));
 
         // Process each wave in parallel. Within a wave, all dependencies
         // have already been hashed in earlier waves.
         for wave in &waves {
-            type HashResult =
-                Result<Option<(TaskId<'static>, String, EnvironmentVariableMap)>, Error>;
+            type HashResult = Result<Option<(TaskId<'static>, PrecomputedTask)>, Error>;
             let wave_results: Vec<HashResult> = wave
                 .par_iter()
                 .map(|&node_idx| {
@@ -260,45 +558,41 @@ impl<'a> Visitor<'a> {
                         return Ok(None);
                     };
 
-                    let package_name = PackageName::from(task_id.package());
-                    let workspace_info = self
-                        .package_graph
-                        .package_info(&package_name)
-                        .ok_or_else(|| Error::MissingPackage {
-                            package_name: package_name.clone(),
-                            task_id: task_id.clone(),
-                        })?;
-
                     let task_definition = engine
                         .task_definition(task_id)
                         .ok_or(Error::MissingDefinition)?;
-
                     let task_env_mode = task_definition.env_mode.unwrap_or(self.global_env_mode);
 
                     let dependency_set = engine
                         .dependencies(task_id)
                         .ok_or(Error::MissingDefinition)?;
 
-                    let package_task_event =
-                        PackageTaskEventBuilder::new(task_id.package(), task_id.task())
-                            .with_parent(telemetry);
-                    package_task_event.track_env_mode(&task_env_mode.to_string());
+                    let has_deferred_dependency = {
+                        let map = results
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
+                        dependency_set.iter().any(|dependency| {
+                            let TaskNode::Task(dependency_task_id) = dependency else {
+                                return false;
+                            };
 
-                    let task_hash_telemetry = package_task_event.child();
-                    let task_hash = self.task_hasher.calculate_task_hash(
-                        task_id,
-                        task_definition,
-                        task_env_mode,
-                        workspace_info,
-                        &dependency_set,
-                        task_hash_telemetry,
-                    )?;
+                            matches!(map.get(dependency_task_id), Some(PrecomputedTask::Deferred))
+                        })
+                    };
 
-                    let execution_env =
-                        self.task_hasher
-                            .env(task_id, task_env_mode, task_definition)?;
+                    if task_definition.inputs.has_deferred_inputs() || has_deferred_dependency {
+                        if self.dry {
+                            self.task_hasher.insert_deferred_hash(
+                                task_id,
+                                task_definition,
+                                task_env_mode,
+                            )?;
+                        }
+                        return Ok(Some((task_id.clone(), PrecomputedTask::Deferred)));
+                    }
 
-                    Ok(Some((task_id.clone(), task_hash, execution_env)))
+                    self.precompute_ready_task_hash(engine, telemetry, task_id)
+                        .map(|precomputed_task| Some((task_id.clone(), precomputed_task)))
                 })
                 .collect();
 
@@ -306,8 +600,8 @@ impl<'a> Visitor<'a> {
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             for result in wave_results {
-                if let Some((task_id, hash, env)) = result? {
-                    map.insert(task_id, (hash, env));
+                if let Some((task_id, precomputed)) = result? {
+                    map.insert(task_id, precomputed);
                 }
             }
         }
@@ -413,9 +707,102 @@ impl<'a> Visitor<'a> {
 
             // Move pre-computed hash and env out of the map — each task is
             // dispatched exactly once, so remove avoids cloning the env map.
-            let Some((task_hash, execution_env)) = precomputed.remove(&info) else {
+            let Some(precomputed_task) = precomputed.remove(&info) else {
                 dispatch_error = Some(Error::MissingDefinition);
                 break;
+            };
+
+            let (task_hash, execution_env) = match precomputed_task {
+                PrecomputedTask::Ready {
+                    task_hash,
+                    execution_env,
+                } => (task_hash, execution_env),
+                PrecomputedTask::Deferred => {
+                    if self.dry {
+                        (
+                            turborepo_task_hash::deferred_task_hash_message(
+                                &task_definition.inputs,
+                            )
+                            .to_string(),
+                            EnvironmentVariableMap::default(),
+                        )
+                    } else {
+                        let task_env_mode =
+                            task_definition.env_mode.unwrap_or(self.global_env_mode);
+                        let dependency_set = match engine.dependencies(&info) {
+                            Some(dependency_set) => dependency_set,
+                            None => {
+                                dispatch_error = Some(Error::MissingDefinition);
+                                break;
+                            }
+                        };
+                        let package_task_event =
+                            PackageTaskEventBuilder::new(info.package(), info.task())
+                                .with_parent(telemetry);
+                        let task_hash_telemetry = package_task_event.child();
+                        let task_hash = if task_definition.inputs.has_deferred_inputs() {
+                            let (dependency_output_hashes, dependency_output_producers) =
+                                match self.dependency_output_hashes(&engine, &info) {
+                                    Ok(hashes) => hashes,
+                                    Err(err) => {
+                                        dispatch_error = Some(err);
+                                        break;
+                                    }
+                                };
+                            match self.task_hasher.calculate_task_hash_with_deferred_inputs(
+                                &info,
+                                task_definition,
+                                task_env_mode,
+                                workspace_info,
+                                &dependency_set,
+                                task_hash_telemetry,
+                                self.scm,
+                                self.repo_root,
+                                self.repo_index,
+                                dependency_output_hashes,
+                                &dependency_output_producers,
+                            ) {
+                                Ok(hash) => hash,
+                                Err(err) => {
+                                    dispatch_error = Some(Error::TaskHash(err));
+                                    break;
+                                }
+                            }
+                        } else {
+                            match self.task_hasher.calculate_task_hash(
+                                &info,
+                                task_definition,
+                                task_env_mode,
+                                workspace_info,
+                                &dependency_set,
+                                task_hash_telemetry,
+                            ) {
+                                Ok(hash) => hash,
+                                Err(err) => {
+                                    dispatch_error = Some(Error::TaskHash(err));
+                                    break;
+                                }
+                            }
+                        };
+                        let execution_env =
+                            match self.task_hasher.env(&info, task_env_mode, task_definition) {
+                                Ok(env) => env,
+                                Err(err) => {
+                                    dispatch_error = Some(Error::TaskHash(err));
+                                    break;
+                                }
+                            };
+                        if let Err(err) = self.precompute_unblocked_deferred_hashes(
+                            &engine,
+                            telemetry,
+                            &mut precomputed,
+                        ) {
+                            dispatch_error = Some(err);
+                            break;
+                        }
+                        (task_hash, execution_env)
+                    }
+                }
             };
 
             debug!("task {} hash is {}", info, task_hash);
@@ -545,16 +932,20 @@ impl<'a> Visitor<'a> {
         // Always wait for the engine, even after a dispatch error. If we broke
         // early the engine will see the closed channel and return
         // Err(ExecuteError::Visitor), which is expected — not a real error.
-        let engine_result = engine_handle
-            .await
-            .map_err(|err| Error::InternalErrors(format!("engine execution panicked: {err}")))?;
+        let engine_result = engine_handle.await.map_err(|err| {
+            Error::InternalErrors(InternalErrors::new(vec![InternalVisitorError::EngineJoin(
+                err,
+            )]))
+        })?;
 
         // Always drain spawned tasks so every TaskTracker is consumed before
         // the ExecutionTracker is dropped.
         let mut internal_errors = Vec::new();
         while let Some(result) = tasks.next().await {
-            if let Err(e) = result.unwrap_or_else(|e| panic!("task executor panicked: {e}")) {
-                internal_errors.push(e);
+            match result {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => internal_errors.push(InternalVisitorError::Task(e)),
+                Err(e) => internal_errors.push(InternalVisitorError::TaskJoin(e)),
             }
         }
         drop(factory);
@@ -573,9 +964,7 @@ impl<'a> Visitor<'a> {
         engine_result?;
 
         if !internal_errors.is_empty() {
-            return Err(Error::InternalErrors(
-                internal_errors.into_iter().map(|e| e.to_string()).join(","),
-            ));
+            return Err(Error::InternalErrors(InternalErrors::new(internal_errors)));
         }
 
         // Write out the traced-config.json file if we have one
@@ -697,5 +1086,55 @@ impl<'a> Visitor<'a> {
         self.dry = true;
         // No need to start a UI on dry run
         self.ui_sender = None;
+    }
+}
+
+fn filter_hashes_to_declared_outputs(
+    requested_hashes: &turborepo_hash::FileHashes,
+    declared_output_globs: &[String],
+) -> Arc<turborepo_hash::FileHashes> {
+    let declared_outputs = CompiledOutputGlobs::new(declared_output_globs);
+    Arc::new(turborepo_hash::FileHashes(
+        requested_hashes
+            .0
+            .iter()
+            .filter(|(path, _)| declared_outputs.matches(&path.to_string()))
+            .cloned()
+            .collect(),
+    ))
+}
+
+struct CompiledOutputGlobs {
+    inclusions: Vec<wax::Glob<'static>>,
+    exclusions: Vec<wax::Glob<'static>>,
+}
+
+impl CompiledOutputGlobs {
+    fn new(globs: &[String]) -> Self {
+        let mut inclusions = Vec::new();
+        let mut exclusions = Vec::new();
+
+        for glob in globs {
+            if let Some(exclusion) = glob.strip_prefix('!') {
+                if let Ok(glob) = wax::Glob::new(exclusion) {
+                    exclusions.push(glob.into_owned());
+                }
+            } else if let Ok(glob) = wax::Glob::new(glob) {
+                inclusions.push(glob.into_owned());
+            }
+        }
+
+        Self {
+            inclusions,
+            exclusions,
+        }
+    }
+
+    fn matches(&self, path: &str) -> bool {
+        if self.exclusions.iter().any(|glob| glob.is_match(path)) {
+            return false;
+        }
+
+        self.inclusions.iter().any(|glob| glob.is_match(path))
     }
 }

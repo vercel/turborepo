@@ -4,7 +4,7 @@ mod common;
 
 use std::{fs, path::Path};
 
-use common::{run_turbo, setup};
+use common::{combined_output, run_turbo, setup};
 
 fn ls_dir(dir: &Path) -> Vec<String> {
     let mut entries: Vec<String> = fs::read_dir(dir)
@@ -13,6 +13,65 @@ fn ls_dir(dir: &Path) -> Vec<String> {
         .collect();
     entries.sort();
     entries
+}
+
+#[test]
+fn test_prune_production_excludes_dev_dependencies() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--production"]);
+    assert!(
+        output.status.success(),
+        "prune --production failed: {}",
+        combined_output(&output)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Added web"));
+    assert!(stdout.contains("Added shared"));
+    assert!(!stdout.contains("Added util"));
+
+    let packages_dir = tempdir.path().join("out/packages");
+    let package_entries = ls_dir(&packages_dir);
+    assert_eq!(package_entries, vec!["shared".to_string()]);
+    assert!(!packages_dir.join("util").exists());
+}
+
+#[test]
+fn test_prune_production_docker_excludes_dev_dependencies() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["prune", "web", "--production", "--docker"],
+    );
+    assert!(
+        output.status.success(),
+        "prune --production --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let full_packages = ls_dir(&tempdir.path().join("out/full/packages"));
+    assert_eq!(full_packages, vec!["shared".to_string()]);
+    assert!(!tempdir.path().join("out/full/packages/util").exists());
+
+    let json_packages = ls_dir(&tempdir.path().join("out/json/packages"));
+    assert_eq!(json_packages, vec!["shared".to_string()]);
+    assert!(!tempdir.path().join("out/json/packages/util").exists());
 }
 
 // --- docker.t ---
@@ -78,6 +137,155 @@ fn test_prune_docker() {
     assert_eq!(
         pkg_json["pnpm"]["patchedDependencies"]["is-number@7.0.0"],
         "patches/is-number@7.0.0.patch"
+    );
+}
+
+#[test]
+fn test_prune_docker_filters_pnpm_workspace_patched_dependencies() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("monorepo_with_root_dep", tempdir.path()).unwrap();
+
+    fs::write(
+        tempdir.path().join("pnpm-workspace.yaml"),
+        r#"packages:
+  - "apps/*"
+  - "packages/*"
+
+patchedDependencies:
+  is-number@7.0.0: patches/is-number@7.0.0.patch
+  is-odd@3.0.1: patches/is-odd@3.0.1.patch
+"#,
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("patches/is-odd@3.0.1.patch"),
+        "patch for out-of-closure dependency\n",
+    )
+    .unwrap();
+
+    let lockfile_path = tempdir.path().join("pnpm-lock.yaml");
+    let lockfile = fs::read_to_string(&lockfile_path).unwrap();
+    fs::write(
+        &lockfile_path,
+        lockfile.replace(
+            "patchedDependencies:\n  is-number@7.0.0:",
+            "patchedDependencies:\n  is-odd@3.0.1:\n    hash: unusedpatchhash\n    path: \
+             patches/is-odd@3.0.1.patch\n  is-number@7.0.0:",
+        ),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    for workspace_yaml in [
+        "out/pnpm-workspace.yaml",
+        "out/json/pnpm-workspace.yaml",
+        "out/full/pnpm-workspace.yaml",
+    ] {
+        let contents = fs::read_to_string(tempdir.path().join(workspace_yaml)).unwrap();
+        assert!(
+            contents.contains("is-number@7.0.0"),
+            "{workspace_yaml} should retain in-closure patch:\n{contents}"
+        );
+        assert!(
+            !contents.contains("is-odd@3.0.1"),
+            "{workspace_yaml} should drop out-of-closure patch:\n{contents}"
+        );
+    }
+}
+
+#[test]
+fn test_prune_rejects_patch_paths_with_parent_dir() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("monorepo_with_root_dep", tempdir.path()).unwrap();
+
+    let outside_dir = tempfile::tempdir_in(tempdir.path().parent().unwrap()).unwrap();
+    let outside_dir_name = outside_dir
+        .path()
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
+    let outside_patch_name = "outside.patch";
+    let malicious_patch_path = format!("../{outside_dir_name}/{outside_patch_name}");
+    fs::write(
+        outside_dir.path().join(outside_patch_name),
+        "outside repo\n",
+    )
+    .unwrap();
+
+    let lockfile_path = tempdir.path().join("pnpm-lock.yaml");
+    let lockfile = fs::read_to_string(&lockfile_path).unwrap();
+    fs::write(
+        &lockfile_path,
+        lockfile.replace("patches/is-number@7.0.0.patch", &malicious_patch_path),
+    )
+    .unwrap();
+
+    let package_json_path = tempdir.path().join("package.json");
+    let package_json = fs::read_to_string(&package_json_path).unwrap();
+    fs::write(
+        &package_json_path,
+        package_json.replace("patches/is-number@7.0.0.patch", &malicious_patch_path),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    let combined_output = combined_output(&output);
+
+    assert!(!output.status.success());
+    assert!(
+        combined_output.contains("Invalid patched dependency path"),
+        "unexpected output: {combined_output}"
+    );
+    assert!(
+        !tempdir
+            .path()
+            .join(&outside_dir_name)
+            .join(outside_patch_name)
+            .exists()
+    );
+}
+
+#[test]
+fn test_prune_allows_patch_paths_with_non_escaping_parent_dir() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("monorepo_with_root_dep", tempdir.path()).unwrap();
+
+    let patch_path = "patches/../patches/is-number@7.0.0.patch";
+    let lockfile_path = tempdir.path().join("pnpm-lock.yaml");
+    let lockfile = fs::read_to_string(&lockfile_path).unwrap();
+    fs::write(
+        &lockfile_path,
+        lockfile.replace("patches/is-number@7.0.0.patch", patch_path),
+    )
+    .unwrap();
+
+    let package_json_path = tempdir.path().join("package.json");
+    let package_json = fs::read_to_string(&package_json_path).unwrap();
+    fs::write(
+        &package_json_path,
+        package_json.replace("patches/is-number@7.0.0.patch", patch_path),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        combined_output(&output)
+    );
+    assert!(
+        tempdir
+            .path()
+            .join("out/patches/is-number@7.0.0.patch")
+            .exists()
     );
 }
 

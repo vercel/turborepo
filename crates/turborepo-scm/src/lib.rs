@@ -1,5 +1,4 @@
 #![feature(error_generic_member_access)]
-#![feature(io_error_more)]
 #![deny(clippy::all)]
 #![allow(clippy::result_large_err)]
 
@@ -28,6 +27,7 @@ mod ls_tree;
 pub mod manual;
 pub mod package_deps;
 mod repo_index;
+pub mod slowest_files;
 mod status;
 pub mod worktree;
 
@@ -38,6 +38,7 @@ mod git_path;
 mod test_utils;
 
 pub use repo_index::{RepoGitIndex, walk_candidate_files};
+pub use slowest_files::{SlowestFile, SlowestFiles};
 pub use turborepo_hash::OidHash;
 pub use worktree::WorktreeInfo;
 
@@ -80,6 +81,8 @@ pub enum Error {
     Walk(#[from] globwalk::WalkError),
     #[error("Unable to resolve base branch. Please set with `TURBO_SCM_BASE`.")]
     UnableToResolveRef,
+    #[error("Invalid git ref `{0}`: refs must not begin with `-`")]
+    InvalidGitRef(String),
 }
 
 pub type GitHashes = HashMap<RelativeUnixPathBuf, OidHash>;
@@ -228,6 +231,9 @@ pub struct GitRepo {
     root: AbsoluteSystemPathBuf,
     bin: AbsoluteSystemPathBuf,
     attrs: OnceLock<Option<crlf::GitAttrs>>,
+    /// Optional recorder for the slowest-to-hash files. Set by long-running
+    /// consumers (the file watcher) so they can diagnose a stalled startup.
+    slowest_files: Option<std::sync::Arc<SlowestFiles>>,
 }
 
 impl GitRepo {
@@ -244,6 +250,7 @@ impl Clone for GitRepo {
             root: self.root.clone(),
             bin: self.bin.clone(),
             attrs: OnceLock::new(),
+            slowest_files: self.slowest_files.clone(),
         }
     }
 }
@@ -277,6 +284,7 @@ impl GitRepo {
             root,
             bin,
             attrs: OnceLock::new(),
+            slowest_files: None,
         })
     }
 
@@ -347,6 +355,7 @@ impl SCM {
                 root: git_root,
                 bin,
                 attrs: OnceLock::new(),
+                slowest_files: None,
             }),
             Err(e) => {
                 debug!(
@@ -356,6 +365,16 @@ impl SCM {
                 SCM::Manual
             }
         }
+    }
+
+    /// Attach a recorder that tracks the slowest-to-hash files. Long-running
+    /// consumers (the file watcher) use this to diagnose a stalled startup
+    /// caused by hashing a very large file. No-op for `SCM::Manual`.
+    pub fn with_slowest_files_recorder(mut self, recorder: std::sync::Arc<SlowestFiles>) -> Self {
+        if let SCM::Git(git) = &mut self {
+            git.slowest_files = Some(recorder);
+        }
+        self
     }
 
     pub fn is_manual(&self) -> bool {

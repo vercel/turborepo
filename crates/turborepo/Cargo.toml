@@ -48,3 +48,9 @@ turborepo-query = { workspace = true }
 turborepo-query-api = { workspace = true }
 turborepo-signals = { workspace = true }
 turborepo-ui = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_System_Console",
+] }

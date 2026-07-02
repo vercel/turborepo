@@ -184,12 +184,14 @@ mod test {
     fn test_default_api_url_filtered_out() {
         let api_opts = APIClientOpts {
             api_url: "https://vercel.com/api".into(),
+            api_url_source: None,
             team_id: None,
             team_slug: None,
             token: None,
             timeout: 0,
             upload_timeout: 0,
             login_url: "".into(),
+            login_url_source: None,
             preflight: false,
             sso_login_callback_port: None,
         };
@@ -208,12 +210,14 @@ mod test {
     fn test_finds_existing_values() {
         let api_opts = APIClientOpts {
             api_url: "https://my-remote-cache.com".into(),
+            api_url_source: None,
             team_slug: Some("custom-cache".into()),
             team_id: None,
             token: Some("token".into()),
             timeout: 0,
             upload_timeout: 0,
             login_url: "".into(),
+            login_url_source: None,
             preflight: false,
             sso_login_callback_port: None,
         };

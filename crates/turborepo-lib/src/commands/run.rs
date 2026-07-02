@@ -171,7 +171,6 @@ pub async fn run(
             analytics_handle.close_with_timeout().await;
         }
 
-        // We only stop if it's the TUI, for the web UI we don't need to stop
         if let Some(UISender::Tui(sender)) = sender {
             sender.stop().await;
         }

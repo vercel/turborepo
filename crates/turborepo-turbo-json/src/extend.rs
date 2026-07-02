@@ -71,14 +71,29 @@ impl Extendable for ProcessedWith {
 
 impl Extendable for ProcessedInputs {
     fn extend(&mut self, other: Self) {
-        merge_field_vec!(self, other, globs);
-        // Handle the default flag specially
         if other.extends {
-            // When extending, OR the default flags
+            self.globs.extend(other.globs);
             self.default = self.default || other.default;
+            self.jit_globs.extend(other.jit_globs);
+            self.jit_default = self.jit_default || other.jit_default;
+            if other.dependency_outputs.is_some() {
+                self.dependency_outputs = other.dependency_outputs;
+            }
+            self.legacy_startup = self.legacy_startup || other.legacy_startup;
+            self.structured_startup = self.structured_startup || other.structured_startup;
+            self.structured_jit = self.structured_jit || other.structured_jit;
+            self.structured_dependency_outputs =
+                self.structured_dependency_outputs || other.structured_dependency_outputs;
         } else {
-            // When replacing, use the other's default
+            self.globs = other.globs;
             self.default = other.default;
+            self.jit_globs = other.jit_globs;
+            self.jit_default = other.jit_default;
+            self.dependency_outputs = other.dependency_outputs;
+            self.legacy_startup = other.legacy_startup;
+            self.structured_startup = other.structured_startup;
+            self.structured_jit = other.structured_jit;
+            self.structured_dependency_outputs = other.structured_dependency_outputs;
         }
         self.extends = other.extends;
     }
@@ -178,7 +193,7 @@ mod test {
                 .unwrap(),
             ),
             inputs: Some(
-                ProcessedInputs::new(
+                ProcessedInputs::new_legacy(
                     vec![Spanned::new(UnescapedString::from("src/**"))],
                     &FutureFlags::default(),
                 )
@@ -216,7 +231,7 @@ mod test {
                 .unwrap(),
             ),
             inputs: Some(
-                ProcessedInputs::new(
+                ProcessedInputs::new_legacy(
                     vec![Spanned::new(UnescapedString::from("lib/**"))],
                     &FutureFlags::default(),
                 )
@@ -357,7 +372,7 @@ mod test {
         let second = ProcessedTaskDefinition {
             persistent: Some(Spanned::new(false)),
             inputs: Some(
-                ProcessedInputs::new(
+                ProcessedInputs::new_legacy(
                     vec![Spanned::new(UnescapedString::from("src/**"))],
                     &FutureFlags::default(),
                 )
@@ -487,6 +502,13 @@ mod test {
         ProcessedInputs {
             globs: vec![],
             default: false,
+            jit_globs: vec![],
+            jit_default: false,
+            dependency_outputs: None,
+            legacy_startup: false,
+            structured_startup: false,
+            structured_jit: false,
+            structured_dependency_outputs: false,
             extends: false,
         }
     }
@@ -495,6 +517,13 @@ mod test {
         ProcessedInputs {
             globs: vec![],
             default: true,
+            jit_globs: vec![],
+            jit_default: false,
+            dependency_outputs: None,
+            legacy_startup: true,
+            structured_startup: false,
+            structured_jit: false,
+            structured_dependency_outputs: false,
             extends: true,
         }
     }

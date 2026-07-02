@@ -150,6 +150,12 @@
   },
   "overrides": [
     {
+      "files": ["apps/agents/agent/**/*.ts"],
+      "rules": {
+        "unicorn/filename-case": "off"
+      }
+    },
+    {
       "files": [
         "**/*.{test,spec}.{ts,tsx,js,jsx}",
         "**/__tests__/**/*.{ts,tsx,js,jsx}"

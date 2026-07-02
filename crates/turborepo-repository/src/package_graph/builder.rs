@@ -17,7 +17,7 @@ use crate::{
         self, CachingPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscovery,
         PackageDiscoveryBuilder,
     },
-    package_json::PackageJson,
+    package_json::{DependencyKind, PackageJson},
     package_manager::{PackageManager, pnpm::PnpmCatalogs},
 };
 
@@ -33,7 +33,7 @@ pub struct PackageGraphBuilder<'a, T> {
 
 #[derive(Debug, Diagnostic, thiserror::Error)]
 pub enum Error {
-    #[error("Could not resolve workspaces.")]
+    #[error("Could not resolve workspace.")]
     #[diagnostic(transparent)]
     PackageManager(#[from] crate::package_manager::Error),
     #[error(
@@ -155,9 +155,13 @@ where
 
         // If no pre-supplied lockfile, start reading it on a blocking thread
         // concurrently with package discovery + JSON parsing.
-        let known_pm = self.package_manager.take().or_else(|| {
-            PackageManager::get_package_manager(self.repo_root, &self.root_package_json).ok()
-        });
+        let known_pm = self
+            .package_manager
+            .take()
+            .or_else(|| {
+                PackageManager::get_package_manager(self.repo_root, &self.root_package_json).ok()
+            })
+            .map(|pm| pm.with_resolved_nub_lockfile(self.repo_root));
         let lockfile_future = if !is_single_package && self.lockfile.is_none() {
             if let Some(pm) = known_pm {
                 let repo_root = self.repo_root.to_owned();
@@ -191,7 +195,7 @@ struct BuildState<'a, S, T> {
     repo_root: &'a AbsoluteSystemPath,
     single: bool,
     workspaces: HashMap<PackageName, PackageInfo>,
-    workspace_graph: Graph<PackageNode, ()>,
+    workspace_graph: Graph<PackageNode, DependencyKind>,
     root_node_index: NodeIndex,
     root_workspace_index: NodeIndex,
     node_lookup: HashMap<PackageNode, NodeIndex>,
@@ -254,7 +258,11 @@ where
         let root_node_index = workspace_graph.add_node(PackageNode::Root);
         let root_workspace = PackageNode::Workspace(PackageName::Root);
         let root_workspace_index = workspace_graph.add_node(root_workspace.clone());
-        workspace_graph.add_edge(root_workspace_index, root_node_index, ());
+        workspace_graph.add_edge(
+            root_workspace_index,
+            root_node_index,
+            DependencyKind::Production,
+        );
 
         let mut node_lookup = HashMap::new();
         node_lookup.insert(PackageNode::Root, root_node_index);
@@ -408,7 +416,11 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             ..
         } = self;
 
-        let package_manager = package_discovery.discover_packages().await?.package_manager;
+        let package_manager = package_discovery
+            .discover_packages()
+            .await?
+            .package_manager
+            .with_resolved_nub_lockfile(repo_root);
 
         debug_assert!(single, "expected single package graph");
         Ok(PackageGraph {
@@ -453,7 +465,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                             &entry.package_json_path,
                             &self.workspaces,
                             link_workspace_packages,
-                            entry.package_json.all_dependencies(),
+                            entry.package_json.dependencies_with_kind(),
                             &path_index,
                             catalogs.as_ref(),
                         ),
@@ -476,15 +488,16 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                     .node_lookup
                     .get(&PackageNode::Root)
                     .expect("root node should have index");
-                self.workspace_graph.add_edge(*node_idx, *root_idx, ());
+                self.workspace_graph
+                    .add_edge(*node_idx, *root_idx, DependencyKind::Production);
             }
-            for dependency in internal {
+            for (dependency, kind) in internal {
                 let dependency_idx = self
                     .node_lookup
                     .get(&PackageNode::Workspace(dependency))
                     .expect("unable to find workspace node index");
                 self.workspace_graph
-                    .add_edge(*node_idx, *dependency_idx, ());
+                    .add_edge(*node_idx, *dependency_idx, kind);
             }
             entry.unresolved_external_dependencies = Some(external);
         }
@@ -498,7 +511,8 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             .package_discovery
             .discover_packages()
             .await?
-            .package_manager;
+            .package_manager
+            .with_resolved_nub_lockfile(self.repo_root);
 
         match self.lockfile.take() {
             Some(lockfile) => Ok(lockfile),
@@ -527,7 +541,8 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             .package_discovery
             .discover_packages()
             .await?
-            .package_manager;
+            .package_manager
+            .with_resolved_nub_lockfile(self.repo_root);
         turborepo_rayon_compat::block_in_place(|| {
             self.connect_internal_dependencies(&package_manager)
         })?;
@@ -641,7 +656,8 @@ impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
             .discover_packages()
             .instrument(tracing::debug_span!("package discovery"))
             .await?
-            .package_manager;
+            .package_manager
+            .with_resolved_nub_lockfile(self.repo_root);
         let Self {
             workspaces,
             workspace_graph,
@@ -669,12 +685,12 @@ impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
 }
 
 struct Dependencies {
-    internal: HashSet<PackageName>,
+    internal: HashMap<PackageName, DependencyKind>,
     external: BTreeMap<String, String>, // Package name and version
 }
 
 impl Dependencies {
-    pub fn new<'a, I: IntoIterator<Item = (&'a String, &'a String)>>(
+    pub fn new<'a, I: IntoIterator<Item = (&'a String, &'a String, DependencyKind)>>(
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPathBuf,
         workspaces: &HashMap<PackageName, PackageInfo>,
@@ -687,7 +703,7 @@ impl Dependencies {
         let workspace_dir = resolved_workspace_json_path
             .parent()
             .expect("package.json path should have parent");
-        let mut internal = HashSet::new();
+        let mut internal = HashMap::new();
         let mut external = BTreeMap::new();
         let mut seen = HashSet::new();
         let splitter = DependencySplitter::new(
@@ -698,15 +714,21 @@ impl Dependencies {
             path_index,
             catalogs,
         );
-        for (name, version) in dependencies.into_iter() {
+        for (name, version, kind) in dependencies.into_iter() {
             if !seen.insert(name.clone()) {
                 continue;
             }
 
-            if let Some(workspace) = splitter.is_internal(name, version) {
-                internal.insert(workspace);
-            } else {
-                external.insert(name.clone(), version.clone());
+            match kind {
+                // Peers are provided by consumers and are not package graph inputs.
+                DependencyKind::Peer { .. } => {}
+                DependencyKind::Production | DependencyKind::Development => {
+                    if let Some(workspace) = splitter.is_internal(name, version) {
+                        internal.entry(workspace).or_insert(kind);
+                    } else {
+                        external.insert(name.clone(), version.clone());
+                    }
+                }
             }
         }
         Self { internal, external }
@@ -913,6 +935,138 @@ mod test {
     }
 
     #[tokio::test]
+    async fn test_dev_dependency_edge_kind() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+
+        let graph = PackageGraphBuilder::new(
+            &root,
+            PackageJson {
+                name: Some(Spanned::new("root".into())),
+                ..Default::default()
+            },
+        )
+        .with_single_package_mode(false)
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut package_jsons = HashMap::new();
+            package_jsons.insert(
+                root.join_components(&["apps", "web", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("web".into())),
+                    version: Some("1.0.0".to_string()),
+                    dependencies: Some(
+                        [("lib".to_string(), "workspace:*".to_string())]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    dev_dependencies: Some(
+                        [("tooling".to_string(), "workspace:*".to_string())]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    ..Default::default()
+                },
+            );
+            package_jsons.insert(
+                root.join_components(&["packages", "lib", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("lib".into())),
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
+                },
+            );
+            package_jsons.insert(
+                root.join_components(&["packages", "tooling", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("tooling".into())),
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
+                },
+            );
+            package_jsons
+        }))
+        .build()
+        .await
+        .unwrap();
+
+        let web = PackageNode::Workspace(PackageName::from("web"));
+        let lib = PackageNode::Workspace(PackageName::from("lib"));
+        let tooling = PackageNode::Workspace(PackageName::from("tooling"));
+
+        assert_eq!(
+            graph.dependency_kind(&web, &lib),
+            Some(DependencyKind::Production)
+        );
+        assert_eq!(
+            graph.dependency_kind(&web, &tooling),
+            Some(DependencyKind::Development)
+        );
+
+        let web_closure = graph.production_transitive_closure([&web]);
+        assert!(web_closure.contains(&web));
+        assert!(web_closure.contains(&lib));
+        assert!(!web_closure.contains(&tooling));
+    }
+
+    #[tokio::test]
+    async fn test_duplicate_dependency_prefers_production_kind() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+
+        let graph = PackageGraphBuilder::new(
+            &root,
+            PackageJson {
+                name: Some(Spanned::new("root".into())),
+                ..Default::default()
+            },
+        )
+        .with_single_package_mode(false)
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut package_jsons = HashMap::new();
+            package_jsons.insert(
+                root.join_components(&["apps", "web", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("web".into())),
+                    version: Some("1.0.0".to_string()),
+                    dependencies: Some(
+                        [("shared".to_string(), "workspace:*".to_string())]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    dev_dependencies: Some(
+                        [("shared".to_string(), "workspace:*".to_string())]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    ..Default::default()
+                },
+            );
+            package_jsons.insert(
+                root.join_components(&["packages", "shared", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("shared".into())),
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
+                },
+            );
+            package_jsons
+        }))
+        .build()
+        .await
+        .unwrap();
+
+        let web = PackageNode::Workspace(PackageName::from("web"));
+        let shared = PackageNode::Workspace(PackageName::from("shared"));
+
+        assert_eq!(
+            graph.dependency_kind(&web, &shared),
+            Some(DependencyKind::Production)
+        );
+    }
+
+    #[tokio::test]
     async fn test_peer_workspace_dep_does_not_override_concrete_external_dep() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
@@ -994,6 +1148,264 @@ mod test {
         assert_eq!(
             b_external.get("buffer").map(|v| v.as_str()),
             Some("npm:buffer@6.0.3")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_pure_peer_workspace_dep_does_not_create_edge() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+
+        let graph = PackageGraphBuilder::new(
+            &root,
+            PackageJson {
+                name: Some(Spanned::new("root".into())),
+                ..Default::default()
+            },
+        )
+        .with_single_package_mode(false)
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut package_jsons = HashMap::new();
+            package_jsons.insert(
+                root.join_components(&["packages", "a", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("a".into())),
+                    version: Some("1.0.0".to_string()),
+                    dependencies: Some(
+                        [("b".to_string(), "workspace:*".to_string())]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    ..Default::default()
+                },
+            );
+            package_jsons.insert(
+                root.join_components(&["packages", "b", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("b".into())),
+                    version: Some("1.0.0".to_string()),
+                    peer_dependencies: Some(
+                        [("a".to_string(), "workspace:*".to_string())]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    ..Default::default()
+                },
+            );
+            package_jsons
+        }))
+        .build()
+        .await
+        .unwrap();
+
+        let a = PackageName::from("a");
+        let b = PackageName::from("b");
+
+        let a_deps = graph
+            .immediate_dependencies(&PackageNode::Workspace(a.clone()))
+            .unwrap();
+        assert!(
+            a_deps.contains(&PackageNode::Workspace(b.clone())),
+            "a should depend on b, got: {:?}",
+            a_deps
+        );
+
+        let b_deps = graph
+            .immediate_dependencies(&PackageNode::Workspace(b.clone()))
+            .unwrap();
+        assert!(
+            !b_deps.contains(&PackageNode::Workspace(a)),
+            "pure peer workspace specifier should not create an internal edge, got: {:?}",
+            b_deps
+        );
+
+        assert!(
+            graph.find_cycles().is_empty(),
+            "package graph should be acyclic once the pure peer edge is dropped"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_external_peer_dep_is_not_retained_as_external() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+
+        let graph = PackageGraphBuilder::new(
+            &root,
+            PackageJson {
+                name: Some(Spanned::new("root".into())),
+                ..Default::default()
+            },
+        )
+        .with_single_package_mode(false)
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut package_jsons = HashMap::new();
+            package_jsons.insert(
+                root.join_components(&["packages", "a", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("a".into())),
+                    version: Some("1.0.0".to_string()),
+                    peer_dependencies: Some(
+                        [("react".to_string(), "*".to_string())]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    ..Default::default()
+                },
+            );
+            package_jsons
+        }))
+        .build()
+        .await
+        .unwrap();
+
+        let a = PackageName::from("a");
+        let a_external = graph
+            .package_info(&a)
+            .unwrap()
+            .unresolved_external_dependencies
+            .as_ref()
+            .unwrap();
+        assert!(
+            !a_external.contains_key("react"),
+            "external peer dependency should not be retained as an external dep, got: {:?}",
+            a_external
+        );
+    }
+
+    #[tokio::test]
+    async fn test_optional_external_peer_is_not_retained() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+
+        let graph = PackageGraphBuilder::new(
+            &root,
+            PackageJson {
+                name: Some(Spanned::new("root".into())),
+                ..Default::default()
+            },
+        )
+        .with_single_package_mode(false)
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut package_jsons = HashMap::new();
+            package_jsons.insert(
+                root.join_components(&["packages", "a", "package.json"]),
+                PackageJson::from_value(serde_json::json!({
+                    "name": "a",
+                    "version": "1.0.0",
+                    "peerDependencies": {
+                        "react": "*",
+                        "lodash": "*"
+                    },
+                    "peerDependenciesMeta": {
+                        "react": { "optional": true }
+                    }
+                }))
+                .unwrap(),
+            );
+            package_jsons
+        }))
+        .build()
+        .await
+        .unwrap();
+
+        let a = PackageName::from("a");
+        let a_external = graph
+            .package_info(&a)
+            .unwrap()
+            .unresolved_external_dependencies
+            .as_ref()
+            .unwrap();
+        assert!(
+            !a_external.contains_key("react"),
+            "optional peer should not be retained, got: {:?}",
+            a_external
+        );
+        assert!(
+            !a_external.contains_key("lodash"),
+            "required peer should not be retained, got: {:?}",
+            a_external
+        );
+    }
+
+    #[tokio::test]
+    async fn test_peer_dependencies_do_not_create_internal_edges() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+
+        let graph = PackageGraphBuilder::new(
+            &root,
+            PackageJson {
+                name: Some(Spanned::new("root".into())),
+                ..Default::default()
+            },
+        )
+        .with_single_package_mode(false)
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut package_jsons = HashMap::new();
+            package_jsons.insert(
+                root.join_components(&["packages", "app", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("app".into())),
+                    version: Some("1.0.0".to_string()),
+                    dependencies: Some(
+                        [("lib".to_string(), "workspace:*".to_string())]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    ..Default::default()
+                },
+            );
+            package_jsons.insert(
+                root.join_components(&["packages", "lib", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("lib".into())),
+                    version: Some("1.0.0".to_string()),
+                    peer_dependencies: Some(
+                        [
+                            ("app".to_string(), "workspace:*".to_string()),
+                            ("react".to_string(), "*".to_string()),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    ),
+                    ..Default::default()
+                },
+            );
+            package_jsons
+        }))
+        .build()
+        .await
+        .unwrap();
+
+        let app = PackageNode::Workspace(PackageName::from("app"));
+        let lib = PackageNode::Workspace(PackageName::from("lib"));
+
+        let lib_closure = graph.transitive_closure([&lib]);
+        assert!(
+            !lib_closure.contains(&app),
+            "package graph closure for lib should exclude pure-peer workspace app, got: \
+             {lib_closure:?}"
+        );
+        assert!(
+            graph.transitive_closure([&app]).contains(&lib),
+            "prune closure for app should include its regular dependency lib"
+        );
+
+        let lib_external = graph
+            .package_info(&PackageName::from("lib"))
+            .unwrap()
+            .unresolved_external_dependencies
+            .as_ref()
+            .unwrap();
+        assert!(
+            !lib_external.contains_key("react"),
+            "external peer should not be retained by package graph, got: {:?}",
+            lib_external
         );
     }
 

@@ -17,7 +17,6 @@
     "turbo-prebuilt": "pnpm -- turbo",
     "prepare": "husky install",
     "test": "turbo run test",
-    "tbx": "pnpm --filter @turbo/tbx tbx",
     "rustdoc": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going || true",
     "rustdoc:open": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --open",
     "check": "ultracite check",
@@ -31,7 +30,8 @@
     "oxfmt": "^0.34.0",
     "oxlint": "^1.49.0",
     "semver": "7.5.2",
-    "typescript": "5.5.4",
+    "typescript": "npm:@typescript/typescript6@^6.0.1",
+    "typescript-7": "npm:typescript@7.0.1-rc",
     "ultracite": "7.4.3"
   },
   "lint-staged": {
@@ -39,7 +39,12 @@
     "*.toml": "taplo format"
   },
   "engines": {
-    "node": "22.x"
+    "node": "24.x"
   },
-  "packageManager": "pnpm@10.28.0"
+  "packageManager": "pnpm@10.28.0",
+  "pnpm": {
+    "overrides": {
+      "esbuild": "0.28.1"
+    }
+  }
 }

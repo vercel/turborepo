@@ -9,6 +9,7 @@
 //! As of now, the manager will execute futures in a random order, and
 //! must be either `wait`ed on or `stop`ped to drive state.
 
+#![cfg_attr(windows, feature(windows_process_extensions_show_window))]
 #![deny(clippy::all)]
 
 mod child;
@@ -38,6 +39,10 @@ pub use self::child::{Child, ChildExit, ChildStdin};
 pub struct ProcessManager {
     state: Arc<Mutex<ProcessManagerInner>>,
     use_pty: bool,
+    // Captured before the TUI may put stdout in raw mode. Reapply it to child
+    // PTYs so task processes do not inherit TUI-specific terminal settings.
+    #[cfg(unix)]
+    pty_termios: Option<libc::termios>,
 }
 
 #[derive(Debug)]
@@ -77,6 +82,8 @@ impl ProcessManager {
                 size: None,
             })),
             use_pty,
+            #[cfg(unix)]
+            pty_termios: use_pty.then(capture_stdout_termios).flatten(),
         }
     }
 
@@ -146,6 +153,14 @@ impl ProcessManager {
             return None;
         }
         let pty_size = self.use_pty.then(|| lock.pty_size()).flatten();
+        #[cfg(unix)]
+        let child = child::Child::spawn_with_termios(
+            command,
+            child::ShutdownStyle::Graceful(Some(stop_timeout)),
+            pty_size,
+            self.pty_termios,
+        );
+        #[cfg(not(unix))]
         let child = child::Child::spawn(
             command,
             child::ShutdownStyle::Graceful(Some(stop_timeout)),
@@ -161,9 +176,13 @@ impl ProcessManager {
         Some(child)
     }
 
-    /// Stop the process manager, closing all child processes. On posix
-    /// systems this will send a SIGINT, and on windows it will just kill
-    /// the process immediately.
+    /// Stop the process manager, closing all child processes. On posix systems
+    /// this will send SIGINT to the process group for non-PTY children and to
+    /// the direct child for PTY children. On Windows, children spawned under
+    /// ConPTY receive a Ctrl-C keystroke via the pseudoconsole input; other
+    /// children share turbo's console and are expected to receive console
+    /// Ctrl-C events directly, with a force kill after the child stop
+    /// timeout as the fallback.
     pub async fn stop(&self) {
         self.close(CloseMode::Stop).await
     }
@@ -281,6 +300,13 @@ impl ProcessManager {
     pub fn is_closing(&self) -> bool {
         self.lock_state().is_closing
     }
+}
+
+#[cfg(unix)]
+fn capture_stdout_termios() -> Option<libc::termios> {
+    let mut termios = std::mem::MaybeUninit::<libc::termios>::uninit();
+    let result = unsafe { libc::tcgetattr(libc::STDOUT_FILENO, termios.as_mut_ptr()) };
+    (result == 0).then(|| unsafe { termios.assume_init() })
 }
 
 impl ProcessManagerInner {

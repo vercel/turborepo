@@ -244,6 +244,63 @@ impl<T: TaskDefinitionInfo + Default + Clone> Default for Engine<Building, T> {
 }
 
 impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
+    /// Returns dependency task nodes selected by `dependencyOutputs` for
+    /// `task_id`.
+    ///
+    /// With no explicit `from`, this selects direct task dependencies. With
+    /// `from`, each selector is resolved against the transitive dependency set.
+    pub fn dependency_output_producers(
+        &self,
+        task_id: &TaskId<'static>,
+        from: Option<&[String]>,
+    ) -> Vec<TaskId<'static>> {
+        let Some(from) = from else {
+            return self.direct_task_dependencies(task_id);
+        };
+
+        let mut selected = from
+            .iter()
+            .flat_map(|selector| self.dependency_output_producers_for_selector(task_id, selector))
+            .collect::<Vec<_>>();
+        selected.sort();
+        selected.dedup();
+        selected
+    }
+
+    /// Returns transitive dependency task nodes matching one
+    /// `dependencyOutputs.from` selector.
+    pub fn dependency_output_producers_for_selector(
+        &self,
+        task_id: &TaskId<'static>,
+        selector: &str,
+    ) -> Vec<TaskId<'static>> {
+        self.transitive_task_dependencies(task_id)
+            .into_iter()
+            .filter(|candidate| dependency_output_selector_matches(task_id, selector, candidate))
+            .collect()
+    }
+
+    fn direct_task_dependencies(&self, task_id: &TaskId<'static>) -> Vec<TaskId<'static>> {
+        self.dependencies(task_id)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|node| match node {
+                TaskNode::Task(id) => Some((*id).clone()),
+                TaskNode::Root => None,
+            })
+            .collect()
+    }
+
+    fn transitive_task_dependencies(&self, task_id: &TaskId<'static>) -> Vec<TaskId<'static>> {
+        self.transitive_dependencies(task_id)
+            .into_iter()
+            .filter_map(|node| match node {
+                TaskNode::Task(id) => Some(id.clone()),
+                TaskNode::Root => None,
+            })
+            .collect()
+    }
+
     /// Creates an engine containing only tasks reachable from the given
     /// packages: their direct tasks, transitive dependents, and cacheable
     /// transitive dependencies needed for execution. Persistent
@@ -265,6 +322,29 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
 
         let reachable = self.watch_reachable_closure(entrypoint_indices);
         self.prune_to_reachable(&reachable, true)
+    }
+
+    /// Returns the full execution closure for directly affected tasks:
+    /// transitive dependents plus transitive dependencies needed for execution.
+    /// This is the task set retained by `retain_affected_tasks` without
+    /// pruning the engine.
+    pub fn execution_closure_for_affected(
+        &self,
+        directly_affected: &HashSet<TaskId<'static>>,
+    ) -> HashSet<TaskId<'static>> {
+        let entrypoint_indices: Vec<_> = directly_affected
+            .iter()
+            .filter_map(|task_id| self.task_lookup.get(task_id))
+            .copied()
+            .collect();
+
+        self.reachable_closure(entrypoint_indices)
+            .into_iter()
+            .filter_map(|node| match self.task_graph.node_weight(node)? {
+                TaskNode::Task(id) => Some(id.clone()),
+                TaskNode::Root => None,
+            })
+            .collect()
     }
 
     /// Returns a new engine containing only the given directly affected tasks,
@@ -655,6 +735,20 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     }
 }
 
+fn dependency_output_selector_matches(
+    current_task: &TaskId,
+    selector: &str,
+    candidate: &TaskId,
+) -> bool {
+    if let Some(task) = selector.strip_prefix('^') {
+        candidate.task() == task && candidate.package() != current_task.package()
+    } else if selector.contains('#') {
+        TaskId::try_from(selector).is_ok_and(|id| id == candidate.as_borrowed())
+    } else {
+        candidate.package() == current_task.package() && candidate.task() == selector
+    }
+}
+
 // Implement EngineInfo for Engine<Built, TaskDefinition> to allow use with
 // turborepo-run-summary. This implementation provides access to task
 // definitions and dependency information needed for run summaries.
@@ -853,6 +947,18 @@ mod affected_tasks_tests {
 
     fn task_ids_set(engine: &Engine) -> HashSet<TaskId<'static>> {
         engine.task_ids().cloned().collect()
+    }
+
+    #[test]
+    fn execution_closure_matches_retain_affected_tasks() {
+        let engine = build_linear_engine();
+        let affected: HashSet<_> = [TaskId::new("b", "build")].into_iter().collect();
+
+        let closure = engine.execution_closure_for_affected(&affected);
+        let pruned = engine.retain_affected_tasks(&affected);
+        let pruned_ids = task_ids_set(&pruned);
+
+        assert_eq!(closure, pruned_ids);
     }
 
     #[test]

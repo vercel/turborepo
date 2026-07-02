@@ -114,7 +114,7 @@ export const getMDXComponents = (
     }),
     pre: CodeBlock,
     a: ({ href, ...props }) =>
-      href.startsWith("/") ? (
+      href?.startsWith("/") ? (
         <DynamicLink
           className="font-normal text-primary no-underline"
           href={`/[lang]${href}`}

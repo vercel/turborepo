@@ -17,9 +17,9 @@ use super::login::{
 use crate::{
     Error, LoginOptions, Token,
     auth::{
-        ExistingTokenSource, classify_existing_vercel_token, ensure_trusted_vercel_api,
-        generate_csrf_state, is_vercel, should_attempt_vercel_token_refresh,
-        should_skip_existing_token_for_login,
+        ExistingTokenSource, classify_existing_vercel_token, ensure_non_vercel_redirect_allowed,
+        ensure_trusted_vercel_api, generate_csrf_state, is_vercel,
+        should_attempt_vercel_token_refresh, should_skip_existing_token_for_login,
     },
     device_flow::TokenSet,
     error, ui,
@@ -156,10 +156,15 @@ pub async fn sso_login<T: Client + TokenClient>(
         api_client,
         color_config,
         login_url: login_url_configuration,
+        login_url_source,
+        api_url_source,
         sso_team,
         existing_token,
         force,
         sso_login_callback_port,
+        // SSO login validates team access via `is_valid_sso` instead.
+        linked_team_id: _,
+        linked_team_slug: _,
     } = *options;
 
     let sso_team = sso_team.ok_or(Error::EmptySSOTeam)?;
@@ -275,7 +280,15 @@ pub async fn sso_login<T: Client + TokenClient>(
     }
 
     let port = sso_login_callback_port.unwrap_or(DEFAULT_PORT);
-    let verification_token = sso_redirect(login_url_configuration, sso_team, port).await?;
+    let verification_token = sso_redirect(
+        api_client,
+        login_url_configuration,
+        login_url_source,
+        api_url_source,
+        sso_team,
+        port,
+    )
+    .await?;
 
     // Verify the SSO token with the API
     let secret_verification_token = SecretString::new(verification_token.clone());
@@ -300,11 +313,21 @@ pub async fn sso_login<T: Client + TokenClient>(
 /// Non-Vercel SSO: open browser to `{login_url}/api/auth/sso` with
 /// `teamId`, `mode`, and `next` params, then wait for localhost redirect.
 /// This preserves the original SSO flow for self-hosted remote cache servers.
-async fn sso_redirect(
+async fn sso_redirect<T: Client>(
+    api_client: &T,
     login_url_configuration: &str,
+    login_url_source: Option<turborepo_types::ConfigurationSource>,
+    api_url_source: Option<turborepo_types::ConfigurationSource>,
     sso_team: &str,
     port: u16,
 ) -> Result<String, Error> {
+    let mut login_url =
+        Url::parse(login_url_configuration).map_err(|_| error::Error::LoginUrlCannotBeABase {
+            value: login_url_configuration.to_string(),
+        })?;
+
+    ensure_non_vercel_redirect_allowed(&login_url, login_url_source, api_client, api_url_source)?;
+
     let listener = TcpListener::bind(format!("{DEFAULT_HOST_NAME}:{port}"))
         .map_err(Error::CallbackListenerFailed)?;
     let port = listener
@@ -313,11 +336,6 @@ async fn sso_redirect(
         .port();
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{port}");
     let state = generate_csrf_state();
-
-    let mut login_url =
-        Url::parse(login_url_configuration).map_err(|_| error::Error::LoginUrlCannotBeABase {
-            value: login_url_configuration.to_string(),
-        })?;
 
     login_url
         .path_segments_mut()
@@ -619,10 +637,14 @@ mod tests {
         let options = LoginOptions {
             color_config: &color_config,
             login_url: "https://api.vercel.com",
+            login_url_source: None,
+            api_url_source: None,
             api_client: &api_client,
             existing_token: None,
             sso_team: None,
             force: false,
+            linked_team_id: None,
+            linked_team_slug: None,
             sso_login_callback_port: None,
         };
 
@@ -638,10 +660,14 @@ mod tests {
         let options = LoginOptions {
             color_config: &color_config,
             login_url: "https://api.vercel.com",
+            login_url_source: None,
+            api_url_source: None,
             api_client: &api_client,
             existing_token: Some("existing-token"),
             sso_team: Some("my-team"),
             force: false,
+            linked_team_id: None,
+            linked_team_slug: None,
             sso_login_callback_port: None,
         };
 
@@ -658,10 +684,14 @@ mod tests {
         let options = LoginOptions {
             color_config: &color_config,
             login_url: "https://vercel.com",
+            login_url_source: None,
+            api_url_source: None,
             api_client: &api_client,
             existing_token: Some("existing-token"),
             sso_team: Some("my-team"),
             force: false,
+            linked_team_id: None,
+            linked_team_slug: None,
             sso_login_callback_port: None,
         };
 
@@ -671,6 +701,35 @@ mod tests {
             result,
             Err(Error::UntrustedVercelApiUrl { ref api_url })
                 if api_url == "https://attacker.test/api"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_non_vercel_sso_rejects_repo_controlled_login_url() {
+        let color_config = turborepo_ui::ColorConfig::new(false);
+        let api_client = MockApiClient::new();
+
+        let options = LoginOptions {
+            login_url: "https://attacker.test",
+            login_url_source: Some(turborepo_types::ConfigurationSource::TurboJson),
+            api_url_source: None,
+            api_client: &api_client,
+            existing_token: None,
+            sso_team: Some("my-team"),
+            force: false,
+            sso_login_callback_port: None,
+            linked_team_id: None,
+            linked_team_slug: None,
+            color_config: &color_config,
+        };
+
+        let result = sso_login(&options).await;
+
+        assert_matches!(
+            result,
+            Err(Error::UntrustedNonVercelLoginUrlSource {
+                url_source: Some(turborepo_types::ConfigurationSource::TurboJson)
+            })
         );
     }
 

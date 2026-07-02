@@ -6,7 +6,6 @@ pub(crate) mod package_discovery;
 pub(crate) mod scope;
 pub mod task_access;
 pub(crate) mod task_filter;
-mod ui;
 pub mod watch;
 
 use std::{
@@ -44,9 +43,7 @@ use turborepo_task_hash::{
 };
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_types::{EnvMode, UIMode};
-use turborepo_ui::{
-    sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig, TerminalSink,
-};
+use turborepo_ui::{sender::UISender, tui, tui::TuiSender, ColorConfig, TerminalSink, LIGHT_GREY};
 
 pub use crate::run::error::Error;
 use crate::{
@@ -108,10 +105,9 @@ pub struct Run {
 
 type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
 
-type WuiResult = UIResult<WebUISender>;
 type TuiResult = UIResult<TuiSender>;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ForceShutdownReason {
     Signal,
     Timeout,
@@ -123,23 +119,77 @@ enum CacheShutdownOutcome {
     ForcedShutdown,
 }
 
-const SLOW_SHUTDOWN_WARNING_DELAY: Duration = Duration::from_secs(3);
+const SLOW_SHUTDOWN_STATUS_INTERVAL: Duration = Duration::from_secs(2);
+
+fn remote_cache_status_message(status: RemoteCacheStatus, api_url: &str) -> (String, bool) {
+    match status {
+        RemoteCacheStatus::Enabled => ("Remote caching enabled".to_string(), false),
+        RemoteCacheStatus::Disabled(reason) => {
+            let msg = match reason {
+                RemoteCacheDisabledReason::NotLinked => "Remote caching disabled".to_string(),
+                RemoteCacheDisabledReason::TokenWithoutTeam => {
+                    "Remote caching disabled (TURBO_TOKEN set without TURBO_TEAM)".to_string()
+                }
+                RemoteCacheDisabledReason::InConfig => {
+                    "Remote caching disabled (in configuration)".to_string()
+                }
+                RemoteCacheDisabledReason::InEnvVar => {
+                    "Remote caching disabled (by TURBO_REMOTE_CACHE_ENABLED)".to_string()
+                }
+                RemoteCacheDisabledReason::ByFlags => {
+                    "Remote caching disabled (by flags)".to_string()
+                }
+                RemoteCacheDisabledReason::RequestedWithoutCredentials => {
+                    "Remote caching disabled (remote cache requested \u{2014} set TURBO_TOKEN and \
+                     TURBO_TEAM, or run \"turbo login\" and \"turbo link\")"
+                        .to_string()
+                }
+            };
+            (msg, false)
+        }
+        RemoteCacheStatus::Unavailable(reason) => {
+            let msg = match reason {
+                RemoteCacheUnavailableReason::CouldNotConnect => {
+                    format!("Remote caching unavailable (Could not connect to \"{api_url}\")")
+                }
+                RemoteCacheUnavailableReason::AuthenticationFailed => {
+                    "Remote caching unavailable (Authentication failed \u{2014} check TURBO_TOKEN \
+                     or run \"turbo login\")"
+                        .to_string()
+                }
+                RemoteCacheUnavailableReason::UsageLimitExceeded => {
+                    "Remote caching unavailable (Usage limit exceeded)".to_string()
+                }
+                RemoteCacheUnavailableReason::SpendingPaused => {
+                    "Remote caching unavailable (Spending paused)".to_string()
+                }
+                RemoteCacheUnavailableReason::DisabledForTeam => {
+                    "Remote caching unavailable (Disabled for this team)".to_string()
+                }
+                RemoteCacheUnavailableReason::UnexpectedServerError => {
+                    format!("Remote caching unavailable (Unexpected server error at \"{api_url}\")")
+                }
+            };
+            (msg, true)
+        }
+    }
+}
 
 impl Run {
-    fn shutdown_started_message(force_shutdown_timeout: Option<Duration>) -> &'static str {
+    fn shutdown_started_message(force_shutdown_timeout: Option<Duration>) -> String {
         #[cfg(windows)]
-        {
+        let message = {
             let _ = force_shutdown_timeout;
             "Shutting down Turborepo tasks..."
-        }
+        };
 
         #[cfg(not(windows))]
-        {
-            match force_shutdown_timeout {
-                Some(_) => "Shutting down Turborepo tasks...",
-                None => "^C - Shutting down Turborepo tasks...",
-            }
-        }
+        let message = match force_shutdown_timeout {
+            Some(_) => "Shutting down Turborepo tasks...",
+            None => " - Shutting down Turborepo tasks...Press CTRL+C again to exit forcefully.",
+        };
+
+        LIGHT_GREY.apply_to(message).to_string()
     }
 
     fn force_shutdown_timeout() -> Option<Duration> {
@@ -166,33 +216,22 @@ impl Run {
         }
     }
 
-    fn emit_slow_tasks(task_names: &[String], force_shutdown_timeout: Option<Duration>) {
+    fn emit_shutdown_status(task_names: &[String]) {
         if task_names.is_empty() {
             return;
         }
 
-        let list = task_names.join(", ");
-        turborepo_log::warn(
+        let task_description = match task_names.len() {
+            1 => "1 task".to_string(),
+            count => format!("{count} tasks"),
+        };
+        turborepo_log::info(
             turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-            format!("Some tasks in your Turborepo are taking awhile to shut down: {list}"),
+            LIGHT_GREY
+                .apply_to(format!("{task_description} shutting down..."))
+                .to_string(),
         )
         .emit();
-
-        if let Some(remaining) = force_shutdown_timeout
-            .map(|timeout| timeout.saturating_sub(SLOW_SHUTDOWN_WARNING_DELAY))
-        {
-            turborepo_log::warn(
-                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-                format!("Shutting down forcibly in {}s...", remaining.as_secs()),
-            )
-            .emit();
-        } else {
-            turborepo_log::warn(
-                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-                "Press CTRL+C again to force shut down, or wait.",
-            )
-            .emit();
-        }
     }
 
     fn emit_force_shutdown_message(
@@ -202,42 +241,59 @@ impl Run {
     ) {
         let message = match (reason, task_names.is_empty()) {
             (ForceShutdownReason::Signal, false) if is_interactive => {
-                format!(
-                    " - Force killing Turborepo tasks: {}",
-                    task_names.join(", ")
-                )
+                format!(" - Force killed Turborepo tasks: {}", task_names.join(", "))
             }
             (ForceShutdownReason::Signal, false) => {
-                format!("Force killing Turborepo tasks: {}", task_names.join(", "))
+                format!("Force killed Turborepo tasks: {}", task_names.join(", "))
             }
             (ForceShutdownReason::Timeout, false) => format!(
-                "Graceful shutdown timed out. Force killing Turborepo tasks: {}",
+                "Graceful shutdown timed out. Force killed Turborepo tasks: {}",
                 task_names.join(", ")
             ),
             (ForceShutdownReason::Signal, true) if is_interactive => {
-                " - Force killing remaining Turborepo tasks...".to_string()
+                " - Force killed remaining Turborepo tasks...".to_string()
             }
             (ForceShutdownReason::Signal, true) => {
-                "Force killing remaining Turborepo tasks...".to_string()
+                "Force killed remaining Turborepo tasks...".to_string()
             }
-            (ForceShutdownReason::Timeout, true) => "Graceful shutdown timed out. Force killing \
-                                                     remaining Turborepo tasks..."
-                .to_string(),
+            (ForceShutdownReason::Timeout, true) => {
+                "Graceful shutdown timed out. Force killed remaining Turborepo tasks...".to_string()
+            }
         };
-        turborepo_log::warn(
+        turborepo_log::info(
             turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-            message,
+            LIGHT_GREY.apply_to(message).to_string(),
         )
         .emit();
     }
 
     async fn wait_for_forced_shutdown(
         force_shutdown_timeout: Option<Duration>,
+        in_process_signals: Option<tokio::sync::broadcast::Receiver<()>>,
     ) -> ForceShutdownReason {
+        let in_process_signal = async move {
+            let Some(mut in_process_signals) = in_process_signals else {
+                std::future::pending::<()>().await;
+                return;
+            };
+
+            loop {
+                match in_process_signals.recv().await {
+                    Ok(()) | Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => return,
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        std::future::pending::<()>().await;
+                    }
+                }
+            }
+        };
+        pin!(in_process_signal);
+
         match force_shutdown_timeout {
             Some(timeout) => {
-                tokio::time::sleep(timeout).await;
-                ForceShutdownReason::Timeout
+                select! {
+                    _ = tokio::time::sleep(timeout) => ForceShutdownReason::Timeout,
+                    _ = &mut in_process_signal => ForceShutdownReason::Signal,
+                }
             }
             None => {
                 let interrupt = async {
@@ -249,8 +305,10 @@ impl Run {
                         tokio::time::sleep(Duration::MAX).await;
                     }
                 };
-                interrupt.await;
-                ForceShutdownReason::Signal
+                select! {
+                    _ = interrupt => ForceShutdownReason::Signal,
+                    _ = &mut in_process_signal => ForceShutdownReason::Signal,
+                }
             }
         }
     }
@@ -258,6 +316,7 @@ impl Run {
     async fn wait_for_cache_shutdown<FClosed, FProgress>(
         shutdown_reason: Option<ShutdownReason>,
         force_shutdown_timeout: Option<Duration>,
+        in_process_signals: Option<tokio::sync::broadcast::Receiver<()>>,
         closed: FClosed,
         progress: FProgress,
     ) -> CacheShutdownOutcome
@@ -269,7 +328,7 @@ impl Run {
             select! {
                 _ = closed => CacheShutdownOutcome::Complete,
                 _ = progress => CacheShutdownOutcome::Complete,
-                _ = Self::wait_for_forced_shutdown(force_shutdown_timeout) => {
+                _ = Self::wait_for_forced_shutdown(force_shutdown_timeout, in_process_signals) => {
                     CacheShutdownOutcome::ForcedShutdown
                 }
             }
@@ -284,23 +343,27 @@ impl Run {
     async fn wait_for_process_manager_shutdown<F>(
         process_manager: ProcessManager,
         force_shutdown_timeout: Option<Duration>,
+        in_process_signals: Option<tokio::sync::broadcast::Receiver<()>>,
         graceful_shutdown: F,
     ) where
         F: Future<Output = ()> + Send,
     {
         let is_interactive = force_shutdown_timeout.is_none();
-        let slow_task_delay = tokio::time::sleep(SLOW_SHUTDOWN_WARNING_DELAY);
-        let force_shutdown = Self::wait_for_forced_shutdown(force_shutdown_timeout);
-        pin!(graceful_shutdown, slow_task_delay, force_shutdown);
-        let mut slow_tasks_emitted = false;
+        let mut shutdown_status = tokio::time::interval_at(
+            tokio::time::Instant::now() + SLOW_SHUTDOWN_STATUS_INTERVAL,
+            SLOW_SHUTDOWN_STATUS_INTERVAL,
+        );
+        shutdown_status.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let force_shutdown =
+            Self::wait_for_forced_shutdown(force_shutdown_timeout, in_process_signals);
+        pin!(graceful_shutdown, force_shutdown);
 
         loop {
             select! {
                 _ = &mut graceful_shutdown => break,
-                _ = &mut slow_task_delay, if !slow_tasks_emitted => {
-                    slow_tasks_emitted = true;
+                _ = shutdown_status.tick() => {
                     let tasks = process_manager.running_task_ids();
-                    Self::emit_slow_tasks(&tasks, force_shutdown_timeout);
+                    Self::emit_shutdown_status(&tasks);
                 }
                 reason = &mut force_shutdown => {
                     let tasks = process_manager.running_task_ids();
@@ -352,60 +415,10 @@ impl Run {
             .emit();
         }
 
-        let api_url = &self.opts.api_client_opts.api_url;
-        let (base_msg, is_warning) = match self.remote_cache_status {
-            RemoteCacheStatus::Enabled => ("Remote caching enabled".to_string(), false),
-            RemoteCacheStatus::Disabled(reason) => {
-                let msg = match reason {
-                    RemoteCacheDisabledReason::NotLinked => "Remote caching disabled".to_string(),
-                    RemoteCacheDisabledReason::TokenWithoutTeam => {
-                        "Remote caching disabled (TURBO_TOKEN set without TURBO_TEAM)".to_string()
-                    }
-                    RemoteCacheDisabledReason::InConfig => {
-                        "Remote caching disabled (in configuration)".to_string()
-                    }
-                    RemoteCacheDisabledReason::InEnvVar => {
-                        "Remote caching disabled (by TURBO_REMOTE_CACHE_ENABLED)".to_string()
-                    }
-                    RemoteCacheDisabledReason::ByFlags => {
-                        "Remote caching disabled (by flags)".to_string()
-                    }
-                    RemoteCacheDisabledReason::RequestedWithoutCredentials => {
-                        "Remote caching disabled (remote cache requested \u{2014} set TURBO_TOKEN \
-                         and TURBO_TEAM, or run \"turbo login\" and \"turbo link\")"
-                            .to_string()
-                    }
-                };
-                (msg, false)
-            }
-            RemoteCacheStatus::Unavailable(reason) => {
-                let msg = match reason {
-                    RemoteCacheUnavailableReason::CouldNotConnect => {
-                        format!("Remote caching unavailable (Could not connect to \"{api_url}\")")
-                    }
-                    RemoteCacheUnavailableReason::AuthenticationFailed => {
-                        "Remote caching unavailable (Authentication failed \u{2014} check \
-                         TURBO_TOKEN or run \"turbo login\")"
-                            .to_string()
-                    }
-                    RemoteCacheUnavailableReason::UsageLimitExceeded => {
-                        "Remote caching unavailable (Usage limit exceeded)".to_string()
-                    }
-                    RemoteCacheUnavailableReason::SpendingPaused => {
-                        "Remote caching unavailable (Spending paused)".to_string()
-                    }
-                    RemoteCacheUnavailableReason::DisabledForTeam => {
-                        "Remote caching unavailable (Disabled for this team)".to_string()
-                    }
-                    RemoteCacheUnavailableReason::UnexpectedServerError => {
-                        format!(
-                            "Remote caching unavailable (Unexpected server error at \"{api_url}\")"
-                        )
-                    }
-                };
-                (msg, true)
-            }
-        };
+        let (base_msg, is_warning) = remote_cache_status_message(
+            self.remote_cache_status,
+            &self.opts.api_client_opts.api_url,
+        );
 
         let cache_status = if self.opts.run_opts.is_shared_worktree_cache {
             format!("{pad}• {base_msg}, using shared worktree cache")
@@ -523,21 +536,7 @@ impl Run {
                 .start_terminal_ui(terminal_sink)
                 .map(|res| res.map(|(sender, handle)| (UISender::Tui(sender), handle))),
             UIMode::Stream | UIMode::StreamWithTimestamps => Ok(None),
-            UIMode::Web => self
-                .start_web_ui()
-                .map(|res| res.map(|(sender, handle)| (UISender::Wui(sender), handle))),
         }
-    }
-    fn start_web_ui(self: &Arc<Self>) -> WuiResult {
-        let Some(query_server) = self.query_server.clone() else {
-            tracing::warn!("Web UI requires a query server implementation");
-            return Ok(None);
-        };
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-
-        let handle = tokio::spawn(ui::start_web_ui_server(rx, self.clone(), query_server));
-
-        Ok(Some((WebUISender { tx }, handle)))
     }
 
     #[allow(clippy::type_complexity)]
@@ -556,6 +555,8 @@ impl Run {
         let color_config = self.color_config;
         let scrollback_len = self.opts.tui_opts.scrollback_length;
         let repo_root = self.repo_root.clone();
+        let signal_handler = self.signal_handler.clone();
+        let interrupt = Arc::new(move || signal_handler.notify_signal());
         let handle = tokio::task::spawn(async move {
             Ok(tui::run_app(
                 task_names,
@@ -563,6 +564,7 @@ impl Run {
                 color_config,
                 &repo_root,
                 scrollback_len,
+                Some(interrupt),
                 terminal_sink,
             )
             .await?)
@@ -575,11 +577,14 @@ impl Run {
     pub fn stopper(&self) -> RunStopper {
         RunStopper {
             manager: self.processes.clone(),
+            run_cache: self.run_cache.clone(),
+            skip_cache_writes: self.opts.cache_opts.cache.skip_writes(),
         }
     }
 
     async fn start_proxy_if_needed(
         &self,
+        register_shutdown_handler: bool,
     ) -> Result<
         Option<(
             tokio::sync::broadcast::Sender<()>,
@@ -602,8 +607,11 @@ impl Run {
         let config = self.load_proxy_config(mfe_configs).await?;
         let (mut server, shutdown_handle) = self.start_proxy_server(config).await?;
 
-        let signal_handler_complete_rx =
-            self.setup_shutdown_handlers(&mut server, shutdown_handle.clone());
+        let signal_handler_complete_rx = self.setup_shutdown_handlers(
+            &mut server,
+            shutdown_handle.clone(),
+            register_shutdown_handler,
+        );
 
         tokio::spawn(async move {
             if let Err(e) = server.run().await {
@@ -663,23 +671,30 @@ impl Run {
         &self,
         server: &mut ProxyServer,
         shutdown_handle: tokio::sync::broadcast::Sender<()>,
+        register_signal_handler: bool,
     ) -> tokio::sync::oneshot::Receiver<()> {
         let (proxy_shutdown_complete_tx, proxy_shutdown_complete_rx) =
             tokio::sync::oneshot::channel();
         let (cleanup_complete_tx, cleanup_complete_rx) = tokio::sync::oneshot::channel();
-        let (signal_handler_complete_tx, signal_handler_complete_rx) =
-            tokio::sync::oneshot::channel();
+        let (signal_handler_complete_tx, signal_handler_complete_rx) = register_signal_handler
+            .then(tokio::sync::oneshot::channel)
+            .map(|(tx, rx)| (Some(tx), Some(rx)))
+            .unwrap_or((None, None));
 
         server.set_shutdown_complete_tx(proxy_shutdown_complete_tx);
 
         tokio::spawn(async move {
             if proxy_shutdown_complete_rx.await.is_ok() {
                 let _ = cleanup_complete_tx.send(());
-                let _ = signal_handler_complete_tx.send(());
+                if let Some(signal_handler_complete_tx) = signal_handler_complete_tx {
+                    let _ = signal_handler_complete_tx.send(());
+                }
             }
         });
 
-        self.register_proxy_signal_handler(shutdown_handle, signal_handler_complete_rx);
+        if let Some(signal_handler_complete_rx) = signal_handler_complete_rx {
+            self.register_proxy_signal_handler(shutdown_handle, signal_handler_complete_rx);
+        }
 
         cleanup_complete_rx
     }
@@ -747,6 +762,7 @@ impl Run {
                 Self::wait_for_process_manager_shutdown(
                     process_manager.clone(),
                     force_shutdown_timeout,
+                    Some(signal_handler.subscribe_in_process_signals()),
                     graceful_shutdown,
                 )
                 .await;
@@ -843,6 +859,7 @@ impl Run {
                 if Self::wait_for_cache_shutdown(
                     shutdown_reason,
                     force_shutdown_timeout,
+                    Some(signal_handler.subscribe_in_process_signals()),
                     async {
                         let _ = closed.await;
                     },
@@ -896,6 +913,7 @@ impl Run {
             Self::wait_for_process_manager_shutdown(
                 process_manager.clone(),
                 force_shutdown_timeout,
+                Some(signal_handler.subscribe_in_process_signals()),
                 graceful_shutdown,
             )
             .await;
@@ -1094,6 +1112,8 @@ impl Run {
             self.color_config,
             self.processes.clone(),
             &self.repo_root,
+            &self.scm,
+            repo_index,
             global_env,
             &self.root_turbo_json.global_env,
             ui_sender,
@@ -1162,13 +1182,15 @@ impl Run {
 
     #[instrument(skip_all)]
     pub async fn run(&self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
-        let proxy_shutdown = self.start_proxy_if_needed().await?;
-        self.setup_cache_shutdown_handler();
+        let proxy_shutdown = self.start_proxy_if_needed(!is_watch).await?;
+        if !is_watch {
+            self.setup_cache_shutdown_handler();
+        }
 
         // If there's no proxy, we need a fallback signal handler for the process
         // manager When a proxy is present, register_proxy_signal_handler
         // handles process manager shutdown
-        if proxy_shutdown.is_none() {
+        if proxy_shutdown.is_none() && !is_watch {
             self.setup_process_manager_shutdown_handler();
         }
 
@@ -1199,14 +1221,49 @@ impl Run {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RunStopper {
     manager: ProcessManager,
+    run_cache: Arc<RunCache>,
+    skip_cache_writes: bool,
 }
 
 impl RunStopper {
     pub async fn stop(&self) {
         self.manager.stop().await;
+    }
+
+    pub async fn shutdown(
+        &self,
+        force_shutdown_timeout: Option<Duration>,
+        in_process_signals: Option<tokio::sync::broadcast::Receiver<()>>,
+    ) {
+        let process_manager = self.manager.clone();
+        let graceful_process_manager = process_manager.clone();
+        let graceful_shutdown = async move {
+            graceful_process_manager.shutdown(None).await;
+        };
+        Run::wait_for_process_manager_shutdown(
+            process_manager,
+            force_shutdown_timeout,
+            in_process_signals,
+            graceful_shutdown,
+        )
+        .await;
+    }
+
+    pub async fn shutdown_cache(&self) {
+        if self.skip_cache_writes {
+            return;
+        }
+
+        if let Ok((_status, closed)) = self.run_cache.shutdown_cache().await {
+            let _ = closed.await;
+        }
+    }
+
+    pub fn cache_writes_enabled(&self) -> bool {
+        !self.skip_cache_writes
     }
 
     pub async fn stop_tasks(&self, task_ids: &[turborepo_task_id::TaskId<'static>]) {
@@ -1350,7 +1407,52 @@ mod tests {
 
     use turborepo_signals::ShutdownReason;
 
-    use super::{CacheShutdownOutcome, Run};
+    use super::{
+        remote_cache_status_message, CacheShutdownOutcome, ForceShutdownReason, RemoteCacheStatus,
+        RemoteCacheUnavailableReason, Run,
+    };
+    use crate::opts::RemoteCacheDisabledReason;
+
+    #[test]
+    fn remote_cache_status_messages_match_prelude_contract() {
+        assert_eq!(
+            remote_cache_status_message(RemoteCacheStatus::Enabled, "https://cache.example.com"),
+            ("Remote caching enabled".to_string(), false)
+        );
+        assert_eq!(
+            remote_cache_status_message(
+                RemoteCacheStatus::Disabled(RemoteCacheDisabledReason::InConfig),
+                "https://cache.example.com",
+            ),
+            (
+                "Remote caching disabled (in configuration)".to_string(),
+                false
+            )
+        );
+        assert_eq!(
+            remote_cache_status_message(
+                RemoteCacheStatus::Disabled(RemoteCacheDisabledReason::RequestedWithoutCredentials),
+                "https://cache.example.com",
+            ),
+            (
+                "Remote caching disabled (remote cache requested — set TURBO_TOKEN and \
+                 TURBO_TEAM, or run \"turbo login\" and \"turbo link\")"
+                    .to_string(),
+                false,
+            )
+        );
+        assert_eq!(
+            remote_cache_status_message(
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::CouldNotConnect),
+                "https://cache.example.com",
+            ),
+            (
+                "Remote caching unavailable (Could not connect to \"https://cache.example.com\")"
+                    .to_string(),
+                true,
+            )
+        );
+    }
 
     #[tokio::test]
     async fn cache_shutdown_close_does_not_arm_force_timeout() {
@@ -1359,6 +1461,7 @@ mod tests {
             Run::wait_for_cache_shutdown(
                 Some(ShutdownReason::Close),
                 Some(Duration::from_millis(10)),
+                None,
                 pending::<()>(),
                 pending::<()>(),
             ),
@@ -1376,6 +1479,34 @@ mod tests {
         let result = Run::wait_for_cache_shutdown(
             Some(ShutdownReason::Signal),
             Some(Duration::from_millis(10)),
+            None,
+            pending::<()>(),
+            pending::<()>(),
+        )
+        .await;
+
+        assert_eq!(result, CacheShutdownOutcome::ForcedShutdown);
+    }
+
+    #[tokio::test]
+    async fn forced_shutdown_accepts_in_process_signal_before_timeout() {
+        let (tx, rx) = tokio::sync::broadcast::channel(1);
+        tx.send(()).unwrap();
+
+        let result = Run::wait_for_forced_shutdown(Some(Duration::from_secs(60)), Some(rx)).await;
+
+        assert_eq!(result, ForceShutdownReason::Signal);
+    }
+
+    #[tokio::test]
+    async fn cache_shutdown_signal_accepts_in_process_signal() {
+        let (tx, rx) = tokio::sync::broadcast::channel(1);
+        tx.send(()).unwrap();
+
+        let result = Run::wait_for_cache_shutdown(
+            Some(ShutdownReason::Signal),
+            Some(Duration::from_secs(60)),
+            Some(rx),
             pending::<()>(),
             pending::<()>(),
         )

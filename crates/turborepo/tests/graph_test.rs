@@ -8,7 +8,7 @@ use common::{combined_output, run_turbo, setup, turbo_output_filters};
 use serde_json::json;
 
 fn setup_topological(dir: &std::path::Path) {
-    setup::setup_integration_test(dir, "task_dependencies/topological", "npm@10.5.0", true)
+    setup::setup_integration_test(dir, "task_dependencies/topological", "npm@10.5.0", false)
         .unwrap();
 }
 
@@ -22,6 +22,14 @@ fn test_graph_to_stdout() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("digraph {"), "expected DOT output");
+    assert!(
+        !stdout.contains("Packages in scope"),
+        "prelude must not appear on stdout in --graph mode"
+    );
+    assert!(
+        !stdout.contains("Remote caching"),
+        "remote cache status must not appear on stdout in --graph mode"
+    );
     assert!(
         stdout.contains(r#""[root] my-app#build" -> "[root] util#build""#),
         "expected my-app -> util edge"

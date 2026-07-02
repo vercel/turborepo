@@ -185,12 +185,6 @@ pub enum UIMode {
     #[schemars(rename = "stream-with-experimental-timestamps")]
     #[value(name = "stream-with-experimental-timestamps")]
     StreamWithTimestamps,
-    /// Use the web user interface.
-    /// Note: This feature is undocumented, experimental, and not meant to be
-    /// used. It may change or be removed at any time.
-    #[schemars(skip)]
-    #[ts(skip)]
-    Web,
 }
 
 impl fmt::Display for UIMode {
@@ -199,7 +193,6 @@ impl fmt::Display for UIMode {
             UIMode::Tui => write!(f, "tui"),
             UIMode::Stream => write!(f, "stream"),
             UIMode::StreamWithTimestamps => write!(f, "stream-with-experimental-timestamps"),
-            UIMode::Web => write!(f, "web"),
         }
     }
 }
@@ -210,9 +203,9 @@ impl UIMode {
     }
 
     /// Returns true if the UI mode has a sender,
-    /// i.e. web or tui but not stream
+    /// i.e. tui but not stream
     pub fn has_sender(&self) -> bool {
-        matches!(self, Self::Tui | Self::Web)
+        matches!(self, Self::Tui)
     }
 
     /// Returns true if this UI mode should include timestamps in the prefix
@@ -349,6 +342,17 @@ pub enum GraphOpts {
     File(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum ConfigurationSource {
+    Cli,
+    Environment,
+    OverrideEnvironment,
+    LocalConfig,
+    GlobalAuth,
+    GlobalConfig,
+    TurboJson,
+}
+
 /// API client configuration options.
 ///
 /// Contains all settings needed to connect to the Turborepo remote cache API,
@@ -357,6 +361,8 @@ pub enum GraphOpts {
 pub struct APIClientOpts {
     /// Base URL for the Turborepo API
     pub api_url: String,
+    /// Source that provided the API URL, if explicitly configured.
+    pub api_url_source: Option<ConfigurationSource>,
     /// Request timeout in seconds
     pub timeout: u64,
     /// Upload-specific timeout in seconds
@@ -372,6 +378,8 @@ pub struct APIClientOpts {
     pub team_slug: Option<String>,
     /// Login URL for authentication flow
     pub login_url: String,
+    /// Source that provided the login URL, if explicitly configured.
+    pub login_url_source: Option<ConfigurationSource>,
     /// Whether to use preflight requests
     pub preflight: bool,
     /// Port for SSO login callback (non-Vercel flows only)
@@ -537,12 +545,40 @@ pub struct IncrementalPartition {
 /// missing `inputs` key), affected detection treats all files in the
 /// package as inputs. This matches turbo's existing hashing behavior
 /// where an omitted `inputs` key means "hash everything."
-#[derive(Debug, PartialEq, Clone, Eq, Hash, Default)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub struct TaskInputs {
     /// Glob patterns for input files
     pub globs: Vec<String>,
     /// Set when $TURBO_DEFAULT$ is in inputs
     pub default: bool,
+    /// Glob patterns for files that should be hashed after task dependencies
+    /// complete.
+    pub jit_globs: Vec<String>,
+    /// Set when structured JIT inputs include default package files.
+    pub jit_default: bool,
+    pub dependency_outputs: Option<DependencyOutputsInput>,
+    /// Whether eager file hashing should run. This is false for JIT-only
+    /// inputs.
+    pub eager: bool,
+}
+
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
+pub struct DependencyOutputsInput {
+    pub from: Option<Vec<String>>,
+    pub globs: Vec<String>,
+}
+
+impl Default for TaskInputs {
+    fn default() -> Self {
+        Self {
+            globs: Vec::new(),
+            default: false,
+            jit_globs: Vec::new(),
+            jit_default: false,
+            dependency_outputs: None,
+            eager: true,
+        }
+    }
 }
 
 impl TaskInputs {
@@ -551,6 +587,10 @@ impl TaskInputs {
         Self {
             globs,
             default: false,
+            jit_globs: Vec::new(),
+            jit_default: false,
+            dependency_outputs: None,
+            eager: true,
         }
     }
 
@@ -558,6 +598,18 @@ impl TaskInputs {
     pub fn with_default(mut self, default: bool) -> Self {
         self.default = default;
         self
+    }
+
+    pub fn has_jit_inputs(&self) -> bool {
+        self.jit_default || !self.jit_globs.is_empty()
+    }
+
+    pub fn has_dependency_outputs(&self) -> bool {
+        self.dependency_outputs.is_some()
+    }
+
+    pub fn has_deferred_inputs(&self) -> bool {
+        self.has_jit_inputs() || self.has_dependency_outputs()
     }
 }
 

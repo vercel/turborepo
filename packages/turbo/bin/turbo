@@ -11,6 +11,7 @@ const path = require('path');
 
 // If we do not find the correct platform binary, should we attempt to install it?
 const SHOULD_INSTALL = true;
+const CTRL_C_BYTE = Buffer.from([0x03]);
 
 // If we do not find the correct platform binary, should we trust calling an emulated variant?
 const SHOULD_ATTEMPT_EMULATED = true;
@@ -34,6 +35,39 @@ function installUsingNPM() {
 // npm has multiple places that we need to look for a package name.
 function hasPackage(sourceObject, packageName) {
   return !!sourceObject[packageName] || !!sourceObject[`node_modules/${packageName}`];
+}
+
+// When invoked through a package manager's scripts (or npx/pnpm dlx/etc.),
+// the package manager identifies itself in npm_config_user_agent,
+// e.g. "pnpm/9.1.0 npm/? node/v20.11.0 darwin arm64".
+function detectPackageManager() {
+  const userAgent = process.env.npm_config_user_agent;
+  if (!userAgent) {
+    return null;
+  }
+
+  const match = userAgent.match(/^(\S+)\/(\d+)/);
+  if (!match) {
+    return null;
+  }
+
+  return { name: match[1], majorVersion: Number(match[2]) };
+}
+
+function repairInstructions(packageManager) {
+  switch (packageManager.name) {
+    case 'pnpm':
+      return 'pnpm install --force';
+    case 'bun':
+      return 'bun install --force';
+    case 'yarn':
+      if (packageManager.majorVersion === 1) {
+        return 'yarn install --check-files';
+      }
+      return 'yarn install (after deleting your repository\'s node_modules directory)';
+    default:
+      return `${packageManager.name} install (after deleting your repository's node_modules directory)`;
+  }
 }
 
 // Binary packages were renamed from `turbo-<os>-<arch>` to `@turbo/<os>-<arch>`.
@@ -126,8 +160,33 @@ function getBinaryPath() {
         console.warn('Installation has succeeded.');
         return resolvedPath;
       }
-    } catch (e) {}
-    console.warn('Installation has failed.');
+      console.warn('Installation has failed.');
+      console.warn();
+      console.warn('npm reported success, but the binary is still missing.');
+      console.warn('npm skips failed optional dependencies without reporting an error.');
+      console.warn('The reason for the failure is recorded in the debug log of your npm cache\'s _logs directory (see `npm config get cache`).');
+    } catch (e) {
+      console.warn('Installation has failed.');
+
+      // Show the underlying error so that failures are diagnosable.
+      const stderr = e?.stderr?.toString().trim();
+      const reason = stderr || e?.message;
+      if (reason) {
+        console.warn();
+        console.warn('The installation attempt reported:');
+        console.warn(reason);
+      }
+    }
+
+    // The repair attempt above uses npm regardless of the package manager
+    // that installed this tree. If the user came through a different package
+    // manager, point them at its equivalent repair command.
+    const packageManager = detectPackageManager();
+    if (packageManager !== null && packageManager.name !== 'npm') {
+      console.warn();
+      console.warn(`It looks like your project uses ${packageManager.name}. To reinstall the missing binary, run:`);
+      console.warn(repairInstructions(packageManager));
+    }
   }
 
   // 3. Both Windows and macOS ARM boxes can run x64 binaries. Attempt to run under emulation.
@@ -218,6 +277,14 @@ function getBinaryPath() {
     console.error('Turborepo checked to see if binaries for another platform are installed.');
     console.error('This typically indicates an error in sharing of pre-resolved node_modules across platforms.');
     console.error('One common reason for this is copying files to Docker.');
+
+    if (platform === 'windows' && otherInstalled.some((binaryPath) => binaryPath.includes('linux'))) {
+      console.error();
+      console.error('Turborepo found Linux binaries, but you are running on Windows.');
+      console.error('This usually means dependencies were installed from WSL in a directory shared with Windows.');
+      console.error('To fix this, delete your node_modules directory and reinstall your dependencies in the environment where you run turbo.');
+    }
+
     console.error();
     console.error(`We found these unnecessary binaries:`);
     console.error(otherInstalled.join('\n'));
@@ -310,16 +377,96 @@ function exitWithCodeOrSignal(code, signal) {
   process.exit(code === null ? 1 : code);
 }
 
+function shouldOwnWindowsCtrlC() {
+  if (process.platform !== "win32" || !process.stdin.isTTY) {
+    return false;
+  }
+
+  if (usesTui(process.argv.slice(2))) {
+    return false;
+  }
+
+  return Boolean(
+    process.env.npm_command ||
+    process.env.npm_lifecycle_event ||
+    process.env.npm_config_user_agent
+  );
+}
+
+function usesTui(args) {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--ui=tui") {
+      return true;
+    }
+    if (arg === "--ui" && args[i + 1] === "tui") {
+      return true;
+    }
+  }
+  return false;
+}
+
 function runTurbo() {
+  if (shouldOwnWindowsCtrlC()) {
+    return runTurboChild(
+      {
+        ...process.env,
+        __TURBO_WINDOWS_CTRL_C_FD: "3",
+      },
+      true
+    );
+  }
+
+  runTurboChild(process.env, false);
+}
+
+function runTurboChild(env, useCtrlCPipe) {
   const child = child_process.spawn(
     getBinaryPath(),
     process.argv.slice(2),
-    { stdio: "inherit" }
+    {
+      stdio: useCtrlCPipe ? ["inherit", "inherit", "inherit", "pipe"] : "inherit",
+      env,
+    }
   );
 
+  const ctrlCPipe = useCtrlCPipe ? child.stdio[3] : null;
+  ctrlCPipe?.on("error", () => {});
+
+  const sendCtrlC = () => {
+    if (ctrlCPipe && !ctrlCPipe.destroyed && ctrlCPipe.writable) {
+      ctrlCPipe.write(CTRL_C_BYTE);
+    }
+  };
+
+  const restoreStdin = () => {
+    if (!useCtrlCPipe) {
+      return;
+    }
+
+    if (process.stdin.isRaw) {
+      process.stdin.setRawMode(false);
+    }
+    process.stdin.pause();
+  };
+
+  const handleInput = (chunk) => {
+    for (const byte of chunk) {
+      if (byte === 0x03) {
+        sendCtrlC();
+      }
+    }
+  };
+
+  if (useCtrlCPipe) {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.on("data", handleInput);
+  }
+
   const handleSigint = () => {
-    // The child shares our process group, so Ctrl+C already reached it.
-    // Keep the wrapper alive until the child finishes its own shutdown.
+    // Keep the wrapper alive and let native turbo handle graceful shutdown.
+    sendCtrlC();
   };
 
   const handleSigterm = () => {
@@ -331,6 +478,9 @@ function runTurbo() {
   const cleanup = () => {
     process.off("SIGINT", handleSigint);
     process.off("SIGTERM", handleSigterm);
+    process.stdin.off("data", handleInput);
+    restoreStdin();
+    ctrlCPipe?.destroy();
   };
 
   process.on("SIGINT", handleSigint);

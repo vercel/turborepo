@@ -31,6 +31,7 @@ pub struct HashWatcher {
     _exit_tx: oneshot::Sender<()>,
     _handle: tokio::task::JoinHandle<()>,
     query_tx: mpsc::Sender<Query>,
+    slowest_files: Arc<turborepo_scm::SlowestFiles>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -131,13 +132,26 @@ impl HashWatcher {
     ) -> Self {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (query_tx, query_rx) = mpsc::channel(16);
+        // Track the slowest-to-hash files so a stalled startup (e.g. a large
+        // file dominating the initial hash) can be diagnosed via
+        // `slowest_files()`.
+        let slowest_files = Arc::new(turborepo_scm::SlowestFiles::new());
+        let scm = scm.with_slowest_files_recorder(slowest_files.clone());
         let subscriber = Subscriber::new(repo_root, package_discovery, scm, query_rx);
         let handle = tokio::spawn(subscriber.watch(exit_rx, file_events));
         Self {
             _exit_tx: exit_tx,
             _handle: handle,
             query_tx,
+            slowest_files,
         }
+    }
+
+    /// Snapshot the slowest-to-hash files, slowest-first by hashing duration
+    /// (in-flight files use their elapsed-so-far). Used to diagnose a startup
+    /// that stalls on hashing a large file.
+    pub fn slowest_files(&self) -> Vec<turborepo_scm::SlowestFile> {
+        self.slowest_files.snapshot()
     }
 
     // Note that this does not wait for any sort of ready signal. The watching
@@ -909,7 +923,8 @@ mod tests {
 
         let scm = SCM::new(&repo_root);
         assert!(!scm.is_manual());
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher =
+            PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
         let package_discovery = package_watcher.watch_discovery();
         let hash_watcher =
             HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
@@ -983,6 +998,58 @@ mod tests {
 
     #[tokio::test]
     #[tracing_test::traced_test]
+    async fn test_large_file_recorded_as_slowest() {
+        let (_tmp, repo_root) = setup_fixture();
+
+        // Add a large (8 MiB) *untracked* file to the foo package. Tracked
+        // files are read from the git tree, but untracked files are hashed by
+        // reading their contents (`hash_objects`) — exactly the path that
+        // dominates startup time for a large temp file, and the one the
+        // slowest-files recorder instruments. Do NOT commit it.
+        let big_path = repo_root.join_components(&["packages", "foo", "big.bin"]);
+        big_path
+            .create_with_contents(vec![0u8; 8 * 1024 * 1024])
+            .unwrap();
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(
+            watcher.cookie_dir(),
+            Duration::from_millis(100),
+            recv.clone(),
+        );
+        let scm = SCM::new(&repo_root);
+        assert!(!scm.is_manual());
+        let package_watcher =
+            PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
+        let package_discovery = package_watcher.watch_discovery();
+        let hash_watcher =
+            HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
+
+        // Drive a hash of the foo package so the big file gets hashed.
+        let foo_path = repo_root.join_components(&["packages", "foo"]);
+        let spec = HashSpec {
+            package_path: repo_root.anchor(&foo_path).unwrap(),
+            inputs: InputGlobs::Default,
+        };
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            if hash_watcher.get_file_hashes(spec.clone()).await.is_ok() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+
+        let slowest = hash_watcher.slowest_files();
+        assert!(
+            slowest.iter().any(|f| f.path.as_str().ends_with("big.bin")),
+            "expected big.bin in slowest files, got: {:?}",
+            slowest.iter().map(|f| f.path.as_str()).collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
     async fn test_switch_branch() {
         let (_tmp, repo_root) = setup_fixture();
 
@@ -997,7 +1064,8 @@ mod tests {
 
         let scm = SCM::new(&repo_root);
         assert!(!scm.is_manual());
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher =
+            PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
         let package_discovery = package_watcher.watch_discovery();
         let hash_watcher =
             HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
@@ -1051,7 +1119,8 @@ mod tests {
 
         let scm = SCM::new(&repo_root);
         assert!(!scm.is_manual());
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher =
+            PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
         let package_discovery = package_watcher.watch_discovery();
         let hash_watcher =
             HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
@@ -1249,7 +1318,8 @@ mod tests {
 
         let scm = SCM::new(&repo_root);
         assert!(!scm.is_manual());
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher =
+            PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
         let package_discovery = package_watcher.watch_discovery();
         let hash_watcher =
             HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
@@ -1306,7 +1376,8 @@ mod tests {
 
         let scm = SCM::new(&repo_root);
         assert!(!scm.is_manual());
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher =
+            PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
         let package_discovery = package_watcher.watch_discovery();
         let hash_watcher =
             HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
@@ -1368,7 +1439,8 @@ mod tests {
 
         let scm = SCM::new(&repo_root);
         assert!(!scm.is_manual());
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher =
+            PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
         let package_discovery = package_watcher.watch_discovery();
         let hash_watcher =
             HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);
@@ -1454,7 +1526,8 @@ mod tests {
 
         let scm = SCM::new(&repo_root);
         assert!(!scm.is_manual());
-        let package_watcher = PackageWatcher::new(repo_root.clone(), recv, cookie_writer).unwrap();
+        let package_watcher =
+            PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
         let package_discovery = package_watcher.watch_discovery();
         let hash_watcher =
             HashWatcher::new(repo_root.clone(), package_discovery, watcher.watch(), scm);

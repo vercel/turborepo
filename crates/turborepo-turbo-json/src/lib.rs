@@ -43,7 +43,7 @@ pub use parser::{BiomeParseError, parse_turbo_json};
 pub use processed::{
     ProcessedDependsOn, ProcessedEnv, ProcessedGlob, ProcessedIncrementalPartition,
     ProcessedInputs, ProcessedOutputs, ProcessedPassThroughEnv, ProcessedTaskDefinition,
-    ProcessedWith,
+    ProcessedWith, duplicate_startup_error,
 };
 pub use raw::{
     HasConfigBeyondExtends, Pipeline, RawExperimentalObservability, RawIncrementalPartition,
@@ -365,20 +365,49 @@ pub trait TaskInputsFromProcessed {
     fn from_processed(
         inputs: ProcessedInputs,
         turbo_root_path: &RelativeUnixPath,
-    ) -> turborepo_types::TaskInputs;
+    ) -> Result<turborepo_types::TaskInputs, Error>;
 }
 
 impl TaskInputsFromProcessed for turborepo_types::TaskInputs {
     fn from_processed(
         inputs: ProcessedInputs,
         turbo_root_path: &RelativeUnixPath,
-    ) -> turborepo_types::TaskInputs {
+    ) -> Result<turborepo_types::TaskInputs, Error> {
+        if inputs.legacy_startup && inputs.structured_startup {
+            return Err(duplicate_startup_error(None));
+        }
+
         // Resolve all globs with the turbo_root path
         // Absolute path validation was already done during ProcessedGlob creation
-        turborepo_types::TaskInputs {
-            globs: inputs.resolve(turbo_root_path),
-            default: inputs.default,
-        }
+        let globs = inputs.resolve(turbo_root_path);
+        let default = inputs.default;
+        let jit_globs = inputs.resolve_jit(turbo_root_path);
+        let jit_default = inputs.jit_default;
+        let dependency_outputs =
+            inputs
+                .dependency_outputs
+                .map(|input| turborepo_types::DependencyOutputsInput {
+                    from: input.from.map(|from| {
+                        from.into_iter()
+                            .map(|entry| entry.into_inner().into())
+                            .collect()
+                    }),
+                    globs: input
+                        .globs
+                        .iter()
+                        .map(|glob| glob.resolve(turbo_root_path))
+                        .collect(),
+                });
+        let eager = default || !globs.is_empty() || (!jit_default && jit_globs.is_empty());
+
+        Ok(turborepo_types::TaskInputs {
+            globs,
+            default,
+            jit_globs,
+            jit_default,
+            dependency_outputs,
+            eager,
+        })
     }
 }
 
@@ -394,8 +423,11 @@ pub fn incremental_partitions_from_processed(
             let outputs = task_outputs_from_processed(p.outputs, turbo_root_path)?;
             let inputs = p
                 .inputs
-                .map(|i| turborepo_types::TaskInputs::from_processed(i, turbo_root_path))
-                .map(|ti| ti.globs)
+                .map(|i| {
+                    turborepo_types::TaskInputs::from_processed(i, turbo_root_path)
+                        .map(|ti| ti.globs)
+                })
+                .transpose()?
                 .unwrap_or_default();
             Ok(turborepo_types::IncrementalPartition { outputs, inputs })
         })
@@ -434,13 +466,13 @@ pub fn task_outputs_from_processed(
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use biome_deserialize::json::deserialize_from_json_str;
     use biome_json_parser::JsonParserOptions;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use test_case::test_case;
     use turbopath::RelativeUnixPath;
     use turborepo_boundaries::BoundariesConfig;
+    use turborepo_errors::json::deserialize_from_json_str;
     use turborepo_task_id::TaskName;
     use turborepo_types::{OutputLogsMode, TaskOutputs, UIMode};
     use turborepo_unescape::UnescapedString;
@@ -656,12 +688,12 @@ mod tests {
             }
         }"#;
 
-        let deserialized_result = deserialize_from_json_str(
+        let (deserialized, _) = deserialize_from_json_str(
             json,
             JsonParserOptions::default().with_allow_comments(),
             "turbo.json",
         );
-        let raw_turbo_json: RawTurboJson = deserialized_result.into_deserialized().unwrap();
+        let raw_turbo_json: RawTurboJson = deserialized.unwrap();
 
         // Try to convert to TurboJson - this should fail
         let turbo_json_result = TurboJson::try_from(raw_turbo_json);
@@ -684,12 +716,12 @@ mod tests {
             }
         }"#;
 
-        let deserialized_result = deserialize_from_json_str(
+        let (deserialized, _) = deserialize_from_json_str(
             json,
             JsonParserOptions::default().with_allow_comments(),
             "turbo.json",
         );
-        let raw_turbo_json: RawTurboJson = deserialized_result.into_deserialized().unwrap();
+        let raw_turbo_json: RawTurboJson = deserialized.unwrap();
 
         // Verify that futureFlags is parsed correctly (empty now that flags are
         // removed)
@@ -714,12 +746,12 @@ mod tests {
             }
         }"#;
 
-        let deserialized_result = deserialize_from_json_str(
+        let (deserialized, _) = deserialize_from_json_str(
             json,
             JsonParserOptions::default().with_allow_comments(),
             "turbo.json",
         );
-        let raw_turbo_json: RawTurboJson = deserialized_result.into_deserialized().unwrap();
+        let raw_turbo_json: RawTurboJson = deserialized.unwrap();
 
         // Verify that futureFlags is parsed correctly
         assert!(raw_turbo_json.future_flags.is_some());
@@ -744,12 +776,12 @@ mod tests {
             }
         }"#;
 
-        let deserialized_result = deserialize_from_json_str(
+        let (deserialized, _) = deserialize_from_json_str(
             json,
             JsonParserOptions::default().with_allow_comments(),
             "turbo.json",
         );
-        let raw_turbo_json: RawTurboJson = deserialized_result.into_deserialized().unwrap();
+        let raw_turbo_json: RawTurboJson = deserialized.unwrap();
 
         assert!(raw_turbo_json.future_flags.is_some());
         let future_flags = raw_turbo_json.future_flags.as_ref().unwrap();
@@ -801,7 +833,7 @@ mod tests {
     #[test_case("{}", "empty boundaries")]
     #[test_case(r#"{"tags": {} }"#, "empty tags")]
     #[test_case(
-        r#"{"tags": { "my-tag": { "dependencies": { "allow": ["my-package"] } } }"#,
+        r#"{"tags": { "my-tag": { "dependencies": { "allow": ["my-package"] } } } }"#,
         "tags and dependencies"
     )]
     #[test_case(
@@ -859,13 +891,16 @@ mod tests {
         "package rule"
     )]
     fn test_deserialize_boundaries(json: &str, name: &str) {
-        let deserialized_result = deserialize_from_json_str(
+        // Match the options used by parse_turbo_json: production turbo.json
+        // parsing allows comments and trailing commas.
+        let (deserialized, _) = deserialize_from_json_str(
             json,
-            JsonParserOptions::default().with_allow_comments(),
+            JsonParserOptions::default()
+                .with_allow_comments()
+                .with_allow_trailing_commas(),
             "turbo.json",
         );
-        let raw_boundaries_config: BoundariesConfig =
-            deserialized_result.into_deserialized().unwrap();
+        let raw_boundaries_config: BoundariesConfig = deserialized.unwrap();
         insta::assert_json_snapshot!(name.replace(' ', "_"), raw_boundaries_config);
     }
 

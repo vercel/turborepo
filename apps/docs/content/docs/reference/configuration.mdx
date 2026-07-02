@@ -135,9 +135,9 @@ Set/limit the maximum concurrency for task execution. Must be an integer greater
 
 Default: `false`
 
-Turborepo uses your repository's lockfile to determine caching behavior, [Package Graphs](https://turborepo.dev/docs/core-concepts/internal-packages), and more. Because of this, we use [the `packageManager` field](https://nodejs.org/api/packages.html#packagemanager) to help you stabilize your Turborepo.
+Turborepo uses your repository's lockfile to determine caching behavior, [Package Graphs](https://turborepo.dev/docs/core-concepts/internal-packages), and more. Because of this, we use the package manager declaration in your root `package.json` to help you stabilize your Turborepo. We recommend `devEngines.packageManager`; the legacy top-level [`packageManager`](https://nodejs.org/api/packages.html#packagemanager) field is also supported.
 
-To help with incremental migration or in situations where you can't use the `packageManager` field, you may use `--dangerously-disable-package-manager-check` to opt out of this check and assume the risks of unstable lockfiles producing unpredictable behavior. When disabled, Turborepo will attempt a best-effort discovery of the intended package manager meant for the repository.
+To help with incremental migration or in situations where you can't use a package manager declaration, you may use `--dangerously-disable-package-manager-check` to opt out of this check and assume the risks of unstable lockfiles producing unpredictable behavior. When disabled, Turborepo will attempt a best-effort discovery of the intended package manager meant for the repository.
 
 ```jsonc title="./turbo.json"
 {
@@ -177,7 +177,7 @@ Specify the filesystem cache directory.
 
 Default: `"0"` (disabled)
 
-Maximum age of local cache entries before automatic eviction. Entries older than this value are removed at the start of each `turbo run`.
+Maximum age of local cache entries before automatic eviction. Entries older than this value are removed when eviction runs at the start of each `turbo run`. Eviction runs in a background thread so it does not block tasks.
 
 ```jsonc title="./turbo.json"
 {
@@ -197,6 +197,10 @@ Accepts a human-readable duration string with the following units:
 
 Set to `"0"` to disable age-based eviction.
 
+<Callout type="info">
+  Local cache eviction is opt-in today. We expect to enable it by default in
+  Turborepo 3.0.
+</Callout>
 
 <Callout type="info">
   You may also set this option via the
@@ -208,7 +212,7 @@ Set to `"0"` to disable age-based eviction.
 
 Default: `"0"` (disabled)
 
-Maximum total size of the local filesystem cache. When the cache exceeds this limit, the oldest entries are evicted until the cache is within the limit.
+Maximum total size of the local filesystem cache. When the cache exceeds this limit, the oldest entries are evicted until the cache is within the limit. Eviction runs in a background thread at the start of each `turbo run`, so it does not block tasks.
 
 ```jsonc title="./turbo.json"
 {
@@ -562,7 +566,7 @@ In the example below, we've defined three tasks under the `tasks` key: `build`, 
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**"],
     },
     "test": {
       "outputs": ["coverage/**"],
@@ -864,6 +868,68 @@ Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to 
 }
 ```
 
+#### Deferred hashing
+
+`inputs` entries can be structured objects that defer file hashing until after
+the task's dependencies have completed. Tasks that depend on a deferred task are
+also deferred until upstream hashes are available.
+
+##### `mode: "jit"`
+
+Hash the files matching `globs` just before the task executes, after its
+dependencies have completed.
+
+```jsonc title="./turbo.json"
+{
+  "tasks": {
+    "codegen": {
+      "cache": false,
+    },
+    "build": {
+      "dependsOn": ["codegen"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!src/generated/**",
+        {
+          "mode": "jit",
+          "globs": ["src/generated/**"],
+        },
+      ],
+    },
+  },
+}
+```
+
+##### `mode: "dependencyOutputs"`
+
+Hash the intersection of a dependency's declared `outputs` and `globs`.
+`dependencyOutputs` does not create task graph edges; selected tasks must
+already be present through `dependsOn`.
+
+```jsonc title="./turbo.json"
+{
+  "tasks": {
+    "check-types": {
+      "dependsOn": ["^check-types"],
+      "outputs": ["dist/**"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        {
+          "mode": "dependencyOutputs",
+          "globs": ["dist/**/*.d.ts"],
+          "from": ["^check-types"],
+        },
+      ],
+    },
+  },
+}
+```
+
+- `from` is only valid with `dependencyOutputs`.
+- `dependencyOutputs.from` defaults to the task's direct task dependencies.
+- A selected `dependencyOutputs` task must declare `outputs`.
+- Tasks using `jit` or `dependencyOutputs` cannot know their final cache key until execution time, so `--dry=json` reports `hash: null` and a `hashReason`.
+
 #### `$TURBO_EXTENDS$`
 
 When using [Package Configurations](/docs/reference/package-configurations), array fields completely replace the values from the root `turbo.json` by default. The `$TURBO_EXTENDS$` microsyntax changes this behavior to **append** instead of **replace**.
@@ -897,13 +963,18 @@ A Package Configuration can add additional outputs while keeping the root output
   "tasks": {
     "build": {
       // Inherits "dist/**" from root, and adds ".next/**"
-      "outputs": ["$TURBO_EXTENDS$", ".next/**", "!.next/cache/**"],
+      "outputs": [
+        "$TURBO_EXTENDS$",
+        ".next/**",
+        "!.next/cache/**",
+        "!.next/dev/**",
+      ],
     },
   },
 }
 ```
 
-Without `$TURBO_EXTENDS$`, the `outputs` array would be completely replaced with `[".next/**", "!.next/cache/**"]`, dropping the `"dist/**"` from the root configuration.
+Without `$TURBO_EXTENDS$`, the `outputs` array would be completely replaced with `[".next/**", "!.next/cache/**", "!.next/dev/**"]`, dropping the `"dist/**"` from the root configuration.
 
 ### `outputLogs`
 
@@ -1255,8 +1326,9 @@ Optional HTTP headers to include with export requests. Useful for authentication
   in your environment), headers from lower-priority sources like `turbo.json` are
   **not inherited**. You must re-provide headers alongside the new endpoint.
 
-  This prevents authentication credentials configured for one collector from
-  being sent to a different collector.
+This prevents authentication credentials configured for one collector from
+being sent to a different collector.
+
 </Callout>
 
 #### `experimentalObservability.otel.timeoutMs`

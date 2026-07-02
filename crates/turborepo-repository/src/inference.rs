@@ -120,7 +120,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::{RepoMode, RepoState};
-    use crate::{package_json::PackageJson, package_manager::PackageManager};
+    use crate::{package_json::PackageJson, package_manager, package_manager::PackageManager};
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();
@@ -311,7 +311,7 @@ mod test {
     }
 
     #[test]
-    fn test_allows_missing_package_manager() {
+    fn test_missing_package_manager_does_not_infer_from_lockfile() {
         let (_tmp, tmp_dir) = tmp_dir();
 
         let monorepo_root = tmp_dir.join_component("monorepo_root");
@@ -337,17 +337,17 @@ mod test {
         let repo_state_from_app = RepoState::infer(&app_1).unwrap();
 
         assert_eq!(&repo_state_from_root.root, &monorepo_root);
-        assert_eq!(&repo_state_from_app.root, &monorepo_root);
-        assert_eq!(repo_state_from_root.mode, RepoMode::MultiPackage);
-        assert_eq!(repo_state_from_app.mode, RepoMode::MultiPackage);
-        assert_eq!(
-            repo_state_from_root.package_manager.unwrap(),
-            PackageManager::Npm
-        );
-        assert_eq!(
-            repo_state_from_app.package_manager.unwrap(),
-            PackageManager::Npm
-        );
+        assert_eq!(&repo_state_from_app.root, &app_1);
+        assert_eq!(repo_state_from_root.mode, RepoMode::SinglePackage);
+        assert_eq!(repo_state_from_app.mode, RepoMode::SinglePackage);
+        assert!(matches!(
+            repo_state_from_root.package_manager.unwrap_err(),
+            package_manager::Error::MissingPackageManager
+        ));
+        assert!(matches!(
+            repo_state_from_app.package_manager.unwrap_err(),
+            package_manager::Error::MissingPackageManager
+        ));
     }
 
     #[test]

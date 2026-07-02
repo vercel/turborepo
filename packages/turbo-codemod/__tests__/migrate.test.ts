@@ -15,6 +15,29 @@ jest.mock<typeof import("@turbo/workspaces")>("@turbo/workspaces", () => ({
   ...jest.requireActual("@turbo/workspaces")
 }));
 
+function expectedPackageJsonWithPackageManager({
+  name,
+  turboVersion
+}: {
+  name: string;
+  turboVersion: string;
+}) {
+  return {
+    dependencies: {},
+    devDependencies: {
+      turbo: turboVersion
+    },
+    devEngines: {
+      packageManager: {
+        name: "pnpm",
+        version: "1.2.3"
+      }
+    },
+    name,
+    version: "1.0.0"
+  };
+}
+
 describe("migrate", () => {
   const mockExit = spyExit();
   const { useFixture } = setupTestFixtures({
@@ -49,7 +72,9 @@ describe("migrate", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
-        bun: undefined
+        bun: undefined,
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -67,15 +92,12 @@ describe("migrate", () => {
       install: false
     });
 
-    expect(readJson("package.json")).toStrictEqual({
-      dependencies: {},
-      devDependencies: {
-        turbo: "1.0.0"
-      },
-      name: "no-turbo-json",
-      packageManager: "pnpm@1.2.3",
-      version: "1.0.0"
-    });
+    expect(readJson("package.json")).toStrictEqual(
+      expectedPackageJsonWithPackageManager({
+        name: "no-turbo-json",
+        turboVersion: "1.0.0"
+      })
+    );
     expect(readJson("turbo.json")).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       pipeline: {
@@ -136,7 +158,9 @@ describe("migrate", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
-        bun: undefined
+        bun: undefined,
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -205,7 +229,9 @@ describe("migrate", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
-        bun: undefined
+        bun: undefined,
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -224,15 +250,12 @@ describe("migrate", () => {
       to: "1.7.0"
     });
 
-    expect(readJson("package.json")).toStrictEqual({
-      dependencies: {},
-      devDependencies: {
-        turbo: "1.0.0"
-      },
-      name: "no-turbo-json",
-      packageManager: "pnpm@1.2.3",
-      version: "1.0.0"
-    });
+    expect(readJson("package.json")).toStrictEqual(
+      expectedPackageJsonWithPackageManager({
+        name: "no-turbo-json",
+        turboVersion: "1.0.0"
+      })
+    );
     expect(readJson("turbo.json")).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       pipeline: {
@@ -290,7 +313,9 @@ describe("migrate", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
-        bun: undefined
+        bun: undefined,
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -309,15 +334,12 @@ describe("migrate", () => {
       from: "1.0.0"
     });
 
-    expect(readJson("package.json")).toStrictEqual({
-      dependencies: {},
-      devDependencies: {
-        turbo: "1.0.0"
-      },
-      name: "no-turbo-json",
-      packageManager: "pnpm@1.2.3",
-      version: "1.0.0"
-    });
+    expect(readJson("package.json")).toStrictEqual(
+      expectedPackageJsonWithPackageManager({
+        name: "no-turbo-json",
+        turboVersion: "1.0.0"
+      })
+    );
     expect(readJson("turbo.json")).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       pipeline: {
@@ -494,7 +516,9 @@ describe("migrate", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
-        bun: undefined
+        bun: undefined,
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -515,15 +539,12 @@ describe("migrate", () => {
       install: true
     });
 
-    expect(readJson("package.json")).toStrictEqual({
-      dependencies: {},
-      devDependencies: {
-        turbo: "1.0.0"
-      },
-      name: "no-turbo-json",
-      packageManager: "pnpm@1.2.3",
-      version: "1.0.0"
-    });
+    expect(readJson("package.json")).toStrictEqual(
+      expectedPackageJsonWithPackageManager({
+        name: "no-turbo-json",
+        turboVersion: "1.0.0"
+      })
+    );
     expect(readJson("turbo.json")).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       pipeline: {
@@ -602,7 +623,9 @@ describe("migrate", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
-        bun: undefined
+        bun: undefined,
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -623,15 +646,12 @@ describe("migrate", () => {
       install: true
     });
 
-    expect(readJson("package.json")).toStrictEqual({
-      dependencies: {},
-      devDependencies: {
-        turbo: "1.0.0"
-      },
-      name: "no-turbo-json",
-      packageManager: "pnpm@1.2.3",
-      version: "1.0.0"
-    });
+    expect(readJson("package.json")).toStrictEqual(
+      expectedPackageJsonWithPackageManager({
+        name: "no-turbo-json",
+        turboVersion: "1.0.0"
+      })
+    );
     expect(readJson("turbo.json")).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       pipeline: {
@@ -839,7 +859,9 @@ describe("migrate", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
-        bun: undefined
+        bun: undefined,
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -953,7 +975,9 @@ describe("migrate", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
-        bun: undefined
+        bun: undefined,
+        nub: undefined,
+        aube: undefined
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -971,15 +995,12 @@ describe("migrate", () => {
       install: false
     });
 
-    expect(readJson("package.json")).toStrictEqual({
-      dependencies: {},
-      devDependencies: {
-        turbo: "1.7.1"
-      },
-      name: "turbo-1",
-      packageManager: "pnpm@1.2.3",
-      version: "1.0.0"
-    });
+    expect(readJson("package.json")).toStrictEqual(
+      expectedPackageJsonWithPackageManager({
+        name: "turbo-1",
+        turboVersion: "1.7.1"
+      })
+    );
     expect(readJson("turbo.json")).toStrictEqual({
       $schema: "https://v2-9-3.turborepo.dev/schema.json",
       tasks: {

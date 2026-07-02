@@ -92,6 +92,15 @@ fn wait_for_markers(test_dir: &Path, pkg: &str, expected: usize, timeout: Durati
 
 /// Spawn `turbo watch` with the given tasks as a child process.
 fn spawn_turbo_watch_with_tasks(test_dir: &Path, tasks: &[&str]) -> Child {
+    spawn_turbo_watch_with_tasks_and_stdio(test_dir, tasks, Stdio::null(), Stdio::null())
+}
+
+fn spawn_turbo_watch_with_tasks_and_stdio(
+    test_dir: &Path,
+    tasks: &[&str],
+    stdout: Stdio,
+    stderr: Stdio,
+) -> Child {
     let turbo_bin = assert_cmd::cargo::cargo_bin("turbo");
     let mut cmd = std::process::Command::new(turbo_bin);
     #[cfg(unix)]
@@ -114,8 +123,8 @@ fn spawn_turbo_watch_with_tasks(test_dir: &Path, tasks: &[&str]) -> Child {
         .env_remove("CI")
         .env_remove("GITHUB_ACTIONS")
         .current_dir(test_dir)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stdout(stdout)
+        .stderr(stderr)
         .spawn()
         .expect("failed to spawn turbo watch")
 }
@@ -250,6 +259,72 @@ fn setup_watch_test() -> (tempfile::TempDir, PathBuf) {
     (tempdir, test_dir)
 }
 
+fn setup_watch_deferred_dependency_outputs_test() -> (tempfile::TempDir, PathBuf) {
+    let (tempdir, test_dir) = setup_watch_test();
+
+    fs::write(
+        test_dir.join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "watchUsingTaskInputs": true
+  },
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "pkg-b#build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        {
+          "mode": "dependencyOutputs",
+          "from": ["^build"]
+        }
+      ],
+      "outputs": ["dist/**"]
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        test_dir.join("packages/a/build.js"),
+        r#"const fs = require('fs');
+const path = require('path');
+
+const markerDir = path.join(__dirname, '.markers');
+fs.mkdirSync(markerDir, { recursive: true });
+
+const count = fs.readdirSync(markerDir).length;
+const markerFile = path.join(markerDir, `run-${count}`);
+fs.writeFileSync(markerFile, `${Date.now()}\n`);
+
+const distDir = path.join(__dirname, 'dist');
+fs.mkdirSync(distDir, { recursive: true });
+fs.copyFileSync(path.join(__dirname, 'src.js'), path.join(distDir, 'src.js'));
+console.log(`pkg-a build #${count}`);
+"#,
+    )
+    .unwrap();
+
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &[
+            "commit",
+            "-m",
+            "configure deferred dependency outputs watch test",
+            "--quiet",
+        ],
+    );
+
+    (tempdir, test_dir)
+}
+
 #[test]
 fn watch_initial_run_executes_tasks() {
     let (_tempdir, test_dir) = setup_watch_test();
@@ -268,6 +343,35 @@ fn watch_initial_run_executes_tasks() {
     assert!(
         b_count >= 1,
         "package b should have run at least once, ran {b_count} times"
+    );
+}
+
+#[test]
+fn watch_task_inputs_reruns_deferred_dependency_output_consumers() {
+    let (_tempdir, test_dir) = setup_watch_deferred_dependency_outputs_test();
+    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+
+    wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
+    wait_for_markers(&test_dir, "b", 1, Duration::from_secs(30));
+    std::thread::sleep(Duration::from_secs(2));
+
+    let a_before = marker_count(&test_dir, "a");
+    let b_before = marker_count(&test_dir, "b");
+
+    let a_after = retry_file_change(&test_dir, "a", a_before, 3);
+    let b_after = wait_for_markers(&test_dir, "b", b_before + 1, Duration::from_secs(30));
+
+    drop(guard);
+
+    assert!(
+        a_after > a_before,
+        "package a should have rebuilt after its source changed. before: {a_before}, after: \
+         {a_after}"
+    );
+    assert!(
+        b_after > b_before,
+        "package b should have rebuilt because its hash includes package a's deferred dependency \
+         outputs. before: {b_before}, after: {b_after}"
     );
 }
 
@@ -351,6 +455,68 @@ fn watch_clean_shutdown_on_sigint() {
             Err(e) => panic!("error waiting for turbo watch: {e}"),
         }
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn watch_shutdown_after_rebuild_emits_single_shutdown_banner() {
+    use nix::{
+        sys::signal::{self, Signal},
+        unistd::Pid,
+    };
+
+    let (_tempdir, test_dir) = setup_watch_test();
+    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks_and_stdio(
+        &test_dir,
+        &["build"],
+        Stdio::piped(),
+        Stdio::piped(),
+    ));
+
+    let initial = wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
+    assert!(initial >= 1, "initial watch run did not complete");
+    let rebuilt = retry_file_change(&test_dir, "a", initial, 3);
+    assert!(rebuilt > initial, "watch rebuild did not complete");
+
+    let mut child = guard.take();
+    let pid = Pid::from_raw(child.id() as i32);
+    signal::kill(Pid::from_raw(-pid.as_raw()), Signal::SIGINT).expect("failed to send SIGINT");
+
+    let start = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if start.elapsed() <= Duration::from_secs(10) => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Ok(None) => {
+                stop_watch(child);
+                panic!("turbo watch did not exit within 10s after SIGINT");
+            }
+            Err(e) => panic!("error waiting for turbo watch: {e}"),
+        }
+    };
+
+    let output = child.wait_with_output().expect("failed to collect output");
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(
+        status.success(),
+        "turbo watch should exit cleanly on SIGINT\n{combined}"
+    );
+    assert_eq!(
+        combined.matches("Shutting down Turborepo tasks...").count(),
+        1,
+        "shutdown banner should be emitted once after rebuilds\n{combined}"
+    );
+    assert!(
+        !combined.contains("could not start shutdown, exiting"),
+        "stale run cache shutdown handlers should not warn\n{combined}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -908,5 +1074,79 @@ fn watch_interruptible_persistent_task_restarts_on_file_change() {
         a_after > a_before,
         "app-a dev (interruptible) should have restarted after file change. before: {a_before}, \
          after: {a_after}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Regression test for #13115: watchUsingTaskInputs + interruptible persistent
+// ---------------------------------------------------------------------------
+
+fn setup_watch_task_inputs_persistent_test() -> (tempfile::TempDir, PathBuf) {
+    let tempdir = tempfile::tempdir().expect("failed to create tempdir");
+    let test_dir = tempdir.path().to_path_buf();
+
+    setup::copy_fixture("watch_task_inputs_persistent_test", &test_dir).unwrap();
+    setup::setup_git(&test_dir).unwrap();
+
+    let gitignore = test_dir.join(".gitignore");
+    let mut gi = fs::read_to_string(&gitignore).unwrap_or_default();
+    gi.push_str(".markers/\n");
+    fs::write(&gitignore, gi).unwrap();
+
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "add markers ignore", "--quiet"],
+    );
+
+    (tempdir, test_dir)
+}
+
+/// Regression test for https://github.com/vercel/turborepo/issues/13115
+///
+/// With `watchUsingTaskInputs: true`, changing a file outside a persistent
+/// task's `inputs` must not stop the dev server. Turbo should only interrupt
+/// interruptible persistent tasks when their own inputs (or upstream deps)
+/// change.
+#[test]
+#[cfg_attr(windows, ignore)]
+fn watch_task_inputs_persistent_task_not_stopped_for_out_of_input_change() {
+    let (_tempdir, test_dir) = setup_watch_task_inputs_persistent_test();
+    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks(&test_dir, &["dev"]));
+
+    wait_for_prefixed_markers(&test_dir, "app", "dev-", 1, Duration::from_secs(60));
+
+    // Let the watcher fully settle after the initial run.
+    std::thread::sleep(Duration::from_secs(2));
+
+    let dev_before = prefixed_marker_count(&test_dir, "app", "dev-");
+
+    // Modify app-source.txt, which is intentionally NOT in dev.inputs.
+    let src_file = test_dir.join("packages/app/src/app-source.txt");
+    for attempt in 0..3 {
+        fs::write(&src_file, format!("updated app source {attempt}\n")).unwrap();
+
+        common::git(&test_dir, &["add", "."]);
+        common::git(
+            &test_dir,
+            &[
+                "commit",
+                "-m",
+                &format!("modify app source (attempt {attempt})"),
+                "--quiet",
+            ],
+        );
+
+        std::thread::sleep(Duration::from_secs(10));
+    }
+
+    let dev_after = prefixed_marker_count(&test_dir, "app", "dev-");
+
+    drop(guard);
+
+    assert_eq!(
+        dev_before, dev_after,
+        "app dev should not restart when a file outside dev.inputs changes. before: {dev_before}, \
+         after: {dev_after}"
     );
 }

@@ -108,7 +108,7 @@ impl Command {
     }
 }
 
-impl From<Command> for tokio::process::Command {
+impl From<Command> for std::process::Command {
     fn from(value: Command) -> Self {
         let Command {
             program,
@@ -119,7 +119,7 @@ impl From<Command> for tokio::process::Command {
             env_clear,
         } = value;
 
-        let mut cmd = tokio::process::Command::new(program);
+        let mut cmd = std::process::Command::new(program);
         if env_clear {
             cmd.env_clear();
         }
@@ -138,6 +138,12 @@ impl From<Command> for tokio::process::Command {
             cmd.current_dir(cwd.as_std_path());
         }
         cmd
+    }
+}
+
+impl From<Command> for tokio::process::Command {
+    fn from(value: Command) -> Self {
+        tokio::process::Command::from(std::process::Command::from(value))
     }
 }
 

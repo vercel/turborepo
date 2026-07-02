@@ -20,6 +20,7 @@
 //! `_tx`/`_rx` suffixes indicate that this variable is respectively a `Sender`
 //! or `Receiver`.
 
+#![allow(unused_features, reason = "impl_trait_in_assoc_type is actually used")]
 #![feature(impl_trait_in_assoc_type)]
 #![deny(clippy::all)]
 #![allow(clippy::needless_lifetimes)]
@@ -60,6 +61,7 @@ pub struct PackageChangesWatcherArgs {
     >,
     pub hash_watcher: std::sync::Arc<turborepo_filewatch::hash_watcher::HashWatcher>,
     pub custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    pub allow_no_package_manager: bool,
 }
 
 /// Events that indicate package changes in the repository.
@@ -91,8 +93,26 @@ pub struct Paths {
 
 fn repo_hash(repo_root: &AbsoluteSystemPath) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(repo_root.to_string().as_bytes());
+    hasher.update(repo_hash_input(repo_root).as_bytes());
     hex::encode(&hasher.finalize()[..8])
+}
+
+#[cfg(windows)]
+fn repo_hash_input(repo_root: &AbsoluteSystemPath) -> String {
+    let path = repo_root.to_string();
+    let mut chars = path.chars();
+
+    match (chars.next(), chars.next()) {
+        (Some(drive), Some(':')) if drive.is_ascii_alphabetic() => {
+            format!("{}:{}", drive.to_ascii_uppercase(), chars.as_str())
+        }
+        _ => path,
+    }
+}
+
+#[cfg(not(windows))]
+fn repo_hash_input(repo_root: &AbsoluteSystemPath) -> String {
+    repo_root.to_string()
 }
 
 #[cfg(unix)]
@@ -202,6 +222,15 @@ pub mod proto {
                 PackageManager::Pnpm6 => Self::Pnpm6,
                 PackageManager::Pnpm9 => Self::Pnpm9,
                 PackageManager::Bun => Self::Bun,
+                // The wire format does not carry nub's underlying lockfile
+                // manager. Clients must call [`PackageManager::with_resolved_nub_lockfile`]
+                // after deserializing to re-resolve from disk.
+                PackageManager::Nub => Self::Nub {
+                    lockfile: Box::new(Self::Npm),
+                },
+                PackageManager::Aube => Self::Aube {
+                    lockfile: Box::new(Self::Npm),
+                },
             }
         }
     }
@@ -216,6 +245,8 @@ pub mod proto {
                 turborepo_repository::package_manager::PackageManager::Pnpm6 => Self::Pnpm6,
                 turborepo_repository::package_manager::PackageManager::Pnpm9 => Self::Pnpm9,
                 turborepo_repository::package_manager::PackageManager::Bun => Self::Bun,
+                turborepo_repository::package_manager::PackageManager::Nub { .. } => Self::Nub,
+                turborepo_repository::package_manager::PackageManager::Aube { .. } => Self::Aube,
             }
         }
     }
@@ -238,5 +269,22 @@ mod test {
 
         assert_eq!(hash, expected_hash);
         assert_eq!(hash.len(), 16);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn repo_hash_normalizes_drive_letter_case() {
+        let lower = AbsoluteSystemPathBuf::new("c:\\tmp\\turborepo").unwrap();
+        let upper = AbsoluteSystemPathBuf::new("C:\\tmp\\turborepo").unwrap();
+
+        assert_eq!(repo_hash(&lower), repo_hash(&upper));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn repo_hash_input_preserves_non_drive_paths() {
+        let repo_root = AbsoluteSystemPathBuf::new(r"\\server\share\turborepo").unwrap();
+
+        assert_eq!(super::repo_hash_input(&repo_root), repo_root.to_string());
     }
 }

@@ -429,6 +429,80 @@ mod test {
     }
 
     #[tokio::test]
+    async fn validation_rejects_dependency_on_persistent_task() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let mut engine: Engine<Building> = Engine::new();
+
+        let build = TaskId::new("a", "build");
+        let dev = TaskId::new("a", "dev");
+        let build_idx = engine.get_index(&build);
+        let dev_idx = engine.get_index(&dev);
+        engine.add_definition(build.clone(), TaskDefinition::default());
+        engine.add_definition(
+            dev.clone(),
+            TaskDefinition {
+                persistent: true,
+                ..Default::default()
+            },
+        );
+        engine.task_graph_mut().add_edge(build_idx, dev_idx, ());
+        engine.connect_to_root(&dev);
+        let engine = engine.seal();
+
+        let graph = PackageGraph::builder(
+            AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
+            PackageJson::default(),
+        )
+        .with_package_discovery(DummyDiscovery(&tmp))
+        .build()
+        .await
+        .unwrap();
+
+        let errors = engine
+            .validate(&graph, 10, UIMode::Stream, true)
+            .expect_err("persistent dependency should be rejected");
+
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidateError::DependencyOnPersistentTask { persistent_task, dependant, .. }
+                if persistent_task == "a#dev" && dependant == "a#build"
+        )));
+    }
+
+    #[tokio::test]
+    async fn validation_allows_dependency_on_persistent_task_without_script() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let mut engine: Engine<Building> = Engine::new();
+
+        let build = TaskId::new("a", "build");
+        let dev = TaskId::new("c", "dev");
+        let build_idx = engine.get_index(&build);
+        let dev_idx = engine.get_index(&dev);
+        engine.add_definition(build.clone(), TaskDefinition::default());
+        engine.add_definition(
+            dev.clone(),
+            TaskDefinition {
+                persistent: true,
+                ..Default::default()
+            },
+        );
+        engine.task_graph_mut().add_edge(build_idx, dev_idx, ());
+        engine.connect_to_root(&dev);
+        let engine = engine.seal();
+
+        let graph = PackageGraph::builder(
+            AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
+            PackageJson::default(),
+        )
+        .with_package_discovery(DummyDiscovery(&tmp))
+        .build()
+        .await
+        .unwrap();
+
+        engine.validate(&graph, 10, UIMode::Stream, true).unwrap();
+    }
+
+    #[tokio::test]
     async fn test_get_subgraph_for_package() {
         // Verifies that we can prune the `Engine` to include only the persistent tasks
         // or only the non-persistent tasks.

@@ -65,6 +65,7 @@ pub struct FileWatching<W: PackageChangesWatcher + 'static> {
     pub package_changes_watcher: OnceLock<Arc<W>>,
     pub hash_watcher: Arc<HashWatcher>,
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    allow_no_package_manager: bool,
     package_changes_watcher_factory: Arc<dyn Fn(PackageChangesWatcherArgs) -> W + Send + Sync>,
 }
 
@@ -87,6 +88,7 @@ impl<W: PackageChangesWatcher + 'static> Clone for FileWatching<W> {
             package_changes_watcher: new_package_changes_watcher,
             hash_watcher: self.hash_watcher.clone(),
             custom_turbo_json_path: self.custom_turbo_json_path.clone(),
+            allow_no_package_manager: self.allow_no_package_manager,
             package_changes_watcher_factory: self.package_changes_watcher_factory.clone(),
         }
     }
@@ -139,6 +141,7 @@ impl<W: PackageChangesWatcher + 'static> FileWatching<W> {
     pub fn new<F>(
         repo_root: AbsoluteSystemPathBuf,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+        allow_no_package_manager: bool,
         package_changes_watcher_factory: F,
     ) -> Result<FileWatching<W>, WatchError>
     where
@@ -158,8 +161,13 @@ impl<W: PackageChangesWatcher + 'static> FileWatching<W> {
             recv.clone(),
         ));
         let package_watcher = Arc::new(
-            PackageWatcher::new(repo_root.clone(), recv.clone(), cookie_writer)
-                .map_err(|e| WatchError::Setup(format!("{e:?}")))?,
+            PackageWatcher::new(
+                repo_root.clone(),
+                recv.clone(),
+                cookie_writer,
+                allow_no_package_manager,
+            )
+            .map_err(|e| WatchError::Setup(format!("{e:?}")))?,
         );
         let scm = SCM::new(&repo_root);
         let hash_watcher = Arc::new(HashWatcher::new(
@@ -177,6 +185,7 @@ impl<W: PackageChangesWatcher + 'static> FileWatching<W> {
             package_changes_watcher: OnceLock::new(),
             hash_watcher,
             custom_turbo_json_path,
+            allow_no_package_manager,
             package_changes_watcher_factory: Arc::new(package_changes_watcher_factory),
         })
     }
@@ -190,6 +199,7 @@ impl<W: PackageChangesWatcher + 'static> FileWatching<W> {
                     file_events: recv,
                     hash_watcher: self.hash_watcher.clone(),
                     custom_turbo_json_path: self.custom_turbo_json_path.clone(),
+                    allow_no_package_manager: self.allow_no_package_manager,
                 };
                 Arc::new((self.package_changes_watcher_factory)(args))
             })
@@ -214,6 +224,7 @@ where
     timeout: Duration,
     external_shutdown: S,
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    allow_no_package_manager: bool,
     package_changes_watcher_factory: Arc<dyn Fn(PackageChangesWatcherArgs) -> W + Send + Sync>,
 }
 
@@ -234,6 +245,7 @@ where
         timeout: Duration,
         external_shutdown: S,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+        allow_no_package_manager: bool,
         package_changes_watcher_factory: F,
     ) -> Self
     where
@@ -248,6 +260,7 @@ where
             timeout,
             external_shutdown,
             custom_turbo_json_path,
+            allow_no_package_manager,
             package_changes_watcher_factory: Arc::new(package_changes_watcher_factory),
         }
     }
@@ -259,6 +272,7 @@ where
             repo_root,
             timeout,
             custom_turbo_json_path,
+            allow_no_package_manager,
             package_changes_watcher_factory,
         } = self;
 
@@ -273,6 +287,7 @@ where
             trigger_shutdown,
             paths.log_file,
             custom_turbo_json_path,
+            allow_no_package_manager,
             move |args| (factory)(args),
         ) {
             Ok(inner) => inner,
@@ -363,6 +378,7 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
         trigger_shutdown: mpsc::Sender<()>,
         log_file: AbsoluteSystemPathBuf,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+        allow_no_package_manager: bool,
         package_changes_watcher_factory: F,
     ) -> TurboGrpcServiceInnerInit<W>
     where
@@ -371,6 +387,7 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
         let file_watching = FileWatching::new(
             repo_root.clone(),
             custom_turbo_json_path,
+            allow_no_package_manager,
             package_changes_watcher_factory,
         )?;
 
@@ -909,6 +926,7 @@ mod test {
             Duration::from_secs(60 * 60),
             exit_signal,
             None,
+            false,
             MockPackageChangesWatcher::new,
         );
 
@@ -968,6 +986,7 @@ mod test {
             Duration::from_millis(10),
             exit_signal,
             None,
+            false,
             MockPackageChangesWatcher::new,
         );
 
@@ -1027,6 +1046,7 @@ mod test {
             Duration::from_secs(60 * 60),
             exit_signal,
             None,
+            false,
             MockPackageChangesWatcher::new,
         );
 

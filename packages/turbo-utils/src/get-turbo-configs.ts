@@ -332,11 +332,17 @@ export function getWorkspaceConfigs(
   return configs;
 }
 
-export function forEachTaskDef<BaseSchema extends BaseSchemaV1 | BaseSchemaV2>(
-  config: BaseSchema,
-  f: (
-    value: [string, BaseSchema extends BaseSchemaV1 ? PipelineV1 : PipelineV2]
-  ) => void
+export function forEachTaskDef(
+  config: BaseSchemaV1,
+  f: (value: [string, PipelineV1]) => void
+): void;
+export function forEachTaskDef(
+  config: BaseSchemaV2,
+  f: (value: [string, PipelineV2]) => void
+): void;
+export function forEachTaskDef(
+  config: BaseSchemaV1 | BaseSchemaV2,
+  f: (value: [string, PipelineV1 & PipelineV2]) => void
 ): void {
   if ("pipeline" in config) {
     if (!config.pipeline) {
@@ -350,7 +356,7 @@ export function forEachTaskDef<BaseSchema extends BaseSchemaV1 | BaseSchemaV2>(
       return;
     }
     for (const entry of Object.entries(config.tasks)) {
-      f(entry);
+      f(entry as [string, PipelineV1 & PipelineV2]);
     }
   }
 }

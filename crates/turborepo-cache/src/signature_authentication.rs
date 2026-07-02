@@ -9,6 +9,7 @@ use thiserror::Error;
 type HmacSha256 = Hmac<Sha256>;
 
 pub const MIN_SIGNATURE_KEY_LENGTH: usize = 32;
+const SIGNATURE_MESSAGE_PREFIX: &[u8] = b"artifact-signature:v2";
 
 #[derive(Debug, Error)]
 pub enum SignatureError {
@@ -76,18 +77,16 @@ impl ArtifactSignatureAuthenticator {
             .into_raw_vec())
     }
 
-    fn construct_metadata(&self, hash: &[u8]) -> Result<Vec<u8>, SignatureError> {
-        let mut metadata = hash.to_vec();
-        metadata.extend_from_slice(&self.team_id);
-
-        Ok(metadata)
-    }
-
-    fn get_tag_generator(&self, hash: &[u8]) -> Result<HmacSha256, SignatureError> {
+    fn get_tag_generator(
+        &self,
+        hash: &[u8],
+        artifact_body: &[u8],
+    ) -> Result<HmacSha256, SignatureError> {
         let mut mac = HmacSha256::new_from_slice(&self.secret_key()?)?;
-        let metadata = self.construct_metadata(hash)?;
-
-        mac.update(&metadata);
+        update_message_field(&mut mac, SIGNATURE_MESSAGE_PREFIX);
+        update_message_field(&mut mac, hash);
+        update_message_field(&mut mac, &self.team_id);
+        update_message_field(&mut mac, artifact_body);
 
         Ok(mac)
     }
@@ -98,9 +97,7 @@ impl ArtifactSignatureAuthenticator {
         hash: &[u8],
         artifact_body: &[u8],
     ) -> Result<Vec<u8>, SignatureError> {
-        let mut mac = self.get_tag_generator(hash)?;
-
-        mac.update(artifact_body);
+        let mac = self.get_tag_generator(hash, artifact_body)?;
         let hmac_output = mac.finalize();
         Ok(hmac_output.into_bytes().to_vec())
     }
@@ -111,9 +108,7 @@ impl ArtifactSignatureAuthenticator {
         hash: &[u8],
         artifact_body: &[u8],
     ) -> Result<String, SignatureError> {
-        let mut hmac_ctx = self.get_tag_generator(hash)?;
-
-        hmac_ctx.update(artifact_body);
+        let hmac_ctx = self.get_tag_generator(hash, artifact_body)?;
         let hmac_output = hmac_ctx.finalize();
         Ok(BASE64_STANDARD.encode(hmac_output.into_bytes()))
     }
@@ -125,14 +120,16 @@ impl ArtifactSignatureAuthenticator {
         artifact_body: &[u8],
         expected_tag: &str,
     ) -> Result<bool, SignatureError> {
-        let mut mac = HmacSha256::new_from_slice(&self.secret_key()?)?;
-        let message = self.construct_metadata(hash)?;
-        mac.update(&message);
-        mac.update(artifact_body);
+        let mac = self.get_tag_generator(hash, artifact_body)?;
 
         let expected_bytes = BASE64_STANDARD.decode(expected_tag)?;
         Ok(mac.verify_slice(&expected_bytes).is_ok())
     }
+}
+
+fn update_message_field(mac: &mut HmacSha256, field: &[u8]) {
+    mac.update(&(field.len() as u64).to_le_bytes());
+    mac.update(field);
 }
 
 #[cfg(test)]
@@ -148,10 +145,7 @@ mod tests {
             artifact_body: &[u8],
             expected_tag: &[u8],
         ) -> Result<bool, SignatureError> {
-            let mut mac = HmacSha256::new_from_slice(&self.secret_key()?)?;
-            let message = self.construct_metadata(hash)?;
-            mac.update(&message);
-            mac.update(artifact_body);
+            let mac = self.get_tag_generator(hash, artifact_body)?;
 
             Ok(mac.verify_slice(expected_tag).is_ok())
         }
@@ -353,5 +347,26 @@ mod tests {
         };
         let tag = auth.generate_tag(b"hash", b"body").unwrap();
         assert!(auth.validate(b"hash", b"body", &tag).unwrap());
+    }
+
+    #[test]
+    fn test_signature_fields_are_separated() {
+        let secret_key = b"shared signing key".to_vec();
+        let attacker = ArtifactSignatureAuthenticator {
+            team_id: b"team_abc".to_vec(),
+            secret_key_override: Some(secret_key.clone()),
+        };
+        let victim = ArtifactSignatureAuthenticator {
+            team_id: b"team_ab".to_vec(),
+            secret_key_override: Some(secret_key),
+        };
+
+        let tag = attacker.generate_tag(b"0123456789abcdef", b"body").unwrap();
+
+        assert!(
+            !victim
+                .validate(b"0123456789abcdef", b"cbody", &tag)
+                .unwrap()
+        );
     }
 }

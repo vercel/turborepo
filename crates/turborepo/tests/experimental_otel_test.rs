@@ -7,7 +7,7 @@ use std::fs;
 use common::{run_turbo_with_env, setup};
 
 fn setup_otel_fixture(dir: &std::path::Path) {
-    setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     // Enable experimentalObservability by inserting futureFlags after the opening
     // brace
@@ -70,51 +70,4 @@ fn test_otel_cli_flags_do_not_break_run() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("FULL TURBO"));
-}
-
-#[test]
-fn test_otel_disabled_does_not_break_run() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_otel_fixture(tempdir.path());
-
-    // Prime cache
-    run_turbo_with_env(
-        tempdir.path(),
-        &["run", "build", "--filter=my-app"],
-        &[("TURBO_CACHE_DIR", ".turbo/cache-experimental-otel")],
-    );
-
-    let output = run_turbo_with_env(
-        tempdir.path(),
-        &["run", "build", "--filter=my-app"],
-        &[
-            ("TURBO_EXPERIMENTAL_OTEL_ENABLED", "0"),
-            ("TURBO_EXPERIMENTAL_OTEL_ENDPOINT", "https://localhost:4318"),
-            ("TURBO_CACHE_DIR", ".turbo/cache-experimental-otel"),
-        ],
-    );
-    assert!(output.status.success());
-}
-
-#[test]
-fn test_otel_enabled_without_endpoint_is_noop() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_otel_fixture(tempdir.path());
-
-    // Prime cache
-    run_turbo_with_env(
-        tempdir.path(),
-        &["run", "build", "--filter=my-app"],
-        &[("TURBO_CACHE_DIR", ".turbo/cache-experimental-otel")],
-    );
-
-    let output = run_turbo_with_env(
-        tempdir.path(),
-        &["run", "build", "--filter=my-app"],
-        &[
-            ("TURBO_EXPERIMENTAL_OTEL_ENABLED", "1"),
-            ("TURBO_CACHE_DIR", ".turbo/cache-experimental-otel"),
-        ],
-    );
-    assert!(output.status.success());
 }

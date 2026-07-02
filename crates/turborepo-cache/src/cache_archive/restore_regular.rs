@@ -42,10 +42,20 @@ pub fn restore_regular(
     #[cfg(not(unix))]
     let mode = 0;
 
-    let mut file = open_for_restore(&resolved_path, mode)?;
+    let mut file = open_for_restore(&resolved_path, sanitized_mode(mode))?;
     io::copy(entry, &mut file)?;
 
     Ok((processed_name, false))
+}
+
+#[cfg(unix)]
+fn sanitized_mode(mode: u32) -> u32 {
+    mode & 0o777
+}
+
+#[cfg(not(unix))]
+fn sanitized_mode(mode: u32) -> u32 {
+    mode
 }
 
 fn open_for_restore(

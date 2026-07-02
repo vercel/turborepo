@@ -1281,6 +1281,32 @@ mod test {
     }
 
     #[test]
+    fn filter_name_on_cyclic_package_graph_selects_only_matching_package() {
+        let (_tempdir, resolver) = make_project(
+            &[
+                ("packages/pkg-a", "packages/pkg-b"),
+                ("packages/pkg-b", "packages/pkg-a"),
+            ],
+            &[],
+            None,
+            TestChangeDetector::new(&[]),
+        );
+
+        let packages = resolver
+            .get_filtered_packages(vec![TargetSelector {
+                name_pattern: "pkg-a".to_string(),
+                raw: "pkg-a".to_string(),
+                ..Default::default()
+            }])
+            .unwrap();
+
+        assert_eq!(
+            packages.into_keys().collect::<HashSet<_>>(),
+            HashSet::from([PackageName::from("pkg-a")])
+        );
+    }
+
+    #[test]
     fn match_exact() {
         let (_tempdir, resolver) = make_project(
             &[],

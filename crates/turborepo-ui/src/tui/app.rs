@@ -700,19 +700,23 @@ impl<W> App<W> {
 
     pub fn handle_mouse(&mut self, mut event: crossterm::event::MouseEvent) -> Result<(), Error> {
         // Only offset by table width if the sidebar is visible
-        let table_width = if self.preferences.is_task_list_visible() {
+        let has_sidebar = self.preferences.is_task_list_visible();
+        let table_width = if has_sidebar {
             self.size.task_list_width()
         } else {
             0
         };
+        let pane_left_padding = self.size.pane_left_padding_with_sidebar(has_sidebar);
         debug!("original mouse event: {event:?}, table_width: {table_width}");
         // Only handle mouse event if it happens inside of pane
         // We give a 1 cell buffer to make it easier to select the first column of a row
         if event.row > 0 && event.column >= table_width {
             // Subtract 1 from the y axis due to the title of the pane
             event.row -= 1;
-            // Subtract the width of the table
-            event.column -= table_width;
+            // Subtract the width of the table and the pane's link-safe left padding.
+            event.column = event
+                .column
+                .saturating_sub(table_width.saturating_add(pane_left_padding));
             debug!("translated mouse event: {event:?}");
 
             let task = self.get_full_task_mut()?;
@@ -722,8 +726,8 @@ impl<W> App<W> {
         Ok(())
     }
 
-    pub fn copy_selection(&self) -> Result<(), Error> {
-        let task = self.get_full_task()?;
+    pub fn copy_selection(&mut self) -> Result<(), Error> {
+        let task = self.get_full_task_mut()?;
         let Some(text) = task.copy_selection() else {
             return Ok(());
         };
@@ -771,13 +775,13 @@ impl<W> App<W> {
 
     pub fn jump_to_logs_top(&mut self) -> Result<(), Error> {
         let task = self.get_full_task_mut()?;
-        task.parser.screen_mut().set_scrollback(usize::MAX);
+        task.scroll_to_top()?;
         Ok(())
     }
 
     pub fn jump_to_logs_bottom(&mut self) -> Result<(), Error> {
         let task = self.get_full_task_mut()?;
-        task.parser.screen_mut().set_scrollback(0);
+        task.scroll_to_bottom()?;
         Ok(())
     }
 
@@ -859,6 +863,7 @@ pub async fn run_app(
     color_config: ColorConfig,
     repo_root: &AbsoluteSystemPathBuf,
     scrollback_len: u64,
+    interrupt: Option<Arc<dyn Fn() + Send + Sync>>,
     terminal_sink: Arc<TerminalSink>,
 ) -> Result<(), Error> {
     // Get terminal size before potentially entering alternate screen
@@ -885,6 +890,7 @@ pub async fn run_app(
         receiver,
         crossterm_rx,
         color_config,
+        interrupt.as_deref(),
         &terminal_sink,
     )
     .await
@@ -945,6 +951,7 @@ async fn run_app_inner(
     mut receiver: AppReceiver,
     mut crossterm_rx: mpsc::Receiver<crossterm::event::Event>,
     color_config: ColorConfig,
+    interrupt: Option<&(dyn Fn() + Send + Sync)>,
     terminal_sink: &TerminalSink,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
     let mut last_render = Instant::now();
@@ -996,10 +1003,10 @@ async fn run_app_inner(
             if let Some(term) = terminal.as_mut() {
                 term.autoresize()?;
             }
-            update(app, resize)?;
+            update(app, resize, interrupt)?;
         }
         if let Some(event) = event {
-            callback = update(app, event)?;
+            callback = update(app, event, interrupt)?;
             if callback.is_some() {
                 drain_after_stop(terminal, *display, app, &mut receiver, &mut last_render).await?;
                 break;
@@ -1100,7 +1107,7 @@ async fn drain_after_stop(
         if !matches!(event, Event::Tick) {
             needs_rerender = true;
         }
-        update(app, event)?;
+        update(app, event, None)?;
 
         if drawing
             && let Some(term) = terminal.as_mut()
@@ -1316,6 +1323,7 @@ fn final_cleanup(
 fn update(
     app: &mut App<Box<dyn io::Write + Send>>,
     event: Event,
+    interrupt: Option<&(dyn Fn() + Send + Sync)>,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
     match event {
         Event::LogEvent(log_event) => {
@@ -1337,6 +1345,14 @@ fn update(
         Event::InternalStop => {
             debug!("shutting down due to internal failure");
             app.done = true;
+        }
+        Event::Interrupt => {
+            if let Some(interrupt) = interrupt {
+                interrupt();
+            } else {
+                debug!("unable to notify interrupt handler, shutting down");
+                app.done = true;
+            }
         }
         Event::Stop(callback) => {
             debug!("shutting down due to message");
@@ -1469,7 +1485,7 @@ fn update(
 }
 
 fn view<W>(app: &mut App<W>, f: &mut Frame) {
-    let cols = app.size.pane_cols();
+    let cols = app.size.rendered_pane_cols();
     let horizontal = if app.preferences.is_task_list_visible() {
         Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)])
     } else {
@@ -1483,14 +1499,14 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
 
     if let Ok(active_task) = app.active_task() {
         let active_task = active_task.to_string();
-        if let Some(output_logs) = app.tasks.get(&active_task) {
-            let pane_to_render: TerminalPane<W> = TerminalPane::new(
+        if let Some(output_logs) = app.tasks.get_mut(&active_task) {
+            let mut pane_to_render = TerminalPane::new(
                 output_logs,
                 &active_task,
                 &app.section_focus,
                 app.preferences.is_task_list_visible(),
             );
-            f.render_widget(&pane_to_render, pane);
+            f.render_widget(&mut pane_to_render, pane);
         }
     }
 
@@ -2915,7 +2931,7 @@ mod test {
             turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
             "something went wrong",
         );
-        update(&mut app, Event::LogEvent(event))?;
+        update(&mut app, Event::LogEvent(event), None)?;
 
         assert_eq!(app.log_events.len(), 1);
         assert_eq!(app.log_events[0].message(), "something went wrong");
@@ -2949,7 +2965,7 @@ mod test {
         sender.end_task("app-a#dev".to_string(), TaskResult::Success);
 
         let (callback_tx, _callback_rx) = oneshot::channel();
-        update(&mut app, Event::Stop(callback_tx))?;
+        update(&mut app, Event::Stop(callback_tx), None)?;
         let mut terminal = None;
         let mut last_render = Instant::now();
         drain_after_stop(
@@ -2964,11 +2980,13 @@ mod test {
         assert!(app.done);
         assert!(app.tasks_by_status.running.is_empty());
         assert_eq!(app.tasks_by_status.finished.len(), 1);
-        let screen = app.tasks["app-a#dev"].parser.entire_screen();
-        let (_, cols) = screen.size();
-        let output =
-            String::from_utf8(screen.rows_formatted(0, cols).flatten().collect::<Vec<_>>())
-                .unwrap();
+        let output = String::from_utf8(
+            app.tasks["app-a#dev"]
+                .parser
+                .format_screen_vt()
+                .expect("format screen"),
+        )
+        .unwrap();
         assert!(output.contains("before stop"));
         assert!(output.contains("after stop"));
 

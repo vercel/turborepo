@@ -32,7 +32,7 @@ fn basic_with_extends_json() -> std::path::PathBuf {
 #[test]
 fn test_both_json_and_jsonc_in_root_is_error() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     fs::copy(
         tempdir.path().join("turbo.json"),
@@ -54,7 +54,7 @@ fn test_both_json_and_jsonc_in_root_is_error() {
 #[test]
 fn test_turbo_jsonc_only_in_root() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     fs::rename(
         tempdir.path().join("turbo.json"),
@@ -73,7 +73,7 @@ fn test_turbo_jsonc_only_in_root() {
 #[test]
 fn test_root_json_package_jsonc() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     fs::copy(
         basic_with_extends_json(),
@@ -92,7 +92,7 @@ fn test_root_json_package_jsonc() {
 #[test]
 fn test_root_jsonc_package_json() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     fs::rename(
         tempdir.path().join("turbo.json"),
@@ -117,7 +117,7 @@ fn test_root_jsonc_package_json() {
 #[test]
 fn test_both_json_and_jsonc_in_package_is_error() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let app_dir = tempdir.path().join("apps/my-app");
     fs::copy(basic_with_extends_json(), app_dir.join("turbo.json")).unwrap();

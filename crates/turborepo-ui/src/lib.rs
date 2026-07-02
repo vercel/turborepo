@@ -1,16 +1,18 @@
 //! Turborepo's terminal UI library. Handles elements like spinners, colors,
 //! logging sinks, and the TUI. Includes a `ColorSelector` that lets multiple
 //! concurrent resources get an assigned color.
-#![feature(deadline_api)]
 
 mod color_selector;
+#[cfg(feature = "tui")]
 mod log_sinks;
 mod logs;
+#[cfg(feature = "tui")]
 pub mod sender;
 mod terminal_sink;
+#[cfg(feature = "tui")]
 pub mod tui;
+#[cfg(feature = "tui")]
 mod tui_sink;
-pub mod wui;
 
 use std::{borrow::Cow, env, f64::consts::PI, io::IsTerminal, sync::LazyLock, time::Duration};
 
@@ -20,9 +22,12 @@ use thiserror::Error;
 
 pub use crate::{
     color_selector::ColorSelector,
-    log_sinks::LogSinks,
     logs::{LogWriter, replay_logs},
     terminal_sink::TerminalSink,
+};
+#[cfg(feature = "tui")]
+pub use crate::{
+    log_sinks::LogSinks,
     tui::{TaskTable, TerminalPane, panic_handler::restore_terminal_on_panic},
     tui_sink::TuiSink,
 };
@@ -48,10 +53,9 @@ pub use crate::{
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[cfg(feature = "tui")]
     #[error(transparent)]
     Tui(#[from] tui::Error),
-    #[error(transparent)]
-    Wui(#[from] wui::Error),
     #[error("Cannot read logs: {0}")]
     CannotReadLogs(#[source] std::io::Error),
     #[error("Cannot write logs: {0}")]
@@ -229,6 +233,7 @@ impl ColorConfig {
 }
 
 pub static GREY: LazyLock<Style> = LazyLock::new(|| Style::new().dim());
+pub static LIGHT_GREY: LazyLock<Style> = LazyLock::new(|| Style::new().color256(245));
 pub static CYAN: LazyLock<Style> = LazyLock::new(|| Style::new().cyan());
 pub static BOLD: LazyLock<Style> = LazyLock::new(|| Style::new().bold());
 pub static MAGENTA: LazyLock<Style> = LazyLock::new(|| Style::new().magenta());

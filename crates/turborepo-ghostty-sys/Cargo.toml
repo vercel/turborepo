@@ -1,0 +1,21 @@
+[package]
+name = "turborepo-ghostty-sys"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "Raw FFI bindings for libghostty-vt, built from Ghostty sources"
+links = "ghostty-vt"
+build = "build.rs"
+
+[lints]
+workspace = true
+
+[features]
+default = ["vendored"]
+link-dynamic = []
+vendored = []
+
+[lib]
+name = "turborepo_ghostty_sys"
+path = "src/lib.rs"
+doctest = false

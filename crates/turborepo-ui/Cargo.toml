@@ -15,31 +15,46 @@ test-case = { workspace = true }
 [lints]
 workspace = true
 
+[features]
+default = []
+tui = [
+  "dep:async-graphql",
+  "dep:base64",
+  "dep:crossterm",
+  "dep:futures",
+  "dep:nix",
+  "dep:ratatui",
+  "dep:turborepo-ghostty",
+  "dep:which",
+  "dep:clipboard-win",
+  "dep:windows-sys",
+]
+
 [dependencies]
-async-graphql = { workspace = true }
-axum = { workspace = true, features = ["ws"] }
-base64 = "0.22"
+async-graphql = { workspace = true, optional = true }
+base64 = { version = "0.22", optional = true }
 chrono = { workspace = true }
 console = { workspace = true }
-crossterm = { version = "0.29", features = ["event-stream"] }
+crossterm = { version = "0.29", features = ["event-stream"], optional = true }
 dialoguer = { workspace = true }
-futures = { workspace = true }
+futures = { workspace = true, optional = true }
 indicatif = { workspace = true }
-nix = { workspace = true, features = ["signal"] }
-ratatui = { workspace = true }
+nix = { workspace = true, features = ["signal"], optional = true }
+ratatui = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-tui-term = { workspace = true }
 turbopath = { workspace = true }
 turborepo-ci = { workspace = true }
+turborepo-ghostty = { workspace = true, optional = true }
 turborepo-log = { workspace = true }
 turborepo-types = { workspace = true }
-turborepo-vt100 = { workspace = true }
-which = { workspace = true }
+which = { workspace = true, optional = true }
 
 [target."cfg(windows)".dependencies]
-clipboard-win = "5.3.1"
-windows-sys = { version = "0.59", features = ["Win32_System_Console"] }
+clipboard-win = { version = "5.3.1", optional = true }
+windows-sys = { version = "0.59", features = [
+  "Win32_System_Console",
+], optional = true }

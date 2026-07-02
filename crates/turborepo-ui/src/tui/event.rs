@@ -26,6 +26,7 @@ pub enum Event {
     Stop(oneshot::Sender<()>),
     // Stop initiated by the TUI itself
     InternalStop,
+    Interrupt,
     Tick,
     Up,
     Down,

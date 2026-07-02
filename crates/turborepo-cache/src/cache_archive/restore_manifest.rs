@@ -60,7 +60,7 @@ impl RestoreManifest {
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
-            if (meta.mode() & 0o7777) != expected.mode {
+            if (meta.mode() & 0o777) != expected.mode {
                 return false;
             }
         }
@@ -91,7 +91,7 @@ impl RestoreManifest {
         #[cfg(unix)]
         let mode = {
             use std::os::unix::fs::MetadataExt;
-            meta.mode() & 0o7777
+            meta.mode() & 0o777
         };
         #[cfg(not(unix))]
         let mode = 0o644;

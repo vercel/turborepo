@@ -161,7 +161,7 @@ fn create_dir_all_with_mode(path: &AbsoluteSystemPath, mode: u32) -> io::Result<
 
     std::fs::DirBuilder::new()
         .recursive(true)
-        .mode(mode & 0o7777)
+        .mode(mode & 0o777)
         .create(path.as_path())
 }
 
@@ -206,32 +206,55 @@ fn check_path(
         return Ok(combined_path);
     }
 
-    // Check to see if the symlink targets outside of the originalAnchor.
-    // We don't do eval symlinks because we could find ourself in a totally
-    // different place.
-
-    // 1. Get the target.
+    // Check the real target of any existing path prefix so archive-created
+    // symlink chains cannot hide an escape behind lexical cleaning.
     let link_target = combined_path.read_link()?;
     debug!(
         "link source: {:?}, link target {:?}",
         combined_path, link_target
     );
-    if link_target.is_absolute() {
-        let absolute_link_target = AbsoluteSystemPathBuf::new(link_target.clone())?;
-        if path_clean::clean(&absolute_link_target).starts_with(original_anchor) {
-            return Ok(absolute_link_target);
-        }
+    let link_target_path = if link_target.is_absolute() {
+        AbsoluteSystemPathBuf::new(link_target.clone())?
     } else {
-        let relative_link_target = AnchoredSystemPath::new(link_target.as_str())?;
-        // We clean here to resolve the `..` and `.` segments.
-        let computed_target = path_clean::clean(accumulated_anchor.resolve(relative_link_target));
-        if computed_target.starts_with(original_anchor) {
-            return check_path(original_anchor, accumulated_anchor, relative_link_target);
-        }
+        accumulated_anchor.resolve(AnchoredSystemPath::new(link_target.as_str())?)
+    };
+
+    let real_anchor = original_anchor.to_realpath()?;
+    if let Some(real_target) = realpath_existing_prefix(&link_target_path)?
+        && !real_target.starts_with(&real_anchor)
+    {
+        return Err(CacheError::LinkOutsideOfDirectory(
+            link_target.to_string(),
+            Backtrace::capture(),
+        ));
+    }
+
+    let clean_target = link_target_path.clean()?;
+    if clean_target.starts_with(original_anchor) {
+        return Ok(clean_target);
     }
 
     Err(CacheError::LinkOutsideOfDirectory(
         link_target.to_string(),
         Backtrace::capture(),
     ))
+}
+
+pub(crate) fn realpath_existing_prefix(
+    path: &AbsoluteSystemPath,
+) -> Result<Option<AbsoluteSystemPathBuf>, CacheError> {
+    let mut candidate = path.as_path().to_path_buf();
+
+    loop {
+        let candidate_path = AbsoluteSystemPathBuf::try_from(candidate.as_std_path())?;
+        match candidate_path.to_realpath() {
+            Ok(realpath) => return Ok(Some(realpath)),
+            Err(err) if err.is_io_error(io::ErrorKind::NotFound) => {
+                if !candidate.pop() {
+                    return Ok(None);
+                }
+            }
+            Err(err) => return Err(err.into()),
+        }
+    }
 }

@@ -1,0 +1,78 @@
+:root {
+  font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #f7f1de;
+  background: #15120e;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    linear-gradient(135deg, rgba(130, 199, 165, 0.22), transparent 34%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(247, 241, 222, 0.06) 0,
+      rgba(247, 241, 222, 0.06) 1px,
+      transparent 1px,
+      transparent 44px
+    ),
+    #15120e;
+}
+
+main {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: clamp(24px, 7vw, 88px);
+}
+
+.eyebrow {
+  color: #82c7a5;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+h1 {
+  font-size: clamp(3rem, 12vw, 8rem);
+  line-height: 0.9;
+  margin: 0;
+}
+
+.intro {
+  color: rgba(247, 241, 222, 0.76);
+  font-size: 1.2rem;
+  max-width: 34rem;
+}
+
+.card {
+  align-items: center;
+  background: #244a54;
+  border: 1px solid rgba(247, 241, 222, 0.14);
+  border-radius: 8px;
+  box-shadow: 10px 10px 0 #f6b352;
+  display: flex;
+  gap: 16px;
+  margin-top: 36px;
+  max-width: 360px;
+  padding: 24px;
+}
+
+button {
+  background: #f6b352;
+  border: 0;
+  border-radius: 6px;
+  color: #191611;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  padding: 0.6em 1.2em;
+}

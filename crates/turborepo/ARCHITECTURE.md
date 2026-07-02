@@ -189,7 +189,15 @@ The task graph visitor handles task execution:
 #### Visitor `visit` (`crates/turborepo-lib/src/task_graph/visitor/mod.rs`)
 
 - Receives tasks from the engine when they can be executed
-- Calculates task hashes
+- Calculates task hashes. Most task hashes are precomputed before scheduling,
+  but tasks with structured deferred inputs (`mode: "jit"` or
+  `mode: "dependencyOutputs"`) defer final file-input hashing until the engine
+  dispatches the task, after its dependencies have completed and restored any
+  cached outputs. Tasks that depend on deferred tasks are also deferred so their
+  dependency hashes are available before their own hash is calculated. Once a
+  deferred task has a real hash, the visitor precomputes any unblocked
+  non-deferred descendants instead of waiting for each descendant to be
+  dispatched.
 - Creates `ExecContext` for each task
 - Manages UI output and progress tracking
 - Collects errors and execution information
@@ -199,7 +207,7 @@ The task graph visitor handles task execution:
 - `ExecContext`: Holds state required to execute a task
 - Attempts cache restoration before execution
 - Spawns and manages child processes using `turborepo_process`
-- Captures `stdout`/`sterr` output
+- Captures `stdout`/`stderr` output
 - Saves outputs to cache on success
 - Reports task result back to the execution engine
 
@@ -316,6 +324,11 @@ Creates a "content identifier" for a specific task depending on current state of
 - **Explicit Inputs**: When tasks use custom `inputs`, glob matches still walk the
   filesystem, but clean tracked matches reuse blob OIDs from the repo index
   instead of re-hashing file contents
+- **Structured Deferred Inputs**: `inputs` entries with `mode: "jit"` are file
+  inputs hashed just before task execution. `mode: "dependencyOutputs"` selects
+  already-expanded dependency task nodes and defers the task hash because those
+  producers' declared outputs are not known until after dependencies complete.
+  In dry runs, these task hashes are reported as deferred.
 - **CRLF Normalization**: When `.gitattributes` marks files as `text` or
   `text=auto`, git normalizes CRLF line endings to LF in blob objects. The
   `crlf` module in `turborepo-scm` replicates this so turbo's file hashes
@@ -375,7 +388,7 @@ The summary module is responsible for any time of summary:
 ### 8. Query Subsystem
 
 The query subsystem powers `turbo query` (GraphQL introspection of the
-package/task graph) and the Web UI mode (`--ui=web`).
+package/task graph).
 
 **Crate layout:**
 
@@ -390,8 +403,8 @@ package/task graph) and the Web UI mode (`--ui=web`).
 **Data flow:** `main()` constructs `Arc<TurboQueryServer>` → passes to
 `turborepo_lib::main` → threaded through `shim` → `cli::run` →
 `commands::run` → `RunBuilder` → `Run`.  The `Run` struct stores the
-`query_server` and uses it in `start_web_ui()` and the `turbo query`
-command handler.
+`query_server`; the `turbo query` command handler uses it for direct query
+execution and the local GraphQL server mode.
 
 ## Data Flow Overview
 

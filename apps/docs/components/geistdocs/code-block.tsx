@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 type CodeBlockProps = {
-  children: ReactNode;
+  children?: ReactNode;
   className?: string;
   icon?: ReactNode;
   style?: CSSProperties;

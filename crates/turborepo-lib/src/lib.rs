@@ -1,8 +1,5 @@
 #![feature(box_patterns)]
-#![feature(error_generic_member_access)]
-#![feature(once_cell_try)]
 #![feature(try_blocks)]
-#![feature(impl_trait_in_assoc_type)]
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
@@ -62,9 +59,8 @@ pub fn get_version() -> &'static str {
 /// Main entry point for the turborepo CLI.
 ///
 /// `query_server` provides the GraphQL query execution layer. When `None`,
-/// the `turbo query` command returns an error and the Web UI mode falls
-/// back silently. Pass `Some(...)` with a [`QueryServer`] implementation
-/// to enable the full query subsystem.
+/// the `turbo query` command returns an error. Pass `Some(...)` with a
+/// [`QueryServer`] implementation to enable the full query subsystem.
 pub fn main(
     query_server: Option<std::sync::Arc<dyn turborepo_query_api::QueryServer>>,
 ) -> Result<i32, shim::Error> {

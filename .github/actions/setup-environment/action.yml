@@ -55,6 +55,10 @@ runs:
         cache: ${{ inputs.rust-cache }}
         github-token: ${{ inputs.github-token }}
 
+    - name: "Setup Zig"
+      if: inputs.rust == 'true'
+      uses: ./.github/actions/setup-zig
+
     - name: "Setup capnproto"
       if: inputs.capnproto == 'true'
       uses: ./.github/actions/setup-capnproto

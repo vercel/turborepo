@@ -114,7 +114,9 @@ impl RepoGitIndex {
                     Ok(path) => path,
                     Err(path) => return Ok(EntryClassification::Unsupported(path)),
                 };
-                let abs_path = git.root.join_unix_path(&rel_path);
+                // Git index paths are normalized repo-relative paths, so avoid
+                // per-entry path_clean normalization before stat calls.
+                let abs_path = git.root.join_unix_path_unchecked(&rel_path);
 
                 match gix_index::fs::Metadata::from_path_no_follow(abs_path.as_std_path()) {
                     Ok(fs_meta) => {
@@ -1143,10 +1145,13 @@ enum EntryClassification {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{BTreeMap, HashMap};
+    use std::{
+        collections::{BTreeMap, HashMap},
+        sync::OnceLock,
+    };
 
     use tempfile::TempDir;
-    use turbopath::RelativeUnixPathBuf;
+    use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
     use super::*;
 
@@ -1177,6 +1182,31 @@ mod tests {
             status_entries,
             unsupported_paths: Vec::new(),
             untracked_entries_populated: true,
+        }
+    }
+
+    fn make_unpopulated_index(
+        ls_tree: Vec<(&str, &str)>,
+        status: Vec<(&str, bool)>,
+    ) -> RepoGitIndex {
+        let mut index = make_index(ls_tree, status);
+        index.untracked_entries_populated = false;
+        index
+    }
+
+    fn write_file(root: &std::path::Path, rel_path: &str, contents: &str) {
+        let full_path = root.join(rel_path);
+        std::fs::create_dir_all(full_path.parent().unwrap()).unwrap();
+        std::fs::write(full_path, contents).unwrap();
+    }
+
+    fn test_git_repo(root: &std::path::Path) -> GitRepo {
+        let root = AbsoluteSystemPathBuf::try_from(root).unwrap();
+        GitRepo {
+            root: root.clone(),
+            bin: root,
+            attrs: OnceLock::new(),
+            slowest_files: None,
         }
     }
 
@@ -1330,9 +1360,9 @@ mod tests {
             ("apps/web/package.json", "ddd"),
             ("apps/web/src/index.ts", "eee"),
             ("apps/web/src/utils.ts", "fff"),
-            ("packages/ui/button.tsx", "ggg"),
-            ("packages/ui/package.json", "hhh"),
-            ("root.json", "iii"),
+            ("packages/ui/button.tsx", "111"),
+            ("packages/ui/package.json", "222"),
+            ("root.json", "333"),
         ];
         let index = make_index(ls_tree_data.clone(), vec![]);
 
@@ -1413,6 +1443,68 @@ mod tests {
             &root.join("packages/core/dist/index.js"),
             false,
         ));
+    }
+
+    #[test]
+    fn test_walk_candidate_files_respects_prefixes_gitignore_and_empty_dirs() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+
+        write_file(root, ".gitignore", "*.log\nnode_modules/\n");
+        write_file(root, "packages/ui/.gitignore", "output/\n");
+        write_file(root, "packages/ui/src/button.tsx", "button");
+        write_file(root, "packages/ui/output/bundle.js", "ignored ui output");
+        write_file(root, "apps/web/output/bundle.js", "web output");
+        write_file(root, "apps/web/debug.log", "ignored log");
+        write_file(root, "packages/core/index.ts", "outside prefix");
+        std::fs::create_dir_all(root.join("packages/ui/empty")).unwrap();
+
+        let prefixes = [path("packages/ui"), path("apps/web")];
+        let mut candidates = walk_candidate_files(root, Some(&prefixes)).unwrap();
+        candidates.sort();
+
+        assert_eq!(
+            candidates,
+            vec![
+                path(".gitignore"),
+                path("apps/web/output/bundle.js"),
+                path("packages/ui/.gitignore"),
+                path("packages/ui/src/button.tsx"),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_find_untracked_files_uses_dirty_gitignore_status_entries() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        let git = test_git_repo(root);
+
+        write_file(root, ".gitignore", "node_modules/\n");
+        write_file(root, "pkg-a/.gitignore", "dist/\n");
+        write_file(root, "pkg-a/src/index.ts", "tracked");
+        write_file(root, "pkg-a/package.json", "{}");
+        write_file(root, "pkg-a/keep.ts", "untracked");
+        write_file(root, "pkg-a/node_modules/dep/index.js", "ignored by root");
+        write_file(root, "pkg-a/dist/out.js", "ignored by nested");
+
+        let index = make_index(
+            vec![("pkg-a/package.json", "aaa"), ("pkg-a/src/index.ts", "bbb")],
+            vec![(".gitignore", false), ("pkg-a/.gitignore", false)],
+        );
+
+        let prefixes = [path("pkg-a")];
+        let mut untracked = find_untracked_files(
+            &git,
+            &index.ls_tree_hashes,
+            &index.status_entries,
+            Some(&prefixes),
+        )
+        .unwrap()
+        .paths;
+        untracked.sort();
+
+        assert_eq!(untracked, vec![path("pkg-a/keep.ts")]);
     }
 
     #[test]
@@ -1649,5 +1741,48 @@ mod tests {
                 path("pkg/untracked.ts"),
             ]
         );
+    }
+
+    #[test]
+    fn test_populate_untracked_from_candidates_filters_known_paths_and_is_idempotent() {
+        let mut index = make_unpopulated_index(
+            vec![
+                ("pkg/clean.ts", "aaa"),
+                ("pkg/deleted.ts", "bbb"),
+                ("pkg/sub/clean.ts", "ccc"),
+            ],
+            vec![
+                ("other/dirty.ts", false),
+                ("pkg/deleted.ts", true),
+                ("pkg/dirty.ts", false),
+            ],
+        );
+
+        index.populate_untracked_from_candidates(vec![
+            path("pkg/new-b.ts"),
+            path("pkg/clean.ts"),
+            path("pkg/dirty.ts"),
+            path("pkg/deleted.ts"),
+            path("pkg/new-a.ts"),
+            path("other/new.ts"),
+        ]);
+
+        let (hashes, to_hash) = index.get_package_hashes(&path("pkg")).unwrap();
+        assert_eq!(hashes.len(), 2);
+        assert!(hashes.contains_key(&path("clean.ts")));
+        assert!(hashes.contains_key(&path("sub/clean.ts")));
+        assert!(!hashes.contains_key(&path("deleted.ts")));
+        assert_eq!(
+            to_hash,
+            vec![
+                path("pkg/dirty.ts"),
+                path("pkg/new-a.ts"),
+                path("pkg/new-b.ts"),
+            ]
+        );
+
+        index.populate_untracked_from_candidates(vec![path("pkg/new-c.ts")]);
+        let (_, to_hash_after_second_populate) = index.get_package_hashes(&path("pkg")).unwrap();
+        assert_eq!(to_hash_after_second_populate, to_hash);
     }
 }

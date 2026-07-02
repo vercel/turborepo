@@ -11,7 +11,11 @@ use turborepo_task_id::TaskName;
 use turborepo_types::{EnvMode, OutputLogsMode};
 use turborepo_unescape::UnescapedString;
 
-use crate::{error::Error, future_flags::FutureFlags, raw::RawTaskDefinition};
+use crate::{
+    error::Error,
+    future_flags::FutureFlags,
+    raw::{RawStructuredInput, RawTaskDefinition, RawTaskInput},
+};
 
 const TURBO_DEFAULT: &str = "$TURBO_DEFAULT$";
 const TURBO_ROOT: &str = "$TURBO_ROOT$";
@@ -27,6 +31,21 @@ fn extract_turbo_extends(
     _future_flags: &FutureFlags,
 ) -> (Vec<Spanned<UnescapedString>>, bool) {
     if let Some(pos) = items.iter().position(|item| item.as_str() == TURBO_EXTENDS) {
+        items.remove(pos);
+        (items, true)
+    } else {
+        (items, false)
+    }
+}
+
+fn extract_turbo_extends_inputs(
+    mut items: Vec<Spanned<RawTaskInput>>,
+    _future_flags: &FutureFlags,
+) -> (Vec<Spanned<RawTaskInput>>, bool) {
+    if let Some(pos) = items.iter().position(|item| match item.as_inner() {
+        RawTaskInput::String(value) => value.as_str() == TURBO_EXTENDS,
+        RawTaskInput::Structured(_) => false,
+    }) {
         items.remove(pos);
         (items, true)
     } else {
@@ -174,28 +193,127 @@ impl ProcessedEnv {
 pub struct ProcessedInputs {
     pub globs: Vec<ProcessedGlob>,
     pub default: bool,
+    pub jit_globs: Vec<ProcessedGlob>,
+    pub jit_default: bool,
+    pub dependency_outputs: Option<ProcessedDependencyOutputsInput>,
+    pub legacy_startup: bool,
+    pub structured_startup: bool,
+    pub structured_jit: bool,
+    pub structured_dependency_outputs: bool,
     pub extends: bool,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProcessedDependencyOutputsInput {
+    pub from: Option<Vec<Spanned<UnescapedString>>>,
+    pub globs: Vec<ProcessedGlob>,
+}
+
 impl ProcessedInputs {
-    pub fn new(
+    pub fn new_legacy(
         raw_globs: Vec<Spanned<UnescapedString>>,
         future_flags: &FutureFlags,
     ) -> Result<Self, Error> {
-        let (processed_globs, extends) = extract_turbo_extends(raw_globs, future_flags);
+        Self::new(
+            raw_globs
+                .into_iter()
+                .map(|glob| glob.map(RawTaskInput::String))
+                .collect(),
+            future_flags,
+        )
+    }
 
-        let mut globs = Vec::with_capacity(processed_globs.len());
+    pub fn new(
+        raw_inputs: Vec<Spanned<RawTaskInput>>,
+        future_flags: &FutureFlags,
+    ) -> Result<Self, Error> {
+        let (processed_inputs, extends) = extract_turbo_extends_inputs(raw_inputs, future_flags);
+
+        let mut globs = Vec::with_capacity(processed_inputs.len());
+        let mut jit_globs = Vec::new();
         let mut default = false;
-        for raw_glob in processed_globs {
-            if raw_glob.as_str() == TURBO_DEFAULT {
-                default = true;
+        let mut jit_default = false;
+        let mut dependency_outputs = None;
+        let mut legacy_startup = false;
+        let mut structured_startup = false;
+        let mut structured_jit = false;
+        let mut structured_dependency_outputs = false;
+
+        for raw_input in processed_inputs {
+            let span = raw_input.to(());
+            match raw_input.into_inner() {
+                RawTaskInput::String(raw_glob) => {
+                    legacy_startup = true;
+                    if raw_glob.as_str() == TURBO_DEFAULT {
+                        default = true;
+                        continue;
+                    }
+                    globs.push(ProcessedGlob::from_spanned_input(Spanned::new(raw_glob))?);
+                }
+                RawTaskInput::Structured(input) => match structured_input_mode(&input, &span)? {
+                    StructuredInputMode::Startup => {
+                        if structured_startup {
+                            return Err(structured_input_error(
+                                &span,
+                                "duplicate structured \"startup\" input mode".to_string(),
+                            ));
+                        }
+                        structured_startup = true;
+                        reject_from(&input, &span)?;
+                        default = input.with_defaults.as_ref().is_some_and(|value| **value);
+                        globs = structured_globs(input.globs, &span)?;
+                        reject_negative_only_globs("startup", default, &globs, &span)?;
+                    }
+                    StructuredInputMode::Jit => {
+                        if structured_jit {
+                            return Err(structured_input_error(
+                                &span,
+                                "duplicate structured \"jit\" input mode".to_string(),
+                            ));
+                        }
+                        structured_jit = true;
+                        reject_from(&input, &span)?;
+                        jit_default = input.with_defaults.as_ref().is_some_and(|value| **value);
+                        jit_globs = structured_globs(input.globs, &span)?;
+                        reject_negative_only_globs("jit", jit_default, &jit_globs, &span)?;
+                    }
+                    StructuredInputMode::DependencyOutputs => {
+                        if structured_dependency_outputs {
+                            return Err(structured_input_error(
+                                &span,
+                                "duplicate structured \"dependencyOutputs\" input mode".to_string(),
+                            ));
+                        }
+                        structured_dependency_outputs = true;
+                        if input.with_defaults.is_some() {
+                            return Err(structured_input_error(
+                                &span,
+                                "withDefaults is only valid for startup or jit inputs".to_string(),
+                            ));
+                        }
+                        dependency_outputs = Some(ProcessedDependencyOutputsInput {
+                            from: input.from,
+                            globs: structured_globs(input.globs, &span)?,
+                        });
+                    }
+                },
             }
-            globs.push(ProcessedGlob::from_spanned_input(raw_glob)?);
+        }
+
+        if legacy_startup && structured_startup {
+            return Err(duplicate_startup_error(None));
         }
 
         Ok(ProcessedInputs {
             globs,
             default,
+            jit_globs,
+            jit_default,
+            dependency_outputs,
+            legacy_startup,
+            structured_startup,
+            structured_jit,
+            structured_dependency_outputs,
             extends,
         })
     }
@@ -206,6 +324,121 @@ impl ProcessedInputs {
             .iter()
             .map(|glob| glob.resolve(turbo_root_path))
             .collect()
+    }
+
+    pub fn resolve_jit(&self, turbo_root_path: &RelativeUnixPath) -> Vec<String> {
+        self.jit_globs
+            .iter()
+            .map(|glob| glob.resolve(turbo_root_path))
+            .collect()
+    }
+}
+
+enum StructuredInputMode {
+    Startup,
+    Jit,
+    DependencyOutputs,
+}
+
+fn structured_input_mode(
+    input: &RawStructuredInput,
+    span: &Spanned<()>,
+) -> Result<StructuredInputMode, Error> {
+    let Some(mode) = input.mode.as_ref() else {
+        return Err(structured_input_error(
+            span,
+            "Structured input entries must specify mode".to_string(),
+        ));
+    };
+
+    match mode.as_str() {
+        "startup" => Ok(StructuredInputMode::Startup),
+        "jit" => Ok(StructuredInputMode::Jit),
+        "dependencyOutputs" => Ok(StructuredInputMode::DependencyOutputs),
+        unknown => Err(structured_input_error(
+            &mode.to(()),
+            format!("Unknown input mode \"{unknown}\""),
+        )),
+    }
+}
+
+fn reject_from(input: &RawStructuredInput, span: &Spanned<()>) -> Result<(), Error> {
+    if input.from.is_some() {
+        return Err(structured_input_error(
+            span,
+            "from is only valid for dependencyOutputs inputs".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn structured_globs(
+    raw_globs: Option<Vec<Spanned<UnescapedString>>>,
+    span: &Spanned<()>,
+) -> Result<Vec<ProcessedGlob>, Error> {
+    raw_globs
+        .unwrap_or_default()
+        .into_iter()
+        .map(|glob| {
+            if matches!(glob.as_str(), TURBO_DEFAULT | TURBO_EXTENDS) {
+                return Err(structured_input_error(
+                    &glob.to(()),
+                    format!(
+                        "Sentinel string \"{}\" is not valid inside structured globs",
+                        glob.as_str()
+                    ),
+                ));
+            }
+            ProcessedGlob::from_spanned_input(glob)
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| match err {
+            Error::AbsolutePathInConfig { .. }
+            | Error::InvalidTurboRootUse { .. }
+            | Error::InvalidTurboRootNeedsSlash { .. } => err,
+            _ => structured_input_error(span, err.to_string()),
+        })
+}
+
+fn reject_negative_only_globs(
+    mode: &str,
+    with_defaults: bool,
+    globs: &[ProcessedGlob],
+    span: &Spanned<()>,
+) -> Result<(), Error> {
+    if !with_defaults && !globs.is_empty() && globs.iter().all(|glob| glob.negated) {
+        return Err(structured_input_error(
+            span,
+            format!("negative-only {mode} globs require withDefaults: true"),
+        ));
+    }
+    Ok(())
+}
+
+pub fn duplicate_startup_error(span: Option<&Spanned<()>>) -> Error {
+    let message = "Legacy input strings normalize to mode \"startup\", but this task also \
+                   declares a structured \"startup\" input.\n\nUse either legacy startup \
+                   inputs:\n\n  \"inputs\": [\"$TURBO_DEFAULT$\", \"src/**\"]\n\nOr one \
+                   structured startup input:\n\n  \"inputs\": [\n    {\n      \"mode\": \
+                   \"startup\",\n      \"withDefaults\": true,\n      \"globs\": [\"src/**\"]\n    \
+                   }\n  ]"
+        .to_string();
+    match span {
+        Some(span) => structured_input_error(span, message),
+        None => Error::StructuredInput {
+            message,
+            span: None,
+            text: miette::NamedSource::new("turbo.json", String::new()),
+        },
+    }
+}
+
+fn structured_input_error(span: &Spanned<()>, message: String) -> Error {
+    let (span, text) = span.span_and_text("turbo.json");
+    Error::StructuredInput {
+        message,
+        span,
+        text,
     }
 }
 
@@ -372,7 +605,7 @@ impl ProcessedTaskDefinition {
                         if outputs.globs.is_empty() {
                             return None;
                         }
-                        // Reject $TURBO_DEFAULT$ and $TURBO_EXTENDS$ in
+                        // Reject task-input DSL tokens in
                         // incremental inputs — these DSL tokens only apply to
                         // regular task inputs and have no meaning here.
                         if let Some(ref raw_inputs) = partition.inputs {
@@ -391,7 +624,7 @@ impl ProcessedTaskDefinition {
                         }
                         let inputs = match partition
                             .inputs
-                            .map(|i| ProcessedInputs::new(i, future_flags))
+                            .map(|i| ProcessedInputs::new_legacy(i, future_flags))
                             .transpose()
                         {
                             Ok(i) => i,
@@ -554,8 +787,10 @@ mod tests {
         // Create a raw task definition with TURBO_ROOT tokens
         let raw_task = RawTaskDefinition {
             inputs: Some(vec![
-                Spanned::new(UnescapedString::from("$TURBO_ROOT$/config.txt")),
-                Spanned::new(UnescapedString::from("src/**/*.ts")),
+                Spanned::new(RawTaskInput::String(UnescapedString::from(
+                    "$TURBO_ROOT$/config.txt",
+                ))),
+                Spanned::new(RawTaskInput::String(UnescapedString::from("src/**/*.ts"))),
             ]),
             outputs: Some(vec![
                 Spanned::new(UnescapedString::from("!$TURBO_ROOT$/README.md")),
@@ -594,16 +829,9 @@ mod tests {
     fn test_detects_turbo_default() {
         let raw_globs = vec![Spanned::new(UnescapedString::from(TURBO_DEFAULT))];
 
-        let inputs = ProcessedInputs::new(raw_globs, &FutureFlags::default()).unwrap();
+        let inputs = ProcessedInputs::new_legacy(raw_globs, &FutureFlags::default()).unwrap();
         assert!(inputs.default);
-        assert_eq!(
-            inputs.globs,
-            vec![ProcessedGlob {
-                glob: TURBO_DEFAULT.to_string(),
-                negated: false,
-                turbo_root: false
-            }]
-        );
+        assert!(inputs.globs.is_empty());
     }
 
     #[test]
@@ -631,7 +859,7 @@ mod tests {
             Spanned::new(UnescapedString::from("lib/**")),
         ];
 
-        let inputs = ProcessedInputs::new(raw_globs, &FutureFlags::default()).unwrap();
+        let inputs = ProcessedInputs::new_legacy(raw_globs, &FutureFlags::default()).unwrap();
 
         assert!(inputs.extends);
         assert_eq!(inputs.globs.len(), 2);

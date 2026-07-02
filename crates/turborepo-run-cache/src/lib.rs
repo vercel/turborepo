@@ -13,6 +13,7 @@ pub mod incremental;
 use std::{
     collections::HashSet,
     io::Write,
+    str::FromStr,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -216,6 +217,119 @@ impl RunCache {
         // Ignore errors coming from cache already shutting down
         self.cache.start_shutdown().await
     }
+}
+
+fn expand_symlinked_output_roots(
+    repo_root: &AbsoluteSystemPath,
+    inclusions: &[globwalk::ValidatedGlob],
+    exclusions: &[globwalk::ValidatedGlob],
+) -> Result<HashSet<AbsoluteSystemPathBuf>, Error> {
+    let mut followed_outputs = HashSet::new();
+    let real_repo_root = repo_root.to_realpath()?;
+
+    for inclusion in inclusions {
+        let Some((prefix, suffix)) =
+            split_at_deepest_symlinked_prefix(repo_root, inclusion.as_str())?
+        else {
+            continue;
+        };
+
+        let prefix_path = AnchoredSystemPath::new(&prefix)?;
+        let absolute_prefix = repo_root.resolve(prefix_path);
+
+        let Ok(real_prefix) = absolute_prefix.to_realpath() else {
+            continue;
+        };
+        if !real_repo_root.contains(&real_prefix) || !real_prefix.as_std_path().is_dir() {
+            continue;
+        }
+
+        let include = [globwalk::ValidatedGlob::from_str(&suffix)?];
+        let exclude = exclusions_for_symlinked_prefix(&prefix, exclusions)?;
+        for real_output in
+            globwalk::globwalk(&real_prefix, &include, &exclude, globwalk::WalkType::All)?
+        {
+            let relative_output =
+                AnchoredSystemPathBuf::relative_path_between(&real_prefix, &real_output);
+            followed_outputs.extend([absolute_prefix.resolve(&relative_output)]);
+        }
+    }
+
+    Ok(followed_outputs)
+}
+
+/// Finds the deepest literal segment of `pattern` that is itself a symlink and
+/// splits the pattern there.
+///
+/// The portion up to and including that symlinked segment becomes the `prefix`
+/// (which is later resolved to its real path), and the remainder — including
+/// any further literal segments and the glob — becomes the `suffix`.
+///
+/// We must inspect *every* literal segment rather than only the deepest literal
+/// prefix: a `symlink_metadata` (lstat) on the full literal prefix follows any
+/// symlinks among the intermediate segments, so a symlink that is not the final
+/// literal segment would otherwise be reported as a plain directory and missed.
+/// This happens in practice for workspace packages located behind symlinked
+/// directories (e.g. `packages/nested` -> `../external/nested`), where an
+/// output glob like `packages/nested/deep-pkg/dist/**` has its symlink at an
+/// intermediate segment.
+fn split_at_deepest_symlinked_prefix(
+    repo_root: &AbsoluteSystemPath,
+    pattern: &str,
+) -> Result<Option<(String, String)>, Error> {
+    let segments = pattern.split('/').collect::<Vec<_>>();
+    let Some(first_glob) = segments
+        .iter()
+        .position(|segment| globwalk::is_glob_pattern(segment))
+    else {
+        return Ok(None);
+    };
+    if first_glob == 0 {
+        return Ok(None);
+    }
+
+    // Walk the literal segments from shallowest to deepest, recording the deepest
+    // one that is a symlink. Intermediate symlinks are followed when lstat'ing
+    // deeper segments, which is exactly why we need to check each segment.
+    let mut deepest_symlink_split = None;
+    for split in 1..=first_glob {
+        let prefix = segments[..split].join("/");
+        let prefix_path = AnchoredSystemPath::new(&prefix)?;
+        let absolute_prefix = repo_root.resolve(prefix_path);
+        let Ok(metadata) = absolute_prefix.symlink_metadata() else {
+            continue;
+        };
+        if metadata.file_type().is_symlink() {
+            deepest_symlink_split = Some(split);
+        }
+    }
+
+    let Some(split) = deepest_symlink_split else {
+        return Ok(None);
+    };
+
+    Ok(Some((
+        segments[..split].join("/"),
+        segments[split..].join("/"),
+    )))
+}
+
+fn exclusions_for_symlinked_prefix(
+    prefix: &str,
+    exclusions: &[globwalk::ValidatedGlob],
+) -> Result<Vec<globwalk::ValidatedGlob>, Error> {
+    let prefix_with_separator = format!("{prefix}/");
+
+    exclusions
+        .iter()
+        .filter_map(|exclusion| {
+            exclusion
+                .as_str()
+                .strip_prefix(&prefix_with_separator)
+                .map(globwalk::ValidatedGlob::from_str)
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
 }
 
 /// Cache state for a specific task execution.
@@ -559,6 +673,14 @@ impl TaskCache {
             &validated_exclusions,
             globwalk::WalkType::All,
         )?;
+        let files_to_be_cached = files_to_be_cached
+            .into_iter()
+            .chain(expand_symlinked_output_roots(
+                &self.run_cache.repo_root,
+                &validated_inclusions,
+                &validated_exclusions,
+            )?)
+            .collect::<HashSet<_>>();
 
         for path in &files_to_be_cached {
             if !self.run_cache.repo_root.contains(path) {
@@ -794,6 +916,7 @@ fn format_sha_context(meta: Option<&CacheHitMetadata>) -> Option<String> {
 mod test {
     use std::{
         collections::HashSet,
+        io::Write,
         sync::{
             Arc, Mutex,
             atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -804,6 +927,7 @@ mod test {
     use tempfile::tempdir;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
     use turborepo_cache::{AsyncCache, CacheActions, CacheConfig, CacheOpts, LazyScmState};
+    use turborepo_log::{LogSink, Logger, OutputChannel, grouping::GroupingLayer};
     use turborepo_task_id::TaskId;
     use turborepo_telemetry::events::task::PackageTaskEventBuilder;
     use turborepo_types::{OutputLogsMode, TaskOutputs};
@@ -829,6 +953,15 @@ mod test {
         repo_root: &AbsoluteSystemPathBuf,
         outputs: Vec<String>,
     ) -> TaskCache {
+        task_cache_for_outputs_with_mode(repo_root, outputs, OutputLogsMode::None, false)
+    }
+
+    fn task_cache_for_outputs_with_mode(
+        repo_root: &AbsoluteSystemPathBuf,
+        outputs: Vec<String>,
+        task_output_logs: OutputLogsMode,
+        errors_only_show_hash: bool,
+    ) -> TaskCache {
         let cache_opts = local_cache_opts(repo_root);
         let cache = AsyncCache::new(
             &cache_opts,
@@ -850,7 +983,7 @@ mod test {
             repo_root: repo_root.to_owned(),
             output_watcher: None,
             ui,
-            errors_only_show_hash: false,
+            errors_only_show_hash,
             remote_only: false,
         });
 
@@ -863,15 +996,42 @@ mod test {
             },
             hash: "test-hash".to_string(),
             task_id: TaskId::new("pkg", "build"),
-            task_output_logs: OutputLogsMode::None,
+            task_output_logs,
             caching_disabled: false,
             log_file_path: repo_root.join_components(&["pkg", ".turbo", "turbo-build.log"]),
             output_watcher: None,
             ui,
             warnings,
-            errors_only_show_hash: false,
+            errors_only_show_hash,
             incremental_cache: None,
         }
+    }
+
+    #[derive(Default)]
+    struct RecordingSink {
+        output: Mutex<Vec<u8>>,
+    }
+
+    impl RecordingSink {
+        fn output_string(&self) -> String {
+            String::from_utf8_lossy(&self.output.lock().unwrap()).into_owned()
+        }
+    }
+
+    impl LogSink for RecordingSink {
+        fn emit(&self, _event: &turborepo_log::LogEvent) {}
+
+        fn task_output(&self, _task: &str, _channel: OutputChannel, bytes: &[u8]) {
+            self.output.lock().unwrap().extend_from_slice(bytes);
+        }
+    }
+
+    fn recording_task_handle() -> (Arc<RecordingSink>, turborepo_log::grouping::TaskHandle) {
+        let sink = Arc::new(RecordingSink::default());
+        let logger = Arc::new(Logger::new(vec![Box::new(sink.clone())]));
+        let layer = GroupingLayer::new(logger, turborepo_log::grouping::GroupingMode::Passthrough);
+        let handle = layer.task("pkg#build");
+        (sink, handle)
     }
 
     /// Mock OutputWatcher that records calls and returns configurable results.
@@ -1102,6 +1262,204 @@ mod test {
     }
 
     #[tokio::test]
+    async fn output_writer_respects_output_log_modes() {
+        let temp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+
+        for (mode, forwards_to_terminal, writes_log_file) in [
+            (OutputLogsMode::Full, true, true),
+            (OutputLogsMode::NewOnly, true, true),
+            (OutputLogsMode::HashOnly, false, true),
+            (OutputLogsMode::None, false, true),
+            (OutputLogsMode::ErrorsOnly, false, true),
+        ] {
+            let task_cache = task_cache_for_outputs_with_mode(
+                &repo_root,
+                vec!["pkg/.turbo/turbo-build.log".to_string()],
+                mode,
+                false,
+            );
+            let _ = task_cache.log_file_path.remove_file();
+
+            let mut terminal = Vec::new();
+            {
+                let mut writer = task_cache.output_writer(&mut terminal).unwrap();
+                writer.write_all(b"task-output\n").unwrap();
+            }
+
+            assert_eq!(
+                String::from_utf8_lossy(&terminal).contains("task-output"),
+                forwards_to_terminal,
+                "{mode:?} terminal forwarding"
+            );
+            assert_eq!(
+                task_cache.log_file_path.exists(),
+                writes_log_file,
+                "{mode:?} log file creation"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn cache_miss_status_respects_output_log_modes() {
+        let temp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let telemetry = PackageTaskEventBuilder::new("pkg", "build");
+
+        for (mode, errors_only_show_hash, expected, unexpected) in [
+            (
+                OutputLogsMode::Full,
+                false,
+                Some("cache miss, executing test-hash"),
+                None,
+            ),
+            (
+                OutputLogsMode::NewOnly,
+                false,
+                Some("cache miss, executing test-hash"),
+                None,
+            ),
+            (
+                OutputLogsMode::HashOnly,
+                false,
+                Some("cache miss, executing test-hash"),
+                None,
+            ),
+            (OutputLogsMode::None, false, None, Some("cache miss")),
+            (OutputLogsMode::ErrorsOnly, false, None, Some("cache miss")),
+            (
+                OutputLogsMode::ErrorsOnly,
+                true,
+                Some("cache miss, executing test-hash (only logging errors)"),
+                None,
+            ),
+        ] {
+            let mut task_cache = task_cache_for_outputs_with_mode(
+                &repo_root,
+                vec!["pkg/.turbo/turbo-build.log".to_string()],
+                mode,
+                errors_only_show_hash,
+            );
+            let (sink, mut handle) = recording_task_handle();
+
+            let result = task_cache
+                .restore_outputs(&mut handle, None, &telemetry)
+                .await
+                .unwrap();
+            assert!(result.is_none());
+
+            let output = sink.output_string();
+            if let Some(expected) = expected {
+                assert!(output.contains(expected), "{mode:?}: {output}");
+            }
+            if let Some(unexpected) = unexpected {
+                assert!(!output.contains(unexpected), "{mode:?}: {output}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn cache_hit_status_respects_output_log_modes() {
+        let temp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let log_file = repo_root.join_components(&["pkg", ".turbo", "turbo-build.log"]);
+        log_file.ensure_dir().unwrap();
+        log_file.create_with_contents("cached-output\n").unwrap();
+
+        let telemetry = PackageTaskEventBuilder::new("pkg", "build");
+        let mut warmer = task_cache_for_outputs_with_mode(
+            &repo_root,
+            vec!["pkg/.turbo/turbo-build.log".to_string()],
+            OutputLogsMode::Full,
+            false,
+        );
+        warmer
+            .save_outputs(Duration::from_millis(10), &telemetry)
+            .await
+            .unwrap();
+        warmer.run_cache.cache.wait().await.unwrap();
+        log_file.remove_file().unwrap();
+
+        for (mode, errors_only_show_hash, expected, replays_cached_output) in [
+            (
+                OutputLogsMode::Full,
+                false,
+                Some("cache hit, replaying logs test-hash"),
+                true,
+            ),
+            (
+                OutputLogsMode::NewOnly,
+                false,
+                Some("cache hit, suppressing logs test-hash"),
+                false,
+            ),
+            (
+                OutputLogsMode::HashOnly,
+                false,
+                Some("cache hit, suppressing logs test-hash"),
+                false,
+            ),
+            (OutputLogsMode::None, false, None, false),
+            (OutputLogsMode::ErrorsOnly, false, None, false),
+            (
+                OutputLogsMode::ErrorsOnly,
+                true,
+                Some("cache hit, replaying logs (no errors) test-hash"),
+                false,
+            ),
+        ] {
+            let mut task_cache = task_cache_for_outputs_with_mode(
+                &repo_root,
+                vec!["pkg/.turbo/turbo-build.log".to_string()],
+                mode,
+                errors_only_show_hash,
+            );
+            let (sink, mut handle) = recording_task_handle();
+
+            let result = task_cache
+                .restore_outputs(&mut handle, None, &telemetry)
+                .await
+                .unwrap();
+            assert!(result.is_some());
+
+            let output = sink.output_string();
+            if let Some(expected) = expected {
+                assert!(output.contains(expected), "{mode:?}: {output}");
+            } else {
+                assert!(output.is_empty(), "{mode:?}: {output}");
+            }
+            assert_eq!(
+                output.contains("cached-output"),
+                replays_cached_output,
+                "{mode:?}: {output}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn errors_only_replays_log_file_on_error() {
+        let temp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let log_file = repo_root.join_components(&["pkg", ".turbo", "turbo-build.log"]);
+        log_file.ensure_dir().unwrap();
+        log_file.create_with_contents("error-output\n").unwrap();
+
+        let task_cache = task_cache_for_outputs_with_mode(
+            &repo_root,
+            vec!["pkg/.turbo/turbo-build.log".to_string()],
+            OutputLogsMode::ErrorsOnly,
+            false,
+        );
+        let (sink, mut handle) = recording_task_handle();
+
+        task_cache.on_error(&mut handle, None).unwrap();
+
+        let output = sink.output_string();
+        assert!(output.contains("cache miss, executing test-hash"));
+        assert!(output.contains("error-output"));
+    }
+
+    #[tokio::test]
     async fn save_outputs_allows_files_inside_repo_root() {
         let temp = tempdir().unwrap();
         let repo_dir = temp.path().join("repo");
@@ -1146,5 +1504,184 @@ mod test {
             "outputs outside repo root should be rejected before cache upload"
         );
         assert!(task_cache.expanded_outputs().is_empty());
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn save_outputs_does_not_follow_symlink_that_escapes_repo_root() {
+        let temp = tempdir().unwrap();
+        let repo_dir = temp.path().join("repo");
+        let outside_dir = temp.path().join("outside");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+        std::fs::create_dir_all(&outside_dir).unwrap();
+        std::fs::write(outside_dir.join("output.txt"), b"outside").unwrap();
+        std::os::unix::fs::symlink("../outside", repo_dir.join("dist")).unwrap();
+
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_dir.as_path()).unwrap();
+        let mut task_cache = task_cache_for_outputs(&repo_root, vec!["dist/**".to_string()]);
+        let telemetry = PackageTaskEventBuilder::new("pkg", "build");
+
+        task_cache
+            .save_outputs(Duration::from_millis(10), &telemetry)
+            .await
+            .unwrap();
+
+        task_cache.run_cache.cache.wait().await.unwrap();
+        let cached = task_cache
+            .run_cache
+            .cache
+            .fetch(&repo_root, "test-hash")
+            .await
+            .unwrap();
+
+        assert!(
+            cached.is_none(),
+            "symlinked output outside repo root should not write a cache artifact"
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn save_outputs_follows_internal_symlinked_output_root() {
+        let temp = tempdir().unwrap();
+        let repo_dir = temp.path().join("repo");
+        let package_dir = repo_dir.join("pkg");
+        std::fs::create_dir_all(package_dir.join("actual-dist")).unwrap();
+        std::fs::write(package_dir.join("actual-dist/output.txt"), b"output").unwrap();
+        std::os::unix::fs::symlink("actual-dist", package_dir.join("dist")).unwrap();
+
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_dir.as_path()).unwrap();
+        let mut task_cache = task_cache_for_outputs(&repo_root, vec!["pkg/dist/**".to_string()]);
+        let telemetry = PackageTaskEventBuilder::new("pkg", "build");
+
+        task_cache
+            .save_outputs(Duration::from_millis(10), &telemetry)
+            .await
+            .unwrap();
+
+        task_cache.run_cache.cache.wait().await.unwrap();
+        let (_metadata, cached_files) = task_cache
+            .run_cache
+            .cache
+            .fetch(&repo_root, "test-hash")
+            .await
+            .unwrap()
+            .expect("symlinked output root should be cached");
+
+        assert!(
+            cached_files.contains(
+                &AnchoredSystemPathBuf::from_raw(format!(
+                    "pkg{}dist{}output.txt",
+                    std::path::MAIN_SEPARATOR,
+                    std::path::MAIN_SEPARATOR
+                ))
+                .unwrap()
+            )
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn save_outputs_follows_intermediate_symlinked_dir() {
+        // A workspace package located behind a symlinked directory: `packages/nested`
+        // is a symlink to `external/nested`, while `deep-pkg/dist` underneath it are
+        // real directories. The symlink is an *intermediate* literal segment of the
+        // output glob, so it must still be followed when caching outputs.
+        let temp = tempdir().unwrap();
+        let repo_dir = temp.path().join("repo");
+        std::fs::create_dir_all(repo_dir.join("external/nested/deep-pkg/dist")).unwrap();
+        std::fs::write(
+            repo_dir.join("external/nested/deep-pkg/dist/output.txt"),
+            b"output",
+        )
+        .unwrap();
+        std::fs::create_dir_all(repo_dir.join("packages")).unwrap();
+        std::os::unix::fs::symlink("../external/nested", repo_dir.join("packages/nested")).unwrap();
+
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_dir.as_path()).unwrap();
+        let mut task_cache = task_cache_for_outputs(
+            &repo_root,
+            vec!["packages/nested/deep-pkg/dist/**".to_string()],
+        );
+        let telemetry = PackageTaskEventBuilder::new("nested", "build");
+
+        task_cache
+            .save_outputs(Duration::from_millis(10), &telemetry)
+            .await
+            .unwrap();
+
+        task_cache.run_cache.cache.wait().await.unwrap();
+        let (_metadata, cached_files) = task_cache
+            .run_cache
+            .cache
+            .fetch(&repo_root, "test-hash")
+            .await
+            .unwrap()
+            .expect("output behind intermediate symlinked dir should be cached");
+
+        assert!(
+            cached_files.contains(
+                &AnchoredSystemPathBuf::from_raw(format!(
+                    "packages{0}nested{0}deep-pkg{0}dist{0}output.txt",
+                    std::path::MAIN_SEPARATOR,
+                ))
+                .unwrap()
+            ),
+            "expected output behind intermediate symlink to be cached, got: {cached_files:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn save_outputs_ignores_symlink_cycles() {
+        let temp = tempdir().unwrap();
+        let repo_dir = temp.path().join("repo");
+        std::fs::create_dir_all(repo_dir.join("apps/app/node_modules/@vercel")).unwrap();
+        std::fs::create_dir_all(repo_dir.join("apps/app/node_modules/.cache")).unwrap();
+        std::fs::create_dir_all(
+            repo_dir.join("packages/navigation-metrics/examples/basic/node_modules/@vercel"),
+        )
+        .unwrap();
+        std::fs::write(
+            repo_dir.join("apps/app/node_modules/.cache/tsbuildinfo.json"),
+            b"{}",
+        )
+        .unwrap();
+
+        std::os::unix::fs::symlink(
+            "../../../../packages/navigation-metrics",
+            repo_dir.join("apps/app/node_modules/@vercel/navigation-metrics"),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(
+            "../../../..",
+            repo_dir
+                .join("packages/navigation-metrics")
+                .join("examples/basic/node_modules/@vercel/navigation-metrics"),
+        )
+        .unwrap();
+
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_dir.as_path()).unwrap();
+        let mut task_cache = task_cache_for_outputs(
+            &repo_root,
+            vec!["**/node_modules/.cache/tsbuildinfo.json".to_string()],
+        );
+        let telemetry = PackageTaskEventBuilder::new("pkg", "type-check");
+
+        task_cache
+            .save_outputs(Duration::from_millis(10), &telemetry)
+            .await
+            .unwrap();
+
+        let expected = AnchoredSystemPathBuf::from_raw(format!(
+            "apps{}app{}node_modules{}.cache{}tsbuildinfo.json",
+            std::path::MAIN_SEPARATOR_STR,
+            std::path::MAIN_SEPARATOR_STR,
+            std::path::MAIN_SEPARATOR_STR,
+            std::path::MAIN_SEPARATOR_STR,
+        ))
+        .unwrap();
+
+        assert!(task_cache.expanded_outputs().contains(&expected));
     }
 }

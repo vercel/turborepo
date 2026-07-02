@@ -8,7 +8,7 @@ use std::{backtrace, collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use biome_deserialize::{
     Deserializable, DeserializableValue, DeserializationDiagnostic, DeserializationVisitor,
-    VisitableType, json::deserialize_from_json_str,
+    VisitableType,
 };
 use biome_diagnostics::DiagnosticExt;
 use biome_json_parser::JsonParserOptions;
@@ -25,7 +25,7 @@ use crate::raw::{
     Pipeline, RawExperimentalCIConfig, RawExperimentalObservability, RawGlobalConfig,
     RawObservabilityOtel, RawObservabilityOtelMetrics, RawObservabilityOtelRunAttributes,
     RawObservabilityOtelTaskAttributes, RawPackageTurboJson, RawRemoteCacheOptions,
-    RawRootTurboJson, RawTaskDefinition, RawTurboJson,
+    RawRootTurboJson, RawStructuredInput, RawTaskDefinition, RawTaskInput, RawTurboJson,
 };
 
 /// Error type for turbo.json parsing failures using biome parser
@@ -81,6 +81,83 @@ impl Deserializable for Pipeline {
         diagnostics: &mut Vec<DeserializationDiagnostic>,
     ) -> Option<Self> {
         value.deserialize(PipelineVisitor, name, diagnostics)
+    }
+}
+
+impl Deserializable for RawTaskInput {
+    fn deserialize(
+        value: &impl DeserializableValue,
+        name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self> {
+        value.deserialize(RawTaskInputVisitor, name, diagnostics)
+    }
+}
+
+struct RawTaskInputVisitor;
+
+impl DeserializationVisitor for RawTaskInputVisitor {
+    type Output = RawTaskInput;
+
+    const EXPECTED_TYPE: VisitableType = VisitableType::STR.union(VisitableType::MAP);
+
+    fn visit_str(
+        self,
+        value: biome_deserialize::Text,
+        _range: TextRange,
+        _name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        match UnescapedString::from_escaped(value.text().to_string()) {
+            Ok(value) => Some(RawTaskInput::String(value)),
+            Err(error) => {
+                diagnostics.push(DeserializationDiagnostic::new(format!("{error}")));
+                None
+            }
+        }
+    }
+
+    fn visit_map(
+        self,
+        members: impl Iterator<Item = Option<(impl DeserializableValue, impl DeserializableValue)>>,
+        _range: TextRange,
+        _name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        let mut structured = RawStructuredInput {
+            mode: None,
+            globs: None,
+            with_defaults: None,
+            from: None,
+        };
+
+        for (key, value) in members.flatten() {
+            let key = String::deserialize(&key, "", diagnostics)?;
+            match key.as_str() {
+                "mode" => {
+                    structured.mode = Spanned::deserialize(&value, "mode", diagnostics);
+                }
+                "globs" => {
+                    structured.globs =
+                        Vec::<Spanned<UnescapedString>>::deserialize(&value, "globs", diagnostics);
+                }
+                "withDefaults" => {
+                    structured.with_defaults =
+                        Spanned::<bool>::deserialize(&value, "withDefaults", diagnostics);
+                }
+                "from" => {
+                    structured.from =
+                        Vec::<Spanned<UnescapedString>>::deserialize(&value, "from", diagnostics);
+                }
+                _ => diagnostics.push(DeserializationDiagnostic::new_unknown_key(
+                    &key,
+                    value.range(),
+                    &["mode", "globs", "withDefaults", "from"],
+                )),
+            }
+        }
+
+        Some(RawTaskInput::Structured(structured))
     }
 }
 
@@ -507,7 +584,7 @@ pub fn parse_turbo_json<T: Deserializable + WithMetadata>(
     text: &str,
     file_path: &str,
 ) -> Result<T, BiomeParseError> {
-    let result = deserialize_from_json_str::<T>(
+    let (deserialized, errors) = turborepo_errors::json::deserialize_from_json_str::<T>(
         text,
         JsonParserOptions::default()
             .with_allow_comments()
@@ -515,9 +592,8 @@ pub fn parse_turbo_json<T: Deserializable + WithMetadata>(
         file_path,
     );
 
-    if !result.diagnostics().is_empty() {
-        let diagnostics = result
-            .into_diagnostics()
+    if !errors.is_empty() {
+        let diagnostics = errors
             .into_iter()
             .map(|d| {
                 d.with_file_source_code(text)
@@ -530,9 +606,7 @@ pub fn parse_turbo_json<T: Deserializable + WithMetadata>(
         return Err(BiomeParseError::new(diagnostics));
     }
 
-    let mut turbo_json = result
-        .into_deserialized()
-        .ok_or_else(BiomeParseError::empty)?;
+    let mut turbo_json = deserialized.ok_or_else(BiomeParseError::empty)?;
     turbo_json.add_text(Arc::from(text));
     turbo_json.add_path(Arc::from(file_path));
 
@@ -562,6 +636,15 @@ mod tests {
     fn test_biome_parse_error_display() {
         let err = BiomeParseError::empty();
         assert_eq!(err.to_string(), "Failed to parse turbo.json.");
+    }
+
+    // Regression tests for https://github.com/vercel/turborepo/issues/13197
+    // Unterminated string literals used to panic inside biome during
+    // deserialization instead of producing a parse error.
+    #[test_case("{\"tasks\": {\"build\": {\"persistent\": \"\n}}}"; "quote before newline")]
+    #[test_case("{\"tasks\": {\"build\": {\"dependsOn\": [\""; "quote at eof")]
+    fn test_unterminated_string_reports_parse_error(json: &str) {
+        assert!(RawRootTurboJson::parse(json, "turbo.json").is_err());
     }
 
     #[test_case(r#"{"daemon": true}"#; "daemon in package turbo.json")]
@@ -621,6 +704,34 @@ mod tests {
             "expected parsing to fail due to unknown key 'lol' in task definition, but got: {:?}",
             result
         );
+    }
+
+    #[test]
+    fn test_structured_task_inputs_accept_mixed_entries() {
+        let json = r#"{
+          "tasks": {
+            "build": {
+              "inputs": [
+                "$TURBO_DEFAULT$",
+                "!src/generated/**",
+                {
+                  "mode": "jit",
+                  "globs": ["src/generated/**"],
+                  "withDefaults": true
+                },
+                {
+                  "mode": "dependencyOutputs",
+                  "from": ["codegen"],
+                  "globs": ["dist/**", "!dist/**/*.map"]
+                }
+              ]
+            }
+          }
+        }"#;
+
+        let result = RawRootTurboJson::parse(json, "turbo.json");
+
+        assert!(result.is_ok(), "structured task inputs should parse");
     }
 
     #[test]

@@ -26,11 +26,13 @@ mod dep_splitter;
 
 pub use builder::{Error, PackageGraphBuilder};
 
+pub use crate::package_json::DependencyKind;
+
 pub const ROOT_PKG_NAME: &str = "//";
 
 #[derive(Debug)]
 pub struct PackageGraph {
-    graph: petgraph::Graph<PackageNode, ()>,
+    graph: petgraph::Graph<PackageNode, DependencyKind>,
     root_node_index: NodeIndex,
     root_workspace_index: NodeIndex,
     #[allow(dead_code)]
@@ -369,8 +371,40 @@ impl PackageGraph {
         self.graph.node_indices()
     }
 
-    pub fn edges(&self) -> &[Edge<()>] {
+    pub fn edges(&self) -> &[Edge<DependencyKind>] {
         self.graph.raw_edges()
+    }
+
+    /// Returns the dependency kind for a directed edge between two workspace
+    /// packages, if one exists.
+    pub fn dependency_kind(&self, from: &PackageNode, to: &PackageNode) -> Option<DependencyKind> {
+        let from_index = self.node_lookup.get(from)?;
+        let to_index = self.node_lookup.get(to)?;
+        self.graph
+            .edges_connecting(*from_index, *to_index)
+            .next()
+            .map(|edge| *edge.weight())
+    }
+
+    /// Like [`Self::immediate_dependencies`], but includes the dependency kind
+    /// for each outgoing edge.
+    pub fn immediate_dependencies_with_kinds(
+        &self,
+        package: &PackageNode,
+    ) -> Option<HashMap<&PackageNode, DependencyKind>> {
+        let index = self.node_lookup.get(package)?;
+        Some(
+            self.graph
+                .edges(*index)
+                .map(|edge| {
+                    let target = self
+                        .graph
+                        .node_weight(edge.target())
+                        .expect("node index from neighbors should be present");
+                    (target, *edge.weight())
+                })
+                .collect(),
+        )
     }
 
     pub fn packages(&self) -> impl Iterator<Item = (&PackageName, &PackageInfo)> {
@@ -570,6 +604,36 @@ impl PackageGraph {
                 .flat_map(|node| self.node_lookup.get(node).cloned()),
             petgraph::Direction::Outgoing,
         )
+    }
+
+    /// Like [`Self::transitive_closure`], but only follows edges with
+    /// [`DependencyKind::Production`].
+    pub fn production_transitive_closure<'a, 'b, I: IntoIterator<Item = &'b PackageNode>>(
+        &'a self,
+        nodes: I,
+    ) -> HashSet<&'a PackageNode> {
+        let mut visited = HashSet::new();
+        let mut stack: Vec<NodeIndex> = nodes
+            .into_iter()
+            .filter_map(|node| self.node_lookup.get(node).cloned())
+            .collect();
+
+        while let Some(index) = stack.pop() {
+            let Some(node) = self.graph.node_weight(index) else {
+                continue;
+            };
+            if !visited.insert(node) {
+                continue;
+            }
+
+            for edge in self.graph.edges(index) {
+                if matches!(*edge.weight(), DependencyKind::Production) {
+                    stack.push(edge.target());
+                }
+            }
+        }
+
+        visited
     }
 
     pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a PackageName>>(
@@ -809,6 +873,8 @@ impl AsRef<str> for PackageName {
 
 #[cfg(test)]
 mod test {
+    use std::{fs, path::Path, process::Command};
+
     use serde_json::json;
     use turborepo_errors::Spanned;
 
@@ -830,6 +896,172 @@ mod test {
             &self,
         ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
             self.discover_packages().await
+        }
+    }
+
+    fn repo_root() -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("crate is under <repo>/crates")
+            .to_owned()
+    }
+
+    fn copy_dir_all(from: &Path, to: &Path) {
+        fs::create_dir_all(to).unwrap();
+        for entry in fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let file_type = entry.file_type().unwrap();
+            let dest = to.join(entry.file_name());
+            if file_type.is_dir() {
+                copy_dir_all(&entry.path(), &dest);
+            } else {
+                fs::copy(entry.path(), dest).unwrap();
+            }
+        }
+    }
+
+    fn apply_patch(dir: &Path, target: &str, patch_file: &str) {
+        let status = Command::new("patch")
+            .args([target, patch_file])
+            .current_dir(dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success(), "patch {target} {patch_file} failed");
+    }
+
+    fn setup_lockfile_aware_fixture(dir: &Path, pm_name: &str) {
+        let root = repo_root();
+        copy_dir_all(
+            &root.join("turborepo-tests/integration/fixtures/lockfile_aware_caching"),
+            dir,
+        );
+        copy_dir_all(
+            &root.join(format!(
+                "turborepo-tests/integration/tests/lockfile-aware-caching/{pm_name}"
+            )),
+            dir,
+        );
+    }
+
+    fn build_lockfile_aware_graph(
+        root: &AbsoluteSystemPath,
+        package_manager: PackageManager,
+    ) -> PackageGraph {
+        let root_package_json = PackageJson::load(&root.join_component("package.json")).unwrap();
+        let builder = PackageGraph::builder(root, root_package_json)
+            .with_package_manager(package_manager)
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::from([
+                (
+                    root.join_components(&["apps", "a", "package.json"]),
+                    PackageJson::load(&root.join_components(&["apps", "a", "package.json"]))
+                        .unwrap(),
+                ),
+                (
+                    root.join_components(&["apps", "b", "package.json"]),
+                    PackageJson::load(&root.join_components(&["apps", "b", "package.json"]))
+                        .unwrap(),
+                ),
+            ])));
+
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(builder.build())
+            .unwrap()
+    }
+
+    #[test]
+    fn lockfile_changes_are_scoped_by_package_manager() {
+        let cases = [
+            (
+                PackageManager::Npm,
+                "npm",
+                "package-lock.json",
+                "package-lock.patch",
+                "turbo-bump.patch",
+            ),
+            (
+                PackageManager::Yarn,
+                "yarn",
+                "yarn.lock",
+                "yarn-lock.patch",
+                "turbo-bump.patch",
+            ),
+            (
+                PackageManager::Pnpm,
+                "pnpm",
+                "pnpm-lock.yaml",
+                "pnpm-lock.patch",
+                "turbo-bump.patch",
+            ),
+            (
+                PackageManager::Berry,
+                "berry",
+                "yarn.lock",
+                "yarn-lock.patch",
+                "turbo-bump.patch",
+            ),
+            (
+                PackageManager::Bun,
+                "bun",
+                "bun.lock",
+                "bun-lock.patch",
+                "turbo-bump.patch",
+            ),
+        ];
+
+        for (package_manager, pm_name, lockfile, dep_patch, root_patch) in cases {
+            let tempdir = tempfile::tempdir().unwrap();
+            setup_lockfile_aware_fixture(tempdir.path(), pm_name);
+            let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+            let root_package_json =
+                PackageJson::load(&root.join_component("package.json")).unwrap();
+
+            let previous = package_manager
+                .read_lockfile(&root, &root_package_json)
+                .unwrap();
+
+            apply_patch(tempdir.path(), lockfile, dep_patch);
+            let dep_graph = build_lockfile_aware_graph(&root, package_manager.clone());
+            let mut dep_changed = dep_graph
+                .changed_packages_from_lockfile(previous.as_ref())
+                .unwrap();
+            dep_changed.sort_by(|a, b| a.package.name.cmp(&b.package.name));
+
+            assert_eq!(
+                dep_changed
+                    .iter()
+                    .map(|change| change.package.name.clone())
+                    .collect::<Vec<_>>(),
+                vec![PackageName::from("b")],
+                "{pm_name}: dependency lockfile change should only affect b"
+            );
+
+            let previous_dep = package_manager
+                .read_lockfile(&root, &root_package_json)
+                .unwrap();
+            apply_patch(tempdir.path(), lockfile, root_patch);
+            let root_graph = build_lockfile_aware_graph(&root, package_manager);
+            let mut root_changed = root_graph
+                .changed_packages_from_lockfile(previous_dep.as_ref())
+                .unwrap();
+            root_changed.sort_by(|a, b| a.package.name.cmp(&b.package.name));
+
+            let root_changed_names = root_changed
+                .iter()
+                .map(|change| change.package.name.clone())
+                .collect::<HashSet<_>>();
+            assert!(
+                root_changed_names.contains(&PackageName::from("a"))
+                    && root_changed_names.contains(&PackageName::from("b")),
+                "{pm_name}: root lockfile change should affect all workspaces: \
+                 {root_changed_names:?}"
+            );
         }
     }
 
