@@ -1710,6 +1710,7 @@ mod tests {
             root: root.to_owned(),
             bin,
             attrs: std::sync::OnceLock::new(),
+            slowest_files: None,
         }
     }
 

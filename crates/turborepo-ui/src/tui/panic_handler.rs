@@ -20,6 +20,16 @@ static TUI_ACTIVE: AtomicBool = AtomicBool::new(false);
 /// to be saved before it can be restored.
 static MOUSE_CAPTURE_ENABLED: AtomicBool = AtomicBool::new(false);
 
+/// Global flag indicating whether raw mode is currently enabled.
+///
+/// Raw mode is decoupled from the alternate screen: while the user can
+/// toggle between the TUI (alternate screen) and streamed logs (main
+/// screen), raw mode stays enabled the whole time so the toggle hotkey
+/// remains catchable. The panic handler therefore tracks raw mode
+/// separately from `TUI_ACTIVE` so it can restore it even when a panic
+/// happens while streaming (i.e. when the TUI is not active).
+static RAW_MODE_ENABLED: AtomicBool = AtomicBool::new(false);
+
 /// Mark the TUI as active. Call this after entering raw mode and alternate
 /// screen.
 pub fn set_tui_active() {
@@ -51,6 +61,23 @@ pub fn is_mouse_capture_enabled() -> bool {
     MOUSE_CAPTURE_ENABLED.load(Ordering::SeqCst)
 }
 
+/// Mark that raw mode has been enabled. Call this once when the render
+/// loop first takes ownership of terminal input.
+pub fn set_raw_mode_enabled() {
+    RAW_MODE_ENABLED.store(true, Ordering::SeqCst);
+}
+
+/// Mark that raw mode has been disabled. Call this once during final
+/// cleanup.
+pub fn set_raw_mode_disabled() {
+    RAW_MODE_ENABLED.store(false, Ordering::SeqCst);
+}
+
+/// Check if raw mode is currently enabled.
+pub fn is_raw_mode_enabled() -> bool {
+    RAW_MODE_ENABLED.load(Ordering::SeqCst)
+}
+
 /// Attempts to restore terminal to a sane state if the TUI was active.
 ///
 /// This is designed to be called from a panic handler. It is best-effort:
@@ -60,8 +87,13 @@ pub fn is_mouse_capture_enabled() -> bool {
 ///
 /// Returns `true` if restoration was attempted, `false` if TUI wasn't active.
 pub fn restore_terminal_on_panic() -> bool {
-    // Only restore if TUI was active
-    if !TUI_ACTIVE.load(Ordering::SeqCst) {
+    let tui_active = TUI_ACTIVE.load(Ordering::SeqCst);
+    let raw_mode_enabled = RAW_MODE_ENABLED.load(Ordering::SeqCst);
+
+    // Nothing to restore if we never modified terminal state. Note that raw
+    // mode is tracked separately from the alternate screen: a panic while
+    // streaming logs (TUI inactive) still needs raw mode restored.
+    if !tui_active && !raw_mode_enabled {
         return false;
     }
 
@@ -73,27 +105,35 @@ pub fn restore_terminal_on_panic() -> bool {
     // panics from crossterm itself.
     let mut stdout = std::io::stdout();
 
-    // Disable mouse capture (multiple modes to cover all cases)
-    // CSI ? 1000 l - Disable normal mouse tracking
-    // CSI ? 1002 l - Disable button event mouse tracking
-    // CSI ? 1003 l - Disable any event mouse tracking
-    // CSI ? 1006 l - Disable SGR extended mouse mode
-    let _ = stdout.write_all(b"\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
+    // Only the alternate-screen-related restoration is gated on `tui_active`;
+    // these sequences are meaningless (though harmless) when we're already on
+    // the main screen streaming logs.
+    if tui_active {
+        // Disable mouse capture (multiple modes to cover all cases)
+        // CSI ? 1000 l - Disable normal mouse tracking
+        // CSI ? 1002 l - Disable button event mouse tracking
+        // CSI ? 1003 l - Disable any event mouse tracking
+        // CSI ? 1006 l - Disable SGR extended mouse mode
+        let _ = stdout.write_all(b"\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
 
-    // Leave alternate screen (CSI ? 1049 l)
-    let _ = stdout.write_all(b"\x1b[?1049l");
+        // Leave alternate screen (CSI ? 1049 l)
+        let _ = stdout.write_all(b"\x1b[?1049l");
 
-    // Show cursor (CSI ? 25 h)
-    let _ = stdout.write_all(b"\x1b[?25h");
+        // Show cursor (CSI ? 25 h)
+        let _ = stdout.write_all(b"\x1b[?25h");
 
-    // Reset all attributes (SGR 0)
-    let _ = stdout.write_all(b"\x1b[0m");
+        // Reset all attributes (SGR 0)
+        let _ = stdout.write_all(b"\x1b[0m");
 
-    let _ = stdout.flush();
+        let _ = stdout.flush();
+    }
 
     // Disable raw mode - this is the one crossterm call we make, but it's
-    // relatively safe as it just makes a tcsetattr syscall
-    let _ = crossterm::terminal::disable_raw_mode();
+    // relatively safe as it just makes a tcsetattr syscall. Restored whenever
+    // raw mode was enabled, regardless of whether the TUI was active.
+    if raw_mode_enabled {
+        let _ = crossterm::terminal::disable_raw_mode();
+    }
 
     true
 }
@@ -145,9 +185,23 @@ mod test {
     fn test_restore_skipped_when_inactive() {
         // Reset to known state
         set_tui_inactive();
+        set_raw_mode_disabled();
 
         // Should return false and not attempt restoration
         assert!(!restore_terminal_on_panic());
+    }
+
+    #[test]
+    #[serial]
+    fn test_restore_runs_when_only_raw_mode() {
+        // Raw mode enabled without the TUI being active (streaming logs).
+        set_tui_inactive();
+        set_raw_mode_enabled();
+
+        assert!(restore_terminal_on_panic());
+
+        // Clean up
+        set_raw_mode_disabled();
     }
 
     #[test]

@@ -43,6 +43,13 @@ impl<W> TerminalOutput<W> {
         }
     }
 
+    /// The raw (newline-normalized) byte stream this task has produced so
+    /// far. Used to backfill streamed logs when the user switches from the
+    /// TUI to streaming mid-run.
+    pub fn raw_output(&self) -> &[u8] {
+        &self.output
+    }
+
     pub fn title(&self, task_name: &str) -> String {
         match self.status.as_deref() {
             Some(status) => format!(" {task_name} > {status} "),

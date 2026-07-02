@@ -43,7 +43,7 @@ use turborepo_task_hash::{
 };
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_types::{EnvMode, UIMode};
-use turborepo_ui::{sender::UISender, tui, tui::TuiSender, ColorConfig, LIGHT_GREY};
+use turborepo_ui::{sender::UISender, tui, tui::TuiSender, ColorConfig, TerminalSink, LIGHT_GREY};
 
 pub use crate::run::error::Error;
 use crate::{
@@ -530,17 +530,17 @@ impl Run {
             && tui::terminal_big_enough()?)
     }
 
-    pub fn start_ui(self: &Arc<Self>) -> UIResult<UISender> {
+    pub fn start_ui(self: &Arc<Self>, terminal_sink: Arc<TerminalSink>) -> UIResult<UISender> {
         match self.opts.run_opts.ui_mode {
             UIMode::Tui => self
-                .start_terminal_ui()
+                .start_terminal_ui(terminal_sink)
                 .map(|res| res.map(|(sender, handle)| (UISender::Tui(sender), handle))),
             UIMode::Stream | UIMode::StreamWithTimestamps => Ok(None),
         }
     }
 
     #[allow(clippy::type_complexity)]
-    fn start_terminal_ui(&self) -> TuiResult {
+    fn start_terminal_ui(&self, terminal_sink: Arc<TerminalSink>) -> TuiResult {
         if !self.should_start_ui()? {
             return Ok(None);
         }
@@ -564,6 +564,7 @@ impl Run {
             repo_root,
             scrollback_len,
             Some(interrupt),
+            terminal_sink,
         )?;
 
         Ok(Some((sender, handle)))
@@ -1136,10 +1137,12 @@ impl Run {
             .max()
             .unwrap_or(if errors.is_empty() { 0 } else { 1 });
 
+        // Task-scoped so sinks can attribute the failure to its task — e.g.
+        // the single-task stream filter drops errors from other tasks.
         for err in &errors {
             turborepo_log::error(
-                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-                err.to_string(),
+                turborepo_log::Source::task(err.task_id()),
+                err.cause().to_string(),
             )
             .emit();
         }

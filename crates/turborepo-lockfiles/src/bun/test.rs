@@ -2301,3 +2301,84 @@ fn test_prune_preserves_three_level_nested_version() {
             .collect::<Vec<_>>()
     );
 }
+
+// https://github.com/vercel/turborepo/issues/13204
+// A scoped package like "@types/webpack" whose unscoped name matches one of
+// its own dependencies ("webpack") must not be treated as a nested entry for
+// that dependency. The parent-chain walk previously split "@types/webpack" at
+// the scope separator, found the "@types/webpack" entry under the bogus
+// ancestor key "@types" + "/webpack", and pinned the webpack dependency to
+// @types/webpack's version, dropping webpack from the pruned lockfile.
+#[test]
+fn test_scoped_package_name_not_mistaken_for_nested_entry() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": {
+                "name": "test-root"
+            },
+            "packages/app": {
+                "name": "app",
+                "version": "0.0.0",
+                "dependencies": {
+                    "@types/webpack": "5.28.5"
+                }
+            }
+        },
+        "packages": {
+            "@types/webpack": ["@types/webpack@5.28.5", "", {
+                "dependencies": {
+                    "tapable": "^2.2.0",
+                    "webpack": "^5"
+                }
+            }, "sha512-types-webpack"],
+            "tapable": ["tapable@2.3.3", "", {}, "sha512-tapable"],
+            "webpack": ["webpack@5.108.3", "", {
+                "dependencies": {
+                    "tapable": "^2.3.0"
+                }
+            }, "sha512-webpack"]
+        }
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+    // The webpack dependency of @types/webpack must keep its original spec
+    // instead of being pinned to @types/webpack's own version.
+    let deps = lockfile
+        .all_dependencies("@types/webpack@5.28.5")
+        .unwrap()
+        .expect("@types/webpack should have dependencies");
+    assert_eq!(deps.get("webpack"), Some(&"^5".to_string()));
+
+    let unresolved_deps: std::collections::BTreeMap<String, String> =
+        [("@types/webpack".to_string(), "5.28.5".to_string())]
+            .into_iter()
+            .collect();
+    let closure =
+        crate::transitive_closure(&lockfile, "packages/app", unresolved_deps, false).unwrap();
+
+    assert!(
+        closure.iter().any(|pkg| pkg.key == "webpack@5.108.3"),
+        "webpack should be in the transitive closure of @types/webpack"
+    );
+
+    let subgraph = <BunLockfile as crate::Lockfile>::subgraph(
+        &lockfile,
+        &["packages/app".into()],
+        &closure
+            .iter()
+            .map(|pkg| pkg.key.clone())
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    let encoded = subgraph.encode().unwrap();
+    let encoded_str = String::from_utf8(encoded).unwrap();
+    let pruned = BunLockfile::from_str(&encoded_str).unwrap();
+
+    assert!(
+        pruned.data.packages.contains_key("webpack"),
+        "webpack must remain in the pruned lockfile"
+    );
+}

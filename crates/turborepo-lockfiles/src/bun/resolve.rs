@@ -1,6 +1,6 @@
 use semver::{Version, VersionReq};
 
-use super::{BunLockfile, PackageEntry, PackageIdent, PossibleKeyIter, VersionSpec};
+use super::{BunLockfile, PackageEntry, PackageIdent, PackageKey, PossibleKeyIter, VersionSpec};
 
 impl BunLockfile {
     fn process_package_entry(
@@ -85,16 +85,21 @@ impl BunLockfile {
             return Some((direct_key, entry));
         }
 
-        let mut search_key = entry_key;
-        while let Some(slash_pos) = search_key.rfind('/') {
-            search_key = &search_key[..slash_pos];
-            let ancestor_key = format!("{search_key}/{dependency}");
+        // Walk up the parent chain using PackageKey so scoped package names
+        // are handled correctly. A naive split on '/' would treat a top-level
+        // scoped key like "@types/webpack" as having parent "@types" and
+        // incorrectly return the "@types/webpack" entry itself as a nested
+        // entry for a "webpack" dependency.
+        let mut current = PackageKey::parse(entry_key);
+        while let Some(parent) = current.parent() {
+            let ancestor_key = format!("{parent}/{dependency}");
             if let Some(entry) = self.data.packages.get(&ancestor_key) {
                 if self.version_satisfies_spec(entry.version(), version) {
                     return Some((ancestor_key, entry));
                 }
                 break;
             }
+            current = PackageKey::parse(&parent);
         }
 
         None

@@ -1206,6 +1206,7 @@ mod tests {
             root: root.clone(),
             bin: root,
             attrs: OnceLock::new(),
+            slowest_files: None,
         }
     }
 

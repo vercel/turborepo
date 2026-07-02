@@ -849,6 +849,14 @@ impl TaskError {
         Self { task_id, cause }
     }
 
+    pub fn task_id(&self) -> &str {
+        &self.task_id
+    }
+
+    pub fn cause(&self) -> &TaskErrorCause {
+        &self.cause
+    }
+
     pub fn exit_code(&self) -> Option<i32> {
         match self.cause {
             TaskErrorCause::Exit { exit_code, .. } => Some(exit_code),
