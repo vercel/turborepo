@@ -149,6 +149,12 @@ impl<W> TerminalOutput<W> {
         self.parser.has_selection()
     }
 
+    /// Whether a mouse-driven selection is in progress (the button is still
+    /// held down).
+    pub fn is_selecting(&self) -> bool {
+        self.selection_start.is_some()
+    }
+
     pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
         match event.kind {
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
@@ -156,7 +162,15 @@ impl<W> TerminalOutput<W> {
                 self.selection_start = Some((event.row, event.column));
             }
             crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
-                if let Some((start_row, start_col)) = self.selection_start {
+                // Holding shift mid-drag cancels the selection so releasing
+                // the button won't copy anything.
+                if event
+                    .modifiers
+                    .contains(crossterm::event::KeyModifiers::SHIFT)
+                {
+                    self.parser.clear_selection()?;
+                    self.selection_start = None;
+                } else if let Some((start_row, start_col)) = self.selection_start {
                     self.parser
                         .update_selection(start_row, start_col, event.row, event.column)?;
                 }
@@ -169,6 +183,12 @@ impl<W> TerminalOutput<W> {
             crossterm::event::MouseEventKind::ScrollLeft
             | crossterm::event::MouseEventKind::ScrollRight => (),
             crossterm::event::MouseEventKind::Up(_) => {
+                if event
+                    .modifiers
+                    .contains(crossterm::event::KeyModifiers::SHIFT)
+                {
+                    self.parser.clear_selection()?;
+                }
                 self.selection_start = None;
             }
         }
@@ -262,7 +282,91 @@ mod newline_tests {
         })?;
 
         assert!(output.has_selection());
+        assert!(output.is_selecting());
         assert_eq!(output.copy_selection().as_deref(), Some("hello"));
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+        // Release ends the drag but keeps the selection highlighted.
+        assert!(!output.is_selecting());
+        assert!(output.has_selection());
+        Ok(())
+    }
+
+    #[test]
+    fn shift_during_drag_cancels_selection() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let mut output: TerminalOutput<()> = TerminalOutput::new(10, 40, None, 100);
+        output.process(b"hello world\r\n");
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        assert!(output.has_selection());
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 6,
+            row: 0,
+            modifiers: KeyModifiers::SHIFT,
+        })?;
+        assert!(!output.has_selection());
+        assert!(!output.is_selecting());
+
+        // Continuing to drag without shift doesn't resurrect the selection.
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 8,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        assert!(!output.has_selection());
+        Ok(())
+    }
+
+    #[test]
+    fn shift_on_release_cancels_selection() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let mut output: TerminalOutput<()> = TerminalOutput::new(10, 40, None, 100);
+        output.process(b"hello world\r\n");
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        assert!(output.has_selection());
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::SHIFT,
+        })?;
+        assert!(!output.has_selection());
+        assert!(!output.is_selecting());
         Ok(())
     }
 }

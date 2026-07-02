@@ -11,6 +11,8 @@ use super::{PANE_LEFT_PADDING_WITH_SIDEBAR, TerminalOutput, app::LayoutSections}
 const EXIT_INTERACTIVE_HINT: &str = "Ctrl-z - Stop interacting";
 const ENTER_INTERACTIVE_HINT: &str = "i - Interact";
 const HAS_SELECTION: &str = "c - Copy selection";
+const CANCEL_SELECTION: &str = "hold shift - Cancel selection";
+const COPIED_TO_CLIPBOARD: &str = "Copied to clipboard";
 const SCROLL_LOGS: &str = "u/d - Scroll logs";
 const PAGE_LOGS: &str = "U/D - Page logs";
 const JUMP_IN_LOGS: &str = "t/b - Jump to top/bottom";
@@ -21,6 +23,7 @@ pub struct TerminalPane<'a, W> {
     task_name: &'a str,
     section: &'a LayoutSections,
     has_sidebar: bool,
+    show_copied_notice: bool,
 }
 
 impl<'a, W> TerminalPane<'a, W> {
@@ -29,12 +32,14 @@ impl<'a, W> TerminalPane<'a, W> {
         task_name: &'a str,
         section: &'a LayoutSections,
         has_sidebar: bool,
+        show_copied_notice: bool,
     ) -> Self {
         Self {
             terminal_output,
             section,
             task_name,
             has_sidebar,
+            show_copied_notice,
         }
     }
 
@@ -51,7 +56,15 @@ impl<'a, W> TerminalPane<'a, W> {
                 messages.push(TASK_LIST_HIDDEN);
             }
 
-            if self.terminal_output.has_selection() {
+            // Selection hints, in priority order: while the user is dragging
+            // out a selection, tell them how to cancel it; right after a
+            // copy, confirm it happened; otherwise advertise the copy bind
+            // for the selection they have.
+            if self.terminal_output.is_selecting() {
+                messages.push(CANCEL_SELECTION);
+            } else if self.show_copied_notice {
+                messages.push(COPIED_TO_CLIPBOARD);
+            } else if self.terminal_output.has_selection() {
                 messages.push(HAS_SELECTION);
             }
 
@@ -128,7 +141,7 @@ mod test {
     #[test]
     fn test_footer_interactive() {
         let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, Some(Vec::new()), 2048);
-        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true);
+        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, false);
         assert_eq!(
             String::from(pane.footer()),
             "   i - Interact   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom"
@@ -138,7 +151,7 @@ mod test {
     #[test]
     fn test_footer_non_interactive() {
         let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
-        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true);
+        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, false);
         assert_eq!(
             String::from(pane.footer()),
             "   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom"
@@ -146,9 +159,49 @@ mod test {
     }
 
     #[test]
+    fn test_footer_copied_notice() {
+        let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
+        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, true);
+        assert_eq!(
+            String::from(pane.footer()),
+            "   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom   Copied to \
+             clipboard"
+        );
+    }
+
+    #[test]
+    fn test_footer_cancel_selection_hint_while_selecting() {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
+        term.process(b"hello world\r\n");
+        term.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })
+        .unwrap();
+        term.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })
+        .unwrap();
+
+        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, false);
+        assert_eq!(
+            String::from(pane.footer()),
+            "   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom   hold shift - \
+             Cancel selection"
+        );
+    }
+
+    #[test]
     fn test_content_area_pads_when_sidebar_visible() {
         let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
-        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true);
+        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, false);
 
         assert_eq!(
             pane.content_area(Rect::new(10, 0, 20, 10)),
@@ -159,7 +212,7 @@ mod test {
     #[test]
     fn test_content_area_has_no_padding_when_sidebar_hidden() {
         let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
-        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, false);
+        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, false, false);
 
         assert_eq!(
             pane.content_area(Rect::new(10, 0, 20, 10)),

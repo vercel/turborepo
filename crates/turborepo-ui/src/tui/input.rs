@@ -46,7 +46,8 @@ impl InputOptions<'_> {
                     Some(Event::ScrollWithMomentum(Direction::Up))
                 }
                 crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
-                | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
+                | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left)
+                | crossterm::event::MouseEventKind::Up(crossterm::event::MouseButton::Left) => {
                     Some(Event::Mouse(m))
                 }
                 _ => None,
