@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
-use biome_deserialize::{Text, json::deserialize_from_json_str};
+use biome_deserialize::Text;
 use biome_deserialize_macros::Deserializable;
 use biome_diagnostics::DiagnosticExt;
 use biome_json_parser::JsonParserOptions;
@@ -187,7 +187,11 @@ impl PackageJson {
 
     pub fn load_from_str(contents: &str, path: &str) -> Result<PackageJson, Error> {
         let (result, errors): (Option<RawPackageJson>, _) =
-            deserialize_from_json_str(contents, JsonParserOptions::default(), path).consume();
+            turborepo_errors::json::deserialize_from_json_str(
+                contents,
+                JsonParserOptions::default(),
+                path,
+            );
         if !errors.is_empty() {
             return Err(Error::Parse(
                 errors
@@ -316,6 +320,15 @@ mod test {
         let package_json: PackageJson = PackageJson::from_value(json.clone()).unwrap();
         let actual = serde_json::to_value(package_json).unwrap();
         assert_eq!(actual, json);
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/13197
+    // Unterminated string literals used to panic inside biome during
+    // deserialization instead of producing a parse error.
+    #[test_case("{\"name\": \"\n}" ; "quote before newline")]
+    #[test_case("{\"dependencies\": {\"turbo\": \"" ; "quote at eof")]
+    fn test_unterminated_string_reports_parse_error(contents: &str) {
+        assert!(PackageJson::load_from_str(contents, "package.json").is_err());
     }
 
     #[test]
