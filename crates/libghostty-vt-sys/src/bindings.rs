@@ -107,29 +107,21 @@ pub type Terminal = *mut TerminalImpl;
 pub struct TrackedGridRefImpl {
     _unused: [u8; 0],
 }
-#[doc = " Opaque handle to a tracked grid reference.\n\n A tracked grid reference is owned by the \
-         caller and must be freed with\n ghostty_tracked_grid_ref_free(). If the terminal that \
-         created it is freed\n first, the handle remains valid only for tracked-grid-ref APIs: it \
-         reports no\n value and can still be freed.\n"]
+#[doc = " Opaque handle to a tracked grid reference.\n\n A tracked grid reference is owned by the caller and must be freed with\n ghostty_tracked_grid_ref_free(). If the terminal that created it is freed\n first, the handle remains valid only for tracked-grid-ref APIs: it reports no\n value and can still be freed.\n"]
 pub type TrackedGridRef = *mut TrackedGridRefImpl;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct KittyGraphicsImpl {
     _unused: [u8; 0],
 }
-#[doc = " Opaque handle to a Kitty graphics image storage.\n\n Obtained via ghostty_terminal_get() \
-         with\n GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS. The pointer is borrowed from\n the terminal \
-         and remains valid until the next mutating terminal call\n (e.g. \
-         ghostty_terminal_vt_write() or ghostty_terminal_reset()).\n"]
+#[doc = " Opaque handle to a Kitty graphics image storage.\n\n Obtained via ghostty_terminal_get() with\n GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS. The pointer is borrowed from\n the terminal and remains valid until the next mutating terminal call\n (e.g. ghostty_terminal_vt_write() or ghostty_terminal_reset()).\n"]
 pub type KittyGraphics = *mut KittyGraphicsImpl;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct KittyGraphicsImageImpl {
     _unused: [u8; 0],
 }
-#[doc = " Opaque handle to a Kitty graphics image.\n\n Obtained via ghostty_kitty_graphics_image() \
-         with an image ID. The\n pointer is borrowed from the storage and remains valid until the \
-         next\n mutating terminal call.\n"]
+#[doc = " Opaque handle to a Kitty graphics image.\n\n Obtained via ghostty_kitty_graphics_image() with an image ID. The\n pointer is borrowed from the storage and remains valid until the next\n mutating terminal call.\n"]
 pub type KittyGraphicsImage = *const KittyGraphicsImageImpl;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -164,9 +156,7 @@ pub type RenderStateRowCells = *mut RenderStateRowCellsImpl;
 pub struct SgrParserImpl {
     _unused: [u8; 0],
 }
-#[doc = " Opaque handle to an SGR parser instance.\n\n This handle represents an SGR (Select \
-         Graphic Rendition) parser that can\n be used to parse SGR sequences and extract \
-         individual text attributes.\n"]
+#[doc = " Opaque handle to an SGR parser instance.\n\n This handle represents an SGR (Select Graphic Rendition) parser that can\n be used to parse SGR sequences and extract individual text attributes.\n"]
 pub type SgrParser = *mut SgrParserImpl;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -180,17 +170,14 @@ pub type Formatter = *mut FormatterImpl;
 pub struct OscParserImpl {
     _unused: [u8; 0],
 }
-#[doc = " Opaque handle to an OSC parser instance.\n\n This handle represents an OSC (Operating \
-         System Command) parser that can\n be used to parse the contents of OSC sequences.\n"]
+#[doc = " Opaque handle to an OSC parser instance.\n\n This handle represents an OSC (Operating System Command) parser that can\n be used to parse the contents of OSC sequences.\n"]
 pub type OscParser = *mut OscParserImpl;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct OscCommandImpl {
     _unused: [u8; 0],
 }
-#[doc = " Opaque handle to a single OSC command.\n\n This handle represents a parsed OSC \
-         (Operating System Command) command.\n The command can be queried for its type and \
-         associated data.\n"]
+#[doc = " Opaque handle to a single OSC command.\n\n This handle represents a parsed OSC (Operating System Command) command.\n The command can be queried for its type and associated data.\n"]
 pub type OscCommand = *mut OscCommandImpl;
 pub mod FormatterFormat {
     #[doc = " Terminal content output format.\n"]
@@ -204,9 +191,7 @@ pub mod FormatterFormat {
     #[doc = " HTML with inline styles."]
     pub const MAX_VALUE: Type = 2147483647;
 }
-#[doc = " A borrowed byte string (pointer + length).\n\n The memory is not owned by this struct. \
-         The pointer is only valid\n for the lifetime documented by the API that produces or \
-         consumes it."]
+#[doc = " A borrowed byte string (pointer + length).\n\n The memory is not owned by this struct. The pointer is only valid\n for the lifetime documented by the API that produces or consumes it."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct String {
@@ -231,9 +216,7 @@ impl Default for String {
         }
     }
 }
-#[doc = " A caller-provided byte buffer.\n\n APIs that write to this type use `len` for the number \
-         of bytes written on\n GHOSTTY_SUCCESS and the required byte capacity on \
-         GHOSTTY_OUT_OF_SPACE."]
+#[doc = " A caller-provided byte buffer.\n\n APIs that write to this type use `len` for the number of bytes written on\n GHOSTTY_SUCCESS and the required byte capacity on GHOSTTY_OUT_OF_SPACE."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Buffer {
@@ -261,9 +244,7 @@ impl Default for Buffer {
         }
     }
 }
-#[doc = " A surface-space position in pixels.\n\n This is not a terminal grid coordinate. It \
-         represents an x/y position in the\n rendered surface coordinate space, with (0, 0) at the \
-         top-left of the\n surface."]
+#[doc = " A surface-space position in pixels.\n\n This is not a terminal grid coordinate. It represents an x/y position in the\n rendered surface coordinate space, with (0, 0) at the top-left of the\n surface."]
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct SurfacePosition {
@@ -279,10 +260,7 @@ const _: () = {
     ["Offset of field: SurfacePosition::x"][::std::mem::offset_of!(SurfacePosition, x) - 0usize];
     ["Offset of field: SurfacePosition::y"][::std::mem::offset_of!(SurfacePosition, y) - 8usize];
 };
-#[doc = " A borrowed list of Unicode scalar values.\n\n Values are encoded as uint32_t scalar \
-         values. The memory is not owned by this\n struct. The pointer is only valid for the \
-         lifetime documented by the API that\n consumes or produces it.\n\n APIs may document \
-         special handling for NULL + len 0, such as “use defaults”."]
+#[doc = " A borrowed list of Unicode scalar values.\n\n Values are encoded as uint32_t scalar values. The memory is not owned by this\n struct. The pointer is only valid for the lifetime documented by the API that\n consumes or produces it.\n\n APIs may document special handling for NULL + len 0, such as “use defaults”."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Codepoints {
@@ -311,28 +289,11 @@ unsafe extern "C" {
     #[doc = " Return a pointer to a null-terminated JSON string describing the\n layout of every C API struct for the current target.\n\n This is primarily useful for language bindings that can't easily\n set C struct fields and need to do so via byte offsets. For example,\n WebAssembly modules can't share struct definitions with the host.\n\n Example (abbreviated):\n {\n   \"GhosttyMouseEncoderSize\": {\n     \"size\": 40,\n     \"align\": 8,\n     \"fields\": {\n       \"size\":           { \"offset\": 0,  \"size\": 8, \"type\": \"u64\" },\n       \"screen_width\":   { \"offset\": 8,  \"size\": 4, \"type\": \"u32\" },\n       \"screen_height\":  { \"offset\": 12, \"size\": 4, \"type\": \"u32\" },\n       \"cell_width\":     { \"offset\": 16, \"size\": 4, \"type\": \"u32\" },\n       \"cell_height\":    { \"offset\": 20, \"size\": 4, \"type\": \"u32\" },\n       \"padding_top\":    { \"offset\": 24, \"size\": 4, \"type\": \"u32\" },\n       \"padding_bottom\": { \"offset\": 28, \"size\": 4, \"type\": \"u32\" },\n       \"padding_right\":  { \"offset\": 32, \"size\": 4, \"type\": \"u32\" },\n       \"padding_left\":   { \"offset\": 36, \"size\": 4, \"type\": \"u32\" }\n     }\n   }\n }\n\n The returned pointer is valid for the lifetime of the process.\n"]
     pub fn ghostty_type_json() -> *const ::std::os::raw::c_char;
 }
-#[doc = " Function table for custom memory allocator operations.\n\n This vtable defines the \
-         interface for a custom memory allocator. All\n function pointers must be valid and \
-         non-NULL.\n\n\n If you're not going to use a custom allocator, you can ignore all of\n \
-         this. All functions that take an allocator pointer allow NULL to use a\n default \
-         allocator.\n\n The interface is based on the Zig allocator interface. I'll say up front\n \
-         that it is easy to look at this interface and think \"wow, this is really\n \
-         overcomplicated\". The reason for this complexity is well thought out by\n the Zig folks, \
-         and it enables a diverse set of allocation strategies\n as shown by the Zig ecosystem. As \
-         a consolation, please note that many\n of the arguments are only needed for advanced use \
-         cases and can be\n safely ignored in simple implementations. For example, if you look \
-         at\n the Zig implementation of the libc allocator in `lib/std/heap.zig`\n (search for \
-         CAllocator), you'll see it is very simple.\n\n We chose to align with the Zig allocator \
-         interface because:\n\n   1. It is a proven interface that serves a wide variety of use \
-         cases\n      in the real world via the Zig ecosystem. It's shown to work.\n\n   2. Our \
-         core implementation itself is Zig, and this lets us very\n      cheaply and easily \
-         convert between C and Zig allocators.\n\n NOTE(mitchellh): In the future, we can have \
-         default implementations of\n resize/remap and allow those to be null."]
+#[doc = " Function table for custom memory allocator operations.\n\n This vtable defines the interface for a custom memory allocator. All\n function pointers must be valid and non-NULL.\n\n\n If you're not going to use a custom allocator, you can ignore all of\n this. All functions that take an allocator pointer allow NULL to use a\n default allocator.\n\n The interface is based on the Zig allocator interface. I'll say up front\n that it is easy to look at this interface and think \"wow, this is really\n overcomplicated\". The reason for this complexity is well thought out by\n the Zig folks, and it enables a diverse set of allocation strategies\n as shown by the Zig ecosystem. As a consolation, please note that many\n of the arguments are only needed for advanced use cases and can be\n safely ignored in simple implementations. For example, if you look at\n the Zig implementation of the libc allocator in `lib/std/heap.zig`\n (search for CAllocator), you'll see it is very simple.\n\n We chose to align with the Zig allocator interface because:\n\n   1. It is a proven interface that serves a wide variety of use cases\n      in the real world via the Zig ecosystem. It's shown to work.\n\n   2. Our core implementation itself is Zig, and this lets us very\n      cheaply and easily convert between C and Zig allocators.\n\n NOTE(mitchellh): In the future, we can have default implementations of\n resize/remap and allow those to be null."]
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct AllocatorVtable {
-    #[doc = " Return a pointer to `len` bytes with specified `alignment`, or return\n `NULL` \
-             indicating the allocation failed.\n\n   be a power of two between 1 and 16 inclusive."]
+    #[doc = " Return a pointer to `len` bytes with specified `alignment`, or return\n `NULL` indicating the allocation failed.\n\n   be a power of two between 1 and 16 inclusive."]
     pub alloc: ::std::option::Option<
         unsafe extern "C" fn(
             ctx: *mut ::std::os::raw::c_void,
@@ -341,10 +302,7 @@ pub struct AllocatorVtable {
             ret_addr: usize,
         ) -> *mut ::std::os::raw::c_void,
     >,
-    #[doc = " Attempt to expand or shrink memory in place.\n\n `memory_len` must equal the length \
-             requested from the most recent\n successful call to `alloc`, `resize`, or `remap`. \
-             `alignment` must\n equal the same value that was passed as the `alignment` parameter \
-             to\n the original `alloc` call.\n\n `new_len` must be greater than zero.\n"]
+    #[doc = " Attempt to expand or shrink memory in place.\n\n `memory_len` must equal the length requested from the most recent\n successful call to `alloc`, `resize`, or `remap`. `alignment` must\n equal the same value that was passed as the `alignment` parameter to\n the original `alloc` call.\n\n `new_len` must be greater than zero.\n"]
     pub resize: ::std::option::Option<
         unsafe extern "C" fn(
             ctx: *mut ::std::os::raw::c_void,
@@ -355,16 +313,7 @@ pub struct AllocatorVtable {
             ret_addr: usize,
         ) -> bool,
     >,
-    #[doc = " Attempt to expand or shrink memory, allowing relocation.\n\n `memory_len` must \
-             equal the length requested from the most recent\n successful call to `alloc`, \
-             `resize`, or `remap`. `alignment` must\n equal the same value that was passed as the \
-             `alignment` parameter to\n the original `alloc` call.\n\n A non-`NULL` return value \
-             indicates the resize was successful. The\n allocation may have same address, or may \
-             have been relocated. In either\n case, the allocation now has size of `new_len`. A \
-             `NULL` return value\n indicates that the resize would be equivalent to allocating \
-             new memory,\n copying the bytes from the old memory, and then freeing the old \
-             memory.\n In such case, it is more efficient for the caller to perform the copy.\n\n \
-             `new_len` must be greater than zero.\n"]
+    #[doc = " Attempt to expand or shrink memory, allowing relocation.\n\n `memory_len` must equal the length requested from the most recent\n successful call to `alloc`, `resize`, or `remap`. `alignment` must\n equal the same value that was passed as the `alignment` parameter to\n the original `alloc` call.\n\n A non-`NULL` return value indicates the resize was successful. The\n allocation may have same address, or may have been relocated. In either\n case, the allocation now has size of `new_len`. A `NULL` return value\n indicates that the resize would be equivalent to allocating new memory,\n copying the bytes from the old memory, and then freeing the old memory.\n In such case, it is more efficient for the caller to perform the copy.\n\n `new_len` must be greater than zero.\n"]
     pub remap: ::std::option::Option<
         unsafe extern "C" fn(
             ctx: *mut ::std::os::raw::c_void,
@@ -375,10 +324,7 @@ pub struct AllocatorVtable {
             ret_addr: usize,
         ) -> *mut ::std::os::raw::c_void,
     >,
-    #[doc = " Free and invalidate a region of memory.\n\n `memory_len` must equal the length \
-             requested from the most recent\n successful call to `alloc`, `resize`, or `remap`. \
-             `alignment` must\n equal the same value that was passed as the `alignment` parameter \
-             to\n the original `alloc` call.\n"]
+    #[doc = " Free and invalidate a region of memory.\n\n `memory_len` must equal the length requested from the most recent\n successful call to `alloc`, `resize`, or `remap`. `alignment` must\n equal the same value that was passed as the `alignment` parameter to\n the original `alloc` call.\n"]
     pub free: ::std::option::Option<
         unsafe extern "C" fn(
             ctx: *mut ::std::os::raw::c_void,
@@ -402,21 +348,13 @@ const _: () = {
     ["Offset of field: AllocatorVtable::free"]
         [::std::mem::offset_of!(AllocatorVtable, free) - 24usize];
 };
-#[doc = " Custom memory allocator.\n\n For functions that take an allocator pointer, a NULL \
-         pointer indicates\n that the default allocator should be used. The default allocator \
-         will\n be libc malloc/free if we're linking to libc. If libc isn't linked,\n a custom \
-         allocator is used (currently Zig's SMP allocator).\n\n\n Usage example:\n \
-         GhosttyAllocator allocator = {\n     .vtable = &my_allocator_vtable,\n     .ctx = \
-         my_allocator_state\n };"]
+#[doc = " Custom memory allocator.\n\n For functions that take an allocator pointer, a NULL pointer indicates\n that the default allocator should be used. The default allocator will\n be libc malloc/free if we're linking to libc. If libc isn't linked,\n a custom allocator is used (currently Zig's SMP allocator).\n\n\n Usage example:\n GhosttyAllocator allocator = {\n     .vtable = &my_allocator_vtable,\n     .ctx = my_allocator_state\n };"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Allocator {
-    #[doc = " Opaque context pointer passed to all vtable functions.\n This allows the allocator \
-             implementation to maintain state\n or reference external resources needed for memory \
-             management."]
+    #[doc = " Opaque context pointer passed to all vtable functions.\n This allows the allocator implementation to maintain state\n or reference external resources needed for memory management."]
     pub ctx: *mut ::std::os::raw::c_void,
-    #[doc = " Pointer to the allocator's vtable containing function pointers\n for memory \
-             operations (alloc, resize, remap, free)."]
+    #[doc = " Pointer to the allocator's vtable containing function pointers\n for memory operations (alloc, resize, remap, free)."]
     pub vtable: *const AllocatorVtable,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
@@ -436,22 +374,11 @@ impl Default for Allocator {
     }
 }
 unsafe extern "C" {
-    #[doc = " Allocate a buffer of `len` bytes.\n\n Uses the provided allocator, or the default \
-             allocator if NULL is passed.\n The returned buffer must be freed with ghostty_free() \
-             using the same\n allocator.\n\n"]
+    #[doc = " Allocate a buffer of `len` bytes.\n\n Uses the provided allocator, or the default allocator if NULL is passed.\n The returned buffer must be freed with ghostty_free() using the same\n allocator.\n\n"]
     pub fn ghostty_alloc(allocator: *const Allocator, len: usize) -> *mut u8;
 }
 unsafe extern "C" {
-    #[doc = " Free memory that was allocated by a libghostty-vt function.\n\n Use this to free \
-             buffers returned by functions such as\n ghostty_formatter_format_alloc(). Pass the \
-             same allocator that was\n used for the allocation, or NULL if the default allocator \
-             was used.\n\n On platforms where the library's internal allocator differs from the\n \
-             consumer's C runtime (e.g. Windows, where Zig's libc and MSVC's CRT\n maintain \
-             separate heaps), calling the standard C free() on memory\n allocated by the library \
-             causes undefined behavior. This function\n guarantees the correct allocator is used \
-             regardless of platform.\n\n It is safe to pass a NULL pointer; the call is a no-op in \
-             that case.\n\n   memory, or NULL if the default allocator was used\n   allocation \
-             size)\n"]
+    #[doc = " Free memory that was allocated by a libghostty-vt function.\n\n Use this to free buffers returned by functions such as\n ghostty_formatter_format_alloc(). Pass the same allocator that was\n used for the allocation, or NULL if the default allocator was used.\n\n On platforms where the library's internal allocator differs from the\n consumer's C runtime (e.g. Windows, where Zig's libc and MSVC's CRT\n maintain separate heaps), calling the standard C free() on memory\n allocated by the library causes undefined behavior. This function\n guarantees the correct allocator is used regardless of platform.\n\n It is safe to pass a NULL pointer; the call is a no-op in that case.\n\n   memory, or NULL if the default allocator was used\n   allocation size)\n"]
     pub fn ghostty_free(allocator: *const Allocator, ptr: *mut u8, len: usize);
 }
 pub mod OptimizeMode {
@@ -464,8 +391,7 @@ pub mod OptimizeMode {
     pub const MODE_MAX_VALUE: Type = 2147483647;
 }
 pub mod BuildInfo {
-    #[doc = " Build info data types that can be queried.\n\n Each variant documents the expected \
-             output pointer type."]
+    #[doc = " Build info data types that can be queried.\n\n Each variant documents the expected output pointer type."]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Invalid data type. Never results in any data extraction."]
     pub const INVALID: Type = 0;
@@ -475,11 +401,9 @@ pub mod BuildInfo {
     pub const KITTY_GRAPHICS: Type = 2;
     #[doc = " Whether tmux control mode support is available.\n\n Output type: bool *"]
     pub const TMUX_CONTROL_MODE: Type = 3;
-    #[doc = " The optimization mode the library was built with.\n\n Output type: \
-             GhosttyOptimizeMode *"]
+    #[doc = " The optimization mode the library was built with.\n\n Output type: GhosttyOptimizeMode *"]
     pub const OPTIMIZE: Type = 4;
-    #[doc = " The full version string (e.g. \"1.2.3\" or \"1.2.3-dev+abcdef\").\n\n Output type: \
-             GhosttyString *"]
+    #[doc = " The full version string (e.g. \"1.2.3\" or \"1.2.3-dev+abcdef\").\n\n Output type: GhosttyString *"]
     pub const VERSION_STRING: Type = 5;
     #[doc = " The major version number.\n\n Output type: size_t *"]
     pub const VERSION_MAJOR: Type = 6;
@@ -487,20 +411,15 @@ pub mod BuildInfo {
     pub const VERSION_MINOR: Type = 7;
     #[doc = " The patch version number.\n\n Output type: size_t *"]
     pub const VERSION_PATCH: Type = 8;
-    #[doc = " The pre metadata string (e.g. \"alpha\", \"beta\", \"dev\"). Has zero length if\n no \
-             pre metadata is present.\n\n Output type: GhosttyString *"]
+    #[doc = " The pre metadata string (e.g. \"alpha\", \"beta\", \"dev\"). Has zero length if\n no pre metadata is present.\n\n Output type: GhosttyString *"]
     pub const VERSION_PRE: Type = 9;
-    #[doc = " The build metadata string (e.g. commit hash). Has zero length if\n no build metadata \
-             is present.\n\n Output type: GhosttyString *"]
+    #[doc = " The build metadata string (e.g. commit hash). Has zero length if\n no build metadata is present.\n\n Output type: GhosttyString *"]
     pub const VERSION_BUILD: Type = 10;
-    #[doc = " The build metadata string (e.g. commit hash). Has zero length if\n no build metadata \
-             is present.\n\n Output type: GhosttyString *"]
+    #[doc = " The build metadata string (e.g. commit hash). Has zero length if\n no build metadata is present.\n\n Output type: GhosttyString *"]
     pub const MAX_VALUE: Type = 2147483647;
 }
 unsafe extern "C" {
-    #[doc = " Query a compile-time build configuration value.\n\n The caller must pass a pointer \
-             to the correct output type for the\n requested data (see GhosttyBuildInfo variants \
-             for types).\n\n         data type is invalid\n"]
+    #[doc = " Query a compile-time build configuration value.\n\n The caller must pass a pointer to the correct output type for the\n requested data (see GhosttyBuildInfo variants for types).\n\n         data type is invalid\n"]
     pub fn ghostty_build_info(
         data: BuildInfo::Type,
         out: *mut ::std::os::raw::c_void,
@@ -528,9 +447,7 @@ const _: () = {
 #[doc = " Palette color index (0-255).\n"]
 pub type ColorPaletteIndex = u8;
 unsafe extern "C" {
-    #[doc = " Get the RGB color components.\n\n This function extracts the individual red, green, \
-             and blue components\n from a GhosttyColorRgb value. Primarily useful in WebAssembly \
-             environments\n where accessing struct fields directly is difficult.\n\n"]
+    #[doc = " Get the RGB color components.\n\n This function extracts the individual red, green, and blue components\n from a GhosttyColorRgb value. Primarily useful in WebAssembly environments\n where accessing struct fields directly is difficult.\n\n"]
     pub fn ghostty_color_rgb_get(color: ColorRgb, r: *mut u8, g: *mut u8, b: *mut u8);
 }
 pub mod ColorScheme {
@@ -540,9 +457,7 @@ pub mod ColorScheme {
     pub const DARK: Type = 1;
     pub const MAX_VALUE: Type = 2147483647;
 }
-#[doc = " Primary device attributes (DA1) response data.\n\n Returned as part of \
-         GhosttyDeviceAttributes in response to a CSI c query.\n The conformance_level is the Pp \
-         parameter and features contains the Ps\n feature codes.\n"]
+#[doc = " Primary device attributes (DA1) response data.\n\n Returned as part of GhosttyDeviceAttributes in response to a CSI c query.\n The conformance_level is the Pp parameter and features contains the Ps\n feature codes.\n"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct DeviceAttributesPrimary {
@@ -575,9 +490,7 @@ impl Default for DeviceAttributesPrimary {
         }
     }
 }
-#[doc = " Secondary device attributes (DA2) response data.\n\n Returned as part of \
-         GhosttyDeviceAttributes in response to a CSI > c query.\n Response format: CSI > Pp ; Pv \
-         ; Pc c\n"]
+#[doc = " Secondary device attributes (DA2) response data.\n\n Returned as part of GhosttyDeviceAttributes in response to a CSI > c query.\n Response format: CSI > Pp ; Pv ; Pc c\n"]
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct DeviceAttributesSecondary {
@@ -601,9 +514,7 @@ const _: () = {
     ["Offset of field: DeviceAttributesSecondary::rom_cartridge"]
         [::std::mem::offset_of!(DeviceAttributesSecondary, rom_cartridge) - 4usize];
 };
-#[doc = " Tertiary device attributes (DA3) response data.\n\n Returned as part of \
-         GhosttyDeviceAttributes in response to a CSI = c query.\n Response format: DCS ! | D...D \
-         ST (DECRPTUI).\n"]
+#[doc = " Tertiary device attributes (DA3) response data.\n\n Returned as part of GhosttyDeviceAttributes in response to a CSI = c query.\n Response format: DCS ! | D...D ST (DECRPTUI).\n"]
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct DeviceAttributesTertiary {
@@ -619,9 +530,7 @@ const _: () = {
     ["Offset of field: DeviceAttributesTertiary::unit_id"]
         [::std::mem::offset_of!(DeviceAttributesTertiary, unit_id) - 0usize];
 };
-#[doc = " Device attributes response data for all three DA levels.\n\n Filled by the \
-         device_attributes callback in response to CSI c,\n CSI > c, or CSI = c queries. The \
-         terminal uses whichever sub-struct\n matches the request type.\n"]
+#[doc = " Device attributes response data for all three DA levels.\n\n Filled by the device_attributes callback in response to CSI c,\n CSI > c, or CSI = c queries. The terminal uses whichever sub-struct\n matches the request type.\n"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct DeviceAttributes {
@@ -660,12 +569,7 @@ pub mod FocusEvent {
     pub const MAX_VALUE: Type = 2147483647;
 }
 unsafe extern "C" {
-    #[doc = " Encode a focus event into a terminal escape sequence.\n\n Encodes a focus gained \
-             (CSI I) or focus lost (CSI O) report into the\n provided buffer.\n\n If the buffer is \
-             too small, the function returns GHOSTTY_OUT_OF_SPACE\n and writes the required buffer \
-             size to @p out_written. The caller can\n then retry with a sufficiently sized \
-             buffer.\n\n             GHOSTTY_OUT_OF_SPACE, the required buffer size.\n         is \
-             too small"]
+    #[doc = " Encode a focus event into a terminal escape sequence.\n\n Encodes a focus gained (CSI I) or focus lost (CSI O) report into the\n provided buffer.\n\n If the buffer is too small, the function returns GHOSTTY_OUT_OF_SPACE\n and writes the required buffer size to @p out_written. The caller can\n then retry with a sufficiently sized buffer.\n\n             GHOSTTY_OUT_OF_SPACE, the required buffer size.\n         is too small"]
     pub fn ghostty_focus_encode(
         event: FocusEvent::Type,
         buf: *mut ::std::os::raw::c_char,
@@ -673,13 +577,9 @@ unsafe extern "C" {
         out_written: *mut usize,
     ) -> Result::Type;
 }
-#[doc = " Opaque cell value.\n\n Represents a single terminal cell. The internal layout is opaque \
-         and\n must be queried via ghostty_cell_get(). Obtain cell values from\n terminal query \
-         APIs.\n"]
+#[doc = " Opaque cell value.\n\n Represents a single terminal cell. The internal layout is opaque and\n must be queried via ghostty_cell_get(). Obtain cell values from\n terminal query APIs.\n"]
 pub type Cell = u64;
-#[doc = " Opaque row value.\n\n Represents a single terminal row. The internal layout is opaque \
-         and\n must be queried via ghostty_row_get(). Obtain row values from\n terminal query \
-         APIs.\n"]
+#[doc = " Opaque row value.\n\n Represents a single terminal row. The internal layout is opaque and\n must be queried via ghostty_row_get(). Obtain row values from\n terminal query APIs.\n"]
 pub type Row = u64;
 pub mod CellContentTag {
     #[doc = " Cell content tag.\n\n Describes what kind of content a cell holds.\n"]
@@ -710,8 +610,7 @@ pub mod CellWide {
     pub const MAX_VALUE: Type = 2147483647;
 }
 pub mod CellSemanticContent {
-    #[doc = " Semantic content type of a cell.\n\n Set by semantic prompt sequences (OSC 133) to \
-             distinguish between\n command output, user input, and shell prompt text.\n"]
+    #[doc = " Semantic content type of a cell.\n\n Set by semantic prompt sequences (OSC 133) to distinguish between\n command output, user input, and shell prompt text.\n"]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Regular output content, such as command output."]
     pub const OUTPUT: Type = 0;
@@ -723,15 +622,13 @@ pub mod CellSemanticContent {
     pub const MAX_VALUE: Type = 2147483647;
 }
 pub mod CellData {
-    #[doc = " Cell data types.\n\n These values specify what type of data to extract from a cell\n \
-             using `ghostty_cell_get`.\n"]
+    #[doc = " Cell data types.\n\n These values specify what type of data to extract from a cell\n using `ghostty_cell_get`.\n"]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Invalid data type. Never results in any data extraction."]
     pub const INVALID: Type = 0;
     #[doc = " The codepoint of the cell (0 if empty or bg-color-only).\n\n Output type: uint32_t *"]
     pub const CODEPOINT: Type = 1;
-    #[doc = " The content tag describing what kind of content is in the cell.\n\n Output type: \
-             GhosttyCellContentTag *"]
+    #[doc = " The content tag describing what kind of content is in the cell.\n\n Output type: GhosttyCellContentTag *"]
     pub const CONTENT_TAG: Type = 2;
     #[doc = " The wide property of the cell.\n\n Output type: GhosttyCellWide *"]
     pub const WIDE: Type = 3;
@@ -745,22 +642,17 @@ pub mod CellData {
     pub const HAS_HYPERLINK: Type = 7;
     #[doc = " Whether the cell is protected.\n\n Output type: bool *"]
     pub const PROTECTED: Type = 8;
-    #[doc = " The semantic content type of the cell (from OSC 133).\n\n Output type: \
-             GhosttyCellSemanticContent *"]
+    #[doc = " The semantic content type of the cell (from OSC 133).\n\n Output type: GhosttyCellSemanticContent *"]
     pub const SEMANTIC_CONTENT: Type = 9;
-    #[doc = " The palette index for the cell's background color.\n Only valid when content_tag is \
-             GHOSTTY_CELL_CONTENT_BG_COLOR_PALETTE.\n\n Output type: GhosttyColorPaletteIndex *"]
+    #[doc = " The palette index for the cell's background color.\n Only valid when content_tag is GHOSTTY_CELL_CONTENT_BG_COLOR_PALETTE.\n\n Output type: GhosttyColorPaletteIndex *"]
     pub const COLOR_PALETTE: Type = 10;
-    #[doc = " The RGB value for the cell's background color.\n Only valid when content_tag is \
-             GHOSTTY_CELL_CONTENT_BG_COLOR_RGB.\n\n Output type: GhosttyColorRgb *"]
+    #[doc = " The RGB value for the cell's background color.\n Only valid when content_tag is GHOSTTY_CELL_CONTENT_BG_COLOR_RGB.\n\n Output type: GhosttyColorRgb *"]
     pub const COLOR_RGB: Type = 11;
-    #[doc = " The RGB value for the cell's background color.\n Only valid when content_tag is \
-             GHOSTTY_CELL_CONTENT_BG_COLOR_RGB.\n\n Output type: GhosttyColorRgb *"]
+    #[doc = " The RGB value for the cell's background color.\n Only valid when content_tag is GHOSTTY_CELL_CONTENT_BG_COLOR_RGB.\n\n Output type: GhosttyColorRgb *"]
     pub const MAX_VALUE: Type = 2147483647;
 }
 pub mod RowSemanticPrompt {
-    #[doc = " Row semantic prompt state.\n\n Indicates whether any cells in a row are part of a \
-             shell prompt,\n as reported by OSC 133 sequences.\n"]
+    #[doc = " Row semantic prompt state.\n\n Indicates whether any cells in a row are part of a shell prompt,\n as reported by OSC 133 sequences.\n"]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " No prompt cells in this row."]
     pub const NONE: Type = 0;
@@ -772,8 +664,7 @@ pub mod RowSemanticPrompt {
     pub const MAX_VALUE: Type = 2147483647;
 }
 pub mod RowData {
-    #[doc = " Row data types.\n\n These values specify what type of data to extract from a row\n \
-             using `ghostty_row_get`.\n"]
+    #[doc = " Row data types.\n\n These values specify what type of data to extract from a row\n using `ghostty_row_get`.\n"]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Invalid data type. Never results in any data extraction."]
     pub const INVALID: Type = 0;
@@ -783,11 +674,9 @@ pub mod RowData {
     pub const WRAP_CONTINUATION: Type = 2;
     #[doc = " Whether any cells in this row have grapheme clusters.\n\n Output type: bool *"]
     pub const GRAPHEME: Type = 3;
-    #[doc = " Whether any cells in this row have styling (may have false positives).\n\n Output \
-             type: bool *"]
+    #[doc = " Whether any cells in this row have styling (may have false positives).\n\n Output type: bool *"]
     pub const STYLED: Type = 4;
-    #[doc = " Whether any cells in this row have hyperlinks (may have false positives).\n\n Output \
-             type: bool *"]
+    #[doc = " Whether any cells in this row have hyperlinks (may have false positives).\n\n Output type: bool *"]
     pub const HYPERLINK: Type = 5;
     #[doc = " The semantic prompt state of this row.\n\n Output type: GhosttyRowSemanticPrompt *"]
     pub const SEMANTIC_PROMPT: Type = 6;
@@ -799,10 +688,7 @@ pub mod RowData {
     pub const MAX_VALUE: Type = 2147483647;
 }
 unsafe extern "C" {
-    #[doc = " Get data from a cell.\n\n Extracts typed data from the given cell based on the \
-             specified\n data type. The output pointer must be of the appropriate type for the\n \
-             requested data kind. Valid data types and output types are documented\n in the \
-             `GhosttyCellData` enum.\n\n         data type is invalid\n"]
+    #[doc = " Get data from a cell.\n\n Extracts typed data from the given cell based on the specified\n data type. The output pointer must be of the appropriate type for the\n requested data kind. Valid data types and output types are documented\n in the `GhosttyCellData` enum.\n\n         data type is invalid\n"]
     pub fn ghostty_cell_get(
         cell: Cell,
         data: CellData::Type,
@@ -810,12 +696,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get multiple data fields from a cell in a single call.\n\n Each element in the keys \
-             array specifies a data kind, and the\n corresponding element in the values array \
-             receives the result.\n\n Processing stops at the first error; on success \
-             out_written\n is set to count, on error it is set to the index of the\n failing key \
-             (i.e. the number of values successfully written).\n\n               documented output \
-             type)\n             successfully written (may be NULL)\n"]
+    #[doc = " Get multiple data fields from a cell in a single call.\n\n Each element in the keys array specifies a data kind, and the\n corresponding element in the values array receives the result.\n\n Processing stops at the first error; on success out_written\n is set to count, on error it is set to the index of the\n failing key (i.e. the number of values successfully written).\n\n               documented output type)\n             successfully written (may be NULL)\n"]
     pub fn ghostty_cell_get_multi(
         cell: Cell,
         count: usize,
@@ -825,10 +706,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get data from a row.\n\n Extracts typed data from the given row based on the \
-             specified\n data type. The output pointer must be of the appropriate type for the\n \
-             requested data kind. Valid data types and output types are documented\n in the \
-             `GhosttyRowData` enum.\n\n         data type is invalid\n"]
+    #[doc = " Get data from a row.\n\n Extracts typed data from the given row based on the specified\n data type. The output pointer must be of the appropriate type for the\n requested data kind. Valid data types and output types are documented\n in the `GhosttyRowData` enum.\n\n         data type is invalid\n"]
     pub fn ghostty_row_get(
         row: Row,
         data: RowData::Type,
@@ -836,12 +714,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get multiple data fields from a row in a single call.\n\n Each element in the keys \
-             array specifies a data kind, and the\n corresponding element in the values array \
-             receives the result.\n\n Processing stops at the first error; on success \
-             out_written\n is set to count, on error it is set to the index of the\n failing key \
-             (i.e. the number of values successfully written).\n\n               documented output \
-             type)\n             successfully written (may be NULL)\n"]
+    #[doc = " Get multiple data fields from a row in a single call.\n\n Each element in the keys array specifies a data kind, and the\n corresponding element in the values array receives the result.\n\n Processing stops at the first error; on success out_written\n is set to count, on error it is set to the index of the\n failing key (i.e. the number of values successfully written).\n\n               documented output type)\n             successfully written (may be NULL)\n"]
     pub fn ghostty_row_get_multi(
         row: Row,
         count: usize,
@@ -850,12 +723,10 @@ unsafe extern "C" {
         out_written: *mut usize,
     ) -> Result::Type;
 }
-#[doc = " Style identifier type.\n\n Used to look up the full style from a grid reference.\n \
-         Obtain this from a cell via GHOSTTY_CELL_DATA_STYLE_ID.\n"]
+#[doc = " Style identifier type.\n\n Used to look up the full style from a grid reference.\n Obtain this from a cell via GHOSTTY_CELL_DATA_STYLE_ID.\n"]
 pub type StyleId = u16;
 pub mod StyleColorTag {
-    #[doc = " Style color tags.\n\n These values identify the type of color in a style color.\n \
-             Use the tag to determine which field in the color value union to access.\n"]
+    #[doc = " Style color tags.\n\n These values identify the type of color in a style color.\n Use the tag to determine which field in the color value union to access.\n"]
     pub type Type = ::std::os::raw::c_uint;
     pub const NONE: Type = 0;
     pub const PALETTE: Type = 1;
@@ -890,8 +761,7 @@ impl Default for StyleColorValue {
         }
     }
 }
-#[doc = " Style color (tagged union).\n\n A color used in a style attribute. Can be unset (none), \
-         a palette\n index, or a direct RGB value.\n"]
+#[doc = " Style color (tagged union).\n\n A color used in a style attribute. Can be unset (none), a palette\n index, or a direct RGB value.\n"]
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct StyleColor {
@@ -914,10 +784,7 @@ impl Default for StyleColor {
         }
     }
 }
-#[doc = " Terminal cell style.\n\n Describes the complete visual style for a terminal cell, \
-         including\n foreground, background, and underline colors, as well as text\n decoration \
-         flags. The underline field uses the same values as\n GhosttySgrUnderline.\n\n This is a \
-         sized struct. Use GHOSTTY_INIT_SIZED() to initialize it.\n"]
+#[doc = " Terminal cell style.\n\n Describes the complete visual style for a terminal cell, including\n foreground, background, and underline colors, as well as text\n decoration flags. The underline field uses the same values as\n GhosttySgrUnderline.\n\n This is a sized struct. Use GHOSTTY_INIT_SIZED() to initialize it.\n"]
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct Style {
@@ -966,17 +833,14 @@ impl Default for Style {
     }
 }
 unsafe extern "C" {
-    #[doc = " Get the default style.\n\n Initializes the style to the default values (no colors, \
-             no flags).\n\n"]
+    #[doc = " Get the default style.\n\n Initializes the style to the default values (no colors, no flags).\n\n"]
     pub fn ghostty_style_default(style: *mut Style);
 }
 unsafe extern "C" {
-    #[doc = " Check if a style is the default style.\n\n Returns true if all colors are unset and \
-             all flags are off.\n\n"]
+    #[doc = " Check if a style is the default style.\n\n Returns true if all colors are unset and all flags are off.\n\n"]
     pub fn ghostty_style_is_default(style: *const Style) -> bool;
 }
-#[doc = " A resolved reference to a terminal cell position.\n\n This is a sized struct. Use \
-         GHOSTTY_INIT_SIZED() to initialize it.\n"]
+#[doc = " A resolved reference to a terminal cell position.\n\n This is a sized struct. Use GHOSTTY_INIT_SIZED() to initialize it.\n"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct GridRef {
@@ -1012,14 +876,7 @@ unsafe extern "C" {
     pub fn ghostty_grid_ref_row(ref_: *const GridRef, out_row: *mut Row) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get the grapheme cluster codepoints for the cell at the grid reference's\n \
-             position.\n\n Writes the full grapheme cluster (the cell's primary codepoint followed \
-             by\n any combining codepoints) into the provided buffer. If the cell has no text,\n \
-             out_len is set to 0 and GHOSTTY_SUCCESS is returned.\n\n If the buffer is too small \
-             (or NULL), the function returns\n GHOSTTY_OUT_OF_SPACE and writes the required number \
-             of codepoints to\n out_len. The caller can then retry with a sufficiently sized \
-             buffer.\n\n             GHOSTTY_OUT_OF_SPACE, the required buffer size in \
-             codepoints.\n         node is NULL, GHOSTTY_OUT_OF_SPACE if the buffer is too small\n"]
+    #[doc = " Get the grapheme cluster codepoints for the cell at the grid reference's\n position.\n\n Writes the full grapheme cluster (the cell's primary codepoint followed by\n any combining codepoints) into the provided buffer. If the cell has no text,\n out_len is set to 0 and GHOSTTY_SUCCESS is returned.\n\n If the buffer is too small (or NULL), the function returns\n GHOSTTY_OUT_OF_SPACE and writes the required number of codepoints to\n out_len. The caller can then retry with a sufficiently sized buffer.\n\n             GHOSTTY_OUT_OF_SPACE, the required buffer size in codepoints.\n         node is NULL, GHOSTTY_OUT_OF_SPACE if the buffer is too small\n"]
     pub fn ghostty_grid_ref_graphemes(
         ref_: *const GridRef,
         buf: *mut u32,
@@ -1028,13 +885,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get the hyperlink URI for the cell at the grid reference's position.\n\n Writes the \
-             URI bytes into the provided buffer. If the cell has no\n hyperlink, out_len is set to \
-             0 and GHOSTTY_SUCCESS is returned.\n\n If the buffer is too small (or NULL), the \
-             function returns\n GHOSTTY_OUT_OF_SPACE and writes the required number of bytes to\n \
-             out_len. The caller can then retry with a sufficiently sized buffer.\n\n             \
-             GHOSTTY_OUT_OF_SPACE, the required buffer size in bytes.\n         node is NULL, \
-             GHOSTTY_OUT_OF_SPACE if the buffer is too small\n"]
+    #[doc = " Get the hyperlink URI for the cell at the grid reference's position.\n\n Writes the URI bytes into the provided buffer. If the cell has no\n hyperlink, out_len is set to 0 and GHOSTTY_SUCCESS is returned.\n\n If the buffer is too small (or NULL), the function returns\n GHOSTTY_OUT_OF_SPACE and writes the required number of bytes to\n out_len. The caller can then retry with a sufficiently sized buffer.\n\n             GHOSTTY_OUT_OF_SPACE, the required buffer size in bytes.\n         node is NULL, GHOSTTY_OUT_OF_SPACE if the buffer is too small\n"]
     pub fn ghostty_grid_ref_hyperlink_uri(
         ref_: *const GridRef,
         buf: *mut u8,
@@ -1043,8 +894,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get the style of the cell at the grid reference's position.\n\n         node is \
-             NULL\n"]
+    #[doc = " Get the style of the cell at the grid reference's position.\n\n         node is NULL\n"]
     pub fn ghostty_grid_ref_style(ref_: *const GridRef, out_style: *mut Style) -> Result::Type;
 }
 #[doc = " A coordinate in the terminal grid.\n"]
@@ -1132,43 +982,26 @@ impl Default for Point {
 pub struct SelectionGestureImpl {
     _unused: [u8; 0],
 }
-#[doc = " Opaque handle to state for interpreting terminal selection gestures.\n\n The gesture \
-         owns only the state required to interpret pointer events. Calls\n that use a gesture are \
-         not concurrency-safe and must be serialized with\n terminal mutations.\n"]
+#[doc = " Opaque handle to state for interpreting terminal selection gestures.\n\n The gesture owns only the state required to interpret pointer events. Calls\n that use a gesture are not concurrency-safe and must be serialized with\n terminal mutations.\n"]
 pub type SelectionGesture = *mut SelectionGestureImpl;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct SelectionGestureEventImpl {
     _unused: [u8; 0],
 }
-#[doc = " Opaque handle to reusable input data for selection gesture operations.\n\n Event options \
-         are set with ghostty_selection_gesture_event_set(). Individual\n gesture operations \
-         document which options are required or optional.\n"]
+#[doc = " Opaque handle to reusable input data for selection gesture operations.\n\n Event options are set with ghostty_selection_gesture_event_set(). Individual\n gesture operations document which options are required or optional.\n"]
 pub type SelectionGestureEvent = *mut SelectionGestureEventImpl;
-#[doc = " A snapshot selection range defined by two grid references.\n\n Both endpoints are \
-         inclusive. The endpoints preserve selection direction\n and may be reversed; callers must \
-         not assume that start is the top-left\n endpoint or that end is the bottom-right \
-         endpoint.\n\n When rectangle is false, the endpoints describe a linear selection. When\n \
-         rectangle is true, the same endpoints are interpreted as opposite corners\n of a \
-         rectangular/block selection.\n\n The start and end values are untracked GhosttyGridRef \
-         snapshots and are\n only valid until the next mutating operation on the terminal that \
-         produced\n them unless the selection is reconstructed from tracked references.\n\n This \
-         is a sized struct. Use GHOSTTY_INIT_SIZED() to initialize it.\n"]
+#[doc = " A snapshot selection range defined by two grid references.\n\n Both endpoints are inclusive. The endpoints preserve selection direction\n and may be reversed; callers must not assume that start is the top-left\n endpoint or that end is the bottom-right endpoint.\n\n When rectangle is false, the endpoints describe a linear selection. When\n rectangle is true, the same endpoints are interpreted as opposite corners\n of a rectangular/block selection.\n\n The start and end values are untracked GhosttyGridRef snapshots and are\n only valid until the next mutating operation on the terminal that produced\n them unless the selection is reconstructed from tracked references.\n\n This is a sized struct. Use GHOSTTY_INIT_SIZED() to initialize it.\n"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Selection {
     #[doc = " Size of this struct in bytes. Must be set to sizeof(GhosttySelection)."]
     pub size: usize,
-    #[doc = " Start of the selection range (inclusive).\n\n This may be after end in terminal \
-             order. It is an untracked\n GhosttyGridRef snapshot and follows untracked grid-ref \
-             lifetime rules."]
+    #[doc = " Start of the selection range (inclusive).\n\n This may be after end in terminal order. It is an untracked\n GhosttyGridRef snapshot and follows untracked grid-ref lifetime rules."]
     pub start: GridRef,
-    #[doc = " End of the selection range (inclusive).\n\n This may be before start in terminal \
-             order. It is an untracked\n GhosttyGridRef snapshot and follows untracked grid-ref \
-             lifetime rules."]
+    #[doc = " End of the selection range (inclusive).\n\n This may be before start in terminal order. It is an untracked\n GhosttyGridRef snapshot and follows untracked grid-ref lifetime rules."]
     pub end: GridRef,
-    #[doc = " Whether the endpoints are interpreted as a rectangular/block selection\n rather \
-             than a linear selection."]
+    #[doc = " Whether the endpoints are interpreted as a rectangular/block selection\n rather than a linear selection."]
     pub rectangle: bool,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
@@ -1190,15 +1023,11 @@ impl Default for Selection {
         }
     }
 }
-#[doc = " Options for deriving a word selection from a terminal grid reference.\n\n This is a \
-         sized struct. Use GHOSTTY_INIT_SIZED() to initialize it.\n If boundary_codepoints is NULL \
-         and boundary_codepoints_len is 0, Ghostty's\n default word-boundary codepoints are used. \
-         If boundary_codepoints_len is\n non-zero, boundary_codepoints must not be NULL.\n"]
+#[doc = " Options for deriving a word selection from a terminal grid reference.\n\n This is a sized struct. Use GHOSTTY_INIT_SIZED() to initialize it.\n If boundary_codepoints is NULL and boundary_codepoints_len is 0, Ghostty's\n default word-boundary codepoints are used. If boundary_codepoints_len is\n non-zero, boundary_codepoints must not be NULL.\n"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct TerminalSelectWordOptions {
-    #[doc = " Size of this struct in bytes. Must be set to \
-             sizeof(GhosttyTerminalSelectWordOptions)."]
+    #[doc = " Size of this struct in bytes. Must be set to sizeof(GhosttyTerminalSelectWordOptions)."]
     pub size: usize,
     #[doc = " Grid reference under which to derive the word selection."]
     pub ref_: GridRef,
@@ -1231,15 +1060,11 @@ impl Default for TerminalSelectWordOptions {
         }
     }
 }
-#[doc = " Options for deriving the nearest word selection between two grid references.\n\n This is \
-         a sized struct. Use GHOSTTY_INIT_SIZED() to initialize it.\n If boundary_codepoints is \
-         NULL and boundary_codepoints_len is 0, Ghostty's\n default word-boundary codepoints are \
-         used. If boundary_codepoints_len is\n non-zero, boundary_codepoints must not be NULL.\n"]
+#[doc = " Options for deriving the nearest word selection between two grid references.\n\n This is a sized struct. Use GHOSTTY_INIT_SIZED() to initialize it.\n If boundary_codepoints is NULL and boundary_codepoints_len is 0, Ghostty's\n default word-boundary codepoints are used. If boundary_codepoints_len is\n non-zero, boundary_codepoints must not be NULL.\n"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct TerminalSelectWordBetweenOptions {
-    #[doc = " Size of this struct in bytes. Must be set to \
-             sizeof(GhosttyTerminalSelectWordBetweenOptions)."]
+    #[doc = " Size of this struct in bytes. Must be set to sizeof(GhosttyTerminalSelectWordBetweenOptions)."]
     pub size: usize,
     #[doc = " Starting grid reference for the inclusive search range."]
     pub start: GridRef,
@@ -1278,15 +1103,11 @@ impl Default for TerminalSelectWordBetweenOptions {
         }
     }
 }
-#[doc = " Options for deriving a line selection from a terminal grid reference.\n\n This is a \
-         sized struct. Use GHOSTTY_INIT_SIZED() to initialize it.\n If whitespace is NULL and \
-         whitespace_len is 0, Ghostty's default line-trim\n whitespace codepoints are used. If \
-         whitespace_len is non-zero, whitespace\n must not be NULL.\n"]
+#[doc = " Options for deriving a line selection from a terminal grid reference.\n\n This is a sized struct. Use GHOSTTY_INIT_SIZED() to initialize it.\n If whitespace is NULL and whitespace_len is 0, Ghostty's default line-trim\n whitespace codepoints are used. If whitespace_len is non-zero, whitespace\n must not be NULL.\n"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct TerminalSelectLineOptions {
-    #[doc = " Size of this struct in bytes. Must be set to \
-             sizeof(GhosttyTerminalSelectLineOptions)."]
+    #[doc = " Size of this struct in bytes. Must be set to sizeof(GhosttyTerminalSelectLineOptions)."]
     pub size: usize,
     #[doc = " Grid reference under which to derive the line selection."]
     pub ref_: GridRef,
@@ -1323,18 +1144,11 @@ impl Default for TerminalSelectLineOptions {
         }
     }
 }
-#[doc = " Options for one-shot formatting of a terminal selection.\n\n This is a sized struct. Use \
-         GHOSTTY_INIT_SIZED() to initialize it.\n\n If selection is NULL, the terminal's current \
-         active selection is used.\n If selection is non-NULL, that caller-provided snapshot \
-         selection is used.\n\n The selection is formatted from the terminal's active screen using \
-         the same\n formatting semantics as GhosttyFormatter. For copy/clipboard behavior\n \
-         matching Ghostty's Screen.selectionString(), use plain output with unwrap\n and trim both \
-         set to true.\n"]
+#[doc = " Options for one-shot formatting of a terminal selection.\n\n This is a sized struct. Use GHOSTTY_INIT_SIZED() to initialize it.\n\n If selection is NULL, the terminal's current active selection is used.\n If selection is non-NULL, that caller-provided snapshot selection is used.\n\n The selection is formatted from the terminal's active screen using the same\n formatting semantics as GhosttyFormatter. For copy/clipboard behavior\n matching Ghostty's Screen.selectionString(), use plain output with unwrap\n and trim both set to true.\n"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct TerminalSelectionFormatOptions {
-    #[doc = " Size of this struct in bytes. Must be set to \
-             sizeof(GhosttyTerminalSelectionFormatOptions)."]
+    #[doc = " Size of this struct in bytes. Must be set to sizeof(GhosttyTerminalSelectionFormatOptions)."]
     pub size: usize,
     #[doc = " Output format to emit."]
     pub emit: FormatterFormat::Type,
@@ -1342,10 +1156,7 @@ pub struct TerminalSelectionFormatOptions {
     pub unwrap: bool,
     #[doc = " Whether to trim trailing whitespace on non-blank lines."]
     pub trim: bool,
-    #[doc = " Optional selection to format.\n\n If NULL, the terminal's current active selection \
-             is used. If the terminal\n has no active selection, formatting returns \
-             GHOSTTY_NO_VALUE.\n\n If non-NULL, the pointed-to selection must be a valid snapshot \
-             selection\n for this terminal and must obey GhosttySelection lifetime rules."]
+    #[doc = " Optional selection to format.\n\n If NULL, the terminal's current active selection is used. If the terminal\n has no active selection, formatting returns GHOSTTY_NO_VALUE.\n\n If non-NULL, the pointed-to selection must be a valid snapshot selection\n for this terminal and must obey GhosttySelection lifetime rules."]
     pub selection: *const Selection,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
@@ -1375,10 +1186,7 @@ impl Default for TerminalSelectionFormatOptions {
     }
 }
 pub mod SelectionOrder {
-    #[doc = " Ordering of a selection's endpoints in terminal coordinates.\n\n Mirrored orders are \
-             only produced by rectangular selections whose start\n and end endpoints are on \
-             opposite diagonal corners that are not simple\n top-left-to-bottom-right or \
-             bottom-right-to-top-left orderings.\n"]
+    #[doc = " Ordering of a selection's endpoints in terminal coordinates.\n\n Mirrored orders are only produced by rectangular selections whose start\n and end endpoints are on opposite diagonal corners that are not simple\n top-left-to-bottom-right or bottom-right-to-top-left orderings.\n"]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Start is before end in top-left to bottom-right order."]
     pub const FORWARD: Type = 0;
@@ -1392,20 +1200,15 @@ pub mod SelectionOrder {
     pub const MAX_VALUE: Type = 2147483647;
 }
 pub mod SelectionAdjust {
-    #[doc = " Operation used to adjust a selection endpoint.\n\n Adjustment mutates the \
-             selection's logical end endpoint, not whichever\n endpoint is visually bottom/right. \
-             This preserves keyboard and drag\n behavior for both forward and reversed \
-             selections.\n"]
+    #[doc = " Operation used to adjust a selection endpoint.\n\n Adjustment mutates the selection's logical end endpoint, not whichever\n endpoint is visually bottom/right. This preserves keyboard and drag\n behavior for both forward and reversed selections.\n"]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Move left to the previous non-empty cell, wrapping upward."]
     pub const LEFT: Type = 0;
     #[doc = " Move right to the next non-empty cell, wrapping downward."]
     pub const RIGHT: Type = 1;
-    #[doc = " Move up one row at the current column, or to the beginning of the\n line if already \
-             at the top."]
+    #[doc = " Move up one row at the current column, or to the beginning of the\n line if already at the top."]
     pub const UP: Type = 2;
-    #[doc = " Move down to the next non-blank row at the current column, or to the\n end of the \
-             line if none exists."]
+    #[doc = " Move down to the next non-blank row at the current column, or to the\n end of the line if none exists."]
     pub const DOWN: Type = 3;
     #[doc = " Move to the top-left cell of the screen."]
     pub const HOME: Type = 4;
@@ -1413,8 +1216,7 @@ pub mod SelectionAdjust {
     pub const END: Type = 5;
     #[doc = " Move up by one terminal page height, or to home if that would move\n past the top."]
     pub const PAGE_UP: Type = 6;
-    #[doc = " Move down by one terminal page height, or to end if that would move\n past the \
-             bottom."]
+    #[doc = " Move down by one terminal page height, or to end if that would move\n past the bottom."]
     pub const PAGE_DOWN: Type = 7;
     #[doc = " Move to the left edge of the current line."]
     pub const BEGINNING_OF_LINE: Type = 8;
@@ -1511,8 +1313,7 @@ pub mod SelectionGestureAutoscroll {
     pub const MAX_VALUE: Type = 2147483647;
 }
 pub mod SelectionGestureData {
-    #[doc = " Data fields readable from a selection gesture with\n \
-             ghostty_selection_gesture_get().\n"]
+    #[doc = " Data fields readable from a selection gesture with\n ghostty_selection_gesture_get().\n"]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Current click count: uint8_t*. 0 means inactive."]
     pub const CLICK_COUNT: Type = 0;
@@ -1522,19 +1323,13 @@ pub mod SelectionGestureData {
     pub const AUTOSCROLL: Type = 2;
     #[doc = " Current gesture behavior: GhosttySelectionGestureBehavior*."]
     pub const BEHAVIOR: Type = 3;
-    #[doc = " Current left-click anchor: GhosttyGridRef*.\n\n Returns GHOSTTY_NO_VALUE if there is \
-             no valid active anchor. On success,\n writes an untracked GhosttyGridRef snapshot \
-             with normal GhosttyGridRef\n lifetime rules."]
+    #[doc = " Current left-click anchor: GhosttyGridRef*.\n\n Returns GHOSTTY_NO_VALUE if there is no valid active anchor. On success,\n writes an untracked GhosttyGridRef snapshot with normal GhosttyGridRef\n lifetime rules."]
     pub const ANCHOR: Type = 4;
-    #[doc = " Current left-click anchor: GhosttyGridRef*.\n\n Returns GHOSTTY_NO_VALUE if there is \
-             no valid active anchor. On success,\n writes an untracked GhosttyGridRef snapshot \
-             with normal GhosttyGridRef\n lifetime rules."]
+    #[doc = " Current left-click anchor: GhosttyGridRef*.\n\n Returns GHOSTTY_NO_VALUE if there is no valid active anchor. On success,\n writes an untracked GhosttyGridRef snapshot with normal GhosttyGridRef\n lifetime rules."]
     pub const MAX_VALUE: Type = 2147483647;
 }
 pub mod SelectionGestureEventType {
-    #[doc = " Selection gesture event type.\n\n The event type is fixed when the event is created. \
-             Each event type documents\n which options are valid and which options are required by \
-             gesture operations.\n"]
+    #[doc = " Selection gesture event type.\n\n The event type is fixed when the event is created. Each event type documents\n which options are valid and which options are required by gesture operations.\n"]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Press event for ghostty_selection_gesture_event()."]
     pub const PRESS: Type = 0;
@@ -1550,45 +1345,33 @@ pub mod SelectionGestureEventType {
     pub const MAX_VALUE: Type = 2147483647;
 }
 pub mod SelectionGestureEventOption {
-    #[doc = " Options stored on a reusable selection gesture event.\n\n Passing NULL as the value \
-             to ghostty_selection_gesture_event_set() clears the\n corresponding option.\n"]
+    #[doc = " Options stored on a reusable selection gesture event.\n\n Passing NULL as the value to ghostty_selection_gesture_event_set() clears the\n corresponding option.\n"]
     pub type Type = ::std::os::raw::c_uint;
-    #[doc = " Grid reference under the pointer: GhosttyGridRef*.\n\n Required for PRESS and DRAG \
-             events. Optional for RELEASE events; when unset\n or cleared, release records that \
-             the pointer did not map to a valid cell."]
+    #[doc = " Grid reference under the pointer: GhosttyGridRef*.\n\n Required for PRESS and DRAG events. Optional for RELEASE events; when unset\n or cleared, release records that the pointer did not map to a valid cell."]
     pub const REF: Type = 0;
-    #[doc = " Surface-space pointer position: GhosttySurfacePosition*.\n\n Valid for PRESS, DRAG, \
-             and AUTOSCROLL_TICK."]
+    #[doc = " Surface-space pointer position: GhosttySurfacePosition*.\n\n Valid for PRESS, DRAG, and AUTOSCROLL_TICK."]
     pub const POSITION: Type = 1;
     #[doc = " Maximum repeat-click distance in pixels: double*."]
     pub const REPEAT_DISTANCE: Type = 2;
-    #[doc = " Optional monotonic event time in nanoseconds: uint64_t*.\n\n If unset, press treats \
-             the event as untimed and only single-click behavior\n is available."]
+    #[doc = " Optional monotonic event time in nanoseconds: uint64_t*.\n\n If unset, press treats the event as untimed and only single-click behavior\n is available."]
     pub const TIME_NS: Type = 3;
     #[doc = " Maximum interval between repeat clicks in nanoseconds: uint64_t*."]
     pub const REPEAT_INTERVAL_NS: Type = 4;
-    #[doc = " Word-boundary codepoints: GhosttyCodepoints*.\n\n The codepoints are copied into \
-             event-owned storage when set. If unset,\n operations that need word boundaries use \
-             Ghostty's defaults.\n\n Valid for PRESS, DRAG, AUTOSCROLL_TICK, and DEEP_PRESS."]
+    #[doc = " Word-boundary codepoints: GhosttyCodepoints*.\n\n The codepoints are copied into event-owned storage when set. If unset,\n operations that need word boundaries use Ghostty's defaults.\n\n Valid for PRESS, DRAG, AUTOSCROLL_TICK, and DEEP_PRESS."]
     pub const WORD_BOUNDARY_CODEPOINTS: Type = 5;
-    #[doc = " Selection behavior table: GhosttySelectionGestureBehaviors*.\n\n If unset, press \
-             uses the default behavior table: cell, word, line."]
+    #[doc = " Selection behavior table: GhosttySelectionGestureBehaviors*.\n\n If unset, press uses the default behavior table: cell, word, line."]
     pub const BEHAVIORS: Type = 6;
     #[doc = " Whether a drag or autoscroll tick should produce a rectangular selection: bool*."]
     pub const RECTANGLE: Type = 7;
-    #[doc = " Drag display geometry: GhosttySelectionGestureGeometry*. Required for DRAG and \
-             AUTOSCROLL_TICK."]
+    #[doc = " Drag display geometry: GhosttySelectionGestureGeometry*. Required for DRAG and AUTOSCROLL_TICK."]
     pub const GEOMETRY: Type = 8;
-    #[doc = " Viewport coordinate for an autoscroll tick: GhosttyPointCoordinate*. Required for \
-             AUTOSCROLL_TICK."]
+    #[doc = " Viewport coordinate for an autoscroll tick: GhosttyPointCoordinate*. Required for AUTOSCROLL_TICK."]
     pub const VIEWPORT: Type = 9;
-    #[doc = " Viewport coordinate for an autoscroll tick: GhosttyPointCoordinate*. Required for \
-             AUTOSCROLL_TICK."]
+    #[doc = " Viewport coordinate for an autoscroll tick: GhosttyPointCoordinate*. Required for AUTOSCROLL_TICK."]
     pub const MAX_VALUE: Type = 2147483647;
 }
 unsafe extern "C" {
-    #[doc = " Create a reusable selection gesture event object.\n\n         NULL or type is \
-             invalid, or GHOSTTY_OUT_OF_MEMORY if allocation fails\n"]
+    #[doc = " Create a reusable selection gesture event object.\n\n         NULL or type is invalid, or GHOSTTY_OUT_OF_MEMORY if allocation fails\n"]
     pub fn ghostty_selection_gesture_event_new(
         allocator: *const Allocator,
         out_event: *mut SelectionGestureEvent,
@@ -1596,15 +1379,11 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Free a selection gesture event object.\n\n Passing NULL is allowed and is a \
-             no-op.\n\n"]
+    #[doc = " Free a selection gesture event object.\n\n Passing NULL is allowed and is a no-op.\n\n"]
     pub fn ghostty_selection_gesture_event_free(event: SelectionGestureEvent);
 }
 unsafe extern "C" {
-    #[doc = " Set or clear an option on a selection gesture event.\n\n The value type depends on \
-             option and is documented by\n GhosttySelectionGestureEventOption. Passing NULL for \
-             value clears the option.\n\n         event-owned data fails, or GHOSTTY_INVALID_VALUE \
-             if event, option, or\n         value is invalid\n"]
+    #[doc = " Set or clear an option on a selection gesture event.\n\n The value type depends on option and is documented by\n GhosttySelectionGestureEventOption. Passing NULL for value clears the option.\n\n         event-owned data fails, or GHOSTTY_INVALID_VALUE if event, option, or\n         value is invalid\n"]
     pub fn ghostty_selection_gesture_event_set(
         event: SelectionGestureEvent,
         option: SelectionGestureEventOption::Type,
@@ -1612,33 +1391,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Apply a selection gesture event and return the resulting selection snapshot.\n\n \
-             This dispatches to the gesture operation matching the event's fixed type.\n For \
-             GHOSTTY_SELECTION_GESTURE_EVENT_TYPE_PRESS, the event must have\n \
-             GHOSTTY_SELECTION_GESTURE_EVENT_OPT_REF set before calling this function.\n All other \
-             press options use their initialized defaults when unset or cleared.\n\n For \
-             GHOSTTY_SELECTION_GESTURE_EVENT_TYPE_RELEASE, only\n \
-             GHOSTTY_SELECTION_GESTURE_EVENT_OPT_REF is valid. It is optional; if unset or\n \
-             cleared, release records that the pointer did not map to a valid cell. Release\n \
-             events update gesture state but do not produce a selection, so this function\n \
-             returns GHOSTTY_NO_VALUE after applying them.\n\n For \
-             GHOSTTY_SELECTION_GESTURE_EVENT_TYPE_DRAG,\n GHOSTTY_SELECTION_GESTURE_EVENT_OPT_REF \
-             and\n GHOSTTY_SELECTION_GESTURE_EVENT_OPT_GEOMETRY are required. Position,\n \
-             rectangle, and word-boundary codepoints are optional and use initialized\n defaults \
-             when unset or cleared.\n\n For \
-             GHOSTTY_SELECTION_GESTURE_EVENT_TYPE_AUTOSCROLL_TICK,\n \
-             GHOSTTY_SELECTION_GESTURE_EVENT_OPT_VIEWPORT and\n \
-             GHOSTTY_SELECTION_GESTURE_EVENT_OPT_GEOMETRY are required. Position,\n rectangle, and \
-             word-boundary codepoints are optional and use initialized\n defaults when unset or \
-             cleared.\n\n For GHOSTTY_SELECTION_GESTURE_EVENT_TYPE_DEEP_PRESS, only\n \
-             GHOSTTY_SELECTION_GESTURE_EVENT_OPT_WORD_BOUNDARY_CODEPOINTS is valid. It is\n \
-             optional and uses initialized defaults when unset or cleared.\n\n The returned \
-             selection is not installed as the terminal's current selection.\n It is a snapshot \
-             with the same lifetime rules as GhosttySelection.\n\n             be NULL to apply \
-             the event and discard the selection result.\n         currently produce a selection, \
-             GHOSTTY_OUT_OF_MEMORY if tracking\n         gesture state fails, or \
-             GHOSTTY_INVALID_VALUE if gesture, terminal,\n         event, or required event data \
-             is invalid\n"]
+    #[doc = " Apply a selection gesture event and return the resulting selection snapshot.\n\n This dispatches to the gesture operation matching the event's fixed type.\n For GHOSTTY_SELECTION_GESTURE_EVENT_TYPE_PRESS, the event must have\n GHOSTTY_SELECTION_GESTURE_EVENT_OPT_REF set before calling this function.\n All other press options use their initialized defaults when unset or cleared.\n\n For GHOSTTY_SELECTION_GESTURE_EVENT_TYPE_RELEASE, only\n GHOSTTY_SELECTION_GESTURE_EVENT_OPT_REF is valid. It is optional; if unset or\n cleared, release records that the pointer did not map to a valid cell. Release\n events update gesture state but do not produce a selection, so this function\n returns GHOSTTY_NO_VALUE after applying them.\n\n For GHOSTTY_SELECTION_GESTURE_EVENT_TYPE_DRAG,\n GHOSTTY_SELECTION_GESTURE_EVENT_OPT_REF and\n GHOSTTY_SELECTION_GESTURE_EVENT_OPT_GEOMETRY are required. Position,\n rectangle, and word-boundary codepoints are optional and use initialized\n defaults when unset or cleared.\n\n For GHOSTTY_SELECTION_GESTURE_EVENT_TYPE_AUTOSCROLL_TICK,\n GHOSTTY_SELECTION_GESTURE_EVENT_OPT_VIEWPORT and\n GHOSTTY_SELECTION_GESTURE_EVENT_OPT_GEOMETRY are required. Position,\n rectangle, and word-boundary codepoints are optional and use initialized\n defaults when unset or cleared.\n\n For GHOSTTY_SELECTION_GESTURE_EVENT_TYPE_DEEP_PRESS, only\n GHOSTTY_SELECTION_GESTURE_EVENT_OPT_WORD_BOUNDARY_CODEPOINTS is valid. It is\n optional and uses initialized defaults when unset or cleared.\n\n The returned selection is not installed as the terminal's current selection.\n It is a snapshot with the same lifetime rules as GhosttySelection.\n\n             be NULL to apply the event and discard the selection result.\n         currently produce a selection, GHOSTTY_OUT_OF_MEMORY if tracking\n         gesture state fails, or GHOSTTY_INVALID_VALUE if gesture, terminal,\n         event, or required event data is invalid\n"]
     pub fn ghostty_selection_gesture_event(
         gesture: SelectionGesture,
         terminal: Terminal,
@@ -1647,39 +1400,22 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Create a selection gesture object.\n\n The gesture stores mutable state for terminal \
-             text selection gestures. The\n gesture is not bound to a terminal at creation time; \
-             terminal-dependent APIs\n take the terminal explicitly.\n\n         NULL, or \
-             GHOSTTY_OUT_OF_MEMORY if allocation fails\n"]
+    #[doc = " Create a selection gesture object.\n\n The gesture stores mutable state for terminal text selection gestures. The\n gesture is not bound to a terminal at creation time; terminal-dependent APIs\n take the terminal explicitly.\n\n         NULL, or GHOSTTY_OUT_OF_MEMORY if allocation fails\n"]
     pub fn ghostty_selection_gesture_new(
         allocator: *const Allocator,
         out_gesture: *mut SelectionGesture,
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Free a selection gesture object.\n\n This releases any tracked terminal references \
-             owned by the gesture using the\n provided terminal, then frees the gesture object. \
-             Passing NULL for gesture is\n allowed and is a no-op.\n\n If the terminal is still \
-             alive, pass the terminal most recently used with the\n gesture so any tracked \
-             terminal references can be released correctly. If the\n terminal has already been \
-             freed, pass NULL for terminal; the terminal's page\n storage has already released the \
-             underlying tracked references, so the\n gesture wrapper can be safely discarded \
-             without touching the stale terminal\n state.\n\n                 the terminal has \
-             already been freed\n"]
+    #[doc = " Free a selection gesture object.\n\n This releases any tracked terminal references owned by the gesture using the\n provided terminal, then frees the gesture object. Passing NULL for gesture is\n allowed and is a no-op.\n\n If the terminal is still alive, pass the terminal most recently used with the\n gesture so any tracked terminal references can be released correctly. If the\n terminal has already been freed, pass NULL for terminal; the terminal's page\n storage has already released the underlying tracked references, so the\n gesture wrapper can be safely discarded without touching the stale terminal\n state.\n\n                 the terminal has already been freed\n"]
     pub fn ghostty_selection_gesture_free(gesture: SelectionGesture, terminal: Terminal);
 }
 unsafe extern "C" {
-    #[doc = " Reset any active selection gesture state.\n\n This cancels the active click sequence \
-             and releases any tracked terminal\n references owned by the gesture without freeing \
-             the gesture object.\n Passing NULL is allowed and is a no-op.\n\n"]
+    #[doc = " Reset any active selection gesture state.\n\n This cancels the active click sequence and releases any tracked terminal\n references owned by the gesture without freeing the gesture object.\n Passing NULL is allowed and is a no-op.\n\n"]
     pub fn ghostty_selection_gesture_reset(gesture: SelectionGesture, terminal: Terminal);
 }
 unsafe extern "C" {
-    #[doc = " Read data from a selection gesture.\n\n The type of value depends on data and is \
-             documented by\n GhosttySelectionGestureData. For \
-             GHOSTTY_SELECTION_GESTURE_DATA_ANCHOR,\n the returned GhosttyGridRef is an untracked \
-             snapshot with normal grid-ref\n lifetime rules.\n\n         has no value, or \
-             GHOSTTY_INVALID_VALUE if gesture, terminal, data, or\n         value is invalid\n"]
+    #[doc = " Read data from a selection gesture.\n\n The type of value depends on data and is documented by\n GhosttySelectionGestureData. For GHOSTTY_SELECTION_GESTURE_DATA_ANCHOR,\n the returned GhosttyGridRef is an untracked snapshot with normal grid-ref\n lifetime rules.\n\n         has no value, or GHOSTTY_INVALID_VALUE if gesture, terminal, data, or\n         value is invalid\n"]
     pub fn ghostty_selection_gesture_get(
         gesture: SelectionGesture,
         terminal: Terminal,
@@ -1699,11 +1435,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Derive a word selection snapshot from a terminal grid reference.\n\n The returned \
-             selection is not installed as the terminal's current\n selection. It is a snapshot \
-             with the same lifetime rules as GhosttySelection.\n\n         no selectable word \
-             content, or GHOSTTY_INVALID_VALUE if the\n         terminal, options, ref, codepoint \
-             pointer, or output pointer are\n         invalid.\n"]
+    #[doc = " Derive a word selection snapshot from a terminal grid reference.\n\n The returned selection is not installed as the terminal's current\n selection. It is a snapshot with the same lifetime rules as GhosttySelection.\n\n         no selectable word content, or GHOSTTY_INVALID_VALUE if the\n         terminal, options, ref, codepoint pointer, or output pointer are\n         invalid.\n"]
     pub fn ghostty_terminal_select_word(
         terminal: Terminal,
         options: *const TerminalSelectWordOptions,
@@ -1711,19 +1443,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Derive the nearest word selection snapshot between two terminal grid refs.\n\n \
-             Starting at options->start, this searches toward options->end (inclusive)\n and \
-             returns the first selectable word found using Ghostty's word-selection\n rules.\n\n \
-             This is useful for implementing double-click-and-drag selection in a UI. If\n a user \
-             double-clicks one word and drags across spaces or punctuation toward\n another word, \
-             selecting only the word directly under the current pointer can\n flicker or collapse \
-             when the pointer is between words. Instead, ask for the\n nearest word between the \
-             original click and the drag point, ask again in the\n reverse direction, and combine \
-             the two word bounds into the drag selection.\n\n\n The returned selection is not \
-             installed as the terminal's current\n selection. It is a snapshot with the same \
-             lifetime rules as GhosttySelection.\n\n         selectable word content between the \
-             valid refs, or\n         GHOSTTY_INVALID_VALUE if the terminal, options, refs, \
-             codepoint\n         pointer, or output pointer are invalid.\n"]
+    #[doc = " Derive the nearest word selection snapshot between two terminal grid refs.\n\n Starting at options->start, this searches toward options->end (inclusive)\n and returns the first selectable word found using Ghostty's word-selection\n rules.\n\n This is useful for implementing double-click-and-drag selection in a UI. If\n a user double-clicks one word and drags across spaces or punctuation toward\n another word, selecting only the word directly under the current pointer can\n flicker or collapse when the pointer is between words. Instead, ask for the\n nearest word between the original click and the drag point, ask again in the\n reverse direction, and combine the two word bounds into the drag selection.\n\n\n The returned selection is not installed as the terminal's current\n selection. It is a snapshot with the same lifetime rules as GhosttySelection.\n\n         selectable word content between the valid refs, or\n         GHOSTTY_INVALID_VALUE if the terminal, options, refs, codepoint\n         pointer, or output pointer are invalid.\n"]
     pub fn ghostty_terminal_select_word_between(
         terminal: Terminal,
         options: *const TerminalSelectWordBetweenOptions,
@@ -1731,11 +1451,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Derive a line selection snapshot from a terminal grid reference.\n\n The returned \
-             selection is not installed as the terminal's current\n selection. It is a snapshot \
-             with the same lifetime rules as GhosttySelection.\n\n         no selectable line \
-             content, or GHOSTTY_INVALID_VALUE if the\n         terminal, options, ref, codepoint \
-             pointer, or output pointer are\n         invalid.\n"]
+    #[doc = " Derive a line selection snapshot from a terminal grid reference.\n\n The returned selection is not installed as the terminal's current\n selection. It is a snapshot with the same lifetime rules as GhosttySelection.\n\n         no selectable line content, or GHOSTTY_INVALID_VALUE if the\n         terminal, options, ref, codepoint pointer, or output pointer are\n         invalid.\n"]
     pub fn ghostty_terminal_select_line(
         terminal: Terminal,
         options: *const TerminalSelectLineOptions,
@@ -1743,22 +1459,14 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Derive a selection snapshot covering all selectable terminal content.\n\n The \
-             returned selection is not installed as the terminal's current\n selection. It is a \
-             snapshot with the same lifetime rules as GhosttySelection.\n\n         selectable \
-             content, or GHOSTTY_INVALID_VALUE if the terminal or\n         output pointer is \
-             invalid.\n"]
+    #[doc = " Derive a selection snapshot covering all selectable terminal content.\n\n The returned selection is not installed as the terminal's current\n selection. It is a snapshot with the same lifetime rules as GhosttySelection.\n\n         selectable content, or GHOSTTY_INVALID_VALUE if the terminal or\n         output pointer is invalid.\n"]
     pub fn ghostty_terminal_select_all(
         terminal: Terminal,
         out_selection: *mut Selection,
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Derive a command-output selection snapshot from a terminal grid reference.\n\n The \
-             returned selection is not installed as the terminal's current\n selection. It is a \
-             snapshot with the same lifetime rules as GhosttySelection.\n\n         not selectable \
-             command output, or GHOSTTY_INVALID_VALUE if the\n         terminal, ref, or output \
-             pointer is invalid.\n"]
+    #[doc = " Derive a command-output selection snapshot from a terminal grid reference.\n\n The returned selection is not installed as the terminal's current\n selection. It is a snapshot with the same lifetime rules as GhosttySelection.\n\n         not selectable command output, or GHOSTTY_INVALID_VALUE if the\n         terminal, ref, or output pointer is invalid.\n"]
     pub fn ghostty_terminal_select_output(
         terminal: Terminal,
         ref_: GridRef,
@@ -1776,16 +1484,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Format a terminal selection into an allocated buffer.\n\n This is a one-shot \
-             convenience API for formatting either the terminal's\n active selection or a \
-             caller-provided GhosttySelection without explicitly\n creating a \
-             GhosttyFormatter.\n\n The returned buffer is allocated using allocator, or the \
-             default allocator\n if NULL is passed. The caller owns the returned buffer and must \
-             free it with\n ghostty_free(), passing the same allocator and returned length.\n\n \
-             The returned bytes are not NUL-terminated. This supports plain text, VT, and\n HTML \
-             uniformly as byte output.\n\n If options.selection is NULL and the terminal has no \
-             active selection, the\n function returns GHOSTTY_NO_VALUE and leaves out_ptr as NULL \
-             and out_len as 0.\n\n"]
+    #[doc = " Format a terminal selection into an allocated buffer.\n\n This is a one-shot convenience API for formatting either the terminal's\n active selection or a caller-provided GhosttySelection without explicitly\n creating a GhosttyFormatter.\n\n The returned buffer is allocated using allocator, or the default allocator\n if NULL is passed. The caller owns the returned buffer and must free it with\n ghostty_free(), passing the same allocator and returned length.\n\n The returned bytes are not NUL-terminated. This supports plain text, VT, and\n HTML uniformly as byte output.\n\n If options.selection is NULL and the terminal has no active selection, the\n function returns GHOSTTY_NO_VALUE and leaves out_ptr as NULL and out_len as 0.\n\n"]
     pub fn ghostty_terminal_selection_format_alloc(
         terminal: Terminal,
         allocator: *const Allocator,
@@ -1795,18 +1494,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Adjust a selection snapshot using terminal selection semantics.\n\n This mutates the \
-             caller-provided GhosttySelection in place. The logical end\n endpoint is always \
-             moved, regardless of whether the selection is forward or\n reversed visually. The \
-             input selection remains a snapshot: after adjustment,\n call ghostty_terminal_set() \
-             with GHOSTTY_TERMINAL_OPT_SELECTION to install it\n as the terminal-owned selection \
-             if desired.\n\n The selection's start and end grid refs must both be valid \
-             untracked\n snapshots for the given terminal's currently active screen. In \
-             practice,\n they must come from that terminal and screen, and no mutating terminal \
-             call\n may have occurred since the refs were produced or reconstructed from\n tracked \
-             refs. Passing refs from another terminal, another screen, or stale\n refs violates \
-             this precondition.\n\n         selection, or adjustment are invalid. Selection \
-             reference validity\n         is a precondition and is not checked.\n"]
+    #[doc = " Adjust a selection snapshot using terminal selection semantics.\n\n This mutates the caller-provided GhosttySelection in place. The logical end\n endpoint is always moved, regardless of whether the selection is forward or\n reversed visually. The input selection remains a snapshot: after adjustment,\n call ghostty_terminal_set() with GHOSTTY_TERMINAL_OPT_SELECTION to install it\n as the terminal-owned selection if desired.\n\n The selection's start and end grid refs must both be valid untracked\n snapshots for the given terminal's currently active screen. In practice,\n they must come from that terminal and screen, and no mutating terminal call\n may have occurred since the refs were produced or reconstructed from\n tracked refs. Passing refs from another terminal, another screen, or stale\n refs violates this precondition.\n\n         selection, or adjustment are invalid. Selection reference validity\n         is a precondition and is not checked.\n"]
     pub fn ghostty_terminal_selection_adjust(
         terminal: Terminal,
         selection: *mut Selection,
@@ -1814,14 +1502,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get the current endpoint ordering of a selection snapshot.\n\n The selection's start \
-             and end grid refs must both be valid untracked\n snapshots for the given terminal's \
-             currently active screen. In practice,\n they must come from that terminal and screen, \
-             and no mutating terminal call\n may have occurred since the refs were produced or \
-             reconstructed from\n tracked refs. Passing refs from another terminal, another \
-             screen, or stale\n refs violates this precondition.\n\n         selection, or output \
-             pointer are invalid. Selection reference\n         validity is a precondition and is \
-             not checked.\n"]
+    #[doc = " Get the current endpoint ordering of a selection snapshot.\n\n The selection's start and end grid refs must both be valid untracked\n snapshots for the given terminal's currently active screen. In practice,\n they must come from that terminal and screen, and no mutating terminal call\n may have occurred since the refs were produced or reconstructed from\n tracked refs. Passing refs from another terminal, another screen, or stale\n refs violates this precondition.\n\n         selection, or output pointer are invalid. Selection reference\n         validity is a precondition and is not checked.\n"]
     pub fn ghostty_terminal_selection_order(
         terminal: Terminal,
         selection: *const Selection,
@@ -1829,19 +1510,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Return a selection snapshot with endpoints ordered as requested.\n\n Use \
-             GHOSTTY_SELECTION_ORDER_FORWARD to get top-left to bottom-right bounds,\n and \
-             GHOSTTY_SELECTION_ORDER_REVERSE to get bottom-right to top-left bounds.\n Mirrored \
-             desired orders are accepted but normalized the same as forward.\n The output \
-             selection is a fresh untracked snapshot and is not installed as\n the terminal's \
-             current selection.\n\n The selection's start and end grid refs must both be valid \
-             untracked\n snapshots for the given terminal's currently active screen. In \
-             practice,\n they must come from that terminal and screen, and no mutating terminal \
-             call\n may have occurred since the refs were produced or reconstructed from\n tracked \
-             refs. Passing refs from another terminal, another screen, or stale\n refs violates \
-             this precondition.\n\n         selection, desired order, or output pointer are \
-             invalid. Selection\n         reference validity is a precondition and is not \
-             checked.\n"]
+    #[doc = " Return a selection snapshot with endpoints ordered as requested.\n\n Use GHOSTTY_SELECTION_ORDER_FORWARD to get top-left to bottom-right bounds,\n and GHOSTTY_SELECTION_ORDER_REVERSE to get bottom-right to top-left bounds.\n Mirrored desired orders are accepted but normalized the same as forward.\n The output selection is a fresh untracked snapshot and is not installed as\n the terminal's current selection.\n\n The selection's start and end grid refs must both be valid untracked\n snapshots for the given terminal's currently active screen. In practice,\n they must come from that terminal and screen, and no mutating terminal call\n may have occurred since the refs were produced or reconstructed from\n tracked refs. Passing refs from another terminal, another screen, or stale\n refs violates this precondition.\n\n         selection, desired order, or output pointer are invalid. Selection\n         reference validity is a precondition and is not checked.\n"]
     pub fn ghostty_terminal_selection_ordered(
         terminal: Terminal,
         selection: *const Selection,
@@ -1850,16 +1519,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Test whether a terminal point is inside a selection snapshot.\n\n This uses the same \
-             selection semantics as the terminal, including\n rectangular/block selections and \
-             linear selections spanning multiple rows.\n\n The selection's start and end grid refs \
-             must both be valid untracked\n snapshots for the given terminal's currently active \
-             screen. In practice,\n they must come from that terminal and screen, and no mutating \
-             terminal call\n may have occurred since the refs were produced or reconstructed \
-             from\n tracked refs. Passing refs from another terminal, another screen, or stale\n \
-             refs violates this precondition.\n\n         selection, point, or output pointer are \
-             invalid. Selection reference\n         validity is a precondition and is not \
-             checked.\n"]
+    #[doc = " Test whether a terminal point is inside a selection snapshot.\n\n This uses the same selection semantics as the terminal, including\n rectangular/block selections and linear selections spanning multiple rows.\n\n The selection's start and end grid refs must both be valid untracked\n snapshots for the given terminal's currently active screen. In practice,\n they must come from that terminal and screen, and no mutating terminal call\n may have occurred since the refs were produced or reconstructed from\n tracked refs. Passing refs from another terminal, another screen, or stale\n refs violates this precondition.\n\n         selection, point, or output pointer are invalid. Selection reference\n         validity is a precondition and is not checked.\n"]
     pub fn ghostty_terminal_selection_contains(
         terminal: Terminal,
         selection: *const Selection,
@@ -1868,16 +1528,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Test whether two selection snapshots are equal.\n\n Equality uses the terminal's \
-             internal selection semantics: both endpoint\n pins must match and both selections \
-             must have the same rectangular/block\n state. This avoids requiring callers to \
-             compare raw GhosttyGridRef internals.\n\n Both selections' start and end grid refs \
-             must be valid untracked snapshots\n for the given terminal's currently active screen. \
-             In practice, they must\n come from that terminal and screen, and no mutating terminal \
-             call may have\n occurred since the refs were produced or reconstructed from tracked \
-             refs.\n Passing refs from another terminal, another screen, or stale refs violates\n \
-             this precondition.\n\n         selections, or output pointer are invalid. Selection \
-             reference\n         validity is a precondition and is not checked.\n"]
+    #[doc = " Test whether two selection snapshots are equal.\n\n Equality uses the terminal's internal selection semantics: both endpoint\n pins must match and both selections must have the same rectangular/block\n state. This avoids requiring callers to compare raw GhosttyGridRef internals.\n\n Both selections' start and end grid refs must be valid untracked snapshots\n for the given terminal's currently active screen. In practice, they must\n come from that terminal and screen, and no mutating terminal call may have\n occurred since the refs were produced or reconstructed from tracked refs.\n Passing refs from another terminal, another screen, or stale refs violates\n this precondition.\n\n         selections, or output pointer are invalid. Selection reference\n         validity is a precondition and is not checked.\n"]
     pub fn ghostty_terminal_selection_equal(
         terminal: Terminal,
         a: *const Selection,
@@ -1885,13 +1536,10 @@ unsafe extern "C" {
         out_equal: *mut bool,
     ) -> Result::Type;
 }
-#[doc = " A packed 16-bit terminal mode.\n\n Encodes a mode value (bits 0–14) and an ANSI flag \
-         (bit 15) into a\n single 16-bit integer. Use the inline helper functions to construct\n \
-         and inspect modes rather than manipulating bits directly."]
+#[doc = " A packed 16-bit terminal mode.\n\n Encodes a mode value (bits 0–14) and an ANSI flag (bit 15) into a\n single 16-bit integer. Use the inline helper functions to construct\n and inspect modes rather than manipulating bits directly."]
 pub type Mode = u16;
 pub mod ModeReportState {
-    #[doc = " DECRPM report state values.\n\n These correspond to the Ps2 parameter in a DECRPM \
-             response\n sequence (CSI ? Ps1 ; Ps2 $ y)."]
+    #[doc = " DECRPM report state values.\n\n These correspond to the Ps2 parameter in a DECRPM response\n sequence (CSI ? Ps1 ; Ps2 $ y)."]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Mode is not recognized"]
     pub const NOT_RECOGNIZED: Type = 0;
@@ -1907,13 +1555,7 @@ pub mod ModeReportState {
     pub const MAX_VALUE: Type = 2147483647;
 }
 unsafe extern "C" {
-    #[doc = " Encode a DECRPM (DEC Private Mode Report) response sequence.\n\n Writes a mode \
-             report escape sequence into the provided buffer.\n The generated sequence has the \
-             form:\n - DEC private mode: CSI ? Ps1 ; Ps2 $ y\n - ANSI mode:        CSI Ps1 ; Ps2 $ \
-             y\n\n If the buffer is too small, the function returns GHOSTTY_OUT_OF_SPACE\n and \
-             writes the required buffer size to @p out_written. The caller can\n then retry with a \
-             sufficiently sized buffer.\n\n             GHOSTTY_OUT_OF_SPACE, the required buffer \
-             size.\n         is too small"]
+    #[doc = " Encode a DECRPM (DEC Private Mode Report) response sequence.\n\n Writes a mode report escape sequence into the provided buffer.\n The generated sequence has the form:\n - DEC private mode: CSI ? Ps1 ; Ps2 $ y\n - ANSI mode:        CSI Ps1 ; Ps2 $ y\n\n If the buffer is too small, the function returns GHOSTTY_OUT_OF_SPACE\n and writes the required buffer size to @p out_written. The caller can\n then retry with a sufficiently sized buffer.\n\n             GHOSTTY_OUT_OF_SPACE, the required buffer size.\n         is too small"]
     pub fn ghostty_mode_report_encode(
         mode: Mode,
         state: ModeReportState::Type,
@@ -1963,12 +1605,7 @@ const _: () = {
         [::std::mem::offset_of!(SizeReportSize, cell_height) - 8usize];
 };
 unsafe extern "C" {
-    #[doc = " Encode a terminal size report into an escape sequence.\n\n Encodes a size report in \
-             the format specified by @p style into the\n provided buffer.\n\n If the buffer is too \
-             small, the function returns GHOSTTY_OUT_OF_SPACE\n and writes the required buffer \
-             size to @p out_written. The caller can\n then retry with a sufficiently sized \
-             buffer.\n\n             GHOSTTY_OUT_OF_SPACE, the required buffer size.\n         is \
-             too small"]
+    #[doc = " Encode a terminal size report into an escape sequence.\n\n Encodes a size report in the format specified by @p style into the\n provided buffer.\n\n If the buffer is too small, the function returns GHOSTTY_OUT_OF_SPACE\n and writes the required buffer size to @p out_written. The caller can\n then retry with a sufficiently sized buffer.\n\n             GHOSTTY_OUT_OF_SPACE, the required buffer size.\n         is too small"]
     pub fn ghostty_size_report_encode(
         style: SizeReportStyle::Type,
         size: SizeReportSize,
@@ -1982,13 +1619,9 @@ pub mod KittyGraphicsData {
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Invalid / sentinel value."]
     pub const INVALID: Type = 0;
-    #[doc = " Populate a pre-allocated placement iterator with placement data from\n the storage. \
-             Iterator data is only valid as long as the underlying\n terminal is not mutated.\n\n \
-             Output type: GhosttyKittyGraphicsPlacementIterator *"]
+    #[doc = " Populate a pre-allocated placement iterator with placement data from\n the storage. Iterator data is only valid as long as the underlying\n terminal is not mutated.\n\n Output type: GhosttyKittyGraphicsPlacementIterator *"]
     pub const PLACEMENT_ITERATOR: Type = 1;
-    #[doc = " Populate a pre-allocated placement iterator with placement data from\n the storage. \
-             Iterator data is only valid as long as the underlying\n terminal is not mutated.\n\n \
-             Output type: GhosttyKittyGraphicsPlacementIterator *"]
+    #[doc = " Populate a pre-allocated placement iterator with placement data from\n the storage. Iterator data is only valid as long as the underlying\n terminal is not mutated.\n\n Output type: GhosttyKittyGraphicsPlacementIterator *"]
     pub const MAX_VALUE: Type = 2147483647;
 }
 pub mod KittyGraphicsPlacementData {
@@ -2012,8 +1645,7 @@ pub mod KittyGraphicsPlacementData {
     pub const SOURCE_Y: Type = 7;
     #[doc = " Source rectangle width in pixels (0 = full image width).\n\n Output type: uint32_t *"]
     pub const SOURCE_WIDTH: Type = 8;
-    #[doc = " Source rectangle height in pixels (0 = full image height).\n\n Output type: uint32_t \
-             *"]
+    #[doc = " Source rectangle height in pixels (0 = full image height).\n\n Output type: uint32_t *"]
     pub const SOURCE_HEIGHT: Type = 9;
     #[doc = " Number of columns this placement occupies.\n\n Output type: uint32_t *"]
     pub const COLUMNS: Type = 10;
@@ -2025,10 +1657,7 @@ pub mod KittyGraphicsPlacementData {
     pub const MAX_VALUE: Type = 2147483647;
 }
 pub mod KittyPlacementLayer {
-    #[doc = " Z-layer classification for kitty graphics placements.\n\n Based on the kitty \
-             protocol z-index conventions:\n - BELOW_BG:   z < INT32_MIN/2  (drawn below cell \
-             background)\n - BELOW_TEXT:  INT32_MIN/2 <= z < 0  (above background, below text)\n - \
-             ABOVE_TEXT:  z >= 0  (above text)\n - ALL:         no filtering (current behavior)\n"]
+    #[doc = " Z-layer classification for kitty graphics placements.\n\n Based on the kitty protocol z-index conventions:\n - BELOW_BG:   z < INT32_MIN/2  (drawn below cell background)\n - BELOW_TEXT:  INT32_MIN/2 <= z < 0  (above background, below text)\n - ABOVE_TEXT:  z >= 0  (above text)\n - ALL:         no filtering (current behavior)\n"]
     pub type Type = ::std::os::raw::c_uint;
     pub const ALL: Type = 0;
     pub const BELOW_BG: Type = 1;
@@ -2078,29 +1707,18 @@ pub mod KittyGraphicsImageData {
     pub const FORMAT: Type = 5;
     #[doc = " Compression of the image.\n\n Output type: GhosttyKittyImageCompression *"]
     pub const COMPRESSION: Type = 6;
-    #[doc = " Borrowed pointer to the raw pixel data. Valid as long as the\n underlying terminal \
-             is not mutated.\n\n Output type: const uint8_t **"]
+    #[doc = " Borrowed pointer to the raw pixel data. Valid as long as the\n underlying terminal is not mutated.\n\n Output type: const uint8_t **"]
     pub const DATA_PTR: Type = 7;
     #[doc = " Length of the raw pixel data in bytes.\n\n Output type: size_t *"]
     pub const DATA_LEN: Type = 8;
     #[doc = " Length of the raw pixel data in bytes.\n\n Output type: size_t *"]
     pub const MAX_VALUE: Type = 2147483647;
 }
-#[doc = " Combined rendering geometry for a placement in a single sized struct.\n\n Combines the \
-         results of ghostty_kitty_graphics_placement_pixel_size(),\n \
-         ghostty_kitty_graphics_placement_grid_size(),\n \
-         ghostty_kitty_graphics_placement_viewport_pos(), and\n \
-         ghostty_kitty_graphics_placement_source_rect() into one call. This is\n an optimization \
-         over calling those four functions individually,\n particularly useful in environments \
-         with high per-call overhead such\n as FFI or Cgo.\n\n This struct uses the sized-struct \
-         ABI pattern. Initialize with\n \
-         GHOSTTY_INIT_SIZED(GhosttyKittyGraphicsPlacementRenderInfo) before calling\n \
-         ghostty_kitty_graphics_placement_render_info().\n"]
+#[doc = " Combined rendering geometry for a placement in a single sized struct.\n\n Combines the results of ghostty_kitty_graphics_placement_pixel_size(),\n ghostty_kitty_graphics_placement_grid_size(),\n ghostty_kitty_graphics_placement_viewport_pos(), and\n ghostty_kitty_graphics_placement_source_rect() into one call. This is\n an optimization over calling those four functions individually,\n particularly useful in environments with high per-call overhead such\n as FFI or Cgo.\n\n This struct uses the sized-struct ABI pattern. Initialize with\n GHOSTTY_INIT_SIZED(GhosttyKittyGraphicsPlacementRenderInfo) before calling\n ghostty_kitty_graphics_placement_render_info().\n"]
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct KittyGraphicsPlacementRenderInfo {
-    #[doc = " Size of this struct in bytes. Must be set to \
-             sizeof(GhosttyKittyGraphicsPlacementRenderInfo)."]
+    #[doc = " Size of this struct in bytes. Must be set to sizeof(GhosttyKittyGraphicsPlacementRenderInfo)."]
     pub size: usize,
     #[doc = " Rendered width in pixels."]
     pub pixel_width: u32,
@@ -2157,9 +1775,7 @@ const _: () = {
         [::std::mem::offset_of!(KittyGraphicsPlacementRenderInfo, source_height) - 48usize];
 };
 unsafe extern "C" {
-    #[doc = " Get data from a kitty graphics storage instance.\n\n The output pointer must be of \
-             the appropriate type for the requested\n data kind.\n\n Returns GHOSTTY_NO_VALUE when \
-             Kitty graphics are disabled at build time.\n\n"]
+    #[doc = " Get data from a kitty graphics storage instance.\n\n The output pointer must be of the appropriate type for the requested\n data kind.\n\n Returns GHOSTTY_NO_VALUE when Kitty graphics are disabled at build time.\n\n"]
     pub fn ghostty_kitty_graphics_get(
         graphics: KittyGraphics,
         data: KittyGraphicsData::Type,
@@ -2167,16 +1783,14 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Look up a Kitty graphics image by its image ID.\n\n Returns NULL if no image with \
-             the given ID exists or if Kitty graphics\n are disabled at build time.\n\n"]
+    #[doc = " Look up a Kitty graphics image by its image ID.\n\n Returns NULL if no image with the given ID exists or if Kitty graphics\n are disabled at build time.\n\n"]
     pub fn ghostty_kitty_graphics_image(
         graphics: KittyGraphics,
         image_id: u32,
     ) -> KittyGraphicsImage;
 }
 unsafe extern "C" {
-    #[doc = " Get data from a Kitty graphics image.\n\n The output pointer must be of the \
-             appropriate type for the requested\n data kind.\n\n"]
+    #[doc = " Get data from a Kitty graphics image.\n\n The output pointer must be of the appropriate type for the requested\n data kind.\n\n"]
     pub fn ghostty_kitty_graphics_image_get(
         image: KittyGraphicsImage,
         data: KittyGraphicsImageData::Type,
@@ -2184,16 +1798,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get multiple data fields from a Kitty graphics image in a single call.\n\n This is \
-             an optimization over calling ghostty_kitty_graphics_image_get()\n repeatedly, \
-             particularly useful in environments with high per-call\n overhead such as FFI or \
-             Cgo.\n\n Each element in the keys array specifies a data kind, and the\n \
-             corresponding element in the values array receives the result.\n The type of each \
-             values[i] pointer must match the output type\n documented for keys[i].\n\n Processing \
-             stops at the first error; on success out_written\n is set to count, on error it is \
-             set to the index of the\n failing key (i.e. the number of values successfully \
-             written).\n\n               documented output type)\n             successfully \
-             written (may be NULL)\n"]
+    #[doc = " Get multiple data fields from a Kitty graphics image in a single call.\n\n This is an optimization over calling ghostty_kitty_graphics_image_get()\n repeatedly, particularly useful in environments with high per-call\n overhead such as FFI or Cgo.\n\n Each element in the keys array specifies a data kind, and the\n corresponding element in the values array receives the result.\n The type of each values[i] pointer must match the output type\n documented for keys[i].\n\n Processing stops at the first error; on success out_written\n is set to count, on error it is set to the index of the\n failing key (i.e. the number of values successfully written).\n\n               documented output type)\n             successfully written (may be NULL)\n"]
     pub fn ghostty_kitty_graphics_image_get_multi(
         image: KittyGraphicsImage,
         count: usize,
@@ -2203,9 +1808,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Create a new placement iterator instance.\n\n All fields except the allocator are \
-             left undefined until populated\n via ghostty_kitty_graphics_get() with\n \
-             GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_ITERATOR.\n\n         failure\n"]
+    #[doc = " Create a new placement iterator instance.\n\n All fields except the allocator are left undefined until populated\n via ghostty_kitty_graphics_get() with\n GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_ITERATOR.\n\n         failure\n"]
     pub fn ghostty_kitty_graphics_placement_iterator_new(
         allocator: *const Allocator,
         out_iterator: *mut KittyGraphicsPlacementIterator,
@@ -2216,13 +1819,7 @@ unsafe extern "C" {
     pub fn ghostty_kitty_graphics_placement_iterator_free(iterator: KittyGraphicsPlacementIterator);
 }
 unsafe extern "C" {
-    #[doc = " Set an option on a placement iterator.\n\n Use \
-             GHOSTTY_KITTY_GRAPHICS_PLACEMENT_ITERATOR_OPTION_LAYER with a\n \
-             GhosttyKittyPlacementLayer value to filter placements by z-layer.\n The filter is \
-             applied during iteration: ghostty_kitty_graphics_placement_next()\n will skip \
-             placements that do not match the configured layer.\n\n The default layer is \
-             GHOSTTY_KITTY_PLACEMENT_LAYER_ALL (no filtering).\n\n              \
-             GHOSTTY_INVALID_VALUE)\n"]
+    #[doc = " Set an option on a placement iterator.\n\n Use GHOSTTY_KITTY_GRAPHICS_PLACEMENT_ITERATOR_OPTION_LAYER with a\n GhosttyKittyPlacementLayer value to filter placements by z-layer.\n The filter is applied during iteration: ghostty_kitty_graphics_placement_next()\n will skip placements that do not match the configured layer.\n\n The default layer is GHOSTTY_KITTY_PLACEMENT_LAYER_ALL (no filtering).\n\n              GHOSTTY_INVALID_VALUE)\n"]
     pub fn ghostty_kitty_graphics_placement_iterator_set(
         iterator: KittyGraphicsPlacementIterator,
         option: KittyGraphicsPlacementIteratorOption::Type,
@@ -2230,15 +1827,11 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Advance the placement iterator to the next placement.\n\n If a layer filter has been \
-             set via\n ghostty_kitty_graphics_placement_iterator_set(), only placements\n matching \
-             that layer are returned.\n\n"]
+    #[doc = " Advance the placement iterator to the next placement.\n\n If a layer filter has been set via\n ghostty_kitty_graphics_placement_iterator_set(), only placements\n matching that layer are returned.\n\n"]
     pub fn ghostty_kitty_graphics_placement_next(iterator: KittyGraphicsPlacementIterator) -> bool;
 }
 unsafe extern "C" {
-    #[doc = " Get data from the current placement in a placement iterator.\n\n Call \
-             ghostty_kitty_graphics_placement_next() at least once before\n calling this \
-             function.\n\n         iterator is NULL or not positioned on a placement\n"]
+    #[doc = " Get data from the current placement in a placement iterator.\n\n Call ghostty_kitty_graphics_placement_next() at least once before\n calling this function.\n\n         iterator is NULL or not positioned on a placement\n"]
     pub fn ghostty_kitty_graphics_placement_get(
         iterator: KittyGraphicsPlacementIterator,
         data: KittyGraphicsPlacementData::Type,
@@ -2246,16 +1839,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get multiple data fields from the current placement in a single call.\n\n This is an \
-             optimization over calling ghostty_kitty_graphics_placement_get()\n repeatedly, \
-             particularly useful in environments with high per-call\n overhead such as FFI or \
-             Cgo.\n\n Each element in the keys array specifies a data kind, and the\n \
-             corresponding element in the values array receives the result.\n The type of each \
-             values[i] pointer must match the output type\n documented for keys[i].\n\n Processing \
-             stops at the first error; on success out_written\n is set to count, on error it is \
-             set to the index of the\n failing key (i.e. the number of values successfully \
-             written).\n\n               documented output type)\n             successfully \
-             written (may be NULL)\n"]
+    #[doc = " Get multiple data fields from the current placement in a single call.\n\n This is an optimization over calling ghostty_kitty_graphics_placement_get()\n repeatedly, particularly useful in environments with high per-call\n overhead such as FFI or Cgo.\n\n Each element in the keys array specifies a data kind, and the\n corresponding element in the values array receives the result.\n The type of each values[i] pointer must match the output type\n documented for keys[i].\n\n Processing stops at the first error; on success out_written\n is set to count, on error it is set to the index of the\n failing key (i.e. the number of values successfully written).\n\n               documented output type)\n             successfully written (may be NULL)\n"]
     pub fn ghostty_kitty_graphics_placement_get_multi(
         iterator: KittyGraphicsPlacementIterator,
         count: usize,
@@ -2265,12 +1849,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Compute the grid rectangle occupied by the current placement.\n\n Uses the \
-             placement's pin, the image dimensions, and the terminal's\n cell/pixel geometry to \
-             calculate the bounding rectangle. Virtual\n placements (unicode placeholders) return \
-             GHOSTTY_NO_VALUE.\n\n             as a selection with rectangle=true\n         is \
-             NULL or the iterator is not positioned, GHOSTTY_NO_VALUE for\n         virtual \
-             placements or when Kitty graphics are disabled\n"]
+    #[doc = " Compute the grid rectangle occupied by the current placement.\n\n Uses the placement's pin, the image dimensions, and the terminal's\n cell/pixel geometry to calculate the bounding rectangle. Virtual\n placements (unicode placeholders) return GHOSTTY_NO_VALUE.\n\n             as a selection with rectangle=true\n         is NULL or the iterator is not positioned, GHOSTTY_NO_VALUE for\n         virtual placements or when Kitty graphics are disabled\n"]
     pub fn ghostty_kitty_graphics_placement_rect(
         iterator: KittyGraphicsPlacementIterator,
         image: KittyGraphicsImage,
@@ -2279,10 +1858,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Compute the rendered pixel size of the current placement.\n\n Takes into account the \
-             placement's source rectangle, specified\n columns/rows, and aspect ratio to calculate \
-             the final rendered\n pixel dimensions.\n\n         is NULL or the iterator is not \
-             positioned, GHOSTTY_NO_VALUE when\n         Kitty graphics are disabled\n"]
+    #[doc = " Compute the rendered pixel size of the current placement.\n\n Takes into account the placement's source rectangle, specified\n columns/rows, and aspect ratio to calculate the final rendered\n pixel dimensions.\n\n         is NULL or the iterator is not positioned, GHOSTTY_NO_VALUE when\n         Kitty graphics are disabled\n"]
     pub fn ghostty_kitty_graphics_placement_pixel_size(
         iterator: KittyGraphicsPlacementIterator,
         image: KittyGraphicsImage,
@@ -2292,12 +1868,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Compute the grid cell size of the current placement.\n\n Returns the number of \
-             columns and rows that the placement occupies\n in the terminal grid. If the placement \
-             specifies explicit columns\n and rows, those are returned directly; otherwise they \
-             are calculated\n from the pixel size and cell dimensions.\n\n         is NULL or the \
-             iterator is not positioned, GHOSTTY_NO_VALUE when\n         Kitty graphics are \
-             disabled\n"]
+    #[doc = " Compute the grid cell size of the current placement.\n\n Returns the number of columns and rows that the placement occupies\n in the terminal grid. If the placement specifies explicit columns\n and rows, those are returned directly; otherwise they are calculated\n from the pixel size and cell dimensions.\n\n         is NULL or the iterator is not positioned, GHOSTTY_NO_VALUE when\n         Kitty graphics are disabled\n"]
     pub fn ghostty_kitty_graphics_placement_grid_size(
         iterator: KittyGraphicsPlacementIterator,
         image: KittyGraphicsImage,
@@ -2307,22 +1878,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get the viewport-relative grid position of the current placement.\n\n Converts the \
-             placement's internal pin to viewport-relative column and\n row coordinates. The \
-             returned coordinates represent the top-left\n corner of the placement in the \
-             viewport's grid coordinate space.\n\n The row value can be negative when the \
-             placement's origin has\n scrolled above the top of the viewport. For example, a \
-             4-row\n image that has scrolled up by 2 rows returns row=-2, meaning\n its top 2 rows \
-             are above the visible area but its bottom 2 rows\n are still on screen. Embedders \
-             should use these coordinates\n directly when computing the destination rectangle for \
-             rendering;\n the embedder is responsible for clipping the portion of the image\n that \
-             falls outside the viewport.\n\n Returns GHOSTTY_SUCCESS for any placement that is at \
-             least\n partially visible in the viewport. Returns GHOSTTY_NO_VALUE when\n the \
-             placement is completely outside the viewport (its bottom edge\n is above the viewport \
-             or its top edge is at or below the last\n viewport row), or when the placement is a \
-             virtual (unicode\n placeholder) placement.\n\n             (may be negative for \
-             partially visible placements)\n         off-screen or virtual, GHOSTTY_INVALID_VALUE \
-             if any handle\n         is NULL or the iterator is not positioned\n"]
+    #[doc = " Get the viewport-relative grid position of the current placement.\n\n Converts the placement's internal pin to viewport-relative column and\n row coordinates. The returned coordinates represent the top-left\n corner of the placement in the viewport's grid coordinate space.\n\n The row value can be negative when the placement's origin has\n scrolled above the top of the viewport. For example, a 4-row\n image that has scrolled up by 2 rows returns row=-2, meaning\n its top 2 rows are above the visible area but its bottom 2 rows\n are still on screen. Embedders should use these coordinates\n directly when computing the destination rectangle for rendering;\n the embedder is responsible for clipping the portion of the image\n that falls outside the viewport.\n\n Returns GHOSTTY_SUCCESS for any placement that is at least\n partially visible in the viewport. Returns GHOSTTY_NO_VALUE when\n the placement is completely outside the viewport (its bottom edge\n is above the viewport or its top edge is at or below the last\n viewport row), or when the placement is a virtual (unicode\n placeholder) placement.\n\n             (may be negative for partially visible placements)\n         off-screen or virtual, GHOSTTY_INVALID_VALUE if any handle\n         is NULL or the iterator is not positioned\n"]
     pub fn ghostty_kitty_graphics_placement_viewport_pos(
         iterator: KittyGraphicsPlacementIterator,
         image: KittyGraphicsImage,
@@ -2332,11 +1888,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get the resolved source rectangle for the current placement.\n\n Applies kitty \
-             protocol semantics: a width or height of 0 in the\n placement means \"use the full \
-             image dimension\", and the resulting\n rectangle is clamped to the actual image \
-             bounds. The returned\n values are in pixels and are ready to use for texture \
-             sampling.\n\n         handle is NULL or the iterator is not positioned\n"]
+    #[doc = " Get the resolved source rectangle for the current placement.\n\n Applies kitty protocol semantics: a width or height of 0 in the\n placement means \"use the full image dimension\", and the resulting\n rectangle is clamped to the actual image bounds. The returned\n values are in pixels and are ready to use for texture sampling.\n\n         handle is NULL or the iterator is not positioned\n"]
     pub fn ghostty_kitty_graphics_placement_source_rect(
         iterator: KittyGraphicsPlacementIterator,
         image: KittyGraphicsImage,
@@ -2347,12 +1899,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get all rendering geometry for a placement in a single call.\n\n Combines pixel \
-             size, grid size, viewport position, and source\n rectangle into one struct. \
-             Initialize with\n GHOSTTY_INIT_SIZED(GhosttyKittyGraphicsPlacementRenderInfo).\n\n \
-             When viewport_visible is false, the placement is fully off-screen\n or is a virtual \
-             placement; viewport_col and viewport_row may\n contain meaningless values in that \
-             case.\n\n"]
+    #[doc = " Get all rendering geometry for a placement in a single call.\n\n Combines pixel size, grid size, viewport position, and source\n rectangle into one struct. Initialize with\n GHOSTTY_INIT_SIZED(GhosttyKittyGraphicsPlacementRenderInfo).\n\n When viewport_visible is false, the placement is fully off-screen\n or is a virtual placement; viewport_col and viewport_row may\n contain meaningless values in that case.\n\n"]
     pub fn ghostty_kitty_graphics_placement_render_info(
         iterator: KittyGraphicsPlacementIterator,
         image: KittyGraphicsImage,
@@ -2450,8 +1997,7 @@ impl Default for TerminalScrollViewport {
     }
 }
 pub mod TerminalScreen {
-    #[doc = " Terminal screen identifier.\n\n Identifies which screen buffer is active in the \
-             terminal.\n"]
+    #[doc = " Terminal screen identifier.\n\n Identifies which screen buffer is active in the terminal.\n"]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " The primary (normal) screen."]
     pub const PRIMARY: Type = 0;
@@ -2474,8 +2020,7 @@ pub mod TerminalCursorStyle {
     #[doc = " Hollow block cursor."]
     pub const MAX_VALUE: Type = 2147483647;
 }
-#[doc = " Scrollbar state for the terminal viewport.\n\n Represents the scrollable area dimensions \
-         needed to render a scrollbar.\n"]
+#[doc = " Scrollbar state for the terminal viewport.\n\n Represents the scrollable area dimensions needed to render a scrollbar.\n"]
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct TerminalScrollbar {
@@ -2497,15 +2042,11 @@ const _: () = {
     ["Offset of field: TerminalScrollbar::len"]
         [::std::mem::offset_of!(TerminalScrollbar, len) - 16usize];
 };
-#[doc = " Callback function type for bell.\n\n Called when the terminal receives a BEL character \
-         (0x07).\n\n"]
+#[doc = " Callback function type for bell.\n\n Called when the terminal receives a BEL character (0x07).\n\n"]
 pub type TerminalBellFn = ::std::option::Option<
     unsafe extern "C" fn(terminal: Terminal, userdata: *mut ::std::os::raw::c_void),
 >;
-#[doc = " Callback function type for color scheme queries (CSI ? 996 n).\n\n Called when the \
-         terminal receives a color scheme device status report\n query. Return true and fill \
-         *out_scheme with the current color scheme,\n or return false to silently ignore the \
-         query.\n\n"]
+#[doc = " Callback function type for color scheme queries (CSI ? 996 n).\n\n Called when the terminal receives a color scheme device status report\n query. Return true and fill *out_scheme with the current color scheme,\n or return false to silently ignore the query.\n\n"]
 pub type TerminalColorSchemeFn = ::std::option::Option<
     unsafe extern "C" fn(
         terminal: Terminal,
@@ -2513,11 +2054,7 @@ pub type TerminalColorSchemeFn = ::std::option::Option<
         out_scheme: *mut ColorScheme::Type,
     ) -> bool,
 >;
-#[doc = " Callback function type for device attributes queries (DA1/DA2/DA3).\n\n Called when the \
-         terminal receives a device attributes query (CSI c,\n CSI > c, or CSI = c). Return true \
-         and fill *out_attrs with the\n response data, or return false to silently ignore the \
-         query.\n\n The terminal uses whichever sub-struct (primary, secondary, tertiary)\n \
-         matches the request type, but all three should be filled for simplicity.\n\n"]
+#[doc = " Callback function type for device attributes queries (DA1/DA2/DA3).\n\n Called when the terminal receives a device attributes query (CSI c,\n CSI > c, or CSI = c). Return true and fill *out_attrs with the\n response data, or return false to silently ignore the query.\n\n The terminal uses whichever sub-struct (primary, secondary, tertiary)\n matches the request type, but all three should be filled for simplicity.\n\n"]
 pub type TerminalDeviceAttributesFn = ::std::option::Option<
     unsafe extern "C" fn(
         terminal: Terminal,
@@ -2525,15 +2062,11 @@ pub type TerminalDeviceAttributesFn = ::std::option::Option<
         out_attrs: *mut DeviceAttributes,
     ) -> bool,
 >;
-#[doc = " Callback function type for enquiry (ENQ, 0x05).\n\n Called when the terminal receives an \
-         ENQ character. Return the\n response bytes as a GhosttyString. The memory must remain \
-         valid\n until the callback returns. Return a zero-length string to send\n no response.\n\n"]
+#[doc = " Callback function type for enquiry (ENQ, 0x05).\n\n Called when the terminal receives an ENQ character. Return the\n response bytes as a GhosttyString. The memory must remain valid\n until the callback returns. Return a zero-length string to send\n no response.\n\n"]
 pub type TerminalEnquiryFn = ::std::option::Option<
     unsafe extern "C" fn(terminal: Terminal, userdata: *mut ::std::os::raw::c_void) -> String,
 >;
-#[doc = " Callback function type for size queries (XTWINOPS).\n\n Called in response to XTWINOPS \
-         size queries (CSI 14/16/18 t).\n Return true and fill *out_size with the current terminal \
-         geometry,\n or return false to silently ignore the query.\n\n"]
+#[doc = " Callback function type for size queries (XTWINOPS).\n\n Called in response to XTWINOPS size queries (CSI 14/16/18 t).\n Return true and fill *out_size with the current terminal geometry,\n or return false to silently ignore the query.\n\n"]
 pub type TerminalSizeFn = ::std::option::Option<
     unsafe extern "C" fn(
         terminal: Terminal,
@@ -2541,9 +2074,7 @@ pub type TerminalSizeFn = ::std::option::Option<
         out_size: *mut SizeReportSize,
     ) -> bool,
 >;
-#[doc = " Callback function type for title_changed.\n\n Called when the terminal title changes via \
-         escape sequences\n (e.g. OSC 0 or OSC 2). The new title can be queried from the\n \
-         terminal after the callback returns.\n\n"]
+#[doc = " Callback function type for title_changed.\n\n Called when the terminal title changes via escape sequences\n (e.g. OSC 0 or OSC 2). The new title can be queried from the\n terminal after the callback returns.\n\n"]
 pub type TerminalTitleChangedFn = ::std::option::Option<
     unsafe extern "C" fn(terminal: Terminal, userdata: *mut ::std::os::raw::c_void),
 >;
@@ -2551,10 +2082,7 @@ pub type TerminalTitleChangedFn = ::std::option::Option<
 pub type TerminalPwdChangedFn = ::std::option::Option<
     unsafe extern "C" fn(terminal: Terminal, userdata: *mut ::std::os::raw::c_void),
 >;
-#[doc = " Callback function type for write_pty.\n\n Called when the terminal needs to write data \
-         back to the pty, for\n example in response to a device status report or mode query. The\n \
-         data is only valid for the duration of the call; callers must copy\n it if it needs to \
-         persist.\n\n"]
+#[doc = " Callback function type for write_pty.\n\n Called when the terminal needs to write data back to the pty, for\n example in response to a device status report or mode query. The\n data is only valid for the duration of the call; callers must copy\n it if it needs to persist.\n\n"]
 pub type TerminalWritePtyFn = ::std::option::Option<
     unsafe extern "C" fn(
         terminal: Terminal,
@@ -2563,129 +2091,70 @@ pub type TerminalWritePtyFn = ::std::option::Option<
         len: usize,
     ),
 >;
-#[doc = " Callback function type for XTVERSION.\n\n Called when the terminal receives an XTVERSION \
-         query (CSI > q).\n Return the version string (e.g. \"myterm 1.0\") as a GhosttyString.\n \
-         The memory must remain valid until the callback returns. Return a\n zero-length string to \
-         report the default \"libghostty\" version.\n\n"]
+#[doc = " Callback function type for XTVERSION.\n\n Called when the terminal receives an XTVERSION query (CSI > q).\n Return the version string (e.g. \"myterm 1.0\") as a GhosttyString.\n The memory must remain valid until the callback returns. Return a\n zero-length string to report the default \"libghostty\" version.\n\n"]
 pub type TerminalXtversionFn = ::std::option::Option<
     unsafe extern "C" fn(terminal: Terminal, userdata: *mut ::std::os::raw::c_void) -> String,
 >;
 pub mod TerminalOption {
-    #[doc = " Terminal option identifiers.\n\n These values are used with ghostty_terminal_set() \
-             to configure\n terminal callbacks and associated state.\n"]
+    #[doc = " Terminal option identifiers.\n\n These values are used with ghostty_terminal_set() to configure\n terminal callbacks and associated state.\n"]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Opaque userdata pointer passed to all callbacks.\n\n Input type: void*"]
     pub const USERDATA: Type = 0;
-    #[doc = " Callback invoked when the terminal needs to write data back\n to the pty (e.g. in \
-             response to a DECRQM query or device\n status report). Set to NULL to ignore such \
-             sequences.\n\n Input type: GhosttyTerminalWritePtyFn"]
+    #[doc = " Callback invoked when the terminal needs to write data back\n to the pty (e.g. in response to a DECRQM query or device\n status report). Set to NULL to ignore such sequences.\n\n Input type: GhosttyTerminalWritePtyFn"]
     pub const WRITE_PTY: Type = 1;
-    #[doc = " Callback invoked when the terminal receives a BEL character\n (0x07). Set to NULL to \
-             ignore bell events.\n\n Input type: GhosttyTerminalBellFn"]
+    #[doc = " Callback invoked when the terminal receives a BEL character\n (0x07). Set to NULL to ignore bell events.\n\n Input type: GhosttyTerminalBellFn"]
     pub const BELL: Type = 2;
-    #[doc = " Callback invoked when the terminal receives an ENQ character\n (0x05). Set to NULL \
-             to send no response.\n\n Input type: GhosttyTerminalEnquiryFn"]
+    #[doc = " Callback invoked when the terminal receives an ENQ character\n (0x05). Set to NULL to send no response.\n\n Input type: GhosttyTerminalEnquiryFn"]
     pub const ENQUIRY: Type = 3;
-    #[doc = " Callback invoked when the terminal receives an XTVERSION query\n (CSI > q). Set to \
-             NULL to report the default \"libghostty\" string.\n\n Input type: \
-             GhosttyTerminalXtversionFn"]
+    #[doc = " Callback invoked when the terminal receives an XTVERSION query\n (CSI > q). Set to NULL to report the default \"libghostty\" string.\n\n Input type: GhosttyTerminalXtversionFn"]
     pub const XTVERSION: Type = 4;
-    #[doc = " Callback invoked when the terminal title changes via escape\n sequences (e.g. OSC 0 \
-             or OSC 2). Set to NULL to ignore title\n change events.\n\n Input type: \
-             GhosttyTerminalTitleChangedFn"]
+    #[doc = " Callback invoked when the terminal title changes via escape\n sequences (e.g. OSC 0 or OSC 2). Set to NULL to ignore title\n change events.\n\n Input type: GhosttyTerminalTitleChangedFn"]
     pub const TITLE_CHANGED: Type = 5;
-    #[doc = " Callback invoked in response to XTWINOPS size queries\n (CSI 14/16/18 t). Set to \
-             NULL to silently ignore size queries.\n\n Input type: GhosttyTerminalSizeFn"]
+    #[doc = " Callback invoked in response to XTWINOPS size queries\n (CSI 14/16/18 t). Set to NULL to silently ignore size queries.\n\n Input type: GhosttyTerminalSizeFn"]
     pub const SIZE: Type = 6;
-    #[doc = " Callback invoked in response to a color scheme device status\n report query (CSI ? \
-             996 n). Return true and fill the out pointer\n to report the current scheme, or \
-             return false to silently ignore.\n Set to NULL to ignore color scheme queries.\n\n \
-             Input type: GhosttyTerminalColorSchemeFn"]
+    #[doc = " Callback invoked in response to a color scheme device status\n report query (CSI ? 996 n). Return true and fill the out pointer\n to report the current scheme, or return false to silently ignore.\n Set to NULL to ignore color scheme queries.\n\n Input type: GhosttyTerminalColorSchemeFn"]
     pub const COLOR_SCHEME: Type = 7;
-    #[doc = " Callback invoked in response to a device attributes query\n (CSI c, CSI > c, or CSI \
-             = c). Return true and fill the out\n pointer with response data, or return false to \
-             silently ignore.\n Set to NULL to ignore device attributes queries.\n\n Input type: \
-             GhosttyTerminalDeviceAttributesFn"]
+    #[doc = " Callback invoked in response to a device attributes query\n (CSI c, CSI > c, or CSI = c). Return true and fill the out\n pointer with response data, or return false to silently ignore.\n Set to NULL to ignore device attributes queries.\n\n Input type: GhosttyTerminalDeviceAttributesFn"]
     pub const DEVICE_ATTRIBUTES: Type = 8;
-    #[doc = " Set the terminal title manually.\n\n The string data is copied into the terminal. A \
-             NULL value pointer\n clears the title (equivalent to setting an empty string).\n\n \
-             Input type: GhosttyString*"]
+    #[doc = " Set the terminal title manually.\n\n The string data is copied into the terminal. A NULL value pointer\n clears the title (equivalent to setting an empty string).\n\n Input type: GhosttyString*"]
     pub const TITLE: Type = 9;
-    #[doc = " Set the terminal working directory manually.\n\n The string data is copied into the \
-             terminal. A NULL value pointer\n clears the pwd (equivalent to setting an empty \
-             string).\n\n Input type: GhosttyString*"]
+    #[doc = " Set the terminal working directory manually.\n\n The string data is copied into the terminal. A NULL value pointer\n clears the pwd (equivalent to setting an empty string).\n\n Input type: GhosttyString*"]
     pub const PWD: Type = 10;
-    #[doc = " Set the default foreground color.\n\n A NULL value pointer clears the default \
-             (unset).\n\n Input type: GhosttyColorRgb*"]
+    #[doc = " Set the default foreground color.\n\n A NULL value pointer clears the default (unset).\n\n Input type: GhosttyColorRgb*"]
     pub const COLOR_FOREGROUND: Type = 11;
-    #[doc = " Set the default background color.\n\n A NULL value pointer clears the default \
-             (unset).\n\n Input type: GhosttyColorRgb*"]
+    #[doc = " Set the default background color.\n\n A NULL value pointer clears the default (unset).\n\n Input type: GhosttyColorRgb*"]
     pub const COLOR_BACKGROUND: Type = 12;
-    #[doc = " Set the default cursor color.\n\n A NULL value pointer clears the default \
-             (unset).\n\n Input type: GhosttyColorRgb*"]
+    #[doc = " Set the default cursor color.\n\n A NULL value pointer clears the default (unset).\n\n Input type: GhosttyColorRgb*"]
     pub const COLOR_CURSOR: Type = 13;
-    #[doc = " Set the default 256-color palette.\n\n The value must point to an array of exactly \
-             256 GhosttyColorRgb values.\n A NULL value pointer resets to the built-in default \
-             palette.\n\n Input type: GhosttyColorRgb[256]*"]
+    #[doc = " Set the default 256-color palette.\n\n The value must point to an array of exactly 256 GhosttyColorRgb values.\n A NULL value pointer resets to the built-in default palette.\n\n Input type: GhosttyColorRgb[256]*"]
     pub const COLOR_PALETTE: Type = 14;
-    #[doc = " Set the Kitty image storage limit in bytes.\n\n Applied to all initialized screens \
-             (primary and alternate).\n A value of zero disables the Kitty graphics protocol \
-             entirely,\n deleting all stored images and placements. A NULL value pointer\n is \
-             equivalent to zero (disables). Has no effect when Kitty graphics\n are disabled at \
-             build time.\n\n Input type: uint64_t*"]
+    #[doc = " Set the Kitty image storage limit in bytes.\n\n Applied to all initialized screens (primary and alternate).\n A value of zero disables the Kitty graphics protocol entirely,\n deleting all stored images and placements. A NULL value pointer\n is equivalent to zero (disables). Has no effect when Kitty graphics\n are disabled at build time.\n\n Input type: uint64_t*"]
     pub const KITTY_IMAGE_STORAGE_LIMIT: Type = 15;
-    #[doc = " Enable or disable Kitty image loading via the file medium.\n\n A NULL value pointer \
-             is a no-op. Has no effect when Kitty graphics\n are disabled at build time.\n\n Input \
-             type: bool*"]
+    #[doc = " Enable or disable Kitty image loading via the file medium.\n\n A NULL value pointer is a no-op. Has no effect when Kitty graphics\n are disabled at build time.\n\n Input type: bool*"]
     pub const KITTY_IMAGE_MEDIUM_FILE: Type = 16;
-    #[doc = " Enable or disable Kitty image loading via the temporary file medium.\n\n A NULL \
-             value pointer is a no-op. Has no effect when Kitty graphics\n are disabled at build \
-             time.\n\n Input type: bool*"]
+    #[doc = " Enable or disable Kitty image loading via the temporary file medium.\n\n A NULL value pointer is a no-op. Has no effect when Kitty graphics\n are disabled at build time.\n\n Input type: bool*"]
     pub const KITTY_IMAGE_MEDIUM_TEMP_FILE: Type = 17;
-    #[doc = " Enable or disable Kitty image loading via the shared memory medium.\n\n A NULL value \
-             pointer is a no-op. Has no effect when Kitty graphics\n are disabled at build \
-             time.\n\n Input type: bool*"]
+    #[doc = " Enable or disable Kitty image loading via the shared memory medium.\n\n A NULL value pointer is a no-op. Has no effect when Kitty graphics\n are disabled at build time.\n\n Input type: bool*"]
     pub const KITTY_IMAGE_MEDIUM_SHARED_MEM: Type = 18;
-    #[doc = " Set the maximum bytes the APC handler will buffer for all protocols.\n This prevents \
-             malicious input from causing unbounded memory allocation.\n A NULL value pointer \
-             removes all overrides, reverting to the built-in\n defaults.\n\n Input type: size_t*"]
+    #[doc = " Set the maximum bytes the APC handler will buffer for all protocols.\n This prevents malicious input from causing unbounded memory allocation.\n A NULL value pointer removes all overrides, reverting to the built-in\n defaults.\n\n Input type: size_t*"]
     pub const APC_MAX_BYTES: Type = 19;
-    #[doc = " Set the maximum bytes the APC handler will buffer for Kitty graphics\n protocol \
-             data. A NULL value pointer removes the override, reverting\n to the built-in \
-             default.\n\n Input type: size_t*"]
+    #[doc = " Set the maximum bytes the APC handler will buffer for Kitty graphics\n protocol data. A NULL value pointer removes the override, reverting\n to the built-in default.\n\n Input type: size_t*"]
     pub const APC_MAX_BYTES_KITTY: Type = 20;
-    #[doc = " Set the active screen selection.\n\n The value must point to a GhosttySelection \
-             whose grid references are\n valid for this terminal's active screen at the time of \
-             the call. The\n terminal copies the selection immediately and converts it to\n \
-             terminal-owned tracked state, so the GhosttySelection struct and its\n untracked grid \
-             references do not need to outlive this call.\n\n Passing NULL clears the active \
-             screen selection.\n\n Input type: GhosttySelection*"]
+    #[doc = " Set the active screen selection.\n\n The value must point to a GhosttySelection whose grid references are\n valid for this terminal's active screen at the time of the call. The\n terminal copies the selection immediately and converts it to\n terminal-owned tracked state, so the GhosttySelection struct and its\n untracked grid references do not need to outlive this call.\n\n Passing NULL clears the active screen selection.\n\n Input type: GhosttySelection*"]
     pub const SELECTION: Type = 21;
-    #[doc = " Set the default cursor style used by DECSCUSR reset (CSI 0 q).\n\n A NULL value \
-             pointer resets to the built-in default block cursor.\n\n Input type: \
-             GhosttyTerminalCursorStyle*"]
+    #[doc = " Set the default cursor style used by DECSCUSR reset (CSI 0 q).\n\n A NULL value pointer resets to the built-in default block cursor.\n\n Input type: GhosttyTerminalCursorStyle*"]
     pub const DEFAULT_CURSOR_STYLE: Type = 22;
-    #[doc = " Set whether the default cursor should blink when reset by DECSCUSR\n (CSI 0 q).\n\n \
-             A NULL value pointer resets to the built-in default of not blinking.\n\n Input type: \
-             bool*"]
+    #[doc = " Set whether the default cursor should blink when reset by DECSCUSR\n (CSI 0 q).\n\n A NULL value pointer resets to the built-in default of not blinking.\n\n Input type: bool*"]
     pub const DEFAULT_CURSOR_BLINK: Type = 23;
-    #[doc = " Enable or disable Glyph Protocol APC handling.\n\n When disabled, Glyph Protocol APC \
-             sequences are ignored and no\n support/query/register/clear responses are emitted. \
-             Disabling also clears\n the terminal session's glyph glossary. A NULL value pointer \
-             is a no-op.\n\n Input type: bool*"]
+    #[doc = " Enable or disable Glyph Protocol APC handling.\n\n When disabled, Glyph Protocol APC sequences are ignored and no\n support/query/register/clear responses are emitted. Disabling also clears\n the terminal session's glyph glossary. A NULL value pointer is a no-op.\n\n Input type: bool*"]
     pub const GLYPH_PROTOCOL: Type = 24;
-    #[doc = " Callback invoked when the terminal pwd changes via escape\n sequences (OSC 7, OSC 9, \
-             or OSC 1337 CurrentDir). Set to NULL\n to ignore pwd change events.\n\n Input type: \
-             GhosttyTerminalPwdChangedFn"]
+    #[doc = " Callback invoked when the terminal pwd changes via escape\n sequences (OSC 7, OSC 9, or OSC 1337 CurrentDir). Set to NULL\n to ignore pwd change events.\n\n Input type: GhosttyTerminalPwdChangedFn"]
     pub const PWD_CHANGED: Type = 25;
-    #[doc = " Callback invoked when the terminal pwd changes via escape\n sequences (OSC 7, OSC 9, \
-             or OSC 1337 CurrentDir). Set to NULL\n to ignore pwd change events.\n\n Input type: \
-             GhosttyTerminalPwdChangedFn"]
+    #[doc = " Callback invoked when the terminal pwd changes via escape\n sequences (OSC 7, OSC 9, or OSC 1337 CurrentDir). Set to NULL\n to ignore pwd change events.\n\n Input type: GhosttyTerminalPwdChangedFn"]
     pub const MAX_VALUE: Type = 2147483647;
 }
 pub mod TerminalData {
-    #[doc = " Terminal data types.\n\n These values specify what type of data to extract from a \
-             terminal\n using `ghostty_terminal_get`.\n"]
+    #[doc = " Terminal data types.\n\n These values specify what type of data to extract from a terminal\n using `ghostty_terminal_get`.\n"]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Invalid data type. Never results in any data extraction."]
     pub const INVALID: Type = 0;
@@ -2697,113 +2166,63 @@ pub mod TerminalData {
     pub const CURSOR_X: Type = 3;
     #[doc = " Cursor row position within the active area (0-indexed).\n\n Output type: uint16_t *"]
     pub const CURSOR_Y: Type = 4;
-    #[doc = " Whether the cursor has a pending wrap (next print will soft-wrap).\n\n Output type: \
-             bool *"]
+    #[doc = " Whether the cursor has a pending wrap (next print will soft-wrap).\n\n Output type: bool *"]
     pub const CURSOR_PENDING_WRAP: Type = 5;
     #[doc = " The currently active screen.\n\n Output type: GhosttyTerminalScreen *"]
     pub const ACTIVE_SCREEN: Type = 6;
     #[doc = " Whether the cursor is visible (DEC mode 25).\n\n Output type: bool *"]
     pub const CURSOR_VISIBLE: Type = 7;
-    #[doc = " Current Kitty keyboard protocol flags.\n\n Output type: GhosttyKittyKeyFlags * \
-             (uint8_t *)"]
+    #[doc = " Current Kitty keyboard protocol flags.\n\n Output type: GhosttyKittyKeyFlags * (uint8_t *)"]
     pub const KITTY_KEYBOARD_FLAGS: Type = 8;
-    #[doc = " Scrollbar state for the terminal viewport.\n\n This may be expensive to calculate \
-             depending on where the viewport\n is (arbitrary pins are expensive). The caller \
-             should take care to only\n call this as needed and not too frequently.\n\n Output \
-             type: GhosttyTerminalScrollbar *"]
+    #[doc = " Scrollbar state for the terminal viewport.\n\n This may be expensive to calculate depending on where the viewport\n is (arbitrary pins are expensive). The caller should take care to only\n call this as needed and not too frequently.\n\n Output type: GhosttyTerminalScrollbar *"]
     pub const SCROLLBAR: Type = 9;
-    #[doc = " The current SGR style of the cursor.\n\n This is the style that will be applied to \
-             newly printed characters.\n\n Output type: GhosttyStyle *"]
+    #[doc = " The current SGR style of the cursor.\n\n This is the style that will be applied to newly printed characters.\n\n Output type: GhosttyStyle *"]
     pub const CURSOR_STYLE: Type = 10;
-    #[doc = " Whether any mouse tracking mode is active.\n\n Returns true if any of the mouse \
-             tracking modes (X10, normal, button,\n or any-event) are enabled.\n\n Output type: \
-             bool *"]
+    #[doc = " Whether any mouse tracking mode is active.\n\n Returns true if any of the mouse tracking modes (X10, normal, button,\n or any-event) are enabled.\n\n Output type: bool *"]
     pub const MOUSE_TRACKING: Type = 11;
-    #[doc = " The terminal title as set by escape sequences (e.g. OSC 0/2).\n\n Returns a borrowed \
-             string. The pointer is valid until the next call\n to ghostty_terminal_vt_write() or \
-             ghostty_terminal_reset(). An empty\n string (len=0) is returned when no title has \
-             been set.\n\n Output type: GhosttyString *"]
+    #[doc = " The terminal title as set by escape sequences (e.g. OSC 0/2).\n\n Returns a borrowed string. The pointer is valid until the next call\n to ghostty_terminal_vt_write() or ghostty_terminal_reset(). An empty\n string (len=0) is returned when no title has been set.\n\n Output type: GhosttyString *"]
     pub const TITLE: Type = 12;
-    #[doc = " The terminal's current working directory as set by escape sequences\n (e.g. OSC \
-             7).\n\n Returns a borrowed string. The pointer is valid until the next call\n to \
-             ghostty_terminal_vt_write() or ghostty_terminal_reset(). An empty\n string (len=0) is \
-             returned when no pwd has been set.\n\n Output type: GhosttyString *"]
+    #[doc = " The terminal's current working directory as set by escape sequences\n (e.g. OSC 7).\n\n Returns a borrowed string. The pointer is valid until the next call\n to ghostty_terminal_vt_write() or ghostty_terminal_reset(). An empty\n string (len=0) is returned when no pwd has been set.\n\n Output type: GhosttyString *"]
     pub const PWD: Type = 13;
-    #[doc = " The total number of rows in the active screen including scrollback.\n\n Output type: \
-             size_t *"]
+    #[doc = " The total number of rows in the active screen including scrollback.\n\n Output type: size_t *"]
     pub const TOTAL_ROWS: Type = 14;
-    #[doc = " The number of scrollback rows (total rows minus viewport rows).\n\n Output type: \
-             size_t *"]
+    #[doc = " The number of scrollback rows (total rows minus viewport rows).\n\n Output type: size_t *"]
     pub const SCROLLBACK_ROWS: Type = 15;
-    #[doc = " The total width of the terminal in pixels.\n\n This is cols * cell_width_px as set \
-             by ghostty_terminal_resize().\n\n Output type: uint32_t *"]
+    #[doc = " The total width of the terminal in pixels.\n\n This is cols * cell_width_px as set by ghostty_terminal_resize().\n\n Output type: uint32_t *"]
     pub const WIDTH_PX: Type = 16;
-    #[doc = " The total height of the terminal in pixels.\n\n This is rows * cell_height_px as set \
-             by ghostty_terminal_resize().\n\n Output type: uint32_t *"]
+    #[doc = " The total height of the terminal in pixels.\n\n This is rows * cell_height_px as set by ghostty_terminal_resize().\n\n Output type: uint32_t *"]
     pub const HEIGHT_PX: Type = 17;
-    #[doc = " The effective foreground color (override or default).\n\n Returns GHOSTTY_NO_VALUE \
-             if no foreground color is set.\n\n Output type: GhosttyColorRgb *"]
+    #[doc = " The effective foreground color (override or default).\n\n Returns GHOSTTY_NO_VALUE if no foreground color is set.\n\n Output type: GhosttyColorRgb *"]
     pub const COLOR_FOREGROUND: Type = 18;
-    #[doc = " The effective background color (override or default).\n\n Returns GHOSTTY_NO_VALUE \
-             if no background color is set.\n\n Output type: GhosttyColorRgb *"]
+    #[doc = " The effective background color (override or default).\n\n Returns GHOSTTY_NO_VALUE if no background color is set.\n\n Output type: GhosttyColorRgb *"]
     pub const COLOR_BACKGROUND: Type = 19;
-    #[doc = " The effective cursor color (override or default).\n\n Returns GHOSTTY_NO_VALUE if no \
-             cursor color is set.\n\n Output type: GhosttyColorRgb *"]
+    #[doc = " The effective cursor color (override or default).\n\n Returns GHOSTTY_NO_VALUE if no cursor color is set.\n\n Output type: GhosttyColorRgb *"]
     pub const COLOR_CURSOR: Type = 20;
     #[doc = " The current 256-color palette.\n\n Output type: GhosttyColorRgb[256] *"]
     pub const COLOR_PALETTE: Type = 21;
-    #[doc = " The default foreground color (ignoring any OSC override).\n\n Returns \
-             GHOSTTY_NO_VALUE if no default foreground color is set.\n\n Output type: \
-             GhosttyColorRgb *"]
+    #[doc = " The default foreground color (ignoring any OSC override).\n\n Returns GHOSTTY_NO_VALUE if no default foreground color is set.\n\n Output type: GhosttyColorRgb *"]
     pub const COLOR_FOREGROUND_DEFAULT: Type = 22;
-    #[doc = " The default background color (ignoring any OSC override).\n\n Returns \
-             GHOSTTY_NO_VALUE if no default background color is set.\n\n Output type: \
-             GhosttyColorRgb *"]
+    #[doc = " The default background color (ignoring any OSC override).\n\n Returns GHOSTTY_NO_VALUE if no default background color is set.\n\n Output type: GhosttyColorRgb *"]
     pub const COLOR_BACKGROUND_DEFAULT: Type = 23;
-    #[doc = " The default cursor color (ignoring any OSC override).\n\n Returns GHOSTTY_NO_VALUE \
-             if no default cursor color is set.\n\n Output type: GhosttyColorRgb *"]
+    #[doc = " The default cursor color (ignoring any OSC override).\n\n Returns GHOSTTY_NO_VALUE if no default cursor color is set.\n\n Output type: GhosttyColorRgb *"]
     pub const COLOR_CURSOR_DEFAULT: Type = 24;
-    #[doc = " The default 256-color palette (ignoring any OSC overrides).\n\n Output type: \
-             GhosttyColorRgb[256] *"]
+    #[doc = " The default 256-color palette (ignoring any OSC overrides).\n\n Output type: GhosttyColorRgb[256] *"]
     pub const COLOR_PALETTE_DEFAULT: Type = 25;
-    #[doc = " The Kitty image storage limit in bytes for the active screen.\n\n A value of zero \
-             means the Kitty graphics protocol is disabled.\n Returns GHOSTTY_NO_VALUE when Kitty \
-             graphics are disabled at build time.\n\n Output type: uint64_t *"]
+    #[doc = " The Kitty image storage limit in bytes for the active screen.\n\n A value of zero means the Kitty graphics protocol is disabled.\n Returns GHOSTTY_NO_VALUE when Kitty graphics are disabled at build time.\n\n Output type: uint64_t *"]
     pub const KITTY_IMAGE_STORAGE_LIMIT: Type = 26;
-    #[doc = " Whether the file medium is enabled for Kitty image loading on the\n active \
-             screen.\n\n Returns GHOSTTY_NO_VALUE when Kitty graphics are disabled at build \
-             time.\n\n Output type: bool *"]
+    #[doc = " Whether the file medium is enabled for Kitty image loading on the\n active screen.\n\n Returns GHOSTTY_NO_VALUE when Kitty graphics are disabled at build time.\n\n Output type: bool *"]
     pub const KITTY_IMAGE_MEDIUM_FILE: Type = 27;
-    #[doc = " Whether the temporary file medium is enabled for Kitty image loading\n on the active \
-             screen.\n\n Returns GHOSTTY_NO_VALUE when Kitty graphics are disabled at build \
-             time.\n\n Output type: bool *"]
+    #[doc = " Whether the temporary file medium is enabled for Kitty image loading\n on the active screen.\n\n Returns GHOSTTY_NO_VALUE when Kitty graphics are disabled at build time.\n\n Output type: bool *"]
     pub const KITTY_IMAGE_MEDIUM_TEMP_FILE: Type = 28;
-    #[doc = " Whether the shared memory medium is enabled for Kitty image loading\n on the active \
-             screen.\n\n Returns GHOSTTY_NO_VALUE when Kitty graphics are disabled at build \
-             time.\n\n Output type: bool *"]
+    #[doc = " Whether the shared memory medium is enabled for Kitty image loading\n on the active screen.\n\n Returns GHOSTTY_NO_VALUE when Kitty graphics are disabled at build time.\n\n Output type: bool *"]
     pub const KITTY_IMAGE_MEDIUM_SHARED_MEM: Type = 29;
-    #[doc = " The Kitty graphics image storage for the active screen.\n\n Returns a borrowed \
-             pointer to the image storage. The pointer is valid\n until the next mutating terminal \
-             call (e.g. ghostty_terminal_vt_write()\n or ghostty_terminal_reset()).\n\n Returns \
-             GHOSTTY_NO_VALUE when Kitty graphics are disabled at build time.\n\n Output type: \
-             GhosttyKittyGraphics *"]
+    #[doc = " The Kitty graphics image storage for the active screen.\n\n Returns a borrowed pointer to the image storage. The pointer is valid\n until the next mutating terminal call (e.g. ghostty_terminal_vt_write()\n or ghostty_terminal_reset()).\n\n Returns GHOSTTY_NO_VALUE when Kitty graphics are disabled at build time.\n\n Output type: GhosttyKittyGraphics *"]
     pub const KITTY_GRAPHICS: Type = 30;
-    #[doc = " The active screen's current selection.\n\n On success, writes an untracked snapshot \
-             of the terminal-owned selection\n to the caller-provided GhosttySelection. The \
-             GhosttySelection struct is\n caller-owned and may be kept, but the grid references \
-             inside it are\n untracked borrowed references into the active screen. They are only \
-             valid\n until the next mutating terminal call, such as ghostty_terminal_set(),\n \
-             ghostty_terminal_vt_write(), ghostty_terminal_resize(), or\n \
-             ghostty_terminal_reset().\n\n Returns GHOSTTY_NO_VALUE when there is no active \
-             selection.\n\n Output type: GhosttySelection *"]
+    #[doc = " The active screen's current selection.\n\n On success, writes an untracked snapshot of the terminal-owned selection\n to the caller-provided GhosttySelection. The GhosttySelection struct is\n caller-owned and may be kept, but the grid references inside it are\n untracked borrowed references into the active screen. They are only valid\n until the next mutating terminal call, such as ghostty_terminal_set(),\n ghostty_terminal_vt_write(), ghostty_terminal_resize(), or\n ghostty_terminal_reset().\n\n Returns GHOSTTY_NO_VALUE when there is no active selection.\n\n Output type: GhosttySelection *"]
     pub const SELECTION: Type = 31;
-    #[doc = " Whether the viewport is currently pinned to the active area.\n\n This is true when \
-             the viewport is following the active terminal area,\n and false when the user has \
-             scrolled into history.\n\n Output type: bool *"]
+    #[doc = " Whether the viewport is currently pinned to the active area.\n\n This is true when the viewport is following the active terminal area,\n and false when the user has scrolled into history.\n\n Output type: bool *"]
     pub const VIEWPORT_ACTIVE: Type = 32;
-    #[doc = " Whether the viewport is currently pinned to the active area.\n\n This is true when \
-             the viewport is following the active terminal area,\n and false when the user has \
-             scrolled into history.\n\n Output type: bool *"]
+    #[doc = " Whether the viewport is currently pinned to the active area.\n\n This is true when the viewport is following the active terminal area,\n and false when the user has scrolled into history.\n\n Output type: bool *"]
     pub const MAX_VALUE: Type = 2147483647;
 }
 unsafe extern "C" {
@@ -2815,24 +2234,15 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Free a terminal instance.\n\n Releases all resources associated with the terminal. \
-             After this call,\n the terminal handle becomes invalid and must not be used.\n\n"]
+    #[doc = " Free a terminal instance.\n\n Releases all resources associated with the terminal. After this call,\n the terminal handle becomes invalid and must not be used.\n\n"]
     pub fn ghostty_terminal_free(terminal: Terminal);
 }
 unsafe extern "C" {
-    #[doc = " Perform a full reset of the terminal (RIS).\n\n Resets all terminal state back to \
-             its initial configuration, including\n modes, scrollback, scrolling region, and \
-             screen contents. The terminal\n dimensions are preserved.\n\n"]
+    #[doc = " Perform a full reset of the terminal (RIS).\n\n Resets all terminal state back to its initial configuration, including\n modes, scrollback, scrolling region, and screen contents. The terminal\n dimensions are preserved.\n\n"]
     pub fn ghostty_terminal_reset(terminal: Terminal);
 }
 unsafe extern "C" {
-    #[doc = " Resize the terminal to the given dimensions.\n\n Changes the number of columns and \
-             rows in the terminal. The primary\n screen will reflow content if wraparound mode is \
-             enabled; the alternate\n screen does not reflow. If the dimensions are unchanged, \
-             this is a no-op.\n\n This also updates the terminal's pixel dimensions (used for \
-             image\n protocols and size reports), disables synchronized output mode (allowed\n by \
-             the spec so that resize results are shown immediately), and sends an\n in-band size \
-             report if mode 2048 is enabled.\n\n"]
+    #[doc = " Resize the terminal to the given dimensions.\n\n Changes the number of columns and rows in the terminal. The primary\n screen will reflow content if wraparound mode is enabled; the alternate\n screen does not reflow. If the dimensions are unchanged, this is a no-op.\n\n This also updates the terminal's pixel dimensions (used for image\n protocols and size reports), disables synchronized output mode (allowed\n by the spec so that resize results are shown immediately), and sends an\n in-band size report if mode 2048 is enabled.\n\n"]
     pub fn ghostty_terminal_resize(
         terminal: Terminal,
         cols: u16,
@@ -2850,28 +2260,15 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Write VT-encoded data to the terminal for processing.\n\n Feeds raw bytes through \
-             the terminal's VT stream parser, updating\n terminal state accordingly. By default, \
-             sequences that require output\n (queries, device status reports) are silently \
-             ignored. Use\n ghostty_terminal_set() with GHOSTTY_TERMINAL_OPT_WRITE_PTY to \
-             install\n a callback that receives response data.\n\n This never fails. Any erroneous \
-             input or errors in processing the\n input are logged internally but do not cause this \
-             function to fail\n because this input is assumed to be untrusted and from an \
-             external\n source; so the primary goal is to keep the terminal state consistent and\n \
-             not allow malformed input to corrupt or crash.\n\n"]
+    #[doc = " Write VT-encoded data to the terminal for processing.\n\n Feeds raw bytes through the terminal's VT stream parser, updating\n terminal state accordingly. By default, sequences that require output\n (queries, device status reports) are silently ignored. Use\n ghostty_terminal_set() with GHOSTTY_TERMINAL_OPT_WRITE_PTY to install\n a callback that receives response data.\n\n This never fails. Any erroneous input or errors in processing the\n input are logged internally but do not cause this function to fail\n because this input is assumed to be untrusted and from an external\n source; so the primary goal is to keep the terminal state consistent and\n not allow malformed input to corrupt or crash.\n\n"]
     pub fn ghostty_terminal_vt_write(terminal: Terminal, data: *const u8, len: usize);
 }
 unsafe extern "C" {
-    #[doc = " Scroll the terminal viewport.\n\n Scrolls the terminal's viewport according to the \
-             given behavior.\n When using GHOSTTY_SCROLL_VIEWPORT_DELTA, set the delta field in\n \
-             the value union to specify the number of rows to scroll (negative\n for up, positive \
-             for down). For other behaviors, the value is ignored.\n\n"]
+    #[doc = " Scroll the terminal viewport.\n\n Scrolls the terminal's viewport according to the given behavior.\n When using GHOSTTY_SCROLL_VIEWPORT_DELTA, set the delta field in\n the value union to specify the number of rows to scroll (negative\n for up, positive for down). For other behaviors, the value is ignored.\n\n"]
     pub fn ghostty_terminal_scroll_viewport(terminal: Terminal, behavior: TerminalScrollViewport);
 }
 unsafe extern "C" {
-    #[doc = " Get the current value of a terminal mode.\n\n Returns the value of the mode \
-             identified by the given mode.\n\n             if it is reset\n         is NULL or the \
-             mode does not correspond to a known mode\n"]
+    #[doc = " Get the current value of a terminal mode.\n\n Returns the value of the mode identified by the given mode.\n\n             if it is reset\n         is NULL or the mode does not correspond to a known mode\n"]
     pub fn ghostty_terminal_mode_get(
         terminal: Terminal,
         mode: Mode,
@@ -2879,17 +2276,11 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Set the value of a terminal mode.\n\n Sets the mode identified by the given mode to \
-             the specified value.\n\n         is NULL or the mode does not correspond to a known \
-             mode\n"]
+    #[doc = " Set the value of a terminal mode.\n\n Sets the mode identified by the given mode to the specified value.\n\n         is NULL or the mode does not correspond to a known mode\n"]
     pub fn ghostty_terminal_mode_set(terminal: Terminal, mode: Mode, value: bool) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get data from a terminal instance.\n\n Extracts typed data from the given terminal \
-             based on the specified\n data type. The output pointer must be of the appropriate \
-             type for the\n requested data kind. Valid data types and output types are \
-             documented\n in the `GhosttyTerminalData` enum.\n\n         is NULL or the data type \
-             is invalid\n"]
+    #[doc = " Get data from a terminal instance.\n\n Extracts typed data from the given terminal based on the specified\n data type. The output pointer must be of the appropriate type for the\n requested data kind. Valid data types and output types are documented\n in the `GhosttyTerminalData` enum.\n\n         is NULL or the data type is invalid\n"]
     pub fn ghostty_terminal_get(
         terminal: Terminal,
         data: TerminalData::Type,
@@ -2897,15 +2288,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get multiple data fields from a terminal in a single call.\n\n This is an \
-             optimization over calling ghostty_terminal_get()\n repeatedly, particularly useful in \
-             environments with high per-call\n overhead such as FFI or Cgo.\n\n Each element in \
-             the keys array specifies a data kind, and the\n corresponding element in the values \
-             array receives the result.\n The type of each values[i] pointer must match the output \
-             type\n documented for keys[i].\n\n Processing stops at the first error; on success \
-             out_written\n is set to count, on error it is set to the index of the\n failing key \
-             (i.e. the number of values successfully written).\n\n               documented output \
-             type)\n             successfully written (may be NULL)\n"]
+    #[doc = " Get multiple data fields from a terminal in a single call.\n\n This is an optimization over calling ghostty_terminal_get()\n repeatedly, particularly useful in environments with high per-call\n overhead such as FFI or Cgo.\n\n Each element in the keys array specifies a data kind, and the\n corresponding element in the values array receives the result.\n The type of each values[i] pointer must match the output type\n documented for keys[i].\n\n Processing stops at the first error; on success out_written\n is set to count, on error it is set to the index of the\n failing key (i.e. the number of values successfully written).\n\n               documented output type)\n             successfully written (may be NULL)\n"]
     pub fn ghostty_terminal_get_multi(
         terminal: Terminal,
         count: usize,
@@ -2915,17 +2298,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Resolve a point in the terminal grid to a grid reference.\n\n Resolves the given \
-             point (which can be in active, viewport, screen,\n or history coordinates) to a grid \
-             reference for that location. Use\n ghostty_grid_ref_cell() and ghostty_grid_ref_row() \
-             to extract the cell\n and row.\n\n Lookups using the `active` and `viewport` tags are \
-             fast. The `screen`\n and `history` tags may require traversing the full scrollback \
-             page list\n to resolve the y coordinate, so they can be expensive for large\n \
-             scrollback buffers.\n\n This function isn't meant to be used as the core of render \
-             loop. It\n isn't built to sustain the framerates needed for rendering large \
-             screens.\n Use the render state API for that. This API is instead meant for less\n \
-             strictly performance-sensitive use cases.\n\n         is NULL or the point is out of \
-             bounds\n"]
+    #[doc = " Resolve a point in the terminal grid to a grid reference.\n\n Resolves the given point (which can be in active, viewport, screen,\n or history coordinates) to a grid reference for that location. Use\n ghostty_grid_ref_cell() and ghostty_grid_ref_row() to extract the cell\n and row.\n\n Lookups using the `active` and `viewport` tags are fast. The `screen`\n and `history` tags may require traversing the full scrollback page list\n to resolve the y coordinate, so they can be expensive for large\n scrollback buffers.\n\n This function isn't meant to be used as the core of render loop. It\n isn't built to sustain the framerates needed for rendering large screens.\n Use the render state API for that. This API is instead meant for less\n strictly performance-sensitive use cases.\n\n         is NULL or the point is out of bounds\n"]
     pub fn ghostty_terminal_grid_ref(
         terminal: Terminal,
         point: Point,
@@ -2933,17 +2306,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Create an owned tracked grid reference for a terminal point.\n\n This is the tracked \
-             variant of ghostty_terminal_grid_ref(). The returned\n handle follows the referenced \
-             cell as the terminal's page list is modified:\n scrolling, pruning, resize/reflow, \
-             and other page-list operations update the\n tracked reference automatically.\n\n The \
-             reference is attached to the terminal screen/page-list that is active at\n creation \
-             time.\n\n If the point is outside the requested coordinate space, this returns\n \
-             GHOSTTY_INVALID_VALUE and writes NULL to out_ref.\n\n The returned handle must be \
-             freed with ghostty_tracked_grid_ref_free(). If\n the terminal is freed first, the \
-             handle remains valid only for\n tracked-grid-ref APIs: it reports no value and can \
-             still be freed.\n\n         point, or out_ref is invalid, or GHOSTTY_OUT_OF_MEMORY if \
-             allocation\n         fails.\n"]
+    #[doc = " Create an owned tracked grid reference for a terminal point.\n\n This is the tracked variant of ghostty_terminal_grid_ref(). The returned\n handle follows the referenced cell as the terminal's page list is modified:\n scrolling, pruning, resize/reflow, and other page-list operations update the\n tracked reference automatically.\n\n The reference is attached to the terminal screen/page-list that is active at\n creation time.\n\n If the point is outside the requested coordinate space, this returns\n GHOSTTY_INVALID_VALUE and writes NULL to out_ref.\n\n The returned handle must be freed with ghostty_tracked_grid_ref_free(). If\n the terminal is freed first, the handle remains valid only for\n tracked-grid-ref APIs: it reports no value and can still be freed.\n\n         point, or out_ref is invalid, or GHOSTTY_OUT_OF_MEMORY if allocation\n         fails.\n"]
     pub fn ghostty_terminal_grid_ref_track(
         terminal: Terminal,
         point: Point,
@@ -3044,8 +2407,7 @@ const _: () = {
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct FormatterTerminalOptions {
-    #[doc = " Size of this struct in bytes. Must be set to \
-             sizeof(GhosttyFormatterTerminalOptions)."]
+    #[doc = " Size of this struct in bytes. Must be set to sizeof(GhosttyFormatterTerminalOptions)."]
     pub size: usize,
     #[doc = " Output format to emit."]
     pub emit: FormatterFormat::Type,
@@ -3055,8 +2417,7 @@ pub struct FormatterTerminalOptions {
     pub trim: bool,
     #[doc = " Extra terminal state to include in styled output."]
     pub extra: FormatterTerminalExtra,
-    #[doc = " Optional selection to restrict output to a range.\n  If NULL, the entire screen is \
-             formatted."]
+    #[doc = " Optional selection to restrict output to a range.\n  If NULL, the entire screen is formatted."]
     pub selection: *const Selection,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
@@ -3088,9 +2449,7 @@ impl Default for FormatterTerminalOptions {
     }
 }
 unsafe extern "C" {
-    #[doc = " Create a formatter for a terminal's active screen.\n\n The terminal must outlive the \
-             formatter. The formatter stores a borrowed\n reference to the terminal and reads its \
-             current state on each format call.\n\n"]
+    #[doc = " Create a formatter for a terminal's active screen.\n\n The terminal must outlive the formatter. The formatter stores a borrowed\n reference to the terminal and reads its current state on each format call.\n\n"]
     pub fn ghostty_formatter_terminal_new(
         allocator: *const Allocator,
         formatter: *mut Formatter,
@@ -3099,13 +2458,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Run the formatter and produce output into the caller-provided buffer.\n\n Each call \
-             formats the current terminal state. Pass NULL for buf to\n query the required buffer \
-             size without writing any output; in that case\n out_written receives the required \
-             size and the return value is\n GHOSTTY_OUT_OF_SPACE.\n\n If the buffer is too small, \
-             returns GHOSTTY_OUT_OF_SPACE and sets\n out_written to the required size. The caller \
-             can then retry with a\n larger buffer.\n\n                    or the required size on \
-             failure\n"]
+    #[doc = " Run the formatter and produce output into the caller-provided buffer.\n\n Each call formats the current terminal state. Pass NULL for buf to\n query the required buffer size without writing any output; in that case\n out_written receives the required size and the return value is\n GHOSTTY_OUT_OF_SPACE.\n\n If the buffer is too small, returns GHOSTTY_OUT_OF_SPACE and sets\n out_written to the required size. The caller can then retry with a\n larger buffer.\n\n                    or the required size on failure\n"]
     pub fn ghostty_formatter_format_buf(
         formatter: Formatter,
         buf: *mut u8,
@@ -3114,11 +2467,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Run the formatter and return an allocated buffer with the output.\n\n Each call \
-             formats the current terminal state. The buffer is allocated\n using the provided \
-             allocator (or the default allocator if NULL).\n The caller is responsible for freeing \
-             the returned buffer with\n ghostty_free(), passing the same allocator (or NULL for \
-             the default)\n that was used for the allocation.\n\n         failure\n"]
+    #[doc = " Run the formatter and return an allocated buffer with the output.\n\n Each call formats the current terminal state. The buffer is allocated\n using the provided allocator (or the default allocator if NULL).\n The caller is responsible for freeing the returned buffer with\n ghostty_free(), passing the same allocator (or NULL for the default)\n that was used for the allocation.\n\n         failure\n"]
     pub fn ghostty_formatter_format_alloc(
         formatter: Formatter,
         allocator: *const Allocator,
@@ -3127,8 +2476,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Free a formatter instance.\n\n Releases all resources associated with the formatter. \
-             After this call,\n the formatter handle becomes invalid.\n\n"]
+    #[doc = " Free a formatter instance.\n\n Releases all resources associated with the formatter. After this call,\n the formatter handle becomes invalid.\n\n"]
     pub fn ghostty_formatter_free(formatter: Formatter);
 }
 pub mod RenderStateDirty {
@@ -3168,18 +2516,13 @@ pub mod RenderStateData {
     pub const ROWS: Type = 2;
     #[doc = " Current dirty state (GhosttyRenderStateDirty)."]
     pub const DIRTY: Type = 3;
-    #[doc = " Populate a pre-allocated GhosttyRenderStateRowIterator with row data\n  from the \
-             render state (GhosttyRenderStateRowIterator). Row data is\n  only valid as long as \
-             the underlying render state is not updated.\n  It is unsafe to use row data after \
-             updating the render state."]
+    #[doc = " Populate a pre-allocated GhosttyRenderStateRowIterator with row data\n  from the render state (GhosttyRenderStateRowIterator). Row data is\n  only valid as long as the underlying render state is not updated.\n  It is unsafe to use row data after updating the render state."]
     pub const ROW_ITERATOR: Type = 4;
     #[doc = " Default/current background color (GhosttyColorRgb)."]
     pub const COLOR_BACKGROUND: Type = 5;
     #[doc = " Default/current foreground color (GhosttyColorRgb)."]
     pub const COLOR_FOREGROUND: Type = 6;
-    #[doc = " Cursor color when explicitly set by terminal state (GhosttyColorRgb).\n  Returns \
-             GHOSTTY_INVALID_VALUE if no explicit cursor color is set;\n  use \
-             COLOR_CURSOR_HAS_VALUE to check first."]
+    #[doc = " Cursor color when explicitly set by terminal state (GhosttyColorRgb).\n  Returns GHOSTTY_INVALID_VALUE if no explicit cursor color is set;\n  use COLOR_CURSOR_HAS_VALUE to check first."]
     pub const COLOR_CURSOR: Type = 7;
     #[doc = " Whether an explicit cursor color is set (bool)."]
     pub const COLOR_CURSOR_HAS_VALUE: Type = 8;
@@ -3193,20 +2536,15 @@ pub mod RenderStateData {
     pub const CURSOR_BLINKING: Type = 12;
     #[doc = " Whether the cursor is at a password input field (bool)."]
     pub const CURSOR_PASSWORD_INPUT: Type = 13;
-    #[doc = " Whether the cursor is visible within the viewport (bool).\n  If false, the cursor \
-             viewport position values are undefined."]
+    #[doc = " Whether the cursor is visible within the viewport (bool).\n  If false, the cursor viewport position values are undefined."]
     pub const CURSOR_VIEWPORT_HAS_VALUE: Type = 14;
-    #[doc = " Cursor viewport x position in cells (uint16_t).\n  Only valid when \
-             CURSOR_VIEWPORT_HAS_VALUE is true."]
+    #[doc = " Cursor viewport x position in cells (uint16_t).\n  Only valid when CURSOR_VIEWPORT_HAS_VALUE is true."]
     pub const CURSOR_VIEWPORT_X: Type = 15;
-    #[doc = " Cursor viewport y position in cells (uint16_t).\n  Only valid when \
-             CURSOR_VIEWPORT_HAS_VALUE is true."]
+    #[doc = " Cursor viewport y position in cells (uint16_t).\n  Only valid when CURSOR_VIEWPORT_HAS_VALUE is true."]
     pub const CURSOR_VIEWPORT_Y: Type = 16;
-    #[doc = " Whether the cursor is on the tail of a wide character (bool).\n  Only valid when \
-             CURSOR_VIEWPORT_HAS_VALUE is true."]
+    #[doc = " Whether the cursor is on the tail of a wide character (bool).\n  Only valid when CURSOR_VIEWPORT_HAS_VALUE is true."]
     pub const CURSOR_VIEWPORT_WIDE_TAIL: Type = 17;
-    #[doc = " Whether the cursor is on the tail of a wide character (bool).\n  Only valid when \
-             CURSOR_VIEWPORT_HAS_VALUE is true."]
+    #[doc = " Whether the cursor is on the tail of a wide character (bool).\n  Only valid when CURSOR_VIEWPORT_HAS_VALUE is true."]
     pub const MAX_VALUE: Type = 2147483647;
 }
 pub mod RenderStateOption {
@@ -3226,10 +2564,7 @@ pub mod RenderStateRowData {
     pub const DIRTY: Type = 1;
     #[doc = " The raw row value (GhosttyRow)."]
     pub const RAW: Type = 2;
-    #[doc = " Populate a pre-allocated GhosttyRenderStateRowCells with cell data for\n  the \
-             current row (GhosttyRenderStateRowCells). Cell data is only\n  valid as long as the \
-             underlying render state is not updated.\n  It is unsafe to use cell data after \
-             updating the render state."]
+    #[doc = " Populate a pre-allocated GhosttyRenderStateRowCells with cell data for\n  the current row (GhosttyRenderStateRowCells). Cell data is only\n  valid as long as the underlying render state is not updated.\n  It is unsafe to use cell data after updating the render state."]
     pub const CELLS: Type = 3;
     #[doc = " Row-local selected cell range (GhosttyRenderStateRowSelection)."]
     pub const SELECTION: Type = 4;
@@ -3244,11 +2579,7 @@ pub mod RenderStateRowOption {
     #[doc = " Set dirty state for the current row (bool)."]
     pub const MAX_VALUE: Type = 2147483647;
 }
-#[doc = " Row-local selection range.\n\n This struct uses the sized-struct ABI pattern. Initialize \
-         with\n GHOSTTY_INIT_SIZED(GhosttyRenderStateRowSelection) before querying\n \
-         GHOSTTY_RENDER_STATE_ROW_DATA_SELECTION.\n\n Querying \
-         GHOSTTY_RENDER_STATE_ROW_DATA_SELECTION returns GHOSTTY_NO_VALUE\n if the current row \
-         does not intersect the current selection.\n"]
+#[doc = " Row-local selection range.\n\n This struct uses the sized-struct ABI pattern. Initialize with\n GHOSTTY_INIT_SIZED(GhosttyRenderStateRowSelection) before querying\n GHOSTTY_RENDER_STATE_ROW_DATA_SELECTION.\n\n Querying GHOSTTY_RENDER_STATE_ROW_DATA_SELECTION returns GHOSTTY_NO_VALUE\n if the current row does not intersect the current selection.\n"]
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct RenderStateRowSelection {
@@ -3271,11 +2602,7 @@ const _: () = {
     ["Offset of field: RenderStateRowSelection::end_x"]
         [::std::mem::offset_of!(RenderStateRowSelection, end_x) - 10usize];
 };
-#[doc = " Render-state color information.\n\n This struct uses the sized-struct ABI pattern. \
-         Initialize with\n GHOSTTY_INIT_SIZED(GhosttyRenderStateColors) before calling\n \
-         ghostty_render_state_colors_get().\n\n Example:\n GhosttyRenderStateColors colors = \
-         GHOSTTY_INIT_SIZED(GhosttyRenderStateColors);\n GhosttyResult result = \
-         ghostty_render_state_colors_get(state, &colors);\n"]
+#[doc = " Render-state color information.\n\n This struct uses the sized-struct ABI pattern. Initialize with\n GHOSTTY_INIT_SIZED(GhosttyRenderStateColors) before calling\n ghostty_render_state_colors_get().\n\n Example:\n GhosttyRenderStateColors colors = GHOSTTY_INIT_SIZED(GhosttyRenderStateColors);\n GhosttyResult result = ghostty_render_state_colors_get(state, &colors);\n"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct RenderStateColors {
@@ -3287,8 +2614,7 @@ pub struct RenderStateColors {
     pub foreground: ColorRgb,
     #[doc = " The cursor color when explicitly set by terminal state."]
     pub cursor: ColorRgb,
-    #[doc = " True when cursor contains a valid explicit cursor color value.\n If this is false, \
-             the cursor color should be ignored; it will\n contain undefined data."]
+    #[doc = " True when cursor contains a valid explicit cursor color value.\n If this is false, the cursor color should be ignored; it will\n contain undefined data."]
     pub cursor_has_value: bool,
     #[doc = " The active 256-color palette for this render state."]
     pub palette: [ColorRgb; 256usize],
@@ -3327,15 +2653,11 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Free a render state instance.\n\n Releases all resources associated with the render \
-             state. After this call,\n the render state handle becomes invalid.\n\n"]
+    #[doc = " Free a render state instance.\n\n Releases all resources associated with the render state. After this call,\n the render state handle becomes invalid.\n\n"]
     pub fn ghostty_render_state_free(state: RenderState);
 }
 unsafe extern "C" {
-    #[doc = " Update a render state instance from a terminal.\n\n This consumes terminal/screen \
-             dirty state in the same way as the internal\n render state update path.\n\n \
-             `terminal` is NULL, GHOSTTY_OUT_OF_MEMORY if updating the state requires\n allocation \
-             and that allocation fails\n"]
+    #[doc = " Update a render state instance from a terminal.\n\n This consumes terminal/screen dirty state in the same way as the internal\n render state update path.\n\n `terminal` is NULL, GHOSTTY_OUT_OF_MEMORY if updating the state requires\n allocation and that allocation fails\n"]
     pub fn ghostty_render_state_update(state: RenderState, terminal: Terminal) -> Result::Type;
 }
 unsafe extern "C" {
@@ -3347,12 +2669,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get multiple data fields from a render state in a single call.\n\n Each element in \
-             the keys array specifies a data kind, and the\n corresponding element in the values \
-             array receives the result.\n\n Processing stops at the first error; on success \
-             out_written\n is set to count, on error it is set to the index of the\n failing key \
-             (i.e. the number of values successfully written).\n\n               documented output \
-             type)\n             successfully written (may be NULL)\n"]
+    #[doc = " Get multiple data fields from a render state in a single call.\n\n Each element in the keys array specifies a data kind, and the\n corresponding element in the values array receives the result.\n\n Processing stops at the first error; on success out_written\n is set to count, on error it is set to the index of the\n failing key (i.e. the number of values successfully written).\n\n               documented output type)\n             successfully written (may be NULL)\n"]
     pub fn ghostty_render_state_get_multi(
         state: RenderState,
         count: usize,
@@ -3362,10 +2679,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Set an option on a render state.\n\n The `value` pointer must point to a value of \
-             the type corresponding to the\n requested option kind (see \
-             GhosttyRenderStateOption).\n\n            GHOSTTY_INVALID_VALUE)\n         `value` is \
-             NULL\n"]
+    #[doc = " Set an option on a render state.\n\n The `value` pointer must point to a value of the type corresponding to the\n requested option kind (see GhosttyRenderStateOption).\n\n            GHOSTTY_INVALID_VALUE)\n         `value` is NULL\n"]
     pub fn ghostty_render_state_set(
         state: RenderState,
         option: RenderStateOption::Type,
@@ -3380,9 +2694,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Create a new row iterator instance.\n\n All fields except the allocator are left \
-             undefined until populated\n via ghostty_render_state_get() with\n \
-             GHOSTTY_RENDER_STATE_DATA_ROW_ITERATOR.\n\n         failure\n"]
+    #[doc = " Create a new row iterator instance.\n\n All fields except the allocator are left undefined until populated\n via ghostty_render_state_get() with\n GHOSTTY_RENDER_STATE_DATA_ROW_ITERATOR.\n\n         failure\n"]
     pub fn ghostty_render_state_row_iterator_new(
         allocator: *const Allocator,
         out_iterator: *mut RenderStateRowIterator,
@@ -3397,11 +2709,7 @@ unsafe extern "C" {
     pub fn ghostty_render_state_row_iterator_next(iterator: RenderStateRowIterator) -> bool;
 }
 unsafe extern "C" {
-    #[doc = " Get a value from the current row in a render-state row iterator.\n\n The `out` \
-             pointer must point to a value of the type corresponding to the\n requested data kind \
-             (see GhosttyRenderStateRowData).\n Call ghostty_render_state_row_iterator_next() at \
-             least once before\n calling this function.\n\n         `iterator` is NULL or the \
-             iterator is not positioned on a row\n"]
+    #[doc = " Get a value from the current row in a render-state row iterator.\n\n The `out` pointer must point to a value of the type corresponding to the\n requested data kind (see GhosttyRenderStateRowData).\n Call ghostty_render_state_row_iterator_next() at least once before\n calling this function.\n\n         `iterator` is NULL or the iterator is not positioned on a row\n"]
     pub fn ghostty_render_state_row_get(
         iterator: RenderStateRowIterator,
         data: RenderStateRowData::Type,
@@ -3409,12 +2717,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get multiple data fields from the current row in a single call.\n\n Each element in \
-             the keys array specifies a data kind, and the\n corresponding element in the values \
-             array receives the result.\n\n Processing stops at the first error; on success \
-             out_written\n is set to count, on error it is set to the index of the\n failing key \
-             (i.e. the number of values successfully written).\n\n               documented output \
-             type)\n             successfully written (may be NULL)\n"]
+    #[doc = " Get multiple data fields from the current row in a single call.\n\n Each element in the keys array specifies a data kind, and the\n corresponding element in the values array receives the result.\n\n Processing stops at the first error; on success out_written\n is set to count, on error it is set to the index of the\n failing key (i.e. the number of values successfully written).\n\n               documented output type)\n             successfully written (may be NULL)\n"]
     pub fn ghostty_render_state_row_get_multi(
         iterator: RenderStateRowIterator,
         count: usize,
@@ -3424,12 +2727,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Set an option on the current row in a render-state row iterator.\n\n The `value` \
-             pointer must point to a value of the type corresponding to the\n requested option \
-             kind (see GhosttyRenderStateRowOption).\n Call \
-             ghostty_render_state_row_iterator_next() at least once before\n calling this \
-             function.\n\n            GHOSTTY_INVALID_VALUE)\n         `iterator` is NULL or the \
-             iterator is not positioned on a row\n"]
+    #[doc = " Set an option on the current row in a render-state row iterator.\n\n The `value` pointer must point to a value of the type corresponding to the\n requested option kind (see GhosttyRenderStateRowOption).\n Call ghostty_render_state_row_iterator_next() at least once before\n calling this function.\n\n            GHOSTTY_INVALID_VALUE)\n         `iterator` is NULL or the iterator is not positioned on a row\n"]
     pub fn ghostty_render_state_row_set(
         iterator: RenderStateRowIterator,
         option: RenderStateRowOption::Type,
@@ -3437,11 +2735,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Create a new row cells instance.\n\n All fields except the allocator are left \
-             undefined until populated\n via ghostty_render_state_row_get() with\n \
-             GHOSTTY_RENDER_STATE_ROW_DATA_CELLS.\n\n You can reuse this value repeatedly with \
-             ghostty_render_state_row_get() to\n avoid allocating a new cells container for every \
-             row.\n\n         failure\n"]
+    #[doc = " Create a new row cells instance.\n\n All fields except the allocator are left undefined until populated\n via ghostty_render_state_row_get() with\n GHOSTTY_RENDER_STATE_ROW_DATA_CELLS.\n\n You can reuse this value repeatedly with ghostty_render_state_row_get() to\n avoid allocating a new cells container for every row.\n\n         failure\n"]
     pub fn ghostty_render_state_row_cells_new(
         allocator: *const Allocator,
         out_cells: *mut RenderStateRowCells,
@@ -3456,75 +2750,36 @@ pub mod RenderStateRowCellsData {
     pub const RAW: Type = 1;
     #[doc = " The style for the current cell (GhosttyStyle)."]
     pub const STYLE: Type = 2;
-    #[doc = " The total number of grapheme codepoints including the base codepoint\n  (uint32_t). \
-             Returns 0 if the cell has no text."]
+    #[doc = " The total number of grapheme codepoints including the base codepoint\n  (uint32_t). Returns 0 if the cell has no text."]
     pub const GRAPHEMES_LEN: Type = 3;
-    #[doc = " Write grapheme codepoints into a caller-provided buffer (uint32_t*).\n  The buffer \
-             must be at least graphemes_len elements. The base codepoint\n  is written first, \
-             followed by any extra codepoints."]
+    #[doc = " Write grapheme codepoints into a caller-provided buffer (uint32_t*).\n  The buffer must be at least graphemes_len elements. The base codepoint\n  is written first, followed by any extra codepoints."]
     pub const GRAPHEMES_BUF: Type = 4;
-    #[doc = " The resolved background color of the cell (GhosttyColorRgb).\n  Flattens the three \
-             possible sources: content-tag bg_color_rgb,\n  content-tag bg_color_palette (looked \
-             up in the palette), or the\n  style's bg_color. Returns GHOSTTY_INVALID_VALUE if the \
-             cell has\n  no background color, in which case the caller should use whatever\n  \
-             default background color it wants (e.g. the terminal background)."]
+    #[doc = " The resolved background color of the cell (GhosttyColorRgb).\n  Flattens the three possible sources: content-tag bg_color_rgb,\n  content-tag bg_color_palette (looked up in the palette), or the\n  style's bg_color. Returns GHOSTTY_INVALID_VALUE if the cell has\n  no background color, in which case the caller should use whatever\n  default background color it wants (e.g. the terminal background)."]
     pub const BG_COLOR: Type = 5;
-    #[doc = " The resolved foreground color of the cell (GhosttyColorRgb).\n  Resolves palette \
-             indices through the palette. Bold color handling\n  is not applied; the caller should \
-             handle bold styling separately.\n  Returns GHOSTTY_INVALID_VALUE if the cell has no \
-             explicit foreground\n  color, in which case the caller should use whatever default \
-             foreground\n  color it wants (e.g. the terminal foreground)."]
+    #[doc = " The resolved foreground color of the cell (GhosttyColorRgb).\n  Resolves palette indices through the palette. Bold color handling\n  is not applied; the caller should handle bold styling separately.\n  Returns GHOSTTY_INVALID_VALUE if the cell has no explicit foreground\n  color, in which case the caller should use whatever default foreground\n  color it wants (e.g. the terminal foreground)."]
     pub const FG_COLOR: Type = 6;
-    #[doc = " Whether the cell is contained within the current selection (bool).\n  This returns \
-             true when the cell's column is within the current row's\n  row-local selection range, \
-             and false otherwise. Rendering policy for\n  selected cells (colors, inversion, etc.) \
-             is left to the caller.\n\n  Renderers that can draw cells in spans may be more \
-             efficient querying\n  GHOSTTY_RENDER_STATE_ROW_DATA_SELECTION once per row and \
-             applying that\n  range directly, avoiding one C API call per cell for selection state."]
+    #[doc = " Whether the cell is contained within the current selection (bool).\n  This returns true when the cell's column is within the current row's\n  row-local selection range, and false otherwise. Rendering policy for\n  selected cells (colors, inversion, etc.) is left to the caller.\n\n  Renderers that can draw cells in spans may be more efficient querying\n  GHOSTTY_RENDER_STATE_ROW_DATA_SELECTION once per row and applying that\n  range directly, avoiding one C API call per cell for selection state."]
     pub const SELECTED: Type = 7;
-    #[doc = " Whether the cell has any explicit styling (bool).\n  This is equivalent to querying \
-             the raw cell's\n  GHOSTTY_CELL_DATA_HAS_STYLING value, but avoids materializing the \
-             raw\n  GhosttyCell for renderers that only need to know whether fetching the\n  full \
-             style is necessary."]
+    #[doc = " Whether the cell has any explicit styling (bool).\n  This is equivalent to querying the raw cell's\n  GHOSTTY_CELL_DATA_HAS_STYLING value, but avoids materializing the raw\n  GhosttyCell for renderers that only need to know whether fetching the\n  full style is necessary."]
     pub const HAS_STYLING: Type = 8;
-    #[doc = " Encode the current cell's full grapheme cluster as UTF-8 into a\n caller-provided \
-             buffer (GhosttyBuffer).\n\n The base codepoint is encoded first, followed by any \
-             extra grapheme\n codepoints. Returns GHOSTTY_SUCCESS with len=0 when the cell has no \
-             text.\n\n If ptr is NULL or cap is too small for a non-empty cell, returns\n \
-             GHOSTTY_OUT_OF_SPACE without writing any bytes and sets len to the required\n buffer \
-             size in bytes."]
+    #[doc = " Encode the current cell's full grapheme cluster as UTF-8 into a\n caller-provided buffer (GhosttyBuffer).\n\n The base codepoint is encoded first, followed by any extra grapheme\n codepoints. Returns GHOSTTY_SUCCESS with len=0 when the cell has no text.\n\n If ptr is NULL or cap is too small for a non-empty cell, returns\n GHOSTTY_OUT_OF_SPACE without writing any bytes and sets len to the required\n buffer size in bytes."]
     pub const GRAPHEMES_UTF8: Type = 9;
-    #[doc = " Encode the current cell's full grapheme cluster as UTF-8 into a\n caller-provided \
-             buffer (GhosttyBuffer).\n\n The base codepoint is encoded first, followed by any \
-             extra grapheme\n codepoints. Returns GHOSTTY_SUCCESS with len=0 when the cell has no \
-             text.\n\n If ptr is NULL or cap is too small for a non-empty cell, returns\n \
-             GHOSTTY_OUT_OF_SPACE without writing any bytes and sets len to the required\n buffer \
-             size in bytes."]
+    #[doc = " Encode the current cell's full grapheme cluster as UTF-8 into a\n caller-provided buffer (GhosttyBuffer).\n\n The base codepoint is encoded first, followed by any extra grapheme\n codepoints. Returns GHOSTTY_SUCCESS with len=0 when the cell has no text.\n\n If ptr is NULL or cap is too small for a non-empty cell, returns\n GHOSTTY_OUT_OF_SPACE without writing any bytes and sets len to the required\n buffer size in bytes."]
     pub const MAX_VALUE: Type = 2147483647;
 }
 unsafe extern "C" {
-    #[doc = " Move a render-state row cells iterator to the next cell.\n\n Returns true if the \
-             iterator moved successfully and cell data is\n available to read at the new \
-             position.\n\n         NULL or if the iterator has reached the end\n"]
+    #[doc = " Move a render-state row cells iterator to the next cell.\n\n Returns true if the iterator moved successfully and cell data is\n available to read at the new position.\n\n         NULL or if the iterator has reached the end\n"]
     pub fn ghostty_render_state_row_cells_next(cells: RenderStateRowCells) -> bool;
 }
 unsafe extern "C" {
-    #[doc = " Move a render-state row cells iterator to a specific column.\n\n Positions the \
-             iterator at the given x (column) index so that\n subsequent reads return data for \
-             that cell.\n\n        GHOSTTY_INVALID_VALUE)\n         is NULL or `x` is out of \
-             range\n"]
+    #[doc = " Move a render-state row cells iterator to a specific column.\n\n Positions the iterator at the given x (column) index so that\n subsequent reads return data for that cell.\n\n        GHOSTTY_INVALID_VALUE)\n         is NULL or `x` is out of range\n"]
     pub fn ghostty_render_state_row_cells_select(
         cells: RenderStateRowCells,
         x: u16,
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get a value from the current cell in a render-state row cells iterator.\n\n The \
-             `out` pointer must point to a value of the type corresponding to the\n requested data \
-             kind (see GhosttyRenderStateRowCellsData).\n Call \
-             ghostty_render_state_row_cells_next() or\n ghostty_render_state_row_cells_select() at \
-             least once before\n calling this function.\n\n         `cells` is NULL or the \
-             iterator is not positioned on a cell\n"]
+    #[doc = " Get a value from the current cell in a render-state row cells iterator.\n\n The `out` pointer must point to a value of the type corresponding to the\n requested data kind (see GhosttyRenderStateRowCellsData).\n Call ghostty_render_state_row_cells_next() or\n ghostty_render_state_row_cells_select() at least once before\n calling this function.\n\n         `cells` is NULL or the iterator is not positioned on a cell\n"]
     pub fn ghostty_render_state_row_cells_get(
         cells: RenderStateRowCells,
         data: RenderStateRowCellsData::Type,
@@ -3532,12 +2787,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get multiple data fields from the current cell in a single call.\n\n Each element in \
-             the keys array specifies a data kind, and the\n corresponding element in the values \
-             array receives the result.\n\n Processing stops at the first error; on success \
-             out_written\n is set to count, on error it is set to the index of the\n failing key \
-             (i.e. the number of values successfully written).\n\n               documented output \
-             type)\n             successfully written (may be NULL)\n"]
+    #[doc = " Get multiple data fields from the current cell in a single call.\n\n Each element in the keys array specifies a data kind, and the\n corresponding element in the values array receives the result.\n\n Processing stops at the first error; on success out_written\n is set to count, on error it is set to the index of the\n failing key (i.e. the number of values successfully written).\n\n               documented output type)\n             successfully written (may be NULL)\n"]
     pub fn ghostty_render_state_row_cells_get_multi(
         cells: RenderStateRowCells,
         count: usize,
@@ -3551,13 +2801,11 @@ unsafe extern "C" {
     pub fn ghostty_render_state_row_cells_free(cells: RenderStateRowCells);
 }
 unsafe extern "C" {
-    #[doc = " Free a tracked grid reference.\n\n Passing NULL is allowed and has no effect. A \
-             tracked reference may be freed\n after the terminal that created it is freed.\n\n"]
+    #[doc = " Free a tracked grid reference.\n\n Passing NULL is allowed and has no effect. A tracked reference may be freed\n after the terminal that created it is freed.\n\n"]
     pub fn ghostty_tracked_grid_ref_free(ref_: TrackedGridRef);
 }
 unsafe extern "C" {
-    #[doc = " Return whether a tracked grid reference currently has a meaningful value.\n\n If the \
-             terminal that created the tracked reference has been freed, this\n returns false.\n\n"]
+    #[doc = " Return whether a tracked grid reference currently has a meaningful value.\n\n If the terminal that created the tracked reference has been freed, this\n returns false.\n\n"]
     pub fn ghostty_tracked_grid_ref_has_value(ref_: TrackedGridRef) -> bool;
 }
 unsafe extern "C" {
@@ -3569,15 +2817,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Move an existing tracked grid reference to a new terminal point.\n\n On success, the \
-             tracked reference begins tracking the new point and any prior\n \"no value\" state is \
-             cleared. On GHOSTTY_OUT_OF_MEMORY, the original tracked\n reference is left \
-             unchanged.\n\n The terminal must be the same terminal that created the tracked \
-             reference.\n The point is resolved against the terminal screen/page-list that is \
-             active at\n the time this function is called. If the terminal has switched between\n \
-             primary and alternate screens, this may move the tracked reference from one\n \
-             screen/page-list to the other.\n\n         or point is invalid, or \
-             GHOSTTY_OUT_OF_MEMORY if allocation fails.\n"]
+    #[doc = " Move an existing tracked grid reference to a new terminal point.\n\n On success, the tracked reference begins tracking the new point and any prior\n \"no value\" state is cleared. On GHOSTTY_OUT_OF_MEMORY, the original tracked\n reference is left unchanged.\n\n The terminal must be the same terminal that created the tracked reference.\n The point is resolved against the terminal screen/page-list that is active at\n the time this function is called. If the terminal has switched between\n primary and alternate screens, this may move the tracked reference from one\n screen/page-list to the other.\n\n         or point is invalid, or GHOSTTY_OUT_OF_MEMORY if allocation fails.\n"]
     pub fn ghostty_tracked_grid_ref_set(
         ref_: TrackedGridRef,
         terminal: Terminal,
@@ -3585,15 +2825,7 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Snapshot a tracked grid reference into a regular GhosttyGridRef.\n\n The returned \
-             GhosttyGridRef is an untracked snapshot and has the same\n lifetime rules as \
-             ghostty_terminal_grid_ref(): it is only valid until the\n next terminal update. \
-             Snapshot immediately before calling\n ghostty_grid_ref_cell(), \
-             ghostty_grid_ref_row(),\n ghostty_grid_ref_graphemes(), \
-             ghostty_grid_ref_hyperlink_uri(), or\n ghostty_grid_ref_style().\n\n If the tracked \
-             reference no longer has a meaningful value, this returns\n GHOSTTY_NO_VALUE. This \
-             includes references whose owning terminal has been\n freed.\n\n         or \
-             GHOSTTY_NO_VALUE if the tracked location was discarded.\n"]
+    #[doc = " Snapshot a tracked grid reference into a regular GhosttyGridRef.\n\n The returned GhosttyGridRef is an untracked snapshot and has the same\n lifetime rules as ghostty_terminal_grid_ref(): it is only valid until the\n next terminal update. Snapshot immediately before calling\n ghostty_grid_ref_cell(), ghostty_grid_ref_row(),\n ghostty_grid_ref_graphemes(), ghostty_grid_ref_hyperlink_uri(), or\n ghostty_grid_ref_style().\n\n If the tracked reference no longer has a meaningful value, this returns\n GHOSTTY_NO_VALUE. This includes references whose owning terminal has been\n freed.\n\n         or GHOSTTY_NO_VALUE if the tracked location was discarded.\n"]
     pub fn ghostty_tracked_grid_ref_snapshot(
         ref_: TrackedGridRef,
         out_ref: *mut GridRef,
@@ -3628,75 +2860,41 @@ pub mod OscCommandType {
     pub const TYPE_MAX_VALUE: Type = 2147483647;
 }
 pub mod OscCommandData {
-    #[doc = " OSC command data types.\n\n These values specify what type of data to extract from \
-             an OSC command\n using `ghostty_osc_command_data`.\n"]
+    #[doc = " OSC command data types.\n\n These values specify what type of data to extract from an OSC command\n using `ghostty_osc_command_data`.\n"]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Invalid data type. Never results in any data extraction."]
     pub const INVALID: Type = 0;
-    #[doc = " Window title string data.\n\n Valid for: GHOSTTY_OSC_COMMAND_CHANGE_WINDOW_TITLE\n\n \
-             Output type: const char ** (pointer to null-terminated string)\n\n Lifetime: Valid \
-             until the next call to any ghostty_osc_* function with\n the same parser instance. \
-             Memory is owned by the parser."]
+    #[doc = " Window title string data.\n\n Valid for: GHOSTTY_OSC_COMMAND_CHANGE_WINDOW_TITLE\n\n Output type: const char ** (pointer to null-terminated string)\n\n Lifetime: Valid until the next call to any ghostty_osc_* function with\n the same parser instance. Memory is owned by the parser."]
     pub const CHANGE_WINDOW_TITLE_STR: Type = 1;
-    #[doc = " Window title string data.\n\n Valid for: GHOSTTY_OSC_COMMAND_CHANGE_WINDOW_TITLE\n\n \
-             Output type: const char ** (pointer to null-terminated string)\n\n Lifetime: Valid \
-             until the next call to any ghostty_osc_* function with\n the same parser instance. \
-             Memory is owned by the parser."]
+    #[doc = " Window title string data.\n\n Valid for: GHOSTTY_OSC_COMMAND_CHANGE_WINDOW_TITLE\n\n Output type: const char ** (pointer to null-terminated string)\n\n Lifetime: Valid until the next call to any ghostty_osc_* function with\n the same parser instance. Memory is owned by the parser."]
     pub const MAX_VALUE: Type = 2147483647;
 }
 unsafe extern "C" {
-    #[doc = " Create a new OSC parser instance.\n\n Creates a new OSC (Operating System Command) \
-             parser using the provided\n allocator. The parser must be freed using \
-             ghostty_vt_osc_free() when\n no longer needed.\n\n"]
+    #[doc = " Create a new OSC parser instance.\n\n Creates a new OSC (Operating System Command) parser using the provided\n allocator. The parser must be freed using ghostty_vt_osc_free() when\n no longer needed.\n\n"]
     pub fn ghostty_osc_new(allocator: *const Allocator, parser: *mut OscParser) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Free an OSC parser instance.\n\n Releases all resources associated with the OSC \
-             parser. After this call,\n the parser handle becomes invalid and must not be used.\n\n"]
+    #[doc = " Free an OSC parser instance.\n\n Releases all resources associated with the OSC parser. After this call,\n the parser handle becomes invalid and must not be used.\n\n"]
     pub fn ghostty_osc_free(parser: OscParser);
 }
 unsafe extern "C" {
-    #[doc = " Reset an OSC parser instance to its initial state.\n\n Resets the parser state, \
-             clearing any partially parsed OSC sequences\n and returning the parser to its initial \
-             state. This is useful for\n reusing a parser instance or recovering from parse \
-             errors.\n\n"]
+    #[doc = " Reset an OSC parser instance to its initial state.\n\n Resets the parser state, clearing any partially parsed OSC sequences\n and returning the parser to its initial state. This is useful for\n reusing a parser instance or recovering from parse errors.\n\n"]
     pub fn ghostty_osc_reset(parser: OscParser);
 }
 unsafe extern "C" {
-    #[doc = " Parse the next byte in an OSC sequence.\n\n Processes a single byte as part of an \
-             OSC sequence. The parser maintains\n internal state to track the progress through the \
-             sequence. Call this\n function for each byte in the sequence data.\n\n When finished \
-             pumping the parser with bytes, call ghostty_osc_end\n to get the final result.\n\n"]
+    #[doc = " Parse the next byte in an OSC sequence.\n\n Processes a single byte as part of an OSC sequence. The parser maintains\n internal state to track the progress through the sequence. Call this\n function for each byte in the sequence data.\n\n When finished pumping the parser with bytes, call ghostty_osc_end\n to get the final result.\n\n"]
     pub fn ghostty_osc_next(parser: OscParser, byte: u8);
 }
 unsafe extern "C" {
-    #[doc = " Finalize OSC parsing and retrieve the parsed command.\n\n Call this function after \
-             feeding all bytes of an OSC sequence to the parser\n using ghostty_osc_next() with \
-             the exception of the terminating character\n (ESC or ST). This function finalizes the \
-             parsing process and returns the\n parsed OSC command.\n\n The return value is never \
-             NULL. Invalid commands will return a command\n with type \
-             GHOSTTY_OSC_COMMAND_INVALID.\n\n The terminator parameter specifies the byte that \
-             terminated the OSC sequence\n (typically 0x07 for BEL or 0x5C for ST after ESC). This \
-             information is\n preserved in the parsed command so that responses can use the same \
-             terminator\n format for better compatibility with the calling program. For commands \
-             that\n do not require a response, this parameter is ignored and the resulting\n \
-             command will not retain the terminator information.\n\n The returned command handle \
-             is valid until the next call to any\n `ghostty_osc_*` function with the same parser \
-             instance with the exception\n of command introspection functions such as \
-             `ghostty_osc_command_type`.\n\n"]
+    #[doc = " Finalize OSC parsing and retrieve the parsed command.\n\n Call this function after feeding all bytes of an OSC sequence to the parser\n using ghostty_osc_next() with the exception of the terminating character\n (ESC or ST). This function finalizes the parsing process and returns the\n parsed OSC command.\n\n The return value is never NULL. Invalid commands will return a command\n with type GHOSTTY_OSC_COMMAND_INVALID.\n\n The terminator parameter specifies the byte that terminated the OSC sequence\n (typically 0x07 for BEL or 0x5C for ST after ESC). This information is\n preserved in the parsed command so that responses can use the same terminator\n format for better compatibility with the calling program. For commands that\n do not require a response, this parameter is ignored and the resulting\n command will not retain the terminator information.\n\n The returned command handle is valid until the next call to any\n `ghostty_osc_*` function with the same parser instance with the exception\n of command introspection functions such as `ghostty_osc_command_type`.\n\n"]
     pub fn ghostty_osc_end(parser: OscParser, terminator: u8) -> OscCommand;
 }
 unsafe extern "C" {
-    #[doc = " Get the type of an OSC command.\n\n Returns the type identifier for the given OSC \
-             command. This can be used\n to determine what kind of command was parsed and what \
-             data might be\n available from it.\n\n"]
+    #[doc = " Get the type of an OSC command.\n\n Returns the type identifier for the given OSC command. This can be used\n to determine what kind of command was parsed and what data might be\n available from it.\n\n"]
     pub fn ghostty_osc_command_type(command: OscCommand) -> OscCommandType::Type;
 }
 unsafe extern "C" {
-    #[doc = " Extract data from an OSC command.\n\n Extracts typed data from the given OSC command \
-             based on the specified\n data type. The output pointer must be of the appropriate \
-             type for the\n requested data kind. Valid command types, output types, and memory\n \
-             safety information are documented in the `GhosttyOscCommandData` enum.\n\n"]
+    #[doc = " Extract data from an OSC command.\n\n Extracts typed data from the given OSC command based on the specified\n data type. The output pointer must be of the appropriate type for the\n requested data kind. Valid command types, output types, and memory\n safety information are documented in the `GhosttyOscCommandData` enum.\n\n"]
     pub fn ghostty_osc_command_data(
         command: OscCommand,
         data: OscCommandData::Type,
@@ -3704,9 +2902,7 @@ unsafe extern "C" {
     ) -> bool;
 }
 pub mod SgrAttributeTag {
-    #[doc = " SGR attribute tags.\n\n These values identify the type of an SGR attribute in a \
-             tagged union.\n Use the tag to determine which field in the attribute value union to \
-             access.\n"]
+    #[doc = " SGR attribute tags.\n\n These values identify the type of an SGR attribute in a tagged union.\n Use the tag to determine which field in the attribute value union to access.\n"]
     pub type Type = ::std::os::raw::c_uint;
     pub const UNSET: Type = 0;
     pub const UNKNOWN: Type = 1;
@@ -3752,8 +2948,7 @@ pub mod SgrUnderline {
     pub const DASHED: Type = 5;
     pub const MAX_VALUE: Type = 2147483647;
 }
-#[doc = " Unknown SGR attribute data.\n\n Contains the full parameter list and the partial list \
-         where parsing\n encountered an unknown or invalid sequence.\n"]
+#[doc = " Unknown SGR attribute data.\n\n Contains the full parameter list and the partial list where parsing\n encountered an unknown or invalid sequence.\n"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct SgrUnknown {
@@ -3784,9 +2979,7 @@ impl Default for SgrUnknown {
         }
     }
 }
-#[doc = " SGR attribute value union.\n\n This union contains all possible attribute values. Use \
-         the tag field\n to determine which union member is active. Attributes without \
-         associated\n data (like bold, italic) don't use the union value.\n"]
+#[doc = " SGR attribute value union.\n\n This union contains all possible attribute values. Use the tag field\n to determine which union member is active. Attributes without associated\n data (like bold, italic) don't use the union value.\n"]
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union SgrAttributeValue {
@@ -3844,11 +3037,7 @@ impl Default for SgrAttributeValue {
         }
     }
 }
-#[doc = " SGR attribute (tagged union).\n\n A complete SGR attribute with both its type tag and \
-         associated value.\n Always check the tag field to determine which value union member is \
-         valid.\n\n Attributes without associated data (e.g., GHOSTTY_SGR_ATTR_BOLD) can be\n \
-         identified by tag alone; the value union is not used for these and\n the memory in the \
-         value field is undefined.\n"]
+#[doc = " SGR attribute (tagged union).\n\n A complete SGR attribute with both its type tag and associated value.\n Always check the tag field to determine which value union member is valid.\n\n Attributes without associated data (e.g., GHOSTTY_SGR_ATTR_BOLD) can be\n identified by tag alone; the value union is not used for these and\n the memory in the value field is undefined.\n"]
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct SgrAttribute {
@@ -3872,36 +3061,19 @@ impl Default for SgrAttribute {
     }
 }
 unsafe extern "C" {
-    #[doc = " Create a new SGR parser instance.\n\n Creates a new SGR (Select Graphic Rendition) \
-             parser using the provided\n allocator. The parser must be freed using \
-             ghostty_sgr_free() when\n no longer needed.\n\n NULL to use the default allocator\n"]
+    #[doc = " Create a new SGR parser instance.\n\n Creates a new SGR (Select Graphic Rendition) parser using the provided\n allocator. The parser must be freed using ghostty_sgr_free() when\n no longer needed.\n\n NULL to use the default allocator\n"]
     pub fn ghostty_sgr_new(allocator: *const Allocator, parser: *mut SgrParser) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Free an SGR parser instance.\n\n Releases all resources associated with the SGR \
-             parser. After this call,\n the parser handle becomes invalid and must not be used. \
-             This includes\n any attributes previously returned by ghostty_sgr_next().\n\n"]
+    #[doc = " Free an SGR parser instance.\n\n Releases all resources associated with the SGR parser. After this call,\n the parser handle becomes invalid and must not be used. This includes\n any attributes previously returned by ghostty_sgr_next().\n\n"]
     pub fn ghostty_sgr_free(parser: SgrParser);
 }
 unsafe extern "C" {
-    #[doc = " Reset an SGR parser instance to the beginning of the parameter list.\n\n Resets the \
-             parser's iteration state without clearing the parameters.\n After calling this, \
-             ghostty_sgr_next() will start from the beginning\n of the parameter list again.\n\n"]
+    #[doc = " Reset an SGR parser instance to the beginning of the parameter list.\n\n Resets the parser's iteration state without clearing the parameters.\n After calling this, ghostty_sgr_next() will start from the beginning\n of the parameter list again.\n\n"]
     pub fn ghostty_sgr_reset(parser: SgrParser);
 }
 unsafe extern "C" {
-    #[doc = " Set SGR parameters for parsing.\n\n Sets the SGR parameter list to parse. Parameters \
-             are the numeric values\n from a CSI SGR sequence (e.g., for `ESC[1;31m`, params would \
-             be {1, 31}).\n\n The separators array optionally specifies the separator type for \
-             each\n parameter position. Each byte should be either ';' for semicolon or ':'\n for \
-             colon. This is needed for certain color formats that use colon\n separators (e.g., \
-             `ESC[4:3m` for curly underline). Any invalid separator\n values are treated as \
-             semicolons. The separators array must have the same\n length as the params array, if \
-             it is not NULL.\n\n If separators is NULL, all parameters are assumed to be \
-             semicolon-separated.\n\n This function makes an internal copy of the parameter and \
-             separator data,\n so the caller can safely free or modify the input arrays after this \
-             call.\n\n After calling this function, the parser is automatically reset and ready\n \
-             to iterate from the beginning.\n\n NULL\n"]
+    #[doc = " Set SGR parameters for parsing.\n\n Sets the SGR parameter list to parse. Parameters are the numeric values\n from a CSI SGR sequence (e.g., for `ESC[1;31m`, params would be {1, 31}).\n\n The separators array optionally specifies the separator type for each\n parameter position. Each byte should be either ';' for semicolon or ':'\n for colon. This is needed for certain color formats that use colon\n separators (e.g., `ESC[4:3m` for curly underline). Any invalid separator\n values are treated as semicolons. The separators array must have the same\n length as the params array, if it is not NULL.\n\n If separators is NULL, all parameters are assumed to be semicolon-separated.\n\n This function makes an internal copy of the parameter and separator data,\n so the caller can safely free or modify the input arrays after this call.\n\n After calling this function, the parser is automatically reset and ready\n to iterate from the beginning.\n\n NULL\n"]
     pub fn ghostty_sgr_set_params(
         parser: SgrParser,
         params: *const u16,
@@ -3910,41 +3082,26 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get the next SGR attribute.\n\n Parses and returns the next attribute from the \
-             parameter list.\n Call this function repeatedly until it returns false to process\n \
-             all attributes in the sequence.\n\n"]
+    #[doc = " Get the next SGR attribute.\n\n Parses and returns the next attribute from the parameter list.\n Call this function repeatedly until it returns false to process\n all attributes in the sequence.\n\n"]
     pub fn ghostty_sgr_next(parser: SgrParser, attr: *mut SgrAttribute) -> bool;
 }
 unsafe extern "C" {
-    #[doc = " Get the full parameter list from an unknown SGR attribute.\n\n This function \
-             retrieves the full parameter list that was provided to the\n parser when an unknown \
-             attribute was encountered. Primarily useful in\n WebAssembly environments where \
-             accessing struct fields directly is difficult.\n\n"]
+    #[doc = " Get the full parameter list from an unknown SGR attribute.\n\n This function retrieves the full parameter list that was provided to the\n parser when an unknown attribute was encountered. Primarily useful in\n WebAssembly environments where accessing struct fields directly is difficult.\n\n"]
     pub fn ghostty_sgr_unknown_full(unknown: SgrUnknown, ptr: *mut *const u16) -> usize;
 }
 unsafe extern "C" {
-    #[doc = " Get the partial parameter list from an unknown SGR attribute.\n\n This function \
-             retrieves the partial parameter list where parsing stopped\n when an unknown \
-             attribute was encountered. Primarily useful in WebAssembly\n environments where \
-             accessing struct fields directly is difficult.\n\n"]
+    #[doc = " Get the partial parameter list from an unknown SGR attribute.\n\n This function retrieves the partial parameter list where parsing stopped\n when an unknown attribute was encountered. Primarily useful in WebAssembly\n environments where accessing struct fields directly is difficult.\n\n"]
     pub fn ghostty_sgr_unknown_partial(unknown: SgrUnknown, ptr: *mut *const u16) -> usize;
 }
 unsafe extern "C" {
-    #[doc = " Get the tag from an SGR attribute.\n\n This function extracts the tag that \
-             identifies which type of attribute\n this is. Primarily useful in WebAssembly \
-             environments where accessing\n struct fields directly is difficult.\n\n"]
+    #[doc = " Get the tag from an SGR attribute.\n\n This function extracts the tag that identifies which type of attribute\n this is. Primarily useful in WebAssembly environments where accessing\n struct fields directly is difficult.\n\n"]
     pub fn ghostty_sgr_attribute_tag(attr: SgrAttribute) -> SgrAttributeTag::Type;
 }
 unsafe extern "C" {
-    #[doc = " Get the value from an SGR attribute.\n\n This function returns a pointer to the \
-             value union from an SGR attribute. Use\n the tag to determine which field of the \
-             union is valid. Primarily useful in\n WebAssembly environments where accessing struct \
-             fields directly is difficult.\n\n"]
+    #[doc = " Get the value from an SGR attribute.\n\n This function returns a pointer to the value union from an SGR attribute. Use\n the tag to determine which field of the union is valid. Primarily useful in\n WebAssembly environments where accessing struct fields directly is difficult.\n\n"]
     pub fn ghostty_sgr_attribute_value(attr: *mut SgrAttribute) -> *mut SgrAttributeValue;
 }
-#[doc = " Result of decoding an image.\n\n The `data` buffer must be allocated through the \
-         allocator provided to\n the decode callback. The library takes ownership and will free \
-         it\n with the same allocator."]
+#[doc = " Result of decoding an image.\n\n The `data` buffer must be allocated through the allocator provided to\n the decode callback. The library takes ownership and will free it\n with the same allocator."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct SysImage {
@@ -3984,11 +3141,7 @@ pub mod SysLogLevel {
     pub const DEBUG: Type = 3;
     pub const MAX_VALUE: Type = 2147483647;
 }
-#[doc = " Callback type for logging.\n\n When installed, internal library log messages are \
-         delivered through\n this callback instead of being discarded. The embedder is \
-         responsible\n for formatting and routing log output.\n\n When the log is unscoped \
-         (default scope), @p scope_len is 0.\n\n All pointer arguments are only valid for the \
-         duration of the callback.\n The callback must be safe to call from any thread.\n"]
+#[doc = " Callback type for logging.\n\n When installed, internal library log messages are delivered through\n this callback instead of being discarded. The embedder is responsible\n for formatting and routing log output.\n\n When the log is unscoped (default scope), @p scope_len is 0.\n\n All pointer arguments are only valid for the duration of the callback.\n The callback must be safe to call from any thread.\n"]
 pub type SysLogFn = ::std::option::Option<
     unsafe extern "C" fn(
         userdata: *mut ::std::os::raw::c_void,
@@ -3999,9 +3152,7 @@ pub type SysLogFn = ::std::option::Option<
         message_len: usize,
     ),
 >;
-#[doc = " Callback type for PNG decoding.\n\n Decodes raw PNG data into RGBA pixels. The output \
-         pixel data must be\n allocated through the provided allocator. The library takes \
-         ownership\n of the buffer and will free it with the same allocator.\n"]
+#[doc = " Callback type for PNG decoding.\n\n Decodes raw PNG data into RGBA pixels. The output pixel data must be\n allocated through the provided allocator. The library takes ownership\n of the buffer and will free it with the same allocator.\n"]
 pub type SysDecodePngFn = ::std::option::Option<
     unsafe extern "C" fn(
         userdata: *mut ::std::os::raw::c_void,
@@ -4016,44 +3167,22 @@ pub mod SysOption {
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Set the userdata pointer passed to all sys callbacks.\n\n Input type: void* (or NULL)"]
     pub const GHOSTTY_SYS_OPT_USERDATA: Type = 0;
-    #[doc = " Set the PNG decode function.\n\n When set, the terminal can accept PNG images via \
-             the Kitty\n Graphics Protocol. When cleared (NULL value), PNG decoding is\n \
-             unsupported and PNG image data will be rejected.\n\n Input type: \
-             GhosttySysDecodePngFn (function pointer, or NULL)"]
+    #[doc = " Set the PNG decode function.\n\n When set, the terminal can accept PNG images via the Kitty\n Graphics Protocol. When cleared (NULL value), PNG decoding is\n unsupported and PNG image data will be rejected.\n\n Input type: GhosttySysDecodePngFn (function pointer, or NULL)"]
     pub const GHOSTTY_SYS_OPT_DECODE_PNG: Type = 1;
-    #[doc = " Set the log callback.\n\n When set, internal library log messages are delivered to \
-             this\n callback. When cleared (NULL value), log messages are silently\n \
-             discarded.\n\n Use ghostty_sys_log_stderr as a convenience callback that\n writes \
-             formatted messages to stderr.\n\n Which log levels are emitted depends on the build \
-             mode of the\n library and is not configurable at runtime. Debug builds emit\n all \
-             levels (debug and above). Release builds emit info and\n above; debug-level messages \
-             are compiled out entirely and will\n never reach the callback.\n\n Input type: \
-             GhosttySysLogFn (function pointer, or NULL)"]
+    #[doc = " Set the log callback.\n\n When set, internal library log messages are delivered to this\n callback. When cleared (NULL value), log messages are silently\n discarded.\n\n Use ghostty_sys_log_stderr as a convenience callback that\n writes formatted messages to stderr.\n\n Which log levels are emitted depends on the build mode of the\n library and is not configurable at runtime. Debug builds emit\n all levels (debug and above). Release builds emit info and\n above; debug-level messages are compiled out entirely and will\n never reach the callback.\n\n Input type: GhosttySysLogFn (function pointer, or NULL)"]
     pub const GHOSTTY_SYS_OPT_LOG: Type = 2;
-    #[doc = " Set the log callback.\n\n When set, internal library log messages are delivered to \
-             this\n callback. When cleared (NULL value), log messages are silently\n \
-             discarded.\n\n Use ghostty_sys_log_stderr as a convenience callback that\n writes \
-             formatted messages to stderr.\n\n Which log levels are emitted depends on the build \
-             mode of the\n library and is not configurable at runtime. Debug builds emit\n all \
-             levels (debug and above). Release builds emit info and\n above; debug-level messages \
-             are compiled out entirely and will\n never reach the callback.\n\n Input type: \
-             GhosttySysLogFn (function pointer, or NULL)"]
+    #[doc = " Set the log callback.\n\n When set, internal library log messages are delivered to this\n callback. When cleared (NULL value), log messages are silently\n discarded.\n\n Use ghostty_sys_log_stderr as a convenience callback that\n writes formatted messages to stderr.\n\n Which log levels are emitted depends on the build mode of the\n library and is not configurable at runtime. Debug builds emit\n all levels (debug and above). Release builds emit info and\n above; debug-level messages are compiled out entirely and will\n never reach the callback.\n\n Input type: GhosttySysLogFn (function pointer, or NULL)"]
     pub const GHOSTTY_SYS_OPT_MAX_VALUE: Type = 2147483647;
 }
 unsafe extern "C" {
-    #[doc = " Set a system-level option.\n\n Configures a process-global implementation function. \
-             These should be\n set once at startup before using any terminal functionality that\n \
-             depends on them.\n\n               or NULL to clear it\n         option is not \
-             recognized"]
+    #[doc = " Set a system-level option.\n\n Configures a process-global implementation function. These should be\n set once at startup before using any terminal functionality that\n depends on them.\n\n               or NULL to clear it\n         option is not recognized"]
     pub fn ghostty_sys_set(
         option: SysOption::Type,
         value: *const ::std::os::raw::c_void,
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Built-in log callback that writes to stderr.\n\n Formats each message as \
-             \"[level](scope): message\\n\".\n Can be passed directly to ghostty_sys_set():\n\n \
-             ghostty_sys_set(GHOSTTY_SYS_OPT_LOG, &ghostty_sys_log_stderr);"]
+    #[doc = " Built-in log callback that writes to stderr.\n\n Formats each message as \"[level](scope): message\\n\".\n Can be passed directly to ghostty_sys_set():\n\n ghostty_sys_set(GHOSTTY_SYS_OPT_LOG, &ghostty_sys_log_stderr);"]
     pub fn ghostty_sys_log_stderr(
         userdata: *mut ::std::os::raw::c_void,
         level: SysLogLevel::Type,
@@ -4068,8 +3197,7 @@ unsafe extern "C" {
 pub struct KeyEventImpl {
     _unused: [u8; 0],
 }
-#[doc = " Opaque handle to a key event.\n\n This handle represents a keyboard input event \
-         containing information about\n the physical key pressed, modifiers, and generated text.\n"]
+#[doc = " Opaque handle to a key event.\n\n This handle represents a keyboard input event containing information about\n the physical key pressed, modifiers, and generated text.\n"]
 pub type KeyEvent = *mut KeyEventImpl;
 pub mod KeyAction {
     #[doc = " Keyboard input event types.\n"]
@@ -4083,13 +3211,7 @@ pub mod KeyAction {
     #[doc = " Key is being repeated (held down)"]
     pub const MAX_VALUE: Type = 2147483647;
 }
-#[doc = " Keyboard modifier keys bitmask.\n\n A bitmask representing all keyboard modifiers. This \
-         tracks which modifier keys\n are pressed and, where supported by the platform, which side \
-         (left or right)\n of each modifier is active.\n\n Use the GHOSTTY_MODS_* constants to \
-         test and set individual modifiers.\n\n Modifier side bits are only meaningful when the \
-         corresponding modifier bit is set.\n Not all platforms support distinguishing between \
-         left and right modifier\n keys and Ghostty is built to expect that some platforms may not \
-         provide this\n information.\n"]
+#[doc = " Keyboard modifier keys bitmask.\n\n A bitmask representing all keyboard modifiers. This tracks which modifier keys\n are pressed and, where supported by the platform, which side (left or right)\n of each modifier is active.\n\n Use the GHOSTTY_MODS_* constants to test and set individual modifiers.\n\n Modifier side bits are only meaningful when the corresponding modifier bit is set.\n Not all platforms support distinguishing between left and right modifier\n keys and Ghostty is built to expect that some platforms may not provide this\n information.\n"]
 pub type Mods = u16;
 pub mod Key {
     #[doc = " Physical key codes.\n\n The set of key codes that Ghostty is aware of. These represent physical keys\n on the keyboard and are layout-independent. For example, the \"a\" key on a US\n keyboard is the same as the \"ф\" key on a Russian keyboard, but both will\n report the same key_a value.\n\n Layout-dependent strings are provided separately as UTF-8 text and are produced\n by the platform. These values are based on the W3C UI Events KeyboardEvent code\n standard. See: https://www.w3.org/TR/uievents-code\n"]
@@ -4273,14 +3395,12 @@ pub mod Key {
     pub const MAX_VALUE: Type = 2147483647;
 }
 unsafe extern "C" {
-    #[doc = " Create a new key event instance.\n\n Creates a new key event with default values. \
-             The event must be freed using\n ghostty_key_event_free() when no longer needed.\n\n"]
+    #[doc = " Create a new key event instance.\n\n Creates a new key event with default values. The event must be freed using\n ghostty_key_event_free() when no longer needed.\n\n"]
     pub fn ghostty_key_event_new(allocator: *const Allocator, event: *mut KeyEvent)
-    -> Result::Type;
+        -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Free a key event instance.\n\n Releases all resources associated with the key event. \
-             After this call,\n the event handle becomes invalid and must not be used.\n\n"]
+    #[doc = " Free a key event instance.\n\n Releases all resources associated with the key event. After this call,\n the event handle becomes invalid and must not be used.\n\n"]
     pub fn ghostty_key_event_free(event: KeyEvent);
 }
 unsafe extern "C" {
@@ -4324,14 +3444,7 @@ unsafe extern "C" {
     pub fn ghostty_key_event_get_composing(event: KeyEvent) -> bool;
 }
 unsafe extern "C" {
-    #[doc = " Set the UTF-8 text generated by the key for the current keyboard layout.\n\n Must \
-             contain the unmodified character before any Ctrl/Meta transformations.\n The encoder \
-             derives modifier sequences from the logical key and mods\n bitmask, not from this \
-             text. Do not pass C0 control characters\n (U+0000-U+001F, U+007F) or platform \
-             function key codes (e.g. macOS PUA\n U+F700-U+F8FF); pass NULL instead and let the \
-             encoder use the logical key.\n\n The key event does NOT take ownership of the text \
-             pointer. The caller\n must ensure the string remains valid for the lifetime needed by \
-             the event.\n\n"]
+    #[doc = " Set the UTF-8 text generated by the key for the current keyboard layout.\n\n Must contain the unmodified character before any Ctrl/Meta transformations.\n The encoder derives modifier sequences from the logical key and mods\n bitmask, not from this text. Do not pass C0 control characters\n (U+0000-U+001F, U+007F) or platform function key codes (e.g. macOS PUA\n U+F700-U+F8FF); pass NULL instead and let the encoder use the logical key.\n\n The key event does NOT take ownership of the text pointer. The caller\n must ensure the string remains valid for the lifetime needed by the event.\n\n"]
     pub fn ghostty_key_event_set_utf8(
         event: KeyEvent,
         utf8: *const ::std::os::raw::c_char,
@@ -4339,8 +3452,7 @@ unsafe extern "C" {
     );
 }
 unsafe extern "C" {
-    #[doc = " Get the UTF-8 text generated by the key event.\n\n The returned pointer is valid \
-             until the event is freed or the UTF-8 text is modified.\n\n"]
+    #[doc = " Get the UTF-8 text generated by the key event.\n\n The returned pointer is valid until the event is freed or the UTF-8 text is modified.\n\n"]
     pub fn ghostty_key_event_get_utf8(
         event: KeyEvent,
         len: *mut usize,
@@ -4359,17 +3471,12 @@ unsafe extern "C" {
 pub struct KeyEncoderImpl {
     _unused: [u8; 0],
 }
-#[doc = " Opaque handle to a key encoder instance.\n\n This handle represents a key encoder that \
-         converts key events into terminal\n escape sequences.\n"]
+#[doc = " Opaque handle to a key encoder instance.\n\n This handle represents a key encoder that converts key events into terminal\n escape sequences.\n"]
 pub type KeyEncoder = *mut KeyEncoderImpl;
-#[doc = " Kitty keyboard protocol flags.\n\n Bitflags representing the various modes of the Kitty \
-         keyboard protocol.\n These can be combined using bitwise OR operations. Valid values \
-         all\n start with `GHOSTTY_KITTY_KEY_`.\n"]
+#[doc = " Kitty keyboard protocol flags.\n\n Bitflags representing the various modes of the Kitty keyboard protocol.\n These can be combined using bitwise OR operations. Valid values all\n start with `GHOSTTY_KITTY_KEY_`.\n"]
 pub type KittyKeyFlags = u8;
 pub mod OptionAsAlt {
-    #[doc = " macOS option key behavior.\n\n Determines whether the \"option\" key on macOS is \
-             treated as \"alt\" or not.\n See the Ghostty `macos-option-as-alt` configuration \
-             option for more details.\n"]
+    #[doc = " macOS option key behavior.\n\n Determines whether the \"option\" key on macOS is treated as \"alt\" or not.\n See the Ghostty `macos-option-as-alt` configuration option for more details.\n"]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Option key is not treated as alt"]
     pub const FALSE: Type = 0;
@@ -4383,8 +3490,7 @@ pub mod OptionAsAlt {
     pub const MAX_VALUE: Type = 2147483647;
 }
 pub mod KeyEncoderOption {
-    #[doc = " Key encoder option identifiers.\n\n These values are used with \
-             ghostty_key_encoder_setopt() to configure\n the behavior of the key encoder.\n"]
+    #[doc = " Key encoder option identifiers.\n\n These values are used with ghostty_key_encoder_setopt() to configure\n the behavior of the key encoder.\n"]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Terminal DEC mode 1: cursor key application mode (value: bool)"]
     pub const CURSOR_KEY_APPLICATION: Type = 0;
@@ -4400,39 +3506,24 @@ pub mod KeyEncoderOption {
     pub const KITTY_FLAGS: Type = 5;
     #[doc = " macOS option-as-alt setting (value: GhosttyOptionAsAlt)"]
     pub const MACOS_OPTION_AS_ALT: Type = 6;
-    #[doc = " Backarrow key mode (value: bool)\n See https://vt100.net/dec/ek-vt3xx-tp-002.pdf \
-             page 170\n If `false` (the default), `backspace` emits 0x7f\n If `true`, `backspace` \
-             emits 0x08"]
+    #[doc = " Backarrow key mode (value: bool)\n See https://vt100.net/dec/ek-vt3xx-tp-002.pdf page 170\n If `false` (the default), `backspace` emits 0x7f\n If `true`, `backspace` emits 0x08"]
     pub const BACKARROW_KEY_MODE: Type = 7;
-    #[doc = " Backarrow key mode (value: bool)\n See https://vt100.net/dec/ek-vt3xx-tp-002.pdf \
-             page 170\n If `false` (the default), `backspace` emits 0x7f\n If `true`, `backspace` \
-             emits 0x08"]
+    #[doc = " Backarrow key mode (value: bool)\n See https://vt100.net/dec/ek-vt3xx-tp-002.pdf page 170\n If `false` (the default), `backspace` emits 0x7f\n If `true`, `backspace` emits 0x08"]
     pub const MAX_VALUE: Type = 2147483647;
 }
 unsafe extern "C" {
-    #[doc = " Create a new key encoder instance.\n\n Creates a new key encoder with default \
-             options. The encoder can be configured\n using ghostty_key_encoder_setopt() and must \
-             be freed using\n ghostty_key_encoder_free() when no longer needed.\n\n"]
+    #[doc = " Create a new key encoder instance.\n\n Creates a new key encoder with default options. The encoder can be configured\n using ghostty_key_encoder_setopt() and must be freed using\n ghostty_key_encoder_free() when no longer needed.\n\n"]
     pub fn ghostty_key_encoder_new(
         allocator: *const Allocator,
         encoder: *mut KeyEncoder,
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Free a key encoder instance.\n\n Releases all resources associated with the key \
-             encoder. After this call,\n the encoder handle becomes invalid and must not be \
-             used.\n\n"]
+    #[doc = " Free a key encoder instance.\n\n Releases all resources associated with the key encoder. After this call,\n the encoder handle becomes invalid and must not be used.\n\n"]
     pub fn ghostty_key_encoder_free(encoder: KeyEncoder);
 }
 unsafe extern "C" {
-    #[doc = " Set an option on the key encoder.\n\n Configures the behavior of the key encoder. \
-             Options control various aspects\n of encoding such as terminal modes (cursor key \
-             application mode, keypad mode),\n protocol selection (Kitty keyboard protocol flags), \
-             and platform-specific\n behaviors (macOS option-as-alt).\n\n If you are using a \
-             terminal instance, you can set the key encoding\n options based on the active \
-             terminal state (e.g. legacy vs Kitty mode\n and associated flags) with \
-             ghostty_key_encoder_setopt_from_terminal().\n\n A null pointer value does nothing. It \
-             does not reset the value to the\n default. The setopt call will do nothing.\n\n"]
+    #[doc = " Set an option on the key encoder.\n\n Configures the behavior of the key encoder. Options control various aspects\n of encoding such as terminal modes (cursor key application mode, keypad mode),\n protocol selection (Kitty keyboard protocol flags), and platform-specific\n behaviors (macOS option-as-alt).\n\n If you are using a terminal instance, you can set the key encoding\n options based on the active terminal state (e.g. legacy vs Kitty mode\n and associated flags) with ghostty_key_encoder_setopt_from_terminal().\n\n A null pointer value does nothing. It does not reset the value to the\n default. The setopt call will do nothing.\n\n"]
     pub fn ghostty_key_encoder_setopt(
         encoder: KeyEncoder,
         option: KeyEncoderOption::Type,
@@ -4440,40 +3531,11 @@ unsafe extern "C" {
     );
 }
 unsafe extern "C" {
-    #[doc = " Set encoder options from a terminal's current state.\n\n Reads the terminal's \
-             current modes and flags and applies them to the\n encoder's options. This sets cursor \
-             key application mode, keypad mode,\n alt escape prefix, modifyOtherKeys state, and \
-             Kitty keyboard protocol\n flags from the terminal state.\n\n Note that the \
-             `macos_option_as_alt` option cannot be determined from\n terminal state and is reset \
-             to `GHOSTTY_OPTION_AS_ALT_FALSE` by this\n call. Use ghostty_key_encoder_setopt() to \
-             set it afterward if needed.\n\n"]
+    #[doc = " Set encoder options from a terminal's current state.\n\n Reads the terminal's current modes and flags and applies them to the\n encoder's options. This sets cursor key application mode, keypad mode,\n alt escape prefix, modifyOtherKeys state, and Kitty keyboard protocol\n flags from the terminal state.\n\n Note that the `macos_option_as_alt` option cannot be determined from\n terminal state and is reset to `GHOSTTY_OPTION_AS_ALT_FALSE` by this\n call. Use ghostty_key_encoder_setopt() to set it afterward if needed.\n\n"]
     pub fn ghostty_key_encoder_setopt_from_terminal(encoder: KeyEncoder, terminal: Terminal);
 }
 unsafe extern "C" {
-    #[doc = " Encode a key event into a terminal escape sequence.\n\n Converts a key event into \
-             the appropriate terminal escape sequence based on\n the encoder's current options. \
-             The sequence is written to the provided buffer.\n\n Not all key events produce \
-             output. For example, unmodified modifier keys\n typically don't generate escape \
-             sequences. Check the out_len parameter to\n determine if any data was written.\n\n If \
-             the output buffer is too small, this function returns GHOSTTY_OUT_OF_SPACE\n and \
-             out_len will contain the required buffer size. The caller can then\n allocate a \
-             larger buffer and call the function again.\n\n\n ## Example: Calculate required \
-             buffer size\n\n // Query the required size with a NULL buffer (always returns \
-             OUT_OF_SPACE)\n size_t required = 0;\n GhosttyResult result = \
-             ghostty_key_encoder_encode(encoder, event, NULL, 0, &required);\n assert(result == \
-             GHOSTTY_OUT_OF_SPACE);\n\n // Allocate buffer of required size\n char *buf = \
-             malloc(required);\n\n // Encode with properly sized buffer\n size_t written = 0;\n \
-             result = ghostty_key_encoder_encode(encoder, event, buf, required, &written);\n \
-             assert(result == GHOSTTY_SUCCESS);\n\n // Use the encoded sequence...\n\n \
-             free(buf);\n\n ## Example: Direct encoding with static buffer\n\n // Most escape \
-             sequences are short, so a static buffer often suffices\n char buf[128];\n size_t \
-             written = 0;\n GhosttyResult result = ghostty_key_encoder_encode(encoder, event, buf, \
-             sizeof(buf), &written);\n\n if (result == GHOSTTY_SUCCESS) {\n   // Write the encoded \
-             sequence to the terminal\n   write(pty_fd, buf, written);\n } else if (result == \
-             GHOSTTY_OUT_OF_SPACE) {\n   // Buffer too small, written contains required size\n   \
-             char *dynamic_buf = malloc(written);\n   result = ghostty_key_encoder_encode(encoder, \
-             event, dynamic_buf, written, &written);\n   assert(result == GHOSTTY_SUCCESS);\n   \
-             write(pty_fd, dynamic_buf, written);\n   free(dynamic_buf);\n }\n"]
+    #[doc = " Encode a key event into a terminal escape sequence.\n\n Converts a key event into the appropriate terminal escape sequence based on\n the encoder's current options. The sequence is written to the provided buffer.\n\n Not all key events produce output. For example, unmodified modifier keys\n typically don't generate escape sequences. Check the out_len parameter to\n determine if any data was written.\n\n If the output buffer is too small, this function returns GHOSTTY_OUT_OF_SPACE\n and out_len will contain the required buffer size. The caller can then\n allocate a larger buffer and call the function again.\n\n\n ## Example: Calculate required buffer size\n\n // Query the required size with a NULL buffer (always returns OUT_OF_SPACE)\n size_t required = 0;\n GhosttyResult result = ghostty_key_encoder_encode(encoder, event, NULL, 0, &required);\n assert(result == GHOSTTY_OUT_OF_SPACE);\n\n // Allocate buffer of required size\n char *buf = malloc(required);\n\n // Encode with properly sized buffer\n size_t written = 0;\n result = ghostty_key_encoder_encode(encoder, event, buf, required, &written);\n assert(result == GHOSTTY_SUCCESS);\n\n // Use the encoded sequence...\n\n free(buf);\n\n ## Example: Direct encoding with static buffer\n\n // Most escape sequences are short, so a static buffer often suffices\n char buf[128];\n size_t written = 0;\n GhosttyResult result = ghostty_key_encoder_encode(encoder, event, buf, sizeof(buf), &written);\n\n if (result == GHOSTTY_SUCCESS) {\n   // Write the encoded sequence to the terminal\n   write(pty_fd, buf, written);\n } else if (result == GHOSTTY_OUT_OF_SPACE) {\n   // Buffer too small, written contains required size\n   char *dynamic_buf = malloc(written);\n   result = ghostty_key_encoder_encode(encoder, event, dynamic_buf, written, &written);\n   assert(result == GHOSTTY_SUCCESS);\n   write(pty_fd, dynamic_buf, written);\n   free(dynamic_buf);\n }\n"]
     pub fn ghostty_key_encoder_encode(
         encoder: KeyEncoder,
         event: KeyEvent,
@@ -4487,8 +3549,7 @@ unsafe extern "C" {
 pub struct MouseEventImpl {
     _unused: [u8; 0],
 }
-#[doc = " Opaque handle to a mouse event.\n\n This handle represents a normalized mouse input \
-         event containing\n action, button, modifiers, and surface-space position.\n"]
+#[doc = " Opaque handle to a mouse event.\n\n This handle represents a normalized mouse input event containing\n action, button, modifiers, and surface-space position.\n"]
 pub type MouseEvent = *mut MouseEventImpl;
 pub mod MouseAction {
     #[doc = " Mouse event action type.\n"]
@@ -4553,9 +3614,7 @@ unsafe extern "C" {
     pub fn ghostty_mouse_event_get_action(event: MouseEvent) -> MouseAction::Type;
 }
 unsafe extern "C" {
-    #[doc = " Set the event button.\n\n This sets a concrete button identity for the event.\n To \
-             represent \"no button\" (for motion events), use\n \
-             ghostty_mouse_event_clear_button().\n\n"]
+    #[doc = " Set the event button.\n\n This sets a concrete button identity for the event.\n To represent \"no button\" (for motion events), use\n ghostty_mouse_event_clear_button().\n\n"]
     pub fn ghostty_mouse_event_set_button(event: MouseEvent, button: MouseButton::Type);
 }
 unsafe extern "C" {
@@ -4590,8 +3649,7 @@ unsafe extern "C" {
 pub struct MouseEncoderImpl {
     _unused: [u8; 0],
 }
-#[doc = " Opaque handle to a mouse encoder instance.\n\n This handle represents a mouse encoder \
-         that converts normalized\n mouse events into terminal escape sequences.\n"]
+#[doc = " Opaque handle to a mouse encoder instance.\n\n This handle represents a mouse encoder that converts normalized\n mouse events into terminal escape sequences.\n"]
 pub type MouseEncoder = *mut MouseEncoderImpl;
 pub mod MouseTrackingMode {
     #[doc = " Mouse tracking mode.\n"]
@@ -4619,8 +3677,7 @@ pub mod MouseFormat {
     pub const SGR_PIXELS: Type = 4;
     pub const MAX_VALUE: Type = 2147483647;
 }
-#[doc = " Mouse encoder size and geometry context.\n\n This describes the rendered terminal \
-         geometry used to convert\n surface-space positions into encoded coordinates.\n"]
+#[doc = " Mouse encoder size and geometry context.\n\n This describes the rendered terminal geometry used to convert\n surface-space positions into encoded coordinates.\n"]
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct MouseEncoderSize {
@@ -4667,8 +3724,7 @@ const _: () = {
         [::std::mem::offset_of!(MouseEncoderSize, padding_left) - 36usize];
 };
 pub mod MouseEncoderOption {
-    #[doc = " Mouse encoder option identifiers.\n\n These values are used with \
-             ghostty_mouse_encoder_setopt() to configure\n the behavior of the mouse encoder.\n"]
+    #[doc = " Mouse encoder option identifiers.\n\n These values are used with ghostty_mouse_encoder_setopt() to configure\n the behavior of the mouse encoder.\n"]
     pub type Type = ::std::os::raw::c_uint;
     #[doc = " Mouse tracking mode (value: GhosttyMouseTrackingMode)."]
     pub const EVENT: Type = 0;
@@ -4695,8 +3751,7 @@ unsafe extern "C" {
     pub fn ghostty_mouse_encoder_free(encoder: MouseEncoder);
 }
 unsafe extern "C" {
-    #[doc = " Set an option on the mouse encoder.\n\n A null pointer value does nothing. It does \
-             not reset to defaults.\n\n"]
+    #[doc = " Set an option on the mouse encoder.\n\n A null pointer value does nothing. It does not reset to defaults.\n\n"]
     pub fn ghostty_mouse_encoder_setopt(
         encoder: MouseEncoder,
         option: MouseEncoderOption::Type,
@@ -4704,20 +3759,15 @@ unsafe extern "C" {
     );
 }
 unsafe extern "C" {
-    #[doc = " Set encoder options from a terminal's current state.\n\n This sets tracking mode and \
-             output format from terminal state.\n It does not modify size or any-button state.\n\n"]
+    #[doc = " Set encoder options from a terminal's current state.\n\n This sets tracking mode and output format from terminal state.\n It does not modify size or any-button state.\n\n"]
     pub fn ghostty_mouse_encoder_setopt_from_terminal(encoder: MouseEncoder, terminal: Terminal);
 }
 unsafe extern "C" {
-    #[doc = " Reset internal encoder state.\n\n This clears motion deduplication state (last \
-             tracked cell).\n\n"]
+    #[doc = " Reset internal encoder state.\n\n This clears motion deduplication state (last tracked cell).\n\n"]
     pub fn ghostty_mouse_encoder_reset(encoder: MouseEncoder);
 }
 unsafe extern "C" {
-    #[doc = " Encode a mouse event into a terminal escape sequence.\n\n Not all mouse events \
-             produce output. In such cases this returns\n GHOSTTY_SUCCESS with out_len set to \
-             0.\n\n If the output buffer is too small, this returns GHOSTTY_OUT_OF_SPACE\n and \
-             out_len contains the required size.\n\n         or another error code\n"]
+    #[doc = " Encode a mouse event into a terminal escape sequence.\n\n Not all mouse events produce output. In such cases this returns\n GHOSTTY_SUCCESS with out_len set to 0.\n\n If the output buffer is too small, this returns GHOSTTY_OUT_OF_SPACE\n and out_len contains the required size.\n\n         or another error code\n"]
     pub fn ghostty_mouse_encoder_encode(
         encoder: MouseEncoder,
         event: MouseEvent,
@@ -4727,24 +3777,11 @@ unsafe extern "C" {
     ) -> Result::Type;
 }
 unsafe extern "C" {
-    #[doc = " Check if paste data is safe to paste into the terminal.\n\n Data is considered \
-             unsafe if it contains:\n - Newlines (`\\n`) which can inject commands\n - The \
-             bracketed paste end sequence (`\\x1b[201~`) which can be used\n   to exit bracketed \
-             paste mode and inject commands\n\n This check is conservative and considers data \
-             unsafe regardless of\n current terminal state.\n"]
+    #[doc = " Check if paste data is safe to paste into the terminal.\n\n Data is considered unsafe if it contains:\n - Newlines (`\\n`) which can inject commands\n - The bracketed paste end sequence (`\\x1b[201~`) which can be used\n   to exit bracketed paste mode and inject commands\n\n This check is conservative and considers data unsafe regardless of\n current terminal state.\n"]
     pub fn ghostty_paste_is_safe(data: *const ::std::os::raw::c_char, len: usize) -> bool;
 }
 unsafe extern "C" {
-    #[doc = " Encode paste data for writing to the terminal pty.\n\n This function prepares paste \
-             data for terminal input by:\n - Stripping unsafe control bytes (NUL, ESC, DEL, etc.) \
-             by replacing\n   them with spaces\n - Wrapping the data in bracketed paste sequences \
-             if @p bracketed is true\n - Replacing newlines with carriage returns if @p bracketed \
-             is false\n\n The input @p data buffer is modified in place during encoding. The\n \
-             encoded result (potentially with bracketed paste prefix/suffix) is\n written to the \
-             output buffer.\n\n If the output buffer is too small, the function returns\n \
-             GHOSTTY_OUT_OF_SPACE and sets the required size in @p out_written.\n The caller can \
-             then retry with a sufficiently sized buffer.\n\n             GHOSTTY_OUT_OF_SPACE, \
-             the required buffer size.\n         is too small"]
+    #[doc = " Encode paste data for writing to the terminal pty.\n\n This function prepares paste data for terminal input by:\n - Stripping unsafe control bytes (NUL, ESC, DEL, etc.) by replacing\n   them with spaces\n - Wrapping the data in bracketed paste sequences if @p bracketed is true\n - Replacing newlines with carriage returns if @p bracketed is false\n\n The input @p data buffer is modified in place during encoding. The\n encoded result (potentially with bracketed paste prefix/suffix) is\n written to the output buffer.\n\n If the output buffer is too small, the function returns\n GHOSTTY_OUT_OF_SPACE and sets the required size in @p out_written.\n The caller can then retry with a sufficiently sized buffer.\n\n             GHOSTTY_OUT_OF_SPACE, the required buffer size.\n         is too small"]
     pub fn ghostty_paste_encode(
         data: *mut ::std::os::raw::c_char,
         data_len: usize,

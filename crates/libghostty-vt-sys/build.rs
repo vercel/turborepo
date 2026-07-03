@@ -1,14 +1,6 @@
-#![allow(clippy::expect_used)]
-
-use std::{
-    env,
-    fs::OpenOptions,
-    io::ErrorKind,
-    path::{Path, PathBuf},
-    process::Command,
-    thread,
-    time::Duration,
-};
+use std::env;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 /// Pinned ghostty commit. Update this to pull a newer version.
 const GHOSTTY_REPO: &str = "https://github.com/ghostty-org/ghostty.git";
@@ -59,6 +51,14 @@ impl LinkMode {
             }
         }
     }
+
+    #[cfg(feature = "pkg-config")]
+    fn pkg_config_name(self) -> &'static str {
+        match self {
+            Self::Dynamic => "libghostty-vt",
+            Self::Static => "libghostty-vt-static",
+        }
+    }
 }
 
 fn main() {
@@ -71,20 +71,28 @@ fn main() {
 
     let link_mode = LinkMode::current();
 
-    println!("cargo:rerun-if-env-changed=TURBOREPO_GHOSTTY_SYS_OPTIMIZE");
+    println!("cargo:rerun-if-env-changed=LIBGHOSTTY_VT_SYS_OPTIMIZE");
     println!("cargo:rerun-if-env-changed=GHOSTTY_SOURCE_DIR");
     println!("cargo:rerun-if-env-changed=GHOSTTY_ZIG_SYSTEM_DIR");
     println!("cargo:rerun-if-env-changed=TARGET");
     println!("cargo:rerun-if-env-changed=HOST");
     println!("cargo:rerun-if-env-changed=DEBUG");
     println!("cargo:rerun-if-env-changed=OPT_LEVEL");
-    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=crates/libghostty-vt-sys/build.rs");
 
     // An explicit source override should stay authoritative even when the
     // pkg-config feature is enabled, so local Ghostty checkouts remain easy to
     // test against.
     if env::var_os("GHOSTTY_SOURCE_DIR").is_some() {
         build_vendored(link_mode);
+        return;
+    }
+
+    // When the pkg-config feature is enabled, prefer an installed library over
+    // fetching Ghostty. libghostty is pre-1.0, so this crate intentionally does
+    // not promise compatibility with every installed C API revision.
+    #[cfg(feature = "pkg-config")]
+    if try_pkg_config(link_mode) {
         return;
     }
 
@@ -119,7 +127,7 @@ fn build_vendored(link_mode: LinkMode) {
 
     let optimize = zig_optimize_mode();
 
-    let mut build = Command::new(zig_executable());
+    let mut build = Command::new("zig");
     build
         .arg("build")
         .arg("-Demit-lib-vt")
@@ -130,8 +138,6 @@ fn build_vendored(link_mode: LinkMode) {
         .arg(&install_prefix)
         .arg("--cache-dir")
         .arg(&zig_cache_dir)
-        .arg("--global-cache-dir")
-        .arg(&zig_global_cache_dir)
         .current_dir(&ghostty_dir);
 
     // Package managers can provide Ghostty's Zig package cache ahead of time
@@ -148,7 +154,11 @@ fn build_vendored(link_mode: LinkMode) {
             "GHOSTTY_ZIG_SYSTEM_DIR does not exist: {}",
             zig_system_dir.display()
         );
-        build.arg("--system").arg(&zig_system_dir);
+        build
+            .arg("--system")
+            .arg(&zig_system_dir)
+            .arg("--global-cache-dir")
+            .arg(&zig_global_cache_dir);
     }
 
     // Only pass -Dtarget when cross-compiling. For native builds, let zig
@@ -199,8 +209,8 @@ fn build_vendored(link_mode: LinkMode) {
         LinkMode::Dynamic => println!("cargo:rustc-link-lib=dylib=ghostty-vt"),
         LinkMode::Static => {
             // MSVC resolves `static=ghostty-vt` to `ghostty-vt.lib`, which is the DLL
-            // import library. Link the actual static archive so release
-            // binaries do not depend on `ghostty-vt.dll` at runtime.
+            // import library. Link the actual static archive so release binaries do
+            // not depend on `ghostty-vt.dll` at runtime.
             if target.contains("windows") && target.contains("msvc") {
                 println!("cargo:rustc-link-lib=static=ghostty-vt-static");
             } else {
@@ -215,10 +225,61 @@ fn warn_unused_xcframework(lib_dir: &Path) {
     let xcframework = lib_dir.join("ghostty-vt.xcframework");
     if xcframework.exists() {
         println!(
-            "cargo:warning=unused libghostty-vt XCFramework emitted at {}; Cargo links the dylib \
-             or archive directly",
+            "cargo:warning=unused libghostty-vt XCFramework emitted at {}; Cargo links the dylib or archive directly",
             xcframework.display()
         );
+    }
+}
+
+#[cfg(feature = "pkg-config")]
+fn try_pkg_config(link_mode: LinkMode) -> bool {
+    let mut config = pkg_config::Config::new();
+    let lib = match link_mode {
+        LinkMode::Dynamic => config.probe(link_mode.pkg_config_name()),
+        LinkMode::Static => config
+            .statik(true)
+            .cargo_metadata(false)
+            .probe(link_mode.pkg_config_name()),
+    };
+    let lib = match lib {
+        Ok(lib) => lib,
+        Err(_) => return false,
+    };
+
+    if let LinkMode::Static = link_mode {
+        emit_static_pkg_config_metadata(&lib);
+    }
+    emit_include_metadata(&lib.include_paths);
+    true
+}
+
+#[cfg(feature = "pkg-config")]
+fn emit_static_pkg_config_metadata(lib: &pkg_config::Library) {
+    for path in &lib.link_paths {
+        println!("cargo:rustc-link-search=native={}", path.display());
+    }
+    for path in &lib.link_files {
+        if let Some(parent) = path.parent() {
+            println!("cargo:rustc-link-search=native={}", parent.display());
+        }
+    }
+    for path in &lib.framework_paths {
+        println!("cargo:rustc-link-search=framework={}", path.display());
+    }
+    for framework in &lib.frameworks {
+        println!("cargo:rustc-link-lib=framework={framework}");
+    }
+
+    println!("cargo:rustc-link-lib=static=ghostty-vt");
+    for library in &lib.libs {
+        if library != "ghostty-vt" {
+            println!("cargo:rustc-link-lib={library}");
+        }
+    }
+    for args in &lib.ld_args {
+        if !args.is_empty() {
+            println!("cargo:rustc-link-arg=-Wl,{}", args.join(","));
+        }
     }
 }
 
@@ -234,23 +295,22 @@ fn emit_include_metadata(include_paths: &[PathBuf]) {
 
 /// Decide which Zig `OptimizeMode` to pass to `zig build`.
 ///
-/// The `TURBOREPO_GHOSTTY_SYS_OPTIMIZE` environment variable overrides this
-/// unconditionally; accepted values are the four Zig `OptimizeMode` names
-/// (`Debug`, `ReleaseSafe`, `ReleaseFast`, `ReleaseSmall`).
+/// The `LIBGHOSTTY_VT_SYS_OPTIMIZE` environment variable overrides this unconditionally; accepted
+/// values are the four Zig `OptimizeMode` names (`Debug`, `ReleaseSafe`, `ReleaseFast`,
+/// `ReleaseSmall`).
 ///
-/// Defaults to `ReleaseFast` for optimized builds. If `DEBUG` is `true` (as
-/// cargo sets for the `dev` profile), `Debug` mode is used. Otherwise, if
-/// `OPT_LEVEL` is `s` or `z`, `ReleaseSmall` is used.
+/// Defaults to `ReleaseFast` for optimized builds. If `DEBUG` is `true` (as cargo sets for the
+/// `dev` profile), `Debug` mode is used. Otherwise, if `OPT_LEVEL` is `s` or `z`, `ReleaseSmall`
+/// is used.
 fn zig_optimize_mode() -> &'static str {
-    if let Ok(override_mode) = env::var("TURBOREPO_GHOSTTY_SYS_OPTIMIZE") {
+    if let Ok(override_mode) = env::var("LIBGHOSTTY_VT_SYS_OPTIMIZE") {
         return match override_mode.as_str() {
             "Debug" => "Debug",
             "ReleaseSafe" => "ReleaseSafe",
             "ReleaseFast" => "ReleaseFast",
             "ReleaseSmall" => "ReleaseSmall",
             other => panic!(
-                "TURBOREPO_GHOSTTY_SYS_OPTIMIZE must be one of Debug, ReleaseSafe, ReleaseFast, \
-                 ReleaseSmall (got '{other}')"
+                "LIBGHOSTTY_VT_SYS_OPTIMIZE must be one of Debug, ReleaseSafe, ReleaseFast, ReleaseSmall (got '{other}')"
             ),
         };
     }
@@ -268,7 +328,6 @@ fn zig_optimize_mode() -> &'static str {
 /// Clone ghostty at the pinned commit into OUT_DIR/ghostty-src.
 /// Reuses an existing clone if the commit matches.
 fn fetch_ghostty(out_dir: &Path) -> PathBuf {
-    let _lock = acquire_fetch_lock(&out_dir.join("ghostty-src.lock"));
     let src_dir = out_dir.join("ghostty-src");
     let stamp = src_dir.join(".ghostty-commit");
 
@@ -297,33 +356,6 @@ fn fetch_ghostty(out_dir: &Path) -> PathBuf {
         .arg(&src_dir);
     run(clone, "git clone ghostty");
 
-    let mut longpaths = Command::new("git");
-    longpaths
-        .arg("config")
-        .arg("core.longpaths")
-        .arg("true")
-        .current_dir(&src_dir);
-    run(longpaths, "git enable long paths for ghostty checkout");
-
-    let mut sparse_checkout = Command::new("git");
-    sparse_checkout
-        .arg("sparse-checkout")
-        .arg("set")
-        .arg("--no-cone")
-        .arg("/*")
-        .arg("!/test/fuzz-libghostty/")
-        .current_dir(&src_dir);
-    run(sparse_checkout, "git configure ghostty sparse checkout");
-
-    let mut fetch_commit = Command::new("git");
-    fetch_commit
-        .arg("fetch")
-        .arg("--filter=blob:none")
-        .arg("origin")
-        .arg(GHOSTTY_COMMIT)
-        .current_dir(&src_dir);
-    run(fetch_commit, "git fetch ghostty commit");
-
     let mut checkout = Command::new("git");
     checkout
         .arg("checkout")
@@ -336,49 +368,11 @@ fn fetch_ghostty(out_dir: &Path) -> PathBuf {
     src_dir
 }
 
-struct FetchLock {
-    path: PathBuf,
-}
-
-impl Drop for FetchLock {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
-    }
-}
-
-fn acquire_fetch_lock(path: &Path) -> FetchLock {
-    loop {
-        match OpenOptions::new().write(true).create_new(true).open(path) {
-            Ok(_) => {
-                return FetchLock {
-                    path: path.to_owned(),
-                };
-            }
-            Err(error) if error.kind() == ErrorKind::AlreadyExists => {
-                thread::sleep(Duration::from_millis(100));
-            }
-            Err(error) => panic!("failed to create {}: {error}", path.display()),
-        }
-    }
-}
-
 fn run(mut command: Command, context: &str) {
     let status = command
         .status()
         .unwrap_or_else(|error| panic!("failed to execute {context}: {error}"));
     assert!(status.success(), "{context} failed with status {status}");
-}
-
-fn zig_executable() -> String {
-    if let Ok(path) = env::var("ZIG_EXECUTABLE") {
-        return path;
-    }
-
-    if let Ok(path) = env::var("ZIG") {
-        return path;
-    }
-
-    "zig".to_owned()
 }
 
 /// Returns directories to search for the built library artifact.

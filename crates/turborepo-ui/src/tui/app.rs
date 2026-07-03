@@ -87,7 +87,7 @@ impl<W> App<W> {
         tasks: Vec<String>,
         preferences: PreferenceLoader,
         scrollback_len: u64,
-    ) -> Self {
+    ) -> Result<Self, Error> {
         debug!("tasks: {tasks:?}");
         let size = SizeInfo::new(rows, cols, tasks.iter().map(|s| s.as_str()));
 
@@ -113,19 +113,19 @@ impl<W> App<W> {
             .and_then(|active_task| tasks_by_status.active_index(active_task))
             .unwrap_or(0);
 
-        Self {
+        let tasks = tasks_by_status
+            .task_names_in_displayed_order()
+            .map(|task_name| {
+                TerminalOutput::new(pane_rows, pane_cols, None, scrollback_len)
+                    .map(|output| (task_name.to_owned(), output))
+            })
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self {
             size,
             done: false,
             section_focus: LayoutSections::TaskList,
-            tasks: tasks_by_status
-                .task_names_in_displayed_order()
-                .map(|task_name| {
-                    (
-                        task_name.to_owned(),
-                        TerminalOutput::new(pane_rows, pane_cols, None, scrollback_len),
-                    )
-                })
-                .collect(),
+            tasks,
             selected_task_index,
             tasks_by_status,
             task_list_scroll: TableState::default().with_selected(selected_task_index),
@@ -138,7 +138,18 @@ impl<W> App<W> {
             showing_log_panel: false,
             clipboard_notice_expiry: None,
             replayed_offsets: BTreeMap::new(),
-        }
+        })
+    }
+
+    #[cfg(test)]
+    fn new_for_test(
+        rows: u16,
+        cols: u16,
+        tasks: Vec<String>,
+        preferences: PreferenceLoader,
+        scrollback_len: u64,
+    ) -> Self {
+        Self::new(rows, cols, tasks, preferences, scrollback_len).expect("failed to initialize app")
     }
 
     #[cfg(test)]
@@ -559,9 +570,17 @@ impl<W> App<W> {
             .size
             .pane_cols_with_sidebar(self.preferences.is_task_list_visible());
         for task in &tasks {
-            self.tasks.entry(task.clone()).or_insert_with(|| {
-                TerminalOutput::new(self.size.pane_rows(), pane_cols, None, self.scrollback_len)
-            });
+            if !self.tasks.contains_key(task) {
+                self.tasks.insert(
+                    task.clone(),
+                    TerminalOutput::new(
+                        self.size.pane_rows(),
+                        pane_cols,
+                        None,
+                        self.scrollback_len,
+                    )?,
+                );
+            }
         }
         // Trim the terminal output to only tasks that exist in new list
         self.tasks.retain(|name, _| tasks.contains(name));
@@ -602,9 +621,17 @@ impl<W> App<W> {
             .size
             .pane_cols_with_sidebar(self.preferences.is_task_list_visible());
         for task in &tasks {
-            self.tasks.entry(task.clone()).or_insert_with(|| {
-                TerminalOutput::new(self.size.pane_rows(), pane_cols, None, self.scrollback_len)
-            });
+            if !self.tasks.contains_key(task) {
+                self.tasks.insert(
+                    task.clone(),
+                    TerminalOutput::new(
+                        self.size.pane_rows(),
+                        pane_cols,
+                        None,
+                        self.scrollback_len,
+                    )?,
+                );
+            }
         }
 
         self.tasks_by_status
@@ -960,7 +987,7 @@ pub async fn run_app(
     let preferences = PreferenceLoader::new(repo_root);
 
     let mut app: App<Box<dyn io::Write + Send>> =
-        App::new(size.1, size.0, tasks, preferences, scrollback_len);
+        App::new(size.1, size.0, tasks, preferences, scrollback_len)?;
     let (crossterm_tx, crossterm_rx) = mpsc::channel(1024);
     input::start_crossterm_stream(crossterm_tx);
 
@@ -1001,6 +1028,49 @@ pub async fn run_app(
     )?;
 
     result
+}
+
+/// Spawn the TUI on a dedicated thread.
+///
+/// Ghostty's terminal types are `!Send`, so the TUI must not run on the main
+/// Tokio worker pool. This helper owns a single-threaded runtime on a dedicated
+/// OS thread and returns a `JoinHandle` that can be awaited from any task.
+pub fn spawn_run_app(
+    tasks: Vec<String>,
+    receiver: AppReceiver,
+    color_config: crate::ColorConfig,
+    repo_root: AbsoluteSystemPathBuf,
+    scrollback_len: u64,
+    interrupt: Option<Arc<dyn Fn() + Send + Sync>>,
+    terminal_sink: Arc<TerminalSink>,
+) -> Result<tokio::task::JoinHandle<Result<(), crate::Error>>, Error> {
+    let (done_tx, done_rx) = oneshot::channel();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+
+    std::thread::Builder::new()
+        .name("turbo-tui".into())
+        .spawn(move || {
+            let result = runtime.block_on(run_app(
+                tasks,
+                receiver,
+                color_config,
+                &repo_root,
+                scrollback_len,
+                interrupt,
+                terminal_sink,
+            ));
+            done_tx.send(result).ok();
+        })
+        .map_err(Error::ThreadSpawn)?;
+
+    Ok(tokio::spawn(async move {
+        done_rx
+            .await
+            .map_err(|_| Error::ThreadJoin)?
+            .map_err(crate::Error::Tui)
+    }))
 }
 
 /// Determine where to resume replaying a task's buffered output, given the
@@ -1646,7 +1716,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<Vec<u8>> = App::new(
+        let mut app: App<Vec<u8>> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
@@ -1685,7 +1755,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<Vec<u8>> = App::new(
+        let mut app: App<Vec<u8>> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
@@ -1720,7 +1790,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<bool> = App::new(
+        let mut app: App<bool> = App::new_for_test(
             100,
             100,
             vec!["foo".to_string(), "bar".to_string(), "baz".to_string()],
@@ -1768,7 +1838,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<bool> = App::new(
+        let mut app: App<bool> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -1796,7 +1866,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -1868,7 +1938,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<bool> = App::new(
+        let mut app: App<bool> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -1920,7 +1990,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<Vec<u8>> = App::new(
+        let mut app: App<Vec<u8>> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
@@ -1963,7 +2033,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<Vec<u8>> = App::new(
+        let mut app: App<Vec<u8>> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
@@ -1995,7 +2065,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<Vec<u8>> = App::new(
+        let mut app: App<Vec<u8>> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
@@ -2022,7 +2092,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -2058,7 +2128,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -2095,7 +2165,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<Vec<u8>> = App::new(
+        let mut app: App<Vec<u8>> = App::new_for_test(
             20,
             24,
             vec!["a".to_string(), "b".to_string()],
@@ -2136,7 +2206,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -2156,7 +2226,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -2178,7 +2248,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -2205,7 +2275,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
@@ -2234,7 +2304,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
@@ -2267,7 +2337,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
@@ -2292,7 +2362,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
@@ -2317,7 +2387,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
@@ -2339,7 +2409,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
@@ -2363,7 +2433,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec![
@@ -2402,7 +2472,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec![
@@ -2460,7 +2530,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec![
@@ -2509,7 +2579,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec![
@@ -2555,7 +2625,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec![
@@ -2593,7 +2663,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec![
@@ -2633,7 +2703,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec![
@@ -2667,7 +2737,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec![
@@ -2774,7 +2844,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<Vec<u8>> = App::new(
+        let mut app: App<Vec<u8>> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
@@ -2817,7 +2887,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["app-a".to_string(), "app-b".to_string()],
@@ -2919,7 +2989,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -2983,7 +3053,7 @@ mod test {
             .expect("Failed to create AbsoluteSystemPathBuf");
 
         // 6 rows on screen: header, 3 task rows, 2 footer rows.
-        let mut app: App<()> = App::new(
+        let mut app: App<()> = App::new_for_test(
             6,
             100,
             (0..10).map(|i| format!("task-{i}")).collect(),
@@ -3030,7 +3100,7 @@ mod test {
             vec!["a".to_string()],
             PreferenceLoader::new(&repo_root),
             2048,
-        );
+        )?;
         app.start_task("a", OutputLogs::Full)?;
         app.process_output("a", b"hello world\r\n")?;
 
@@ -3089,7 +3159,7 @@ mod test {
             vec!["a".to_string()],
             PreferenceLoader::new(&repo_root),
             2048,
-        );
+        )?;
         app.start_task("a", OutputLogs::Full)?;
         app.process_output("a", b"hello world\r\n")?;
 
@@ -3145,7 +3215,7 @@ mod test {
             vec!["a".to_string()],
             PreferenceLoader::new(&repo_root),
             2048,
-        );
+        )?;
         app.start_task("a", OutputLogs::Full)?;
         app.process_output("a", b"hello world\r\n")?;
 
@@ -3183,7 +3253,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<bool> = App::new(
+        let mut app: App<bool> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
@@ -3215,7 +3285,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<bool> = App::new(
+        let mut app: App<bool> = App::new_for_test(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
@@ -3269,7 +3339,7 @@ mod test {
 
         let tasks = vec!["build#app-a".to_string(), "build#app-b".to_string()];
 
-        let mut app: App<Vec<u8>> = App::new(
+        let mut app: App<Vec<u8>> = App::new_for_test(
             100,
             100,
             tasks.clone(),
@@ -3314,7 +3384,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<Box<dyn io::Write + Send>> = App::new(
+        let mut app: App<Box<dyn io::Write + Send>> = App::new_for_test(
             100,
             100,
             vec!["a".to_string()],
@@ -3344,7 +3414,7 @@ mod test {
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
 
-        let mut app: App<Box<dyn io::Write + Send>> = App::new(
+        let mut app: App<Box<dyn io::Write + Send>> = App::new_for_test(
             100,
             100,
             vec!["app-a#dev".to_string()],

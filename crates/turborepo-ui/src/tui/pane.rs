@@ -146,7 +146,8 @@ mod test {
 
     #[test]
     fn test_footer_interactive() {
-        let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, Some(Vec::new()), 2048);
+        let mut term: TerminalOutput<Vec<u8>> =
+            TerminalOutput::new(16, 16, Some(Vec::new()), 2048).expect("terminal output");
         let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, false);
         assert_eq!(
             String::from(pane.footer()),
@@ -156,7 +157,8 @@ mod test {
 
     #[test]
     fn test_footer_non_interactive() {
-        let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
+        let mut term: TerminalOutput<Vec<u8>> =
+            TerminalOutput::new(16, 16, None, 2048).expect("terminal output");
         let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, false);
         assert_eq!(
             String::from(pane.footer()),
@@ -166,7 +168,8 @@ mod test {
 
     #[test]
     fn test_footer_copied_notice() {
-        let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
+        let mut term: TerminalOutput<Vec<u8>> =
+            TerminalOutput::new(16, 16, None, 2048).expect("terminal output");
         let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, true);
         assert_eq!(String::from(pane.footer()), "   Copied to clipboard!");
     }
@@ -175,7 +178,8 @@ mod test {
     fn test_footer_cancel_selection_hint_while_selecting() {
         use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-        let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
+        let mut term: TerminalOutput<Vec<u8>> =
+            TerminalOutput::new(16, 16, None, 2048).expect("terminal output");
         term.process(b"hello world\r\n");
         term.handle_mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
@@ -200,7 +204,8 @@ mod test {
     fn test_footer_held_selection_offers_copy_and_unselect() {
         use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-        let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
+        let mut term: TerminalOutput<Vec<u8>> =
+            TerminalOutput::new(16, 16, None, 2048).expect("terminal output");
         term.process(b"hello world\r\n");
         term.handle_mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
@@ -235,7 +240,8 @@ mod test {
 
     #[test]
     fn test_content_area_pads_when_sidebar_visible() {
-        let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
+        let mut term: TerminalOutput<Vec<u8>> =
+            TerminalOutput::new(16, 16, None, 2048).expect("terminal output");
         let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, false);
 
         assert_eq!(
@@ -246,7 +252,8 @@ mod test {
 
     #[test]
     fn test_content_area_has_no_padding_when_sidebar_hidden() {
-        let mut term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
+        let mut term: TerminalOutput<Vec<u8>> =
+            TerminalOutput::new(16, 16, None, 2048).expect("terminal output");
         let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, false, false);
 
         assert_eq!(

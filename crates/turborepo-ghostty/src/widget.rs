@@ -1,3 +1,8 @@
+use libghostty_vt::{
+    RenderState, Terminal,
+    render::{CellIterator, CursorViewport, CursorVisualStyle, RowIterator},
+    style::RgbColor,
+};
 use ratatui::{
     buffer::Buffer,
     layout::{Position, Rect},
@@ -5,12 +10,7 @@ use ratatui::{
     widgets::Widget,
 };
 
-use crate::{
-    convert,
-    render::{CellIterator, CursorViewport, CursorVisualStyle, RenderState, RowIterator},
-    style::RgbColor,
-    terminal::Terminal,
-};
+use crate::convert;
 
 /// Cursor information extracted during rendering.
 #[derive(Debug, Clone, Default)]
@@ -99,9 +99,6 @@ impl Widget for &mut TerminalWidget<'_, '_, '_> {
             self.cursor.blinking = cursor_blinking;
         }
 
-        let default_fg = rgb_to_color(colors.foreground);
-        let default_bg = rgb_to_color(colors.background);
-
         let Ok(mut row_iter) = RowIterator::new() else {
             return;
         };
@@ -140,18 +137,22 @@ impl Widget for &mut TerminalWidget<'_, '_, '_> {
                     },
                 };
 
+                // Unset cell colors map to `Color::Reset` so the host
+                // terminal's own theme shows through, rather than Ghostty's
+                // built-in default colors (which would paint a black
+                // background on light-themed terminals).
                 let fg = cell
                     .fg_color()
                     .ok()
                     .flatten()
                     .map(rgb_to_color)
-                    .unwrap_or(default_fg);
+                    .unwrap_or(Color::Reset);
                 let bg = cell
                     .bg_color()
                     .ok()
                     .flatten()
                     .map(rgb_to_color)
-                    .unwrap_or(default_bg);
+                    .unwrap_or(Color::Reset);
 
                 let cell_style = cell.style().ok();
                 let mut ratatui_style = cell_style
@@ -197,7 +198,7 @@ mod tests {
         let backend = TestBackend::new(cols, rows);
         let mut terminal = Terminal::new(backend).expect("terminal");
 
-        let mut parser_long = Parser::new(rows, cols, 0);
+        let mut parser_long = Parser::try_new(rows, cols, 0).expect("parser");
         parser_long.process(b"Line 1\r\nLine 2\r\nLine 3\r\nLine 4\r\nLine 5");
         terminal
             .draw(|frame| {
@@ -207,7 +208,7 @@ mod tests {
             })
             .expect("draw long");
 
-        let mut parser_short = Parser::new(rows, cols, 0);
+        let mut parser_short = Parser::try_new(rows, cols, 0).expect("parser");
         parser_short.process(b"Short");
         terminal
             .draw(|frame| {

@@ -17,7 +17,7 @@ mod table;
 mod task;
 mod term_output;
 
-pub use app::{run_app, terminal_big_enough};
+pub use app::{run_app, spawn_run_app, terminal_big_enough};
 use clipboard::copy_to_clipboard;
 use debouncer::Debouncer;
 use event::{Event, TaskResult};
@@ -46,4 +46,8 @@ pub enum Error {
     Preferences(#[from] preferences::Error),
     #[error(transparent)]
     Ghostty(#[from] turborepo_ghostty::Error),
+    #[error("Failed to spawn TUI thread: {0}")]
+    ThreadSpawn(std::io::Error),
+    #[error("TUI thread exited unexpectedly")]
+    ThreadJoin,
 }
