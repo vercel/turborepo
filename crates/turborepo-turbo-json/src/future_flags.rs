@@ -89,6 +89,13 @@ pub struct FutureFlags {
     #[serde(default)]
     #[schemars(skip)]
     pub incremental_tasks: bool,
+    /// Treat the crates of a Cargo workspace as Turborepo packages.
+    ///
+    /// When enabled, Rust crates are discovered via `cargo metadata` and
+    /// participate in the package graph. Experimental: support is landing
+    /// incrementally, and this flag currently has no effect.
+    #[serde(default)]
+    pub experimental_cargo_workspaces: bool,
 }
 
 // Manual TS impl because #[derive(TS)] conflicts with the Iterable and
@@ -106,7 +113,7 @@ impl TS for FutureFlags {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
          boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
          pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
-         boolean }"
+         boolean, experimentalCargoWorkspaces?: boolean }"
             .to_string()
     }
 
@@ -114,7 +121,7 @@ impl TS for FutureFlags {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
          boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
          pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
-         boolean }"
+         boolean, experimentalCargoWorkspaces?: boolean }"
             .to_string()
     }
 
@@ -122,7 +129,7 @@ impl TS for FutureFlags {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
          boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         globalConfiguration?: boolean };"
+         globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean };"
             .to_string()
     }
 
@@ -130,7 +137,7 @@ impl TS for FutureFlags {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
          boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         globalConfiguration?: boolean };"
+         globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean };"
             .to_string()
     }
 
