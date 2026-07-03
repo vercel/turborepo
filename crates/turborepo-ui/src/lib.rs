@@ -28,7 +28,7 @@ pub use crate::{
 #[cfg(feature = "tui")]
 pub use crate::{
     log_sinks::LogSinks,
-    tui::{TaskTable, TerminalPane, panic_handler::restore_terminal_on_panic},
+    tui::{TaskTable, TerminalPane, panic_handler::restore_terminal_best_effort},
     tui_sink::TuiSink,
 };
 
@@ -36,17 +36,17 @@ pub use crate::{
 //
 // ## Panic Recovery
 //
-// The [`restore_terminal_on_panic`] function should be called from your panic
-// handler if using the TUI. It will restore terminal state (raw mode, alternate
-// screen, mouse capture) only if the TUI was active, making panic messages
-// visible. This is a best-effort operation that ignores all errors since we're
-// already in a panic context.
+// The [`restore_terminal_best_effort`] function should be called from your
+// panic handler if using the TUI. It will restore terminal state (raw mode,
+// alternate screen, mouse capture) only if the TUI was active, making panic
+// messages visible. This is a best-effort operation that ignores all errors
+// since we're already in a panic context.
 //
 // Example usage in a panic handler:
 // ```ignore
 // pub fn panic_handler(panic_info: &std::panic::PanicHookInfo) {
 //     // Restore terminal first so panic message is visible
-//     turborepo_ui::restore_terminal_on_panic();
+//     turborepo_ui::restore_terminal_best_effort();
 //     // ... rest of panic handling
 // }
 // ```

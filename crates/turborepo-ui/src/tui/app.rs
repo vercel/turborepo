@@ -1018,15 +1018,22 @@ pub async fn run_app(
         }
     };
 
-    final_cleanup(
+    let cleanup_result = final_cleanup(
         terminal,
         display,
         raw_mode_enabled,
         app,
         callback,
         &terminal_sink,
-    )?;
+    );
 
+    // Safety net for racy shutdowns: if any restore step failed (or startup
+    // failed partway), fall back to raw escape sequences so we never exit
+    // leaving the user's terminal in the alternate screen or raw mode. This is
+    // a flag-gated no-op when cleanup fully succeeded.
+    super::panic_handler::restore_terminal_best_effort();
+
+    cleanup_result?;
     result
 }
 
@@ -1361,15 +1368,17 @@ fn enter_alt_screen(terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>) -
     // Ensure all pending writes are flushed before we switch to alternative screen
     stdout.flush()?;
 
+    // Track terminal-state modification before issuing the commands: if the
+    // execute partially applies (e.g. mouse capture enabled but the flush
+    // fails), cleanup must still attempt restoration. Best-effort cleanup
+    // tolerates disabling state that was never enabled.
+    super::panic_handler::set_mouse_capture_enabled();
+    super::panic_handler::set_tui_active();
     crossterm::execute!(
         stdout,
         crossterm::event::EnableMouseCapture,
         crossterm::terminal::EnterAlternateScreen
     )?;
-    // Track that mouse capture was enabled (important for Windows cleanup)
-    super::panic_handler::set_mouse_capture_enabled();
-    // Mark TUI as active so panic handler knows to restore terminal state
-    super::panic_handler::set_tui_active();
 
     match terminal.as_mut() {
         // Re-entering after a stream excursion: force a full repaint.
@@ -1393,11 +1402,33 @@ fn enter_alt_screen(terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>) -
     Ok(())
 }
 
+/// Record `result` into `first_error`, keeping the earliest failure.
+///
+/// Terminal restoration must be best-effort: aborting a restore sequence
+/// halfway (e.g. because the terminal went away during a racy shutdown) would
+/// leave the user's terminal stuck in the alternate screen, raw mode, or with
+/// mouse capture enabled. Each step is attempted regardless of earlier
+/// failures and the first error is surfaced at the end.
+fn record_restore_error(first_error: &mut Option<io::Error>, result: io::Result<()>) {
+    if let Err(err) = result
+        && first_error.is_none()
+    {
+        *first_error = Some(err);
+    }
+}
+
 /// Leave the alternate screen, returning to the main screen with the cursor
 /// visible and mouse capture off (so native terminal scrollback/selection
 /// works while streaming). Does not touch raw mode.
+///
+/// Restoration is best-effort: every step runs even if an earlier one fails,
+/// and the first error is returned. State-tracking flags are only cleared when
+/// the corresponding step succeeds, so the panic handler or the caller's
+/// fallback can re-attempt restoration.
 fn leave_alt_screen(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
-    terminal.clear()?;
+    let mut first_error = None;
+
+    record_restore_error(&mut first_error, terminal.clear());
 
     // On Windows, we must only call DisableMouseCapture if EnableMouseCapture
     // was called first, because crossterm requires the original console mode
@@ -1407,45 +1438,53 @@ fn leave_alt_screen(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Re
     //
     // On Unix, we can safely always disable mouse capture as it uses escape
     // sequences that are idempotent.
+    //
+    // Mouse capture and the alternate screen are restored in separate steps so
+    // a failure in one cannot prevent the other.
     #[cfg(windows)]
-    {
-        if super::panic_handler::is_mouse_capture_enabled() {
-            crossterm::execute!(
-                terminal.backend_mut(),
-                crossterm::event::DisableMouseCapture,
-                crossterm::terminal::LeaveAlternateScreen,
-            )?;
-            super::panic_handler::set_mouse_capture_disabled();
-        } else {
-            crossterm::execute!(
-                terminal.backend_mut(),
-                crossterm::terminal::LeaveAlternateScreen,
-            )?;
-        }
-    }
+    let disable_mouse_capture = super::panic_handler::is_mouse_capture_enabled();
     #[cfg(not(windows))]
-    {
-        // On Unix, always disable mouse capture - it's safe and handles child
-        // processes that may have enabled mouse capture (especially in VSCode).
-        crossterm::execute!(
+    let disable_mouse_capture = true;
+
+    if disable_mouse_capture {
+        let result = crossterm::execute!(
             terminal.backend_mut(),
-            crossterm::event::DisableMouseCapture,
-            crossterm::terminal::LeaveAlternateScreen,
-        )?;
-        super::panic_handler::set_mouse_capture_disabled();
+            crossterm::event::DisableMouseCapture
+        );
+        if result.is_ok() {
+            super::panic_handler::set_mouse_capture_disabled();
+        }
+        record_restore_error(&mut first_error, result);
     }
 
-    terminal.show_cursor()?;
-    // TUI no longer owns the screen; a panic now should not try to leave the
-    // alternate screen.
-    super::panic_handler::set_tui_inactive();
-    terminal.backend_mut().flush()?;
-    Ok(())
+    let leave_result = crossterm::execute!(
+        terminal.backend_mut(),
+        crossterm::terminal::LeaveAlternateScreen
+    );
+    if leave_result.is_ok() {
+        // TUI no longer owns the screen; a panic now should not try to leave
+        // the alternate screen.
+        super::panic_handler::set_tui_inactive();
+    }
+    record_restore_error(&mut first_error, leave_result);
+
+    record_restore_error(&mut first_error, terminal.show_cursor());
+    record_restore_error(&mut first_error, terminal.backend_mut().flush());
+
+    match first_error {
+        Some(err) => Err(err),
+        None => Ok(()),
+    }
 }
 
 /// Restores terminal to expected state at the end of the run, handling both the
 /// case where we exit from the TUI (must leave the alternate screen) and from
 /// streamed logs (already on the main screen).
+///
+/// Cleanup is best-effort: every step runs even if an earlier one fails, and
+/// the first error is returned. State-tracking flags are only cleared when the
+/// corresponding restore step succeeds, so `restore_terminal_best_effort` can
+/// re-attempt whatever is still outstanding.
 #[tracing::instrument(skip_all)]
 fn final_cleanup(
     terminal: Option<Terminal<CrosstermBackend<Stdout>>>,
@@ -1455,34 +1494,42 @@ fn final_cleanup(
     callback: Option<oneshot::Sender<()>>,
     terminal_sink: &TerminalSink,
 ) -> io::Result<()> {
+    let mut first_error = None;
+
     if let Some(mut terminal) = terminal
         && display == DisplayState::Tui
     {
         // Only leave the alternate screen if we're currently in it. When
         // streaming we're already on the main screen with the cursor shown.
-        leave_alt_screen(&mut terminal)?;
+        record_restore_error(&mut first_error, leave_alt_screen(&mut terminal));
     }
 
     // Return the stream sink to a quiescent state.
     terminal_sink.set_stream_filter(None);
 
     let tasks_started = app.tasks_by_status.tasks_started();
-    app.persist_tasks(tasks_started)?;
-    app.persist_summary()?;
+    record_restore_error(&mut first_error, app.persist_tasks(tasks_started));
+    record_restore_error(&mut first_error, app.persist_summary());
     app.preferences.flush_to_disk().ok();
 
     if raw_mode_enabled {
         terminal_sink.set_raw_terminal(false);
-        crossterm::terminal::disable_raw_mode()?;
-        super::panic_handler::set_raw_mode_disabled();
+        let raw_result = crossterm::terminal::disable_raw_mode();
+        if raw_result.is_ok() {
+            super::panic_handler::set_raw_mode_disabled();
+        }
+        record_restore_error(&mut first_error, raw_result);
     }
 
-    // Mark TUI as inactive - cleanup is complete
-    super::panic_handler::set_tui_inactive();
-
-    // We can close the channel now that terminal is back restored to a normal state
+    // We can close the channel now that terminal restoration has been
+    // attempted. Note that on failure the panic-handler flags stay set so the
+    // caller can fall back to restoring with raw escape sequences.
     drop(callback);
-    Ok(())
+
+    match first_error {
+        Some(err) => Err(err),
+        None => Ok(()),
+    }
 }
 
 fn update(
@@ -1697,6 +1744,20 @@ mod test {
 
     use super::*;
     use crate::{ColorConfig, tui::event::CacheResult};
+
+    #[test]
+    fn record_restore_error_keeps_first_error_and_continues() {
+        let mut first_error = None;
+        record_restore_error(&mut first_error, Ok(()));
+        assert!(first_error.is_none());
+
+        record_restore_error(&mut first_error, Err(io::Error::other("first")));
+        record_restore_error(&mut first_error, Err(io::Error::other("second")));
+        record_restore_error(&mut first_error, Ok(()));
+
+        let err = first_error.expect("error should be recorded");
+        assert_eq!(err.to_string(), "first");
+    }
 
     #[test]
     fn replay_offset_resumes_from_watermark_when_buffer_grows() {

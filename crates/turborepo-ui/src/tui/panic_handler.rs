@@ -80,13 +80,16 @@ pub fn is_raw_mode_enabled() -> bool {
 
 /// Attempts to restore terminal to a sane state if the TUI was active.
 ///
-/// This is designed to be called from a panic handler. It is best-effort:
-/// - Only runs if the TUI was marked as active
-/// - Ignores all errors since we're already in a panic
+/// This is called from the panic handler, and as a last-resort safety net
+/// when normal TUI cleanup fails (e.g. racy shutdown while the terminal is
+/// going away). It is best-effort:
+/// - Only runs if terminal state is still marked as modified
+/// - Ignores all errors
 /// - Uses raw escape sequences to minimize risk of additional panics
 ///
-/// Returns `true` if restoration was attempted, `false` if TUI wasn't active.
-pub fn restore_terminal_on_panic() -> bool {
+/// Returns `true` if restoration was attempted, `false` if there was nothing
+/// to restore.
+pub fn restore_terminal_best_effort() -> bool {
     let tui_active = TUI_ACTIVE.load(Ordering::SeqCst);
     let raw_mode_enabled = RAW_MODE_ENABLED.load(Ordering::SeqCst);
 
@@ -188,7 +191,7 @@ mod test {
         set_raw_mode_disabled();
 
         // Should return false and not attempt restoration
-        assert!(!restore_terminal_on_panic());
+        assert!(!restore_terminal_best_effort());
     }
 
     #[test]
@@ -198,7 +201,7 @@ mod test {
         set_tui_inactive();
         set_raw_mode_enabled();
 
-        assert!(restore_terminal_on_panic());
+        assert!(restore_terminal_best_effort());
 
         // Clean up
         set_raw_mode_disabled();
@@ -213,7 +216,7 @@ mod test {
         // Should return true indicating restoration was attempted
         // Note: This will write escape sequences to stdout, but that's harmless in
         // tests
-        assert!(restore_terminal_on_panic());
+        assert!(restore_terminal_best_effort());
 
         // Clean up
         set_tui_inactive();
