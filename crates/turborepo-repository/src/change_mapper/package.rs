@@ -66,6 +66,11 @@ impl PackageChangeMapper for DefaultPackageChangeMapper<'_> {
                 continue;
             }
             if let Some(package_path) = entry.package_json_path.parent()
+                // A package whose directory is the repo root would vacuously
+                // match every file — the component zip below has nothing to
+                // compare. Only the Root package may claim root-level files,
+                // via the fallback.
+                && package_path.components().next().is_some()
                 && Self::is_file_in_package(file, package_path)
             {
                 return PackageMapping::Package((
@@ -188,7 +193,7 @@ impl PackageChangeMapper for GlobalDepsPackageChangeMapper<'_> {
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
-    use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
     use super::{DefaultPackageChangeMapper, GlobalDepsPackageChangeMapper};
     use crate::{
@@ -220,6 +225,101 @@ mod tests {
         ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
             self.discover_packages().await
         }
+    }
+
+    /// A package whose directory is the repository root must never claim
+    /// files during change mapping: the component-zip membership check is
+    /// vacuously true for a zero-component package path, so such a package
+    /// would nondeterministically steal every changed file from the real
+    /// packages (package iteration order picks the winner). Only the Root
+    /// package may claim root-level files, via the fallback.
+    #[tokio::test]
+    async fn root_directory_package_does_not_claim_files() -> Result<(), anyhow::Error> {
+        let repo_root = tempdir()?;
+        let root = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+
+        let write = |rel: &[&str], contents: &str| -> Result<(), anyhow::Error> {
+            let path = root.join_components(rel);
+            path.ensure_dir()?;
+            path.create_with_contents(contents)?;
+            Ok(())
+        };
+        write(&["package.json"], r#"{"name": "rooted-pkg"}"#)?;
+        write(&["packages", "lib-a", "package.json"], r#"{"name": "lib-a"}"#)?;
+
+        struct RootedDiscovery {
+            root: AbsoluteSystemPathBuf,
+        }
+        impl PackageDiscovery for RootedDiscovery {
+            async fn discover_packages(
+                &self,
+            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+                Ok(discovery::DiscoveryResponse {
+                    package_manager: PackageManager::Npm,
+                    workspaces: vec![
+                        discovery::WorkspaceData {
+                            package_json: self.root.join_component("package.json"),
+                            turbo_json: None,
+                        },
+                        discovery::WorkspaceData {
+                            package_json: self
+                                .root
+                                .join_components(&["packages", "lib-a", "package.json"]),
+                            turbo_json: None,
+                        },
+                    ],
+                })
+            }
+
+            async fn discover_packages_blocking(
+                &self,
+            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+                self.discover_packages().await
+            }
+        }
+
+        let pkg_graph = PackageGraphBuilder::new(root, PackageJson::default())
+            .with_package_discovery(RootedDiscovery {
+                root: root.to_owned(),
+            })
+            .build()
+            .await?;
+
+        let detector = GlobalDepsPackageChangeMapper::new(&pkg_graph, std::iter::empty::<&str>())?;
+        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], detector);
+
+        // A change in a real package maps to that package alone.
+        let result = change_mapper.changed_packages(
+            [AnchoredSystemPathBuf::from_raw(
+                ["packages", "lib-a", "index.js"].join(std::path::MAIN_SEPARATOR_STR),
+            )?]
+            .into_iter()
+            .collect(),
+            LockfileContents::Unchanged,
+        )?;
+        let PackageChanges::Some(packages) = result else {
+            panic!("expected Some, got {result:?}");
+        };
+        let names: Vec<&str> = packages.keys().map(|p| p.name.as_ref()).collect();
+        assert_eq!(names, vec!["lib-a"]);
+
+        // A root-level file falls through to the root fallback; it must not
+        // be attributed to the root-directory package.
+        let result = change_mapper.changed_packages(
+            [AnchoredSystemPathBuf::from_raw("README.md")?]
+                .into_iter()
+                .collect(),
+            LockfileContents::Unchanged,
+        )?;
+        let PackageChanges::Some(packages) = result else {
+            panic!("expected Some, got {result:?}");
+        };
+        assert!(
+            packages.keys().all(|p| p.name.as_ref() != "rooted-pkg"),
+            "root-level files must not map to a root-directory package, got {packages:?}"
+        );
+
+        Ok(())
     }
 
     #[tokio::test]
