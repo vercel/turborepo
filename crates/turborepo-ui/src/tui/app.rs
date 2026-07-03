@@ -3100,7 +3100,7 @@ mod test {
             vec!["a".to_string()],
             PreferenceLoader::new(&repo_root),
             2048,
-        );
+        )?;
         app.start_task("a", OutputLogs::Full)?;
         app.process_output("a", b"hello world\r\n")?;
 
@@ -3159,7 +3159,7 @@ mod test {
             vec!["a".to_string()],
             PreferenceLoader::new(&repo_root),
             2048,
-        );
+        )?;
         app.start_task("a", OutputLogs::Full)?;
         app.process_output("a", b"hello world\r\n")?;
 
@@ -3215,7 +3215,7 @@ mod test {
             vec!["a".to_string()],
             PreferenceLoader::new(&repo_root),
             2048,
-        );
+        )?;
         app.start_task("a", OutputLogs::Full)?;
         app.process_output("a", b"hello world\r\n")?;
 
