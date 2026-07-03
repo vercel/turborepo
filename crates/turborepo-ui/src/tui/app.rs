@@ -24,6 +24,8 @@ use crate::tui::popup::{popup, popup_area};
 
 pub const FRAMERATE: Duration = Duration::from_millis(3);
 const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
+/// How long the pane footer shows "Copied to clipboard" after a copy.
+const CLIPBOARD_NOTICE_DURATION: Duration = Duration::from_secs(2);
 
 use super::{
     AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
@@ -69,6 +71,9 @@ pub struct App<W> {
     scroll_momentum: ScrollMomentum,
     log_events: Vec<turborepo_log::LogEvent>,
     showing_log_panel: bool,
+    /// While set, the pane footer shows "Copied to clipboard". Cleared once
+    /// the deadline passes.
+    clipboard_notice_expiry: Option<Instant>,
     /// How many bytes of each task's output have already been emitted to the
     /// stream sink. Lets repeated TUI<->stream toggles backfill only the new
     /// output instead of re-printing the whole history each time.
@@ -131,6 +136,7 @@ impl<W> App<W> {
             scroll_momentum: ScrollMomentum::new(),
             log_events: Vec::new(),
             showing_log_panel: false,
+            clipboard_notice_expiry: None,
             replayed_offsets: BTreeMap::new(),
         }
     }
@@ -150,10 +156,11 @@ impl<W> App<W> {
     }
 
     fn input_options(&self) -> Result<InputOptions<'_>, Error> {
-        let has_selection = self.get_full_task()?.has_selection();
+        let task = self.get_full_task()?;
         Ok(InputOptions {
             focus: &self.section_focus,
-            has_selection,
+            has_selection: task.has_selection(),
+            is_selecting: task.is_selecting(),
             is_help_popup_open: self.showing_help_popup,
             is_log_panel_open: self.showing_log_panel,
         })
@@ -704,6 +711,37 @@ impl<W> App<W> {
     }
 
     pub fn handle_mouse(&mut self, mut event: crossterm::event::MouseEvent) -> Result<(), Error> {
+        // Releasing the left button ends a selection wherever the cursor is,
+        // so handle it before any hit-testing. Whatever was selected gets
+        // copied to the clipboard automatically.
+        if matches!(
+            event.kind,
+            crossterm::event::MouseEventKind::Up(crossterm::event::MouseButton::Left)
+        ) {
+            let shift_held = event
+                .modifiers
+                .contains(crossterm::event::KeyModifiers::SHIFT);
+            let task = self.get_full_task_mut()?;
+            let was_selecting = task.is_selecting();
+            task.handle_mouse(event)?;
+            // Shift prevents the automatic copy, leaving the selection in
+            // place so the user can still copy it with `c` or dismiss it by
+            // clicking.
+            if was_selecting && task.has_selection() && !shift_held {
+                self.copy_selection()?;
+            }
+            return Ok(());
+        }
+
+        // A hover event can only arrive while the button is up, so if a drag
+        // is still live we missed the release (the terminal swallowed the
+        // shifted mouse events). End the drag and keep the selection, the
+        // same outcome as an observed shift-release.
+        if matches!(event.kind, crossterm::event::MouseEventKind::Moved) {
+            self.get_full_task_mut()?.handle_mouse(event)?;
+            return Ok(());
+        }
+
         // Only offset by table width if the sidebar is visible
         let has_sidebar = self.preferences.is_task_list_visible();
         let table_width = if has_sidebar {
@@ -766,7 +804,24 @@ impl<W> App<W> {
             return Ok(());
         };
         super::copy_to_clipboard(&text);
+        // The selection has served its purpose; drop the highlight.
+        task.clear_selection()?;
+        self.clipboard_notice_expiry = Some(Instant::now() + CLIPBOARD_NOTICE_DURATION);
         Ok(())
+    }
+
+    /// Clears the "Copied to clipboard" notice once it has been shown long
+    /// enough. Returns true if the notice was just cleared, meaning the
+    /// footer needs a rerender.
+    fn clear_expired_clipboard_notice(&mut self) -> bool {
+        if self
+            .clipboard_notice_expiry
+            .is_some_and(|deadline| deadline <= Instant::now())
+        {
+            self.clipboard_notice_expiry = None;
+            return true;
+        }
+        false
     }
 
     fn select_task(&mut self, task_name: &str) -> Result<(), Error> {
@@ -1021,6 +1076,12 @@ async fn run_app_inner(
         // If we only receive ticks, then there's been no state change so no update
         // needed
         if !matches!(event, Event::Tick) {
+            needs_rerender = true;
+        }
+
+        // The "Copied to clipboard" notice expires on its own, so ticks must
+        // trigger a rerender when it does.
+        if app.clear_expired_clipboard_notice() {
             needs_rerender = true;
         }
 
@@ -1533,12 +1594,14 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
 
     if let Ok(active_task) = app.active_task() {
         let active_task = active_task.to_string();
+        let show_copied_notice = app.clipboard_notice_expiry.is_some();
         if let Some(output_logs) = app.tasks.get_mut(&active_task) {
             let mut pane_to_render = TerminalPane::new(
                 output_logs,
                 &active_task,
                 &app.section_focus,
                 app.preferences.is_task_list_visible(),
+                show_copied_notice,
             );
             f.render_widget(&mut pane_to_render, pane);
         }
@@ -2949,6 +3012,167 @@ mod test {
         assert_eq!(app.active_task()?, "task-4");
         app.handle_mouse(click(5))?;
         assert_eq!(app.active_task()?, "task-4");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_mouse_release_copies_selection_and_shows_notice() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        app.start_task("a", OutputLogs::Full)?;
+        app.process_output("a", b"hello world\r\n")?;
+
+        let pane_column = app.size.task_list_width();
+        let mouse = |kind, column, modifiers| MouseEvent {
+            kind,
+            column,
+            row: 1,
+            modifiers,
+        };
+
+        app.handle_mouse(mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            pane_column,
+            KeyModifiers::empty(),
+        ))?;
+        app.handle_mouse(mouse(
+            MouseEventKind::Drag(MouseButton::Left),
+            pane_column + 4,
+            KeyModifiers::empty(),
+        ))?;
+        assert!(app.get_full_task()?.has_selection());
+        assert!(app.clipboard_notice_expiry.is_none());
+
+        app.handle_mouse(mouse(
+            MouseEventKind::Up(MouseButton::Left),
+            pane_column + 4,
+            KeyModifiers::empty(),
+        ))?;
+        // Releasing the button copies the selection, clears the highlight,
+        // and shows the notice.
+        assert!(app.clipboard_notice_expiry.is_some());
+        assert!(!app.get_full_task()?.has_selection());
+        assert!(!app.get_full_task()?.is_selecting());
+        assert!(!app.clear_expired_clipboard_notice());
+
+        // Once the deadline passes the notice clears and requests a rerender.
+        app.clipboard_notice_expiry = Some(Instant::now() - Duration::from_millis(1));
+        assert!(app.clear_expired_clipboard_notice());
+        assert!(app.clipboard_notice_expiry.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_mouse_release_with_shift_keeps_selection_for_manual_copy() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        app.start_task("a", OutputLogs::Full)?;
+        app.process_output("a", b"hello world\r\n")?;
+
+        let pane_column = app.size.task_list_width();
+        let mouse = |kind, column, modifiers| MouseEvent {
+            kind,
+            column,
+            row: 1,
+            modifiers,
+        };
+
+        app.handle_mouse(mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            pane_column,
+            KeyModifiers::empty(),
+        ))?;
+        app.handle_mouse(mouse(
+            MouseEventKind::Drag(MouseButton::Left),
+            pane_column + 4,
+            KeyModifiers::empty(),
+        ))?;
+        assert!(app.get_full_task()?.has_selection());
+
+        app.handle_mouse(mouse(
+            MouseEventKind::Up(MouseButton::Left),
+            pane_column + 4,
+            KeyModifiers::SHIFT,
+        ))?;
+        // No automatic copy, but the selection is kept so it can still be
+        // copied with `c`.
+        assert!(app.clipboard_notice_expiry.is_none());
+        assert!(app.get_full_task()?.has_selection());
+
+        // `c` copies the held selection, then drops the highlight.
+        app.copy_selection()?;
+        assert!(app.clipboard_notice_expiry.is_some());
+        assert!(!app.get_full_task()?.has_selection());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_after_swallowed_release_ends_drag_and_keeps_selection() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseEvent, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        app.start_task("a", OutputLogs::Full)?;
+        app.process_output("a", b"hello world\r\n")?;
+
+        let pane_column = app.size.task_list_width();
+        let mouse = |kind, column| MouseEvent {
+            kind,
+            column,
+            row: 1,
+            modifiers: KeyModifiers::empty(),
+        };
+
+        app.handle_mouse(mouse(
+            MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            pane_column,
+        ))?;
+        app.handle_mouse(mouse(
+            MouseEventKind::Drag(crossterm::event::MouseButton::Left),
+            pane_column + 4,
+        ))?;
+        assert!(app.get_full_task()?.is_selecting());
+
+        // The user held shift and released: the terminal swallowed the
+        // shifted release, so the next thing we see is a hover event.
+        app.handle_mouse(mouse(MouseEventKind::Moved, pane_column + 4))?;
+        assert!(!app.get_full_task()?.is_selecting());
+        assert!(app.get_full_task()?.has_selection());
+        assert!(app.clipboard_notice_expiry.is_none());
 
         Ok(())
     }
