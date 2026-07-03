@@ -1,4 +1,4 @@
-use std::{env, io, mem, process, sync::Arc};
+use std::{env, io, mem, process, sync::Arc, time::Duration};
 
 use camino::Utf8Path;
 use clap::CommandFactory;
@@ -277,7 +277,18 @@ pub fn run(
         .build()
         .map_err(Error::Runtime)?;
 
-    runtime.block_on(run_main(repo_state, logger, color_config, query_server))
+    let result = runtime.block_on(run_main(repo_state, logger, color_config, query_server));
+
+    // `Runtime::drop` joins blocking-pool threads with no deadline. Detached
+    // best-effort work — most notably a telemetry flush whose DNS lookup
+    // (`getaddrinfo`) runs on the blocking pool and cannot be cancelled — can
+    // hold the process open for seconds on a slow network after the run has
+    // already finished. Everything owed to the user is awaited inside
+    // `run_main` (telemetry and analytics handles get a bounded close there),
+    // so bound the teardown instead of inheriting drop's unbounded join.
+    runtime.shutdown_timeout(Duration::from_millis(250));
+
+    result
 }
 
 #[tracing::instrument(skip_all)]
