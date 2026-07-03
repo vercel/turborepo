@@ -60,8 +60,19 @@ pub enum Error {
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error(transparent)]
     Discovery(#[from] crate::discovery::Error),
-    #[error(transparent)]
-    Toolchain(#[from] crate::toolchain::Error),
+}
+
+// Toolchain errors map onto the pre-existing variants rather than adding a
+// new one: consumers match on `Error::PackageJson` (diagnostic rendering,
+// io-NotFound telemetry in the run builder), and those contracts must not
+// depend on whether the error surfaced through a toolchain.
+impl From<crate::toolchain::Error> for Error {
+    fn from(err: crate::toolchain::Error) -> Self {
+        match err {
+            crate::toolchain::Error::Discovery(err) => Error::Discovery(err),
+            crate::toolchain::Error::Descriptor(err) => Error::PackageJson(err),
+        }
+    }
 }
 
 /// Attempts to extract the file path that caused the error from the error chain
