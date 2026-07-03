@@ -1,5 +1,6 @@
 use std::{any::Any, borrow::Cow, collections::BTreeMap};
 
+use rustc_hash::FxHashMap;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
@@ -43,9 +44,23 @@ pub struct PnpmLockfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshots: Option<Snapshots>,
     #[serde(skip)]
-    dependency_index: BTreeMap<String, BTreeMap<String, String>>,
+    dependency_index: FxHashMap<String, DepIndexEntry>,
     #[serde(skip_serializing_if = "Option::is_none")]
     time: Option<Map<String, String>>,
+}
+
+/// Per-key lookup entry built once after parse so the hot resolution paths
+/// (`has_package`, `package_version`, `all_dependencies`) are O(1) hash
+/// probes instead of `BTreeMap` walks over long dependency-path keys.
+///
+/// `deps` stays a `BTreeMap` deliberately: its iteration order feeds the
+/// closure walk and must be deterministic across processes.
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
+struct DepIndexEntry {
+    deps: BTreeMap<String, String>,
+    in_packages: bool,
+    in_snapshots: bool,
+    version: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -303,17 +318,27 @@ impl PnpmLockfile {
     }
 
     fn build_dependency_index(&mut self) {
-        let mut index = BTreeMap::new();
+        let capacity = self.snapshots.as_ref().map_or(0, |s| s.len())
+            + self.packages.as_ref().map_or(0, |p| p.len());
+        let mut index: FxHashMap<String, DepIndexEntry> =
+            FxHashMap::with_capacity_and_hasher(capacity, Default::default());
         if let Some(snapshots) = &self.snapshots {
             for (key, snapshot) in snapshots {
-                index.insert(key.clone(), snapshot.dependencies());
+                let entry = index.entry(key.clone()).or_default();
+                entry.deps = snapshot.dependencies();
+                entry.in_snapshots = true;
             }
         }
         if let Some(packages) = &self.packages {
-            for (key, entry) in packages {
-                index
-                    .entry(key.clone())
-                    .or_insert_with(|| entry.snapshot.dependencies());
+            for (key, package) in packages {
+                let entry = index.entry(key.clone()).or_default();
+                // Snapshot dependency maps take priority, matching the
+                // previous insert-then-or_insert construction order.
+                if !entry.in_snapshots {
+                    entry.deps = package.snapshot.dependencies();
+                }
+                entry.in_packages = true;
+                entry.version = package.version.clone();
             }
         }
         self.dependency_index = index;
@@ -331,21 +356,21 @@ impl PnpmLockfile {
     }
 
     fn has_package(&self, key: &str) -> bool {
+        let Some(entry) = self.dependency_index.get(key) else {
+            return false;
+        };
         match self.version() {
-            SupportedLockfileVersion::V5 | SupportedLockfileVersion::V6 => {
-                self.packages.as_ref().map(|pkgs| pkgs.contains_key(key))
-            }
-            SupportedLockfileVersion::V7AndV9 => {
-                self.snapshots.as_ref().map(|snaps| snaps.contains_key(key))
-            }
+            SupportedLockfileVersion::V5 | SupportedLockfileVersion::V6 => entry.in_packages,
+            SupportedLockfileVersion::V7AndV9 => entry.in_snapshots,
         }
-        .unwrap_or_default()
     }
 
     fn package_version(&self, key: &str) -> Option<&str> {
-        let pkgs = self.packages.as_ref()?;
-        let pkg = pkgs.get(key)?;
-        pkg.version.as_deref()
+        let entry = self.dependency_index.get(key)?;
+        if !entry.in_packages {
+            return None;
+        }
+        entry.version.as_deref()
     }
 
     fn get_workspace(&self, workspace_path: &str) -> Result<&ProjectSnapshot, crate::Error> {
@@ -665,7 +690,7 @@ impl crate::Lockfile for PnpmLockfile {
         Ok(self
             .dependency_index
             .get(key)
-            .map(std::borrow::Cow::Borrowed))
+            .map(|entry| std::borrow::Cow::Borrowed(&entry.deps)))
     }
 
     fn subgraph(
@@ -789,7 +814,7 @@ impl crate::Lockfile for PnpmLockfile {
             .map(|patches| self.prune_patches(patches, &pruned_packages))
             .transpose()?;
 
-        Ok(Box::new(Self {
+        let mut pruned = Self {
             leading_documents: self.leading_documents.clone(),
             importers,
             packages: match pruned_packages.is_empty() {
@@ -805,12 +830,16 @@ impl crate::Lockfile for PnpmLockfile {
             package_extensions_checksum: self.package_extensions_checksum.clone(),
             patched_dependencies: patches,
             snapshots: pruned_snapshots,
-            dependency_index: BTreeMap::new(),
+            dependency_index: FxHashMap::default(),
             time: None,
             settings: self.settings.clone(),
             pnpmfile_checksum: self.pnpmfile_checksum.clone(),
             catalogs: self.catalogs.clone(),
-        }))
+        };
+        // The pruned lockfile must be queryable like a parsed one
+        // (has_package/all_dependencies consult the index).
+        pruned.build_dependency_index();
+        Ok(Box::new(pruned))
     }
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
