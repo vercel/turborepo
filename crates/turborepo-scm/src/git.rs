@@ -1875,6 +1875,48 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
+    fn test_dirty_hash_untracked_symlink_agreement() {
+        // An untracked symlink is the one entry class where the repo-index
+        // untracked walk (regular files only) and `git status` (lists
+        // symlinks) could disagree. Pin whatever the truth is.
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        std::os::unix::fs::symlink("foo.txt", repo_root.path().join("untracked_link")).unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        let old = scm.get_dirty_hash();
+        let new = scm.get_dirty_hash_from_repo_index(&repo_index);
+
+        assert_eq!(
+            old.is_some(),
+            new.is_some(),
+            "untracked symlink dirtiness must agree: status-based={old:?}, repo-index={new:?}"
+        );
+        assert!(new.is_some(), "untracked symlink must dirty the tree");
+
+        // A broken symlink is still untracked state.
+        fs::remove_file(repo_root.path().join("untracked_link")).unwrap();
+        std::os::unix::fs::symlink("does_not_exist", repo_root.path().join("broken_link")).unwrap();
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+        let broken = scm.get_dirty_hash_from_repo_index(&repo_index);
+        assert!(
+            broken.is_some(),
+            "broken untracked symlink must dirty the tree"
+        );
+        assert_ne!(
+            new, broken,
+            "different symlink names must produce different hashes"
+        );
+    }
+
+    #[test]
     fn test_dirty_hash_from_repo_index_clean_tree_returns_none() {
         let (repo_root, repo_path) = setup_repository(None).unwrap();
         let file = repo_root.path().join("foo.txt");

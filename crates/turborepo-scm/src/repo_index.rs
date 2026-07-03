@@ -20,6 +20,12 @@ pub struct RepoGitIndex {
     /// Sorted by path so per-package filtering can use binary-search range
     /// queries instead of linear scans.
     status_entries: Vec<RepoStatusEntry>,
+    /// Untracked symlinks discovered by the working-tree walk. Kept out of
+    /// `status_entries` so per-package hashing never attempts to hash them,
+    /// while dirty-hash provenance still reflects them (git tracks symlinks).
+    /// Only populated by [`Self::populate_untracked_for_prefixes`] /
+    /// [`Self::populate_all_untracked`].
+    untracked_symlinks: Vec<RelativeUnixPathBuf>,
     unsupported_paths: Vec<UnsupportedGitPath>,
     untracked_entries_populated: bool,
 }
@@ -34,6 +40,7 @@ impl RepoGitIndex {
             ls_tree_hashes,
             status_entries,
             unsupported_paths: Vec::new(),
+            untracked_symlinks: Vec::new(),
             untracked_entries_populated: true,
         }
     }
@@ -200,6 +207,7 @@ impl RepoGitIndex {
             ls_tree_hashes,
             status_entries,
             unsupported_paths,
+            untracked_symlinks: Vec::new(),
             untracked_entries_populated: false,
         })
     }
@@ -327,6 +335,7 @@ impl RepoGitIndex {
             ls_tree_hashes,
             status_entries,
             unsupported_paths,
+            untracked_symlinks: Vec::new(),
             untracked_entries_populated: true,
         })
     }
@@ -407,15 +416,19 @@ impl RepoGitIndex {
                 is_untracked: true,
             });
         }
+        self.untracked_symlinks = untracked.symlink_paths;
+        self.untracked_symlinks.sort();
 
         self.status_entries.sort_by(|a, b| a.path.cmp(&b.path));
         self.untracked_entries_populated = true;
 
         debug!(
-            "populated repo git index with untracked files: added_count={}, status_count={}",
+            "populated repo git index with untracked files: added_count={}, \
+             untracked_symlinks={}, status_count={}",
             self.status_entries
                 .len()
                 .saturating_sub(before_status_count),
+            self.untracked_symlinks.len(),
             self.status_entries.len(),
         );
 
@@ -440,6 +453,12 @@ impl RepoGitIndex {
             has_untracked = true;
             hasher.update(b"?\0");
             hasher.update(entry.path.as_str().as_bytes());
+            hasher.update(b"\0");
+        }
+        for path in &self.untracked_symlinks {
+            has_untracked = true;
+            hasher.update(b"?\0");
+            hasher.update(path.as_str().as_bytes());
             hasher.update(b"\0");
         }
 
@@ -576,6 +595,10 @@ impl RepoGitIndex {
 
 struct WalkedPaths {
     paths: Vec<RelativeUnixPathBuf>,
+    /// Untracked symlinks. Kept separate from `paths` because per-package
+    /// hashing intentionally ignores symlinks, while dirty-hash provenance
+    /// must still account for them (git treats symlinks as trackable).
+    symlink_paths: Vec<RelativeUnixPathBuf>,
     unsupported_paths: Vec<UnsupportedGitPath>,
 }
 
@@ -583,12 +606,13 @@ impl WalkedPaths {
     fn new() -> Self {
         Self {
             paths: Vec::new(),
+            symlink_paths: Vec::new(),
             unsupported_paths: Vec::new(),
         }
     }
 
     fn is_empty(&self) -> bool {
-        self.paths.is_empty() && self.unsupported_paths.is_empty()
+        self.paths.is_empty() && self.symlink_paths.is_empty() && self.unsupported_paths.is_empty()
     }
 }
 
@@ -676,6 +700,7 @@ fn walk_candidate_files_with_unsupported(
             if !self.batch.is_empty() {
                 let batch = WalkedPaths {
                     paths: std::mem::take(&mut self.batch.paths),
+                    symlink_paths: std::mem::take(&mut self.batch.symlink_paths),
                     unsupported_paths: std::mem::take(&mut self.batch.unsupported_paths),
                 };
                 let _ = self.tx.send(batch);
@@ -910,6 +935,7 @@ fn find_untracked_files(
             if !self.batch.is_empty() {
                 let batch = WalkedPaths {
                     paths: std::mem::take(&mut self.batch.paths),
+                    symlink_paths: std::mem::take(&mut self.batch.symlink_paths),
                     unsupported_paths: std::mem::take(&mut self.batch.unsupported_paths),
                 };
                 let _ = self.tx.send(batch);
@@ -930,9 +956,14 @@ fn find_untracked_files(
                 Err(_) => return ignore::WalkState::Continue,
             };
 
-            // Skip anything that isn't a regular file (directories,
-            // symlinks, sockets, FIFOs, device nodes).
-            if !entry.file_type().is_some_and(|ft| ft.is_file()) {
+            // Regular files feed per-package hashing. Symlinks are trackable
+            // by git and so count as untracked working-tree state, but are
+            // collected separately so hashing never sees them. Everything
+            // else (directories, sockets, FIFOs, device nodes) is skipped.
+            let file_type = entry.file_type();
+            let is_file = file_type.as_ref().is_some_and(|ft| ft.is_file());
+            let is_symlink = file_type.is_some_and(|ft| ft.is_symlink());
+            if !is_file && !is_symlink {
                 return ignore::WalkState::Continue;
             }
 
@@ -960,7 +991,11 @@ fn find_untracked_files(
                 .is_ok();
 
             if !in_ls_tree && !in_status {
-                guard.batch.paths.push(path);
+                if is_file {
+                    guard.batch.paths.push(path);
+                } else {
+                    guard.batch.symlink_paths.push(path);
+                }
             }
 
             ignore::WalkState::Continue
@@ -971,6 +1006,7 @@ fn find_untracked_files(
     let mut untracked = WalkedPaths::new();
     for batch in rx.iter() {
         untracked.paths.extend(batch.paths);
+        untracked.symlink_paths.extend(batch.symlink_paths);
         untracked.unsupported_paths.extend(batch.unsupported_paths);
     }
 
@@ -998,7 +1034,7 @@ fn find_untracked_files(
             }
         }
         if !extra_matchers.is_empty() {
-            untracked.paths.retain(|p| {
+            let not_ignored = |p: &RelativeUnixPathBuf| {
                 if p.as_str().ends_with(".gitignore") {
                     return true;
                 }
@@ -1009,7 +1045,9 @@ fn find_untracked_files(
                     &abs,
                     false,
                 )
-            });
+            };
+            untracked.paths.retain(not_ignored);
+            untracked.symlink_paths.retain(not_ignored);
         }
     }
 
@@ -1212,6 +1250,7 @@ mod tests {
             ls_tree_hashes,
             status_entries,
             unsupported_paths: Vec::new(),
+            untracked_symlinks: Vec::new(),
             untracked_entries_populated: true,
         }
     }
