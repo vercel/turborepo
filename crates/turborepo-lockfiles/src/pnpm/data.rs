@@ -7,6 +7,13 @@ use turbopath::RelativeUnixPathBuf;
 
 use super::{Error, LockfileVersion, SupportedLockfileVersion, dep_path::DepPath};
 
+// A child module of `data` so it can construct the private lockfile structs.
+// The file lives at `data_fast_parse.rs` instead of the default
+// `data/fast_parse.rs` because the repo-root .gitignore ignores any path
+// segment named `data`.
+#[path = "data_fast_parse.rs"]
+mod fast_parse;
+
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
 type Packages = BTreeMap<String, PackageSnapshot>;
@@ -244,6 +251,26 @@ struct LockfileSettings {
 
 impl PnpmLockfile {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, crate::Error> {
+        // Machine-generated pnpm lockfiles parse on a fast event-driven path
+        // (~2x the scanner throughput of the serde path). Inputs outside its
+        // supported YAML subset — and malformed inputs — return `None` and
+        // take the serde path below, which either handles them (e.g. multi-
+        // document lockfiles) or reports a proper error.
+        if let Some(mut this) = fast_parse::parse(bytes) {
+            this.cached_version = this.compute_version();
+            this.build_dependency_index();
+            return Ok(this);
+        }
+
+        tracing::debug!("pnpm lockfile outside fast-parse subset; using serde path");
+        Self::from_bytes_via_serde(bytes)
+    }
+
+    /// The serde-based parse path. Handles everything the fast path doesn't
+    /// (multi-document lockfiles, exotic YAML) and produces proper errors
+    /// for malformed input. Also serves as the correctness oracle for the
+    /// fast path in tests.
+    fn from_bytes_via_serde(bytes: &[u8]) -> Result<Self, crate::Error> {
         let mut documents = serde_yaml_ng::Deserializer::from_slice(bytes).peekable();
         let mut leading_documents = Vec::new();
 
