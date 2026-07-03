@@ -276,15 +276,15 @@ pub fn deliverable_output_globs(prefix: &str, deliverables: &[Deliverable]) -> V
 /// Rewrite the workspace root Cargo.toml for a pruned repository containing
 /// only `kept_dirs` (workspace-relative unix paths of the retained crates).
 ///
-/// * `members` becomes the explicit kept list — glob patterns like
-///   `crates/*` would otherwise still match, but explicitness costs nothing
-///   and `default-members`/path hygiene need the concrete set anyway.
+/// * `members` becomes the explicit kept list — glob patterns like `crates/*`
+///   would otherwise still match, but explicitness costs nothing and
+///   `default-members`/path hygiene need the concrete set anyway.
 /// * `default-members` is filtered to kept dirs (dropped when empty), since
 ///   entries referencing removed crates make Cargo error at load.
-/// * `[workspace.dependencies]` entries whose `path` points at a removed
-///   crate are dropped: no kept crate can reference them (anything
-///   referenced is in the closure and therefore kept), and Cargo validates
-///   the paths of workspace dependencies eagerly.
+/// * `[workspace.dependencies]` entries whose `path` points at a removed crate
+///   are dropped: no kept crate can reference them (anything referenced is in
+///   the closure and therefore kept), and Cargo validates the paths of
+///   workspace dependencies eagerly.
 ///
 /// Everything else — profiles, lints, `[patch]`, non-path workspace
 /// dependencies, comments, formatting — is preserved via `toml_edit`.

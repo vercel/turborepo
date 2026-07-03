@@ -334,8 +334,7 @@ source = "git+https://example.com/dep#deadbeef"
         assert!(!pruned.lockfile.contains("0.4.8"));
         // The lock version header survives, and the output re-parses.
         assert!(pruned.lockfile.contains("version = 4"));
-        let closures =
-            cargo_external_closures(&pruned.lockfile, &["lib-a".to_string()]).unwrap();
+        let closures = cargo_external_closures(&pruned.lockfile, &["lib-a".to_string()]).unwrap();
         assert_eq!(
             names(&closures["lib-a"]),
             vec!["itoa@1.0.0 registry+https://github.com/rust-lang/crates.io-index def456"]

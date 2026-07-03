@@ -154,8 +154,6 @@ pub async fn prune(
     telemetry.track_arg_usage("docker", docker);
     telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
 
-
-
     let prune = Prune::new(base, scope, docker, output_dir, use_gitignore, telemetry).await?;
 
     println!(
@@ -807,12 +805,12 @@ impl<'a> Prune<'a> {
 
     /// Prune the Cargo workspace machinery around the copied crates:
     ///
-    /// * `Cargo.lock` is subset to the closure of the kept crates, so
-    ///   `cargo build --locked` succeeds in the pruned output.
+    /// * `Cargo.lock` is subset to the closure of the kept crates, so `cargo
+    ///   build --locked` succeeds in the pruned output.
     /// * The lock walk may surface members beyond Turborepo's package-graph
     ///   closure (Cargo.lock merges dev-dependency edges, including
-    ///   cycle-participating ones the package graph drops). Their manifests
-    ///   are referenced by kept crates, so their directories are copied too.
+    ///   cycle-participating ones the package graph drops). Their manifests are
+    ///   referenced by kept crates, so their directories are copied too.
     /// * The root `Cargo.toml` is rewritten: explicit `members`, filtered
     ///   `default-members`, and `[workspace.dependencies]` path entries to
     ///   removed crates dropped.

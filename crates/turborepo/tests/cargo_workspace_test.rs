@@ -32,9 +32,8 @@ fn test_cargo_packages_in_task_graph() {
     let json: serde_json::Value = serde_json::from_str(&stdout).expect("dry-run emits JSON");
 
     let tasks = json["tasks"].as_array().expect("tasks array");
-    let task = |id: &str| -> Option<&serde_json::Value> {
-        tasks.iter().find(|t| t["taskId"] == id)
-    };
+    let task =
+        |id: &str| -> Option<&serde_json::Value> { tasks.iter().find(|t| t["taskId"] == id) };
 
     // The bin crate is an entrypoint: it executes a real cargo command.
     let app_build = task("app#build").expect("app#build in graph");
@@ -85,11 +84,11 @@ fn test_cargo_build_executes_caches_and_restores() {
     assert!(output.status.success(), "cold build failed: {output:?}");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("cache miss"), "expected miss: {stdout}");
-    let bin = tempdir.path().join("target").join("debug").join(if cfg!(windows) {
-        "app.exe"
-    } else {
-        "app"
-    });
+    let bin = tempdir
+        .path()
+        .join("target")
+        .join("debug")
+        .join(if cfg!(windows) { "app.exe" } else { "app" });
     assert!(bin.exists(), "cargo build must produce the binary");
 
     // Warm: everything from cache.

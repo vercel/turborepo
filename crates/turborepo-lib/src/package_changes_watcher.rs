@@ -234,7 +234,12 @@ fn classify_changed_files(
         // those events through would re-trigger the very tasks that
         // produced them. Usually target/ is gitignored (and dropped above),
         // but don't rely on it.
-        .filter(|p| !(cargo_enabled && p.components().next().is_some_and(|c| c.as_str() == "target")))
+        .filter(|p| {
+            !(cargo_enabled
+                && p.components()
+                    .next()
+                    .is_some_and(|c| c.as_str() == "target"))
+        })
         .collect();
 
     if changed_files.is_empty() {

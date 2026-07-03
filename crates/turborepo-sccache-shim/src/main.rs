@@ -10,13 +10,13 @@
 //!
 //! Protocol notes (discovered empirically against sccache 0.16 / opendal):
 //! * Keys arrive as `{prefix}/{a}/{b}/{c}/{hash}` — sccache shards keys by
-//!   their first three characters. The final path segment is the full key,
-//!   so it alone becomes the (flattened) artifact hash.
+//!   their first three characters. The final path segment is the full key, so
+//!   it alone becomes the (flattened) artifact hash.
 //! * A `.sccache_check` key is written and read at server startup to probe
 //!   read/write access; it flows through the same artifact translation.
-//! * Reads are `GET`, existence probes are `HEAD`, writes are `PUT`.
-//!   Anything else (`MKCOL`, `PROPFIND`, `OPTIONS`) is acknowledged as a
-//!   no-op — the artifact namespace is flat, so "directories" always exist.
+//! * Reads are `GET`, existence probes are `HEAD`, writes are `PUT`. Anything
+//!   else (`MKCOL`, `PROPFIND`, `OPTIONS`) is acknowledged as a no-op — the
+//!   artifact namespace is flat, so "directories" always exist.
 //!
 //! Every request is logged to stderr as `VERB /path -> status (bytes)` so
 //! the same binary doubles as the protocol-discovery tool.
@@ -139,10 +139,7 @@ async fn respond(shim: &Shim, request: Request) -> (StatusCode, Vec<u8>) {
                     .get("Content-Length")
                     .and_then(|value| value.to_str().ok())
                     .and_then(|value| value.parse().ok());
-                (
-                    StatusCode::MULTI_STATUS,
-                    multistatus(&path, false, length),
-                )
+                (StatusCode::MULTI_STATUS, multistatus(&path, false, length))
             }
             Ok(None) => (StatusCode::NOT_FOUND, Vec::new()),
             Err(error) => {

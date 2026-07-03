@@ -285,9 +285,13 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                             .extend(self.cargo_dependency_globs(task_id_inner.package(), prefix));
                     }
                     if subcommand == "build" {
-                        task_def.outputs.inclusions.extend(
-                            cargo::deliverable_output_globs(prefix, &details.deliverables),
-                        );
+                        task_def
+                            .outputs
+                            .inclusions
+                            .extend(cargo::deliverable_output_globs(
+                                prefix,
+                                &details.deliverables,
+                            ));
                     }
                 }
                 // The workspace package's directory is the repo root, so
