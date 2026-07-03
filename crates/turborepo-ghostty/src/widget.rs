@@ -99,9 +99,6 @@ impl Widget for &mut TerminalWidget<'_, '_, '_> {
             self.cursor.blinking = cursor_blinking;
         }
 
-        let default_fg = rgb_to_color(colors.foreground);
-        let default_bg = rgb_to_color(colors.background);
-
         let Ok(mut row_iter) = RowIterator::new() else {
             return;
         };
@@ -140,18 +137,22 @@ impl Widget for &mut TerminalWidget<'_, '_, '_> {
                     },
                 };
 
+                // Unset cell colors map to `Color::Reset` so the host
+                // terminal's own theme shows through, rather than Ghostty's
+                // built-in default colors (which would paint a black
+                // background on light-themed terminals).
                 let fg = cell
                     .fg_color()
                     .ok()
                     .flatten()
                     .map(rgb_to_color)
-                    .unwrap_or(default_fg);
+                    .unwrap_or(Color::Reset);
                 let bg = cell
                     .bg_color()
                     .ok()
                     .flatten()
                     .map(rgb_to_color)
-                    .unwrap_or(default_bg);
+                    .unwrap_or(Color::Reset);
 
                 let cell_style = cell.style().ok();
                 let mut ratatui_style = cell_style
