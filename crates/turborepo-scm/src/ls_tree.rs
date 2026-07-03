@@ -295,9 +295,11 @@ fn read_diff_index_with_unsupported<R: Read>(
         let is_delete = status_byte == b'D';
 
         match path {
-            Ok(path) => state
-                .entries
-                .push(crate::status::RepoStatusEntry { path, is_delete }),
+            Ok(path) => state.entries.push(crate::status::RepoStatusEntry {
+                path,
+                is_delete,
+                is_untracked: false,
+            }),
             Err(path) => state.unsupported_paths.push(path),
         }
     }

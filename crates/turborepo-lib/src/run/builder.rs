@@ -589,22 +589,14 @@ impl RunBuilder {
             .unzip();
 
         let scm_state = LazyScmState::new();
-        {
-            let scm_state = scm_state.clone();
+        let scm_state_task = {
             let scm = scm.clone();
             let repo_root = self.repo_root.clone();
             tokio::task::spawn_blocking(move || {
-                let _span = tracing::info_span!("capture_scm_state").entered();
-                let sha = scm.get_current_sha(&repo_root).ok();
-                let dirty_hash = scm.get_dirty_hash();
-                let state = if sha.is_some() || dirty_hash.is_some() {
-                    Some(CacheScmState { sha, dirty_hash })
-                } else {
-                    None
-                };
-                scm_state.resolve(state);
-            });
-        }
+                let _span = tracing::info_span!("capture_scm_sha").entered();
+                scm.get_current_sha(&repo_root).ok()
+            })
+        };
 
         let async_cache = {
             let _span = tracing::info_span!("async_cache_new").entered();
@@ -614,7 +606,7 @@ impl RunBuilder {
                 api_client.clone(),
                 self.api_auth.clone(),
                 analytics_sender,
-                scm_state,
+                scm_state.clone(),
             )?
         };
 
@@ -877,6 +869,33 @@ impl RunBuilder {
             }
             None => None,
         });
+
+        {
+            let scm_state = scm_state.clone();
+            let scm = scm.clone();
+            let repo_index = repo_index.clone();
+            tokio::spawn(
+                async move {
+                    let sha = scm_state_task.await.ok().flatten();
+                    let dirty_hash =
+                        tokio::task::spawn_blocking(move || match repo_index.as_ref() {
+                            Some(repo_index) => scm.get_dirty_hash_from_repo_index(repo_index),
+                            None => scm.get_dirty_hash(),
+                        })
+                        .await
+                        .ok()
+                        .flatten();
+                    let state = if sha.is_some() || dirty_hash.is_some() {
+                        Some(CacheScmState { sha, dirty_hash })
+                    } else {
+                        None
+                    };
+                    scm_state.resolve(state);
+                }
+                .instrument(tracing::info_span!("capture_scm_state")),
+            );
+        }
+
         Ok((
             Run {
                 version: self.version,
