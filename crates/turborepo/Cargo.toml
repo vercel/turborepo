@@ -42,7 +42,6 @@ workspace = true
 anyhow = { workspace = true, features = ["backtrace"] }
 dhat = { workspace = true, optional = true }
 miette.workspace = true
-mimalloc = { workspace = true }
 turborepo-lib = { workspace = true, default-features = false }
 turborepo-lsp = { workspace = true, default-features = false }
 turborepo-query = { workspace = true }
@@ -55,3 +54,10 @@ windows-sys = { version = "0.59", features = [
   "Win32_Foundation",
   "Win32_System_Console",
 ] }
+
+# Not enabled on Windows: libmimalloc-sys compiles against the dynamic CRT
+# (the workspace default) while libghostty-vt-sys ships static-CRT objects,
+# and MSVC's /failifmismatch rejects linking both. Revisit if the Windows
+# CRT choice is ever unified.
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+mimalloc = { workspace = true }

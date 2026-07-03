@@ -16,9 +16,9 @@ static ALLOC: dhat::Alloc = dhat::Alloc;
 
 // glibc's malloc loses 10-15% of total CPU to allocator overhead on
 // allocation-heavy phases (lockfile parsing, package graph construction,
-// task dispatch). mimalloc reclaims most of that across every platform we
-// ship.
-#[cfg(not(feature = "heap-dhat"))]
+// task dispatch). mimalloc reclaims most of that. Windows is excluded
+// because of a CRT conflict with libghostty-vt-sys (see Cargo.toml).
+#[cfg(all(not(feature = "heap-dhat"), not(target_os = "windows")))]
 #[global_allocator]
 static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
