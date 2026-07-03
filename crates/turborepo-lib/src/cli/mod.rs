@@ -1,4 +1,4 @@
-use std::{env, io, mem, process, sync::Arc, time::Duration};
+use std::{env, io, mem, process, sync::Arc};
 
 use camino::Utf8Path;
 use clap::CommandFactory;
@@ -284,9 +284,11 @@ pub fn run(
     // (`getaddrinfo`) runs on the blocking pool and cannot be cancelled — can
     // hold the process open for seconds on a slow network after the run has
     // already finished. Everything owed to the user is awaited inside
-    // `run_main` (telemetry and analytics handles get a bounded close there),
-    // so bound the teardown instead of inheriting drop's unbounded join.
-    runtime.shutdown_timeout(Duration::from_millis(250));
+    // `run_main` (telemetry and analytics handles get a bounded close there);
+    // anything still running here is strictly best-effort, so release the
+    // runtime without waiting at all. The orphaned threads die with the
+    // process.
+    runtime.shutdown_background();
 
     result
 }
