@@ -341,14 +341,18 @@ pub async fn daemon_server(
         timeout,
         exit_signal,
         custom_turbo_json_path,
-        |args| {
-            PackageChangesWatcher::new(
-                args.repo_root,
-                args.file_events,
-                args.hash_watcher,
-                args.custom_turbo_json_path,
-                false,
-            )
+        {
+            let cargo_enabled = crate::run::builder::cargo_enabled(&base.opts().future_flags);
+            move |args| {
+                PackageChangesWatcher::new(
+                    args.repo_root,
+                    args.file_events,
+                    args.hash_watcher,
+                    args.custom_turbo_json_path,
+                    false,
+                    cargo_enabled,
+                )
+            }
         },
     );
 

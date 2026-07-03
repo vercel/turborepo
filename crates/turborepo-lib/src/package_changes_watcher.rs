@@ -16,6 +16,7 @@ use turborepo_filewatch::{
     NotifyError, OptionalWatch,
 };
 use turborepo_repository::{
+    cargo,
     change_mapper::{
         ChangeMapper, GlobalDepsPackageChangeMapper, LockfileContents, PackageChanges,
     },
@@ -47,6 +48,7 @@ impl PackageChangesWatcher {
         hash_watcher: Arc<HashWatcher>,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
+        cargo_enabled: bool,
     ) -> Self {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (package_change_events_tx, package_change_events_rx) =
@@ -58,6 +60,7 @@ impl PackageChangesWatcher {
             hash_watcher,
             custom_turbo_json_path,
             single_package,
+            cargo_enabled,
         );
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
@@ -104,6 +107,21 @@ struct Subscriber {
     hash_watcher: Arc<HashWatcher>,
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     single_package: bool,
+    cargo_enabled: bool,
+}
+
+/// Whether an absolute path string is inside the repository's root `target`
+/// directory (Cargo's default build directory).
+fn in_root_target_dir(repo_root: &AbsoluteSystemPathBuf, path: &str) -> bool {
+    AbsoluteSystemPathBuf::new(path)
+        .ok()
+        .and_then(|p| repo_root.anchor(p).ok())
+        .is_some_and(|anchored| {
+            anchored
+                .components()
+                .next()
+                .is_some_and(|c| c.as_str() == "target")
+        })
 }
 
 // This is a workaround because `ignore` doesn't match against a path's
@@ -163,6 +181,7 @@ fn classify_changed_files(
     root_gitignore: &Gitignore,
     custom_turbo_json_path: Option<&AbsoluteSystemPathBuf>,
     change_mapper: &ChangeMapper<'_, GlobalDepsPackageChangeMapper<'_>>,
+    cargo_enabled: bool,
 ) -> FileChangeAction {
     let turbo_json_path = repo_root.join_component(CONFIG_FILE);
     let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
@@ -178,6 +197,26 @@ fn classify_changed_files(
         return FileChangeAction::ConfigChanged;
     }
 
+    // Cargo manifests and the lockfile define the crate set and its edges;
+    // the watcher's package graph is stale after any of them change, so
+    // trigger full rediscovery (Cargo.toml files inside target/ are build
+    // byproducts, not workspace definition).
+    if cargo_enabled {
+        let cargo_lock_path = repo_root.join_component(cargo::CARGO_LOCK);
+        let cargo_definition_changed = trie.keys().any(|p| {
+            if p == cargo_lock_path.as_str() {
+                return true;
+            }
+            std::path::Path::new(p)
+                .file_name()
+                .is_some_and(|name| name == cargo::CARGO_TOML)
+                && !in_root_target_dir(repo_root, p)
+        });
+        if cargo_definition_changed {
+            return FileChangeAction::ConfigChanged;
+        }
+    }
+
     let changed_files: HashSet<_> = trie
         .keys()
         .filter_map(|p| {
@@ -191,6 +230,11 @@ fn classify_changed_files(
             repo_root.anchor(p).ok()
         })
         .filter(|p| !(ancestors_is_ignored(root_gitignore, p) || is_in_git_folder(p)))
+        // Cargo writes continuously into target/ during builds; letting
+        // those events through would re-trigger the very tasks that
+        // produced them. Usually target/ is gitignored (and dropped above),
+        // but don't rely on it.
+        .filter(|p| !(cargo_enabled && p.components().next().is_some_and(|c| c.as_str() == "target")))
         .collect();
 
     if changed_files.is_empty() {
@@ -238,6 +282,7 @@ impl Subscriber {
         hash_watcher: Arc<HashWatcher>,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
+        cargo_enabled: bool,
     ) -> Self {
         // Try to canonicalize the custom path to match what the file watcher reports
         let normalized_custom_path = custom_turbo_json_path.map(|path| {
@@ -279,6 +324,7 @@ impl Subscriber {
             hash_watcher,
             custom_turbo_json_path: normalized_custom_path,
             single_package,
+            cargo_enabled,
         }
     }
 
@@ -292,6 +338,7 @@ impl Subscriber {
         let Ok(pkg_dep_graph) =
             PackageGraphBuilder::new(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.single_package)
+                .with_cargo(self.cargo_enabled)
                 .build()
                 .await
         else {
@@ -536,6 +583,7 @@ impl Subscriber {
                     &root_gitignore,
                     self.custom_turbo_json_path.as_ref(),
                     &change_mapper,
+                    self.cargo_enabled,
                 );
                 tracing::debug!(?action, "classified file changes");
 
@@ -705,6 +753,16 @@ mod test {
             gitignore_lines: &[&str],
             custom_turbo_json: Option<&AbsoluteSystemPathBuf>,
         ) -> FileChangeAction {
+            self.classify_with_cargo(trie, gitignore_lines, custom_turbo_json, false)
+        }
+
+        fn classify_with_cargo(
+            &self,
+            trie: &Trie<String, ()>,
+            gitignore_lines: &[&str],
+            custom_turbo_json: Option<&AbsoluteSystemPathBuf>,
+            cargo_enabled: bool,
+        ) -> FileChangeAction {
             let mapper =
                 GlobalDepsPackageChangeMapper::new(&self.pkg_graph, std::iter::empty::<&str>())
                     .unwrap();
@@ -716,6 +774,7 @@ mod test {
                 &gitignore,
                 custom_turbo_json,
                 &change_mapper,
+                cargo_enabled,
             )
         }
     }
@@ -838,6 +897,66 @@ mod test {
 
         let action = f.classify(&trie, &[], None);
         assert!(matches!(action, FileChangeAction::ConfigChanged));
+    }
+
+    #[tokio::test]
+    async fn classify_cargo_manifest_triggers_rediscovery_when_cargo_enabled() {
+        let f = ClassifyFixture::new().await;
+        let manifest = f
+            .repo_root
+            .join_components(&["crates", "foo", "Cargo.toml"]);
+        let mut trie = Trie::new();
+        trie.insert(manifest.to_string(), ());
+
+        // Manifests define the crate set and its edges; the watcher's graph
+        // is stale after any manifest change.
+        let action = f.classify_with_cargo(&trie, &[], None, true);
+        assert!(matches!(action, FileChangeAction::ConfigChanged));
+
+        // Without cargo support the same file is ordinary content.
+        let action = f.classify_with_cargo(&trie, &[], None, false);
+        assert!(matches!(action, FileChangeAction::PackagesChanged(..)));
+    }
+
+    #[tokio::test]
+    async fn classify_cargo_lock_triggers_rediscovery_when_cargo_enabled() {
+        let f = ClassifyFixture::new().await;
+        let lock = f.repo_root.join_component("Cargo.lock");
+        let mut trie = Trie::new();
+        trie.insert(lock.to_string(), ());
+
+        let action = f.classify_with_cargo(&trie, &[], None, true);
+        assert!(matches!(action, FileChangeAction::ConfigChanged));
+    }
+
+    #[tokio::test]
+    async fn classify_target_dir_writes_ignored_when_cargo_enabled() {
+        let f = ClassifyFixture::new().await;
+        let mut trie = Trie::new();
+        // Build byproducts, including a manifest cargo itself writes under
+        // target/ — neither may re-trigger the tasks that produced them.
+        trie.insert(
+            f.repo_root
+                .join_components(&["target", "debug", "foo"])
+                .to_string(),
+            (),
+        );
+        trie.insert(
+            f.repo_root
+                .join_components(&["target", "package", "foo", "Cargo.toml"])
+                .to_string(),
+            (),
+        );
+
+        let action = f.classify_with_cargo(&trie, &[], None, true);
+        assert!(
+            matches!(action, FileChangeAction::NoRelevantChanges),
+            "target/ writes must be dropped, got {action:?}"
+        );
+
+        // Without cargo support, a directory named target/ is ordinary.
+        let action = f.classify_with_cargo(&trie, &[], None, false);
+        assert!(matches!(action, FileChangeAction::PackagesChanged(..)));
     }
 
     #[tokio::test]
@@ -1175,6 +1294,7 @@ mod test {
             hash_watcher,
             None,
             single_package,
+            false,
         );
 
         TestWatcherHandle {
@@ -1275,7 +1395,8 @@ mod test {
         let mut trie = Trie::new();
         trie.insert(changed_file.to_string(), ());
 
-        let action = classify_changed_files(&trie, &repo_root, &gitignore, None, &change_mapper);
+        let action =
+            classify_changed_files(&trie, &repo_root, &gitignore, None, &change_mapper, false);
 
         match &action {
             FileChangeAction::PackagesChanged(PackageChanges::Some(pkgs), _) => {

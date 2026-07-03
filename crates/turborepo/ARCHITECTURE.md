@@ -231,20 +231,39 @@ All Cargo knowledge lives in `turborepo_repository::cargo`:
   `SCCACHE_*` configuration must reach cargo task environments (strict env
   mode strips it; a productionized shim would inject it directly).
 
+Opting in: set `futureFlags.cargoWorkspaces` in the root turbo.json (the
+durable, repo-level surface), or `TURBO_EXPERIMENTAL_CARGO=1` in the
+environment (the per-invocation escape hatch). A `--filter` that names a
+crate while support is disabled gets an error hint pointing at the flag.
+Note that released turbo versions hard-error on unknown `futureFlags` keys,
+so a repo can only adopt the config flag once every consumer (hooks, CI)
+runs a version that knows it.
+
+Watch mode (`turbo watch`) is Cargo-aware: the package-changes watcher
+builds its graph with crates included, crate source edits re-run exactly
+that crate's tasks, any `Cargo.toml` or `Cargo.lock` change triggers full
+rediscovery (the crate set or its edges may have changed), and events under
+the root `target/` directory are dropped so cargo's own build writes never
+re-trigger the tasks that produced them.
+
 Known limitations of the experiment:
 
 - `--affected` attributes `Cargo.lock` changes to the root package rather
   than to the crates whose closures changed.
 - Builds using `CARGO_TARGET_DIR` or `--target <triple>` write artifacts
   outside `target/<profile>/`; declare explicit `outputs` for those
-  layouts (the env vars are hashed, so caching stays sound).
+  layouts (the env vars are hashed, so caching stays sound). Watch mode's
+  `target/` exclusion also assumes the default layout.
 - Cargo commands (except `cargo run`) execute in a mutually-exclusive serial
   group: concurrent cargo processes serialize on Cargo's build-directory lock
   anyway, so Turborepo runs one at a time — each using all cores — instead of
   spawning processes that sit blocked emitting lock warnings.
-- Only `turbo run` builds a Cargo-aware graph; `prune` (which warns), `query`,
-  `ls`, watch mode, and the daemon do not see crates, and the daemon's file
-  watching does not exclude `target/`.
+- `prune` warns and excludes crates; `query` output has not been audited for
+  Cargo packages.
+- Watch mode's content-hash dedup (suppressing events when file contents
+  are unchanged) does not cover Cargo packages — the hash watcher's
+  discovery is JS-glob-based — so a no-op save inside a crate re-runs its
+  tasks (the run is typically a fast cache hit).
 - Pass-through args after `--` are forwarded to the harness/binary for
   `test`/`bench`/`run`/`clippy`; for `build`/`check`/`doc` they are appended
   as cargo flags instead.
