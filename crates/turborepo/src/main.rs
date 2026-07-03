@@ -14,6 +14,14 @@ const INTERNAL_WINDOWS_CTRL_C_COMMAND: &str = "__internal_windows_ctrl_c";
 #[global_allocator]
 static ALLOC: dhat::Alloc = dhat::Alloc;
 
+// glibc's malloc loses 10-15% of total CPU to allocator overhead on
+// allocation-heavy phases (lockfile parsing, package graph construction,
+// task dispatch). mimalloc reclaims most of that across every platform we
+// ship.
+#[cfg(not(feature = "heap-dhat"))]
+#[global_allocator]
+static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 #[derive(Debug, PartialEq)]
 enum InternalLspCommand {
     Probe,
