@@ -14,7 +14,7 @@ use turbopath::{
 };
 use turborepo_ci::Vendor;
 
-use crate::{Error, GitRepo, SCM};
+use crate::{Error, GitRepo, RepoGitIndex, SCM};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct InvalidRange {
@@ -54,6 +54,17 @@ impl SCM {
     pub fn get_dirty_hash(&self) -> Option<String> {
         match self {
             Self::Git(git) => git.get_dirty_hash(),
+            Self::Manual => None,
+        }
+    }
+
+    /// Compute a dirty hash from an already-built repo index instead of
+    /// spawning `git status`. This preserves the same tracked-content diff
+    /// input as [`Self::get_dirty_hash`], while reusing the untracked-file
+    /// state Turbo already collected for file hashing.
+    pub fn get_dirty_hash_from_repo_index(&self, repo_index: &RepoGitIndex) -> Option<String> {
+        match self {
+            Self::Git(git) => git.get_dirty_hash_from_repo_index(repo_index),
             Self::Manual => None,
         }
     }
@@ -246,31 +257,90 @@ impl GitRepo {
 
         let mut hasher = Sha256::new();
         hasher.update(&status_output);
+        self.finish_dirty_hash(hasher, true)
+    }
+
+    fn get_dirty_hash_from_repo_index(&self, repo_index: &RepoGitIndex) -> Option<String> {
+        use sha2::{Digest, Sha256};
+
+        let mut hasher = Sha256::new();
+        let has_status = repo_index.append_dirty_status_to_hasher(&mut hasher);
+        self.finish_dirty_hash(hasher, has_status)
+    }
+
+    fn finish_dirty_hash(&self, mut hasher: sha2::Sha256, has_status: bool) -> Option<String> {
+        use sha2::Digest;
+
+        // If the repo index did not find any working-tree changes, avoid
+        // streaming a full diff for the common clean case. We only need the
+        // diff stream when staged changes exist (the index can be clean against
+        // the worktree while still differing from HEAD).
+        if !has_status && matches!(self.has_staged_changes(), Some(false)) {
+            return None;
+        }
 
         // Try `git diff HEAD` first. In a freshly initialized repo with no
         // commits, HEAD doesn't exist and git exits with code 128. Fall back
         // to `git diff --cached` which diffs the index against an empty tree,
         // correctly capturing staged file content without needing HEAD.
-        if !self.stream_diff_into_hasher(
+        let diff_has_content = match self.stream_diff_into_hasher(
             &["diff", "HEAD", "--no-ext-diff", "--no-color"],
             &mut hasher,
-        ) && !self.stream_diff_into_hasher(
-            &["diff", "--cached", "--no-ext-diff", "--no-color"],
-            &mut hasher,
         ) {
-            turborepo_log::warn(
-                turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
-                "failed to run git diff for dirty hash",
-            )
-            .emit();
+            Some(has_content) => has_content,
+            None => match self.stream_diff_into_hasher(
+                &["diff", "--cached", "--no-ext-diff", "--no-color"],
+                &mut hasher,
+            ) {
+                Some(has_content) => has_content,
+                None => {
+                    turborepo_log::warn(
+                        turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
+                        "failed to run git diff for dirty hash",
+                    )
+                    .emit();
+                    false
+                }
+            },
+        };
+
+        if !has_status && !diff_has_content {
+            return None;
         }
 
         Some(hex::encode(hasher.finalize()))
     }
 
+    /// Return whether the index differs from HEAD without streaming the diff
+    /// body. `None` means git could not answer (for example, an unborn HEAD),
+    /// so callers should fall back to the full diff path.
+    fn has_staged_changes(&self) -> Option<bool> {
+        let status = Command::new(self.bin.as_std_path())
+            .args([
+                "diff",
+                "--cached",
+                "--quiet",
+                "HEAD",
+                "--no-ext-diff",
+                "--no-color",
+            ])
+            .current_dir(&self.root)
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            .status()
+            .ok()?;
+
+        if status.success() {
+            Some(false)
+        } else if status.code() == Some(1) {
+            Some(true)
+        } else {
+            None
+        }
+    }
+
     /// Spawn a git diff subprocess, streaming its stdout into `hasher`.
-    /// Returns `true` if the command exited successfully.
-    fn stream_diff_into_hasher(&self, args: &[&str], hasher: &mut sha2::Sha256) -> bool {
+    /// Returns whether the diff had content, or `None` if the command failed.
+    fn stream_diff_into_hasher(&self, args: &[&str], hasher: &mut sha2::Sha256) -> Option<bool> {
         use std::{io::Read, process::Stdio};
 
         use sha2::Digest;
@@ -284,22 +354,29 @@ impl GitRepo {
             .spawn()
         {
             Ok(child) => child,
-            Err(_) => return false,
+            Err(_) => return None,
         };
 
+        let mut has_content = false;
         if let Some(stdout) = child.stdout.take() {
             let mut reader = std::io::BufReader::new(stdout);
             let mut buf = [0u8; 65536];
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) => break,
-                    Ok(n) => hasher.update(&buf[..n]),
+                    Ok(n) => {
+                        has_content = true;
+                        hasher.update(&buf[..n]);
+                    }
                     Err(_) => break,
                 }
             }
         }
 
-        child.wait().is_ok_and(|s| s.success())
+        child
+            .wait()
+            .is_ok_and(|s| s.success())
+            .then_some(has_content)
     }
 
     /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
@@ -560,7 +637,7 @@ mod tests {
 
     use super::{CIEnv, InvalidRange, default_base_ref, previous_content};
     use crate::{
-        Error, GitRepo, SCM,
+        Error, GitRepo, RepoGitIndex, SCM,
         git::{GitHubCommit, GitHubEvent},
     };
 
@@ -1668,6 +1745,56 @@ mod tests {
     #[test]
     fn test_dirty_hash_manual_scm_returns_none() {
         assert_eq!(SCM::Manual.get_dirty_hash(), None);
+    }
+
+    #[test]
+    fn test_dirty_hash_from_repo_index_clean_tree_returns_none() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert_eq!(scm.get_dirty_hash_from_repo_index(&repo_index), None);
+    }
+
+    #[test]
+    fn test_dirty_hash_from_repo_index_untracked_file() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(repo_root.path().join("untracked.txt"), "new file").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_some());
+    }
+
+    #[test]
+    fn test_dirty_hash_from_repo_index_staged_changes() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(&file, "staged content").unwrap();
+        run_git(repo_root.path(), &["add", "foo.txt"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_some());
     }
 
     #[test]

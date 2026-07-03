@@ -167,12 +167,14 @@ impl RepoGitIndex {
                     status_entries.push(RepoStatusEntry {
                         path,
                         is_delete: false,
+                        is_untracked: false,
                     });
                 }
                 EntryClassification::Deleted { path } => {
                     status_entries.push(RepoStatusEntry {
                         path,
                         is_delete: true,
+                        is_untracked: false,
                     });
                 }
                 EntryClassification::Unsupported(path) => unsupported_paths.push(path),
@@ -285,6 +287,7 @@ impl RepoGitIndex {
                     status_entries.push(RepoStatusEntry {
                         path,
                         is_delete: false,
+                        is_untracked: true,
                     });
                 }
             }
@@ -304,6 +307,7 @@ impl RepoGitIndex {
                     status_entries.push(RepoStatusEntry {
                         path,
                         is_delete: false,
+                        is_untracked: true,
                     });
                 }
             }
@@ -352,6 +356,7 @@ impl RepoGitIndex {
             self.status_entries.push(RepoStatusEntry {
                 path,
                 is_delete: false,
+                is_untracked: true,
             });
         }
 
@@ -399,6 +404,7 @@ impl RepoGitIndex {
             self.status_entries.push(RepoStatusEntry {
                 path,
                 is_delete: false,
+                is_untracked: true,
             });
         }
 
@@ -414,6 +420,30 @@ impl RepoGitIndex {
         );
 
         Ok(())
+    }
+
+    /// Append untracked file names from the repo index to the dirty-hash
+    /// input. Returns `true` when there was any untracked entry to hash.
+    ///
+    /// Modified/deleted tracked files are intentionally omitted here: the diff
+    /// stream is the canonical input for tracked content changes. The repo
+    /// index may conservatively mark clean racy-git entries as modified so they
+    /// get content-hashed later, and those must not make a clean tree dirty.
+    pub fn append_dirty_status_to_hasher(&self, hasher: &mut sha2::Sha256) -> bool {
+        use sha2::Digest;
+
+        let mut has_untracked = false;
+        for entry in &self.status_entries {
+            if !entry.is_untracked {
+                continue;
+            }
+            has_untracked = true;
+            hasher.update(b"?\0");
+            hasher.update(entry.path.as_str().as_bytes());
+            hasher.update(b"\0");
+        }
+
+        has_untracked
     }
 
     /// Extract hashes for a single package from the cached repo-wide data.
@@ -1174,6 +1204,7 @@ mod tests {
             .map(|(p, is_delete)| RepoStatusEntry {
                 path: path(p),
                 is_delete,
+                is_untracked: false,
             })
             .collect();
         status_entries.sort_by(|a, b| a.path.cmp(&b.path));

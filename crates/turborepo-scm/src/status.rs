@@ -11,6 +11,7 @@ use crate::{Error, GitHashes, GitRepo, git_path::require_git_path, wait_for_succ
 pub(crate) struct RepoStatusEntry {
     pub path: RelativeUnixPathBuf,
     pub is_delete: bool,
+    pub is_untracked: bool,
 }
 
 impl GitRepo {
@@ -88,6 +89,7 @@ fn read_status_raw<R: Read>(reader: R) -> Result<Vec<RepoStatusEntry>, Error> {
         entries.push(RepoStatusEntry {
             path,
             is_delete: entry.is_delete,
+            is_untracked: entry.is_untracked,
         });
         buffer.clear();
     }
@@ -97,6 +99,7 @@ fn read_status_raw<R: Read>(reader: R) -> Result<Vec<RepoStatusEntry>, Error> {
 struct StatusEntry<'a> {
     filename: &'a [u8],
     is_delete: bool,
+    is_untracked: bool,
 }
 
 fn parse_status(i: &[u8]) -> Result<StatusEntry<'_>, Error> {
@@ -121,6 +124,7 @@ fn nom_parse_status(i: &[u8]) -> nom::IResult<&[u8], StatusEntry<'_>> {
         StatusEntry {
             filename,
             is_delete: x[0] == b'D' || y[0] == b'D',
+            is_untracked: x[0] == b'?' && y[0] == b'?',
         },
     ))
 }

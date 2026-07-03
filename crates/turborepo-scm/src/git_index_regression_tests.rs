@@ -104,6 +104,7 @@ impl TestRepo {
             status.push(crate::status::RepoStatusEntry {
                 path: p,
                 is_delete: false,
+                is_untracked: true,
             });
         }
         status.sort_by(|a, b| a.path.cmp(&b.path));
@@ -126,6 +127,7 @@ impl TestRepo {
             status.push(crate::status::RepoStatusEntry {
                 path: p,
                 is_delete: false,
+                is_untracked: true,
             });
         }
         status.sort_by(|a, b| a.path.cmp(&b.path));
