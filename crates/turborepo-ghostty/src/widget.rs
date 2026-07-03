@@ -99,8 +99,8 @@ impl Widget for &mut TerminalWidget<'_, '_, '_> {
             self.cursor.blinking = cursor_blinking;
         }
 
-        let default_fg = rgb_to_color(colors.foreground);
-        let default_bg = rgb_to_color(colors.background);
+        let default_fg = Color::Reset;
+        let default_bg = Color::Reset;
 
         let Ok(mut row_iter) = RowIterator::new() else {
             return;
@@ -231,5 +231,33 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Unstyled cells stay `Color::Reset` so the terminal theme shows
+    /// through.
+    #[test]
+    fn default_colors_defer_to_terminal_theme() {
+        let (cols, rows): (u16, u16) = (20, 2);
+        let backend = TestBackend::new(cols, rows);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+
+        let mut parser = Parser::new(rows, cols, 0);
+        parser.process(b"a\x1b[38;2;1;2;3mb");
+        terminal
+            .draw(|frame| {
+                let mut widget =
+                    TerminalWidget::new(&mut parser.terminal, &mut parser.render_state);
+                widget.render(frame.area(), frame.buffer_mut());
+            })
+            .expect("draw");
+
+        let buf = terminal.backend().buffer();
+        let cell = |col: u16| &buf[ratatui::layout::Position::new(col, 0)];
+
+        // Unstyled cell: both colors stay unset for the terminal to resolve.
+        assert_eq!(cell(0).fg, Color::Reset);
+        assert_eq!(cell(0).bg, Color::Reset);
+        // Explicitly colored cells are unaffected.
+        assert_eq!(cell(1).fg, Color::Rgb(1, 2, 3));
     }
 }
