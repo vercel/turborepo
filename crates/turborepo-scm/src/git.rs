@@ -271,14 +271,6 @@ impl GitRepo {
     fn finish_dirty_hash(&self, mut hasher: sha2::Sha256, has_status: bool) -> Option<String> {
         use sha2::Digest;
 
-        // If the repo index did not find any working-tree changes, avoid
-        // streaming a full diff for the common clean case. We only need the
-        // diff stream when staged changes exist (the index can be clean against
-        // the worktree while still differing from HEAD).
-        if !has_status && matches!(self.has_staged_changes(), Some(false)) {
-            return None;
-        }
-
         // Try `git diff HEAD` first. In a freshly initialized repo with no
         // commits, HEAD doesn't exist and git exits with code 128. Fall back
         // to `git diff --cached` which diffs the index against an empty tree,
@@ -309,33 +301,6 @@ impl GitRepo {
         }
 
         Some(hex::encode(hasher.finalize()))
-    }
-
-    /// Return whether the index differs from HEAD without streaming the diff
-    /// body. `None` means git could not answer (for example, an unborn HEAD),
-    /// so callers should fall back to the full diff path.
-    fn has_staged_changes(&self) -> Option<bool> {
-        let status = Command::new(self.bin.as_std_path())
-            .args([
-                "diff",
-                "--cached",
-                "--quiet",
-                "HEAD",
-                "--no-ext-diff",
-                "--no-color",
-            ])
-            .current_dir(&self.root)
-            .env("GIT_OPTIONAL_LOCKS", "0")
-            .status()
-            .ok()?;
-
-        if status.success() {
-            Some(false)
-        } else if status.code() == Some(1) {
-            Some(true)
-        } else {
-            None
-        }
     }
 
     /// Spawn a git diff subprocess, streaming its stdout into `hasher`.
@@ -1745,6 +1710,168 @@ mod tests {
     #[test]
     fn test_dirty_hash_manual_scm_returns_none() {
         assert_eq!(SCM::Manual.get_dirty_hash(), None);
+    }
+
+    /// Differential matrix: the repo-index dirty hash must agree with the
+    /// `git status`-based dirty hash on whether the tree is dirty, across
+    /// every class of working-tree state. This is the contract that protects
+    /// cache provenance metadata from regressing.
+    #[test]
+    fn test_dirty_hash_paths_agree_across_states() {
+        type Mutation = fn(&Path);
+        let cases: &[(&str, Mutation, bool)] = &[
+            ("clean", |_root| {}, false),
+            (
+                "unstaged_modification",
+                |root| fs::write(root.join("foo.txt"), "modified").unwrap(),
+                true,
+            ),
+            (
+                "staged_modification",
+                |root| {
+                    fs::write(root.join("foo.txt"), "staged").unwrap();
+                    run_git(root, &["add", "foo.txt"]);
+                },
+                true,
+            ),
+            (
+                "staged_new_file",
+                |root| {
+                    fs::write(root.join("brand_new.txt"), "new").unwrap();
+                    run_git(root, &["add", "brand_new.txt"]);
+                },
+                true,
+            ),
+            (
+                "staged_deletion",
+                |root| {
+                    run_git(root, &["rm", "-q", "foo.txt"]);
+                },
+                true,
+            ),
+            (
+                "unstaged_deletion",
+                |root| fs::remove_file(root.join("foo.txt")).unwrap(),
+                true,
+            ),
+            (
+                "untracked_file",
+                |root| fs::write(root.join("untracked.txt"), "hi").unwrap(),
+                true,
+            ),
+            (
+                "untracked_nested",
+                |root| {
+                    fs::create_dir_all(root.join("deep/dir")).unwrap();
+                    fs::write(root.join("deep/dir/f.txt"), "hi").unwrap();
+                },
+                true,
+            ),
+            (
+                "gitignored_untracked",
+                |root| fs::write(root.join("ignored.tmp"), "hi").unwrap(),
+                false,
+            ),
+            (
+                "racy_rewrite_same_content",
+                |root| {
+                    // Rewrite identical content: mtime changes, content does
+                    // not. The gix index conservatively classifies this as
+                    // modified; the dirty hash must not.
+                    let path = root.join("foo.txt");
+                    let content = fs::read(&path).unwrap();
+                    fs::write(&path, content).unwrap();
+                },
+                false,
+            ),
+        ];
+
+        for (name, mutate, expected_dirty) in cases {
+            let (repo_root, repo_path) = setup_repository(None).unwrap();
+            fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+            fs::write(repo_root.path().join(".gitignore"), "*.tmp\n").unwrap();
+            commit_file(&repo_path, Path::new("foo.txt"), None);
+            run_git(repo_root.path(), &["add", ".gitignore"]);
+            run_git(repo_root.path(), &["commit", "-q", "-m", "gitignore"]);
+
+            mutate(repo_root.path());
+
+            let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+            let scm = SCM::new(&git_root);
+            let git = make_git_repo(&git_root);
+            let repo_index = RepoGitIndex::new(&git).unwrap();
+
+            let old = scm.get_dirty_hash();
+            let new = scm.get_dirty_hash_from_repo_index(&repo_index);
+
+            assert_eq!(
+                old.is_some(),
+                *expected_dirty,
+                "{name}: status-based path expected dirty={expected_dirty}, got {old:?}"
+            );
+            assert_eq!(
+                new.is_some(),
+                *expected_dirty,
+                "{name}: repo-index path expected dirty={expected_dirty}, got {new:?}"
+            );
+
+            // Determinism: rebuilding the index over the same state must
+            // reproduce the same hash.
+            let repo_index2 = RepoGitIndex::new(&git).unwrap();
+            let new2 = scm.get_dirty_hash_from_repo_index(&repo_index2);
+            assert_eq!(
+                new, new2,
+                "{name}: repo-index dirty hash must be deterministic"
+            );
+        }
+    }
+
+    #[test]
+    fn test_dirty_hash_from_repo_index_unstaged_modification() {
+        // Regression test: an unstaged modification to a tracked file must
+        // produce a dirty hash. An earlier version of the repo-index path
+        // short-circuited on `git diff --cached` (staged-only) and missed
+        // this, the most common dirty state.
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(&file, "modified but not staged").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(
+            scm.get_dirty_hash_from_repo_index(&repo_index).is_some(),
+            "unstaged modification must produce a dirty hash"
+        );
+    }
+
+    #[test]
+    fn test_dirty_hash_from_repo_index_untracked_name_sensitivity() {
+        // Different untracked file names must produce different hashes.
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+
+        fs::write(repo_root.path().join("name_one.txt"), "x").unwrap();
+        let hash_one = scm.get_dirty_hash_from_repo_index(&RepoGitIndex::new(&git).unwrap());
+        fs::remove_file(repo_root.path().join("name_one.txt")).unwrap();
+
+        fs::write(repo_root.path().join("name_two.txt"), "x").unwrap();
+        let hash_two = scm.get_dirty_hash_from_repo_index(&RepoGitIndex::new(&git).unwrap());
+
+        assert_ne!(
+            hash_one, hash_two,
+            "different untracked file names must produce different hashes"
+        );
     }
 
     #[test]
