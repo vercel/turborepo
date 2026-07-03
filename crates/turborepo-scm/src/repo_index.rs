@@ -809,8 +809,12 @@ fn find_untracked_files(
     // directory so patterns are scoped correctly (e.g., `dist/` in
     // `packages/ui/.gitignore` only matches under `packages/ui/`).
     let gitignore_matchers = {
-        let mut matchers: HashMap<std::path::PathBuf, ignore::gitignore::Gitignore> =
-            HashMap::new();
+        use rayon::prelude::*;
+
+        let mut matchers: HashMap<
+            std::path::PathBuf,
+            std::sync::Arc<ignore::gitignore::Gitignore>,
+        > = HashMap::new();
 
         // Global gitignore + .git/info/exclude are rooted at the repo root
         let mut root_builder = ignore::gitignore::GitignoreBuilder::new(root.as_path());
@@ -830,8 +834,10 @@ fn find_untracked_files(
         // Collect .gitignore paths from both clean tracked files and
         // dirty (modified-but-tracked) files. A modified .gitignore
         // lands in status_entries instead of ls_tree_hashes, but its
-        // on-disk patterns must still be respected.
-        let gitignore_paths: Vec<&str> = ls_tree_hashes
+        // on-disk patterns must still be respected. Only files literally
+        // named `.gitignore` count; git attaches no meaning to files that
+        // merely end in that suffix (e.g. `foo.gitignore`).
+        let mut gitignore_paths: Vec<&str> = ls_tree_hashes
             .iter()
             .map(|(p, _)| p.as_str())
             .chain(
@@ -840,43 +846,62 @@ fn find_untracked_files(
                     .filter(|e| !e.is_delete)
                     .map(|e| e.path.as_str()),
             )
-            .filter(|s| s.ends_with(".gitignore"))
+            .filter(|s| *s == ".gitignore" || s.ends_with("/.gitignore"))
             .collect();
+        gitignore_paths.sort_unstable();
+        gitignore_paths.dedup();
 
-        for s in gitignore_paths {
+        let (root_gitignores, nested_gitignores): (Vec<&str>, Vec<&str>) = gitignore_paths
+            .into_iter()
+            .partition(|s| *s == ".gitignore");
+
+        for s in root_gitignores {
+            // Root .gitignore goes into the root builder alongside
+            // global and info/exclude rules
             let abs_path = root.join(s);
-            if !abs_path.exists() {
-                continue;
-            }
-            let gi_dir = abs_path.parent().unwrap_or(root.as_path());
-            if gi_dir == root.as_path() {
-                // Root .gitignore goes into the root builder alongside
-                // global and info/exclude rules
+            if abs_path.exists() {
                 let _ = root_builder.add(&abs_path);
                 has_root_rules = true;
-            } else {
-                // Nested .gitignore gets its own matcher scoped to its dir
+            }
+        }
+
+        // Nested .gitignore files each get their own matcher scoped to
+        // their containing directory. Building compiles globs, so spread
+        // it across threads.
+        let nested: Vec<(std::path::PathBuf, ignore::gitignore::Gitignore)> = nested_gitignores
+            .par_iter()
+            .filter_map(|s| {
+                let abs_path = root.join(s);
+                if !abs_path.exists() {
+                    return None;
+                }
+                let gi_dir = abs_path.parent()?;
                 let mut builder = ignore::gitignore::GitignoreBuilder::new(gi_dir);
                 let _ = builder.add(&abs_path);
-                if let Ok(gi) = builder.build()
-                    && !gi.is_empty()
-                {
-                    matchers.insert(gi_dir.to_path_buf(), gi);
+                let gi = builder.build().ok()?;
+                if gi.is_empty() {
+                    return None;
                 }
-            }
+                Some((gi_dir.to_path_buf(), gi))
+            })
+            .collect();
+        for (dir, gi) in nested {
+            matchers.insert(dir, std::sync::Arc::new(gi));
         }
 
         if has_root_rules
             && let Ok(gi) = root_builder.build()
             && !gi.is_empty()
         {
-            matchers.insert(root.as_path().to_path_buf(), gi);
+            matchers.insert(root.as_path().to_path_buf(), std::sync::Arc::new(gi));
         }
 
         matchers
     };
     let gitignore_matchers = std::sync::Arc::new(gitignore_matchers);
-
+    let walk_generation = UNTRACKED_WALK_GENERATION
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        .wrapping_add(1);
     let (tx, rx) = mpsc::channel::<WalkedPaths>();
 
     // Disable ALL per-directory probing. Gitignore rules are applied via
@@ -918,8 +943,43 @@ fn find_untracked_files(
                     return false;
                 }
 
-                // Only ancestor .gitignore files can affect this entry.
-                !is_ignored_by_indexed_gitignore_matchers(&matchers, root.as_path(), path, is_dir)
+                // Only ancestor .gitignore files can affect this entry. Git
+                // never lets a directory's own .gitignore match the directory
+                // itself, so the applicable matcher chain is determined
+                // entirely by the entry's parent directory — which the walker
+                // hands us in readdir batches. Memoize the chain per thread,
+                // keyed on the parent dir, so the ancestor walk (and its
+                // HashMap probes) runs once per directory instead of once per
+                // entry.
+                if matchers.is_empty() {
+                    return true;
+                }
+                let parent = path.parent().unwrap_or(root.as_path());
+                let result = CHAIN_MEMO.with(|memo| {
+                    let mut memo = memo.borrow_mut();
+                    let (memo_generation, memo_dir, chain) = &mut *memo;
+                    if *memo_generation != walk_generation || memo_dir.as_path() != parent {
+                        *memo_generation = walk_generation;
+                        memo_dir.clear();
+                        memo_dir.push(parent);
+                        ancestor_matcher_chain(&matchers, root.as_path(), parent, chain);
+                    }
+                    !is_ignored_by_matcher_chain(chain, path, is_dir)
+                });
+
+                // A directory whose own .gitignore matches everything (e.g. a
+                // lone `*`) can be pruned outright when that matcher has no
+                // whitelist patterns: every child would match the same
+                // catch-all, and a whitelist in a deeper .gitignore can't
+                // rescue anything because the intermediate directory itself
+                // gets ignored (git cannot re-include under an excluded
+                // directory). This avoids pointlessly reading directories
+                // that contribute nothing.
+                result
+                    && !(is_dir
+                        && matchers.get(path).is_some_and(|own| {
+                            own.num_whitelists() == 0 && own.matched(path, true).is_ignore()
+                        }))
             }
         })
         .threads(rayon::current_num_threads().min(8))
@@ -1154,6 +1214,72 @@ fn is_nested_path(path: &str, prefix: &str) -> bool {
 
 fn is_nested_path_bytes(path: &[u8], prefix: &[u8]) -> bool {
     path.len() > prefix.len() && path.starts_with(prefix) && path.get(prefix.len()) == Some(&b'/')
+}
+
+/// Distinguishes matcher-chain memo entries between walks so a long-lived
+/// process (daemon, test harness) can never reuse a chain built from a
+/// previous walk's matchers.
+static UNTRACKED_WALK_GENERATION: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+thread_local! {
+    /// Per-thread memo for the untracked walk: (walk generation, parent dir,
+    /// matcher chain for that dir ordered deepest-first).
+    static CHAIN_MEMO: std::cell::RefCell<(
+        u64,
+        std::path::PathBuf,
+        Vec<std::sync::Arc<ignore::gitignore::Gitignore>>,
+    )> = const { std::cell::RefCell::new((0, std::path::PathBuf::new(), Vec::new())) };
+}
+
+/// Collect the gitignore matchers applicable to entries of `dir`, ordered
+/// deepest-first, into `chain` (cleared first).
+fn ancestor_matcher_chain(
+    matchers: &std::collections::HashMap<
+        std::path::PathBuf,
+        std::sync::Arc<ignore::gitignore::Gitignore>,
+    >,
+    root: &std::path::Path,
+    dir: &std::path::Path,
+    chain: &mut Vec<std::sync::Arc<ignore::gitignore::Gitignore>>,
+) {
+    chain.clear();
+    let mut cur = dir;
+    loop {
+        if let Some(matcher) = matchers.get(cur) {
+            chain.push(matcher.clone());
+        }
+        if cur == root {
+            break;
+        }
+        let Some(parent) = cur.parent() else {
+            break;
+        };
+        cur = parent;
+    }
+}
+
+/// Apply git's precedence rules to a chain of ancestor matchers ordered
+/// deepest-first: the first matcher with a verdict for `path` wins, so a
+/// whitelist in a nested .gitignore overrides an ignore rule in a parent.
+///
+/// Checking only `path` itself (not its parents) is sound here because the
+/// walker prunes ignored directories: every ancestor of a visited entry has
+/// already been ruled non-ignored, mirroring git's rule that files under an
+/// excluded directory cannot be re-included.
+fn is_ignored_by_matcher_chain(
+    chain: &[std::sync::Arc<ignore::gitignore::Gitignore>],
+    path: &std::path::Path,
+    is_dir: bool,
+) -> bool {
+    for matcher in chain {
+        match matcher.matched(path, is_dir) {
+            ignore::Match::None => continue,
+            ignore::Match::Ignore(_) => return true,
+            ignore::Match::Whitelist(_) => return false,
+        }
+    }
+    false
 }
 
 fn is_ignored_by_indexed_gitignore_matchers(
@@ -1575,6 +1701,104 @@ mod tests {
         untracked.sort();
 
         assert_eq!(untracked, vec![path("pkg-a/keep.ts")]);
+    }
+
+    #[test]
+    fn test_find_untracked_files_nested_whitelist_overrides_parent_ignore() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        let git = test_git_repo(root);
+
+        // Git gives patterns from deeper .gitignore files precedence over
+        // shallower ones: pkg/important.log is NOT ignored.
+        write_file(root, ".gitignore", "*.log\n");
+        write_file(root, "pkg/.gitignore", "!important.log\n");
+        write_file(root, "pkg/package.json", "{}");
+        write_file(root, "pkg/important.log", "untracked, whitelisted");
+        write_file(root, "pkg/debug.log", "ignored by root");
+        write_file(root, "other.log", "ignored by root");
+
+        let index = make_index(
+            vec![("pkg/package.json", "aaa")],
+            vec![(".gitignore", false), ("pkg/.gitignore", false)],
+        );
+
+        let mut untracked =
+            find_untracked_files(&git, &index.ls_tree_hashes, &index.status_entries, None)
+                .unwrap()
+                .paths;
+        untracked.sort();
+
+        assert_eq!(untracked, vec![path("pkg/important.log")]);
+    }
+
+    #[test]
+    fn test_find_untracked_files_catch_all_gitignore_dir() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        let git = test_git_repo(root);
+
+        // fixtures/.gitignore ignores everything inside; nothing under it is
+        // untracked (and the walk can prune the directory outright).
+        write_file(root, "fixtures/.gitignore", "*\n");
+        write_file(root, "fixtures/generated.js", "ignored");
+        write_file(root, "fixtures/deep/nested.js", "ignored");
+        write_file(root, "visible.ts", "untracked");
+
+        let index = make_index(vec![], vec![("fixtures/.gitignore", false)]);
+
+        let mut untracked =
+            find_untracked_files(&git, &index.ls_tree_hashes, &index.status_entries, None)
+                .unwrap()
+                .paths;
+        untracked.sort();
+
+        assert_eq!(untracked, vec![path("visible.ts")]);
+    }
+
+    #[test]
+    fn test_find_untracked_files_catch_all_gitignore_with_whitelist() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        let git = test_git_repo(root);
+
+        // A whitelist alongside a catch-all must prevent pruning: git keeps
+        // fixtures/keep.js untracked.
+        write_file(root, "fixtures/.gitignore", "*\n!keep.js\n");
+        write_file(root, "fixtures/keep.js", "untracked, whitelisted");
+        write_file(root, "fixtures/generated.js", "ignored");
+
+        let index = make_index(vec![], vec![("fixtures/.gitignore", false)]);
+
+        let mut untracked =
+            find_untracked_files(&git, &index.ls_tree_hashes, &index.status_entries, None)
+                .unwrap()
+                .paths;
+        untracked.sort();
+
+        assert_eq!(untracked, vec![path("fixtures/keep.js")]);
+    }
+
+    #[test]
+    fn test_find_untracked_files_ignores_suffix_named_gitignore_files() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        let git = test_git_repo(root);
+
+        // Only files literally named `.gitignore` carry ignore rules. A
+        // tracked template like `template.gitignore` must not be applied.
+        write_file(root, "pkg/template.gitignore", "*.log\n");
+        write_file(root, "pkg/debug.log", "untracked");
+
+        let index = make_index(vec![("pkg/template.gitignore", "aaa")], vec![]);
+
+        let mut untracked =
+            find_untracked_files(&git, &index.ls_tree_hashes, &index.status_entries, None)
+                .unwrap()
+                .paths;
+        untracked.sort();
+
+        assert_eq!(untracked, vec![path("pkg/debug.log")]);
     }
 
     #[test]
