@@ -245,7 +245,10 @@ mod tests {
             Ok(())
         };
         write(&["package.json"], r#"{"name": "rooted-pkg"}"#)?;
-        write(&["packages", "lib-a", "package.json"], r#"{"name": "lib-a"}"#)?;
+        write(
+            &["packages", "lib-a", "package.json"],
+            r#"{"name": "lib-a"}"#,
+        )?;
 
         struct RootedDiscovery {
             root: AbsoluteSystemPathBuf,
@@ -262,9 +265,11 @@ mod tests {
                             turbo_json: None,
                         },
                         discovery::WorkspaceData {
-                            package_json: self
-                                .root
-                                .join_components(&["packages", "lib-a", "package.json"]),
+                            package_json: self.root.join_components(&[
+                                "packages",
+                                "lib-a",
+                                "package.json",
+                            ]),
                             turbo_json: None,
                         },
                     ],
