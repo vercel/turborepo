@@ -247,6 +247,22 @@ impl PackageInputsHashes {
     }
 }
 
+/// Compute the external dependency hash for every workspace in parallel.
+/// Many tasks share the same package, so hashing once per package avoids
+/// re-sorting transitive dependencies for every task.
+#[tracing::instrument(skip_all)]
+pub fn compute_external_deps_hashes<'b>(
+    workspaces: impl Iterator<Item = (&'b PackageName, &'b PackageInfo)>,
+) -> HashMap<String, String> {
+    let ws: Vec<_> = workspaces.collect();
+    ws.par_iter()
+        .map(|(name, info)| {
+            let hash = get_external_deps_hash(&info.transitive_dependencies);
+            (name.as_str().to_owned(), hash)
+        })
+        .collect()
+}
+
 #[derive(Default, Debug, Clone)]
 pub struct TaskHashTracker {
     state: Arc<RwLock<TaskHashTrackerState>>,
@@ -330,14 +346,15 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         if self.run_opts.single_package() {
             return;
         }
-        let ws: Vec<_> = workspaces.collect();
-        self.external_deps_hash_cache = ws
-            .par_iter()
-            .map(|(name, info)| {
-                let hash = get_external_deps_hash(&info.transitive_dependencies);
-                (name.as_str().to_owned(), hash)
-            })
-            .collect();
+        self.external_deps_hash_cache = compute_external_deps_hashes(workspaces);
+    }
+
+    /// Install an externally computed dependency-hash cache (see
+    /// [`compute_external_deps_hashes`]). Lets callers compute the cache
+    /// concurrently with other startup work instead of serially during
+    /// hasher construction.
+    pub fn set_external_deps_hash_cache(&mut self, cache: HashMap<String, String>) {
+        self.external_deps_hash_cache = cache;
     }
 
     #[tracing::instrument(skip(self, task_definition, task_env_mode, workspace, dependency_set))]
