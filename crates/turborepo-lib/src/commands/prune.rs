@@ -8,13 +8,14 @@ use std::{
 
 use globwalk::{ValidatedGlob, WalkType};
 use miette::Diagnostic;
-use tracing::{trace, warn};
+use tracing::trace;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
     RelativeUnixPath, RelativeUnixPathBuf,
 };
 use turborepo_repository::{
-    package_graph::{self, PackageGraph, PackageName, PackageNode},
+    cargo,
+    package_graph::{self, PackageGraph, PackageName, PackageNode, PackageToolchain},
     package_json::PackageJson,
     package_manager::{npmrc::NpmRc, PackageManager},
 };
@@ -69,6 +70,17 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     TurboJson(#[from] turborepo_turbo_json::Error),
+    #[error("Cannot prune a Cargo workspace without a Cargo.lock; run a build to generate it.")]
+    MissingCargoLockfile,
+    #[error(
+        "'{0}' is the synthetic Cargo workspace package; prune a crate or an application package \
+         instead."
+    )]
+    CargoWorkspacePackageNotPruneable(String),
+    #[error(transparent)]
+    Cargo(#[from] cargo::Error),
+    #[error(transparent)]
+    CargoLock(#[from] turborepo_lockfiles::CargoLockError),
 }
 
 static ADDITIONAL_FILES: LazyLock<Vec<(&'static RelativeUnixPath, Option<CopyDestination>)>> =
@@ -142,15 +154,7 @@ pub async fn prune(
     telemetry.track_arg_usage("docker", docker);
     telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
 
-    // Prune's package graph is JS-only: it copies manifests/lockfiles with
-    // package.json semantics, which don't hold for Cargo crates. Warn loudly
-    // so users of the experiment know crates are absent from pruned output.
-    if crate::run::builder::cargo_enabled(&base.opts().future_flags) {
-        warn!(
-            "Cargo package support is enabled, but `turbo prune` does not support Cargo crates; \
-             the pruned output will not include any Rust packages"
-        );
-    }
+
 
     let prune = Prune::new(base, scope, docker, output_dir, use_gitignore, telemetry).await?;
 
@@ -173,6 +177,7 @@ pub async fn prune(
 
     let mut workspace_paths = Vec::new();
     let mut workspace_names = Vec::new();
+    let mut cargo_crate_names = Vec::new();
     let workspaces = prune.internal_dependencies();
     let lockfile_keys = prune.lockfile_keys(&workspaces)?;
     for workspace in workspaces {
@@ -183,6 +188,23 @@ pub async fn prune(
 
         // We don't want to do any copying for the root workspace
         if let PackageName::Other(workspace) = workspace {
+            if entry.toolchain == PackageToolchain::Cargo {
+                // The synthetic workspace package has no directory of its
+                // own (it is anchored at the root Cargo.toml); the root
+                // manifest is handled by prune_cargo_workspace.
+                if entry.cargo.as_ref().map(|details| details.kind)
+                    == Some(cargo::CargoPackageKind::Workspace)
+                {
+                    continue;
+                }
+                prune.copy_cargo_crate(entry.package_json_path())?;
+                println!(" - Added {workspace}");
+                cargo_crate_names.push(workspace.clone());
+                // Crates participate in turbo.json task pruning, but not in
+                // the JS lockfile subgraph or package.json workspaces.
+                workspace_names.push(workspace);
+                continue;
+            }
             prune.copy_workspace(entry.package_json_path(), &entry.package_json)?;
             let parent = entry
                 .package_json_path()
@@ -195,6 +217,11 @@ pub async fn prune(
         }
     }
     prune.copy_file_dependencies(&workspace_names)?;
+
+    if !cargo_crate_names.is_empty() {
+        let extra_members = prune.prune_cargo_workspace(&cargo_crate_names)?;
+        workspace_names.extend(extra_members);
+    }
 
     trace!("new workspaces: {}", workspace_paths.join(", "));
     trace!("lockfile keys: {}", lockfile_keys.join(", "));
@@ -509,6 +536,9 @@ impl<'a> Prune<'a> {
 
         let package_graph = PackageGraph::builder(&base.repo_root, root_package_json)
             .with_allow_no_package_manager(allow_missing_package_manager)
+            .with_cargo(crate::run::builder::cargo_enabled(
+                &base.opts().future_flags,
+            ))
             .build()
             .await?;
 
@@ -528,6 +558,13 @@ impl<'a> Prune<'a> {
             let Some(info) = package_graph.package_info(&workspace) else {
                 return Err(Error::MissingWorkspace(workspace));
             };
+            // The synthetic workspace package has no directory; pruning it
+            // would mean "copy the whole repository".
+            if info.cargo.as_ref().map(|details| details.kind)
+                == Some(cargo::CargoPackageKind::Workspace)
+            {
+                return Err(Error::CargoWorkspacePackageNotPruneable(target.clone()));
+            }
             trace!(
                 "target: {}",
                 info.package_json
@@ -735,6 +772,149 @@ impl<'a> Prune<'a> {
         Ok(())
     }
 
+    /// Copy a Cargo crate's directory into the pruned output. Mirrors
+    /// [`Self::copy_workspace`], except the docker "json" layer receives the
+    /// crate's `Cargo.toml` (its manifest) rather than a `package.json`, and
+    /// there are no npm bin stubs to create.
+    fn copy_cargo_crate(&self, manifest_path: &AnchoredSystemPath) -> Result<(), Error> {
+        let manifest_path = self.root.resolve(manifest_path);
+        let original_dir = manifest_path
+            .parent()
+            .ok_or_else(|| Error::WorkspaceAtFilesystemRoot)?;
+        let metadata = original_dir.symlink_metadata()?;
+        let relative_crate_dir = AnchoredSystemPathBuf::new(&self.root, original_dir)?;
+        let target_dir = self.full_directory.resolve(&relative_crate_dir);
+        target_dir.create_dir_all_with_permissions(metadata.permissions())?;
+
+        turborepo_fs::recursive_copy(
+            original_dir,
+            &target_dir,
+            self.use_gitignore,
+            Some(&self.root),
+        )?;
+
+        if self.docker {
+            let docker_crate_dir = self.docker_directory().resolve(&relative_crate_dir);
+            docker_crate_dir.ensure_dir()?;
+            turborepo_fs::copy_file(
+                &manifest_path,
+                docker_crate_dir.join_component(cargo::CARGO_TOML),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    /// Prune the Cargo workspace machinery around the copied crates:
+    ///
+    /// * `Cargo.lock` is subset to the closure of the kept crates, so
+    ///   `cargo build --locked` succeeds in the pruned output.
+    /// * The lock walk may surface members beyond Turborepo's package-graph
+    ///   closure (Cargo.lock merges dev-dependency edges, including
+    ///   cycle-participating ones the package graph drops). Their manifests
+    ///   are referenced by kept crates, so their directories are copied too.
+    /// * The root `Cargo.toml` is rewritten: explicit `members`, filtered
+    ///   `default-members`, and `[workspace.dependencies]` path entries to
+    ///   removed crates dropped.
+    /// * Toolchain and Cargo config files are carried over.
+    ///
+    /// Returns the names of any extra members added beyond `crate_names`.
+    fn prune_cargo_workspace(&self, crate_names: &[String]) -> Result<Vec<String>, Error> {
+        let lock_path = self.root.join_component(cargo::CARGO_LOCK);
+        if !lock_path.try_exists()? {
+            return Err(Error::MissingCargoLockfile);
+        }
+        let lock_contents = lock_path.read_to_string()?;
+        let pruned_lock = turborepo_lockfiles::cargo_prune_lock(&lock_contents, crate_names)?;
+
+        let mut kept_dirs = Vec::with_capacity(pruned_lock.members.len());
+        let mut extra_members = Vec::new();
+        for member in &pruned_lock.members {
+            let name = PackageName::Other(member.clone());
+            let info = self
+                .package_graph
+                .package_info(&name)
+                .ok_or_else(|| Error::MissingWorkspace(name.clone()))?;
+            let manifest_path = info.package_json_path();
+            let dir = manifest_path
+                .parent()
+                .ok_or_else(|| Error::WorkspaceAtFilesystemRoot)?;
+            kept_dirs.push(dir.to_unix().to_string());
+
+            if !crate_names.contains(member) {
+                self.copy_cargo_crate(manifest_path)?;
+                println!(" - Added {member} (dev-dependency of a kept crate)");
+                extra_members.push(member.clone());
+            }
+        }
+
+        // The pruned lockfile goes to the full layer and, for docker, the
+        // json layer — it is part of "everything needed to fetch
+        // dependencies".
+        self.full_directory
+            .join_component(cargo::CARGO_LOCK)
+            .create_with_contents(&pruned_lock.lockfile)?;
+
+        let manifest_contents = self
+            .root
+            .join_component(cargo::CARGO_TOML)
+            .read_to_string()?;
+        let pruned_manifest = cargo::prune_root_manifest(&manifest_contents, &kept_dirs)?;
+        self.full_directory
+            .join_component(cargo::CARGO_TOML)
+            .create_with_contents(&pruned_manifest)?;
+
+        // Our lock subset is reachability-based, but Cargo's real resolution
+        // is feature-aware: shrinking the workspace can deactivate features
+        // that were the only reason some packages were in the closure.
+        // Rather than reimplement feature unification, let Cargo minimally
+        // sync its own lockfile (`--offline`: removals need no network, and
+        // every retained pin is preserved) so `cargo build --locked` passes
+        // in the pruned output. Failure is not fatal — the superset lock
+        // still builds correctly, it just isn't `--locked`-clean.
+        let sync = std::process::Command::new("cargo")
+            .args(["metadata", "--format-version", "1", "--offline"])
+            .current_dir(self.full_directory.as_std_path())
+            .output();
+        match sync {
+            Ok(output) if output.status.success() => {}
+            Ok(output) => {
+                tracing::warn!(
+                    "unable to canonicalize the pruned Cargo.lock; `cargo build --locked` may \
+                     require a lockfile refresh: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                );
+            }
+            Err(error) => {
+                tracing::warn!(
+                    "unable to run cargo to canonicalize the pruned Cargo.lock: {error}"
+                );
+            }
+        }
+
+        if self.docker {
+            turborepo_fs::copy_file(
+                self.full_directory.join_component(cargo::CARGO_LOCK),
+                self.docker_directory().join_component(cargo::CARGO_LOCK),
+            )?;
+            self.docker_directory()
+                .join_component(cargo::CARGO_TOML)
+                .create_with_contents(&pruned_manifest)?;
+        }
+
+        for aux in [
+            "rust-toolchain.toml",
+            "rust-toolchain",
+            ".cargo/config.toml",
+            ".cargo/config",
+        ] {
+            let path = RelativeUnixPath::new(aux)?.to_anchored_system_path_buf();
+            self.copy_file(&path, Some(CopyDestination::Docker))?;
+        }
+
+        Ok(extra_members)
+    }
+
     fn create_docker_bin_stubs(
         &self,
         package_json: &PackageJson,
@@ -881,6 +1061,19 @@ impl<'a> Prune<'a> {
     }
 
     fn lockfile_keys(&self, workspaces: &[PackageName]) -> Result<Vec<String>, Error> {
+        // Cargo packages' external dependencies live in Cargo.lock (rustc,
+        // crates.io/git packages); their keys mean nothing to the JS
+        // lockfile's subgraph and must not leak into it.
+        let workspaces: Vec<PackageName> = workspaces
+            .iter()
+            .filter(|workspace| {
+                self.package_graph
+                    .package_info(workspace)
+                    .is_none_or(|info| info.toolchain != PackageToolchain::Cargo)
+            })
+            .cloned()
+            .collect();
+        let workspaces = workspaces.as_slice();
         let mut keys = self
             .package_graph
             .transitive_external_dependencies(workspaces.iter())

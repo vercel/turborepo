@@ -255,6 +255,23 @@ serves Cargo packages through the same graph. Discovery adds roughly
 `rustc --version`, and lockfile parsing); daemon-side caching is the
 optimization path if that ever matters.
 
+`turbo prune <crate>` produces a self-contained Cargo workspace: the
+crate's closure of member directories (from the Cargo.lock walk, so
+dev-dependency-only members whose manifests are referenced by kept crates
+are retained even when the package graph drops their cycle-closing edges),
+a lockfile subset, and a rewritten root manifest (explicit `members`,
+filtered `default-members`, `[workspace.dependencies]` path entries to
+removed crates dropped — comments and formatting preserved). Reachability
+pruning cannot see Cargo's feature unification, so after writing the
+subset, prune runs `cargo metadata --offline` in the output to let Cargo
+minimally sync its own lockfile — `cargo build --locked` then passes in
+the pruned workspace. In docker layout, the json layer carries the root
+manifest, every kept crate's `Cargo.toml`, and the pruned `Cargo.lock`;
+sources go to the full layer. The synthetic `cargo` package is not a
+pruneable target. Mixed targets work in both directions: pruning a JS
+package that depends on crates carries the Cargo machinery along, and
+pruning a JS-only target emits no Cargo files.
+
 Known limitations of the experiment:
 
 - `--affected` attributes `Cargo.lock` changes to the root package rather
@@ -267,8 +284,9 @@ Known limitations of the experiment:
   group: concurrent cargo processes serialize on Cargo's build-directory lock
   anyway, so Turborepo runs one at a time — each using all cores — instead of
   spawning processes that sit blocked emitting lock warnings.
-- `prune` warns and excludes crates; `query` output has not been audited for
-  Cargo packages.
+- `prune` requires a `Cargo.lock` (pruning against an unpinned workspace
+  would be a guess) and a `package.json` at the repo root (mixed-repo
+  focus; Cargo-only repositories are untested).
 - Watch mode's content-hash dedup (suppressing events when file contents
   are unchanged) does not cover Cargo packages — the hash watcher's
   discovery is JS-glob-based — so a no-op save inside a crate re-runs its

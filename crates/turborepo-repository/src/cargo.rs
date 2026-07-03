@@ -58,6 +58,10 @@ pub enum Error {
     LockfileRead(#[source] io::Error),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::CargoLockError),
+    #[error("failed to parse root Cargo.toml: {0}")]
+    ManifestParse(#[from] Box<toml_edit::TomlError>),
+    #[error("root Cargo.toml has no [workspace] table")]
+    NotAWorkspace,
 }
 
 /// Map a Turborepo task name to the Cargo subcommand that implements it for
@@ -267,6 +271,84 @@ pub fn deliverable_output_globs(prefix: &str, deliverables: &[Deliverable]) -> V
                 .map(move |basename| join_prefix(prefix, &format!("target/*/{basename}")))
         })
         .collect()
+}
+
+/// Rewrite the workspace root Cargo.toml for a pruned repository containing
+/// only `kept_dirs` (workspace-relative unix paths of the retained crates).
+///
+/// * `members` becomes the explicit kept list — glob patterns like
+///   `crates/*` would otherwise still match, but explicitness costs nothing
+///   and `default-members`/path hygiene need the concrete set anyway.
+/// * `default-members` is filtered to kept dirs (dropped when empty), since
+///   entries referencing removed crates make Cargo error at load.
+/// * `[workspace.dependencies]` entries whose `path` points at a removed
+///   crate are dropped: no kept crate can reference them (anything
+///   referenced is in the closure and therefore kept), and Cargo validates
+///   the paths of workspace dependencies eagerly.
+///
+/// Everything else — profiles, lints, `[patch]`, non-path workspace
+/// dependencies, comments, formatting — is preserved via `toml_edit`.
+pub fn prune_root_manifest(contents: &str, kept_dirs: &[String]) -> Result<String, Error> {
+    let mut doc: toml_edit::DocumentMut = contents.parse().map_err(Box::new)?;
+    let normalized_kept: HashSet<String> = kept_dirs.iter().map(|d| normalize_dir(d)).collect();
+
+    let workspace = doc
+        .get_mut("workspace")
+        .and_then(|item| item.as_table_like_mut())
+        .ok_or(Error::NotAWorkspace)?;
+
+    let mut members = toml_edit::Array::new();
+    let mut sorted_dirs = kept_dirs.to_vec();
+    sorted_dirs.sort();
+    sorted_dirs.dedup();
+    for dir in &sorted_dirs {
+        members.push(dir.as_str());
+    }
+    workspace.insert("members", toml_edit::value(members));
+
+    if let Some(default_members) = workspace
+        .get_mut("default-members")
+        .and_then(|item| item.as_array_mut())
+    {
+        default_members.retain(|entry| {
+            entry
+                .as_str()
+                .is_some_and(|dir| normalized_kept.contains(&normalize_dir(dir)))
+        });
+        if default_members.is_empty() {
+            workspace.remove("default-members");
+        }
+    }
+
+    if let Some(dependencies) = workspace
+        .get_mut("dependencies")
+        .and_then(|item| item.as_table_like_mut())
+    {
+        let removed: Vec<String> = dependencies
+            .iter()
+            .filter(|(_, value)| {
+                value
+                    .get("path")
+                    .and_then(|path| path.as_str())
+                    .is_some_and(|path| !normalized_kept.contains(&normalize_dir(path)))
+            })
+            .map(|(name, _)| name.to_string())
+            .collect();
+        for name in removed {
+            dependencies.remove(&name);
+        }
+    }
+
+    Ok(doc.to_string())
+}
+
+/// Normalize a manifest-relative directory path for comparison: unix
+/// separators, no leading `./`, no trailing `/`.
+fn normalize_dir(dir: &str) -> String {
+    dir.replace('\\', "/")
+        .trim_start_matches("./")
+        .trim_end_matches('/')
+        .to_string()
 }
 
 fn join_prefix(prefix: &str, rel: &str) -> String {
@@ -917,6 +999,45 @@ mod test {
             ]
         );
         assert!(deliverable_output_globs("../..", &[]).is_empty());
+    }
+
+    #[test]
+    fn test_prune_root_manifest() {
+        let manifest = r#"# workspace comment
+[workspace]
+members = ["crates/*"]
+default-members = ["crates/app", "crates/gone"]
+resolver = "2"
+
+[workspace.dependencies]
+serde = "1.0"
+lib-a = { path = "crates/lib-a" }
+gone = { path = "./crates/gone/" }
+
+[profile.release]
+lto = "thin"
+"#;
+        let kept = vec!["crates/app".to_string(), "crates/lib-a".to_string()];
+        let pruned = prune_root_manifest(manifest, &kept).unwrap();
+
+        // Members become the explicit kept set.
+        assert!(pruned.contains(r#"members = ["crates/app", "crates/lib-a"]"#));
+        // default-members drops the removed crate.
+        assert!(pruned.contains(r#"default-members = ["crates/app"]"#));
+        // Path entries to removed crates are dropped (even with ./ and
+        // trailing-slash spellings); the rest survive untouched.
+        assert!(!pruned.contains("crates/gone"));
+        assert!(pruned.contains(r#"serde = "1.0""#));
+        assert!(pruned.contains(r#"lib-a = { path = "crates/lib-a" }"#));
+        // Formatting extras are preserved.
+        assert!(pruned.contains("# workspace comment"));
+        assert!(pruned.contains("lto = \"thin\""));
+    }
+
+    #[test]
+    fn test_prune_root_manifest_requires_workspace() {
+        let err = prune_root_manifest("[package]\nname = \"solo\"\n", &[]).unwrap_err();
+        assert!(matches!(err, Error::NotAWorkspace));
     }
 
     #[test]
