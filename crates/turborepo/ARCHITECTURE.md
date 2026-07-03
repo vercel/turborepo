@@ -246,6 +246,15 @@ rediscovery (the crate set or its edges may have changed), and events under
 the root `target/` directory are dropped so cargo's own build writes never
 re-trigger the tasks that produced them.
 
+End-to-end coverage lives in `crates/turborepo/tests/cargo_workspace_test.rs`
+against the `cargo_monorepo` fixture (a mixed npm + Cargo workspace):
+graph shape, execution, caching, deliverable restoration, cross-crate
+invalidation, the filter hint, and both opt-in surfaces. `turbo query`
+serves Cargo packages through the same graph. Discovery adds roughly
+170ms to invocations on a ~60-crate workspace (`cargo metadata`,
+`rustc --version`, and lockfile parsing); daemon-side caching is the
+optimization path if that ever matters.
+
 Known limitations of the experiment:
 
 - `--affected` attributes `Cargo.lock` changes to the root package rather
