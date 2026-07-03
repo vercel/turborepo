@@ -866,15 +866,28 @@ impl<'a> Prune<'a> {
         // is feature-aware: shrinking the workspace can deactivate features
         // that were the only reason some packages were in the closure.
         // Rather than reimplement feature unification, let Cargo minimally
-        // sync its own lockfile (`--offline`: removals need no network, and
-        // every retained pin is preserved) so `cargo build --locked` passes
-        // in the pruned output. Failure is not fatal — the superset lock
+        // sync its own lockfile (every retained pin is preserved; only
+        // feature-dead entries are dropped) so `cargo build --locked`
+        // passes in the pruned output. Try `--offline` first — removals
+        // need no network — but workspaces with git patches need their git
+        // databases, which a cold machine won't have cached, so fall back
+        // to a networked sync. Failure is not fatal: the superset lock
         // still builds correctly, it just isn't `--locked`-clean.
-        let sync = std::process::Command::new("cargo")
-            .args(["metadata", "--format-version", "1", "--offline"])
-            .current_dir(self.full_directory.as_std_path())
-            .output();
-        match sync {
+        let sync = |offline: bool| {
+            let mut cmd = std::process::Command::new("cargo");
+            cmd.args(["metadata", "--format-version", "1"]);
+            if offline {
+                cmd.arg("--offline");
+            }
+            cmd.current_dir(self.full_directory.as_std_path()).output()
+        };
+        match sync(true).and_then(|offline| {
+            if offline.status.success() {
+                Ok(offline)
+            } else {
+                sync(false)
+            }
+        }) {
             Ok(output) if output.status.success() => {}
             Ok(output) => {
                 tracing::warn!(
