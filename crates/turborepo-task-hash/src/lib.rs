@@ -131,6 +131,7 @@ impl PackageInputsHashes {
             inputs: &'b TaskInputs,
         }
 
+        let collect_span = tracing::info_span!("collect_task_hash_keys").entered();
         let mut task_infos = Vec::new();
         for task in all_tasks {
             let TaskNode::Task(task_id) = task else {
@@ -185,11 +186,13 @@ impl PackageInputsHashes {
             unique_hash_keys = unique_keys.len(),
             "file hash deduplication"
         );
+        drop(collect_span);
 
         // Phase 2: Compute file hashes in parallel across unique keys.
         // EMFILE (too many open files) errors are handled via retry-with-backoff
         // in the globwalk and hash_objects layers, so we can safely parallelize
         // all keys on rayon without worrying about fd exhaustion.
+        let hash_span = tracing::info_span!("hash_unique_inputs").entered();
         let file_hash_results: Vec<Result<Arc<FileHashes>, Error>> = unique_keys
             .into_par_iter()
             .map(|(package_path, globs, default, eager)| {
@@ -204,8 +207,10 @@ impl PackageInputsHashes {
         let file_hash_results: Vec<Arc<FileHashes>> = file_hash_results
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
+        drop(hash_span);
 
         // Phase 3: Distribute shared results to individual tasks.
+        let _span = tracing::info_span!("distribute_task_file_hashes").entered();
         let mut hashes = HashMap::with_capacity(task_infos.len());
         let mut expanded_hashes = if needs_expanded_hashes {
             HashMap::with_capacity(task_infos.len())
