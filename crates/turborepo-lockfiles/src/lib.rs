@@ -33,16 +33,49 @@ pub use error::Error;
 pub use npm::*;
 pub use pnpm::{PnpmLockfile, pnpm_global_change, pnpm_subgraph};
 use rayon::prelude::*;
+use rustc_hash::{FxBuildHasher, FxHashSet};
 use serde::Serialize;
 use turbopath::RelativeUnixPathBuf;
 pub use yarn1::{Yarn1Lockfile, yarn_subgraph};
 
-type ResolveCache = DashMap<String, Option<Package>>;
+// The closure walk visits every edge of every workspace's dependency closure,
+// so these caches are probed millions of times on large repos. They use
+// FxHash instead of the DoS-resistant default: lockfile contents are developer
+// tooling input, not an adversarial hash-flooding vector, and the long string
+// keys make SipHash a measurable cost.
+//
+// Resolutions cache interned package ids (plus a shared `Arc` of the package)
+// so a cache hit is a refcount bump instead of cloning the package's strings.
+type ResolveCache = DashMap<String, Option<(u32, Arc<Package>)>, FxBuildHasher>;
 // Dependency maps are shared behind an `Arc` so cache hits are a refcount bump
 // instead of a deep clone of the map. The cache is shared across all
 // workspaces, so each package's dependency map would otherwise be cloned once
-// per workspace whose closure contains it.
-type DepsCache = DashMap<String, Option<Arc<BTreeMap<String, String>>>>;
+// per workspace whose closure contains it. Keyed by interned package id to
+// avoid re-hashing package key strings on every node visit.
+type DepsCache = DashMap<u32, Option<Arc<BTreeMap<String, String>>>, FxBuildHasher>;
+
+/// Assigns dense integer ids to resolved packages. Distinct cache keys (e.g.
+/// the same package reached from different workspaces) intern to the same id,
+/// letting visited-set checks hash a `u32` instead of two heap strings.
+#[derive(Default)]
+struct PackageInterner {
+    ids: DashMap<Package, (u32, Arc<Package>), FxBuildHasher>,
+    next: std::sync::atomic::AtomicU32,
+}
+
+impl PackageInterner {
+    fn intern(&self, package: Package) -> (u32, Arc<Package>) {
+        match self.ids.entry(package) {
+            dashmap::mapref::entry::Entry::Occupied(entry) => entry.get().clone(),
+            dashmap::mapref::entry::Entry::Vacant(entry) => {
+                let id = self.next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let package = Arc::new(entry.key().clone());
+                entry.insert((id, package.clone()));
+                (id, package)
+            }
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
 pub struct Package {
@@ -147,8 +180,9 @@ pub fn all_transitive_closures<L: Lockfile + ?Sized>(
     workspaces: HashMap<String, BTreeMap<String, String>>,
     ignore_missing_packages: bool,
 ) -> Result<HashMap<String, HashSet<Package>>, Error> {
-    let resolve_cache: ResolveCache = DashMap::new();
-    let deps_cache: DepsCache = DashMap::new();
+    let resolve_cache: ResolveCache = DashMap::default();
+    let deps_cache: DepsCache = DashMap::default();
+    let interner = PackageInterner::default();
     workspaces
         .into_par_iter()
         .map(|(workspace, unresolved_deps)| {
@@ -159,6 +193,7 @@ pub fn all_transitive_closures<L: Lockfile + ?Sized>(
                 ignore_missing_packages,
                 &resolve_cache,
                 &deps_cache,
+                &interner,
             )?;
             Ok((workspace, closure))
         })
@@ -172,8 +207,9 @@ pub fn transitive_closure<L: Lockfile + ?Sized>(
     unresolved_deps: BTreeMap<String, String>,
     ignore_missing_packages: bool,
 ) -> Result<HashSet<Package>, Error> {
-    let resolve_cache: ResolveCache = DashMap::new();
-    let deps_cache: DepsCache = DashMap::new();
+    let resolve_cache: ResolveCache = DashMap::default();
+    let deps_cache: DepsCache = DashMap::default();
+    let interner = PackageInterner::default();
     transitive_closure_cached(
         lockfile,
         workspace_path,
@@ -181,9 +217,11 @@ pub fn transitive_closure<L: Lockfile + ?Sized>(
         ignore_missing_packages,
         &resolve_cache,
         &deps_cache,
+        &interner,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn transitive_closure_cached<L: Lockfile + ?Sized>(
     lockfile: &L,
     workspace_path: &str,
@@ -191,18 +229,22 @@ fn transitive_closure_cached<L: Lockfile + ?Sized>(
     ignore_missing_packages: bool,
     resolve_cache: &ResolveCache,
     deps_cache: &DepsCache,
+    interner: &PackageInterner,
 ) -> Result<HashSet<Package>, Error> {
     let mut ctx = ClosureContext {
         lockfile,
         workspace_path,
         resolve_cache,
         deps_cache,
+        interner,
         key_buf: String::new(),
     };
     let mut transitive_deps = HashSet::new();
+    let mut visited = FxHashSet::default();
     ctx.walk(
         &unresolved_deps,
         &mut transitive_deps,
+        &mut visited,
         ignore_missing_packages,
         true,
     )?;
@@ -214,6 +256,7 @@ struct ClosureContext<'a, L: Lockfile + ?Sized> {
     workspace_path: &'a str,
     resolve_cache: &'a ResolveCache,
     deps_cache: &'a DepsCache,
+    interner: &'a PackageInterner,
     key_buf: String,
 }
 
@@ -238,7 +281,7 @@ impl<L: Lockfile + ?Sized> ClosureContext<'_, L> {
         unresolved_deps: &BTreeMap<String, String>,
         ignore_missing_packages: bool,
         _is_workspace_root_deps: bool,
-    ) -> Result<Vec<Package>, Error> {
+    ) -> Result<Vec<(u32, Arc<Package>)>, Error> {
         let mut newly_resolved = Vec::new();
 
         for (name, specifier) in unresolved_deps {
@@ -266,9 +309,10 @@ impl<L: Lockfile + ?Sized> ClosureContext<'_, L> {
                             }
                             Err(e) => return Err(e),
                         };
+                    let interned = result.map(|pkg| self.interner.intern(pkg));
                     self.resolve_cache
-                        .insert(self.key_buf.clone(), result.clone());
-                    result
+                        .insert(self.key_buf.clone(), interned.clone());
+                    interned
                 }
             };
 
@@ -284,6 +328,7 @@ impl<L: Lockfile + ?Sized> ClosureContext<'_, L> {
         &mut self,
         unresolved_deps: &BTreeMap<String, String>,
         resolved_deps: &mut HashSet<Package>,
+        visited: &mut FxHashSet<u32>,
         ignore_missing_packages: bool,
         is_workspace_root_deps: bool,
     ) -> Result<(), Error> {
@@ -293,25 +338,25 @@ impl<L: Lockfile + ?Sized> ClosureContext<'_, L> {
             is_workspace_root_deps,
         )?;
 
-        for pkg in newly_resolved {
-            if resolved_deps.contains(&pkg) {
+        for (id, pkg) in newly_resolved {
+            if !visited.insert(id) {
                 continue;
             }
 
-            let all_deps = if let Some(cached) = self.deps_cache.get(&pkg.key) {
+            let all_deps = if let Some(cached) = self.deps_cache.get(&id) {
                 cached.clone()
             } else {
                 let deps = self
                     .lockfile
                     .all_dependencies(&pkg.key)?
                     .map(|cow| Arc::new(cow.into_owned()));
-                self.deps_cache.insert(pkg.key.clone(), deps.clone());
+                self.deps_cache.insert(id, deps.clone());
                 deps
             };
 
-            resolved_deps.insert(pkg);
+            resolved_deps.insert((*pkg).clone());
             if let Some(deps) = all_deps {
-                self.walk(&deps, resolved_deps, false, false)?;
+                self.walk(&deps, resolved_deps, visited, false, false)?;
             }
         }
 
