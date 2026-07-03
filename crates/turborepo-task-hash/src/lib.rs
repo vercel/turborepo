@@ -188,23 +188,35 @@ impl PackageInputsHashes {
         );
         drop(collect_span);
 
-        // Phase 2: Compute file hashes in parallel across unique keys.
+        // Phase 2: Compute file hashes in parallel across unique keys. The
+        // summary hash of each `FileHashes` is computed here too, once per
+        // unique key, so distribution below never re-hashes for the many
+        // tasks that share a key.
         // EMFILE (too many open files) errors are handled via retry-with-backoff
         // in the globwalk and hash_objects layers, so we can safely parallelize
         // all keys on rayon without worrying about fd exhaustion.
         let hash_span = tracing::info_span!("hash_unique_inputs").entered();
-        let file_hash_results: Vec<Result<Arc<FileHashes>, Error>> = unique_keys
+        let file_hash_results: Vec<Result<(Arc<FileHashes>, String), Error>> = unique_keys
             .into_par_iter()
             .map(|(package_path, globs, default, eager)| {
-                if !eager {
-                    return Ok(Arc::new(FileHashes(Vec::new())));
-                }
-
-                file_hashes_for_inputs(scm, repo_root, &package_path, &globs, default, repo_index)
+                let file_hashes = if !eager {
+                    Arc::new(FileHashes(Vec::new()))
+                } else {
+                    file_hashes_for_inputs(
+                        scm,
+                        repo_root,
+                        &package_path,
+                        &globs,
+                        default,
+                        repo_index,
+                    )?
+                };
+                let hash = file_hashes.as_ref().hash();
+                Ok((file_hashes, hash))
             })
             .collect();
 
-        let file_hash_results: Vec<Arc<FileHashes>> = file_hash_results
+        let file_hash_results: Vec<(Arc<FileHashes>, String)> = file_hash_results
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
         drop(hash_span);
@@ -220,11 +232,9 @@ impl PackageInputsHashes {
 
         for (i, info) in task_infos.into_iter().enumerate() {
             let key_idx = task_key_map[i];
-            let file_hashes = &file_hash_results[key_idx];
+            let (file_hashes, hash) = &file_hash_results[key_idx];
 
-            let hash = file_hashes.as_ref().hash();
-
-            hashes.insert(info.task_id.clone(), hash);
+            hashes.insert(info.task_id.clone(), hash.clone());
             if needs_expanded_hashes || info.inputs.has_deferred_inputs() {
                 expanded_hashes.insert(info.task_id, Arc::clone(file_hashes));
             }
