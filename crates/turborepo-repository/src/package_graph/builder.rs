@@ -295,6 +295,21 @@ where
             let crates = turborepo_rayon_compat::block_in_place(|| {
                 crate::cargo::discover_crates(repo_root)
             })?;
+            // External dependencies (locked crates.io/git packages plus the
+            // compiler itself) participate in each crate task's hash through
+            // the same external-dependency mechanism JS packages use, scoped
+            // to the crate's transitive closure — a dependency bump only
+            // invalidates crates that actually depend on it, and a toolchain
+            // change invalidates everything.
+            let all_names: Vec<String> = crates.iter().map(|c| c.name.clone()).collect();
+            let rustc = crate::cargo::rustc_version(repo_root);
+            let mut external_closures = crate::cargo::external_closures(repo_root, &all_names)?;
+            let workspace_externals: HashSet<turborepo_lockfiles::Package> = external_closures
+                .values()
+                .flatten()
+                .cloned()
+                .chain(rustc.clone())
+                .collect();
             let mut crate_names = Vec::with_capacity(crates.len());
             for cargo_crate in crates {
                 let manifest_path = AnchoredSystemPathBuf::relative_path_between(
@@ -306,6 +321,13 @@ where
                     .iter()
                     .map(|dep| (dep.clone(), "workspace:*".to_string()))
                     .collect();
+                let transitive_dependencies: HashSet<turborepo_lockfiles::Package> =
+                    external_closures
+                        .remove(&cargo_crate.name)
+                        .unwrap_or_default()
+                        .into_iter()
+                        .chain(rustc.clone())
+                        .collect();
                 let info = PackageInfo {
                     package_json: PackageJson {
                         name: Some(Spanned::new(cargo_crate.name.clone())),
@@ -322,6 +344,7 @@ where
                         },
                         deliverables: cargo_crate.deliverables,
                     }),
+                    transitive_dependencies: Some(transitive_dependencies),
                     ..Default::default()
                 };
                 crate_names.push(cargo_crate.name.clone());
@@ -354,6 +377,9 @@ where
                         kind: cargo::CargoPackageKind::Workspace,
                         deliverables: Vec::new(),
                     }),
+                    // Workspace-scoped verbs run every crate, so the union
+                    // of all closures is this package's external surface.
+                    transitive_dependencies: Some(workspace_externals),
                     ..Default::default()
                 };
                 insert_cargo_package(
@@ -695,6 +721,13 @@ impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
     ) -> Result<HashMap<String, BTreeMap<String, String>>, Error> {
         self.workspaces
             .values()
+            // Cargo packages have no JS externals, and the synthetic
+            // workspace package shares the repo-root directory with the
+            // root package — including it here would nondeterministically
+            // replace the root's entry in the directory-keyed map (HashMap
+            // iteration order decides the winner), flipping the root's
+            // external-dependency hash and with it the global hash.
+            .filter(|entry| entry.toolchain != PackageToolchain::Cargo)
             .map(|entry| {
                 let workspace_path = entry
                     .package_json_path
@@ -730,6 +763,14 @@ impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
             false,
         )?;
         for (_, entry) in self.workspaces.iter_mut() {
+            // Cargo packages get their closures from Cargo.lock at insertion
+            // time; the JS lockfile knows nothing about them. Overwriting
+            // would clear them — and the synthetic workspace package shares
+            // the repo-root directory with the root JS package, so it could
+            // even steal the root's closure here.
+            if entry.toolchain == PackageToolchain::Cargo {
+                continue;
+            }
             entry.transitive_dependencies = closures.remove(&entry.unix_dir_str()?);
         }
         Ok(())
@@ -1452,9 +1493,33 @@ mod test {
                 (
                     &["crates", "app", "Cargo.toml"],
                     "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \
-                     \"2021\"\n\n[dependencies]\nlib-a = { path = \"../lib-a\" }\n",
+                     \"2021\"\n\n[dependencies]\nlib-a = { path = \"../lib-a\" }\nserde = \
+                     \"1.0\"\n",
                 ),
                 (&["crates", "app", "src", "main.rs"], "fn main() {}\n"),
+                // A lockfile pinning app's external dependency. `cargo
+                // metadata --no-deps` never reads it; only our closure
+                // parsing does.
+                (
+                    &["Cargo.lock"],
+                    r#"version = 4
+
+[[package]]
+name = "app"
+version = "0.1.0"
+dependencies = ["lib-a", "serde"]
+
+[[package]]
+name = "lib-a"
+version = "0.1.0"
+
+[[package]]
+name = "serde"
+version = "1.0.200"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abc123"
+"#,
+                ),
             ],
         );
     }
@@ -1534,13 +1599,123 @@ mod test {
 
         // Cargo crates must not leak dependencies into the JS lockfile's
         // unresolved externals: their edges resolve internally by
-        // construction, and registry deps are invalidated via the Cargo.lock
-        // hash input instead.
+        // construction, and registry deps are invalidated via the
+        // external-dependency hash instead.
         let app_external = app_info.unresolved_external_dependencies.as_ref().unwrap();
         assert!(
             app_external.is_empty(),
             "cargo crates should have no unresolved externals, got: {app_external:?}"
         );
+
+        // External dependencies come from Cargo.lock, scoped per crate, plus
+        // the compiler itself: a serde bump must invalidate app but not
+        // lib-a; a toolchain change must invalidate both.
+        let external_keys = |info: &PackageInfo| -> Vec<String> {
+            let mut keys: Vec<String> = info
+                .transitive_dependencies
+                .as_ref()
+                .expect("cargo packages should have external dependencies")
+                .iter()
+                .map(|package| package.key.clone())
+                .collect();
+            keys.sort();
+            keys
+        };
+        assert_eq!(external_keys(app_info), vec!["rustc", "serde"]);
+        assert_eq!(external_keys(lib_info), vec!["rustc"]);
+        assert_eq!(external_keys(workspace_info), vec!["rustc", "serde"]);
+    }
+
+    /// The synthetic cargo workspace package shares the repo-root directory
+    /// with the root JS package. It must not participate in the JS
+    /// lockfile's directory-keyed external-dependency maps, or it replaces
+    /// the root's entry nondeterministically (HashMap iteration order picks
+    /// the winner), flipping the root's external hash — and with it the
+    /// global hash — between processes. Loops several builds because a
+    /// regression manifests probabilistically.
+    #[tokio::test]
+    async fn test_cargo_workspace_package_does_not_clobber_root_externals() {
+        #[derive(Debug)]
+        struct JsLockfile;
+        impl turborepo_lockfiles::Lockfile for JsLockfile {
+            fn resolve_package(
+                &self,
+                _workspace_path: &str,
+                name: &str,
+                _version: &str,
+            ) -> Result<Option<turborepo_lockfiles::Package>, turborepo_lockfiles::Error>
+            {
+                Ok((name == "jsdep")
+                    .then(|| turborepo_lockfiles::Package::new("key:jsdep", "1.0.0")))
+            }
+
+            fn all_dependencies(
+                &self,
+                _key: &str,
+            ) -> Result<
+                Option<std::borrow::Cow<'_, BTreeMap<String, String>>>,
+                turborepo_lockfiles::Error,
+            > {
+                Ok(None)
+            }
+
+            fn subgraph(
+                &self,
+                _workspace_packages: &[String],
+                _packages: &[String],
+            ) -> Result<Box<dyn turborepo_lockfiles::Lockfile>, turborepo_lockfiles::Error>
+            {
+                unreachable!("not needed for graph construction")
+            }
+
+            fn encode(&self) -> Result<Vec<u8>, turborepo_lockfiles::Error> {
+                unreachable!("not needed for graph construction")
+            }
+
+            fn global_change(&self, _other: &dyn turborepo_lockfiles::Lockfile) -> bool {
+                false
+            }
+
+            fn turbo_version(&self) -> Option<String> {
+                None
+            }
+        }
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        write_cargo_workspace(&root);
+
+        for attempt in 0..4 {
+            let graph = PackageGraphBuilder::new(
+                &root,
+                PackageJson::from_value(
+                    serde_json::json!({ "name": "root", "dependencies": { "jsdep": "^1.0.0" } }),
+                )
+                .unwrap(),
+            )
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_lockfile(Some(Box::new(JsLockfile)))
+            .with_cargo(true)
+            .build()
+            .await
+            .unwrap();
+
+            let root_externals: Vec<&str> = graph
+                .package_info(&PackageName::Root)
+                .unwrap()
+                .transitive_dependencies
+                .as_ref()
+                .expect("root should have a closure from the JS lockfile")
+                .iter()
+                .map(|package| package.key.as_str())
+                .collect();
+            assert_eq!(
+                root_externals,
+                vec!["key:jsdep"],
+                "root externals clobbered on attempt {attempt}"
+            );
+        }
     }
 
     #[tokio::test]

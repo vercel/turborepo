@@ -26,6 +26,8 @@ pub enum Error {
     Bun(#[from] crate::bun::Error),
     #[error(transparent)]
     Berry(#[from] crate::berry::Error),
+    #[error(transparent)]
+    CargoLock(#[from] crate::cargo::Error),
     #[error("Lockfile contains invalid path: {0}")]
     Path(#[from] turbopath::PathError),
 }

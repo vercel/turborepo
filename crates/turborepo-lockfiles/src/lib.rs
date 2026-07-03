@@ -14,6 +14,7 @@
 
 mod berry;
 mod bun;
+mod cargo;
 mod error;
 mod npm;
 mod pnpm;
@@ -27,6 +28,7 @@ use std::{
 
 pub use berry::{Error as BerryError, *};
 pub use bun::{BunLockfile, bun_global_change};
+pub use cargo::{Error as CargoLockError, cargo_external_closures};
 use dashmap::DashMap;
 pub use error::Error;
 pub use npm::*;

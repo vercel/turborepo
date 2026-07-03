@@ -186,16 +186,31 @@ All Cargo knowledge lives in `turborepo_repository::cargo`:
 - **Hashing** (`turborepo-engine/src/builder/definitions.rs`): entrypoint
   tasks hash their own sources plus their transitive dependency crates'
   sources (flattened, so invalidation doesn't depend on `dependsOn` wiring),
-  the workspace files (`Cargo.lock`, root `Cargo.toml`, `.cargo/config*`,
+  the workspace files (root `Cargo.toml`, `.cargo/config*`,
   `rust-toolchain*`), and cargo-relevant env vars (`RUSTFLAGS`,
   `RUSTC_WRAPPER`, `CARGO_TARGET_DIR`, `CARGO_BUILD_TARGET`). The workspace
   package hashes all crate directories instead of default-hashing the repo
-  root.
+  root. `$TURBO_DEFAULT$` in a Cargo task's `inputs` means "everything
+  turbo derives automatically", so extra inputs (e.g. a file embedded via
+  `include_str!` from outside any crate directory) are additive.
+- **External dependencies** (`turborepo-lockfiles/src/cargo.rs`,
+  `turborepo-repository/src/cargo.rs`): locked registry/git packages and
+  the compiler itself flow through the same external-dependency hash JS
+  packages use (`PackageInfo.transitive_dependencies`). Each crate's
+  closure is computed from `Cargo.lock` (identity = version + source +
+  checksum, so git rev bumps count), so a dependency bump only invalidates
+  crates that actually depend on it. `rustc --version` (resolved from the
+  repo root, so `rust-toolchain` overrides apply) is added to every Cargo
+  package's set — compiling with a different toolchain never restores
+  another toolchain's artifacts. A missing `Cargo.lock` contributes
+  nothing; an unparsable one is a hard error.
 - **Caching**: task caches store logs plus, for entrypoint builds, the
-  deliverables: bins (`target/debug/<bin>`) and cdylib/staticlib artifacts
-  (`target/debug/lib<name>.{so,dylib,a}`, `<name>.{dll,lib}` — all platform
-  spellings are emitted; unmatched globs contribute nothing). Cargo's
-  internal `target/` state is
+  deliverables: bins (`target/*/<bin>`) and cdylib/staticlib artifacts
+  (`target/*/lib<name>.{so,dylib,a}`, `<name>.{dll,lib}` — all platform
+  spellings are emitted; unmatched globs contribute nothing). The profile
+  segment is a wildcard, so `--release` and custom profiles cache without
+  configuration — pass-through args participate in the task hash, giving
+  each profile its own cache entry. Cargo's internal `target/` state is
   deliberately never cached — it is Cargo's own incremental cache, and
   tarballing it fights Cargo instead of leaning on it (it is also
   multi-gigabyte). For fine-grained remote compile caching, use sccache via
@@ -203,16 +218,26 @@ All Cargo knowledge lives in `turborepo_repository::cargo`:
   per-compilation caching is sound, and it cooperates with Cargo's
   fingerprints. `RUSTC_WRAPPER` participates in task hashes so toggling it
   invalidates caches.
+- **Compile-level remote caching (sccache)**: the two layers are exactly
+  complementary — sccache cannot cache crates that invoke the linker
+  (bins, dylibs, cdylibs, proc-macros), and those deliverables are
+  precisely what the task cache stores. Measured on this repository:
+  a cold-target rebuild with a warm sccache goes from 21.6s to 12.0s wall
+  (4.4x CPU) at a 100% compile-unit hit rate. sccache traffic can ride
+  Turborepo Remote Cache without modifying sccache: its WebDAV backend is
+  satisfied by a small localhost shim translating to the artifacts API —
+  see the `turborepo-sccache-shim` spike crate for the protocol notes,
+  measurements, and artifact-size profile. Note that sccache's
+  `SCCACHE_*` configuration must reach cargo task environments (strict env
+  mode strips it; a productionized shim would inject it directly).
 
 Known limitations of the experiment:
 
-- Without a committed `rust-toolchain`/`rust-toolchain.toml`, the compiler
-  version is not hashed — sharing a remote cache across machines with
-  different toolchains is unsound.
-- Any `Cargo.lock` change invalidates every Cargo task, and `--affected`
-  attributes `Cargo.lock` changes to the root package rather than to crates.
-- Bin output caching assumes the default `target/debug` layout; declare
-  explicit `outputs` for `--release` or custom target dirs.
+- `--affected` attributes `Cargo.lock` changes to the root package rather
+  than to the crates whose closures changed.
+- Builds using `CARGO_TARGET_DIR` or `--target <triple>` write artifacts
+  outside `target/<profile>/`; declare explicit `outputs` for those
+  layouts (the env vars are hashed, so caching stays sound).
 - Cargo commands (except `cargo run`) execute in a mutually-exclusive serial
   group: concurrent cargo processes serialize on Cargo's build-directory lock
   anyway, so Turborepo runs one at a time — each using all cores — instead of

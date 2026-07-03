@@ -92,7 +92,6 @@ fn test_cargo_entrypoint_build_task_wiring() {
     assert!(def.inputs.default);
     for input in [
         "../../crates/lib-a/**",
-        "../../Cargo.lock",
         "../../Cargo.toml",
         "../../.cargo/config.toml",
         "../../rust-toolchain.toml",
@@ -121,7 +120,7 @@ fn test_cargo_entrypoint_build_task_wiring() {
         def.outputs
             .inclusions
             .iter()
-            .any(|glob| glob == "../../target/debug/app"),
+            .any(|glob| glob == "../../target/*/app"),
         "missing bin output glob, got {:?}",
         def.outputs.inclusions
     );
@@ -181,7 +180,7 @@ fn test_cargo_workspace_task_hashes_crate_dirs_not_whole_repo() {
         !def.inputs.default,
         "workspace tasks must not default-hash the repo root"
     );
-    for input in ["crates/app/**", "crates/lib-a/**", "./Cargo.lock"] {
+    for input in ["crates/app/**", "crates/lib-a/**", "./Cargo.toml"] {
         assert!(
             def.inputs.globs.iter().any(|glob| glob == input),
             "missing input glob {input}, got {:?}",
@@ -222,7 +221,7 @@ fn test_cargo_entrypoint_respects_explicit_inputs() {
         def.inputs
             .globs
             .iter()
-            .any(|glob| glob == "../../Cargo.lock")
+            .any(|glob| glob == "../../Cargo.toml")
     );
 }
 
@@ -246,7 +245,7 @@ fn test_cargo_entrypoint_turbo_default_keeps_automatic_inputs() {
     for input in [
         "../../version.txt",
         "../../crates/lib-a/**",
-        "../../Cargo.lock",
+        "../../Cargo.toml",
     ] {
         assert!(
             def.inputs.globs.iter().any(|glob| glob == input),

@@ -38,6 +38,9 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 /// The conventional file name for a Cargo manifest.
 pub const CARGO_TOML: &str = "Cargo.toml";
 
+/// The conventional file name for a Cargo lockfile.
+pub const CARGO_LOCK: &str = "Cargo.lock";
+
 /// Name of the synthetic package that hosts workspace-scoped Cargo tasks
 /// (`cargo#test`, `cargo#lint`, ...). A real workspace member with this name
 /// collides and hard-errors, like any other duplicate package name.
@@ -51,6 +54,10 @@ pub enum Error {
     Metadata { stderr: String },
     #[error("failed to parse `cargo metadata` output: {0}")]
     Parse(#[from] serde_json::Error),
+    #[error("failed to read Cargo.lock: {0}")]
+    LockfileRead(#[source] io::Error),
+    #[error(transparent)]
+    Lockfile(#[from] turborepo_lockfiles::CargoLockError),
 }
 
 /// Map a Turborepo task name to the Cargo subcommand that implements it for
@@ -128,22 +135,23 @@ pub const HASHED_ENV_VARS: &[&str] = &[
 ];
 
 /// Input globs whose changes should invalidate a Cargo task's cache: the
-/// workspace lockfile, the workspace root manifest (profiles, lints, and
-/// feature unification all live there), Cargo config files, and pinned
-/// toolchain files — expressed relative to the task's package directory via
-/// `prefix` (the path from the package to the repo root, e.g. `../..`;
-/// empty for the workspace package). Globs that don't match anything (e.g. a
-/// missing `rust-toolchain` file) simply contribute nothing.
+/// workspace root manifest (profiles, lints, `[patch]`, and feature
+/// unification all live there), Cargo config files, and pinned toolchain
+/// files — expressed relative to the task's package directory via `prefix`
+/// (the path from the package to the repo root, e.g. `../..`; empty for the
+/// workspace package). Globs that don't match anything (e.g. a missing
+/// `rust-toolchain` file) simply contribute nothing.
 ///
-/// Note: without a committed `rust-toolchain`/`rust-toolchain.toml` file the
-/// compiler version is not part of the hash, so sharing a remote cache
-/// across machines with different toolchains is unsound. For fine-grained
+/// Cargo.lock is deliberately absent: locked dependencies participate in
+/// each crate task's external-dependency hash, scoped to that crate's
+/// transitive closure (see [`external_closures`]), so a dependency bump only
+/// invalidates the crates that actually depend on it. The compiler version
+/// participates the same way (see [`rustc_version`]). For fine-grained
 /// remote compile caching, use sccache (`RUSTC_WRAPPER`) — that is the layer
 /// where per-compilation caching is sound, and it cooperates with Cargo
 /// rather than competing with it.
 pub fn hash_input_globs(prefix: &str) -> Vec<String> {
     [
-        "Cargo.lock",
         "Cargo.toml",
         ".cargo/config.toml",
         ".cargo/config",
@@ -155,19 +163,89 @@ pub fn hash_input_globs(prefix: &str) -> Vec<String> {
     .collect()
 }
 
+/// The version of the Rust compiler that Cargo will invoke, as a hashable
+/// external-dependency identity, or `None` (with a warning) when rustc
+/// can't be queried.
+///
+/// Run from `repo_root` so rustup's shim resolves `rust-toolchain`
+/// overrides the same way a task's `cargo` invocation will. Participating
+/// in the external-dependency hash means compiling with a different
+/// toolchain never restores another toolchain's artifacts — the gap that
+/// made remote cache sharing unsound when no toolchain file was committed.
+pub fn rustc_version(repo_root: &AbsoluteSystemPath) -> Option<turborepo_lockfiles::Package> {
+    let output = std::process::Command::new("rustc")
+        .arg("--version")
+        .current_dir(repo_root.as_std_path())
+        .output();
+    match output {
+        Ok(output) if output.status.success() => {
+            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            (!version.is_empty()).then_some(turborepo_lockfiles::Package {
+                key: "rustc".to_string(),
+                version,
+            })
+        }
+        Ok(output) => {
+            tracing::warn!(
+                "`rustc --version` failed; the compiler version will not participate in Cargo \
+                 task hashes: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+            None
+        }
+        Err(error) => {
+            tracing::warn!(
+                "unable to run `rustc --version`; the compiler version will not participate in \
+                 Cargo task hashes: {error}"
+            );
+            None
+        }
+    }
+}
+
+/// Per-crate external dependency closures from Cargo.lock, for the crates'
+/// external-dependency hashes.
+///
+/// A missing Cargo.lock yields an empty map (the workspace is unpinned;
+/// Cargo will create the lockfile on first build). An unreadable or
+/// unparsable lockfile is a hard error — silently hashing nothing would be
+/// unsound.
+pub fn external_closures(
+    repo_root: &AbsoluteSystemPath,
+    members: &[String],
+) -> Result<HashMap<String, HashSet<turborepo_lockfiles::Package>>, Error> {
+    let lock_path = repo_root.join_component(CARGO_LOCK);
+    let contents = match lock_path.read_to_string() {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(HashMap::new());
+        }
+        Err(error) => return Err(Error::LockfileRead(error)),
+    };
+    Ok(turborepo_lockfiles::cargo_external_closures(
+        &contents, members,
+    )?)
+}
+
 /// Output globs for an entrypoint crate's `build` task: the artifacts Cargo
-/// places in `target/debug/` — uplifted binaries plus cdylib/staticlib
+/// places in `target/<profile>/` — uplifted binaries plus cdylib/staticlib
 /// libraries. These are the workspace's deliverables — the only artifacts
 /// worth caching at the task level. Cargo's internal `target/` state (deps,
 /// fingerprints) is deliberately not cached: it is Cargo's own incremental
 /// cache, and tarballing it fights Cargo instead of leaning on it.
 ///
-/// Every platform's file name is emitted for each deliverable (`.so`,
-/// `.dylib`, `.dll`, ...); globs that match nothing contribute nothing, and
-/// task hashes already segment by platform via the artifacts themselves.
+/// The profile segment is a wildcard, so `--release` and custom profiles
+/// (`--profile=my-profile`) are cached without configuration — pass-through
+/// args participate in the task hash, so each profile gets its own cache
+/// entry. Every platform's file name is emitted for each deliverable
+/// (`.so`, `.dylib`, `.dll`, ...); globs that match nothing contribute
+/// nothing, and task hashes already segment by platform via the artifacts
+/// themselves.
 ///
-/// Builds using `--release`, `CARGO_TARGET_DIR`, or `--target` write
-/// elsewhere; declare explicit `outputs` in turbo.json for those layouts.
+/// Builds using `CARGO_TARGET_DIR` or `--target <triple>` write elsewhere
+/// (`CARGO_TARGET_DIR` and `CARGO_BUILD_TARGET` are hashed, but the
+/// artifact locations differ); declare explicit `outputs` in turbo.json for
+/// those layouts.
 pub fn deliverable_output_globs(prefix: &str, deliverables: &[Deliverable]) -> Vec<String> {
     deliverables
         .iter()
@@ -186,7 +264,7 @@ pub fn deliverable_output_globs(prefix: &str, deliverables: &[Deliverable]) -> V
             };
             basenames
                 .into_iter()
-                .map(move |basename| join_prefix(prefix, &format!("target/debug/{basename}")))
+                .map(move |basename| join_prefix(prefix, &format!("target/*/{basename}")))
         })
         .collect()
 }
@@ -797,7 +875,6 @@ mod test {
         assert_eq!(
             hash_input_globs("../.."),
             vec![
-                "../../Cargo.lock",
                 "../../Cargo.toml",
                 "../../.cargo/config.toml",
                 "../../.cargo/config",
@@ -805,7 +882,10 @@ mod test {
                 "../../rust-toolchain",
             ]
         );
-        assert_eq!(hash_input_globs("")[0], "Cargo.lock");
+        assert_eq!(hash_input_globs("")[0], "Cargo.toml");
+        // Cargo.lock is hashed per-crate via external dependency closures,
+        // not as a global file input.
+        assert!(!hash_input_globs("").iter().any(|g| g.contains("lock")));
     }
 
     #[test]
@@ -827,13 +907,13 @@ mod test {
         assert_eq!(
             deliverable_output_globs("../..", &deliverables),
             vec![
-                "../../target/debug/app",
-                "../../target/debug/app.exe",
-                "../../target/debug/libmy_native.so",
-                "../../target/debug/libmy_native.dylib",
-                "../../target/debug/my_native.dll",
-                "../../target/debug/libmy_archive.a",
-                "../../target/debug/my_archive.lib",
+                "../../target/*/app",
+                "../../target/*/app.exe",
+                "../../target/*/libmy_native.so",
+                "../../target/*/libmy_native.dylib",
+                "../../target/*/my_native.dll",
+                "../../target/*/libmy_archive.a",
+                "../../target/*/my_archive.lib",
             ]
         );
         assert!(deliverable_output_globs("../..", &[]).is_empty());
