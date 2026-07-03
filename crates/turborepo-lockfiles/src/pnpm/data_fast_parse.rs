@@ -38,7 +38,11 @@ impl Unsupported {
     fn here() -> Self {
         if tracing::enabled!(tracing::Level::DEBUG) {
             let loc = std::panic::Location::caller();
-            tracing::debug!("pnpm fast parse unsupported at {}:{}", loc.file(), loc.line());
+            tracing::debug!(
+                "pnpm fast parse unsupported at {}:{}",
+                loc.file(),
+                loc.line()
+            );
         }
         Unsupported
     }
@@ -796,9 +800,7 @@ fn parse_lockfile_version(events: &mut Events) -> FResult<LockfileVersion> {
             Ok(num) => Ok(LockfileVersion::from(num)),
             Err(_) => Ok(LockfileVersion::from(value)),
         },
-        ScalarStyle::SingleQuoted | ScalarStyle::DoubleQuoted => {
-            Ok(LockfileVersion::from(value))
-        }
+        ScalarStyle::SingleQuoted | ScalarStyle::DoubleQuoted => Ok(LockfileVersion::from(value)),
         _ => Err(Unsupported::here()),
     }
 }
@@ -852,9 +854,10 @@ fn parse_lockfile(events: &mut Events) -> FResult<PnpmLockfile> {
             "packageExtensionsChecksum" => {
                 set_once(&mut package_extensions_checksum, events.string()?)?
             }
-            "patchedDependencies" => {
-                set_once(&mut patched_dependencies, parse_patched_dependencies(events)?)?
-            }
+            "patchedDependencies" => set_once(
+                &mut patched_dependencies,
+                parse_patched_dependencies(events)?,
+            )?,
             "importers" => set_once(&mut importers, parse_importers(events)?)?,
             "packages" => set_once(&mut packages, parse_packages(events)?)?,
             "snapshots" => set_once(&mut snapshots, parse_snapshots(events)?)?,
@@ -898,7 +901,6 @@ fn parse_lockfile(events: &mut Events) -> FResult<PnpmLockfile> {
         time,
     })
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -1152,29 +1154,24 @@ packages:
 
     #[test]
     fn test_multi_document_falls_back() {
-        assert_falls_back(
-            "---\nleading: doc\n---\nlockfileVersion: '9.0'\nimporters:\n  .: {}\n",
-        );
+        assert_falls_back("---\nleading: doc\n---\nlockfileVersion: '9.0'\nimporters:\n  .: {}\n");
     }
 
     #[test]
     fn test_anchors_fall_back() {
-        assert_falls_back(
-            "lockfileVersion: '9.0'\nimporters:\n  .: {}\nx: &a hello\ny: *a\n",
-        );
+        assert_falls_back("lockfileVersion: '9.0'\nimporters:\n  .: {}\nx: &a hello\ny: *a\n");
     }
 
     #[test]
     fn test_duplicate_keys_fall_back() {
-        assert_falls_back(
-            "lockfileVersion: '9.0'\nimporters:\n  .: {}\n  .: {}\n",
-        );
+        assert_falls_back("lockfileVersion: '9.0'\nimporters:\n  .: {}\n  .: {}\n");
     }
 
     #[test]
     fn test_hex_int_falls_back() {
         assert_falls_back(
-            "lockfileVersion: '9.0'\nimporters:\n  .: {}\npackages:\n  a@1.0.0:\n    resolution: {integrity: sha512-a}\n    weird: 0x2A\n",
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\npackages:\n  a@1.0.0:\n    resolution: \
+             {integrity: sha512-a}\n    weird: 0x2A\n",
         );
     }
 
@@ -1182,9 +1179,7 @@ packages:
     fn test_null_in_string_position_falls_back() {
         // serde errors on `~` where a String is expected; the fast path must
         // not silently produce a different result.
-        assert_falls_back(
-            "lockfileVersion: '9.0'\nimporters:\n  .: {}\noverrides:\n  foo: ~\n",
-        );
+        assert_falls_back("lockfileVersion: '9.0'\nimporters:\n  .: {}\noverrides:\n  foo: ~\n");
     }
 
     #[test]
