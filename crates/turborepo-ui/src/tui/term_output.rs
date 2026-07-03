@@ -149,11 +149,32 @@ impl<W> TerminalOutput<W> {
         self.parser.has_selection()
     }
 
+    /// Whether a mouse-driven selection is in progress (the button is still
+    /// held down).
+    pub fn is_selecting(&self) -> bool {
+        self.selection_start.is_some()
+    }
+
+    /// Clears the selection highlight and any pending selection anchor.
+    pub fn clear_selection(&mut self) -> Result<(), Error> {
+        self.parser.clear_selection()?;
+        self.selection_start = None;
+        Ok(())
+    }
+
     pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
         match event.kind {
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
                 self.parser.clear_selection()?;
-                self.selection_start = Some((event.row, event.column));
+                // Shift held at click time means the user is preventing the
+                // copy before it starts, so don't anchor a selection. Most
+                // terminals never deliver shifted mouse events (shift
+                // bypasses mouse capture for native selection), but honor
+                // them when they do arrive.
+                self.selection_start = (!event
+                    .modifiers
+                    .contains(crossterm::event::KeyModifiers::SHIFT))
+                .then_some((event.row, event.column));
             }
             crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
                 if let Some((start_row, start_col)) = self.selection_start {
@@ -163,7 +184,11 @@ impl<W> TerminalOutput<W> {
             }
             crossterm::event::MouseEventKind::ScrollDown => (),
             crossterm::event::MouseEventKind::ScrollUp => (),
-            crossterm::event::MouseEventKind::Moved => (),
+            // Hover means the button is up; drop any stale drag anchor from
+            // a release that the terminal never delivered to us.
+            crossterm::event::MouseEventKind::Moved => {
+                self.selection_start = None;
+            }
             crossterm::event::MouseEventKind::Down(_) => (),
             crossterm::event::MouseEventKind::Drag(_) => (),
             crossterm::event::MouseEventKind::ScrollLeft
@@ -263,7 +288,77 @@ mod newline_tests {
         })?;
 
         assert!(output.has_selection());
+        assert!(output.is_selecting());
         assert_eq!(output.copy_selection().as_deref(), Some("hello"));
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+        // Release ends the drag. The selection itself survives at this
+        // layer so `App` can copy it before clearing the highlight.
+        assert!(!output.is_selecting());
+        assert!(output.has_selection());
+        Ok(())
+    }
+
+    #[test]
+    fn shift_on_click_does_not_start_selection() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let mut output: TerminalOutput<()> = TerminalOutput::new(10, 40, None, 100);
+        output.process(b"hello world\r\n");
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::SHIFT,
+        })?;
+        assert!(!output.is_selecting());
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        assert!(!output.has_selection());
+        Ok(())
+    }
+
+    #[test]
+    fn release_with_shift_keeps_selection() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let mut output: TerminalOutput<()> = TerminalOutput::new(10, 40, None, 100);
+        output.process(b"hello world\r\n");
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        assert!(output.has_selection());
+
+        // The drag ends but the selection stays for a later `c` copy.
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::SHIFT,
+        })?;
+        assert!(output.has_selection());
+        assert!(!output.is_selecting());
         Ok(())
     }
 }

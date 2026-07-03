@@ -25,6 +25,7 @@ use turborepo_cache::CacheHitMetadata;
 use turborepo_engine::TaskNode;
 use turborepo_env::{
     BUILTIN_PASS_THROUGH_ENV, BySource, CompiledWildcards, DetailedMap, EnvironmentVariableMap,
+    WildcardMapCache,
 };
 use turborepo_frameworks::{Framework, Slug as FrameworkSlug, infer_framework};
 use turborepo_hash::{FileHashes, LockFilePackagesRef, TaskHashable, TurboHash};
@@ -260,7 +261,13 @@ pub struct TaskHasher<'a, R> {
     global_env_patterns: &'a [String],
     global_hash: &'a str,
     task_hash_tracker: TaskHashTracker,
-    compiled_builtins: Option<CompiledWildcards>,
+    /// Builtin pass-through env vars matched against the environment once at
+    /// construction; the set is invariant for the lifetime of the hasher.
+    builtin_pass_through_env: EnvironmentVariableMap,
+    /// Memoized wildcard matches so tasks sharing the same `env` or
+    /// `passThroughEnv` patterns don't recompile regexes and rescan the
+    /// environment.
+    wildcard_cache: WildcardMapCache,
     external_deps_hash_cache: HashMap<String, String>,
 }
 
@@ -278,7 +285,10 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             expanded_hashes,
         } = package_inputs_hashes;
 
-        let compiled_builtins = CompiledWildcards::compile(BUILTIN_PASS_THROUGH_ENV).ok();
+        let builtin_pass_through_env = CompiledWildcards::compile(BUILTIN_PASS_THROUGH_ENV)
+            .ok()
+            .map(|compiled| env_at_execution_start.from_compiled_wildcards(&compiled))
+            .unwrap_or_default();
 
         Self {
             hashes,
@@ -288,7 +298,8 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             global_env,
             global_env_patterns,
             task_hash_tracker: TaskHashTracker::new(expanded_hashes),
-            compiled_builtins,
+            builtin_pass_through_env,
+            wildcard_cache: WildcardMapCache::default(),
             external_deps_hash_cache: HashMap::new(),
         }
     }
@@ -546,23 +557,36 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 .cloned()
                 .collect();
 
-            self.env_at_execution_start
-                .hashable_task_env(&computed_wildcards, &combined_env_patterns)
+            let inference = self
+                .wildcard_cache
+                .get_or_compute(self.env_at_execution_start, &computed_wildcards)
                 .map_err(|err| Error::EnvPattern {
                     task_id: task_id.clone().into_owned(),
                     err,
-                })
+                })?;
+            let user_env_var_set = self
+                .wildcard_cache
+                .get_or_compute(self.env_at_execution_start, &combined_env_patterns)
+                .map_err(|err| Error::EnvPattern {
+                    task_id: task_id.clone().into_owned(),
+                    err,
+                })?;
+
+            Ok(DetailedMap::from_task_env_parts(
+                &inference.resolved,
+                &user_env_var_set.maps,
+            ))
         } else {
-            let all_env_var_map = self
-                .env_at_execution_start
-                .from_wildcards(task_definition.env())?;
+            let matched = self
+                .wildcard_cache
+                .get_or_compute(self.env_at_execution_start, task_definition.env())?;
 
             Ok(DetailedMap {
                 by_source: BySource {
-                    explicit: all_env_var_map.clone(),
+                    explicit: matched.resolved.clone(),
                     matching: EnvironmentVariableMap::default(),
                 },
-                all: all_env_var_map,
+                all: matched.resolved.clone(),
             })
         }
     }
@@ -625,20 +649,16 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
     ) -> Result<EnvironmentVariableMap, Error> {
         match task_env_mode {
             EnvMode::Strict => {
-                let pass_through_env_vars = match &self.compiled_builtins {
-                    Some(compiled_builtins) => {
-                        self.env_at_execution_start.pass_through_env_compiled(
-                            compiled_builtins,
-                            &self.global_env,
-                            task_definition.pass_through_env().unwrap_or_default(),
-                        )?
-                    }
-                    None => self.env_at_execution_start.pass_through_env(
-                        &[] as &[&str],
-                        &self.global_env,
-                        task_definition.pass_through_env().unwrap_or_default(),
-                    )?,
-                };
+                let task_pass_through = self.wildcard_cache.get_or_compute(
+                    self.env_at_execution_start,
+                    task_definition.pass_through_env().unwrap_or_default(),
+                )?;
+
+                let pass_through_env_vars = turborepo_env::pass_through_env_from_parts(
+                    &self.builtin_pass_through_env,
+                    &self.global_env,
+                    &task_pass_through.maps,
+                );
 
                 let tracker_env = self
                     .task_hash_tracker

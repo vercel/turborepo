@@ -13,6 +13,8 @@ use super::{
 pub struct InputOptions<'a> {
     pub focus: &'a LayoutSections,
     pub has_selection: bool,
+    /// Whether a mouse selection drag is (as far as we know) in progress.
+    pub is_selecting: bool,
     pub is_help_popup_open: bool,
     pub is_log_panel_open: bool,
 }
@@ -46,7 +48,16 @@ impl InputOptions<'_> {
                     Some(Event::ScrollWithMomentum(Direction::Up))
                 }
                 crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
-                | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
+                | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left)
+                | crossterm::event::MouseEventKind::Up(crossterm::event::MouseButton::Left) => {
+                    Some(Event::Mouse(m))
+                }
+                // A hover event while we believe a drag is in progress means
+                // we missed the release: terminals swallow shifted mouse
+                // events (shift is the native-selection escape hatch), so a
+                // shift-release is never delivered. Forward the hover so the
+                // app can end the drag.
+                crossterm::event::MouseEventKind::Moved if self.is_selecting => {
                     Some(Event::Mouse(m))
                 }
                 _ => None,
@@ -464,6 +475,7 @@ mod test {
         InputOptions {
             focus: search(),
             has_selection: false,
+            is_selecting: false,
             is_help_popup_open: false,
             is_log_panel_open: false,
         }
@@ -474,6 +486,7 @@ mod test {
         InputOptions {
             focus: LIST.get_or_init(|| LayoutSections::TaskList),
             has_selection: false,
+            is_selecting: false,
             is_help_popup_open: false,
             is_log_panel_open: false,
         }

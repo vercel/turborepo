@@ -44,6 +44,11 @@ pub struct PackageGraph {
     repo_root: AbsoluteSystemPathBuf,
     external_dep_to_internal_dependents:
         OnceLock<HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>>>,
+    /// Lazily computed internal dependencies of the root package. They are
+    /// implied dependencies of every package, so per-package operations like
+    /// `dependencies` and `ancestors` consult them on every call; the set is
+    /// invariant once the graph is built.
+    root_internal_dependencies: OnceLock<HashSet<PackageNode>>,
 }
 
 /// The WorkspacePackage.
@@ -518,7 +523,7 @@ impl PackageGraph {
     pub fn root_internal_package_dependencies(&self) -> HashSet<WorkspacePackage> {
         let dependencies = self.root_internal_dependencies();
         dependencies
-            .into_iter()
+            .iter()
             .filter_map(|node| match node {
                 PackageNode::Workspace(package) => {
                     let path = self.package_dir_for_node(node)?;
@@ -535,7 +540,7 @@ impl PackageGraph {
     pub fn root_internal_package_dependencies_paths(&self) -> Vec<&AnchoredSystemPath> {
         let dependencies = self.root_internal_dependencies();
         dependencies
-            .into_iter()
+            .iter()
             .filter_map(|node| match node {
                 PackageNode::Workspace(_) => self.package_dir_for_node(node),
                 PackageNode::Root => None,
@@ -573,16 +578,21 @@ impl PackageGraph {
         Some(package_names.join(" -> "))
     }
 
-    fn root_internal_dependencies(&self) -> HashSet<&PackageNode> {
-        // We cannot call self.dependencies(&PackageNode::Workspace(PackageName::Root))
-        // as it will infinitely recurse.
-        let mut dependencies = turborepo_graph_utils::transitive_closure(
-            &self.graph,
-            Some(self.root_workspace_index),
-            petgraph::Direction::Outgoing,
-        );
-        dependencies.remove(&PackageNode::Workspace(PackageName::Root));
-        dependencies
+    fn root_internal_dependencies(&self) -> &HashSet<PackageNode> {
+        self.root_internal_dependencies.get_or_init(|| {
+            // We cannot call self.dependencies(&PackageNode::Workspace(PackageName::Root))
+            // as it will infinitely recurse.
+            let mut dependencies: HashSet<PackageNode> = turborepo_graph_utils::transitive_closure(
+                &self.graph,
+                Some(self.root_workspace_index),
+                petgraph::Direction::Outgoing,
+            )
+            .into_iter()
+            .cloned()
+            .collect();
+            dependencies.remove(&PackageNode::Workspace(PackageName::Root));
+            dependencies
+        })
     }
 
     /// Returns the transitive closure of the given nodes in the package
@@ -783,11 +793,7 @@ impl PackageGraph {
             }
         }
         // Now trace through all ancestors of the direct dependants
-        let root_internal_dependencies = self
-            .root_internal_dependencies()
-            .into_iter()
-            .cloned()
-            .collect::<HashSet<_>>();
+        let root_internal_dependencies = self.root_internal_dependencies();
         let root_external_dependencies =
             self.transitive_external_dependencies(Some(&PackageName::Root));
         for (external_pkg, rdeps) in map.iter_mut() {

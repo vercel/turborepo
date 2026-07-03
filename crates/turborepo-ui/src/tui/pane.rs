@@ -10,7 +10,9 @@ use super::{PANE_LEFT_PADDING_WITH_SIDEBAR, TerminalOutput, app::LayoutSections}
 
 const EXIT_INTERACTIVE_HINT: &str = "Ctrl-z - Stop interacting";
 const ENTER_INTERACTIVE_HINT: &str = "i - Interact";
-const HAS_SELECTION: &str = "c - Copy selection";
+const CANCEL_SELECTION: &str = "Hold Shift - Prevent copy";
+const COPIED_TO_CLIPBOARD: &str = "Copied to clipboard!";
+const HAS_SELECTION: &str = "c - Copy to clipboard | Click to unselect";
 const SCROLL_LOGS: &str = "u/d - Scroll logs";
 const PAGE_LOGS: &str = "U/D - Page logs";
 const JUMP_IN_LOGS: &str = "t/b - Jump to top/bottom";
@@ -21,6 +23,7 @@ pub struct TerminalPane<'a, W> {
     task_name: &'a str,
     section: &'a LayoutSections,
     has_sidebar: bool,
+    show_copied_notice: bool,
 }
 
 impl<'a, W> TerminalPane<'a, W> {
@@ -29,12 +32,14 @@ impl<'a, W> TerminalPane<'a, W> {
         task_name: &'a str,
         section: &'a LayoutSections,
         has_sidebar: bool,
+        show_copied_notice: bool,
     ) -> Self {
         Self {
             terminal_output,
             section,
             task_name,
             has_sidebar,
+            show_copied_notice,
         }
     }
 
@@ -43,6 +48,31 @@ impl<'a, W> TerminalPane<'a, W> {
     }
 
     fn footer(&self) -> Line<'_> {
+        let format_messages = |messages: &[&str]| -> Line {
+            // Spaces are used to pad the footer text for aesthetics
+            let formatted_messages = format!("   {}", messages.join("   "));
+
+            Line::styled(
+                formatted_messages,
+                Style::default().add_modifier(Modifier::DIM),
+            )
+            .left_aligned()
+        };
+
+        // Selection flows replace the usual key binds with the one relevant
+        // message: how to prevent the copy while dragging, confirmation
+        // right after a copy, and the options for a selection that was kept
+        // by releasing with shift held.
+        if self.terminal_output.is_selecting() {
+            return format_messages(&[CANCEL_SELECTION]);
+        }
+        if self.show_copied_notice {
+            return format_messages(&[COPIED_TO_CLIPBOARD]);
+        }
+        if self.terminal_output.has_selection() {
+            return format_messages(&[HAS_SELECTION]);
+        }
+
         let build_message_vec = |footer_text: &[&str]| -> Line {
             let mut messages = Vec::new();
             messages.extend_from_slice(footer_text);
@@ -51,18 +81,7 @@ impl<'a, W> TerminalPane<'a, W> {
                 messages.push(TASK_LIST_HIDDEN);
             }
 
-            if self.terminal_output.has_selection() {
-                messages.push(HAS_SELECTION);
-            }
-
-            // Spaces are used to pad the footer text for aesthetics
-            let formatted_messages = format!("   {}", messages.join("   "));
-
-            Line::styled(
-                formatted_messages.to_string(),
-                Style::default().add_modifier(Modifier::DIM),
-            )
-            .left_aligned()
+            format_messages(&messages)
         };
 
         match self.section {
@@ -129,7 +148,7 @@ mod test {
     fn test_footer_interactive() {
         let mut term: TerminalOutput<Vec<u8>> =
             TerminalOutput::new(16, 16, Some(Vec::new()), 2048).expect("terminal output");
-        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true);
+        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, false);
         assert_eq!(
             String::from(pane.footer()),
             "   i - Interact   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom"
@@ -140,7 +159,7 @@ mod test {
     fn test_footer_non_interactive() {
         let mut term: TerminalOutput<Vec<u8>> =
             TerminalOutput::new(16, 16, None, 2048).expect("terminal output");
-        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true);
+        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, false);
         assert_eq!(
             String::from(pane.footer()),
             "   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom"
@@ -148,10 +167,82 @@ mod test {
     }
 
     #[test]
+    fn test_footer_copied_notice() {
+        let mut term: TerminalOutput<Vec<u8>> =
+            TerminalOutput::new(16, 16, None, 2048).expect("terminal output");
+        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, true);
+        assert_eq!(String::from(pane.footer()), "   Copied to clipboard!");
+    }
+
+    #[test]
+    fn test_footer_cancel_selection_hint_while_selecting() {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let mut term: TerminalOutput<Vec<u8>> =
+            TerminalOutput::new(16, 16, None, 2048).expect("terminal output");
+        term.process(b"hello world\r\n");
+        term.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })
+        .unwrap();
+        term.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })
+        .unwrap();
+
+        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, false);
+        assert_eq!(String::from(pane.footer()), "   Hold Shift - Prevent copy");
+    }
+
+    #[test]
+    fn test_footer_held_selection_offers_copy_and_unselect() {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let mut term: TerminalOutput<Vec<u8>> =
+            TerminalOutput::new(16, 16, None, 2048).expect("terminal output");
+        term.process(b"hello world\r\n");
+        term.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })
+        .unwrap();
+        term.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })
+        .unwrap();
+        term.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::SHIFT,
+        })
+        .unwrap();
+        assert!(term.has_selection());
+        assert!(!term.is_selecting());
+
+        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, false);
+        assert_eq!(
+            String::from(pane.footer()),
+            "   c - Copy to clipboard | Click to unselect"
+        );
+    }
+
+    #[test]
     fn test_content_area_pads_when_sidebar_visible() {
         let mut term: TerminalOutput<Vec<u8>> =
             TerminalOutput::new(16, 16, None, 2048).expect("terminal output");
-        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true);
+        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, true, false);
 
         assert_eq!(
             pane.content_area(Rect::new(10, 0, 20, 10)),
@@ -163,7 +254,7 @@ mod test {
     fn test_content_area_has_no_padding_when_sidebar_hidden() {
         let mut term: TerminalOutput<Vec<u8>> =
             TerminalOutput::new(16, 16, None, 2048).expect("terminal output");
-        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, false);
+        let pane = TerminalPane::new(&mut term, "foo", &LayoutSections::TaskList, false, false);
 
         assert_eq!(
             pane.content_area(Rect::new(10, 0, 20, 10)),
