@@ -99,8 +99,15 @@ impl Widget for &mut TerminalWidget<'_, '_, '_> {
             self.cursor.blinking = cursor_blinking;
         }
 
-        let default_fg = rgb_to_color(colors.foreground);
-        let default_bg = rgb_to_color(colors.background);
+        // Cells without an explicit color must stay unset (`Color::Reset`) so
+        // the user's terminal theme supplies the default fg/bg, matching the
+        // pre-Ghostty vt100 renderer. Resolving them through libghostty's
+        // stock palette would paint an opaque background over the terminal
+        // theme. Like the vt100 renderer, OSC 10/11 default-color overrides
+        // are intentionally not applied; `Terminal::fg_color`/`bg_color`
+        // expose them should that ever be wanted.
+        let default_fg = Color::Reset;
+        let default_bg = Color::Reset;
 
         let Ok(mut row_iter) = RowIterator::new() else {
             return;
@@ -231,5 +238,57 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Unstyled cells stay `Color::Reset` so the terminal theme shows
+    /// through; see the rationale comment in `render`.
+    #[test]
+    fn default_colors_defer_to_terminal_theme() {
+        let (cols, rows): (u16, u16) = (20, 2);
+        let backend = TestBackend::new(cols, rows);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+
+        let mut parser = Parser::new(rows, cols, 0);
+        parser.process(b"a\x1b[38;2;1;2;3mb");
+        terminal
+            .draw(|frame| {
+                let mut widget =
+                    TerminalWidget::new(&mut parser.terminal, &mut parser.render_state);
+                widget.render(frame.area(), frame.buffer_mut());
+            })
+            .expect("draw");
+
+        let buf = terminal.backend().buffer();
+        let cell = |col: u16| &buf[ratatui::layout::Position::new(col, 0)];
+
+        // Unstyled cell: both colors stay unset for the terminal to resolve.
+        assert_eq!(cell(0).fg, Color::Reset);
+        assert_eq!(cell(0).bg, Color::Reset);
+        // Explicitly colored cells are unaffected.
+        assert_eq!(cell(1).fg, Color::Rgb(1, 2, 3));
+    }
+
+    /// OSC 10/11 default-color overrides are intentionally not applied,
+    /// matching the pre-Ghostty vt100 renderer: default cells keep
+    /// deferring to the user's terminal theme.
+    #[test]
+    fn osc_default_color_overrides_are_ignored() {
+        let (cols, rows): (u16, u16) = (20, 2);
+        let backend = TestBackend::new(cols, rows);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+
+        let mut parser = Parser::new(rows, cols, 0);
+        parser.process(b"\x1b]11;#010203\x07x");
+        terminal
+            .draw(|frame| {
+                let mut widget =
+                    TerminalWidget::new(&mut parser.terminal, &mut parser.render_state);
+                widget.render(frame.area(), frame.buffer_mut());
+            })
+            .expect("draw");
+
+        let buf = terminal.backend().buffer();
+        let cell = &buf[ratatui::layout::Position::new(0, 0)];
+        assert_eq!(cell.bg, Color::Reset);
     }
 }
