@@ -1,5 +1,3 @@
-import { notFound } from "next/navigation";
-import { enableDevtools } from "../../../flags";
 import { DevtoolsClientComponent } from "./devtools-client";
 import { createMetadata } from "@/lib/create-metadata";
 
@@ -9,12 +7,6 @@ export const metadata = createMetadata({
   canonicalPath: "/devtools"
 });
 
-export default async function DevtoolsPage() {
-  const showDevtools = await enableDevtools();
-
-  if (!showDevtools) {
-    return notFound();
-  }
-
+export default function DevtoolsPage() {
   return <DevtoolsClientComponent />;
 }
