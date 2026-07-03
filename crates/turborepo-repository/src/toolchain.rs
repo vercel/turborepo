@@ -29,9 +29,12 @@
 //!
 //! # Known debt
 //!
-//! JavaScript machinery that predates this abstraction is still reachable
-//! outside the trait where other build phases need it. Each access point is
-//! the shrink list for future iterations of the trait surface:
+//! Some JavaScript machinery that predates this abstraction is still called
+//! directly, outside the trait, because the build phases that need it have
+//! no trait surface yet. The list below is a checklist to burn down: as the
+//! trait gains a surface for each concern, the corresponding direct access
+//! goes away. When the list is empty, JavaScript is fully behind the
+//! abstraction.
 //!
 //! - [`JavaScriptToolchain::package_manager`]: package-manager resolution feeds
 //!   dependency splitting and lockfile handling in the package graph builder.
