@@ -500,33 +500,50 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                                 dependency: package.to_owned(),
                             },
                         );
+                    }
 
-                        // get the dependent's dependencies
-                        if selector.include_dependencies {
-                            let dependent_node =
-                                package_graph::PackageNode::Workspace(dependent.to_owned());
+                    // Get the dependents' dependencies with a single
+                    // multi-source traversal instead of one traversal per
+                    // dependent. The closure includes the dependents
+                    // themselves, but they already carry the same inclusion
+                    // reason via `walked_dependents`, which takes precedence
+                    // in the merge below. Like `dependencies`, the root
+                    // package's own dependencies count as implied
+                    // dependencies of every dependent.
+                    if selector.include_dependencies && !dependents.is_empty() {
+                        let dependent_nodes: Vec<package_graph::PackageNode> = dependents
+                            .iter()
+                            .map(|i| {
+                                package_graph::PackageNode::Workspace(i.as_package_name().clone())
+                            })
+                            .collect();
 
-                            let dependent_dependencies =
-                                self.pkg_graph.dependencies(&dependent_node);
+                        let dependent_dependencies = self
+                            .pkg_graph
+                            .transitive_closure(dependent_nodes.iter())
+                            .into_iter()
+                            .filter(|node| !matches!(node, package_graph::PackageNode::Root))
+                            .map(|i| i.as_package_name().to_owned())
+                            .chain(
+                                self.pkg_graph
+                                    .root_internal_package_dependencies()
+                                    .into_iter()
+                                    .map(|workspace| workspace.name),
+                            )
+                            .map(|name| {
+                                (
+                                    name,
+                                    PackageInclusionReason::DependencyChanged {
+                                        dependency: package.to_owned(),
+                                    },
+                                )
+                            })
+                            .collect::<HashSet<_>>();
 
-                            let dependent_dependencies = dependent_dependencies
-                                .iter()
-                                .filter(|node| !matches!(node, package_graph::PackageNode::Root))
-                                .map(|i| {
-                                    (
-                                        i.as_package_name().to_owned(),
-                                        PackageInclusionReason::DependencyChanged {
-                                            dependency: package.to_owned(),
-                                        },
-                                    )
-                                })
-                                .collect::<HashSet<_>>();
-
-                            merge_changed_packages(
-                                &mut walked_dependent_dependencies,
-                                dependent_dependencies,
-                            );
-                        }
+                        merge_changed_packages(
+                            &mut walked_dependent_dependencies,
+                            dependent_dependencies,
+                        );
                     }
                 }
 
@@ -622,37 +639,40 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             entry_packages
         };
 
-        let mut roots = HashMap::new();
-        let mut matched = HashSet::new();
         let changed_packages = if let Some(git_range) = selector.git_range.as_ref() {
             self.packages_changed_in_range(git_range)?
         } else {
             HashMap::default()
         };
 
-        for (package, reason) in filtered_entry_packages {
-            if matched.contains(&package) {
-                roots.insert(package, reason);
-                continue;
+        // A package is selected if it is itself changed (unless excluded) or
+        // if it transitively depends on a changed package. Answering the
+        // latter with reverse traversals from the changed set is much cheaper
+        // than computing a forward dependency closure for every candidate
+        // package: the changed set is typically far smaller than the package
+        // count. `ancestors` also matches the semantics of `dependencies`
+        // here, including treating the root package's dependencies as implied
+        // dependencies of every package.
+        let mut dependent_on_changed = HashSet::new();
+        for changed_package in changed_packages.keys() {
+            let changed_node = package_graph::PackageNode::Workspace(changed_package.to_owned());
+            for ancestor in self.pkg_graph.ancestors(&changed_node) {
+                // `dependencies` never includes the package itself, so a
+                // package's own change must not mark it as depending on a
+                // changed package; self-selection is handled below.
+                if *ancestor != changed_node
+                    && !matches!(ancestor, package_graph::PackageNode::Root)
+                {
+                    dependent_on_changed.insert(ancestor.as_package_name().clone());
+                }
             }
+        }
 
-            let workspace_node = package_graph::PackageNode::Workspace(package.clone());
-            let dependencies = self.pkg_graph.dependencies(&workspace_node);
-
-            for changed_package in changed_packages.keys() {
-                if !selector.exclude_self && package.eq(changed_package) {
-                    roots.insert(package, reason);
-                    break;
-                }
-
-                let changed_node =
-                    package_graph::PackageNode::Workspace(changed_package.to_owned());
-
-                if dependencies.contains(&changed_node) {
-                    roots.insert(package.clone(), reason);
-                    matched.insert(package);
-                    break;
-                }
+        let mut roots = HashMap::new();
+        for (package, reason) in filtered_entry_packages {
+            let self_matched = !selector.exclude_self && changed_packages.contains_key(&package);
+            if self_matched || dependent_on_changed.contains(&package) {
+                roots.insert(package, reason);
             }
         }
 
