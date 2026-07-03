@@ -66,6 +66,12 @@ impl PackageChangeMapper for DefaultPackageChangeMapper<'_> {
                 continue;
             }
             if let Some(package_path) = entry.package_json_path.parent()
+                // A package whose directory is the repo root (e.g. the
+                // synthetic `cargo` workspace package, anchored at the root
+                // Cargo.toml) would vacuously match every file — the
+                // component zip below has nothing to compare. Only the Root
+                // package may claim root-level files, via the fallback.
+                && package_path.components().next().is_some()
                 && Self::is_file_in_package(file, package_path)
             {
                 return PackageMapping::Package((
@@ -279,6 +285,74 @@ mod tests {
                 .into_iter()
                 .collect()
             )
+        );
+
+        Ok(())
+    }
+
+    /// The synthetic `cargo` workspace package is anchored at the root
+    /// Cargo.toml, so its directory is the repo root. It must never claim
+    /// files during change mapping — before the empty-directory guard it
+    /// vacuously matched *every* file, nondeterministically stealing them
+    /// from real packages (HashMap iteration order picked the winner).
+    #[tokio::test]
+    async fn cargo_workspace_package_does_not_claim_files() -> Result<(), anyhow::Error> {
+        let repo_root = tempdir()?;
+        let root = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let write = |rel: &str, contents: &str| -> Result<(), anyhow::Error> {
+            let path = root.join_unix_path(turbopath::RelativeUnixPath::new(rel)?);
+            std::fs::create_dir_all(path.parent().ok_or_else(|| anyhow::anyhow!("no parent"))?)?;
+            std::fs::write(&path, contents)?;
+            Ok(())
+        };
+        write(
+            "Cargo.toml",
+            "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n",
+        )?;
+        write(
+            "crates/lib-a/Cargo.toml",
+            "[package]\nname = \"lib-a\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )?;
+        write("crates/lib-a/src/lib.rs", "")?;
+
+        let pkg_graph = PackageGraphBuilder::new(root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_cargo(true)
+            .build()
+            .await?;
+
+        let detector = GlobalDepsPackageChangeMapper::new(&pkg_graph, std::iter::empty::<&str>())?;
+        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], detector);
+
+        // A crate source change maps to that crate, not the `cargo` package.
+        let result = change_mapper.changed_packages(
+            [AnchoredSystemPathBuf::from_raw(
+                ["crates", "lib-a", "src", "lib.rs"].join(std::path::MAIN_SEPARATOR_STR),
+            )?]
+            .into_iter()
+            .collect(),
+            LockfileContents::Unchanged,
+        )?;
+        let PackageChanges::Some(packages) = result else {
+            panic!("expected Some, got {result:?}");
+        };
+        let names: Vec<&str> = packages.keys().map(|p| p.name.as_ref()).collect();
+        assert_eq!(names, vec!["lib-a"]);
+
+        // A root-level file falls through to the root fallback; it must not
+        // be attributed to the `cargo` package.
+        let result = change_mapper.changed_packages(
+            [AnchoredSystemPathBuf::from_raw("README.md")?]
+                .into_iter()
+                .collect(),
+            LockfileContents::Unchanged,
+        )?;
+        let PackageChanges::Some(packages) = result else {
+            panic!("expected Some, got {result:?}");
+        };
+        assert!(
+            packages.keys().all(|p| p.name.as_ref() != "cargo"),
+            "root-level files must not map to the cargo package, got {packages:?}"
         );
 
         Ok(())
