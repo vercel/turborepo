@@ -573,6 +573,7 @@ mod tests {
             package_json_path: AnchoredSystemPathBuf::from_raw("web/package.json").unwrap(),
             unresolved_external_dependencies: None,
             transitive_dependencies: None,
+            ..Default::default()
         }
     }
 
