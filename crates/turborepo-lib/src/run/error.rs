@@ -77,4 +77,11 @@ pub enum Error {
     GlobalFileHashTaskIncomplete,
     #[error("Affected range was not configured")]
     MissingAffectedRange,
+    #[error("No package found with name '{name}' in workspace")]
+    #[diagnostic(help(
+        "This repository contains a Cargo workspace, but Cargo package support is not enabled. \
+         Rust crates become packages when `futureFlags.cargoWorkspaces` is set in the root \
+         turbo.json (or when TURBO_EXPERIMENTAL_CARGO=1 is in the environment)."
+    ))]
+    PackageMayBeCargoCrate { name: String },
 }

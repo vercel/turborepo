@@ -2,6 +2,10 @@
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
   "noUpdateNotifier": true,
+  // TODO: adopt `"futureFlags": { "cargoWorkspaces": true }` once a released
+  // turbo knows the key — released versions hard-error on unknown future
+  // flags, which would break the pre-push hook and CI. Until then this repo
+  // dogfoods Cargo support via TURBO_EXPERIMENTAL_CARGO=1.
   // The following are used by tools such as pnpm, gh actions to setup pnpm, etc.
   "globalPassThroughEnv": [
     "Path",

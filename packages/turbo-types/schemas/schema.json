@@ -311,6 +311,11 @@
           "default": false,
           "type": "boolean"
         },
+        "cargoWorkspaces": {
+          "description": "Treat the crates of a Cargo workspace as Turborepo packages.\n\nWhen enabled, Rust crates are discovered via `cargo metadata` and participate in the package graph: crates with bin/cdylib/staticlib targets get `build`/`run` tasks (`cargo build --package=<crate>`), library crates propagate `--filter`/`--affected`, and a synthetic `cargo` package hosts workspace-scoped verbs like `cargo#test`. The `TURBO_EXPERIMENTAL_CARGO` environment variable also enables this feature.",
+          "default": false,
+          "type": "boolean"
+        },
         "errorsOnlyShowHash": {
           "description": "When using `outputLogs: \"errors-only\"`, show task hashes when tasks complete successfully. This provides visibility into which tasks are running without showing full output logs.",
           "default": false,

@@ -351,7 +351,20 @@ impl RunBuilder {
             pkg_dep_graph,
             scm,
             root_turbo_json,
-        )?;
+        )
+        .map_err(|err| match err {
+            // A filter that names a Rust crate is a likely mistake when Cargo
+            // support exists but isn't enabled; point at the opt-in.
+            ResolutionError::NoPackagesMatchedWithName(name)
+                if !cargo_enabled(&opts.future_flags)
+                    && repo_root
+                        .join_component(turborepo_repository::cargo::CARGO_TOML)
+                        .exists() =>
+            {
+                Error::PackageMayBeCargoCrate { name }
+            }
+            err => Error::Scope(err),
+        })?;
 
         let should_include_root_tasks = match filter_mode {
             FilterMode::AllPackages => true,
@@ -480,7 +493,7 @@ impl RunBuilder {
             let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.opts.run_opts.single_package)
                 .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager)
-                .with_cargo(experimental_cargo_enabled());
+                .with_cargo(cargo_enabled(&self.opts.future_flags));
 
             let graph = builder
                 .build()
@@ -1062,13 +1075,16 @@ impl RunBuilder {
     }
 }
 
-/// Whether experimental Cargo package support is enabled.
-///
-/// Deliberately read straight from the environment rather than through
-/// `ConfigurationOptions` while this remains an experiment: the flag should
-/// be trivially greppable and removable, and not become part of the public
-/// configuration surface until the feature's caching semantics are settled.
-/// Route it through the configuration funnel before stabilizing.
+/// Whether experimental Cargo package support is enabled: opted into via
+/// `futureFlags.cargoWorkspaces` in the root turbo.json (the durable,
+/// repo-level surface — every invoker sees the same graph), or via the
+/// `TURBO_EXPERIMENTAL_CARGO` environment variable (the greppable
+/// per-invocation escape hatch while the feature is experimental).
+pub(crate) fn cargo_enabled(future_flags: &turborepo_turbo_json::FutureFlags) -> bool {
+    future_flags.cargo_workspaces || experimental_cargo_enabled()
+}
+
+/// Whether the `TURBO_EXPERIMENTAL_CARGO` environment override is set.
 pub(crate) fn experimental_cargo_enabled() -> bool {
     env_flag_enabled(std::env::var("TURBO_EXPERIMENTAL_CARGO").ok().as_deref())
 }

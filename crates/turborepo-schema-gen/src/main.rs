@@ -787,6 +787,16 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   globalConfiguration?: boolean;
+  /**
+   * Treat the crates of a Cargo workspace as Turborepo packages.
+   *
+   * When enabled, Rust crates are discovered via `cargo metadata` and
+   * participate in the package graph. The `TURBO_EXPERIMENTAL_CARGO`
+   * environment variable also enables this feature.
+   *
+   * @defaultValue `false`
+   */
+  cargoWorkspaces?: boolean;
 }
 
 "#

@@ -145,10 +145,10 @@ pub async fn prune(
     // Prune's package graph is JS-only: it copies manifests/lockfiles with
     // package.json semantics, which don't hold for Cargo crates. Warn loudly
     // so users of the experiment know crates are absent from pruned output.
-    if crate::run::builder::experimental_cargo_enabled() {
+    if crate::run::builder::cargo_enabled(&base.opts().future_flags) {
         warn!(
-            "TURBO_EXPERIMENTAL_CARGO is enabled, but `turbo prune` does not support Cargo \
-             crates; the pruned output will not include any Rust packages"
+            "Cargo package support is enabled, but `turbo prune` does not support Cargo crates; \
+             the pruned output will not include any Rust packages"
         );
     }
 
