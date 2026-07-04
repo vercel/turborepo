@@ -122,6 +122,11 @@ impl<'a> Parser<'a> {
             }
             map.insert(key, scan_string_value(value_text)?);
         }
+        if map.is_empty() {
+            // An empty block means the header's value is YAML null, which
+            // the serde path types as `None`/an error, not an empty map.
+            return None;
+        }
         Some(map)
     }
 
@@ -141,6 +146,7 @@ impl<'a> Parser<'a> {
                 return None;
             }
             let mut meta = DependencyMeta::default();
+            let mut saw_field = false;
             while let Some((indent, _)) = self.peek_line()? {
                 if indent < 6 {
                     break;
@@ -161,8 +167,18 @@ impl<'a> Parser<'a> {
                     "built" => meta.built = Some(value),
                     _ => return None,
                 }
+                saw_field = true;
+            }
+            if !saw_field {
+                // Empty block: the key's value is YAML null, which serde
+                // rejects for the `DependencyMeta` struct.
+                return None;
             }
             map.insert(key, meta);
+        }
+        if map.is_empty() {
+            // See `parse_string_map`: an empty block is YAML null.
+            return None;
         }
         Some(map)
     }
@@ -398,6 +414,23 @@ mod tests {
         assert_falls_back(&format!(
             "{HEADER}\"a@npm:^1\":\n  version: 1.0.0\n  resolution: \"x\"\n  unknownBlock:\n    \
              key: value\n"
+        ));
+        // Empty nested blocks are YAML null, not empty maps: the serde
+        // path yields `None` for map fields and errors for meta structs.
+        assert_falls_back(&format!(
+            "{HEADER}\"a@npm:^1\":\n  version: 1.0.0\n  resolution: \"x\"\n  dependencies:\n  \
+             languageName: node\n"
+        ));
+        assert_falls_back(&format!(
+            "{HEADER}\"a@npm:^1\":\n  version: 1.0.0\n  resolution: \"x\"\n  dependencies:\n"
+        ));
+        assert_falls_back(&format!(
+            "{HEADER}\"a@npm:^1\":\n  version: 1.0.0\n  resolution: \"x\"\n  dependenciesMeta:\n  \
+             languageName: node\n"
+        ));
+        assert_falls_back(&format!(
+            "{HEADER}\"a@npm:^1\":\n  version: 1.0.0\n  resolution: \"x\"\n  \
+             peerDependenciesMeta:\n    react:\n  languageName: node\n"
         ));
         // CRLF input.
         assert_falls_back("__metadata:\r\n  version: 8\r\n");
