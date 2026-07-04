@@ -284,24 +284,14 @@ fn stream_normalized(reader: &mut impl Read, mut update: impl FnMut(&[u8])) -> s
     Ok(())
 }
 
-/// Abstraction over SHA1 hasher implementations (gix and sha1 crate) so the
-/// normalization algorithm is written exactly once. Both
-/// [`hash_file_maybe_normalized`] and [`manual_hash_file_maybe_normalized`]
-/// delegate to [`hash_file_normalized`].
-trait BlobHasher: Sized {
-    type Output;
+/// Incrementally computes a git blob oid using the `sha1` crate, which
+/// dispatches to hardware SHA extensions at runtime (SHA-NI on x86, the
+/// crypto extensions on aarch64). Both [`hash_file_maybe_normalized`] and
+/// [`manual_hash_file_maybe_normalized`] delegate to
+/// [`hash_file_normalized`], which drives this hasher.
+struct BlobHasher(Sha1);
 
-    fn new() -> Self;
-    fn write_blob_header(&mut self, blob_len: u64);
-    fn update(&mut self, data: &[u8]);
-    fn finalize(self) -> Result<Self::Output, std::io::Error>;
-}
-
-struct ManualBlobHasher(Sha1);
-
-impl BlobHasher for ManualBlobHasher {
-    type Output = OidHash;
-
+impl BlobHasher {
     fn new() -> Self {
         Self(Sha1::new())
     }
@@ -356,15 +346,15 @@ fn validate_file_type(
 /// 2. Seek to start, write normalized blob header, stream with CRLF→LF
 ///
 /// Memory bounded at ~128KB per call.
-fn hash_file_normalized<H: BlobHasher>(
+fn hash_file_normalized(
     file: &mut std::fs::File,
     file_len: u64,
     attr: TextAttr,
-) -> Result<H::Output, std::io::Error> {
+) -> Result<OidHash, std::io::Error> {
     // Fused scan + speculative raw hash in a single pass. The blob header
     // uses the raw file length; if normalization turns out to be needed we
     // discard this hash and do a second pass with the normalized length.
-    let mut raw_hasher = H::new();
+    let mut raw_hasher = BlobHasher::new();
     raw_hasher.write_blob_header(file_len);
     let scan = scan_file_and_feed(file, attr == TextAttr::Auto, |data| {
         raw_hasher.update(data);
@@ -380,7 +370,7 @@ fn hash_file_normalized<H: BlobHasher>(
     file.seek(SeekFrom::Start(0))?;
     let normalized_len = scan.byte_count.saturating_sub(scan.crlf_count);
 
-    let mut hasher = H::new();
+    let mut hasher = BlobHasher::new();
     hasher.write_blob_header(normalized_len);
     let mut bytes_hashed: u64 = 0;
     stream_normalized(file, |data| {
@@ -417,7 +407,7 @@ pub(crate) fn hash_file_maybe_normalized(
     let mut file = std::fs::File::open(path)?;
     let metadata = file.metadata()?;
     validate_file_type(path, &metadata)?;
-    hash_file_normalized::<ManualBlobHasher>(&mut file, metadata.len(), attr)
+    hash_file_normalized(&mut file, metadata.len(), attr)
 }
 
 /// Hash via the manual code path (used after `turbo prune` removes `.git/`).
@@ -428,11 +418,7 @@ pub(crate) fn manual_hash_file_maybe_normalized(
     let mut file = path.open()?;
     let metadata = file.metadata()?;
     validate_file_type(path, &metadata)?;
-    Ok(hash_file_normalized::<ManualBlobHasher>(
-        &mut file,
-        metadata.len(),
-        attr,
-    )?)
+    Ok(hash_file_normalized(&mut file, metadata.len(), attr)?)
 }
 
 #[cfg(test)]
@@ -440,46 +426,6 @@ mod tests {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
-
-    /// gix's collision-detected SHA-1 hasher, kept as a differential oracle:
-    /// production hashing uses the fast `sha1` crate, and these tests prove
-    /// the two implementations agree.
-    struct GixBlobHasher(gix_index::hash::Hasher);
-
-    impl BlobHasher for GixBlobHasher {
-        type Output = gix_index::hash::ObjectId;
-
-        fn new() -> Self {
-            Self(gix_index::hash::hasher(gix_index::hash::Kind::Sha1))
-        }
-
-        fn write_blob_header(&mut self, blob_len: u64) {
-            self.0.update(&gix_object::encode::loose_header(
-                gix_object::Kind::Blob,
-                blob_len,
-            ));
-        }
-
-        fn update(&mut self, data: &[u8]) {
-            self.0.update(data);
-        }
-
-        fn finalize(self) -> Result<gix_index::hash::ObjectId, std::io::Error> {
-            self.0.try_finalize().map_err(std::io::Error::other)
-        }
-    }
-
-    /// Hash via the gix code path. Test-only oracle counterpart of
-    /// [`hash_file_maybe_normalized`].
-    fn gix_hash_file_maybe_normalized(
-        path: &AbsoluteSystemPath,
-        attr: TextAttr,
-    ) -> Result<gix_index::hash::ObjectId, std::io::Error> {
-        let mut file = std::fs::File::open(path)?;
-        let metadata = file.metadata()?;
-        validate_file_type(path, &metadata)?;
-        hash_file_normalized::<GixBlobHasher>(&mut file, metadata.len(), attr)
-    }
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp = tempfile::tempdir().unwrap();
@@ -740,13 +686,31 @@ mod tests {
         }
     }
 
-    /// Verify that the gix-based and sha1-based normalized hashers produce
-    /// identical OIDs for a comprehensive set of inputs. This is critical
-    /// because the git path uses gix and the manual path uses sha1 — they
-    /// must always agree.
+    /// Edge-case content shapes (trailing/standalone CR, chunk-boundary
+    /// CRLF under `text`, binary auto-detection) verified against
+    /// `git hash-object --path`, the ground truth for blob oids.
     #[test]
-    fn test_gix_and_manual_normalized_hashes_agree() {
+    fn test_edge_case_hashes_match_git_hash_object() {
         let (_tmp, root) = tmp_dir();
+
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(root.as_std_path())
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["config", "--local", "core.autocrlf", "false"])
+            .current_dir(root.as_std_path())
+            .output()
+            .unwrap();
+        // Extension-based attrs let one repo cover both `text` and
+        // `text=auto` while `git hash-object --path` derives the same
+        // attribute we pass to our hasher.
+        std::fs::write(
+            root.as_std_path().join(".gitattributes"),
+            "*.set text\n*.auto text=auto\n",
+        )
+        .unwrap();
 
         let mut boundary_content = vec![b'x'; BUF_SIZE - 1];
         boundary_content.push(b'\r');
@@ -754,56 +718,58 @@ mod tests {
         boundary_content.extend_from_slice(b"after-boundary");
 
         let cases: Vec<(&str, Vec<u8>, TextAttr)> = vec![
-            ("empty.txt", vec![], TextAttr::Set),
-            ("lf-only.txt", b"line1\nline2\n".to_vec(), TextAttr::Set),
-            ("pure-crlf.txt", b"a\r\nb\r\nc\r\n".to_vec(), TextAttr::Set),
+            ("empty.set", vec![], TextAttr::Set),
+            ("lf-only.set", b"line1\nline2\n".to_vec(), TextAttr::Set),
+            ("trailing-cr.set", b"data\r".to_vec(), TextAttr::Set),
             (
-                "mixed.txt",
-                b"line1\nline2\r\nline3\n".to_vec(),
-                TextAttr::Set,
-            ),
-            ("trailing-cr.txt", b"data\r".to_vec(), TextAttr::Set),
-            (
-                "standalone-cr.txt",
+                "standalone-cr.set",
                 b"hello\rworld\n".to_vec(),
                 TextAttr::Set,
             ),
-            ("boundary-crlf.txt", boundary_content, TextAttr::Set),
-            // Auto with text content
+            ("boundary-crlf.set", boundary_content, TextAttr::Set),
             (
-                "auto-text.txt",
+                "auto-text.auto",
                 b"hello\r\nworld\r\n".to_vec(),
                 TextAttr::Auto,
             ),
-            // Auto with binary content (NUL byte)
+            // Auto with binary content (NUL byte) — hashed raw
             (
-                "auto-binary.bin",
+                "auto-binary.auto",
                 vec![0x00, b'\r', b'\n', 0xFF],
                 TextAttr::Auto,
             ),
-            // Unspecified — should hash raw
-            ("unspec.txt", b"a\r\nb\r\n".to_vec(), TextAttr::Unspecified),
         ];
 
         for (name, content, attr) in &cases {
             let path = root.join_component(name);
             std::fs::write(path.as_std_path(), content).unwrap();
 
-            let gix_result = gix_hash_file_maybe_normalized(&path, *attr).unwrap();
+            let output = std::process::Command::new("git")
+                .args(["hash-object", "--path", name, "--stdin"])
+                .stdin(std::process::Stdio::from(
+                    std::fs::File::open(path.as_std_path()).unwrap(),
+                ))
+                .current_dir(root.as_std_path())
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "git hash-object --path failed for {name}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let expected = String::from_utf8(output.stdout).unwrap();
+            let expected = expected.trim();
+
             let fast_result = hash_file_maybe_normalized(&path, *attr).unwrap();
             let manual_result = manual_hash_file_maybe_normalized(&path, *attr).unwrap();
 
-            let mut hex_buf = [0u8; 40];
-            hex::encode_to_slice(gix_result.as_bytes(), &mut hex_buf).unwrap();
-            let gix_hex = std::str::from_utf8(&hex_buf).unwrap();
-
             assert_eq!(
-                gix_hex, &*fast_result,
-                "gix and fast hashes must agree for {name} (attr={attr:?})"
+                &*fast_result, expected,
+                "hash must match git hash-object --path for {name} (attr={attr:?})"
             );
             assert_eq!(
                 fast_result, manual_result,
-                "fast and manual hashes must agree for {name} (attr={attr:?})"
+                "git-path and manual-path hashing must agree for {name} (attr={attr:?})"
             );
         }
     }
