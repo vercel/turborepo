@@ -28,6 +28,21 @@ pub struct RepoGitIndex {
     untracked_symlinks: Vec<RelativeUnixPathBuf>,
     unsupported_paths: Vec<UnsupportedGitPath>,
     untracked_entries_populated: bool,
+    /// True when some condition prevents proving that `git diff HEAD` would
+    /// be empty (sparse index, submodules, intent-to-add/skip-worktree
+    /// entries, `.gitattributes` presence, unsupported paths, or a
+    /// stat-stale entry whose content matched only after CRLF normalization
+    /// / with an exec-bit mismatch). See [`Self::tracked_diff_clean_root`].
+    diff_skip_blocked: bool,
+    /// True when at least one verified entry's diff-safety additionally
+    /// requires eol conversion to be off (`core.autocrlf` etc.) — checked by
+    /// the caller at dirty-hash time.
+    eol_sensitive: bool,
+    /// The index's cache-tree root oid (hex), present only when the TREE
+    /// extension is valid and covers every entry — i.e. this is the tree
+    /// `git write-tree` would produce. `None` after `git add` or when the
+    /// extension is missing.
+    cache_tree_root: Option<String>,
 }
 
 impl RepoGitIndex {
@@ -42,6 +57,9 @@ impl RepoGitIndex {
             unsupported_paths: Vec::new(),
             untracked_symlinks: Vec::new(),
             untracked_entries_populated: true,
+            diff_skip_blocked: true,
+            eol_sensitive: false,
+            cache_tree_root: None,
         }
     }
 
@@ -107,67 +125,131 @@ impl RepoGitIndex {
         // sequential scan of all entries).
         let num_entries = index.entries().len();
 
+        // Conditions under which we can never prove `git diff HEAD` empty:
+        // submodule changes don't appear in the index stat comparison;
+        // intent-to-add / skip-worktree / sparse entries all make `git diff`
+        // see things this walk doesn't; and any `.gitattributes` file could
+        // carry conversion rules (eol, filters, working-tree-encoding) that
+        // this code doesn't interpret. The attributes restriction is
+        // deliberately coarse for now — repos with no attributes are fully
+        // provable, repos with attributes always run the diff.
+        let has_special_entries = index.is_sparse()
+            || git.git_attrs().is_some()
+            || index.entries().iter().any(|e| {
+                e.mode.is_submodule()
+                    || e.flags.intersects(
+                        gix_index::entry::Flags::INTENT_TO_ADD
+                            | gix_index::entry::Flags::SKIP_WORKTREE,
+                    )
+                    || e.path(&index).ends_with(b".gitattributes")
+            });
+
+        // A valid cache-tree root covering every entry is exactly the tree
+        // `git write-tree` would produce for this index. If it equals
+        // HEAD^{tree} there are no staged changes. `git add`/merge conflicts
+        // invalidate the extension, so absence is the conservative signal.
+        let cache_tree_root = index.tree().and_then(|tree| {
+            (tree.name.is_empty() && tree.num_entries == Some(num_entries as u32))
+                .then(|| tree.id.to_string())
+        });
+
+        let attrs = git.git_attrs();
+
         // Classify entries in parallel: stat each file, compare with index,
         // and carry the raw ObjectId (20 bytes, Copy) instead of a heap-allocated
         // hex String. Hex conversion uses a thread-local stack buffer to avoid
         // allocator contention across rayon threads.
+        //
+        // Stat-stale (or racy) entries are content-verified inline with the
+        // hardware-accelerated blob hasher: if the working file still hashes
+        // to the index oid, the entry is clean and downstream consumers can
+        // use the committed hash instead of re-hashing it per package. This
+        // is what makes snapshot-restored workspaces (where every entry is
+        // stat-stale) behave like fresh checkouts.
         let classified: Vec<Result<EntryClassification, Error>> = index
             .entries()
             .par_iter()
             .filter(|e| !e.mode.is_submodule())
-            .map(|e| {
-                let path_bytes = e.path(&index);
-                let rel_path = match parse_git_path(path_bytes, "git index path")? {
-                    Ok(path) => path,
-                    Err(path) => return Ok(EntryClassification::Unsupported(path)),
-                };
-                // Git index paths are normalized repo-relative paths, so avoid
-                // per-entry path_clean normalization before stat calls.
-                let abs_path = git.root.join_unix_path_unchecked(&rel_path);
+            .map_init(
+                || attrs.map(|a| a.new_outcome()),
+                |attr_outcome, e| {
+                    let path_bytes = e.path(&index);
+                    let rel_path = match parse_git_path(path_bytes, "git index path")? {
+                        Ok(path) => path,
+                        Err(path) => return Ok(EntryClassification::Unsupported(path)),
+                    };
+                    // Git index paths are normalized repo-relative paths, so avoid
+                    // per-entry path_clean normalization before stat calls.
+                    let abs_path = git.root.join_unix_path_unchecked(&rel_path);
 
-                match gix_index::fs::Metadata::from_path_no_follow(abs_path.as_std_path()) {
-                    Ok(fs_meta) => {
-                        let fs_stat = gix_index::entry::Stat::from_fs(&fs_meta).map_err(|err| {
-                            Error::git_error(format!(
-                                "failed to convert stat for {}: {}",
-                                rel_path, err
-                            ))
-                        })?;
+                    match gix_index::fs::Metadata::from_path_no_follow(abs_path.as_std_path()) {
+                        Ok(fs_meta) => {
+                            let fs_stat =
+                                gix_index::entry::Stat::from_fs(&fs_meta).map_err(|err| {
+                                    Error::git_error(format!(
+                                        "failed to convert stat for {}: {}",
+                                        rel_path, err
+                                    ))
+                                })?;
 
-                        let stat_matches = e.stat.matches(&fs_stat, stat_opts);
+                            let stat_matches = e.stat.matches(&fs_stat, stat_opts);
+                            let is_racy = e.stat.is_racy(index_timestamp, stat_opts);
 
-                        if !stat_matches {
-                            return Ok(EntryClassification::Modified { path: rel_path });
+                            if !stat_matches || is_racy {
+                                let text_attr = match (attrs, attr_outcome.as_mut()) {
+                                    (Some(a), Some(o)) => {
+                                        a.resolve_text_attr_with(rel_path.as_str(), o)
+                                    }
+                                    _ => crate::crlf::TextAttr::Unspecified,
+                                };
+                                return Ok(verify_candidate(
+                                    e, rel_path, &abs_path, &fs_meta, text_attr,
+                                ));
+                            }
+
+                            let mut hex_buf = [0u8; 40];
+                            hex::encode_to_slice(e.id.as_bytes(), &mut hex_buf).map_err(|err| {
+                                Error::git_error(format!(
+                                    "failed to encode object id for {rel_path}: {err}"
+                                ))
+                            })?;
+                            Ok(EntryClassification::Clean {
+                                path: rel_path,
+                                oid: OidHash::from_hex_buf(hex_buf),
+                                diff_safe: DiffSafety::Safe,
+                            })
                         }
-
-                        let is_racy = e.stat.is_racy(index_timestamp, stat_opts);
-                        if is_racy {
-                            return Ok(EntryClassification::Modified { path: rel_path });
-                        }
-
-                        let mut hex_buf = [0u8; 40];
-                        hex::encode_to_slice(e.id.as_bytes(), &mut hex_buf).map_err(|err| {
-                            Error::git_error(format!(
-                                "failed to encode object id for {rel_path}: {err}"
-                            ))
-                        })?;
-                        Ok(EntryClassification::Clean {
-                            path: rel_path,
-                            oid: OidHash::from_hex_buf(hex_buf),
-                        })
+                        Err(_) => Ok(EntryClassification::Deleted { path: rel_path }),
                     }
-                    Err(_) => Ok(EntryClassification::Deleted { path: rel_path }),
-                }
-            })
+                },
+            )
             .collect();
 
         let mut ls_tree_hashes = SortedGitHashes::with_capacity(num_entries);
         let mut status_entries = Vec::new();
         let mut unsupported_paths = Vec::new();
+        let mut diff_skip_blocked = has_special_entries;
+        let mut diff_unsafe_count = 0usize;
+        let mut eol_sensitive_count = 0usize;
 
         for result in classified {
             match result? {
-                EntryClassification::Clean { path, oid } => {
+                EntryClassification::Clean {
+                    path,
+                    oid,
+                    diff_safe,
+                } => {
+                    match diff_safe {
+                        DiffSafety::Safe => {}
+                        DiffSafety::SafeIfEolInert => eol_sensitive_count += 1,
+                        DiffSafety::Unsafe => {
+                            diff_skip_blocked = true;
+                            diff_unsafe_count += 1;
+                            if diff_unsafe_count <= 5 {
+                                debug!("diff-unsafe verified entry: {path}");
+                            }
+                        }
+                    }
                     ls_tree_hashes.push((path, oid));
                 }
                 EntryClassification::Modified { path } => {
@@ -188,6 +270,12 @@ impl RepoGitIndex {
             }
         }
 
+        if !unsupported_paths.is_empty() {
+            // Unrepresentable paths are tracked files whose diff state we
+            // can't reason about.
+            diff_skip_blocked = true;
+        }
+
         // ls_tree_hashes is already sorted (git index is sorted, rayon
         // preserves order for indexed iterators, sequential loop preserves
         // order). status_entries from Modified/Deleted are also in index order
@@ -198,9 +286,16 @@ impl RepoGitIndex {
         unsupported_paths.dedup();
 
         debug!(
-            "built tracked repo git index (gix-index): clean_count={}, status_count={}",
+            "built tracked repo git index (gix-index): clean_count={}, status_count={}, \
+             diff_skip_blocked={}, diff_unsafe_count={}, eol_sensitive_count={}, special={}, \
+             cache_tree_root={:?}",
             ls_tree_hashes.len(),
             status_entries.len(),
+            diff_skip_blocked,
+            diff_unsafe_count,
+            eol_sensitive_count,
+            has_special_entries,
+            cache_tree_root,
         );
 
         Ok(Self {
@@ -209,6 +304,9 @@ impl RepoGitIndex {
             unsupported_paths,
             untracked_symlinks: Vec::new(),
             untracked_entries_populated: false,
+            diff_skip_blocked,
+            eol_sensitive: eol_sensitive_count > 0,
+            cache_tree_root,
         })
     }
 
@@ -337,6 +435,11 @@ impl RepoGitIndex {
             unsupported_paths,
             untracked_symlinks: Vec::new(),
             untracked_entries_populated: true,
+            // The subprocess path has no per-entry verification or
+            // cache-tree access; the dirty hash always runs the diff.
+            diff_skip_blocked: true,
+            eol_sensitive: false,
+            cache_tree_root: None,
         })
     }
 
@@ -442,6 +545,52 @@ impl RepoGitIndex {
     /// stream is the canonical input for tracked content changes. The repo
     /// index may conservatively mark clean racy-git entries as modified so they
     /// get content-hashed later, and those must not make a clean tree dirty.
+    /// When `Some(root_tree_hex)` is returned, the working tree provably has
+    /// no unstaged changes to tracked files: every stat-stale entry was
+    /// content-verified against the index under diff-safe conditions, and no
+    /// modified/deleted/special entries remain. The caller must additionally
+    /// confirm `root_tree_hex == HEAD^{tree}` (no staged changes) before
+    /// concluding that `git diff HEAD` would produce no output.
+    ///
+    /// `info_attributes_exists` is the caller's answer to whether
+    /// `$GIT_DIR/info/attributes` exists — attribute rules from there (like
+    /// any `.gitattributes`, which is checked here against tracked and
+    /// untracked entries) could impose conversions this code doesn't
+    /// interpret.
+    ///
+    /// `None` means nothing is proven — run the diff. Otherwise returns the
+    /// cache-tree root plus whether the caller must also verify that eol
+    /// conversion is inert (`core.autocrlf` off, no attribute sources
+    /// outside the repo) before trusting the proof.
+    pub fn tracked_diff_clean_root(
+        &self,
+        info_attributes_exists: bool,
+    ) -> Option<(&str, EolSensitivity)> {
+        if self.diff_skip_blocked || info_attributes_exists {
+            return None;
+        }
+        if self.status_entries.iter().any(|e| !e.is_untracked) {
+            return None;
+        }
+        // Untracked .gitattributes files affect git's conversion right now
+        // even though they're not in the index.
+        if self
+            .status_entries
+            .iter()
+            .any(|e| e.is_untracked && e.path.as_str().ends_with(".gitattributes"))
+        {
+            return None;
+        }
+        let sensitivity = if self.eol_sensitive {
+            EolSensitivity::RequiresInertEolConversion
+        } else {
+            EolSensitivity::ConfigIndependent
+        };
+        self.cache_tree_root
+            .as_deref()
+            .map(|root| (root, sensitivity))
+    }
+
     pub fn append_dirty_status_to_hasher(&self, hasher: &mut sha2::Sha256) -> bool {
         use sha2::Digest;
 
@@ -1323,10 +1472,40 @@ fn parent_path_bytes(path: &[u8]) -> &[u8] {
         .unwrap_or(b"")
 }
 
+/// Whether the clean-tree proof from [`RepoGitIndex::tracked_diff_clean_root`]
+/// additionally depends on git's eol conversion being inert.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EolSensitivity {
+    /// The proof holds under any git config.
+    ConfigIndependent,
+    /// The proof requires `core.autocrlf` to be unset/false and no attribute
+    /// sources outside the repo (`core.attributesFile`, global/system
+    /// attribute files).
+    RequiresInertEolConversion,
+}
+
+/// Whether an entry provably contributes nothing to `git diff HEAD`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DiffSafety {
+    /// Provable under any git config.
+    Safe,
+    /// Provable only if eol conversion is off (`core.autocrlf` unset/false
+    /// and no attribute sources outside the repo): a text file with CRLFs
+    /// whose raw bytes match the index oid.
+    SafeIfEolInert,
+    /// Not provable: content matched only after CRLF normalization, or the
+    /// executable bit changed (content-identical, but `git diff` reports
+    /// mode changes).
+    Unsafe,
+}
+
 enum EntryClassification {
     Clean {
         path: RelativeUnixPathBuf,
         oid: OidHash,
+        /// `Safe` for stat-fresh entries (git trusts the same stat cache);
+        /// verified entries carry the safety of their content match.
+        diff_safe: DiffSafety,
     },
     Modified {
         path: RelativeUnixPathBuf,
@@ -1335,6 +1514,109 @@ enum EntryClassification {
         path: RelativeUnixPathBuf,
     },
     Unsupported(UnsupportedGitPath),
+}
+
+/// Content-verify a stat-stale (or racy) index entry against its recorded
+/// oid. Returns `Clean` when the working-tree content still hashes to the
+/// index oid, `Modified` otherwise — including every case we can't verify
+/// (type changes, read errors, exotic modes), which downstream consumers
+/// re-hash or hand to `git diff` exactly as before this optimization.
+fn verify_candidate(
+    entry: &gix_index::Entry,
+    rel_path: RelativeUnixPathBuf,
+    abs_path: &turbopath::AbsoluteSystemPath,
+    fs_meta: &gix_index::fs::Metadata,
+    text_attr: crate::crlf::TextAttr,
+) -> EntryClassification {
+    use gix_index::entry::Mode;
+
+    let modified = |path| EntryClassification::Modified { path };
+
+    let mut hex_buf = [0u8; 40];
+    if hex::encode_to_slice(entry.id.as_bytes(), &mut hex_buf).is_err() {
+        return modified(rel_path);
+    }
+    let index_oid = OidHash::from_hex_buf(hex_buf);
+
+    match entry.mode {
+        Mode::SYMLINK => {
+            if !fs_meta.is_symlink() {
+                return modified(rel_path);
+            }
+            let Ok(target) = std::fs::read_link(abs_path.as_std_path()) else {
+                return modified(rel_path);
+            };
+            #[cfg(unix)]
+            let target_bytes = {
+                use std::os::unix::ffi::OsStrExt;
+                target.as_os_str().as_bytes().to_vec()
+            };
+            #[cfg(not(unix))]
+            let target_bytes = match target.to_str() {
+                Some(s) => s.as_bytes().to_vec(),
+                None => return modified(rel_path),
+            };
+            match crate::crlf::hash_bytes_as_blob(&target_bytes) {
+                Ok(oid) if oid == index_oid => EntryClassification::Clean {
+                    path: rel_path,
+                    oid,
+                    // Symlink blobs are the target string; no filters or
+                    // mode bits can diverge once type and target match.
+                    diff_safe: DiffSafety::Safe,
+                },
+                _ => modified(rel_path),
+            }
+        }
+        Mode::FILE | Mode::FILE_EXECUTABLE => {
+            if !fs_meta.is_file() || fs_meta.is_symlink() {
+                return modified(rel_path);
+            }
+            let Ok((oid, outcome)) = crate::hash_object::with_emfile_retry(|| {
+                crate::crlf::hash_file_for_verification(abs_path, text_attr)
+            }) else {
+                return modified(rel_path);
+            };
+            if oid != index_oid {
+                return modified(rel_path);
+            }
+
+            #[cfg(unix)]
+            let exec_matches = (entry.mode == Mode::FILE_EXECUTABLE) == fs_meta.is_executable();
+            // git ignores the executable bit where the filesystem can't
+            // represent it (core.fileMode=false, the default on Windows).
+            #[cfg(not(unix))]
+            let exec_matches = true;
+
+            // Safety of the raw-byte match against git's checkin conversion
+            // (these flags are only consulted when no `.gitattributes`
+            // exists anywhere — see the constructor and
+            // `tracked_diff_clean_root`):
+            // - `crlf_count == 0`: CRLF-free content is a fixed point of every eol/autocrlf
+            //   conversion — safe under any config.
+            // - `is_binary`: git's autocrlf/`text=auto` detection refuses to convert binary
+            //   content, and our NUL check is a conservative subset of git's — safe under
+            //   any config.
+            // - text with CRLFs: safe only if `core.autocrlf` is provably off (otherwise
+            //   git would report the file modified even though the raw bytes match) —
+            //   deferred to a config check at dirty-hash time.
+            let diff_safe = if !exec_matches || outcome.normalized {
+                DiffSafety::Unsafe
+            } else if outcome.crlf_count == 0 || outcome.is_binary {
+                DiffSafety::Safe
+            } else {
+                DiffSafety::SafeIfEolInert
+            };
+
+            EntryClassification::Clean {
+                path: rel_path,
+                oid,
+                diff_safe,
+            }
+        }
+        // Anything exotic (sparse dir entries, unexpected modes) stays
+        // conservative.
+        _ => modified(rel_path),
+    }
 }
 
 #[cfg(test)]
@@ -1378,6 +1660,9 @@ mod tests {
             unsupported_paths: Vec::new(),
             untracked_symlinks: Vec::new(),
             untracked_entries_populated: true,
+            diff_skip_blocked: true,
+            eol_sensitive: false,
+            cache_tree_root: None,
         }
     }
 

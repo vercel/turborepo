@@ -314,6 +314,15 @@ impl BlobHasher {
     }
 }
 
+/// Hash a byte slice as a git blob. Used to verify symlink entries, whose
+/// blob content is the link target path (no filters ever apply).
+pub(crate) fn hash_bytes_as_blob(bytes: &[u8]) -> Result<OidHash, std::io::Error> {
+    let mut hasher = BlobHasher::new();
+    hasher.write_blob_header(bytes.len() as u64);
+    hasher.update(bytes);
+    hasher.finalize()
+}
+
 fn validate_file_type(
     path: &AbsoluteSystemPath,
     metadata: &std::fs::Metadata,
@@ -345,23 +354,48 @@ fn validate_file_type(
 /// 1. Fused scan + speculative raw hash (result discarded)
 /// 2. Seek to start, write normalized blob header, stream with CRLF→LF
 ///
+/// Facts about how a blob hash was produced, used by the repo-index
+/// verification pass to decide whether a stat-stale entry is provably
+/// identical to what `git diff HEAD` would see.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct HashOutcome {
+    /// Whether CRLF→LF normalization was applied (the returned oid is over
+    /// normalized content, not raw bytes).
+    pub(crate) normalized: bool,
+    /// Number of `\r\n` pairs in the raw content.
+    pub(crate) crlf_count: u64,
+    /// Whether a NUL byte was found in the first 8KB. Conservative subset of
+    /// git's binary detection (git scans the whole file), so `true` here
+    /// implies git also considers the content binary and exempts it from
+    /// eol conversion.
+    pub(crate) is_binary: bool,
+}
+
 /// Memory bounded at ~128KB per call.
 fn hash_file_normalized(
     file: &mut std::fs::File,
     file_len: u64,
     attr: TextAttr,
-) -> Result<OidHash, std::io::Error> {
+) -> Result<(OidHash, HashOutcome), std::io::Error> {
     // Fused scan + speculative raw hash in a single pass. The blob header
     // uses the raw file length; if normalization turns out to be needed we
     // discard this hash and do a second pass with the normalized length.
     let mut raw_hasher = BlobHasher::new();
     raw_hasher.write_blob_header(file_len);
-    let scan = scan_file_and_feed(file, attr == TextAttr::Auto, |data| {
+    // Always detect binary content (not just for `text=auto`): the
+    // verification pass needs it to reason about git's eol conversion, and
+    // the NUL scan over the first 8KB is negligible next to hashing.
+    let scan = scan_file_and_feed(file, true, |data| {
         raw_hasher.update(data);
     })?;
 
     if !should_normalize(attr, &scan) {
-        return raw_hasher.finalize();
+        let outcome = HashOutcome {
+            normalized: false,
+            crlf_count: scan.crlf_count,
+            is_binary: scan.is_binary,
+        };
+        return Ok((raw_hasher.finalize()?, outcome));
     }
 
     // CRLF normalization required — second pass with the normalized length.
@@ -386,7 +420,12 @@ fn hash_file_normalized(
             ),
         ));
     }
-    hasher.finalize()
+    let outcome = HashOutcome {
+        normalized: true,
+        crlf_count: scan.crlf_count,
+        is_binary: scan.is_binary,
+    };
+    Ok((hasher.finalize()?, outcome))
 }
 
 /// Hash a working-tree file as a git blob (used when `.git/` is present).
@@ -407,6 +446,18 @@ pub(crate) fn hash_file_maybe_normalized(
     let mut file = std::fs::File::open(path)?;
     let metadata = file.metadata()?;
     validate_file_type(path, &metadata)?;
+    Ok(hash_file_normalized(&mut file, metadata.len(), attr)?.0)
+}
+
+/// Like [`hash_file_maybe_normalized`], but also reports how the hash was
+/// produced. Used by the repo-index verification pass.
+pub(crate) fn hash_file_for_verification(
+    path: &AbsoluteSystemPath,
+    attr: TextAttr,
+) -> Result<(OidHash, HashOutcome), std::io::Error> {
+    let mut file = std::fs::File::open(path)?;
+    let metadata = file.metadata()?;
+    validate_file_type(path, &metadata)?;
     hash_file_normalized(&mut file, metadata.len(), attr)
 }
 
@@ -418,7 +469,7 @@ pub(crate) fn manual_hash_file_maybe_normalized(
     let mut file = path.open()?;
     let metadata = file.metadata()?;
     validate_file_type(path, &metadata)?;
-    Ok(hash_file_normalized(&mut file, metadata.len(), attr)?)
+    Ok(hash_file_normalized(&mut file, metadata.len(), attr)?.0)
 }
 
 #[cfg(test)]
