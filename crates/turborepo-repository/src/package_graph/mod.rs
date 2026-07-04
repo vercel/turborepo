@@ -1718,6 +1718,166 @@ mod test {
         assert_eq!(&cycles[0][0], min_traced);
     }
 
+    fn write_cargo_workspace_fixture(root: &AbsoluteSystemPathBuf) {
+        let write = |rel: &[&str], contents: &str| {
+            let path = root.join_components(rel);
+            std::fs::create_dir_all(path.parent().unwrap().as_std_path()).unwrap();
+            std::fs::write(path.as_std_path(), contents).unwrap();
+        };
+        write(
+            &["Cargo.toml"],
+            "[workspace]\nmembers = [\"rust/*\"]\nresolver = \"2\"\n",
+        );
+        write(
+            &["rust", "app", "Cargo.toml"],
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \
+             \"2021\"\n\n[dependencies]\nlib-a = { path = \"../lib-a\" }\n",
+        );
+        write(&["rust", "app", "src", "main.rs"], "fn main() {}\n");
+        write(
+            &["rust", "lib-a", "Cargo.toml"],
+            "[package]\nname = \"lib-a\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(&["rust", "lib-a", "src", "lib.rs"], "");
+    }
+
+    fn canonical_tempdir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::new(
+            tmp.path()
+                .canonicalize()
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+        )
+        .unwrap();
+        (tmp, root)
+    }
+
+    /// Crates from a registered Cargo toolchain join the graph alongside JS
+    /// packages: crate->crate edges come from Cargo path dependencies, the
+    /// synthetic `cargo` workspace package depends on every crate, and the
+    /// JS lockfile closure of the root package is untouched by the Cargo
+    /// packages (the workspace package shares the repo-root directory with
+    /// the root package, which previously made closure attribution
+    /// nondeterministic).
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_toolchain_packages_in_graph() {
+        let (_tmp, root) = canonical_tempdir();
+        write_cargo_workspace_fixture(&root);
+
+        // Several iterations: the closure-attribution regression this guards
+        // was decided by HashMap iteration order, roughly a coin flip per
+        // process/build.
+        for _ in 0..8 {
+            let pkg_graph = PackageGraph::builder(
+                &root,
+                PackageJson::from_value(json!({ "name": "root", "dependencies": { "a": "1" } }))
+                    .unwrap(),
+            )
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some({
+                let mut map = HashMap::new();
+                map.insert(
+                    root.join_components(&["js-pkg", "package.json"]),
+                    PackageJson::from_value(json!({ "name": "js-pkg" })).unwrap(),
+                );
+                map
+            }))
+            .with_lockfile(Some(Box::new(MockLockfile {})))
+            .with_toolchain(crate::cargo::CargoToolchain::new(root.clone()))
+            .build()
+            .await
+            .unwrap();
+
+            assert!(pkg_graph.validate().is_ok());
+
+            // All packages present, tagged with their toolchain.
+            let app = pkg_graph.package_info(&PackageName::from("app")).unwrap();
+            assert_eq!(app.toolchain, crate::toolchain::ToolchainId::CARGO);
+            let js_pkg = pkg_graph
+                .package_info(&PackageName::from("js-pkg"))
+                .unwrap();
+            assert_eq!(js_pkg.toolchain, crate::toolchain::ToolchainId::JAVASCRIPT);
+            let workspace_pkg = pkg_graph.package_info(&PackageName::from("cargo")).unwrap();
+            assert_eq!(
+                workspace_pkg.toolchain,
+                crate::toolchain::ToolchainId::CARGO
+            );
+
+            // Crate path dependencies became graph edges.
+            let app_deps = pkg_graph
+                .immediate_dependencies(&PackageNode::Workspace(PackageName::from("app")))
+                .unwrap();
+            assert!(
+                app_deps.contains(&PackageNode::Workspace(PackageName::from("lib-a"))),
+                "app should depend on lib-a, got {app_deps:?}"
+            );
+            let workspace_deps = pkg_graph
+                .immediate_dependencies(&PackageNode::Workspace(PackageName::from("cargo")))
+                .unwrap();
+            assert!(
+                workspace_deps.contains(&PackageNode::Workspace(PackageName::from("app")))
+                    && workspace_deps.contains(&PackageNode::Workspace(PackageName::from("lib-a"))),
+                "workspace package should depend on every crate, got {workspace_deps:?}"
+            );
+
+            // The root's JS lockfile closure is attributed to the root, not
+            // stolen by the cargo workspace package sharing its directory.
+            let root_closure = pkg_graph
+                .package_info(&PackageName::Root)
+                .unwrap()
+                .transitive_dependencies
+                .as_ref()
+                .expect("root should have a lockfile closure");
+            assert_eq!(
+                root_closure,
+                &vec![
+                    turborepo_lockfiles::Package::new("key:a", "1"),
+                    turborepo_lockfiles::Package::new("key:c", "1"),
+                ]
+                .into_iter()
+                .collect::<HashSet<_>>(),
+            );
+            assert_eq!(
+                workspace_pkg.transitive_dependencies, None,
+                "the cargo workspace package has no JS lockfile closure"
+            );
+        }
+    }
+
+    /// A crate and a JS package sharing a name is a hard error, like any
+    /// other duplicate package name.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_js_name_collision_hard_errors() {
+        let (_tmp, root) = canonical_tempdir();
+        write_cargo_workspace_fixture(&root);
+
+        let result = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut map = HashMap::new();
+            map.insert(
+                root.join_components(&["js-app", "package.json"]),
+                PackageJson::from_value(json!({ "name": "app" })).unwrap(),
+            );
+            map
+        }))
+        .with_lockfile(Some(Box::new(MockLockfile {})))
+        .with_toolchain(crate::cargo::CargoToolchain::new(root.clone()))
+        .build()
+        .await;
+
+        let err = result.expect_err("cross-toolchain name collision must error");
+        assert!(
+            err.to_string().contains("app"),
+            "error should name the colliding package: {err}"
+        );
+    }
+
     #[tokio::test]
     async fn test_does_not_require_name_for_root_package_json() {
         let root =

@@ -64,6 +64,11 @@ impl ToolchainId {
     /// manifests, regardless of package manager or runtime.
     pub const JAVASCRIPT: ToolchainId = ToolchainId(Cow::Borrowed("javascript"));
 
+    /// The Cargo toolchain: Rust crates discovered from a Cargo workspace
+    /// (see [`crate::cargo`]). Experimental, gated behind
+    /// `futureFlags.experimentalCargoWorkspaces`.
+    pub const CARGO: ToolchainId = ToolchainId(Cow::Borrowed("cargo"));
+
     pub fn new(id: impl Into<Cow<'static, str>>) -> Self {
         Self(id.into())
     }
@@ -107,6 +112,10 @@ pub enum Error {
     Discovery(#[from] discovery::Error),
     #[error(transparent)]
     Descriptor(#[from] crate::package_json::Error),
+    /// A toolchain-specific failure. Boxed rather than enumerated so the
+    /// generic error surface does not accumulate a variant per toolchain.
+    #[error(transparent)]
+    Failed(Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// The future returned by [`Toolchain::discover_packages`]. Boxed so the
