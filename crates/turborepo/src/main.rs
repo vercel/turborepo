@@ -14,6 +14,10 @@ const INTERNAL_WINDOWS_CTRL_C_COMMAND: &str = "__internal_windows_ctrl_c";
 #[global_allocator]
 static ALLOC: dhat::Alloc = dhat::Alloc;
 
+#[cfg(all(not(feature = "heap-dhat"), not(target_os = "windows")))]
+#[global_allocator]
+static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 #[derive(Debug, PartialEq)]
 enum InternalLspCommand {
     Probe,
