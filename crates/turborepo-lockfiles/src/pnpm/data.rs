@@ -1,10 +1,18 @@
 use std::{any::Any, borrow::Cow, collections::BTreeMap};
 
+use rustc_hash::FxHashMap;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
 
 use super::{Error, LockfileVersion, SupportedLockfileVersion, dep_path::DepPath};
+
+// A child module of `data` so it can construct the private lockfile structs.
+// The file lives at `data_fast_parse.rs` instead of the default
+// `data/fast_parse.rs` because the repo-root .gitignore ignores any path
+// segment named `data`.
+#[path = "data_fast_parse.rs"]
+mod fast_parse;
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
@@ -43,9 +51,23 @@ pub struct PnpmLockfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshots: Option<Snapshots>,
     #[serde(skip)]
-    dependency_index: BTreeMap<String, BTreeMap<String, String>>,
+    dependency_index: FxHashMap<String, DepIndexEntry>,
     #[serde(skip_serializing_if = "Option::is_none")]
     time: Option<Map<String, String>>,
+}
+
+/// Per-key lookup entry built once after parse so the hot resolution paths
+/// (`has_package`, `package_version`, `all_dependencies`) are O(1) hash
+/// probes instead of `BTreeMap` walks over long dependency-path keys.
+///
+/// `deps` stays a `BTreeMap` deliberately: its iteration order feeds the
+/// closure walk and must be deterministic across processes.
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
+struct DepIndexEntry {
+    deps: BTreeMap<String, String>,
+    in_packages: bool,
+    in_snapshots: bool,
+    version: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -229,6 +251,26 @@ struct LockfileSettings {
 
 impl PnpmLockfile {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, crate::Error> {
+        // Machine-generated pnpm lockfiles parse on a fast event-driven path
+        // (~2x the scanner throughput of the serde path). Inputs outside its
+        // supported YAML subset — and malformed inputs — return `None` and
+        // take the serde path below, which either handles them (e.g. multi-
+        // document lockfiles) or reports a proper error.
+        if let Some(mut this) = fast_parse::parse(bytes) {
+            this.cached_version = this.compute_version();
+            this.build_dependency_index();
+            return Ok(this);
+        }
+
+        tracing::debug!("pnpm lockfile outside fast-parse subset; using serde path");
+        Self::from_bytes_via_serde(bytes)
+    }
+
+    /// The serde-based parse path. Handles everything the fast path doesn't
+    /// (multi-document lockfiles, exotic YAML) and produces proper errors
+    /// for malformed input. Also serves as the correctness oracle for the
+    /// fast path in tests.
+    fn from_bytes_via_serde(bytes: &[u8]) -> Result<Self, crate::Error> {
         let mut documents = serde_yaml_ng::Deserializer::from_slice(bytes).peekable();
         let mut leading_documents = Vec::new();
 
@@ -303,17 +345,27 @@ impl PnpmLockfile {
     }
 
     fn build_dependency_index(&mut self) {
-        let mut index = BTreeMap::new();
+        let capacity = self.snapshots.as_ref().map_or(0, |s| s.len())
+            + self.packages.as_ref().map_or(0, |p| p.len());
+        let mut index: FxHashMap<String, DepIndexEntry> =
+            FxHashMap::with_capacity_and_hasher(capacity, Default::default());
         if let Some(snapshots) = &self.snapshots {
             for (key, snapshot) in snapshots {
-                index.insert(key.clone(), snapshot.dependencies());
+                let entry = index.entry(key.clone()).or_default();
+                entry.deps = snapshot.dependencies();
+                entry.in_snapshots = true;
             }
         }
         if let Some(packages) = &self.packages {
-            for (key, entry) in packages {
-                index
-                    .entry(key.clone())
-                    .or_insert_with(|| entry.snapshot.dependencies());
+            for (key, package) in packages {
+                let entry = index.entry(key.clone()).or_default();
+                // Snapshot dependency maps take priority, matching the
+                // previous insert-then-or_insert construction order.
+                if !entry.in_snapshots {
+                    entry.deps = package.snapshot.dependencies();
+                }
+                entry.in_packages = true;
+                entry.version = package.version.clone();
             }
         }
         self.dependency_index = index;
@@ -331,21 +383,40 @@ impl PnpmLockfile {
     }
 
     fn has_package(&self, key: &str) -> bool {
+        let Some(entry) = self.dependency_index.get(key) else {
+            return false;
+        };
         match self.version() {
-            SupportedLockfileVersion::V5 | SupportedLockfileVersion::V6 => {
-                self.packages.as_ref().map(|pkgs| pkgs.contains_key(key))
-            }
-            SupportedLockfileVersion::V7AndV9 => {
-                self.snapshots.as_ref().map(|snaps| snaps.contains_key(key))
-            }
+            SupportedLockfileVersion::V5 | SupportedLockfileVersion::V6 => entry.in_packages,
+            SupportedLockfileVersion::V7AndV9 => entry.in_snapshots,
         }
-        .unwrap_or_default()
     }
 
     fn package_version(&self, key: &str) -> Option<&str> {
-        let pkgs = self.packages.as_ref()?;
-        let pkg = pkgs.get(key)?;
-        pkg.version.as_deref()
+        let entry = self.dependency_index.get(key)?;
+        if !entry.in_packages {
+            return None;
+        }
+        entry.version.as_deref()
+    }
+
+    /// Reconstruct the workspace -> (name -> specifier) map from importer
+    /// entries. Production callers derive this from package.jsons; tests
+    /// use the importers so lockfile fixtures are self-contained.
+    #[cfg(test)]
+    pub(crate) fn test_workspaces(&self) -> std::collections::HashMap<String, Map<String, String>> {
+        self.importers
+            .iter()
+            .map(|(path, importer)| {
+                let mut deps = Map::new();
+                for name in importer.dependencies.all_dependency_names() {
+                    if let Some((specifier, _)) = importer.dependencies.find_resolution(name) {
+                        deps.insert(name.to_string(), specifier.to_string());
+                    }
+                }
+                (path.clone(), deps)
+            })
+            .collect()
     }
 
     fn get_workspace(&self, workspace_path: &str) -> Result<&ProjectSnapshot, crate::Error> {
@@ -445,13 +516,30 @@ impl PnpmLockfile {
         key_buf: &mut String,
     ) -> Result<Option<&'a str>, crate::Error> {
         let importer = self.get_workspace(workspace_path)?;
+        Ok(self.resolution_ladder(
+            importer.dependencies.find_resolution(name),
+            name,
+            specifier,
+            key_buf,
+        ))
+    }
 
-        let Some((resolved_specifier, resolved_version)) =
-            importer.dependencies.find_resolution(name)
-        else {
-            return Ok(self
+    /// The specifier-resolution decision ladder, parameterized over the
+    /// importer's `(specifier, version)` entry for `name` (if any). Shared
+    /// by workspace-scoped resolution and the global transitive-edge
+    /// resolver, which evaluates it against every distinct importer entry
+    /// to prove workspace independence.
+    fn resolution_ladder<'a>(
+        &'a self,
+        resolution: Option<(&'a str, &'a str)>,
+        name: &str,
+        specifier: &'a str,
+        key_buf: &mut String,
+    ) -> Option<&'a str> {
+        let Some((resolved_specifier, resolved_version)) = resolution else {
+            return self
                 .has_package_by_parts(name, specifier, key_buf)
-                .then_some(specifier));
+                .then_some(specifier);
         };
 
         let override_specifier = self.apply_overrides(name, specifier);
@@ -459,21 +547,21 @@ impl PnpmLockfile {
         // Prefer the original specifier if it already matches a snapshot,
         // so overrides don't corrupt resolved peer-dep variants.
         if override_specifier != specifier && self.has_package_by_parts(name, specifier, key_buf) {
-            return Ok(Some(specifier));
+            return Some(specifier);
         }
 
         if resolved_specifier == override_specifier {
-            Ok(Some(resolved_version))
+            Some(resolved_version)
         } else if self.has_package_by_parts(name, specifier, key_buf) {
-            Ok(Some(specifier))
+            Some(specifier)
         } else if resolved_specifier == resolved_version
             && self.has_package_by_parts(name, resolved_version, key_buf)
         {
-            Ok(Some(resolved_version))
+            Some(resolved_version)
         } else if self.has_package_by_parts(name, override_specifier, key_buf) {
-            Ok(Some(override_specifier))
+            Some(override_specifier)
         } else {
-            Ok(None)
+            None
         }
     }
 
@@ -665,7 +753,7 @@ impl crate::Lockfile for PnpmLockfile {
         Ok(self
             .dependency_index
             .get(key)
-            .map(std::borrow::Cow::Borrowed))
+            .map(|entry| std::borrow::Cow::Borrowed(&entry.deps)))
     }
 
     fn subgraph(
@@ -789,7 +877,7 @@ impl crate::Lockfile for PnpmLockfile {
             .map(|patches| self.prune_patches(patches, &pruned_packages))
             .transpose()?;
 
-        Ok(Box::new(Self {
+        let mut pruned = Self {
             leading_documents: self.leading_documents.clone(),
             importers,
             packages: match pruned_packages.is_empty() {
@@ -805,12 +893,16 @@ impl crate::Lockfile for PnpmLockfile {
             package_extensions_checksum: self.package_extensions_checksum.clone(),
             patched_dependencies: patches,
             snapshots: pruned_snapshots,
-            dependency_index: BTreeMap::new(),
+            dependency_index: FxHashMap::default(),
             time: None,
             settings: self.settings.clone(),
             pnpmfile_checksum: self.pnpmfile_checksum.clone(),
             catalogs: self.catalogs.clone(),
-        }))
+        };
+        // The pruned lockfile must be queryable like a parsed one
+        // (has_package/all_dependencies consult the index).
+        pruned.build_dependency_index();
+        Ok(Box::new(pruned))
     }
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
@@ -882,6 +974,79 @@ impl crate::Lockfile for PnpmLockfile {
             // the delimiter between name and version
             Some(package.key.strip_prefix('/')?.to_owned())
         }
+    }
+
+    fn transitive_edge_resolver(&self) -> Option<Box<dyn crate::TransitiveEdgeResolver + '_>> {
+        let any_workspace = self.importers.keys().next()?;
+        // Importer entries are the only workspace-varying input to
+        // `resolution_ladder`. Group the distinct `(specifier, version)`
+        // entries per dependency name so the resolver can prove (per edge)
+        // that every importer resolves it identically.
+        let mut importer_entries: rustc_hash::FxHashMap<&str, Vec<(&str, &str)>> =
+            rustc_hash::FxHashMap::default();
+        for importer in self.importers.values() {
+            for name in importer.dependencies.all_dependency_names() {
+                if let Some(entry) = importer.dependencies.find_resolution(name) {
+                    let entries = importer_entries.entry(name).or_default();
+                    if !entries.contains(&entry) {
+                        entries.push(entry);
+                    }
+                }
+            }
+        }
+        Some(Box::new(PnpmEdgeResolver {
+            lockfile: self,
+            any_workspace,
+            importer_entries,
+        }))
+    }
+}
+
+/// Proves per-edge workspace independence for the shared closure DP.
+///
+/// pnpm resolution consults the importer only through
+/// `find_resolution(name)` inside [`PnpmLockfile::resolution_ladder`]. An
+/// edge's resolution is therefore uniform across workspaces iff the ladder
+/// produces the same outcome for the no-entry case and for every distinct
+/// importer entry for that name. When it does, the edge resolves through
+/// the ordinary `resolve_package` path with an arbitrary importer, so the
+/// fast path shares the exact production resolution code.
+struct PnpmEdgeResolver<'a> {
+    lockfile: &'a PnpmLockfile,
+    any_workspace: &'a str,
+    importer_entries: rustc_hash::FxHashMap<&'a str, Vec<(&'a str, &'a str)>>,
+}
+
+impl crate::TransitiveEdgeResolver for PnpmEdgeResolver<'_> {
+    fn resolve_edge(
+        &self,
+        name: &str,
+        version: &str,
+    ) -> Result<crate::TransitiveEdgeResolution, crate::Error> {
+        // `resolve_package`'s key short-circuit never consults the
+        // importer; the ladder only needs checking when it misses.
+        if !self.lockfile.has_package(version)
+            && let Some(entries) = self.importer_entries.get(name)
+        {
+            let mut key_buf = String::new();
+            let agnostic = self
+                .lockfile
+                .resolution_ladder(None, name, version, &mut key_buf);
+            for &(specifier, resolved) in entries {
+                let outcome = self.lockfile.resolution_ladder(
+                    Some((specifier, resolved)),
+                    name,
+                    version,
+                    &mut key_buf,
+                );
+                if outcome != agnostic {
+                    return Ok(crate::TransitiveEdgeResolution::WorkspaceSensitive);
+                }
+            }
+        }
+        Ok(crate::TransitiveEdgeResolution::Global(
+            crate::Lockfile::resolve_package(self.lockfile, self.any_workspace, name, version)?,
+        ))
     }
 }
 

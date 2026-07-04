@@ -277,7 +277,20 @@ pub fn run(
         .build()
         .map_err(Error::Runtime)?;
 
-    runtime.block_on(run_main(repo_state, logger, color_config, query_server))
+    let result = runtime.block_on(run_main(repo_state, logger, color_config, query_server));
+
+    // `Runtime::drop` joins blocking-pool threads with no deadline. Detached
+    // best-effort work — most notably a telemetry flush whose DNS lookup
+    // (`getaddrinfo`) runs on the blocking pool and cannot be cancelled — can
+    // hold the process open for seconds on a slow network after the run has
+    // already finished. Everything owed to the user is awaited inside
+    // `run_main` (telemetry and analytics handles get a bounded close there);
+    // anything still running here is strictly best-effort, so release the
+    // runtime without waiting at all. The orphaned threads die with the
+    // process.
+    runtime.shutdown_background();
+
+    result
 }
 
 #[tracing::instrument(skip_all)]

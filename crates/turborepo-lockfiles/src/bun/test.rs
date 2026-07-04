@@ -2382,3 +2382,102 @@ fn test_scoped_package_name_not_mistaken_for_nested_entry() {
         "webpack must remain in the pruned lockfile"
     );
 }
+
+// Regression test for https://github.com/vercel/turborepo/issues/13233
+// When a dependency is resolved from an ancestor scope of its source key
+// (e.g. `@headlessui/react/@floating-ui/react/@floating-ui/utils` providing
+// `@floating-ui/utils` for a deeply nested `@floating-ui/dom`), the entry must
+// not be copied into the pruned lockfile under that stale ancestor key once
+// the dependent has been renamed by promotion/de-aliasing. Bun rejects the
+// resulting lockfile because the dependent can no longer resolve the
+// dependency.
+#[test]
+fn test_subgraph_relocates_ancestor_scoped_dep_for_renamed_dependent() {
+    let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "configVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test-monorepo"
+                },
+                "packages/app": {
+                    "name": "app",
+                    "dependencies": {
+                        "@radix-ui/react-popper": "1.2.8"
+                    }
+                },
+                "packages/other": {
+                    "name": "other",
+                    "dependencies": {
+                        "@floating-ui/core": "1.7.5",
+                        "@floating-ui/dom": "1.7.6",
+                        "@floating-ui/react": "0.27.19",
+                        "@floating-ui/react-dom": "2.1.8",
+                        "@floating-ui/utils": "0.2.11",
+                        "@headlessui/react": "2.2.0"
+                    }
+                }
+            },
+            "packages": {
+                "@floating-ui/core": ["@floating-ui/core@1.7.5", "", { "dependencies": { "@floating-ui/utils": "^0.2.11" } }, "sha512-core175"],
+                "@floating-ui/dom": ["@floating-ui/dom@1.7.6", "", { "dependencies": { "@floating-ui/core": "^1.7.5", "@floating-ui/utils": "^0.2.11" } }, "sha512-dom176"],
+                "@floating-ui/react": ["@floating-ui/react@0.27.19", "", { "dependencies": { "@floating-ui/react-dom": "^2.1.8", "@floating-ui/utils": "^0.2.11" } }, "sha512-react02719"],
+                "@floating-ui/react-dom": ["@floating-ui/react-dom@2.1.8", "", { "dependencies": { "@floating-ui/dom": "^1.7.6" } }, "sha512-reactdom218"],
+                "@floating-ui/utils": ["@floating-ui/utils@0.2.11", "", {}, "sha512-utils0211"],
+                "@headlessui/react": ["@headlessui/react@2.2.0", "", { "dependencies": { "@floating-ui/react": "^0.26.16" } }, "sha512-headlessui"],
+                "@radix-ui/react-popper": ["@radix-ui/react-popper@1.2.8", "", { "dependencies": { "@floating-ui/react-dom": "^2.0.0" } }, "sha512-popper"],
+                "app": ["app@workspace:packages/app"],
+                "other": ["other@workspace:packages/other"],
+                "@headlessui/react/@floating-ui/react": ["@floating-ui/react@0.26.16", "", { "dependencies": { "@floating-ui/react-dom": "^2.1.0", "@floating-ui/utils": "^0.2.0" } }, "sha512-react02616"],
+                "@radix-ui/react-popper/@floating-ui/react-dom": ["@floating-ui/react-dom@2.1.7", "", { "dependencies": { "@floating-ui/dom": "^1.7.5" } }, "sha512-reactdom217"],
+                "@headlessui/react/@floating-ui/react/@floating-ui/react-dom": ["@floating-ui/react-dom@2.1.7", "", { "dependencies": { "@floating-ui/dom": "^1.7.5" } }, "sha512-reactdom217"],
+                "@headlessui/react/@floating-ui/react/@floating-ui/utils": ["@floating-ui/utils@0.2.10", "", {}, "sha512-utils0210"],
+                "@radix-ui/react-popper/@floating-ui/react-dom/@floating-ui/dom": ["@floating-ui/dom@1.7.5", "", { "dependencies": { "@floating-ui/core": "^1.7.4", "@floating-ui/utils": "^0.2.10" } }, "sha512-dom175"],
+                "@headlessui/react/@floating-ui/react/@floating-ui/react-dom/@floating-ui/dom": ["@floating-ui/dom@1.7.5", "", { "dependencies": { "@floating-ui/core": "^1.7.4", "@floating-ui/utils": "^0.2.10" } }, "sha512-dom175"],
+                "@radix-ui/react-popper/@floating-ui/react-dom/@floating-ui/dom/@floating-ui/core": ["@floating-ui/core@1.7.4", "", { "dependencies": { "@floating-ui/utils": "^0.2.10" } }, "sha512-core174"],
+                "@radix-ui/react-popper/@floating-ui/react-dom/@floating-ui/dom/@floating-ui/utils": ["@floating-ui/utils@0.2.10", "", {}, "sha512-utils0210"],
+                "@headlessui/react/@floating-ui/react/@floating-ui/react-dom/@floating-ui/dom/@floating-ui/core": ["@floating-ui/core@1.7.4", "", { "dependencies": { "@floating-ui/utils": "^0.2.10" } }, "sha512-core174"]
+            }
+        }))
+        .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+    let mut app_deps = std::collections::BTreeMap::new();
+    app_deps.insert("@radix-ui/react-popper".to_string(), "1.2.8".to_string());
+
+    let closure = crate::transitive_closure(&lockfile, "packages/app", app_deps, false).unwrap();
+    let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+    let subgraph = lockfile
+        .subgraph(&["packages/app".into()], &package_idents)
+        .unwrap();
+    let data = subgraph.lockfile().unwrap();
+
+    // Every nested key must still have its parent chain in the lockfile.
+    for key in data.packages.keys() {
+        if let Some(parent) = PackageKey::parse(key).parent() {
+            assert!(
+                data.packages.contains_key(&parent),
+                "nested key {key} is unreachable: parent {parent} is missing"
+            );
+        }
+    }
+
+    // Every declared dependency must resolve the way bun does: direct nested
+    // entry, then ancestor scopes, then top-level.
+    for (key, entry) in &data.packages {
+        let Some(info) = &entry.info else { continue };
+        for dep_name in info.dependencies.keys() {
+            let mut resolved = data.packages.contains_key(&format!("{key}/{dep_name}"));
+            let mut scope = PackageKey::parse(key).parent();
+            while !resolved && let Some(parent) = scope {
+                resolved = data.packages.contains_key(&format!("{parent}/{dep_name}"));
+                scope = PackageKey::parse(&parent).parent();
+            }
+            resolved = resolved || data.packages.contains_key(dep_name.as_str());
+            assert!(
+                resolved,
+                "package {key} cannot resolve dependency {dep_name}"
+            );
+        }
+    }
+}

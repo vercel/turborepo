@@ -830,7 +830,21 @@ impl BunLockfile {
                         pruned_data.packages.get(&nested_key).is_some_and(|entry| {
                             self.version_satisfies_spec(entry.version(), dep_version)
                         });
-                    if top_level_satisfies || nested_satisfies {
+                    // Bun resolution walks up from the dependent's key, so an
+                    // entry in an ancestor scope also satisfies the dependency.
+                    let ancestor_satisfies = || {
+                        let mut scope = PackageKey::parse(&key).parent();
+                        while let Some(parent) = scope {
+                            if let Some(entry) =
+                                pruned_data.packages.get(&format!("{parent}/{dep_name}"))
+                            {
+                                return self.version_satisfies_spec(entry.version(), dep_version);
+                            }
+                            scope = PackageKey::parse(&parent).parent();
+                        }
+                        false
+                    };
+                    if top_level_satisfies || nested_satisfies || ancestor_satisfies() {
                         continue;
                     }
 
@@ -868,7 +882,37 @@ impl BunLockfile {
                         if let Some(suffix) = source_dep_key.strip_prefix(&source_prefix) {
                             format!("{key}/{suffix}")
                         } else {
-                            source_dep_key
+                            // The entry was found in an ancestor scope of the source
+                            // key, so its key can't be re-parented under the
+                            // dependent's pruned key. Bun resolves dependencies by
+                            // walking up the dependent's scope chain by name, so the
+                            // verbatim key is fine as long as SOME entry named
+                            // dep_name is reachable from the dependent. When none is
+                            // (the dependent was renamed by de-aliasing/promotion and
+                            // the ancestor chain was pruned), bun fails to parse the
+                            // lockfile; nest the entry directly under the dependent
+                            // instead. See
+                            // https://github.com/vercel/turborepo/issues/13233
+                            let name_resolvable = pruned_data.packages.contains_key(dep_name) || {
+                                let mut resolvable = false;
+                                let mut scope = Some(key.clone());
+                                while let Some(scope_key) = scope {
+                                    if pruned_data
+                                        .packages
+                                        .contains_key(&format!("{scope_key}/{dep_name}"))
+                                    {
+                                        resolvable = true;
+                                        break;
+                                    }
+                                    scope = PackageKey::parse(&scope_key).parent();
+                                }
+                                resolvable
+                            };
+                            if name_resolvable {
+                                source_dep_key
+                            } else {
+                                format!("{key}/{dep_name}")
+                            }
                         };
 
                     if pruned_data.packages.contains_key(&pruned_dep_key) {

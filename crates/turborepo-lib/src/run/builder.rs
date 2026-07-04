@@ -436,9 +436,21 @@ impl RunBuilder {
         let scm_task = {
             let repo_root = self.repo_root.clone();
             let git_root = self.opts.git_root.clone();
-            tokio::task::spawn_blocking(move || match git_root {
-                Some(root) => SCM::new_with_git_root(&repo_root, root),
-                None => SCM::new(&repo_root),
+            tokio::task::spawn_blocking(move || {
+                let scm = match git_root {
+                    Some(root) => SCM::new_with_git_root(&repo_root, root),
+                    None => SCM::new(&repo_root),
+                };
+                // The tracked half of the repo index only needs `.git/index`,
+                // not the package graph, so build it here where it overlaps
+                // with package discovery instead of waiting for the graph.
+                // Untracked discovery is layered on later once package
+                // prefixes are known.
+                let tracked_index = {
+                    let _span = tracing::info_span!("build_tracked_repo_index_gix").entered();
+                    scm.build_tracked_repo_index_eager()
+                };
+                (scm, tracked_index)
             })
         };
         let package_json_path = self.repo_root.join_component("package.json");
@@ -511,27 +523,28 @@ impl RunBuilder {
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
 
-        // Build the repo index by reading .git/index directly via gix-index
-        // (fast, in-process, no subprocess spawns) then running a scoped
-        // parallel walk for untracked file discovery. This replaces the
-        // subprocess approach (ls-tree + diff-index + ls-files race) which
-        // burned ~500ms of CPU on background threads.
-        let scm = scm_task
+        // The repo index caches git state (tracked entries + untracked file
+        // discovery) by reading .git/index directly via gix-index — fast,
+        // in-process, no subprocess spawns. The tracked half was already
+        // built inside scm_task, overlapping with package graph
+        // construction; only the untracked walk, which needs the package
+        // prefixes derived from the graph, runs from here.
+        let (scm, tracked_index) = scm_task
             .instrument(tracing::info_span!("scm_task_await"))
             .await?;
         let all_prefixes = Self::all_package_prefixes(&pkg_dep_graph, &scm)?;
-        let repo_index_task = if all_prefixes.is_empty() {
-            None
-        } else {
-            let scm = scm.clone();
-            Some(tokio::task::spawn_blocking(move || {
-                let _span = tracing::info_span!("build_repo_index_gix").entered();
-                let mut index = scm.build_tracked_repo_index_eager()?;
-                if let Err(e) = scm.populate_repo_index_untracked(&mut index, &all_prefixes) {
-                    tracing::debug!("failed to populate untracked files: {e}");
-                }
-                Some(index)
-            }))
+        let repo_index_task = match tracked_index {
+            Some(mut index) if !all_prefixes.is_empty() => {
+                let scm = scm.clone();
+                Some(tokio::task::spawn_blocking(move || {
+                    let _span = tracing::info_span!("populate_repo_index_untracked").entered();
+                    if let Err(e) = scm.populate_repo_index_untracked(&mut index, &all_prefixes) {
+                        tracing::debug!("failed to populate untracked files: {e}");
+                    }
+                    Some(index)
+                }))
+            }
+            _ => None,
         };
         let micro_frontend_configs = {
             let _span = tracing::info_span!("micro_frontends_from_disk").entered();

@@ -179,10 +179,23 @@ type StdErrLogLayered = layer::Layered<StdErrLogFiltered, Registry>;
 type DaemonLog = fmt::Layer<StdErrLogLayered, DefaultFields, fmt::format::Format, NonBlocking>;
 /// This layer can be reloaded. `None` means the layer is disabled.
 type DaemonReload = reload::Layer<Option<DaemonLog>, StdErrLogLayered>;
-/// We filter this using a custom filter that only logs events
-/// - with evel `TRACE` or higher for the `turborepo` target
-/// - with level `INFO` or higher for all other targets
-type DaemonLogFiltered = Filtered<DaemonReload, EnvFilter, StdErrLogLayered>;
+/// The daemon log's `EnvFilter` is itself reloadable. It starts as `off` and
+/// is swapped to an INFO-level filter when daemon logging is enabled.
+///
+/// The filter must start `off`: it declares interest in callsites for the
+/// whole layer stack, and the daemon logger is disabled in every non-daemon
+/// process. If it were INFO from the start, the registry would materialize
+/// every INFO-level span (slab insert, enter/exit bookkeeping, close) with
+/// no consumer — measured at ~5% of total CPU on cache-hit runs with many
+/// tasks.
+///
+/// The filter is swapped rather than the whole `Filtered` because a
+/// `Filtered` only gets a `FilterId` when the subscriber stack is first
+/// built; one constructed later and swapped in via `reload` would silently
+/// drop everything.
+type DaemonFilterReload = reload::Layer<EnvFilter, StdErrLogLayered>;
+/// The reloadable daemon log layer combined with its reloadable filter.
+type DaemonLogFiltered = Filtered<DaemonReload, DaemonFilterReload, StdErrLogLayered>;
 /// When the `DaemonLogFiltered` is applied to the `StdErrLogLayered`, we get a
 /// `DaemonLogLayered`, which forms the base for the next layer.
 type DaemonLogLayered = layer::Layered<DaemonLogFiltered, StdErrLogLayered>;
@@ -196,10 +209,44 @@ type ChromeReload = reload::Layer<Option<ChromeLog>, DaemonLogLayered>;
 /// `ChromeLogLayered`, which forms the base for the next layer.
 type ChromeLogLayered = layer::Layered<ChromeReload, DaemonLogLayered>;
 
+/// Builds the `EnvFilter` used by the stderr and daemon log layers.
+///
+/// `level` is the default directive when neither `TURBO_LOG_VERBOSITY` nor a
+/// verbosity flag override is present. `level_override` (derived from `-v`
+/// flags) takes precedence over the global default but not over per-module
+/// directives.
+fn build_env_filter(level: LevelFilter, level_override: Option<LevelFilter>) -> EnvFilter {
+    let mut filter = EnvFilter::builder()
+        .with_default_directive(level.into())
+        .with_env_var("TURBO_LOG_VERBOSITY")
+        .from_env_lossy();
+
+    for directive in ["reqwest=error", "rustls=error", "hyper=warn", "h2=warn"] {
+        if let Ok(directive) = directive.parse() {
+            filter = filter.add_directive(directive);
+        }
+    }
+
+    if let Some(max_level) = level_override {
+        filter.add_directive(max_level.into())
+    } else {
+        filter
+    }
+}
+
 pub struct TurboSubscriber {
     stderr_handle: SwitchableWriterHandle,
 
     daemon_update: Handle<Option<DaemonLog>, StdErrLogLayered>,
+
+    /// Handle to swap the daemon log filter from `off` to a real filter when
+    /// daemon logging is enabled.
+    daemon_filter_update: Handle<EnvFilter, StdErrLogLayered>,
+
+    /// The level override derived from the `-v` verbosity flag, kept so that
+    /// the daemon log filter can be constructed when daemon logging is
+    /// enabled.
+    level_override: Option<LevelFilter>,
 
     /// The non-blocking file logger only continues to log while this guard is
     /// held. We keep it here so that it doesn't get dropped.
@@ -241,25 +288,6 @@ impl TurboSubscriber {
             _ => Some(LevelFilter::TRACE),
         };
 
-        let env_filter = |level: LevelFilter| {
-            let mut filter = EnvFilter::builder()
-                .with_default_directive(level.into())
-                .with_env_var("TURBO_LOG_VERBOSITY")
-                .from_env_lossy();
-
-            for directive in ["reqwest=error", "rustls=error", "hyper=warn", "h2=warn"] {
-                if let Ok(directive) = directive.parse() {
-                    filter = filter.add_directive(directive);
-                }
-            }
-
-            if let Some(max_level) = level_override {
-                filter.add_directive(max_level.into())
-            } else {
-                filter
-            }
-        };
-
         let switchable = SwitchableWriter::new();
         let stderr_handle = switchable.handle();
 
@@ -269,11 +297,14 @@ impl TurboSubscriber {
                 !color_config.should_strip_ansi,
                 stderr_handle.clone(),
             ))
-            .with_filter(env_filter(LevelFilter::WARN));
+            .with_filter(build_env_filter(LevelFilter::WARN, level_override));
 
         // we set this layer to None to start with, effectively disabling it
         let (logrotate, daemon_update) = reload::Layer::new(Option::<DaemonLog>::None);
-        let logrotate: DaemonLogFiltered = logrotate.with_filter(env_filter(LevelFilter::INFO));
+        // the filter starts as `off` so the disabled layer declares no
+        // callsite interest; `set_daemon_logger` swaps in a real filter
+        let (daemon_filter, daemon_filter_update) = reload::Layer::new(EnvFilter::new("off"));
+        let logrotate: DaemonLogFiltered = logrotate.with_filter(daemon_filter);
 
         let (chrome, chrome_update) = reload::Layer::new(Option::<ChromeLog>::None);
 
@@ -294,6 +325,8 @@ impl TurboSubscriber {
         Self {
             stderr_handle,
             daemon_update,
+            daemon_filter_update,
+            level_override,
             daemon_guard: Mutex::new(None),
             chrome_update,
             chrome_guard: Mutex::new(None),
@@ -349,6 +382,8 @@ impl TurboSubscriber {
             .with_writer(file_writer)
             .with_ansi(false);
 
+        self.daemon_filter_update
+            .reload(build_env_filter(LevelFilter::INFO, self.level_override))?;
         self.daemon_update.reload(Some(layer))?;
         self.daemon_guard
             .lock()

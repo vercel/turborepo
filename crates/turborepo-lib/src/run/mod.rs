@@ -38,8 +38,9 @@ use turborepo_run_summary::{ObservabilityHandle, RunTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_signals::{listeners::get_signal, ShutdownReason, SignalHandler};
 use turborepo_task_hash::{
-    collect_global_file_hash_inputs, get_external_deps_hash, get_internal_deps_hash,
-    global_hash::GLOBAL_CACHE_KEY, GlobalHashableInputs, PackageInputsHashes,
+    collect_global_file_hash_inputs, compute_external_deps_hashes, get_external_deps_hash,
+    get_internal_deps_hash, global_hash::GLOBAL_CACHE_KEY, GlobalHashableInputs,
+    PackageInputsHashes,
 };
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_types::{EnvMode, UIMode};
@@ -970,10 +971,12 @@ impl Run {
 
         let is_monorepo = !self.opts.run_opts.single_package;
 
-        // Run three expensive I/O-bound operations concurrently using rayon::scope:
+        // Run four expensive operations concurrently using rayon::scope:
         // 1. Package file hashing - walks every package's files and computes hashes
         // 2. Internal deps hashing - walks root internal dependency packages
         // 3. Global file hash inputs - globwalks global deps and hashes them
+        // 4. External deps hashing - hashes every package's transitive lockfile
+        //    dependencies (consumed later by the task hasher)
         //
         // These are completely independent and dominate the pre-execution phase.
         // Running them in parallel can significantly reduce wall-clock time.
@@ -987,6 +990,7 @@ impl Run {
         let mut file_hash_result = None;
         let mut internal_deps_result = None;
         let mut global_file_result = None;
+        let mut external_deps_hashes = None;
 
         let _hash_scope_span = tracing::info_span!("hash_scope").entered();
         crate::rayon_compat::block_in_place(|| {
@@ -1036,6 +1040,14 @@ impl Run {
                         &self.scm,
                     ));
                 });
+                if is_monorepo {
+                    s.spawn(|_| {
+                        let _span =
+                            tracing::info_span!("compute_external_deps_hashes_task").entered();
+                        external_deps_hashes =
+                            Some(compute_external_deps_hashes(self.pkg_dep_graph.packages()));
+                    });
+                }
             });
         });
 
@@ -1116,6 +1128,7 @@ impl Run {
             ui_sender,
             is_watch,
             self.micro_frontend_configs.as_ref(),
+            external_deps_hashes,
         )
         .await;
 

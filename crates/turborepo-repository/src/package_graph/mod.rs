@@ -77,10 +77,17 @@ impl WorkspacePackage {
 /// PackageInfo represents a package within the workspace.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PackageInfo {
+    /// The toolchain-neutral package descriptor (see
+    /// [`crate::toolchain::DiscoveredPackage`]). For JavaScript packages
+    /// this is the parsed `package.json`; other toolchains synthesize one
+    /// from their native manifest.
     pub package_json: PackageJson,
+    /// Path to the package's native manifest, anchored to the repo root.
     pub package_json_path: AnchoredSystemPathBuf,
     pub unresolved_external_dependencies: Option<BTreeMap<PackageKey, PackageVersion>>, /* name -> version */
     pub transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
+    /// The toolchain that discovered this package. Defaults to JavaScript.
+    pub toolchain: crate::toolchain::ToolchainId,
 }
 
 impl PackageInfo {
