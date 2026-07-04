@@ -400,6 +400,25 @@ impl PnpmLockfile {
         entry.version.as_deref()
     }
 
+    /// Reconstruct the workspace -> (name -> specifier) map from importer
+    /// entries. Production callers derive this from package.jsons; tests
+    /// use the importers so lockfile fixtures are self-contained.
+    #[cfg(test)]
+    pub(crate) fn test_workspaces(&self) -> std::collections::HashMap<String, Map<String, String>> {
+        self.importers
+            .iter()
+            .map(|(path, importer)| {
+                let mut deps = Map::new();
+                for name in importer.dependencies.all_dependency_names() {
+                    if let Some((specifier, _)) = importer.dependencies.find_resolution(name) {
+                        deps.insert(name.to_string(), specifier.to_string());
+                    }
+                }
+                (path.clone(), deps)
+            })
+            .collect()
+    }
+
     fn get_workspace(&self, workspace_path: &str) -> Result<&ProjectSnapshot, crate::Error> {
         let key = match workspace_path {
             // For pnpm, the root is named "."
@@ -497,13 +516,30 @@ impl PnpmLockfile {
         key_buf: &mut String,
     ) -> Result<Option<&'a str>, crate::Error> {
         let importer = self.get_workspace(workspace_path)?;
+        Ok(self.resolution_ladder(
+            importer.dependencies.find_resolution(name),
+            name,
+            specifier,
+            key_buf,
+        ))
+    }
 
-        let Some((resolved_specifier, resolved_version)) =
-            importer.dependencies.find_resolution(name)
-        else {
-            return Ok(self
+    /// The specifier-resolution decision ladder, parameterized over the
+    /// importer's `(specifier, version)` entry for `name` (if any). Shared
+    /// by workspace-scoped resolution and the global transitive-edge
+    /// resolver, which evaluates it against every distinct importer entry
+    /// to prove workspace independence.
+    fn resolution_ladder<'a>(
+        &'a self,
+        resolution: Option<(&'a str, &'a str)>,
+        name: &str,
+        specifier: &'a str,
+        key_buf: &mut String,
+    ) -> Option<&'a str> {
+        let Some((resolved_specifier, resolved_version)) = resolution else {
+            return self
                 .has_package_by_parts(name, specifier, key_buf)
-                .then_some(specifier));
+                .then_some(specifier);
         };
 
         let override_specifier = self.apply_overrides(name, specifier);
@@ -511,21 +547,21 @@ impl PnpmLockfile {
         // Prefer the original specifier if it already matches a snapshot,
         // so overrides don't corrupt resolved peer-dep variants.
         if override_specifier != specifier && self.has_package_by_parts(name, specifier, key_buf) {
-            return Ok(Some(specifier));
+            return Some(specifier);
         }
 
         if resolved_specifier == override_specifier {
-            Ok(Some(resolved_version))
+            Some(resolved_version)
         } else if self.has_package_by_parts(name, specifier, key_buf) {
-            Ok(Some(specifier))
+            Some(specifier)
         } else if resolved_specifier == resolved_version
             && self.has_package_by_parts(name, resolved_version, key_buf)
         {
-            Ok(Some(resolved_version))
+            Some(resolved_version)
         } else if self.has_package_by_parts(name, override_specifier, key_buf) {
-            Ok(Some(override_specifier))
+            Some(override_specifier)
         } else {
-            Ok(None)
+            None
         }
     }
 
@@ -938,6 +974,79 @@ impl crate::Lockfile for PnpmLockfile {
             // the delimiter between name and version
             Some(package.key.strip_prefix('/')?.to_owned())
         }
+    }
+
+    fn transitive_edge_resolver(&self) -> Option<Box<dyn crate::TransitiveEdgeResolver + '_>> {
+        let any_workspace = self.importers.keys().next()?;
+        // Importer entries are the only workspace-varying input to
+        // `resolution_ladder`. Group the distinct `(specifier, version)`
+        // entries per dependency name so the resolver can prove (per edge)
+        // that every importer resolves it identically.
+        let mut importer_entries: rustc_hash::FxHashMap<&str, Vec<(&str, &str)>> =
+            rustc_hash::FxHashMap::default();
+        for importer in self.importers.values() {
+            for name in importer.dependencies.all_dependency_names() {
+                if let Some(entry) = importer.dependencies.find_resolution(name) {
+                    let entries = importer_entries.entry(name).or_default();
+                    if !entries.contains(&entry) {
+                        entries.push(entry);
+                    }
+                }
+            }
+        }
+        Some(Box::new(PnpmEdgeResolver {
+            lockfile: self,
+            any_workspace,
+            importer_entries,
+        }))
+    }
+}
+
+/// Proves per-edge workspace independence for the shared closure DP.
+///
+/// pnpm resolution consults the importer only through
+/// `find_resolution(name)` inside [`PnpmLockfile::resolution_ladder`]. An
+/// edge's resolution is therefore uniform across workspaces iff the ladder
+/// produces the same outcome for the no-entry case and for every distinct
+/// importer entry for that name. When it does, the edge resolves through
+/// the ordinary `resolve_package` path with an arbitrary importer, so the
+/// fast path shares the exact production resolution code.
+struct PnpmEdgeResolver<'a> {
+    lockfile: &'a PnpmLockfile,
+    any_workspace: &'a str,
+    importer_entries: rustc_hash::FxHashMap<&'a str, Vec<(&'a str, &'a str)>>,
+}
+
+impl crate::TransitiveEdgeResolver for PnpmEdgeResolver<'_> {
+    fn resolve_edge(
+        &self,
+        name: &str,
+        version: &str,
+    ) -> Result<crate::TransitiveEdgeResolution, crate::Error> {
+        // `resolve_package`'s key short-circuit never consults the
+        // importer; the ladder only needs checking when it misses.
+        if !self.lockfile.has_package(version)
+            && let Some(entries) = self.importer_entries.get(name)
+        {
+            let mut key_buf = String::new();
+            let agnostic = self
+                .lockfile
+                .resolution_ladder(None, name, version, &mut key_buf);
+            for &(specifier, resolved) in entries {
+                let outcome = self.lockfile.resolution_ladder(
+                    Some((specifier, resolved)),
+                    name,
+                    version,
+                    &mut key_buf,
+                );
+                if outcome != agnostic {
+                    return Ok(crate::TransitiveEdgeResolution::WorkspaceSensitive);
+                }
+            }
+        }
+        Ok(crate::TransitiveEdgeResolution::Global(
+            crate::Lockfile::resolve_package(self.lockfile, self.any_workspace, name, version)?,
+        ))
     }
 }
 

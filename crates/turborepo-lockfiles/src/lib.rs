@@ -14,6 +14,7 @@
 
 mod berry;
 mod bun;
+mod closure_dp;
 mod error;
 mod npm;
 mod pnpm;
@@ -171,6 +172,31 @@ pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
     fn human_name(&self, package: &Package) -> Option<String> {
         None
     }
+
+    /// A resolver for transitive dependency edges whose resolution can be
+    /// proven identical across workspaces, enabling the shared closure DP
+    /// in [`all_transitive_closures`]. `None` (the default) means the
+    /// format cannot make that promise and closures use the per-workspace
+    /// walk.
+    fn transitive_edge_resolver(&self) -> Option<Box<dyn TransitiveEdgeResolver + '_>> {
+        None
+    }
+}
+
+/// Outcome of resolving a transitive `(name, version)` edge without a
+/// workspace context.
+pub enum TransitiveEdgeResolution {
+    /// Every workspace resolves this edge to the same package (or fails to
+    /// resolve it).
+    Global(Option<Package>),
+    /// Some workspace could resolve this edge differently; the shared DP
+    /// must not be used.
+    WorkspaceSensitive,
+}
+
+/// See [`Lockfile::transitive_edge_resolver`].
+pub trait TransitiveEdgeResolver {
+    fn resolve_edge(&self, name: &str, version: &str) -> Result<TransitiveEdgeResolution, Error>;
 }
 
 /// Takes a lockfile, and a map of workspace directory paths -> (package name,
@@ -180,6 +206,22 @@ pub fn all_transitive_closures<L: Lockfile + ?Sized>(
     workspaces: HashMap<String, BTreeMap<String, String>>,
     ignore_missing_packages: bool,
 ) -> Result<HashMap<String, HashSet<Package>>, Error> {
+    // Shared DP fast path: computes each closure once over the global
+    // package graph instead of once per workspace. Only sound when the
+    // lockfile proves every transitive edge resolves identically across
+    // workspaces; any sensitive edge falls through to the walk below.
+    if workspaces.len() > 1
+        && let Some(resolver) = lockfile.transitive_edge_resolver()
+        && let Some(closures) = closure_dp::all_transitive_closures_dp(
+            lockfile,
+            resolver.as_ref(),
+            &workspaces,
+            ignore_missing_packages,
+        )?
+    {
+        return Ok(closures);
+    }
+
     let resolve_cache: ResolveCache = DashMap::default();
     let deps_cache: DepsCache = DashMap::default();
     let interner = PackageInterner::default();
