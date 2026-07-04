@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt,
-    sync::OnceLock,
+    sync::{Arc, Mutex, OnceLock},
 };
 
 use itertools::Itertools;
@@ -30,6 +30,12 @@ pub use crate::package_json::DependencyKind;
 
 pub const ROOT_PKG_NAME: &str = "//";
 
+/// Channel end delivering the background transitive-closure result: closures
+/// keyed by workspace unix directory, or a rendered error message.
+pub(crate) type DeferredClosuresReceiver = std::sync::mpsc::Receiver<
+    Result<HashMap<String, HashSet<turborepo_lockfiles::Package>>, String>,
+>;
+
 #[derive(Debug)]
 pub struct PackageGraph {
     graph: petgraph::Graph<PackageNode, DependencyKind>,
@@ -40,8 +46,12 @@ pub struct PackageGraph {
     packages: HashMap<PackageName, PackageInfo>,
     root_package_json: PackageJson,
     package_manager: PackageManager,
-    lockfile: Option<Box<dyn Lockfile>>,
+    lockfile: Option<Arc<dyn Lockfile>>,
     repo_root: AbsoluteSystemPathBuf,
+    /// Receiver for background transitive-closure computation when the graph
+    /// was built with deferred closures. Consumed (exactly once) by
+    /// [`Self::ensure_transitive_closures`].
+    deferred_closures: Mutex<Option<DeferredClosuresReceiver>>,
     external_dep_to_internal_dependents:
         OnceLock<HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>>>,
     /// Lazily computed internal dependencies of the root package. They are
@@ -347,6 +357,35 @@ impl PackageGraph {
 
     pub fn lockfile(&self) -> Option<&dyn Lockfile> {
         self.lockfile.as_deref()
+    }
+
+    /// Join the background transitive-closure computation (if the graph was
+    /// built with deferred closures) and install the results. Idempotent and
+    /// cheap when there is nothing to join. Must be called before any
+    /// consumer of `PackageInfo::transitive_dependencies` runs.
+    pub fn ensure_transitive_closures(&mut self) {
+        let receiver = self
+            .deferred_closures
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take();
+        let Some(receiver) = receiver else {
+            return;
+        };
+        match receiver.recv() {
+            Ok(Ok(mut closures)) => {
+                for (_, info) in self.packages.iter_mut() {
+                    info.transitive_dependencies =
+                        closures.remove(info.package_path().to_unix().as_str());
+                }
+            }
+            Ok(Err(e)) => {
+                tracing::warn!("Unable to calculate transitive closures: {}", e);
+            }
+            Err(_) => {
+                tracing::warn!("transitive closure thread disappeared without a result");
+            }
+        }
     }
 
     pub fn package_json(&self, package: &PackageName) -> Option<&PackageJson> {
@@ -1308,6 +1347,79 @@ mod test {
             pkg_graph.transitive_external_dependencies([&foo, &bar].iter().copied()),
             HashSet::from_iter(vec![&a, &b, &c,])
         );
+    }
+
+    /// A graph built with deferred closures must, after
+    /// `ensure_transitive_closures`, be indistinguishable from one built
+    /// inline.
+    #[tokio::test]
+    async fn test_deferred_closures_match_inline() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let package_jsons = || {
+            let mut map = HashMap::new();
+            map.insert(
+                root.join_components(&["package_a", "package.json"]),
+                PackageJson::from_value(json!({
+                    "name": "foo",
+                    "dependencies": { "a": "1" }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_components(&["package_b", "package.json"]),
+                PackageJson::from_value(json!({
+                    "name": "bar",
+                    "dependencies": { "b": "1" }
+                }))
+                .unwrap(),
+            );
+            map
+        };
+
+        let inline = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(package_jsons()))
+        .with_lockfile(Some(Box::new(MockLockfile {})))
+        .build()
+        .await
+        .unwrap();
+
+        let mut deferred = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(package_jsons()))
+        .with_lockfile(Some(Box::new(MockLockfile {})))
+        .defer_transitive_closures(true)
+        .build()
+        .await
+        .unwrap();
+
+        // Before the join, closures are absent.
+        assert!(
+            deferred
+                .packages
+                .values()
+                .all(|info| info.transitive_dependencies.is_none()),
+            "deferred graph must not have closures before ensure"
+        );
+
+        deferred.ensure_transitive_closures();
+        // Idempotent.
+        deferred.ensure_transitive_closures();
+
+        for (name, info) in inline.packages.iter() {
+            assert_eq!(
+                info.transitive_dependencies,
+                deferred.packages.get(name).unwrap().transitive_dependencies,
+                "closures must match for {name}"
+            );
+        }
     }
 
     #[tokio::test]

@@ -493,7 +493,14 @@ impl RunBuilder {
         let mut pkg_dep_graph = {
             let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.opts.run_opts.single_package)
-                .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
+                .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager)
+                // Transitive closures compute on a background thread while
+                // microfrontends config, turbo.json preloading, and other
+                // package-list consumers run. Joined by the
+                // `ensure_transitive_closures` call before package filtering,
+                // the earliest possible consumer (`--affected` with a changed
+                // lockfile compares closures).
+                .defer_transitive_closures(true);
 
             let graph = builder
                 .build()
@@ -685,6 +692,27 @@ impl RunBuilder {
             let _span = tracing::info_span!("turbo_json_preload").entered();
             turbo_json_loader.preload_all();
         });
+
+        // Package filtering reads transitive closures only when a git-based
+        // selector may compare lockfile closures: `--affected`, or a
+        // `--filter` containing a git range (bracket syntax). Joining the
+        // background closure computation here in only those cases lets the
+        // common run keep overlapping it with filtering and engine
+        // construction; the unconditional join below runs before the first
+        // universal consumer (task hashing).
+        let scope_may_read_closures = self.opts.scope_opts.affected_range.is_some()
+            || self
+                .opts
+                .scope_opts
+                .filter_patterns
+                .iter()
+                .any(|pattern| pattern.contains('['));
+        if scope_may_read_closures {
+            crate::rayon_compat::block_in_place(|| {
+                let _span = tracing::info_span!("ensure_transitive_closures").entered();
+                pkg_dep_graph.ensure_transitive_closures();
+            });
+        }
 
         let filtered_pkgs = {
             let _span = tracing::info_span!("calculate_filtered_packages").entered();
@@ -908,6 +936,15 @@ impl RunBuilder {
                 .instrument(tracing::info_span!("capture_scm_state")),
             );
         }
+
+        // Unconditional join point for the background transitive-closure
+        // computation (idempotent when the conditional join above already
+        // ran). The graph is immutable once inside `Run`, and its first
+        // closure consumer (external dependency hashing) runs shortly after.
+        crate::rayon_compat::block_in_place(|| {
+            let _span = tracing::info_span!("ensure_transitive_closures").entered();
+            pkg_dep_graph.ensure_transitive_closures();
+        });
 
         Ok((
             Run {

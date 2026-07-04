@@ -33,6 +33,7 @@ pub struct PackageGraphBuilder<'a, T> {
     lockfile: Option<Box<dyn Lockfile>>,
     package_discovery: T,
     package_manager: Option<PackageManager>,
+    defer_closures: bool,
 }
 
 #[derive(Debug, Diagnostic, thiserror::Error)]
@@ -104,6 +105,7 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
             package_jsons: None,
             lockfile: None,
             package_manager: None,
+            defer_closures: false,
         }
     }
 
@@ -135,6 +137,15 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         self
     }
 
+    /// Defer transitive-closure computation to a background thread. The
+    /// resulting graph's `transitive_dependencies` are absent until
+    /// [`PackageGraph::ensure_transitive_closures`] is called; callers that
+    /// enable this own calling it before any closure consumer runs.
+    pub fn defer_transitive_closures(mut self, defer: bool) -> Self {
+        self.defer_closures = defer;
+        self
+    }
+
     pub fn with_lockfile(mut self, lockfile: Option<Box<dyn Lockfile>>) -> Self {
         self.lockfile = lockfile;
         self
@@ -155,6 +166,7 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
             lockfile: self.lockfile,
             package_discovery: discovery,
             package_manager: self.package_manager,
+            defer_closures: self.defer_closures,
         }
     }
 }
@@ -219,6 +231,7 @@ struct BuildState<'a, S, T> {
     root_package_json: PackageJson,
     lockfile: Option<Box<dyn Lockfile>>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
+    defer_closures: bool,
     state: std::marker::PhantomData<S>,
     /// The JavaScript toolchain, typed. Package-manager resolution for
     /// dependency splitting and lockfile handling reaches through this —
@@ -261,6 +274,7 @@ where
         let PackageGraphBuilder {
             repo_root,
             root_package_json,
+            defer_closures,
             is_single_package: single,
 
             package_jsons,
@@ -312,6 +326,7 @@ where
             root_workspace_index,
             node_lookup,
             root_package_json,
+            defer_closures,
             state: std::marker::PhantomData,
             javascript,
             toolchains,
@@ -422,6 +437,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             lockfile,
             javascript,
             toolchains,
+            defer_closures,
             ..
         } = self;
         Ok(BuildState {
@@ -436,6 +452,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             lockfile,
             javascript,
             toolchains,
+            defer_closures,
             package_jsons: None,
             state: std::marker::PhantomData,
         })
@@ -469,9 +486,10 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             node_lookup,
             root_package_json,
             packages: workspaces,
-            lockfile,
+            lockfile: lockfile.map(Arc::from),
             package_manager,
             repo_root: repo_root.to_owned(),
+            deferred_closures: std::sync::Mutex::new(None),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
             root_internal_dependencies: std::sync::OnceLock::new(),
         })
@@ -618,6 +636,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             root_package_json,
             javascript,
             toolchains,
+            defer_closures,
             ..
         } = self;
         Ok(BuildState {
@@ -630,6 +649,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             node_lookup,
             root_package_json,
             lockfile,
+            defer_closures,
             package_jsons: None,
             state: std::marker::PhantomData,
             javascript,
@@ -686,11 +706,50 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
 
     #[tracing::instrument(skip(self))]
     async fn build_inner(mut self) -> Result<PackageGraph, discovery::Error> {
-        if let Err(e) =
-            turborepo_rayon_compat::block_in_place(|| self.populate_transitive_dependencies())
-        {
-            warn!("Unable to calculate transitive closures: {}", e);
-        }
+        // Transitive closures are only consumed by task hashing and
+        // change-detection, well after graph construction. When deferral is
+        // requested, compute them on a background thread so package-list
+        // consumers (microfrontends config, turbo.json preloading, engine
+        // construction) overlap with the closure work instead of waiting
+        // behind it. `PackageGraph::ensure_transitive_closures` joins.
+        let mut deferred_closures = None;
+        let arc_lockfile: Option<Arc<dyn Lockfile>> = if self.defer_closures {
+            let lockfile: Option<Arc<dyn Lockfile>> = self.lockfile.take().map(Arc::from);
+            if let Some(lockfile) = lockfile.clone() {
+                match self.all_external_dependencies() {
+                    Ok(external_deps) => {
+                        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+                        let spawned = std::thread::Builder::new()
+                            .name("turbo-closures".into())
+                            .spawn(move || {
+                                let closures = turborepo_lockfiles::all_transitive_closures(
+                                    lockfile.as_ref(),
+                                    external_deps,
+                                    false,
+                                );
+                                let _ = tx.send(closures.map_err(|e| e.to_string()));
+                            });
+                        match spawned {
+                            Ok(_) => deferred_closures = Some(rx),
+                            Err(e) => {
+                                warn!("Unable to spawn transitive closure thread: {}", e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Unable to calculate transitive closures: {}", e);
+                    }
+                }
+            }
+            lockfile
+        } else {
+            if let Err(e) =
+                turborepo_rayon_compat::block_in_place(|| self.populate_transitive_dependencies())
+            {
+                warn!("Unable to calculate transitive closures: {}", e);
+            }
+            self.lockfile.take().map(Arc::from)
+        };
         let package_manager = self
             .javascript
             .package_manager()
@@ -704,7 +763,6 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             root_workspace_index,
             node_lookup,
             root_package_json,
-            lockfile,
             repo_root,
             ..
         } = self;
@@ -716,8 +774,9 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             root_package_json,
             packages: workspaces,
             package_manager,
-            lockfile,
+            lockfile: arc_lockfile,
             repo_root: repo_root.to_owned(),
+            deferred_closures: std::sync::Mutex::new(deferred_closures),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
             root_internal_dependencies: std::sync::OnceLock::new(),
         })
