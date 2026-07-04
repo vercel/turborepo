@@ -364,11 +364,6 @@ pub(crate) struct HashOutcome {
     pub(crate) normalized: bool,
     /// Number of `\r\n` pairs in the raw content.
     pub(crate) crlf_count: u64,
-    /// Whether a NUL byte was found in the first 8KB. Conservative subset of
-    /// git's binary detection (git scans the whole file), so `true` here
-    /// implies git also considers the content binary and exempts it from
-    /// eol conversion.
-    pub(crate) is_binary: bool,
 }
 
 /// Memory bounded at ~128KB per call.
@@ -382,9 +377,9 @@ fn hash_file_normalized(
     // discard this hash and do a second pass with the normalized length.
     let mut raw_hasher = BlobHasher::new();
     raw_hasher.write_blob_header(file_len);
-    // Always detect binary content (not just for `text=auto`): the
-    // verification pass needs it to reason about git's eol conversion, and
-    // the NUL scan over the first 8KB is negligible next to hashing.
+    // Binary detection only matters for `text=auto` (`should_normalize`),
+    // but the NUL scan over the first 8KB is negligible next to hashing, so
+    // it stays unconditional for simplicity.
     let scan = scan_file_and_feed(file, true, |data| {
         raw_hasher.update(data);
     })?;
@@ -393,7 +388,6 @@ fn hash_file_normalized(
         let outcome = HashOutcome {
             normalized: false,
             crlf_count: scan.crlf_count,
-            is_binary: scan.is_binary,
         };
         return Ok((raw_hasher.finalize()?, outcome));
     }
@@ -423,7 +417,6 @@ fn hash_file_normalized(
     let outcome = HashOutcome {
         normalized: true,
         crlf_count: scan.crlf_count,
-        is_binary: scan.is_binary,
     };
     Ok((hasher.finalize()?, outcome))
 }

@@ -1490,8 +1490,10 @@ enum DiffSafety {
     /// Provable under any git config.
     Safe,
     /// Provable only if eol conversion is off (`core.autocrlf` unset/false
-    /// and no attribute sources outside the repo): a text file with CRLFs
-    /// whose raw bytes match the index oid.
+    /// and no attribute sources outside the repo): a file with CRLFs whose
+    /// raw bytes match the index oid. Binary content is not exempt — a
+    /// forced `text` attribute from an external attributes file makes git
+    /// eol-convert even binary content.
     SafeIfEolInert,
     /// Not provable: content matched only after CRLF normalization, or the
     /// executable bit changed (content-identical, but `git diff` reports
@@ -1592,16 +1594,18 @@ fn verify_candidate(
             // exists anywhere — see the constructor and
             // `tracked_diff_clean_root`):
             // - `crlf_count == 0`: CRLF-free content is a fixed point of every eol/autocrlf
-            //   conversion — safe under any config.
-            // - `is_binary`: git's autocrlf/`text=auto` detection refuses to convert binary
-            //   content, and our NUL check is a conservative subset of git's — safe under
-            //   any config.
-            // - text with CRLFs: safe only if `core.autocrlf` is provably off (otherwise
-            //   git would report the file modified even though the raw bytes match) —
-            //   deferred to a config check at dirty-hash time.
+            //   conversion — safe under any config. This covers binary files too: git's
+            //   autocrlf/`text=auto` detection refuses to convert binary content, and even
+            //   a forced `text` attribute only rewrites CRLFs, of which there are none.
+            // - content with CRLFs (text or binary): safe only if eol conversion is
+            //   provably inert. Binary content is exempt from autocrlf/`text=auto`, but a
+            //   *forced* `text` attribute (`* text`, as opposed to `text=auto`) makes git
+            //   eol-convert even binary content, and such a rule can come from a
+            //   global/system attributes file that isn't loaded here — deferred to a config
+            //   check at dirty-hash time.
             let diff_safe = if !exec_matches || outcome.normalized {
                 DiffSafety::Unsafe
-            } else if outcome.crlf_count == 0 || outcome.is_binary {
+            } else if outcome.crlf_count == 0 {
                 DiffSafety::Safe
             } else {
                 DiffSafety::SafeIfEolInert
