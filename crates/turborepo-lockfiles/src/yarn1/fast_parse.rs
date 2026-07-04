@@ -52,24 +52,7 @@ impl<'a> Parser<'a> {
     /// One top-level `key(, key)*:` line plus its indented body.
     fn parse_top_entry(&mut self, entries: &mut Map<String, Entry>) -> Option<()> {
         let (_, content) = self.take_line()??;
-        let mut keys = Vec::new();
-        let mut rest = content;
-        loop {
-            let (key, after) = scan_key(rest)?;
-            keys.push(key);
-            rest = after.trim_start_matches(' ');
-            if let Some(after_comma) = rest.strip_prefix(',') {
-                rest = after_comma.trim_start_matches(' ');
-                continue;
-            }
-            break;
-        }
-        let rest = rest.strip_prefix(':')?;
-        if !rest.trim_start_matches(' ').is_empty() {
-            // Inline values for whole entries don't appear in yarn v1
-            // lockfiles; leave them to the general parser.
-            return None;
-        }
+        let keys = scan_entry_keys(content)?;
 
         let entry = self.parse_entry_body()?;
         let (last, firsts) = keys.split_last()?;
@@ -237,6 +220,42 @@ fn scan_key(s: &str) -> Option<(String, &str)> {
         return scan_quoted(s);
     }
     scan_pseudostring(s)
+}
+
+/// The keys of a top-level entry line, which must end with `:` and no
+/// inline value. Mirrors the nom alternation: a single key may be any
+/// (pseudo)string, but the multi-key branch admits only `legacy_name`
+/// keys — so `_a@1, b@2:` is an error there (the bare `_a@1` token is not
+/// a legal legacy name) and must not parse here either.
+fn scan_entry_keys(content: &str) -> Option<Vec<String>> {
+    let ends_clean = |rest: &str| -> Option<()> {
+        let rest = rest.trim_start_matches(' ').strip_prefix(':')?;
+        // Inline values for whole entries don't appear in yarn v1
+        // lockfiles; leave them to the general parser.
+        rest.trim_start_matches(' ').is_empty().then_some(())
+    };
+
+    // Single (pseudo)string key.
+    if let Some((key, rest)) = scan_key(content)
+        && ends_clean(rest).is_some()
+    {
+        return Some(vec![key]);
+    }
+
+    // Legacy key list: `legacy(, legacy)*:`.
+    let mut keys = Vec::new();
+    let mut rest = content;
+    loop {
+        let (key, after) = scan_legacy_token(rest)?;
+        keys.push(key);
+        let after = after.trim_start_matches(' ');
+        if let Some(after_comma) = after.strip_prefix(',') {
+            rest = after_comma.trim_start_matches(' ');
+            continue;
+        }
+        ends_clean(after)?;
+        return Some(keys);
+    }
 }
 
 /// Unquoted values whose first token is `null`/`true`/`false` are typed
@@ -458,6 +477,20 @@ eslint-config-prettier@8.6.0:
   registry npm
 "#,
         );
+    }
+
+    #[test]
+    fn test_multikey_legacy_key_rules() {
+        // Multi-key lines admit only legacy names under the parser of
+        // record: a leading `_` (or `.`, `+`, `~`, ...) key is an error
+        // there, so the fast path must not fabricate entries for it.
+        assert_falls_back("_a@1, b@1:\n  version \"1.0.0\"\n");
+        assert_falls_back("a@1, .b@1:\n  version \"1.0.0\"\n");
+        assert!(super::super::de::parse_syml("_a@1, b@1:\n  version \"1.0.0\"\n").is_err());
+        // ...while a single pseudostring key with those leads is legal.
+        assert_fast_matches_nom("_a@1:\n  version \"1.0.0\"\n");
+        // `--`-prefixed legacy names are accepted in multi-key position.
+        assert_fast_matches_nom("--flag@1, b@1:\n  version \"1.0.0\"\n");
     }
 
     #[test]
