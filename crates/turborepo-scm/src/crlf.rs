@@ -297,31 +297,6 @@ trait BlobHasher: Sized {
     fn finalize(self) -> Result<Self::Output, std::io::Error>;
 }
 
-struct GixBlobHasher(gix_index::hash::Hasher);
-
-impl BlobHasher for GixBlobHasher {
-    type Output = gix_index::hash::ObjectId;
-
-    fn new() -> Self {
-        Self(gix_index::hash::hasher(gix_index::hash::Kind::Sha1))
-    }
-
-    fn write_blob_header(&mut self, blob_len: u64) {
-        self.0.update(&gix_object::encode::loose_header(
-            gix_object::Kind::Blob,
-            blob_len,
-        ));
-    }
-
-    fn update(&mut self, data: &[u8]) {
-        self.0.update(data);
-    }
-
-    fn finalize(self) -> Result<gix_index::hash::ObjectId, std::io::Error> {
-        self.0.try_finalize().map_err(std::io::Error::other)
-    }
-}
-
 struct ManualBlobHasher(Sha1);
 
 impl BlobHasher for ManualBlobHasher {
@@ -424,15 +399,25 @@ fn hash_file_normalized<H: BlobHasher>(
     hasher.finalize()
 }
 
-/// Hash via the gix code path (used when `.git/` is present).
+/// Hash a working-tree file as a git blob (used when `.git/` is present).
+///
+/// Uses the `sha1` crate rather than gix's collision-detected SHA-1
+/// (`sha1_checked`, a Rust port of sha1dc). The `sha1` crate dispatches to
+/// hardware SHA extensions at runtime (SHA-NI on x86, the crypto extensions
+/// on aarch64), which is 5-8x faster than sha1dc's software compression.
+/// Collision detection buys nothing here: these oids are derived from local
+/// working-tree contents to serve as cache-key inputs, and an actor who can
+/// place a crafted collision pair in the repo can already modify the build
+/// itself. Outputs are bit-identical to git for all non-colliding inputs,
+/// enforced by differential tests against `git hash-object` below.
 pub(crate) fn hash_file_maybe_normalized(
     path: &AbsoluteSystemPath,
     attr: TextAttr,
-) -> Result<gix_index::hash::ObjectId, std::io::Error> {
+) -> Result<OidHash, std::io::Error> {
     let mut file = std::fs::File::open(path)?;
     let metadata = file.metadata()?;
     validate_file_type(path, &metadata)?;
-    hash_file_normalized::<GixBlobHasher>(&mut file, metadata.len(), attr)
+    hash_file_normalized::<ManualBlobHasher>(&mut file, metadata.len(), attr)
 }
 
 /// Hash via the manual code path (used after `turbo prune` removes `.git/`).
@@ -455,6 +440,46 @@ mod tests {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
+
+    /// gix's collision-detected SHA-1 hasher, kept as a differential oracle:
+    /// production hashing uses the fast `sha1` crate, and these tests prove
+    /// the two implementations agree.
+    struct GixBlobHasher(gix_index::hash::Hasher);
+
+    impl BlobHasher for GixBlobHasher {
+        type Output = gix_index::hash::ObjectId;
+
+        fn new() -> Self {
+            Self(gix_index::hash::hasher(gix_index::hash::Kind::Sha1))
+        }
+
+        fn write_blob_header(&mut self, blob_len: u64) {
+            self.0.update(&gix_object::encode::loose_header(
+                gix_object::Kind::Blob,
+                blob_len,
+            ));
+        }
+
+        fn update(&mut self, data: &[u8]) {
+            self.0.update(data);
+        }
+
+        fn finalize(self) -> Result<gix_index::hash::ObjectId, std::io::Error> {
+            self.0.try_finalize().map_err(std::io::Error::other)
+        }
+    }
+
+    /// Hash via the gix code path. Test-only oracle counterpart of
+    /// [`hash_file_maybe_normalized`].
+    fn gix_hash_file_maybe_normalized(
+        path: &AbsoluteSystemPath,
+        attr: TextAttr,
+    ) -> Result<gix_index::hash::ObjectId, std::io::Error> {
+        let mut file = std::fs::File::open(path)?;
+        let metadata = file.metadata()?;
+        validate_file_type(path, &metadata)?;
+        hash_file_normalized::<GixBlobHasher>(&mut file, metadata.len(), attr)
+    }
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp = tempfile::tempdir().unwrap();
@@ -707,12 +732,9 @@ mod tests {
 
             let path = root.join_component(name);
             let actual = hash_file_maybe_normalized(&path, TextAttr::Auto).unwrap();
-            let mut hex_buf = [0u8; 40];
-            hex::encode_to_slice(actual.as_bytes(), &mut hex_buf).unwrap();
-            let actual_str = std::str::from_utf8(&hex_buf).unwrap();
 
             assert_eq!(
-                actual_str, expected,
+                &*actual, expected,
                 "normalized hash for {name} must match git hash-object --path (with filters)"
             );
         }
@@ -767,7 +789,8 @@ mod tests {
             let path = root.join_component(name);
             std::fs::write(path.as_std_path(), content).unwrap();
 
-            let gix_result = hash_file_maybe_normalized(&path, *attr).unwrap();
+            let gix_result = gix_hash_file_maybe_normalized(&path, *attr).unwrap();
+            let fast_result = hash_file_maybe_normalized(&path, *attr).unwrap();
             let manual_result = manual_hash_file_maybe_normalized(&path, *attr).unwrap();
 
             let mut hex_buf = [0u8; 40];
@@ -775,8 +798,12 @@ mod tests {
             let gix_hex = std::str::from_utf8(&hex_buf).unwrap();
 
             assert_eq!(
-                gix_hex, &*manual_result,
-                "gix and manual hashes must agree for {name} (attr={attr:?})"
+                gix_hex, &*fast_result,
+                "gix and fast hashes must agree for {name} (attr={attr:?})"
+            );
+            assert_eq!(
+                fast_result, manual_result,
+                "fast and manual hashes must agree for {name} (attr={attr:?})"
             );
         }
     }
@@ -888,12 +915,9 @@ mod tests {
 
         let path = root.join_component(name);
         let actual = hash_file_maybe_normalized(&path, TextAttr::Auto).unwrap();
-        let mut hex_buf = [0u8; 40];
-        hex::encode_to_slice(actual.as_bytes(), &mut hex_buf).unwrap();
-        let actual_str = std::str::from_utf8(&hex_buf).unwrap();
 
         assert_eq!(
-            actual_str, expected,
+            &*actual, expected,
             "chunk-boundary CRLF normalization must match git hash-object"
         );
     }

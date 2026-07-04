@@ -90,16 +90,7 @@ pub(crate) fn hash_objects(
                                 )
                                 .to_unix()
                             });
-                        let mut hex_buf = [0u8; 40];
-                        hex::encode_to_slice(hash.as_bytes(), &mut hex_buf).map_err(|err| {
-                            Error::git_error(format!(
-                                "failed to encode object id for {filename}: {err}"
-                            ))
-                        })?;
-                        Ok(Some((
-                            package_relative_path,
-                            OidHash::from_hex_buf(hex_buf),
-                        )))
+                        Ok(Some((package_relative_path, hash)))
                     }
                     Err(e) => {
                         // Gracefully skip non-regular files (symlinks, sockets,
