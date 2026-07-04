@@ -894,6 +894,7 @@ mod tests {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
+                    ..Default::default()
                 },
             ),
             (
@@ -906,6 +907,7 @@ mod tests {
                     .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
+                    ..Default::default()
                 },
             ),
         ];

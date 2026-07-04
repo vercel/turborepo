@@ -233,7 +233,6 @@ mod test {
 
     use std::collections::{BTreeMap, HashSet};
 
-    use tempfile::TempDir;
     use turbopath::AbsoluteSystemPath;
     use turborepo_errors::Spanned;
     use turborepo_repository::{
@@ -244,9 +243,9 @@ mod test {
 
     use super::*;
 
-    struct DummyDiscovery<'a>(&'a TempDir);
+    struct DummyDiscovery(turbopath::AbsoluteSystemPathBuf);
 
-    impl<'a> PackageDiscovery for DummyDiscovery<'a> {
+    impl PackageDiscovery for DummyDiscovery {
         async fn discover_packages(
             &self,
         ) -> Result<
@@ -257,7 +256,7 @@ mod test {
             let workspaces = [("a", true), ("b", true), ("c", false)]
                 .into_iter()
                 .map(|(name, had_build)| {
-                    let path = AbsoluteSystemPath::from_std_path(self.0.path()).unwrap();
+                    let path = &self.0;
                     let package_json = path.join_component(&format!("{}.json", name));
 
                     let scripts = if had_build {
@@ -335,7 +334,9 @@ mod test {
             AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
             PackageJson::default(),
         )
-        .with_package_discovery(DummyDiscovery(&tmp));
+        .with_package_discovery(DummyDiscovery(
+            turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+        ));
 
         let graph = graph_builder.build().await.unwrap();
 
@@ -387,7 +388,9 @@ mod test {
             AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
             PackageJson::default(),
         )
-        .with_package_discovery(DummyDiscovery(&tmp));
+        .with_package_discovery(DummyDiscovery(
+            turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+        ));
 
         let graph = graph_builder.build().await.unwrap();
 
@@ -420,7 +423,9 @@ mod test {
             AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
             PackageJson::default(),
         )
-        .with_package_discovery(DummyDiscovery(&tmp));
+        .with_package_discovery(DummyDiscovery(
+            turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+        ));
 
         let graph = graph_builder.build().await.unwrap();
 
@@ -453,7 +458,9 @@ mod test {
             AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
             PackageJson::default(),
         )
-        .with_package_discovery(DummyDiscovery(&tmp))
+        .with_package_discovery(DummyDiscovery(
+            turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+        ))
         .build()
         .await
         .unwrap();
@@ -494,7 +501,9 @@ mod test {
             AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
             PackageJson::default(),
         )
-        .with_package_discovery(DummyDiscovery(&tmp))
+        .with_package_discovery(DummyDiscovery(
+            turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+        ))
         .build()
         .await
         .unwrap();

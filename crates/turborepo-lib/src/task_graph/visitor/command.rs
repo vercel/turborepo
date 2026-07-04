@@ -182,6 +182,7 @@ mod test {
             package_json_path: AnchoredSystemPath::new("package.json").unwrap().to_owned(),
             unresolved_external_dependencies: None,
             transitive_dependencies: None,
+            ..Default::default()
         });
         let mut factory = CommandFactory::new();
         factory.add_provider(MicroFrontendProxyProvider::new(

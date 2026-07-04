@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    sync::Arc,
+};
 
 use miette::{Diagnostic, Report};
 use petgraph::graph::{Graph, NodeIndex};
@@ -19,6 +22,7 @@ use crate::{
     },
     package_json::{DependencyKind, PackageJson},
     package_manager::{PackageManager, pnpm::PnpmCatalogs},
+    toolchain::{DiscoveredPackage, JavaScriptToolchain, ToolchainId, ToolchainRegistry},
 };
 
 pub struct PackageGraphBuilder<'a, T> {
@@ -56,6 +60,19 @@ pub enum Error {
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error(transparent)]
     Discovery(#[from] crate::discovery::Error),
+}
+
+// Toolchain errors map onto the pre-existing variants rather than adding a
+// new one: consumers match on `Error::PackageJson` (diagnostic rendering,
+// io-NotFound telemetry in the run builder), and those contracts must not
+// depend on whether the error surfaced through a toolchain.
+impl From<crate::toolchain::Error> for Error {
+    fn from(err: crate::toolchain::Error) -> Self {
+        match err {
+            crate::toolchain::Error::Discovery(err) => Error::Discovery(err),
+            crate::toolchain::Error::Descriptor(err) => Error::PackageJson(err),
+        }
+    }
 }
 
 /// Attempts to extract the file path that caused the error from the error chain
@@ -145,7 +162,7 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
 impl<T> PackageGraphBuilder<'_, T>
 where
     T: PackageDiscoveryBuilder,
-    T::Output: Send + Sync,
+    T::Output: Send + Sync + 'static,
     T::Error: Into<crate::package_manager::Error>,
 {
     /// Build the `PackageGraph`.
@@ -203,7 +220,13 @@ struct BuildState<'a, S, T> {
     lockfile: Option<Box<dyn Lockfile>>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     state: std::marker::PhantomData<S>,
-    package_discovery: T,
+    /// The JavaScript toolchain, typed. Package-manager resolution for
+    /// dependency splitting and lockfile handling reaches through this —
+    /// documented debt, see `crate::toolchain` module docs.
+    javascript: Arc<JavaScriptToolchain<T>>,
+    /// Every toolchain contributing packages, JavaScript included. Package
+    /// discovery goes through this and only this.
+    toolchains: ToolchainRegistry,
 }
 
 // Allows us to perform workspace discovery and parse package jsons
@@ -226,7 +249,7 @@ impl<S, T> BuildState<'_, S, T> {
 impl<'a, T> BuildState<'a, ResolvedPackageManager, T>
 where
     T: PackageDiscoveryBuilder,
-    T::Output: Send,
+    T::Output: Send + Sync + 'static,
     T::Error: Into<crate::package_manager::Error>,
 {
     fn new(
@@ -268,6 +291,15 @@ where
         node_lookup.insert(PackageNode::Root, root_node_index);
         node_lookup.insert(root_workspace, root_workspace_index);
 
+        // The discovery strategy is shared (via the JavaScript toolchain)
+        // between package discovery and package-manager resolution; the
+        // caching wrapper guarantees the underlying strategy runs once.
+        let javascript = Arc::new(JavaScriptToolchain::new(CachingPackageDiscovery::new(
+            package_discovery.build().map_err(Into::into)?,
+        )));
+        let mut toolchains = ToolchainRegistry::new();
+        toolchains.register(javascript.clone());
+
         Ok(BuildState {
             repo_root,
             single,
@@ -281,30 +313,34 @@ where
             node_lookup,
             root_package_json,
             state: std::marker::PhantomData,
-            package_discovery: CachingPackageDiscovery::new(
-                package_discovery.build().map_err(Into::into)?,
-            ),
+            javascript,
+            toolchains,
         })
     }
 }
 
-impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
-    fn add_json(
+impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManager, T> {
+    fn add_package(
         &mut self,
-        package_json_path: AbsoluteSystemPathBuf,
-        json: PackageJson,
+        toolchain: ToolchainId,
+        package: DiscoveredPackage,
     ) -> Result<(), Error> {
+        let DiscoveredPackage {
+            descriptor: json,
+            manifest_path,
+        } = package;
         let relative_json_path =
-            AnchoredSystemPathBuf::relative_path_between(self.repo_root, &package_json_path);
+            AnchoredSystemPathBuf::relative_path_between(self.repo_root, &manifest_path);
         let name = PackageName::Other(
             json.name
                 .clone()
-                .ok_or(Error::PackageJsonMissingName(package_json_path))?
+                .ok_or(Error::PackageJsonMissingName(manifest_path))?
                 .into_inner(),
         );
         let entry = PackageInfo {
             package_json: json,
             package_json_path: relative_json_path,
+            toolchain,
             ..Default::default()
         };
         match self.workspaces.entry(name) {
@@ -329,36 +365,38 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
     // need our own type
     #[tracing::instrument(skip(self))]
     async fn parse_package_jsons(mut self) -> Result<BuildState<'a, ResolvedWorkspaces, T>, Error> {
-        let package_jsons = match self.package_jsons.take() {
-            Some(jsons) => Ok(jsons),
+        let discovered: Vec<(ToolchainId, DiscoveredPackage)> = match self.package_jsons.take() {
+            // A pre-supplied set of parsed package.json files (used by the
+            // package-change watcher and tests) stands in for JavaScript
+            // discovery.
+            Some(jsons) => jsons
+                .into_iter()
+                .map(|(path, json)| {
+                    (
+                        ToolchainId::JAVASCRIPT,
+                        DiscoveredPackage {
+                            descriptor: json,
+                            manifest_path: path,
+                        },
+                    )
+                })
+                .collect(),
             None => {
-                let workspace_paths: Vec<_> =
-                    self.package_discovery.discover_packages().await?.workspaces;
-
-                let results: Vec<_> = turborepo_rayon_compat::block_in_place(|| {
-                    use rayon::prelude::*;
-                    workspace_paths
-                        .into_par_iter()
-                        .map(|path| {
-                            let json = PackageJson::load(&path.package_json)?;
-                            Ok((path.package_json, json))
-                        })
-                        .collect::<Result<Vec<_>, Error>>()
-                })?;
-
-                let mut jsons = HashMap::with_capacity(results.len());
-                for (path, json) in results {
-                    jsons.insert(path, json);
+                let mut discovered = Vec::new();
+                for toolchain in self.toolchains.iter() {
+                    let id = toolchain.id();
+                    let packages = toolchain.discover_packages().await?;
+                    discovered.extend(packages.into_iter().map(|package| (id.clone(), package)));
                 }
-                Ok::<_, Error>(jsons)
+                discovered
             }
-        }?;
+        };
 
-        self.workspaces.reserve(package_jsons.len());
-        self.node_lookup.reserve(package_jsons.len());
+        self.workspaces.reserve(discovered.len());
+        self.node_lookup.reserve(discovered.len());
 
-        for (path, json) in package_jsons {
-            match self.add_json(path, json) {
+        for (toolchain, package) in discovered {
+            match self.add_package(toolchain, package) {
                 Ok(()) => {}
                 Err(Error::PackageJsonMissingName(path)) => {
                     // previous implementations of turbo would silently ignore package.json files
@@ -382,7 +420,8 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             node_lookup,
             root_package_json,
             lockfile,
-            package_discovery,
+            javascript,
+            toolchains,
             ..
         } = self;
         Ok(BuildState {
@@ -395,7 +434,8 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             node_lookup,
             root_package_json,
             lockfile,
-            package_discovery,
+            javascript,
+            toolchains,
             package_jsons: None,
             state: std::marker::PhantomData,
         })
@@ -411,15 +451,14 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             node_lookup,
             root_package_json,
             lockfile,
-            package_discovery,
+            javascript,
             repo_root,
             ..
         } = self;
 
-        let package_manager = package_discovery
-            .discover_packages()
+        let package_manager = javascript
+            .package_manager()
             .await?
-            .package_manager
             .with_resolved_nub_lockfile(repo_root);
 
         debug_assert!(single, "expected single package graph");
@@ -439,7 +478,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
     }
 }
 
-impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
+impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T> {
     #[tracing::instrument(skip(self))]
     fn connect_internal_dependencies(
         &mut self,
@@ -509,10 +548,9 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
     #[tracing::instrument(skip(self))]
     async fn populate_lockfile(&mut self) -> Result<Box<dyn Lockfile>, Error> {
         let package_manager = self
-            .package_discovery
-            .discover_packages()
+            .javascript
+            .package_manager()
             .await?
-            .package_manager
             .with_resolved_nub_lockfile(self.repo_root);
 
         match self.lockfile.take() {
@@ -539,10 +577,9 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
         // Since we've already performed package discovery, this should just be a cache
         // hit
         let package_manager = self
-            .package_discovery
-            .discover_packages()
+            .javascript
+            .package_manager()
             .await?
-            .package_manager
             .with_resolved_nub_lockfile(self.repo_root);
         turborepo_rayon_compat::block_in_place(|| {
             self.connect_internal_dependencies(&package_manager)
@@ -579,7 +616,8 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             root_workspace_index,
             node_lookup,
             root_package_json,
-            package_discovery,
+            javascript,
+            toolchains,
             ..
         } = self;
         Ok(BuildState {
@@ -594,12 +632,13 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             lockfile,
             package_jsons: None,
             state: std::marker::PhantomData,
-            package_discovery,
+            javascript,
+            toolchains,
         })
     }
 }
 
-impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
+impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
     fn all_external_dependencies(
         &self,
     ) -> Result<HashMap<String, BTreeMap<String, String>>, Error> {
@@ -653,11 +692,10 @@ impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
             warn!("Unable to calculate transitive closures: {}", e);
         }
         let package_manager = self
-            .package_discovery
-            .discover_packages()
+            .javascript
+            .package_manager()
             .instrument(tracing::debug_span!("package discovery"))
             .await?
-            .package_manager
             .with_resolved_nub_lockfile(self.repo_root);
         let Self {
             workspaces,
