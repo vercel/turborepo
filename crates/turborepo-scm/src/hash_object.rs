@@ -8,7 +8,9 @@ const MAX_RETRIES: u32 = 10;
 const BASE_DELAY_MS: u64 = 10;
 const MAX_DELAY_MS: u64 = 1000;
 
-fn with_emfile_retry<T>(f: impl Fn() -> Result<T, std::io::Error>) -> Result<T, std::io::Error> {
+pub(crate) fn with_emfile_retry<T>(
+    f: impl Fn() -> Result<T, std::io::Error>,
+) -> Result<T, std::io::Error> {
     for attempt in 0..MAX_RETRIES {
         match f() {
             Ok(v) => return Ok(v),
@@ -90,16 +92,7 @@ pub(crate) fn hash_objects(
                                 )
                                 .to_unix()
                             });
-                        let mut hex_buf = [0u8; 40];
-                        hex::encode_to_slice(hash.as_bytes(), &mut hex_buf).map_err(|err| {
-                            Error::git_error(format!(
-                                "failed to encode object id for {filename}: {err}"
-                            ))
-                        })?;
-                        Ok(Some((
-                            package_relative_path,
-                            OidHash::from_hex_buf(hex_buf),
-                        )))
+                        Ok(Some((package_relative_path, hash)))
                     }
                     Err(e) => {
                         // Gracefully skip non-regular files (symlinks, sockets,

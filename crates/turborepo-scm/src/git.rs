@@ -265,7 +265,99 @@ impl GitRepo {
 
         let mut hasher = Sha256::new();
         let has_status = repo_index.append_dirty_status_to_hasher(&mut hasher);
+
+        // If the repo index proved the working tree clean of unstaged
+        // changes, and the index's cache-tree equals HEAD's tree (no staged
+        // changes), then `git diff HEAD` is guaranteed to produce no output
+        // — skip spawning it. On stat-stale indexes (snapshot-restored
+        // workspaces) that subprocess re-hashes every tracked file with
+        // sha1dc and costs seconds of serial wall time.
+        let info_attributes_exists = self
+            .root
+            .join_components(&[".git", "info", "attributes"])
+            .exists();
+        if let Some((root, sensitivity)) =
+            repo_index.tracked_diff_clean_root(info_attributes_exists)
+        {
+            let eol_ok = match sensitivity {
+                crate::repo_index::EolSensitivity::ConfigIndependent => true,
+                crate::repo_index::EolSensitivity::RequiresInertEolConversion => {
+                    self.eol_conversion_inert()
+                }
+            };
+            if eol_ok
+                && self
+                    .head_tree_oid()
+                    .is_some_and(|head_tree| head_tree == root)
+            {
+                // The diff would have contributed nothing to the hasher, so
+                // the resulting hash is identical to the diff-running path.
+                if !has_status {
+                    return None;
+                }
+                return Some(hex::encode(hasher.finalize()));
+            }
+        }
+
         self.finish_dirty_hash(hasher, has_status)
+    }
+
+    /// Returns true when git provably performs no eol conversion at checkin:
+    /// `core.autocrlf` is unset or false, no `core.attributesFile` is
+    /// configured, and no default global/system attribute files exist.
+    /// Conservative on any failure.
+    fn eol_conversion_inert(&self) -> bool {
+        let Ok(output) = self.execute_git_command(&["config", "-z", "--list"], "") else {
+            return false;
+        };
+        let mut autocrlf_ok = true;
+        for kv in output.split(|b| *b == 0) {
+            // `-z` output: `key\nvalue` per NUL-terminated record.
+            let mut parts = kv.splitn(2, |b| *b == b'\n');
+            let key = parts.next().unwrap_or_default();
+            let value = parts.next().unwrap_or_default();
+            match key {
+                b"core.autocrlf" => {
+                    // Last definition wins, mirroring git.
+                    autocrlf_ok = value.eq_ignore_ascii_case(b"false");
+                }
+                b"core.attributesfile" => return false,
+                _ => {}
+            }
+        }
+        if !autocrlf_ok {
+            return false;
+        }
+
+        // Default global attributes locations git consults when
+        // core.attributesFile is unset.
+        let xdg_attrs = std::env::var_os("XDG_CONFIG_HOME")
+            .map(|base| {
+                std::path::PathBuf::from(base)
+                    .join("git")
+                    .join("attributes")
+            })
+            .or_else(|| {
+                std::env::var_os("HOME")
+                    .map(|home| std::path::PathBuf::from(home).join(".config/git/attributes"))
+            });
+        if xdg_attrs.is_some_and(|p| p.exists()) {
+            return false;
+        }
+        // System-wide attributes. The exact path depends on git's compiled
+        // prefix; /etc/gitattributes is the common location.
+        !std::path::Path::new("/etc/gitattributes").exists()
+    }
+
+    /// Resolve `HEAD^{tree}` to its oid. `None` on failure (unborn HEAD,
+    /// corrupt repo) — callers treat that as "nothing proven".
+    fn head_tree_oid(&self) -> Option<String> {
+        let output = self
+            .execute_git_command(&["rev-parse", "HEAD^{tree}"], "")
+            .ok()?;
+        let output = String::from_utf8(output).ok()?;
+        let trimmed = output.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_owned())
     }
 
     fn finish_dirty_hash(&self, mut hasher: sha2::Sha256, has_status: bool) -> Option<String> {
@@ -1773,6 +1865,14 @@ mod tests {
                 false,
             ),
             (
+                "intent_to_add",
+                |root| {
+                    fs::write(root.join("ita.txt"), "ita").unwrap();
+                    run_git(root, &["add", "-N", "ita.txt"]);
+                },
+                true,
+            ),
+            (
                 "racy_rewrite_same_content",
                 |root| {
                     // Rewrite identical content: mtime changes, content does
@@ -1964,6 +2064,258 @@ mod tests {
         let repo_index = RepoGitIndex::new(&git).unwrap();
 
         assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_some());
+    }
+
+    /// After `git read-tree HEAD` every index entry loses its stat info, so
+    /// every tracked file becomes a verification candidate (the
+    /// snapshot-restored-workspace scenario). On a clean tree the
+    /// verification pass must prove `git diff HEAD` empty and skip it.
+    #[test]
+    fn test_dirty_hash_stale_index_clean_tree_skips_diff() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+        fs::write(repo_root.path().join("bar.txt"), "other content\n").unwrap();
+        run_git(repo_root.path(), &["add", "bar.txt"]);
+        run_git(repo_root.path(), &["commit", "-q", "-m", "bar"]);
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink("foo.txt", repo_root.path().join("link.txt")).unwrap();
+            run_git(repo_root.path(), &["add", "link.txt"]);
+            run_git(repo_root.path(), &["commit", "-q", "-m", "link"]);
+        }
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(
+            repo_index.tracked_diff_clean_root(false).is_some(),
+            "clean stale index must prove the tree clean"
+        );
+        assert_eq!(scm.get_dirty_hash_from_repo_index(&repo_index), None);
+        assert_eq!(scm.get_dirty_hash(), None, "subprocess path must agree");
+    }
+
+    /// A genuinely modified file on a stale index must block the skip and
+    /// produce a dirty hash through the diff path.
+    #[test]
+    fn test_dirty_hash_stale_index_modified_file() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+        fs::write(repo_root.path().join("foo.txt"), "changed").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(repo_index.tracked_diff_clean_root(false).is_none());
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_some());
+        assert!(scm.get_dirty_hash().is_some(), "subprocess path must agree");
+    }
+
+    /// Staged changes invalidate the index's cache-tree, so the skip gate
+    /// must not fire even when every candidate verifies clean.
+    #[test]
+    fn test_dirty_hash_stale_index_staged_change_blocks_skip() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+        fs::write(repo_root.path().join("foo.txt"), "staged").unwrap();
+        run_git(repo_root.path(), &["add", "foo.txt"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(
+            repo_index.tracked_diff_clean_root(false).is_none(),
+            "staged change must block the diff skip"
+        );
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_some());
+        assert!(scm.get_dirty_hash().is_some(), "subprocess path must agree");
+    }
+
+    /// An exec-bit flip is content-identical but `git diff HEAD` reports it
+    /// as a mode change. Verification must not let the skip fire.
+    #[cfg(unix)]
+    #[test]
+    fn test_dirty_hash_stale_index_exec_bit_flip() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+        fs::set_permissions(
+            repo_root.path().join("foo.txt"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(
+            repo_index.tracked_diff_clean_root(false).is_none(),
+            "exec-bit mismatch must block the diff skip"
+        );
+        assert!(
+            scm.get_dirty_hash_from_repo_index(&repo_index).is_some(),
+            "mode change must produce a dirty hash"
+        );
+        assert!(scm.get_dirty_hash().is_some(), "subprocess path must agree");
+    }
+
+    /// CRLF-containing content that raw-matches the index blocks the skip
+    /// (git's checkin conversion could disagree under configs we don't
+    /// read), but the diff then confirms cleanliness — both paths must
+    /// still report clean.
+    #[test]
+    fn test_dirty_hash_stale_index_crlf_content_stays_clean() {
+        let (repo_root, _repo_path) = setup_repository(None).unwrap();
+        run_git(repo_root.path(), &["config", "core.autocrlf", "false"]);
+        fs::write(repo_root.path().join("win.txt"), b"a\r\nb\r\n").unwrap();
+        run_git(repo_root.path(), &["add", "win.txt"]);
+        run_git(repo_root.path(), &["commit", "-q", "-m", "crlf"]);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        let evidence = repo_index.tracked_diff_clean_root(false);
+        assert!(
+            matches!(
+                evidence,
+                Some((
+                    _,
+                    crate::repo_index::EolSensitivity::RequiresInertEolConversion
+                ))
+            ),
+            "CRLF text content must make the proof eol-sensitive, got {evidence:?}"
+        );
+        // Whether the skip fires depends on the machine's git config; the
+        // observable result must be clean either way (skip and diff agree).
+        assert_eq!(
+            scm.get_dirty_hash_from_repo_index(&repo_index),
+            None,
+            "tree must be reported clean"
+        );
+        assert_eq!(scm.get_dirty_hash(), None, "subprocess path must agree");
+    }
+
+    /// Binary content with CRLFs must not be treated as config-independent:
+    /// a forced `text` attribute from a global/system attributes file makes
+    /// git eol-convert even binary content, so the proof must stay
+    /// eol-sensitive.
+    #[test]
+    fn test_dirty_hash_stale_index_binary_crlf_content_stays_eol_sensitive() {
+        let (repo_root, _repo_path) = setup_repository(None).unwrap();
+        run_git(repo_root.path(), &["config", "core.autocrlf", "false"]);
+        fs::write(repo_root.path().join("blob.bin"), b"\x00binary\r\ndata\r\n").unwrap();
+        run_git(repo_root.path(), &["add", "blob.bin"]);
+        run_git(repo_root.path(), &["commit", "-q", "-m", "bin"]);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        let evidence = repo_index.tracked_diff_clean_root(false);
+        assert!(
+            matches!(
+                evidence,
+                Some((
+                    _,
+                    crate::repo_index::EolSensitivity::RequiresInertEolConversion
+                ))
+            ),
+            "binary CRLF content must make the proof eol-sensitive, got {evidence:?}"
+        );
+        // Whether the skip fires depends on the machine's git config; the
+        // observable result must be clean either way (skip and diff agree).
+        assert_eq!(
+            scm.get_dirty_hash_from_repo_index(&repo_index),
+            None,
+            "tree must be reported clean"
+        );
+        assert_eq!(scm.get_dirty_hash(), None, "subprocess path must agree");
+    }
+
+    /// A retargeted symlink on a stale index must be caught as dirty.
+    #[cfg(unix)]
+    #[test]
+    fn test_dirty_hash_stale_index_symlink_retarget() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+        std::os::unix::fs::symlink("foo.txt", repo_root.path().join("link.txt")).unwrap();
+        run_git(repo_root.path(), &["add", "link.txt"]);
+        run_git(repo_root.path(), &["commit", "-q", "-m", "link"]);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+        fs::remove_file(repo_root.path().join("link.txt")).unwrap();
+        std::os::unix::fs::symlink("elsewhere.txt", repo_root.path().join("link.txt")).unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(repo_index.tracked_diff_clean_root(false).is_none());
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_some());
+        assert!(scm.get_dirty_hash().is_some(), "subprocess path must agree");
+    }
+
+    /// Verified stat-stale entries must yield identical package hashes to a
+    /// fresh index, with nothing left to re-hash per package.
+    #[test]
+    fn test_stale_index_package_hashes_match_fresh() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+        fs::write(repo_root.path().join("bar.txt"), "more\n").unwrap();
+        run_git(repo_root.path(), &["add", "bar.txt"]);
+        run_git(repo_root.path(), &["commit", "-q", "-m", "bar"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let git = make_git_repo(&git_root);
+        let prefix = turbopath::RelativeUnixPathBuf::new("").unwrap();
+
+        let fresh = RepoGitIndex::new(&git).unwrap();
+        let (fresh_hashes, _fresh_to_hash) = fresh.get_package_hashes(&prefix).unwrap();
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+
+        let stale = RepoGitIndex::new(&git).unwrap();
+        let (stale_hashes, stale_to_hash) = stale.get_package_hashes(&prefix).unwrap();
+
+        assert_eq!(
+            fresh_hashes, stale_hashes,
+            "stale-index package hashes must match fresh-index hashes"
+        );
+        assert!(
+            stale_to_hash.is_empty(),
+            "verified entries must not be deferred to per-package hashing, got {stale_to_hash:?}"
+        );
     }
 
     #[test]
