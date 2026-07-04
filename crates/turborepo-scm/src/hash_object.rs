@@ -8,7 +8,9 @@ const MAX_RETRIES: u32 = 10;
 const BASE_DELAY_MS: u64 = 10;
 const MAX_DELAY_MS: u64 = 1000;
 
-fn with_emfile_retry<T>(f: impl Fn() -> Result<T, std::io::Error>) -> Result<T, std::io::Error> {
+pub(crate) fn with_emfile_retry<T>(
+    f: impl Fn() -> Result<T, std::io::Error>,
+) -> Result<T, std::io::Error> {
     for attempt in 0..MAX_RETRIES {
         match f() {
             Ok(v) => return Ok(v),
