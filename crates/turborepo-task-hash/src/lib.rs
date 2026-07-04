@@ -131,6 +131,7 @@ impl PackageInputsHashes {
             inputs: &'b TaskInputs,
         }
 
+        let collect_span = tracing::info_span!("collect_task_hash_keys").entered();
         let mut task_infos = Vec::new();
         for task in all_tasks {
             let TaskNode::Task(task_id) = task else {
@@ -185,27 +186,43 @@ impl PackageInputsHashes {
             unique_hash_keys = unique_keys.len(),
             "file hash deduplication"
         );
+        drop(collect_span);
 
-        // Phase 2: Compute file hashes in parallel across unique keys.
+        // Phase 2: Compute file hashes in parallel across unique keys. The
+        // summary hash of each `FileHashes` is computed here too, once per
+        // unique key, so distribution below never re-hashes for the many
+        // tasks that share a key.
         // EMFILE (too many open files) errors are handled via retry-with-backoff
         // in the globwalk and hash_objects layers, so we can safely parallelize
         // all keys on rayon without worrying about fd exhaustion.
-        let file_hash_results: Vec<Result<Arc<FileHashes>, Error>> = unique_keys
+        let hash_span = tracing::info_span!("hash_unique_inputs").entered();
+        let file_hash_results: Vec<Result<(Arc<FileHashes>, String), Error>> = unique_keys
             .into_par_iter()
             .map(|(package_path, globs, default, eager)| {
-                if !eager {
-                    return Ok(Arc::new(FileHashes(Vec::new())));
-                }
-
-                file_hashes_for_inputs(scm, repo_root, &package_path, &globs, default, repo_index)
+                let file_hashes = if !eager {
+                    Arc::new(FileHashes(Vec::new()))
+                } else {
+                    file_hashes_for_inputs(
+                        scm,
+                        repo_root,
+                        &package_path,
+                        &globs,
+                        default,
+                        repo_index,
+                    )?
+                };
+                let hash = file_hashes.as_ref().hash();
+                Ok((file_hashes, hash))
             })
             .collect();
 
-        let file_hash_results: Vec<Arc<FileHashes>> = file_hash_results
+        let file_hash_results: Vec<(Arc<FileHashes>, String)> = file_hash_results
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
+        drop(hash_span);
 
         // Phase 3: Distribute shared results to individual tasks.
+        let _span = tracing::info_span!("distribute_task_file_hashes").entered();
         let mut hashes = HashMap::with_capacity(task_infos.len());
         let mut expanded_hashes = if needs_expanded_hashes {
             HashMap::with_capacity(task_infos.len())
@@ -215,11 +232,9 @@ impl PackageInputsHashes {
 
         for (i, info) in task_infos.into_iter().enumerate() {
             let key_idx = task_key_map[i];
-            let file_hashes = &file_hash_results[key_idx];
+            let (file_hashes, hash) = &file_hash_results[key_idx];
 
-            let hash = file_hashes.as_ref().hash();
-
-            hashes.insert(info.task_id.clone(), hash);
+            hashes.insert(info.task_id.clone(), hash.clone());
             if needs_expanded_hashes || info.inputs.has_deferred_inputs() {
                 expanded_hashes.insert(info.task_id, Arc::clone(file_hashes));
             }
@@ -230,6 +245,22 @@ impl PackageInputsHashes {
             expanded_hashes,
         })
     }
+}
+
+/// Compute the external dependency hash for every workspace in parallel.
+/// Many tasks share the same package, so hashing once per package avoids
+/// re-sorting transitive dependencies for every task.
+#[tracing::instrument(skip_all)]
+pub fn compute_external_deps_hashes<'b>(
+    workspaces: impl Iterator<Item = (&'b PackageName, &'b PackageInfo)>,
+) -> HashMap<String, String> {
+    let ws: Vec<_> = workspaces.collect();
+    ws.par_iter()
+        .map(|(name, info)| {
+            let hash = get_external_deps_hash(&info.transitive_dependencies);
+            (name.as_str().to_owned(), hash)
+        })
+        .collect()
 }
 
 #[derive(Default, Debug, Clone)]
@@ -315,14 +346,15 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         if self.run_opts.single_package() {
             return;
         }
-        let ws: Vec<_> = workspaces.collect();
-        self.external_deps_hash_cache = ws
-            .par_iter()
-            .map(|(name, info)| {
-                let hash = get_external_deps_hash(&info.transitive_dependencies);
-                (name.as_str().to_owned(), hash)
-            })
-            .collect();
+        self.external_deps_hash_cache = compute_external_deps_hashes(workspaces);
+    }
+
+    /// Install an externally computed dependency-hash cache (see
+    /// [`compute_external_deps_hashes`]). Lets callers compute the cache
+    /// concurrently with other startup work instead of serially during
+    /// hasher construction.
+    pub fn set_external_deps_hash_cache(&mut self, cache: HashMap<String, String>) {
+        self.external_deps_hash_cache = cache;
     }
 
     #[tracing::instrument(skip(self, task_definition, task_env_mode, workspace, dependency_set))]

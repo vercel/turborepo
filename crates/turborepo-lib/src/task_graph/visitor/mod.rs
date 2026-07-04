@@ -220,6 +220,7 @@ impl<'a> Visitor<'a> {
         ui_sender: Option<UISender>,
         is_watch: bool,
         micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
+        external_deps_hashes: Option<HashMap<String, String>>,
     ) -> Self {
         let (task_hasher, color_cache, grouping_layer) = {
             let _span = tracing::info_span!("visitor_new").entered();
@@ -232,9 +233,15 @@ impl<'a> Visitor<'a> {
                 global_env_patterns,
             );
 
-            crate::rayon_compat::block_in_place(|| {
-                task_hasher.precompute_external_deps_hashes(package_graph.packages());
-            });
+            // The caller may have computed the external dependency hashes
+            // concurrently with other startup work; fall back to computing
+            // them here if not.
+            match external_deps_hashes {
+                Some(cache) => task_hasher.set_external_deps_hash_cache(cache),
+                None => crate::rayon_compat::block_in_place(|| {
+                    task_hasher.precompute_external_deps_hashes(package_graph.packages());
+                }),
+            }
 
             let color_cache = ColorSelector::default();
 
