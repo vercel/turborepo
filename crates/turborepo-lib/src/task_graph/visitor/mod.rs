@@ -1063,6 +1063,7 @@ impl<'a> Visitor<'a> {
                 env_at_execution_start,
                 scm,
                 is_watch,
+                Some(task_hasher.external_deps_hash_cache()),
             )
             .await?)
     }

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use turbopath::AnchoredSystemPath;
 use turborepo_env::EnvironmentVariableMap;
@@ -24,6 +24,10 @@ pub struct TaskSummaryFactory<'a, E, H, R> {
     env_at_start: &'a EnvironmentVariableMap,
     run_opts: &'a R,
     global_env_mode: EnvMode,
+    /// Per-package external dependency hashes computed during task hashing.
+    /// When present, summaries reuse these instead of re-sorting and
+    /// re-hashing each package's transitive closure per task.
+    external_deps_hashes: Option<&'a HashMap<String, String>>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -57,6 +61,7 @@ where
         env_at_start: &'a EnvironmentVariableMap,
         run_opts: &'a R,
         global_env_mode: EnvMode,
+        external_deps_hashes: Option<&'a HashMap<String, String>>,
     ) -> Self {
         Self {
             package_graph,
@@ -65,6 +70,7 @@ where
             env_at_start,
             run_opts,
             global_env_mode,
+            external_deps_hashes,
         }
     }
 
@@ -176,9 +182,14 @@ where
             })
             .unwrap_or_default();
 
-        // Compute external deps hash from workspace info
-        let hash_of_external_dependencies =
-            get_external_deps_hash(&workspace_info.transitive_dependencies);
+        // Reuse the per-package hash computed during task hashing when
+        // available; recomputing sorts and serializes the package's full
+        // transitive closure per task. The fallback produces byte-identical
+        // output (same sort, same hashable message).
+        let hash_of_external_dependencies = self
+            .external_deps_hashes
+            .and_then(|hashes| hashes.get(task_id.package()).cloned())
+            .unwrap_or_else(|| get_external_deps_hash(&workspace_info.transitive_dependencies));
 
         Ok(SharedTaskSummary {
             hash,
