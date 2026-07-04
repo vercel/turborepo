@@ -4,6 +4,9 @@ use serde::Deserialize;
 
 use super::{BerryPackage, DependencyMeta, LockfileData, Metadata};
 
+#[path = "fast_parse.rs"]
+pub(crate) mod fast_parse;
+
 const METADATA_KEY: &str = "__metadata";
 
 /// Union type of yarn.lock metadata entry and package entries.

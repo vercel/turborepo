@@ -109,7 +109,7 @@ struct BerryPackage {
     conditions: Option<String>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, Default, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Copy)]
 struct DependencyMeta {
     optional: Option<bool>,
     unplugged: Option<bool>,
@@ -654,6 +654,16 @@ impl Lockfile for BerryLockfile {
 
 impl LockfileData {
     pub fn from_bytes(s: &[u8]) -> Result<Self, Error> {
+        // Single-pass fast path for the machine-generated subset. Falls
+        // back to serde for anything it declines — including semantic
+        // errors (missing metadata/resolution), so error reporting stays
+        // on the serde path.
+        if let Ok(text) = std::str::from_utf8(s)
+            && let Some(entries) = de::fast_parse::parse(text)
+            && let Ok(data) = Self::try_from(entries)
+        {
+            return Ok(data);
+        }
         serde_yaml_ng::from_slice(s).map_err(Error::from)
     }
 }
