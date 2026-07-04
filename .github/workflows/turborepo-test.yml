@@ -504,7 +504,7 @@ jobs:
 
       - name: Run tests
         run: |
-          TURBO_API= turbo run test --filter "turborepo-repository" --color --env-mode=strict
+          TURBO_API= turbo run test --filter "@turbo/repository" --color --env-mode=strict
         env:
           NODE_VERSION: ${{ matrix.node-version }}
 
