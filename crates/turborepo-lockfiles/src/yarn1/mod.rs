@@ -6,6 +6,7 @@ use serde::Deserialize;
 use crate::Lockfile;
 
 mod de;
+mod fast_parse;
 mod ser;
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
@@ -49,6 +50,13 @@ impl FromStr for Yarn1Lockfile {
     type Err = super::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Single-pass fast path for the machine-generated subset; the nom
+        // parser below is the parser of record and handles everything the
+        // fast path declines.
+        if let Some(inner) = fast_parse::parse(s) {
+            return Ok(Self { inner });
+        }
+        tracing::debug!("yarn1 fast parse declined, using general parser");
         let value = de::parse_syml(s)?;
         let inner = serde_json::from_value(value)?;
         Ok(Self { inner })
