@@ -19,6 +19,9 @@ use std::collections::BTreeMap;
 use saphyr_parser::{Event, Parser, ScalarStyle, StrInput};
 use serde_yaml_ng::{Mapping, Number, Value};
 
+#[path = "data_scanner.rs"]
+mod scanner;
+
 use super::{
     DependenciesMeta, Dependency, DependencyInfo, LockfileSettings, Map, PackageResolution,
     PackageSnapshot, PackageSnapshotV7, Packages, PatchFile, PnpmLockfile, ProjectSnapshot,
@@ -50,21 +53,40 @@ impl Unsupported {
 
 type FResult<T> = Result<T, Unsupported>;
 
-/// Attempt to parse a pnpm lockfile from YAML using the fast event-driven
-/// path. Returns `None` when the input uses YAML constructs outside the
+/// Attempt to parse a pnpm lockfile from YAML using the fast paths.
+/// Tier 1 is a structural line scanner specialized to the pnpm subset;
+/// tier 2 replays the input through the general saphyr event parser.
+/// Returns `None` when the input uses YAML constructs outside the
 /// supported subset (or is malformed); the caller must then use the serde
 /// path, which either parses it or reports a proper error.
 pub(super) fn parse(bytes: &[u8]) -> Option<PnpmLockfile> {
     let text = std::str::from_utf8(bytes).ok()?;
+    parse_with_scanner(text).or_else(|| parse_with_saphyr(text))
+}
+
+fn parse_with_scanner(text: &str) -> Option<PnpmLockfile> {
     let mut events = Events {
-        parser: Parser::new_from_str(text),
+        source: Source::Lines(scanner::LineScanner::new(text)),
         peeked: None,
     };
     parse_lockfile(&mut events).ok()
 }
 
+fn parse_with_saphyr(text: &str) -> Option<PnpmLockfile> {
+    let mut events = Events {
+        source: Source::Saphyr(Box::new(Parser::new_from_str(text))),
+        peeked: None,
+    };
+    parse_lockfile(&mut events).ok()
+}
+
+enum Source<'a> {
+    Saphyr(Box<Parser<'a, StrInput<'a>>>),
+    Lines(scanner::LineScanner<'a>),
+}
+
 struct Events<'a> {
-    parser: Parser<'a, StrInput<'a>>,
+    source: Source<'a>,
     peeked: Option<Event<'a>>,
 }
 
@@ -73,9 +95,12 @@ impl<'a> Events<'a> {
         if let Some(ev) = self.peeked.take() {
             return Ok(ev);
         }
-        match self.parser.next() {
-            Some(Ok((ev, _span))) => Ok(ev),
-            Some(Err(_)) | None => Err(Unsupported::here()),
+        match &mut self.source {
+            Source::Saphyr(parser) => match parser.next() {
+                Some(Ok((ev, _span))) => Ok(ev),
+                Some(Err(_)) | None => Err(Unsupported::here()),
+            },
+            Source::Lines(scanner) => scanner.next_event(),
         }
     }
 
@@ -910,6 +935,8 @@ mod tests {
 
     /// Parse via the fast path (applying the same post-parse steps as
     /// `from_bytes`) and via the serde oracle; both must succeed and agree.
+    /// When the structural scanner accepts the input, its result must agree
+    /// with the oracle too.
     fn assert_fast_matches_serde(yaml: &str) {
         let mut fast = parse(yaml.as_bytes()).expect("fast path must accept this input");
         fast.cached_version = fast.compute_version();
@@ -923,6 +950,24 @@ mod tests {
             String::from_utf8(crate::Lockfile::encode(&fast).expect("fast encodes")).ok(),
             String::from_utf8(crate::Lockfile::encode(&serde).expect("serde encodes")).ok(),
         );
+
+        if let Some(mut scanned) = parse_with_scanner(yaml) {
+            scanned.cached_version = scanned.compute_version();
+            scanned.build_dependency_index();
+            assert_eq!(scanned, serde, "scanner tier must agree with serde");
+        }
+    }
+
+    /// Like [`assert_fast_matches_serde`], but additionally requires the
+    /// structural scanner tier to accept the input. Guards against silent
+    /// regressions where mainline pnpm shapes start falling through to the
+    /// slower tiers.
+    fn assert_scanner_matches_serde(yaml: &str) {
+        assert!(
+            parse_with_scanner(yaml).is_some(),
+            "structural scanner must accept this input"
+        );
+        assert_fast_matches_serde(yaml);
     }
 
     fn assert_falls_back(yaml: &str) {
@@ -934,7 +979,7 @@ mod tests {
 
     #[test]
     fn test_v9_lockfile_differential() {
-        assert_fast_matches_serde(
+        assert_scanner_matches_serde(
             r#"lockfileVersion: '9.0'
 
 settings:
@@ -1016,7 +1061,7 @@ snapshots:
 
     #[test]
     fn test_v5_lockfile_differential() {
-        assert_fast_matches_serde(
+        assert_scanner_matches_serde(
             r#"lockfileVersion: 5.4
 
 importers:
@@ -1038,7 +1083,7 @@ packages:
 
     #[test]
     fn test_v6_lockfile_differential() {
-        assert_fast_matches_serde(
+        assert_scanner_matches_serde(
             r#"lockfileVersion: '6.0'
 
 importers:
@@ -1061,7 +1106,7 @@ packages:
 
     #[test]
     fn test_time_and_checksums_differential() {
-        assert_fast_matches_serde(
+        assert_scanner_matches_serde(
             r#"lockfileVersion: '9.0'
 pnpmfileChecksum: abc123
 packageExtensionsChecksum: def456
@@ -1188,6 +1233,93 @@ packages:
     }
 
     #[test]
+    fn test_scanner_rejects_what_saphyr_rejects() {
+        // `a: b: c` is a YAML error; accepting it would fabricate a
+        // lockfile where the serde path reports an error.
+        assert!(
+            parse_with_scanner("lockfileVersion: '9.0'\nimporters:\n  .: {}\nx: a: b\n").is_none()
+        );
+        // Plain value ending in a colon is likewise invalid.
+        assert!(
+            parse_with_scanner("lockfileVersion: '9.0'\nimporters:\n  .: {}\nx: a:\n").is_none()
+        );
+    }
+
+    #[test]
+    fn test_scanner_empty_flow_and_null_values() {
+        assert_scanner_matches_serde("lockfileVersion: '9.0'\nimporters:\n  .: {}\n");
+    }
+
+    #[test]
+    fn test_scanner_folded_scalars_differential() {
+        assert_scanner_matches_serde(
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\npackages:\n  a@1.0.0:\n    resolution: {integrity: sha512-a}\n    deprecated: >-\n      This package is deprecated. Use\n      something else instead.\n\n      Second paragraph here.\n  b@1.0.0:\n    resolution: {integrity: sha512-b}\n    deprecated: >\n      trailing newline kept\n",
+        );
+    }
+
+    #[test]
+    fn test_scanner_literal_scalars_differential() {
+        // Literal blocks (`|`, `|-`) keep line breaks and more-indented
+        // lines verbatim; next.js's lockfile uses `|-` for deprecation
+        // messages.
+        assert_scanner_matches_serde(
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\npackages:\n  a@1.0.0:\n    resolution: \
+             {integrity: sha512-a}\n    deprecated: |-\n      line one\n      line two\n\n      \
+             after a blank\n        more indented kept verbatim\n  b@1.0.0:\n    resolution: \
+             {integrity: sha512-b}\n    deprecated: |\n      clipped keeps one newline\n",
+        );
+        // A blank separator line after a block scalar (pnpm emits one
+        // between package entries) is discarded by both strip and clip
+        // chomping.
+        assert_scanner_matches_serde(
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\npackages:\n  a@1.0.0:\n    resolution: \
+             {integrity: sha512-a}\n    deprecated: |-\n      last line\n\n  b@1.0.0:\n    \
+             resolution: {integrity: sha512-b}\n    deprecated: >-\n      folded last\n\n    \
+             engines: {node: '>=10'}\n",
+        );
+        // `|+` keep-chomping stays outside the scanner subset.
+        assert!(
+            parse_with_scanner(
+                "lockfileVersion: '9.0'\nimporters:\n  .: {}\npackages:\n  a@1.0.0:\n    \
+                 resolution: {integrity: sha512-a}\n    deprecated: |+\n      kept\n\n"
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn test_scanner_sequence_forms_differential() {
+        // Block sequence at key indent and deeper, plus flow sequences.
+        assert_scanner_matches_serde(
+            "lockfileVersion: '9.0'\nneverBuiltDependencies:\n- \
+             fsevents\nonlyBuiltDependencies:\n  - esbuild\nimporters:\n  .: {}\npackages:\n  \
+             a@1.0.0:\n    resolution: {integrity: sha512-a}\n    os: [darwin, linux]\n    cpu: \
+             [x64]\n",
+        );
+    }
+
+    #[test]
+    fn test_scanner_quoting_differential() {
+        assert_scanner_matches_serde(
+            "lockfileVersion: '9.0'\nimporters:\n  .:\n    dependencies:\n      '@scope/pkg':\n        specifier: '>=1.0.0'\n        version: 1.0.0\npackages:\n  '@scope/pkg@1.0.0':\n    resolution: {integrity: sha512-a, tarball: 'https://example.com/x, y.tgz'}\n    weird: 'it''s quoted'\n    dquote: \"plain dq\"\n",
+        );
+    }
+
+    #[test]
+    fn test_scanner_comment_and_crlf_handling() {
+        // Full-line comments are meaning-preserving to skip.
+        assert_scanner_matches_serde("lockfileVersion: '9.0'\n# a comment\nimporters:\n  .: {}\n");
+        // Inline comments and CRLF are outside the scanner subset but fine
+        // for the later tiers.
+        let inline_comment = "lockfileVersion: '9.0'\nimporters:\n  .: {}\nx: y # trailing\n";
+        assert!(parse_with_scanner(inline_comment).is_none());
+        assert_fast_matches_serde(inline_comment);
+        let crlf = "lockfileVersion: '9.0'\r\nimporters:\r\n  .: {}\r\n";
+        assert!(parse_with_scanner(crlf).is_none());
+        assert_fast_matches_serde(crlf);
+    }
+
+    #[test]
     fn test_repo_own_lockfile_differential() {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let lockfile_path = std::path::Path::new(manifest_dir)
@@ -1195,6 +1327,6 @@ packages:
             .join("pnpm-lock.yaml");
         let bytes = std::fs::read(&lockfile_path).expect("repo lockfile readable");
         let text = std::str::from_utf8(&bytes).expect("utf8");
-        assert_fast_matches_serde(text);
+        assert_scanner_matches_serde(text);
     }
 }
