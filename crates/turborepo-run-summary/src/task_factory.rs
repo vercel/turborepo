@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use turbopath::AnchoredSystemPath;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_lockfiles::Package;
@@ -176,9 +174,13 @@ where
             })
             .unwrap_or_default();
 
-        // Compute external deps hash from workspace info
-        let hash_of_external_dependencies =
-            get_external_deps_hash(&workspace_info.transitive_dependencies);
+        // The hash is precomputed where the closure is computed; the
+        // recompute below only runs for graphs built without a closure
+        // hasher.
+        let hash_of_external_dependencies = workspace_info
+            .external_deps_hash
+            .clone()
+            .unwrap_or_else(|| get_external_deps_hash(&workspace_info.transitive_dependencies));
 
         Ok(SharedTaskSummary {
             hash,
@@ -250,21 +252,19 @@ fn workspace_relative_log_file(
     Ok(log_dir.join_component(&task_log_filename(task_name)))
 }
 
-/// Computes a hash of external dependencies from transitive dependencies.
-/// This is a pure function that doesn't require any trait access.
-pub fn get_external_deps_hash(transitive_dependencies: &Option<HashSet<Package>>) -> String {
+/// Computes a hash of external dependencies from a workspace's sorted
+/// transitive dependency closure. The closure is already sorted by
+/// `Package`'s `(key, version)` ordering, so no re-sort is needed.
+pub fn get_external_deps_hash(
+    transitive_dependencies: &Option<Vec<std::sync::Arc<Package>>>,
+) -> String {
     use turborepo_hash::{LockFilePackagesRef, TurboHash};
 
     let Some(transitive_dependencies) = transitive_dependencies else {
         return "".into();
     };
 
-    let mut transitive_deps: Vec<&Package> = transitive_dependencies.iter().collect();
-
-    transitive_deps.sort_unstable_by(|a, b| match a.key.cmp(&b.key) {
-        std::cmp::Ordering::Equal => a.version.cmp(&b.version),
-        other => other,
-    });
+    let transitive_deps: Vec<&Package> = transitive_dependencies.iter().map(|pkg| &**pkg).collect();
 
     LockFilePackagesRef(transitive_deps).hash()
 }
