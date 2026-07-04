@@ -508,7 +508,11 @@ pub fn globwalk_with_settings(
     walk_type: WalkType,
     settings: Settings,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
-    let compiled = compile_globs(base_path, include, exclude)?;
+    let compiled = {
+        let _span = tracing::info_span!("globwalk_compile").entered();
+        compile_globs(base_path, include, exclude)?
+    };
+    let _span = tracing::info_span!("globwalk_walk").entered();
     retry_on_emfile(|| walk_compiled_globs(&compiled, walk_type, settings))
 }
 
