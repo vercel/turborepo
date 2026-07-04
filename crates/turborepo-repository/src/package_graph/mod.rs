@@ -1743,9 +1743,10 @@ mod test {
 
     fn canonical_tempdir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp = tempfile::tempdir().unwrap();
+        // dunce: `cargo metadata` reports plain (non-verbatim) paths on
+        // Windows, so the fixture root must be plain too.
         let root = AbsoluteSystemPathBuf::new(
-            tmp.path()
-                .canonicalize()
+            dunce::canonicalize(tmp.path())
                 .unwrap()
                 .to_string_lossy()
                 .to_string(),

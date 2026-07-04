@@ -253,6 +253,20 @@ struct ResolvedDep {
     dev: bool,
 }
 
+/// Normalize a path reported by `cargo metadata` into an
+/// [`AbsoluteSystemPathBuf`]. On Windows, Cargo reports canonicalized
+/// dependency paths in verbatim form (`\\?\C:\...`) while manifest paths
+/// stay plain — `dunce::simplified` strips the verbatim prefix so the two
+/// families compare equal.
+fn metadata_path(path: &str) -> Option<AbsoluteSystemPathBuf> {
+    AbsoluteSystemPathBuf::new(
+        dunce::simplified(std::path::Path::new(path))
+            .to_str()?
+            .to_owned(),
+    )
+    .ok()
+}
+
 fn parse_members(
     repo_root: &AbsoluteSystemPath,
     root_manifest_path: &AbsoluteSystemPath,
@@ -260,7 +274,7 @@ fn parse_members(
 ) -> Vec<ParsedCrate> {
     let mut parsed = Vec::new();
     for package in metadata.packages {
-        let Ok(manifest_path) = AbsoluteSystemPathBuf::new(package.manifest_path.clone()) else {
+        let Some(manifest_path) = metadata_path(&package.manifest_path) else {
             tracing::warn!(
                 "skipping Cargo crate {}: non-absolute manifest path {}",
                 package.name,
@@ -327,7 +341,7 @@ fn parse_members(
             .into_iter()
             .filter_map(|dep| {
                 let path = dep.path?;
-                let dir = AbsoluteSystemPathBuf::new(path).ok()?;
+                let dir = metadata_path(&path)?;
                 Some(ResolvedDep {
                     dir,
                     dev: dep.kind.as_deref() == Some("dev"),
@@ -473,9 +487,10 @@ mod test {
 
     fn tempdir_root() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp = tempfile::tempdir().unwrap();
+        // dunce: `cargo metadata` reports plain (non-verbatim) paths on
+        // Windows, so the fixture root must be plain too.
         let root = AbsoluteSystemPathBuf::new(
-            tmp.path()
-                .canonicalize()
+            dunce::canonicalize(tmp.path())
                 .unwrap()
                 .to_string_lossy()
                 .to_string(),
