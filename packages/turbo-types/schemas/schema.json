@@ -300,6 +300,11 @@
           "default": false,
           "type": "boolean"
         },
+        "experimentalCargoWorkspaces": {
+          "description": "Treat the crates of a Cargo workspace as Turborepo packages.\n\nWhen enabled, Rust crates are discovered via `cargo metadata` and participate in the package graph. Experimental: support is landing incrementally, and this flag currently has no effect.",
+          "default": false,
+          "type": "boolean"
+        },
         "experimentalObservability": {
           "description": "Enable experimental OpenTelemetry exporter support.\n\nWhen enabled, Turborepo will honor the `experimentalObservability` configuration block (if present) to send run summaries to an observability backend.",
           "default": false,
