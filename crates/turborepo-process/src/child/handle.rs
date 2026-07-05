@@ -184,7 +184,12 @@ fn capture_target_identity(pid: Option<u32>) -> Option<TargetIdentity> {
 
 #[cfg(unix)]
 fn descendant_pids(root_pid: libc::pid_t) -> Vec<libc::pid_t> {
-    let mut system = System::new_all();
+    // Only the process table is needed here. `System::new_all` would also
+    // refresh the users list, which on musl calls the non-reentrant
+    // `getgrgid`/`getpwuid`. This function runs concurrently (once per child)
+    // during graceful shutdown, and racing those libc calls corrupts musl's
+    // heap and segfaults (#13254).
+    let mut system = System::new();
     system.refresh_processes();
 
     let root_pid = sysinfo::Pid::from_u32(root_pid as u32);
