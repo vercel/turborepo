@@ -15,6 +15,18 @@ use crate::{
     MissingTurboJsonExtends, TaskDefinitionFromProcessed, TaskDefinitionResult, TurboJsonLoader,
 };
 
+/// Memo key for resolved task definitions: the turbo.json chain (by
+/// address; loader-owned for the duration of a build), the task name, and
+/// the two package-dependent inputs that survive resolution — path to the
+/// repo root and script presence. See `task_definition_cached`.
+#[derive(PartialEq, Eq, Hash)]
+pub(super) struct TaskDefMemoKey {
+    chain: Vec<usize>,
+    task_name: TaskName<'static>,
+    path_to_root: turbopath::RelativeUnixPathBuf,
+    package_has_script: bool,
+}
+
 impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
     // Helper methods used when building the engine
     /// Checks if there's a task definition somewhere in the repository
@@ -174,52 +186,8 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         task_id: &Spanned<TaskId>,
         task_name: &TaskName,
         chain_cache: &mut HashMap<PackageName, Vec<&'b TurboJson>>,
+        def_memo: &mut HashMap<TaskDefMemoKey, TaskDefinition>,
     ) -> Result<TaskDefinition, BuilderError> {
-        let processed_task_definition = ProcessedTaskDefinition::from_iter(
-            self.task_definition_chain_cached(turbo_json_loader, task_id, task_name, chain_cache)?,
-        );
-        let had_explicit_inputs = processed_task_definition.inputs.is_some();
-        let path_to_root = self.path_to_root(task_id.as_inner())?;
-        let mut task_def =
-            TaskDefinition::from_processed(processed_task_definition, &path_to_root)?;
-
-        if !self.future_flags.incremental_tasks {
-            task_def.incremental = None;
-        }
-
-        // Only prepend global inputs to tasks whose package actually has a
-        // script for this task. Phantom/transit tasks (packages without a
-        // matching script that exist solely for dependency ordering via
-        // `dependsOn: ["^task"]`) should not hash global input files — they
-        // don't execute, and including the files would cause their hash to
-        // change and cascade into downstream tasks that depend on them.
-        let package_has_script = self
-            .package_graph
-            .package_json(&PackageName::from(task_id.package()))
-            .and_then(|pj| pj.scripts.get(task_id.task()))
-            .is_some_and(|script| !script.is_empty());
-
-        if !self.global_deps.is_empty() && package_has_script {
-            crate::task_definition::prepend_global_inputs(
-                &mut task_def.inputs,
-                had_explicit_inputs,
-                &self.global_deps,
-                &path_to_root,
-            );
-        }
-
-        Ok(task_def)
-    }
-
-    /// Like `task_definition_chain` but caches the turbo.json chain per
-    /// package.
-    fn task_definition_chain_cached<'b>(
-        &self,
-        turbo_json_loader: &'b L,
-        task_id: &Spanned<TaskId>,
-        task_name: &TaskName,
-        chain_cache: &mut HashMap<PackageName, Vec<&'b TurboJson>>,
-    ) -> Result<Vec<ProcessedTaskDefinition>, BuilderError> {
         let package_name = PackageName::from(task_id.package());
         let turbo_json_chain = match chain_cache.get(&package_name) {
             Some(cached) => cached.clone(),
@@ -230,13 +198,82 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             }
         };
 
-        Self::resolve_task_definitions_from_chain(
-            turbo_json_chain,
-            task_id,
-            task_name,
-            self.is_single,
-            self.should_validate_engine,
-        )
+        let path_to_root = self.path_to_root(task_id.as_inner())?;
+        let package_has_script = self.package_has_script(task_id.as_inner());
+
+        // Most tasks resolve to an identical definition: the same turbo.json
+        // chain and task name, differing only by the package's depth (for
+        // `$TURBO_ROOT$`/global-input anchoring) and whether the package has
+        // a matching script. Memoize on exactly those inputs. The one way a
+        // definition can additionally depend on the package is a
+        // package-scoped task key (`web#build`) in the chain, which
+        // `TurboJson::task` consults first — skip the memo for those.
+        let memo_key = {
+            let package_scoped = turbo_json_chain.iter().any(|turbo_json| {
+                turbo_json
+                    .tasks
+                    .get(&task_id.as_inner().as_task_name())
+                    .is_some()
+            });
+            (!package_scoped).then(|| TaskDefMemoKey {
+                chain: turbo_json_chain
+                    .iter()
+                    .map(|turbo_json| *turbo_json as *const TurboJson as usize)
+                    .collect(),
+                task_name: task_name.clone().into_owned(),
+                path_to_root: path_to_root.clone(),
+                package_has_script,
+            })
+        };
+        if let Some(key) = &memo_key
+            && let Some(cached) = def_memo.get(key)
+        {
+            return Ok(cached.clone());
+        }
+
+        let processed_task_definition =
+            ProcessedTaskDefinition::from_iter(Self::resolve_task_definitions_from_chain(
+                turbo_json_chain,
+                task_id,
+                task_name,
+                self.is_single,
+                self.should_validate_engine,
+            )?);
+        let had_explicit_inputs = processed_task_definition.inputs.is_some();
+        let mut task_def =
+            TaskDefinition::from_processed(processed_task_definition, &path_to_root)?;
+
+        if !self.future_flags.incremental_tasks {
+            task_def.incremental = None;
+        }
+
+        if !self.global_deps.is_empty() && package_has_script {
+            crate::task_definition::prepend_global_inputs(
+                &mut task_def.inputs,
+                had_explicit_inputs,
+                &self.global_deps,
+                &path_to_root,
+            );
+        }
+
+        if let Some(key) = memo_key {
+            def_memo.insert(key, task_def.clone());
+        }
+
+        Ok(task_def)
+    }
+
+    /// Whether the task's package has a non-empty script for it. Tasks
+    /// without one are phantom/transit tasks (they exist solely for
+    /// dependency ordering via `dependsOn: ["^task"]`) and must not hash
+    /// global input files — they don't execute, and including the files
+    /// would cause their hash to change and cascade into downstream tasks
+    /// that depend on them.
+    fn package_has_script(&self, task_id: &TaskId) -> bool {
+        self.package_graph
+            .package_json(&PackageName::from(task_id.package()))
+            .and_then(|pj| pj.scripts.get(task_id.task()))
+            .is_some_and(|script| !script.is_empty())
     }
 
     pub fn task_definition_chain(
