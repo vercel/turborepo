@@ -500,7 +500,13 @@ impl RunBuilder {
                 // `ensure_transitive_closures` call before package filtering,
                 // the earliest possible consumer (`--affected` with a changed
                 // lockfile compares closures).
-                .defer_transitive_closures(true);
+                .defer_transitive_closures(true)
+                // External dependency hashes are computed on the same
+                // background thread, straight from the sorted closures, so
+                // task hashing and run summaries read them as fields.
+                .with_closure_hasher(std::sync::Arc::new(
+                    turborepo_task_hash::hash_sorted_closures,
+                ));
 
             let graph = builder
                 .build()

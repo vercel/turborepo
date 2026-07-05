@@ -34,6 +34,7 @@ pub struct PackageGraphBuilder<'a, T> {
     package_discovery: T,
     package_manager: Option<PackageManager>,
     defer_closures: bool,
+    closure_hasher: Option<ClosureHasher>,
 }
 
 #[derive(Debug, Diagnostic, thiserror::Error)]
@@ -106,6 +107,7 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
             lockfile: None,
             package_manager: None,
             defer_closures: false,
+            closure_hasher: None,
         }
     }
 
@@ -146,6 +148,16 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         self
     }
 
+    /// Provide a function that hashes each workspace's sorted external
+    /// dependency closure. When set, `PackageInfo::external_deps_hash` is
+    /// populated wherever closures are computed (inline or deferred).
+    /// Injected because the capnp-based hasher lives in `turborepo-hash`,
+    /// which transitively depends on this crate.
+    pub fn with_closure_hasher(mut self, hasher: ClosureHasher) -> Self {
+        self.closure_hasher = Some(hasher);
+        self
+    }
+
     pub fn with_lockfile(mut self, lockfile: Option<Box<dyn Lockfile>>) -> Self {
         self.lockfile = lockfile;
         self
@@ -167,6 +179,7 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
             package_discovery: discovery,
             package_manager: self.package_manager,
             defer_closures: self.defer_closures,
+            closure_hasher: self.closure_hasher,
         }
     }
 }
@@ -232,6 +245,7 @@ struct BuildState<'a, S, T> {
     lockfile: Option<Box<dyn Lockfile>>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     defer_closures: bool,
+    closure_hasher: Option<ClosureHasher>,
     state: std::marker::PhantomData<S>,
     /// The JavaScript toolchain, typed. Package-manager resolution for
     /// dependency splitting and lockfile handling reaches through this —
@@ -275,6 +289,7 @@ where
             repo_root,
             root_package_json,
             defer_closures,
+            closure_hasher,
             is_single_package: single,
 
             package_jsons,
@@ -327,6 +342,7 @@ where
             node_lookup,
             root_package_json,
             defer_closures,
+            closure_hasher,
             state: std::marker::PhantomData,
             javascript,
             toolchains,
@@ -438,6 +454,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             javascript,
             toolchains,
             defer_closures,
+            closure_hasher,
             ..
         } = self;
         Ok(BuildState {
@@ -453,6 +470,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             javascript,
             toolchains,
             defer_closures,
+            closure_hasher,
             package_jsons: None,
             state: std::marker::PhantomData,
         })
@@ -637,6 +655,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             javascript,
             toolchains,
             defer_closures,
+            closure_hasher,
             ..
         } = self;
         Ok(BuildState {
@@ -650,6 +669,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             root_package_json,
             lockfile,
             defer_closures,
+            closure_hasher,
             package_jsons: None,
             state: std::marker::PhantomData,
             javascript,
@@ -657,6 +677,15 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
         })
     }
 }
+
+/// Computes per-workspace external dependency hashes from sorted closures,
+/// keyed by workspace unix directory. See
+/// [`PackageGraphBuilder::with_closure_hasher`].
+pub type ClosureHasher = Arc<
+    dyn Fn(&HashMap<String, Vec<Arc<turborepo_lockfiles::Package>>>) -> HashMap<String, String>
+        + Send
+        + Sync,
+>;
 
 impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
     fn all_external_dependencies(
@@ -693,13 +722,20 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
 
         // We cannot ignore missing packages in this context, it would indicate a
         // malformed or stale lockfile.
-        let mut closures = turborepo_lockfiles::all_transitive_closures(
+        let mut closures = turborepo_lockfiles::all_transitive_closures_sorted(
             lockfile,
             self.all_external_dependencies()?,
             false,
         )?;
+        let mut hashes = self
+            .closure_hasher
+            .as_ref()
+            .map(|hasher| hasher(&closures))
+            .unwrap_or_default();
         for (_, entry) in self.workspaces.iter_mut() {
-            entry.transitive_dependencies = closures.remove(&entry.unix_dir_str()?);
+            let dir = entry.unix_dir_str()?;
+            entry.transitive_dependencies = closures.remove(&dir);
+            entry.external_deps_hash = hashes.remove(&dir);
         }
         Ok(())
     }
@@ -719,15 +755,23 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                 match self.all_external_dependencies() {
                     Ok(external_deps) => {
                         let (tx, rx) = std::sync::mpsc::sync_channel(1);
+                        let hasher = self.closure_hasher.clone();
                         let spawned = std::thread::Builder::new()
                             .name("turbo-closures".into())
                             .spawn(move || {
-                                let closures = turborepo_lockfiles::all_transitive_closures(
+                                let result = turborepo_lockfiles::all_transitive_closures_sorted(
                                     lockfile.as_ref(),
                                     external_deps,
                                     false,
-                                );
-                                let _ = tx.send(closures.map_err(|e| e.to_string()));
+                                )
+                                .map(|closures| {
+                                    let hashes = hasher
+                                        .as_ref()
+                                        .map(|hasher| hasher(&closures))
+                                        .unwrap_or_default();
+                                    super::DeferredClosures { closures, hashes }
+                                });
+                                let _ = tx.send(result.map_err(|e| e.to_string()));
                             });
                         match spawned {
                             Ok(_) => deferred_closures = Some(rx),

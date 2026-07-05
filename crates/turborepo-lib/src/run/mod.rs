@@ -1061,8 +1061,12 @@ impl Run {
         let global_file_inputs =
             global_file_result.ok_or(Error::GlobalFileHashTaskIncomplete)??;
 
-        let root_external_dependencies_hash =
-            is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
+        let root_external_dependencies_hash = is_monorepo.then(|| {
+            root_workspace
+                .external_deps_hash
+                .clone()
+                .unwrap_or_else(|| get_external_deps_hash(&root_workspace.transitive_dependencies))
+        });
 
         let pass_through_env = match env_mode {
             EnvMode::Loose => {

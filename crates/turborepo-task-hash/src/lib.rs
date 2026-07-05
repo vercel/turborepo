@@ -247,17 +247,20 @@ impl PackageInputsHashes {
     }
 }
 
-/// Compute the external dependency hash for every workspace in parallel.
-/// Many tasks share the same package, so hashing once per package avoids
-/// re-sorting transitive dependencies for every task.
+/// Collect the external dependency hash for every workspace, keyed by
+/// package name. Hashes are precomputed where closures are computed (see
+/// [`hash_sorted_closures`]); the per-package fallback only runs for graphs
+/// built without a closure hasher.
 #[tracing::instrument(skip_all)]
 pub fn compute_external_deps_hashes<'b>(
     workspaces: impl Iterator<Item = (&'b PackageName, &'b PackageInfo)>,
 ) -> HashMap<String, String> {
-    let ws: Vec<_> = workspaces.collect();
-    ws.par_iter()
+    workspaces
         .map(|(name, info)| {
-            let hash = get_external_deps_hash(&info.transitive_dependencies);
+            let hash = info
+                .external_deps_hash
+                .clone()
+                .unwrap_or_else(|| get_external_deps_hash(&info.transitive_dependencies));
             (name.as_str().to_owned(), hash)
         })
         .collect()
@@ -717,22 +720,36 @@ pub fn deferred_task_hash_message(inputs: &TaskInputs) -> &'static str {
 }
 
 pub fn get_external_deps_hash(
-    transitive_dependencies: &Option<HashSet<turborepo_lockfiles::Package>>,
+    transitive_dependencies: &Option<Vec<Arc<turborepo_lockfiles::Package>>>,
 ) -> String {
     let Some(transitive_dependencies) = transitive_dependencies else {
         return "".into();
     };
 
-    // Collect references instead of cloning each Package (which has two Strings).
-    let mut transitive_deps: Vec<&turborepo_lockfiles::Package> =
-        transitive_dependencies.iter().collect();
-
-    transitive_deps.sort_unstable_by(|a, b| match a.key.cmp(&b.key) {
-        std::cmp::Ordering::Equal => a.version.cmp(&b.version),
-        other => other,
-    });
+    // The closure is already sorted by `Package`'s `(key, version)` ordering,
+    // so hashing is a single linear pass.
+    let transitive_deps: Vec<&turborepo_lockfiles::Package> =
+        transitive_dependencies.iter().map(|pkg| &**pkg).collect();
 
     LockFilePackagesRef(transitive_deps).hash()
+}
+
+/// Hash every workspace's sorted external dependency closure, keyed by the
+/// closure map's own keys. Intended as the `PackageGraphBuilder`
+/// closure-hasher, so hashes are computed where closures are computed
+/// (on the deferred-closure background thread) instead of after graph
+/// construction.
+pub fn hash_sorted_closures(
+    closures: &HashMap<String, Vec<Arc<turborepo_lockfiles::Package>>>,
+) -> HashMap<String, String> {
+    closures
+        .par_iter()
+        .map(|(ws, closure)| {
+            let refs: Vec<&turborepo_lockfiles::Package> =
+                closure.iter().map(|pkg| &**pkg).collect();
+            (ws.clone(), LockFilePackagesRef(refs).hash())
+        })
+        .collect()
 }
 
 pub fn get_internal_deps_hash(
@@ -1199,11 +1216,20 @@ mod test {
         assert_eq!(result[3].1, "dddddddddddddddddddddddddddddddddddddddd");
     }
 
+    fn sorted_closure(
+        packages: Vec<turborepo_lockfiles::Package>,
+    ) -> Vec<Arc<turborepo_lockfiles::Package>> {
+        let mut closure: Vec<Arc<turborepo_lockfiles::Package>> =
+            packages.into_iter().map(Arc::new).collect();
+        closure.sort_unstable();
+        closure
+    }
+
     #[test]
     fn test_external_deps_hash_deterministic() {
         use turborepo_lockfiles::Package;
 
-        let deps: HashSet<Package> = vec![
+        let deps = sorted_closure(vec![
             Package {
                 key: "react".to_string(),
                 version: "18.0.0".to_string(),
@@ -1216,9 +1242,7 @@ mod test {
                 key: "typescript".to_string(),
                 version: "5.0.0".to_string(),
             },
-        ]
-        .into_iter()
-        .collect();
+        ]);
 
         let hash1 = get_external_deps_hash(&Some(deps.clone()));
         let hash2 = get_external_deps_hash(&Some(deps));
@@ -1231,48 +1255,53 @@ mod test {
         let hash_none = get_external_deps_hash(&None);
         assert_eq!(hash_none, "", "None deps should produce empty hash");
 
-        let hash_empty = get_external_deps_hash(&Some(HashSet::new()));
+        let hash_empty = get_external_deps_hash(&Some(Vec::new()));
         assert!(
             !hash_empty.is_empty(),
-            "empty set should produce non-empty hash"
+            "empty closure should produce non-empty hash"
         );
     }
 
+    /// The linear hash of a pre-sorted closure must be byte-identical to the
+    /// legacy path, which collected a `HashSet` and sorted by
+    /// `(key, version)` before hashing.
     #[test]
-    fn test_external_deps_hash_order_independent() {
+    fn test_external_deps_hash_matches_legacy_sort_then_hash() {
         use turborepo_lockfiles::Package;
 
-        let deps1: HashSet<Package> = vec![
-            Package {
-                key: "a".to_string(),
-                version: "1.0".to_string(),
-            },
-            Package {
-                key: "b".to_string(),
-                version: "2.0".to_string(),
-            },
-        ]
-        .into_iter()
-        .collect();
-
-        let deps2: HashSet<Package> = vec![
+        let packages = vec![
             Package {
                 key: "b".to_string(),
                 version: "2.0".to_string(),
             },
             Package {
                 key: "a".to_string(),
+                version: "1.1".to_string(),
+            },
+            Package {
+                key: "a".to_string(),
                 version: "1.0".to_string(),
             },
-        ]
-        .into_iter()
-        .collect();
+            Package {
+                key: "c".to_string(),
+                version: "0.1".to_string(),
+            },
+        ];
 
-        let hash1 = get_external_deps_hash(&Some(deps1));
-        let hash2 = get_external_deps_hash(&Some(deps2));
+        let legacy_hash = {
+            let set: HashSet<Package> = packages.iter().cloned().collect();
+            let mut refs: Vec<&Package> = set.iter().collect();
+            refs.sort_unstable_by(|a, b| match a.key.cmp(&b.key) {
+                std::cmp::Ordering::Equal => a.version.cmp(&b.version),
+                other => other,
+            });
+            LockFilePackagesRef(refs).hash()
+        };
+
+        let sorted_hash = get_external_deps_hash(&Some(sorted_closure(packages)));
         assert_eq!(
-            hash1, hash2,
-            "hash should be order-independent since we sort"
+            legacy_hash, sorted_hash,
+            "sorted-closure hash must match the legacy sort-then-hash path"
         );
     }
 

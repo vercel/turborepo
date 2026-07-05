@@ -206,6 +206,30 @@ pub fn all_transitive_closures<L: Lockfile + ?Sized>(
     workspaces: HashMap<String, BTreeMap<String, String>>,
     ignore_missing_packages: bool,
 ) -> Result<HashMap<String, HashSet<Package>>, Error> {
+    Ok(
+        all_transitive_closures_sorted(lockfile, workspaces, ignore_missing_packages)?
+            .into_iter()
+            .map(|(ws, closure)| (ws, closure.into_iter().map(|pkg| (*pkg).clone()).collect()))
+            .collect(),
+    )
+}
+
+/// Per-workspace transitive closures keyed by workspace directory, each
+/// sorted by `Package`'s `(key, version)` ordering with members shared via
+/// `Arc`.
+pub type SortedClosures = HashMap<String, Vec<Arc<Package>>>;
+
+/// Like [`all_transitive_closures`], but each closure is a `Vec` sorted by
+/// `Package`'s `(key, version)` ordering with members shared via `Arc`.
+/// The sorted form lets consumers hash or diff closures without re-sorting,
+/// and the `Arc` sharing avoids cloning two `String`s per closure member per
+/// workspace (shared dependencies are the overwhelming majority in a
+/// monorepo).
+pub fn all_transitive_closures_sorted<L: Lockfile + ?Sized>(
+    lockfile: &L,
+    workspaces: HashMap<String, BTreeMap<String, String>>,
+    ignore_missing_packages: bool,
+) -> Result<SortedClosures, Error> {
     // Shared DP fast path: computes each closure once over the global
     // package graph instead of once per workspace. Only sound when the
     // lockfile proves every transitive edge resolves identically across
@@ -237,7 +261,9 @@ pub fn all_transitive_closures<L: Lockfile + ?Sized>(
                 &deps_cache,
                 &interner,
             )?;
-            Ok((workspace, closure))
+            let mut sorted: Vec<Arc<Package>> = closure.into_iter().map(Arc::new).collect();
+            sorted.sort_unstable();
+            Ok((workspace, sorted))
         })
         .collect()
 }
