@@ -14,6 +14,7 @@
 pub mod change_mapper;
 pub mod discovery;
 pub mod inference;
+mod manifest_parser;
 pub mod package_graph;
 pub mod package_json;
 pub mod package_manager;

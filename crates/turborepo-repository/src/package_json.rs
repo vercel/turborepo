@@ -1,18 +1,10 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Result;
-use biome_deserialize::Text;
-use biome_deserialize_macros::Deserializable;
-use biome_diagnostics::DiagnosticExt;
-use biome_json_parser::JsonParserOptions;
 use miette::Diagnostic;
 use serde::Serialize;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
-use turborepo_errors::{ParseDiagnostic, Spanned, WithMetadata};
-use turborepo_unescape::UnescapedString;
+use turborepo_errors::{ParseDiagnostic, Spanned};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DependencyKind {
@@ -63,33 +55,6 @@ pub struct PnpmConfig {
     pub other: BTreeMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserializable)]
-pub struct RawPackageJson {
-    pub name: Option<Spanned<UnescapedString>>,
-    pub version: Option<UnescapedString>,
-    pub package_manager: Option<Spanned<UnescapedString>>,
-    pub dev_engines: Option<Spanned<serde_json::Value>>,
-    pub dependencies: Option<BTreeMap<String, UnescapedString>>,
-    pub dev_dependencies: Option<BTreeMap<String, UnescapedString>>,
-    pub optional_dependencies: Option<BTreeMap<String, UnescapedString>>,
-    pub peer_dependencies: Option<BTreeMap<String, UnescapedString>>,
-    pub scripts: BTreeMap<String, Spanned<UnescapedString>>,
-    pub resolutions: Option<BTreeMap<String, UnescapedString>>,
-    pub pnpm: Option<RawPnpmConfig>,
-    pub patched_dependencies: Option<BTreeMap<String, RelativeUnixPathBuf>>,
-    // Unstructured fields kept for round trip capabilities
-    #[deserializable(rest)]
-    pub other: BTreeMap<Text, serde_json::Value>,
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Eq, Deserializable)]
-pub struct RawPnpmConfig {
-    pub patched_dependencies: Option<BTreeMap<String, RelativeUnixPathBuf>>,
-    // Unstructured config options kept for round trip capabilities
-    #[deserializable(rest)]
-    pub other: BTreeMap<Text, serde_json::Value>,
-}
-
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
     #[error("Unable to read package.json: {0}")]
@@ -101,83 +66,6 @@ pub enum Error {
     Parse(#[related] Vec<ParseDiagnostic>),
 }
 
-impl WithMetadata for RawPackageJson {
-    fn add_text(&mut self, text: Arc<str>) {
-        if let Some(ref mut package_manager) = self.package_manager {
-            package_manager.add_text(text.clone());
-        }
-        if let Some(ref mut dev_engines) = self.dev_engines {
-            dev_engines.add_text(text.clone());
-        }
-        self.scripts
-            .iter_mut()
-            .for_each(|(_, v)| v.add_text(text.clone()));
-    }
-
-    fn add_path(&mut self, path: Arc<str>) {
-        if let Some(ref mut package_manager) = self.package_manager {
-            package_manager.add_path(path.clone());
-        }
-        if let Some(ref mut dev_engines) = self.dev_engines {
-            dev_engines.add_path(path.clone());
-        }
-        self.scripts
-            .iter_mut()
-            .for_each(|(_, v)| v.add_path(path.clone()));
-    }
-}
-
-impl From<RawPackageJson> for PackageJson {
-    fn from(raw: RawPackageJson) -> Self {
-        Self {
-            name: raw.name.map(|s| s.map(|s| s.into())),
-            version: raw.version.map(|s| s.into()),
-            package_manager: raw.package_manager.map(|s| s.map(|s| s.into())),
-            dev_engines: raw.dev_engines,
-            dependencies: raw
-                .dependencies
-                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
-            dev_dependencies: raw
-                .dev_dependencies
-                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
-            optional_dependencies: raw
-                .optional_dependencies
-                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
-            peer_dependencies: raw
-                .peer_dependencies
-                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
-            scripts: raw
-                .scripts
-                .into_iter()
-                .map(|(k, v)| (k, v.map(|v| v.into())))
-                .collect(),
-            resolutions: raw
-                .resolutions
-                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
-            pnpm: raw.pnpm.map(|p| p.into()),
-            patched_dependencies: raw.patched_dependencies.map(|m| m.into_iter().collect()),
-            other: raw
-                .other
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v))
-                .collect(),
-        }
-    }
-}
-
-impl From<RawPnpmConfig> for PnpmConfig {
-    fn from(raw: RawPnpmConfig) -> Self {
-        Self {
-            patched_dependencies: raw.patched_dependencies,
-            other: raw
-                .other
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v))
-                .collect(),
-        }
-    }
-}
-
 impl PackageJson {
     pub fn load(path: &AbsoluteSystemPath) -> Result<PackageJson, Error> {
         tracing::trace!("loading package.json from {}", path);
@@ -186,33 +74,7 @@ impl PackageJson {
     }
 
     pub fn load_from_str(contents: &str, path: &str) -> Result<PackageJson, Error> {
-        let (result, errors): (Option<RawPackageJson>, _) =
-            turborepo_errors::json::deserialize_from_json_str(
-                contents,
-                JsonParserOptions::default(),
-                path,
-            );
-        if !errors.is_empty() {
-            return Err(Error::Parse(
-                errors
-                    .into_iter()
-                    .map(|d| {
-                        d.with_file_source_code(contents)
-                            .with_file_path(path)
-                            .as_ref()
-                            .into()
-                    })
-                    .collect(),
-            ));
-        }
-
-        // We expect a result if there are no errors
-        let mut package_json = result.expect("no parse errors produced but no result");
-
-        package_json.add_path(path.into());
-        package_json.add_text(contents.into());
-
-        Ok(package_json.into())
+        crate::manifest_parser::parse(contents, path)
     }
 
     // Utility method for easy construction of package.json during testing
