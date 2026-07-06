@@ -32,6 +32,9 @@ importers:
       semver:
         specifier: 7.5.2
         version: 7.5.2
+      turbo:
+        specifier: 2.10.4-canary.2
+        version: 2.10.4-canary.2
       typescript:
         specifier: npm:@typescript/typescript6@^6.0.1
         version: '@typescript/typescript6@6.0.1'
@@ -4659,6 +4662,36 @@ packages:
 
   '@tsconfig/node16@1.0.4':
     resolution: {integrity: sha512-vxhUy4J8lyeyinH7Azl1pdd43GJhZH/tP2weN8TntQblOY+A0XbT8DJk1/oCPuOOyg/Ja757rG0CgHcWC8OfMA==}
+
+  '@turbo/darwin-64@2.10.4-canary.2':
+    resolution: {integrity: sha512-D0XoiMVSseV0bzcpD7mT+H4j1TVz/gFJKf4wMm1k7x3jHZtAIfBUphLqf7dTeWhAlCfMJOqML+eW7KHH1wmetw==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@turbo/darwin-arm64@2.10.4-canary.2':
+    resolution: {integrity: sha512-PG2qjBXa53lWPBPIivUv2S933C5XD2jnO8/s+9QARtqHrCPj2UJXAmy1sYhcZ6gdlWtZ5l01qI/W+QzgbGXUpQ==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@turbo/linux-64@2.10.4-canary.2':
+    resolution: {integrity: sha512-vKiQXQRiDOrpcOZ0TfjiESQFUsEDHoPwhFtZfwLpQWLBdaO7wkn4asnWLmixYyMz+gkEFEPpt8YnWoiwOS/SwQ==}
+    cpu: [x64]
+    os: [linux]
+
+  '@turbo/linux-arm64@2.10.4-canary.2':
+    resolution: {integrity: sha512-WCuxKm57Jc5/Ob0bqYz7PSq7sNsqd2gQoTb3YMT3FGgKHxq9kFCRVqNni9Q4niIDjKY936g2gcD6eORC4ggqqQ==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@turbo/windows-64@2.10.4-canary.2':
+    resolution: {integrity: sha512-1geqNv/ow2iOc3nGxB3tJzQ5xGVsl0DjYPwZHOwHavzD19Bu5jKvD6itTKhigkOI4n+ZNW3h9iOCPt6gdWVJfA==}
+    cpu: [x64]
+    os: [win32]
+
+  '@turbo/windows-arm64@2.10.4-canary.2':
+    resolution: {integrity: sha512-GiIXahVYsuDLTOAKEAjUHv9OsbCc6R25Yo5834fh+9Qu41Kuc+zW6xHY0jBQVOp9VihnCwuGsd1gLqUMTql1yA==}
+    cpu: [arm64]
+    os: [win32]
 
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
@@ -9656,6 +9689,10 @@ packages:
     cpu: [arm64]
     os: [win32]
 
+  turbo@2.10.4-canary.2:
+    resolution: {integrity: sha512-hcBB6pTZeARmo76dAStBnyAzRvsqAx6BJlfFgB7D0QQfVPrMHdKO0cFHNqAviqM49xIZoTbKCf12Dy0VsMtJaA==}
+    hasBin: true
+
   turbo@2.8.3:
     resolution: {integrity: sha512-8Osxz5Tu/Dw2kb31EAY+nhq/YZ3wzmQSmYa1nIArqxgCAldxv9TPlrAiaBUDVnKA4aiPn0OFBD1ACcpc5VFOAQ==}
     hasBin: true
@@ -13595,6 +13632,24 @@ snapshots:
     optional: true
 
   '@tsconfig/node16@1.0.4':
+    optional: true
+
+  '@turbo/darwin-64@2.10.4-canary.2':
+    optional: true
+
+  '@turbo/darwin-arm64@2.10.4-canary.2':
+    optional: true
+
+  '@turbo/linux-64@2.10.4-canary.2':
+    optional: true
+
+  '@turbo/linux-arm64@2.10.4-canary.2':
+    optional: true
+
+  '@turbo/windows-64@2.10.4-canary.2':
+    optional: true
+
+  '@turbo/windows-arm64@2.10.4-canary.2':
     optional: true
 
   '@tybys/wasm-util@0.10.1':
@@ -19403,6 +19458,15 @@ snapshots:
 
   turbo-windows-arm64@2.8.3:
     optional: true
+
+  turbo@2.10.4-canary.2:
+    optionalDependencies:
+      '@turbo/darwin-64': 2.10.4-canary.2
+      '@turbo/darwin-arm64': 2.10.4-canary.2
+      '@turbo/linux-64': 2.10.4-canary.2
+      '@turbo/linux-arm64': 2.10.4-canary.2
+      '@turbo/windows-64': 2.10.4-canary.2
+      '@turbo/windows-arm64': 2.10.4-canary.2
 
   turbo@2.8.3:
     optionalDependencies:
