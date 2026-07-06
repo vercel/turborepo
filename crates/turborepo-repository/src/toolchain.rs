@@ -104,6 +104,19 @@ pub struct DiscoveredPackage {
     /// Absolute path to the package's native manifest (`package.json`,
     /// `Cargo.toml`, ...).
     pub manifest_path: AbsoluteSystemPathBuf,
+    /// External-dependency identities for this package, when the toolchain
+    /// resolves them at discovery time. They feed the package's
+    /// external-dependency hash: a task's hash changes exactly when an
+    /// identity in its package's set changes. Cargo computes these from
+    /// Cargo.lock (per-crate transitive closures) plus a compiler-version
+    /// stamp.
+    ///
+    /// `None` defers to the toolchain's own pipeline. Known debt (see
+    /// module docs): JavaScript's closures are computed by the graph
+    /// builder's lockfile phase — deliberately concurrent with run setup —
+    /// rather than through this field; folding that in requires a
+    /// deferred-aware trait surface.
+    pub external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -491,6 +504,10 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
                         Ok(DiscoveredPackage {
                             descriptor,
                             manifest_path: workspace.package_json,
+                            // JavaScript closures come from the builder's
+                            // (deliberately concurrent) lockfile phase; see
+                            // the field docs.
+                            external_dependencies: None,
                         })
                     })
                     .collect::<Result<Vec<_>, Error>>()
