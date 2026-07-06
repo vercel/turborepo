@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt,
-    sync::OnceLock,
+    sync::{Arc, Mutex, OnceLock},
 };
 
 use itertools::Itertools;
@@ -30,6 +30,18 @@ pub use crate::package_json::DependencyKind;
 
 pub const ROOT_PKG_NAME: &str = "//";
 
+/// Background transitive-closure result: per-workspace sorted closures and
+/// their external-dependency hashes, keyed by workspace unix directory.
+pub(crate) struct DeferredClosures {
+    pub closures: HashMap<String, Vec<Arc<turborepo_lockfiles::Package>>>,
+    pub hashes: HashMap<String, String>,
+}
+
+/// Channel end delivering the background transitive-closure result, or a
+/// rendered error message.
+pub(crate) type DeferredClosuresReceiver =
+    std::sync::mpsc::Receiver<Result<DeferredClosures, String>>;
+
 #[derive(Debug)]
 pub struct PackageGraph {
     graph: petgraph::Graph<PackageNode, DependencyKind>,
@@ -40,8 +52,12 @@ pub struct PackageGraph {
     packages: HashMap<PackageName, PackageInfo>,
     root_package_json: PackageJson,
     package_manager: PackageManager,
-    lockfile: Option<Box<dyn Lockfile>>,
+    lockfile: Option<Arc<dyn Lockfile>>,
     repo_root: AbsoluteSystemPathBuf,
+    /// Receiver for background transitive-closure computation when the graph
+    /// was built with deferred closures. Consumed (exactly once) by
+    /// [`Self::ensure_transitive_closures`].
+    deferred_closures: Mutex<Option<DeferredClosuresReceiver>>,
     external_dep_to_internal_dependents:
         OnceLock<HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>>>,
     /// Lazily computed internal dependencies of the root package. They are
@@ -89,7 +105,13 @@ pub struct PackageInfo {
     /// Path to the package's native manifest, anchored to the repo root.
     pub package_json_path: AnchoredSystemPathBuf,
     pub unresolved_external_dependencies: Option<BTreeMap<PackageKey, PackageVersion>>, /* name -> version */
-    pub transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
+    /// The workspace's external dependency closure, sorted by `Package`'s
+    /// `(key, version)` ordering. Members are `Arc`-shared across workspaces.
+    pub transitive_dependencies: Option<Vec<Arc<turborepo_lockfiles::Package>>>,
+    /// Hash of `transitive_dependencies`, precomputed where the closure is
+    /// computed so task hashing and run summaries never re-sort or re-hash
+    /// closures. `Some` exactly when `transitive_dependencies` is `Some`.
+    pub external_deps_hash: Option<String>,
     /// The toolchain that discovered this package. Defaults to JavaScript.
     pub toolchain: crate::toolchain::ToolchainId,
 }
@@ -356,6 +378,46 @@ impl PackageGraph {
 
     pub fn lockfile(&self) -> Option<&dyn Lockfile> {
         self.lockfile.as_deref()
+    }
+
+    /// Join the background transitive-closure computation (if the graph was
+    /// built with deferred closures) and install the results. Idempotent and
+    /// cheap when there is nothing to join. Must be called before any
+    /// consumer of `PackageInfo::transitive_dependencies` runs.
+    pub fn ensure_transitive_closures(&mut self) {
+        let receiver = self
+            .deferred_closures
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take();
+        let Some(receiver) = receiver else {
+            return;
+        };
+        match receiver.recv() {
+            Ok(Ok(DeferredClosures {
+                mut closures,
+                mut hashes,
+            })) => {
+                for (_, info) in self.packages.iter_mut() {
+                    // Mirror of the filter in the inline path
+                    // (`populate_transitive_dependencies`): a non-JS package
+                    // sharing a directory with a JS package must not steal
+                    // its closure.
+                    if info.toolchain != crate::toolchain::ToolchainId::JAVASCRIPT {
+                        continue;
+                    }
+                    let dir = info.package_path().to_unix();
+                    info.transitive_dependencies = closures.remove(dir.as_str());
+                    info.external_deps_hash = hashes.remove(dir.as_str());
+                }
+            }
+            Ok(Err(e)) => {
+                tracing::warn!("Unable to calculate transitive closures: {}", e);
+            }
+            Err(_) => {
+                tracing::warn!("transitive closure thread disappeared without a result");
+            }
+        }
     }
 
     pub fn package_json(&self, package: &PackageName) -> Option<&PackageJson> {
@@ -671,6 +733,7 @@ impl PackageGraph {
             .filter_map(|package| self.packages.get(package))
             .filter_map(|entry| entry.transitive_dependencies.as_ref())
             .flatten()
+            .map(|pkg| &**pkg)
             .collect()
     }
 
@@ -702,7 +765,8 @@ impl PackageGraph {
         // we're fine to ignore it. Assuming there is not a commit with a stale
         // lockfile, the same commit should add the package, so it will get
         // picked up as changed.
-        let closures = turborepo_lockfiles::all_transitive_closures(previous, external_deps, true)?;
+        let closures =
+            turborepo_lockfiles::all_transitive_closures_sorted(previous, external_deps, true)?;
 
         let global_change = current.global_change(previous);
 
@@ -713,30 +777,32 @@ impl PackageGraph {
                 .iter()
                 .filter_map(|(name, info)| {
                     let previous_closure = closures.get(info.package_path().to_unix().as_str());
+                    // Both closures are sorted by (key, version), so `Vec`
+                    // equality is set equality here.
                     let not_equal = previous_closure != info.transitive_dependencies.as_ref();
                     if not_equal {
-                        if let (Some(prev), Some(curr)) =
-                            (previous_closure, info.transitive_dependencies.as_ref())
-                        {
-                            debug!(
-                                "package {name} has differing closure: {:?}",
-                                prev.symmetric_difference(curr)
-                            );
-                        }
-                        let empty_set = HashSet::default();
-                        let prev_deps = previous_closure.unwrap_or(&empty_set);
-                        let curr_deps = info.transitive_dependencies.as_ref().unwrap_or(&empty_set);
+                        let empty = Vec::new();
+                        let prev_deps = previous_closure.unwrap_or(&empty);
+                        let curr_deps = info.transitive_dependencies.as_ref().unwrap_or(&empty);
+                        let prev_set: HashSet<&turborepo_lockfiles::Package> =
+                            prev_deps.iter().map(|pkg| &**pkg).collect();
+                        let curr_set: HashSet<&turborepo_lockfiles::Package> =
+                            curr_deps.iter().map(|pkg| &**pkg).collect();
+                        debug!(
+                            "package {name} has differing closure: {:?}",
+                            prev_set.symmetric_difference(&curr_set)
+                        );
                         // {a, b} -> {a, c}
                         // b was removed
                         // c was added
-                        let added = curr_deps
-                            .difference(prev_deps)
-                            .cloned()
+                        let added = curr_set
+                            .difference(&prev_set)
+                            .map(|pkg| (*pkg).clone())
                             .sorted()
                             .collect::<Vec<_>>();
-                        let removed = prev_deps
-                            .difference(curr_deps)
-                            .cloned()
+                        let removed = prev_set
+                            .difference(&curr_set)
+                            .map(|pkg| (*pkg).clone())
                             .sorted()
                             .collect::<Vec<_>>();
                         Some((name, info, added, removed))
@@ -804,7 +870,7 @@ impl PackageGraph {
         // First find which packages directly depend on each external package
         for (pkg, info) in self.packages.iter() {
             for dep in info.transitive_dependencies.iter().flatten() {
-                let rdeps = map.entry(dep.clone()).or_default();
+                let rdeps = map.entry((**dep).clone()).or_default();
                 rdeps.insert(PackageNode::Workspace(pkg.clone()));
             }
         }
@@ -1311,12 +1377,114 @@ mod test {
         let a = turborepo_lockfiles::Package::new("key:a", "1");
         let b = turborepo_lockfiles::Package::new("key:b", "1");
         let c = turborepo_lockfiles::Package::new("key:c", "1");
-        assert_eq!(foo_deps, &HashSet::from_iter(vec![a.clone(), c.clone(),]));
-        assert_eq!(bar_deps, &HashSet::from_iter(vec![b.clone(), c.clone(),]));
+        // Closures are sorted by (key, version).
+        assert_eq!(foo_deps, &vec![Arc::new(a.clone()), Arc::new(c.clone())]);
+        assert_eq!(bar_deps, &vec![Arc::new(b.clone()), Arc::new(c.clone())]);
         assert_eq!(
             pkg_graph.transitive_external_dependencies([&foo, &bar].iter().copied()),
             HashSet::from_iter(vec![&a, &b, &c,])
         );
+    }
+
+    /// A graph built with deferred closures must, after
+    /// `ensure_transitive_closures`, be indistinguishable from one built
+    /// inline.
+    #[tokio::test]
+    async fn test_deferred_closures_match_inline() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let package_jsons = || {
+            let mut map = HashMap::new();
+            map.insert(
+                root.join_components(&["package_a", "package.json"]),
+                PackageJson::from_value(json!({
+                    "name": "foo",
+                    "dependencies": { "a": "1" }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_components(&["package_b", "package.json"]),
+                PackageJson::from_value(json!({
+                    "name": "bar",
+                    "dependencies": { "b": "1" }
+                }))
+                .unwrap(),
+            );
+            map
+        };
+
+        // Stub hasher: enough to prove the hash is computed and delivered on
+        // both paths. The production hasher's byte-identity with the legacy
+        // sort-then-hash path is proven in `turborepo-task-hash` tests.
+        let hasher: crate::package_graph::builder::ClosureHasher = Arc::new(|closures| {
+            closures
+                .iter()
+                .map(|(ws, closure)| {
+                    let rendered = closure
+                        .iter()
+                        .map(|pkg| format!("{}@{}", pkg.key, pkg.version))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    (ws.clone(), rendered)
+                })
+                .collect()
+        });
+
+        let inline = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(package_jsons()))
+        .with_lockfile(Some(Box::new(MockLockfile {})))
+        .with_closure_hasher(hasher.clone())
+        .build()
+        .await
+        .unwrap();
+
+        let mut deferred = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(package_jsons()))
+        .with_lockfile(Some(Box::new(MockLockfile {})))
+        .defer_transitive_closures(true)
+        .with_closure_hasher(hasher)
+        .build()
+        .await
+        .unwrap();
+
+        // Before the join, closures are absent.
+        assert!(
+            deferred
+                .packages
+                .values()
+                .all(|info| info.transitive_dependencies.is_none()),
+            "deferred graph must not have closures before ensure"
+        );
+
+        deferred.ensure_transitive_closures();
+        // Idempotent.
+        deferred.ensure_transitive_closures();
+
+        for (name, info) in inline.packages.iter() {
+            let deferred_info = deferred.packages.get(name).unwrap();
+            assert_eq!(
+                info.transitive_dependencies, deferred_info.transitive_dependencies,
+                "closures must match for {name}"
+            );
+            assert_eq!(
+                info.external_deps_hash, deferred_info.external_deps_hash,
+                "external deps hashes must match for {name}"
+            );
+            assert_eq!(
+                info.external_deps_hash.is_some(),
+                info.transitive_dependencies.is_some(),
+                "hash must be present exactly when the closure is, for {name}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -1840,14 +2008,13 @@ mod test {
                 .transitive_dependencies
                 .as_ref()
                 .expect("root should have a lockfile closure");
+            // Closures are sorted by (key, version).
             assert_eq!(
                 root_closure,
                 &vec![
-                    turborepo_lockfiles::Package::new("key:a", "1"),
-                    turborepo_lockfiles::Package::new("key:c", "1"),
-                ]
-                .into_iter()
-                .collect::<HashSet<_>>(),
+                    Arc::new(turborepo_lockfiles::Package::new("key:a", "1")),
+                    Arc::new(turborepo_lockfiles::Package::new("key:c", "1")),
+                ],
             );
             assert_eq!(
                 workspace_pkg.transitive_dependencies, None,
