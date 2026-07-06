@@ -40,6 +40,9 @@
 //!   dependency splitting and lockfile handling in the package graph builder.
 //!   Lockfile handling gains a trait surface with external dependency hashing;
 //!   dependency splitting remains JS-native for now.
+//! - The prune command's JavaScript machinery (lockfile subgraphing,
+//!   workspace-file rewriting, patches) is its native path rather than a
+//!   [`Toolchain::prune_plan`] implementation.
 
 use std::{borrow::Cow, ffi::OsString, fmt, future::Future, pin::Pin, sync::Arc};
 
@@ -246,6 +249,40 @@ pub trait Toolchain: Send + Sync {
     fn watch_spec(&self) -> WatchSpec {
         WatchSpec::default()
     }
+
+    /// What `turbo prune` must carry for this toolchain so the pruned
+    /// repository is self-contained, given the names of this toolchain's
+    /// packages already selected for the pruned output. `None` means the
+    /// toolchain contributes nothing beyond the packages themselves.
+    fn prune_plan(&self, kept_packages: &[String]) -> Result<Option<PrunePlan>, Error> {
+        let _ = kept_packages;
+        Ok(None)
+    }
+
+    /// Called after the pruned output is fully written, with its root
+    /// directory. Toolchains may polish their own files in place (e.g.
+    /// Cargo canonicalizes the pruned lockfile through `cargo metadata`).
+    /// Failures must be non-fatal: log and continue.
+    fn prune_finalize(&self, pruned_root: &AbsoluteSystemPath) {
+        let _ = pruned_root;
+    }
+}
+
+/// A toolchain's contribution to a pruned repository. See
+/// [`Toolchain::prune_plan`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PrunePlan {
+    /// Packages that must additionally be kept and copied, beyond the ones
+    /// requested (e.g. crates reachable only through dev-dependency edges,
+    /// whose manifests are referenced by kept crates).
+    pub extra_packages: Vec<String>,
+    /// Files to write into the pruned repository: (repo-relative unix path,
+    /// contents). They define dependency resolution, so they go to the full
+    /// layer and, in docker mode, the json layer.
+    pub root_files: Vec<(String, String)>,
+    /// Repo-relative unix paths of toolchain configuration files to copy
+    /// verbatim when present (missing ones are skipped).
+    pub copy_paths: Vec<String>,
 }
 
 /// How filesystem events relate to a toolchain in watch mode. See
@@ -536,6 +573,16 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
         // land inside package directories where gitignore filtering already
         // applies. This is the real answer, not an unimplemented stub.
         WatchSpec::default()
+    }
+
+    fn prune_plan(&self, _kept_packages: &[String]) -> Result<Option<PrunePlan>, Error> {
+        // Known debt (see module docs): the prune command's JavaScript
+        // machinery — lockfile subgraphing, root package.json and
+        // pnpm-workspace rewriting, patch carrying — is its native code
+        // path, predating this abstraction. Folding it into this surface
+        // means restructuring a battle-tested command; until then, the JS
+        // contribution is deliberately empty here.
+        Ok(None)
     }
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
