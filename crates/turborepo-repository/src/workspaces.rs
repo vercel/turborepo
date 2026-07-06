@@ -152,13 +152,17 @@ impl WorkspaceGlobs {
         &self,
         repo_root: &AbsoluteSystemPath,
     ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf> + use<>, Error> {
-        let files = globwalk::globwalk_with_settings(
-            repo_root,
-            &self.package_json_inclusions,
-            &self.validated_exclusions,
-            globwalk::WalkType::Files,
-            globwalk::Settings::default().follow_links(),
-        )?;
+        let files = {
+            let _span = tracing::info_span!("package_json_walk").entered();
+            globwalk::globwalk_with_settings(
+                repo_root,
+                &self.package_json_inclusions,
+                &self.validated_exclusions,
+                globwalk::WalkType::Files,
+                globwalk::Settings::default().follow_links(),
+            )?
+        };
+        let _span = tracing::info_span!("package_json_realpath_check").entered();
         let repo_root = repo_root.to_realpath()?;
         for file in &files {
             let real_file = file.to_realpath()?;
