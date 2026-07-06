@@ -285,6 +285,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let traversal_span = tracing::info_span!("engine_traversal").entered();
         let mut visited = HashSet::new();
         let mut engine: Engine<Building, TaskDefinition> = Engine::default();
+        // Entry points are a floor for the final task count; doubling covers
+        // dependency tasks in the common case so the maps allocate once.
+        engine.reserve(traversal_queue.len() * 2);
         let mut turbo_json_chain_cache: HashMap<PackageName, Vec<&TurboJson>> = HashMap::new();
         let mut task_def_memo: HashMap<definitions::TaskDefMemoKey, TaskDefinition> =
             HashMap::new();

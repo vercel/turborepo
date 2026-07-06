@@ -186,6 +186,17 @@ impl<T: TaskDefinitionInfo + Default + Clone> Engine<Building, T> {
         self.task_graph.add_edge(source, self.root_index, ());
     }
 
+    /// Pre-size the task collections for an expected task count.
+    /// `TaskDefinition` values are large, so growing the definitions map
+    /// incrementally repeatedly reallocates and moves hundreds of kilobytes;
+    /// on large graphs those moves showed up as multi-millisecond
+    /// page-compaction stalls during engine construction.
+    pub fn reserve(&mut self, additional_tasks: usize) {
+        self.task_lookup.reserve(additional_tasks);
+        self.task_definitions.reserve(additional_tasks);
+        self.task_locations.reserve(additional_tasks);
+    }
+
     pub fn add_definition(&mut self, task_id: TaskId<'static>, definition: T) -> Option<T> {
         if definition.persistent() && !definition.interruptible() {
             self.has_non_interruptible_tasks = true;
