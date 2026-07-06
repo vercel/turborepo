@@ -981,6 +981,16 @@ impl Run {
             );
             return None;
         }
+        // CI-only: sccache pays off in cold environments, while local
+        // development is already served by cargo's incremental compilation
+        // and a warm target directory — which the injected
+        // `CARGO_INCREMENTAL=0` would actively degrade. The flag is
+        // repo-level configuration, so without this gate, enabling it for
+        // CI would slow down every contributor's inner loop.
+        if !turborepo_ci::is_ci() {
+            debug!("sccache compile cache disabled: not running in CI");
+            return None;
+        }
         let (Some(client), Some(auth)) = (self.api_client.clone(), self.api_auth.clone()) else {
             debug!("sccache compile cache disabled: Remote Cache is not configured");
             return None;

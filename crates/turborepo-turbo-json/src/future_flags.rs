@@ -102,8 +102,12 @@ pub struct FutureFlags {
     /// tasks. When enabled (together with `experimentalCargoWorkspaces` and
     /// a linked Remote Cache), `turbo` starts a local proxy and routes
     /// rustc invocations through `sccache`, caching individual compilation
-    /// units in the Remote Cache. Requires `sccache` on `PATH`; silently
-    /// disabled otherwise.
+    /// units in the Remote Cache.
+    ///
+    /// Only engages in CI: cold environments are where a compile cache
+    /// pays off, while local development is better served by cargo's own
+    /// incremental compilation (which sccache would disable). Requires
+    /// `sccache` on `PATH`; silently disabled otherwise.
     #[serde(default)]
     #[schemars(skip)]
     pub experimental_cargo_sccache: bool,
