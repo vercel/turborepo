@@ -284,8 +284,15 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // the toolchain derives automatically", so explicit `inputs` can
         // append without forfeiting automatic invalidation; explicit inputs
         // without `$TURBO_DEFAULT$` take full control.
-        if let Some((info, toolchain)) = package_info.zip(toolchain) {
+        if let Some((info, toolchain)) = package_info
+            .zip(toolchain)
+            .filter(|(info, toolchain)| toolchain.derives_task_io(info, task_id.as_inner().task()))
+        {
             let wants_automatic_inputs = !had_explicit_inputs || task_def.inputs.default;
+            // Only assembled when the toolchain will actually use it:
+            // `dependencies` walks the package's full transitive closure,
+            // which is far too expensive to compute per task just to hand
+            // to a toolchain that derives nothing (JavaScript).
             let dependencies: Vec<_> = self
                 .package_graph
                 .dependencies(&PackageNode::Workspace(PackageName::from(

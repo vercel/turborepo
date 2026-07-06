@@ -240,6 +240,15 @@ pub trait Toolchain: Send + Sync {
         None
     }
 
+    /// Whether [`Toolchain::derived_task_io`] can return `Some` for this
+    /// package/task. Callers use this to skip assembling the (expensive)
+    /// dependency-closure argument when the answer is knowably `None` —
+    /// notably engine construction, which resolves a definition per task.
+    fn derives_task_io(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
+        let _ = (package, task);
+        false
+    }
+
     /// How filesystem events relate to this toolchain in watch mode:
     /// workspace-definition files whose change requires rediscovery, and
     /// build-byproduct directories whose events must be ignored.
