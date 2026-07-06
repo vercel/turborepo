@@ -7,9 +7,7 @@ use std::{
 
 use chrono::Local;
 use tracing::Instrument;
-use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPathBuf,
-};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle};
 use turborepo_api_client::{APIAuth, APIClient, CacheClient, SharedHttpClient};
 use turborepo_cache::{AsyncCache, CacheScmState, LazyScmState};
@@ -289,39 +287,17 @@ impl RunBuilder {
         }
     }
 
-    fn package_prefix_for_repo_index(
+    /// The scan prefix for untracked-file discovery: the repo root anchored
+    /// to the git root. When the repo is nested inside a larger git
+    /// repository this restricts the scan to the repo's subtree; when the
+    /// two coincide it is empty and the scan walks the whole repository.
+    /// Every package lives under the repo root (enforced at discovery), so
+    /// this single prefix covers exactly what per-package prefixes used to.
+    fn repo_prefix_for_repo_index(
         repo_root: &AbsoluteSystemPath,
         index_root: &AbsoluteSystemPath,
-        package_dir: &AnchoredSystemPath,
-    ) -> Result<RelativeUnixPathBuf, Error> {
-        let full_package_dir = repo_root.resolve(package_dir);
-        Ok(index_root.anchor(&full_package_dir)?.to_unix())
-    }
-
-    fn all_package_prefixes(
-        pkg_dep_graph: &PackageGraph,
-        scm: &SCM,
-    ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
-        let repo_root = pkg_dep_graph.repo_root();
-        let index_root = scm.git_root().unwrap_or(repo_root);
-        let mut prefixes = pkg_dep_graph
-            .packages()
-            .filter_map(|(name, _)| pkg_dep_graph.package_dir(name))
-            .map(|package_dir| {
-                Self::package_prefix_for_repo_index(repo_root, index_root, package_dir)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let root_dependency_prefixes = pkg_dep_graph
-            .root_internal_package_dependencies_paths()
-            .into_iter()
-            .map(|package_dir| {
-                Self::package_prefix_for_repo_index(repo_root, index_root, package_dir)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        prefixes.extend(root_dependency_prefixes);
-
-        Ok(prefixes)
+    ) -> Result<RelativeUnixPathBuf, turbopath::PathError> {
+        Ok(index_root.anchor(repo_root)?.to_unix())
     }
 
     /// Resolve the set of packages that should participate in this run.
@@ -433,7 +409,20 @@ impl RunBuilder {
         );
         let start_at = Local::now();
 
-        let scm_task = {
+        // SCM detection, the tracked repo index, and untracked-file discovery
+        // all run on one background task, overlapping package graph and
+        // engine construction. The SCM handle is sent back as soon as it
+        // exists so the main flow never waits behind the scans.
+        //
+        // Untracked discovery historically waited for the package graph to
+        // compute package prefixes, but the scan scope was always exactly
+        // the repo-root subtree: every package lives under the repo root
+        // (enforced at discovery), the root package's prefix is always in
+        // the set, and `UntrackedScope` deduplicates nested prefixes.
+        // Scanning the repo-root prefix directly is equivalent and needs
+        // nothing from the graph.
+        let (scm_tx, scm_rx) = tokio::sync::oneshot::channel();
+        let repo_index_task = {
             let repo_root = self.repo_root.clone();
             let git_root = self.opts.git_root.clone();
             tokio::task::spawn_blocking(move || {
@@ -441,16 +430,31 @@ impl RunBuilder {
                     Some(root) => SCM::new_with_git_root(&repo_root, root),
                     None => SCM::new(&repo_root),
                 };
-                // The tracked half of the repo index only needs `.git/index`,
-                // not the package graph, so build it here where it overlaps
-                // with package discovery instead of waiting for the graph.
-                // Untracked discovery is layered on later once package
-                // prefixes are known.
+                // The tracked half of the repo index only needs `.git/index`.
                 let tracked_index = {
                     let _span = tracing::info_span!("build_tracked_repo_index_gix").entered();
                     scm.build_tracked_repo_index_eager()
                 };
-                (scm, tracked_index)
+                let _ = scm_tx.send(scm.clone());
+                tracked_index.map(|mut index| {
+                    let _span = tracing::info_span!("populate_repo_index_untracked").entered();
+                    let index_root = scm.git_root().unwrap_or(&repo_root);
+                    match Self::repo_prefix_for_repo_index(&repo_root, index_root) {
+                        Ok(repo_prefix) => {
+                            if let Err(e) =
+                                scm.populate_repo_index_untracked(&mut index, &[repo_prefix])
+                            {
+                                tracing::debug!("failed to populate untracked files: {e}");
+                            }
+                        }
+                        Err(e) => {
+                            tracing::debug!(
+                                "failed to compute repo prefix for untracked files: {e}"
+                            );
+                        }
+                    }
+                    index
+                })
             })
         };
         let package_json_path = self.repo_root.join_component("package.json");
@@ -536,28 +540,21 @@ impl RunBuilder {
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
 
-        // The repo index caches git state (tracked entries + untracked file
-        // discovery) by reading .git/index directly via gix-index — fast,
-        // in-process, no subprocess spawns. The tracked half was already
-        // built inside scm_task, overlapping with package graph
-        // construction; only the untracked walk, which needs the package
-        // prefixes derived from the graph, runs from here.
-        let (scm, tracked_index) = scm_task
-            .instrument(tracing::info_span!("scm_task_await"))
-            .await?;
-        let all_prefixes = Self::all_package_prefixes(&pkg_dep_graph, &scm)?;
-        let repo_index_task = match tracked_index {
-            Some(mut index) if !all_prefixes.is_empty() => {
-                let scm = scm.clone();
-                Some(tokio::task::spawn_blocking(move || {
-                    let _span = tracing::info_span!("populate_repo_index_untracked").entered();
-                    if let Err(e) = scm.populate_repo_index_untracked(&mut index, &all_prefixes) {
-                        tracing::debug!("failed to populate untracked files: {e}");
-                    }
-                    Some(index)
-                }))
+        // The SCM handle arrives as soon as detection and the tracked index
+        // build finish; the untracked scan continues in the background and
+        // is joined just before the first repo-index consumer.
+        let scm = {
+            let _span = tracing::info_span!("scm_task_await").entered();
+            match scm_rx.await {
+                Ok(scm) => scm,
+                Err(_) => {
+                    // The sender only drops without sending if the SCM task
+                    // panicked; that panic surfaces when the repo-index task
+                    // is joined below. Detect inline so the run reaches that
+                    // point.
+                    SCM::new(&self.repo_root)
+                }
             }
-            _ => None,
         };
         let micro_frontend_configs = {
             let _span = tracing::info_span!("micro_frontends_from_disk").entered();
@@ -908,14 +905,11 @@ impl RunBuilder {
                 });
                 observability::Handle::try_init(opts, token)
             });
-        let repo_index = Arc::new(match repo_index_task {
-            Some(repo_index_task) => {
-                repo_index_task
-                    .instrument(tracing::info_span!("repo_index_untracked_await"))
-                    .await?
-            }
-            None => None,
-        });
+        let repo_index = Arc::new(
+            repo_index_task
+                .instrument(tracing::info_span!("repo_index_untracked_await"))
+                .await?,
+        );
 
         {
             let scm_state = scm_state.clone();
@@ -1157,42 +1151,25 @@ mod package_prefix_tests {
     use super::*;
 
     #[test]
-    fn repo_index_prefixes_are_git_root_relative_for_nested_turbo_root() {
+    fn repo_index_prefix_is_git_root_relative_for_nested_turbo_root() {
         let tmp = tempfile::tempdir().unwrap();
         let git_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
         let repo_root = git_root.join_component("downloaded-app");
 
-        let root_package = AnchoredSystemPath::new("").unwrap();
-        let workspace_package = AnchoredSystemPath::new("packages/web").unwrap();
-
         assert_eq!(
-            RunBuilder::package_prefix_for_repo_index(&repo_root, &git_root, root_package).unwrap(),
+            RunBuilder::repo_prefix_for_repo_index(&repo_root, &git_root).unwrap(),
             RelativeUnixPathBuf::new("downloaded-app").unwrap()
-        );
-        assert_eq!(
-            RunBuilder::package_prefix_for_repo_index(&repo_root, &git_root, workspace_package)
-                .unwrap(),
-            RelativeUnixPathBuf::new("downloaded-app/packages/web").unwrap()
         );
     }
 
     #[test]
-    fn repo_index_prefixes_stay_repo_relative_when_git_root_matches_turbo_root() {
+    fn repo_index_prefix_is_empty_when_git_root_matches_turbo_root() {
         let tmp = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
 
-        let root_package = AnchoredSystemPath::new("").unwrap();
-        let workspace_package = AnchoredSystemPath::new("packages/web").unwrap();
-
         assert_eq!(
-            RunBuilder::package_prefix_for_repo_index(&repo_root, &repo_root, root_package)
-                .unwrap(),
+            RunBuilder::repo_prefix_for_repo_index(&repo_root, &repo_root).unwrap(),
             RelativeUnixPathBuf::new("").unwrap()
-        );
-        assert_eq!(
-            RunBuilder::package_prefix_for_repo_index(&repo_root, &repo_root, workspace_package)
-                .unwrap(),
-            RelativeUnixPathBuf::new("packages/web").unwrap()
         );
     }
 }
