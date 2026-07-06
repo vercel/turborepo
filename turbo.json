@@ -2,6 +2,7 @@
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
   "noUpdateNotifier": true,
+  "futureFlags": { "experimentalCargoWorkspaces": true },
   // The following are used by tools such as pnpm, gh actions to setup pnpm, etc.
   "globalPassThroughEnv": [
     "Path",
@@ -75,6 +76,12 @@
       "cache": false,
       "persistent": true,
       "env": ["AI_GATEWAY_API_KEY"]
+    },
+    // turborepo-lib embeds version.txt via include_str!; it lives outside
+    // every crate directory, so the automatic crate-closure hashing can't
+    // see it. $TURBO_DEFAULT$ keeps the automatic inputs and appends it.
+    "turbo#build": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/version.txt"]
     },
     "package-checks": {
       "dependsOn": ["package:types"]
