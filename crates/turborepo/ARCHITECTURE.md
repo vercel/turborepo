@@ -271,6 +271,28 @@ whether anything changed; Cargo decides how and in what order to build.**
   package anchored at the repo root (the synthetic `cargo` package) is not
   a pruneable target.
 
+- **Compile cache** (`Toolchain::compile_cache_env`, consumed by
+  `ToolchainCommandProvider`; gated by `futureFlags.experimentalCargoSccache`):
+  when enabled alongside `experimentalCargoWorkspaces` with a linked Remote
+  Cache and `sccache` on `PATH`, the run serves a local HTTP proxy
+  (`turborepo-sccache-proxy`) that presents an sccache-compatible webdav
+  storage backend and translates `GET`/`PUT`/`HEAD` into Remote Cache
+  artifact calls. Cargo tasks get `RUSTC_WRAPPER=sccache`,
+  `SCCACHE_WEBDAV_ENDPOINT`/`SCCACHE_WEBDAV_TOKEN`, and
+  `CARGO_INCREMENTAL=0` injected at execution time; JavaScript injects
+  nothing. Objects are fetched lazily per rustc invocation, so nothing is
+  restored before a task runs; the two cache layers compose (task-cache
+  hit: nothing executes; miss: cargo's conservative recompiles become
+  downloads). The endpoint must be stable across runs because the sccache
+  background server captures it at startup and outlives the run: the port
+  is derived from the repo root and the bearer token is persisted at
+  `.turbo/sccache-proxy-token`. Injection is execution-only and does not
+  participate in task hashes (a compile cache is output-transparent); a
+  user-supplied `RUSTC_WRAPPER` in the task environment suppresses the
+  whole injected set, and every unmet precondition disables the proxy
+  softly. Lifecycle: started in `Run::execute_visitor` before the visitor,
+  shut down fire-and-forget after it.
+
 A `--filter` that names a crate while support is disabled gets an error
 hint pointing at the flag. Released turbo versions hard-error on unknown
 `futureFlags` keys, so a repo can only adopt the flag once every consumer
