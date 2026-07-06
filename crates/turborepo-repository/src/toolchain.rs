@@ -275,6 +275,30 @@ pub trait Toolchain: Send + Sync {
     fn prune_finalize(&self, pruned_root: &AbsoluteSystemPath) {
         let _ = pruned_root;
     }
+
+    /// Environment variables to inject into this toolchain's task processes
+    /// when Turborepo is serving a compile cache endpoint (a local proxy in
+    /// front of the remote cache that a compiler wrapper like sccache can
+    /// use as its storage backend).
+    ///
+    /// An empty result means the toolchain has no compile-cache integration
+    /// (the JavaScript default). The executor never applies these variables
+    /// over ones already present in the task's environment: a user-supplied
+    /// configuration (e.g. their own `RUSTC_WRAPPER`) always wins.
+    fn compile_cache_env(&self, endpoint: &CompileCacheEndpoint) -> Vec<(String, String)> {
+        let _ = endpoint;
+        Vec::new()
+    }
+}
+
+/// A Turborepo-served compile cache endpoint, as plain data. See
+/// [`Toolchain::compile_cache_env`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompileCacheEndpoint {
+    /// HTTP endpoint of the local compile-cache proxy.
+    pub url: String,
+    /// Bearer token the proxy requires.
+    pub token: String,
 }
 
 /// A toolchain's contribution to a pruned repository. See

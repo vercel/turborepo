@@ -514,6 +514,33 @@ impl Toolchain for CargoToolchain {
         display_command(details.kind, task, &name)
     }
 
+    /// Route rustc invocations through sccache, with the Turborepo-served
+    /// endpoint as its webdav storage backend. sccache fetches per
+    /// compilation-unit objects lazily at rustc invocation time, so no state
+    /// needs restoring before the task starts.
+    ///
+    /// `CARGO_INCREMENTAL=0` accompanies the wrapper because sccache cannot
+    /// cache incrementally-compiled crates and would fall back to plain
+    /// compilation for them.
+    ///
+    /// These are injected at execution time only and deliberately do not
+    /// participate in the task hash: a compile cache is output-transparent,
+    /// so enabling it must not invalidate existing task artifacts. A
+    /// user-supplied `RUSTC_WRAPPER` (which does participate, via
+    /// [`HASHED_ENV_VARS`]) suppresses this injection entirely — see
+    /// [`Toolchain::compile_cache_env`].
+    fn compile_cache_env(
+        &self,
+        endpoint: &toolchain::CompileCacheEndpoint,
+    ) -> Vec<(String, String)> {
+        vec![
+            ("RUSTC_WRAPPER".to_string(), "sccache".to_string()),
+            ("SCCACHE_WEBDAV_ENDPOINT".to_string(), endpoint.url.clone()),
+            ("SCCACHE_WEBDAV_TOKEN".to_string(), endpoint.token.clone()),
+            ("CARGO_INCREMENTAL".to_string(), "0".to_string()),
+        ]
+    }
+
     fn defines_task(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
         package
             .package_name()
@@ -1409,6 +1436,35 @@ checksum = "abc123"
             vec!["app", "helper"]
         );
         assert_eq!(crates[0].internal_dependencies, vec!["helper".to_string()]);
+    }
+
+    #[test]
+    fn test_compile_cache_env_routes_rustc_through_sccache() {
+        let (_tmp, root) = tempdir_root();
+        let toolchain = CargoToolchain::new(root);
+        let endpoint = toolchain::CompileCacheEndpoint {
+            url: "http://127.0.0.1:42123".to_string(),
+            token: "proxy-token".to_string(),
+        };
+        assert_eq!(
+            toolchain.compile_cache_env(&endpoint),
+            vec![
+                ("RUSTC_WRAPPER".to_string(), "sccache".to_string()),
+                (
+                    "SCCACHE_WEBDAV_ENDPOINT".to_string(),
+                    "http://127.0.0.1:42123".to_string()
+                ),
+                (
+                    "SCCACHE_WEBDAV_TOKEN".to_string(),
+                    "proxy-token".to_string()
+                ),
+                ("CARGO_INCREMENTAL".to_string(), "0".to_string()),
+            ]
+        );
+        // The injected wrapper key must be a hashed env var so a
+        // user-supplied wrapper invalidates task results (the injected one
+        // is execution-only and deliberately does not).
+        assert!(HASHED_ENV_VARS.contains(&"RUSTC_WRAPPER"));
     }
 
     #[tokio::test(flavor = "multi_thread")]

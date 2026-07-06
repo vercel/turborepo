@@ -98,6 +98,19 @@ pub struct FutureFlags {
     /// caching for crates are not wired up yet, so their tasks are no-ops.
     #[serde(default)]
     pub experimental_cargo_workspaces: bool,
+    /// Serve the Remote Cache as an sccache storage backend for Cargo crate
+    /// tasks. When enabled (together with `experimentalCargoWorkspaces` and
+    /// a linked Remote Cache), `turbo` starts a local proxy and routes
+    /// rustc invocations through `sccache`, caching individual compilation
+    /// units in the Remote Cache.
+    ///
+    /// Only engages in CI: cold environments are where a compile cache
+    /// pays off, while local development is better served by cargo's own
+    /// incremental compilation (which sccache would disable). Requires
+    /// `sccache` on `PATH`; silently disabled otherwise.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub experimental_cargo_sccache: bool,
 }
 
 // Manual TS impl because #[derive(TS)] conflicts with the Iterable and

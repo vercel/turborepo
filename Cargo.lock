@@ -7933,6 +7933,7 @@ dependencies = [
  "turborepo-repository",
  "turborepo-run-cache",
  "turborepo-run-summary",
+ "turborepo-sccache-proxy",
  "turborepo-scm",
  "turborepo-scope",
  "turborepo-shim",
@@ -8277,6 +8278,28 @@ dependencies = [
  "turborepo-types",
  "turborepo-ui",
  "url",
+]
+
+[[package]]
+name = "turborepo-sccache-proxy"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "bytes",
+ "futures",
+ "hex",
+ "port_scanner",
+ "rand 0.9.3",
+ "reqwest",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "turbopath",
+ "turborepo-api-client",
+ "turborepo-types",
+ "turborepo-vercel-api-mock",
 ]
 
 [[package]]
