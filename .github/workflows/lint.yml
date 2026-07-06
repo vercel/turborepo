@@ -81,16 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      # AWS-backed sccache is disabled.
-      # SCCACHE_BUCKET: turborepo-sccache
-      # SCCACHE_REGION: us-east-2
-      # RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
       CARGO_INCREMENTAL: 0
-      # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      # SCCACHE_IDLE_TIMEOUT: 0
-      # SCCACHE_REQUEST_TIMEOUT: 30
-      # SCCACHE_ERROR_LOG: error
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -102,9 +93,6 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node: "false"
-
-      # - name: Run sccache-cache
-      #   uses: mozilla-actions/sccache-action@v0.0.6
 
       - name: Run cargo clippy
         run: cargo lint
