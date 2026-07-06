@@ -177,11 +177,3 @@ ifneq ($(SKIP_PUBLISH),--skip-publish)
 	publish_with_retries "@turbo/types" "$(CLI_DIR)/../turbo-types-$(TURBO_VERSION).tgz"
 endif
 
-# use target fixture-<some directory under turborepo-tests/integration/fixtures> to set up the testbed directory
-.PHONY=fixture-%
-fixture-%:
-	$(eval $@_FIXTURE := $(@:fixture-%=%))
-	@echo "fixture setup $($@_FIXTURE)"
-	rm -rf testbed
-	mkdir -p testbed
-	../turborepo-tests/helpers/setup_integration_test.sh ./testbed $($@_FIXTURE)
