@@ -252,6 +252,25 @@ whether anything changed; Cargo decides how and in what order to build.**
   is JS-glob-based, so a no-op save inside a crate re-runs its tasks as a
   fast cache hit rather than being suppressed.
 
+- **Prune** (`Toolchain::prune_plan` / `prune_finalize`, consumed by
+  `turborepo-lib/src/commands/prune.rs`): each toolchain reports what a
+  self-contained pruned repository needs beyond the copied packages. For
+  Cargo: the kept-member set comes from a `Cargo.lock` reachability walk
+  (not the package graph — the lockfile merges dev-dependency edges, so
+  members reachable only through dev-deps are retained, since kept crates'
+  manifests reference them), the lockfile is subset to that closure, and
+  the root `Cargo.toml` is rewritten with `toml_edit` (explicit `members`,
+  filtered `default-members`, `[workspace.dependencies]` path entries to
+  removed crates dropped — comments and formatting preserved). Toolchain
+  and Cargo config files are carried over. Reachability pruning cannot see
+  Cargo's feature unification, so `prune_finalize` runs `cargo metadata`
+  in the output (offline first, then networked) to let Cargo minimally
+  sync its own lockfile; failure downgrades to a warning. In docker
+  layout, the json layer carries the root manifest, each kept crate's
+  `Cargo.toml`, and the pruned lock; sources go to the full layer. A
+  package anchored at the repo root (the synthetic `cargo` package) is not
+  a pruneable target.
+
 A `--filter` that names a crate while support is disabled gets an error
 hint pointing at the flag. Released turbo versions hard-error on unknown
 `futureFlags` keys, so a repo can only adopt the flag once every consumer

@@ -146,6 +146,129 @@ fn test_dependency_crate_change_invalidates_entrypoint() {
     );
 }
 
+/// Prune produces a self-contained Cargo workspace: kept crate dirs, a
+/// lockfile subset, and a rewritten root manifest — proven by building the
+/// pruned output with `cargo build --locked`.
+#[test]
+fn test_prune_produces_buildable_cargo_workspace() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_monorepo(tempdir.path());
+
+    // Prune requires a lockfile; generate it the way a real repo has one.
+    let status = std::process::Command::new("cargo")
+        .arg("generate-lockfile")
+        .current_dir(tempdir.path())
+        .status()
+        .expect("cargo generate-lockfile runs");
+    assert!(status.success());
+
+    let output = run_turbo(tempdir.path(), &["prune", "app"]);
+    assert!(output.status.success(), "prune failed: {output:?}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Added app"), "{stdout}");
+    assert!(stdout.contains("Added lib-a"), "{stdout}");
+
+    let out = tempdir.path().join("out");
+    assert!(out.join("crates/app/src/main.rs").exists());
+    assert!(out.join("crates/lib-a/src/lib.rs").exists());
+    assert!(out.join("Cargo.toml").exists());
+    assert!(out.join("Cargo.lock").exists());
+    // The JS package is not in app's closure and must not be copied.
+    assert!(!out.join("packages/js-pkg").exists());
+
+    // Members are the explicit kept set.
+    let manifest = fs::read_to_string(out.join("Cargo.toml")).unwrap();
+    assert!(
+        manifest.contains(r#"members = ["crates/app", "crates/lib-a"]"#),
+        "explicit members expected, got: {manifest}"
+    );
+
+    // The decisive assertion: the pruned workspace builds with the pruned
+    // lockfile, strictly.
+    let build = std::process::Command::new("cargo")
+        .args(["build", "--locked", "-p", "app"])
+        .current_dir(&out)
+        .output()
+        .expect("cargo build runs");
+    assert!(
+        build.status.success(),
+        "pruned workspace must build --locked: {}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let run = std::process::Command::new(out.join("target/debug/app"))
+        .output()
+        .expect("pruned binary runs");
+    assert!(
+        String::from_utf8_lossy(&run.stdout).contains("hello from lib-a"),
+        "pruned binary output: {run:?}"
+    );
+}
+
+/// Docker layout: the json layer carries everything needed to resolve
+/// dependencies (manifests + lockfile), the full layer carries sources.
+#[test]
+fn test_prune_docker_layout_for_cargo() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_monorepo(tempdir.path());
+    let status = std::process::Command::new("cargo")
+        .arg("generate-lockfile")
+        .current_dir(tempdir.path())
+        .status()
+        .expect("cargo generate-lockfile runs");
+    assert!(status.success());
+
+    let output = run_turbo(tempdir.path(), &["prune", "app", "--docker"]);
+    assert!(output.status.success(), "prune --docker failed: {output:?}");
+
+    let out = tempdir.path().join("out");
+    for file in [
+        "json/Cargo.toml",
+        "json/Cargo.lock",
+        "json/crates/app/Cargo.toml",
+        "json/crates/lib-a/Cargo.toml",
+        "full/crates/app/src/main.rs",
+        "full/crates/lib-a/src/lib.rs",
+        "full/Cargo.toml",
+        "full/Cargo.lock",
+    ] {
+        assert!(out.join(file).exists(), "missing {file} in docker layout");
+    }
+    // Sources stay out of the json layer.
+    assert!(!out.join("json/crates/app/src").exists());
+}
+
+/// A JS-only target in a mixed repo prunes exactly as before: no crates, no
+/// Cargo workspace files.
+#[test]
+fn test_prune_js_target_unaffected_by_cargo() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_monorepo(tempdir.path());
+
+    let output = run_turbo(tempdir.path(), &["prune", "js-pkg"]);
+    assert!(output.status.success(), "prune failed: {output:?}");
+
+    let out = tempdir.path().join("out");
+    assert!(out.join("packages/js-pkg/package.json").exists());
+    assert!(!out.join("crates").exists());
+    assert!(!out.join("Cargo.toml").exists());
+}
+
+/// The synthetic `cargo` package has no directory of its own and is not a
+/// pruneable target.
+#[test]
+fn test_prune_cargo_workspace_package_rejected() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_monorepo(tempdir.path());
+
+    let output = run_turbo(tempdir.path(), &["prune", "cargo"]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("has no directory of its own"),
+        "expected guard message: {stderr}"
+    );
+}
+
 #[test]
 fn test_filter_hint_when_cargo_disabled() {
     let tempdir = tempfile::tempdir().unwrap();

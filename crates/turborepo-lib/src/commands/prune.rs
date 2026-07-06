@@ -1,7 +1,7 @@
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     str::FromStr,
     sync::{LazyLock, OnceLock},
 };
@@ -17,6 +17,7 @@ use turborepo_repository::{
     package_graph::{self, PackageGraph, PackageName, PackageNode},
     package_json::PackageJson,
     package_manager::{npmrc::NpmRc, PackageManager},
+    toolchain::ToolchainId,
 };
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::BOLD;
@@ -69,6 +70,12 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     TurboJson(#[from] turborepo_turbo_json::Error),
+    #[error(
+        "Cannot prune {0}: it has no directory of its own (it represents the whole repository).          Prune a specific package instead."
+    )]
+    PackageNotPruneable(String),
+    #[error(transparent)]
+    Toolchain(#[from] turborepo_repository::toolchain::Error),
 }
 
 static ADDITIONAL_FILES: LazyLock<Vec<(&'static RelativeUnixPath, Option<CopyDestination>)>> =
@@ -175,7 +182,21 @@ pub async fn prune(
     let mut workspace_paths = Vec::new();
     let mut workspace_names = Vec::new();
     let workspaces = prune.internal_dependencies();
-    let lockfile_keys = prune.lockfile_keys(&workspaces)?;
+    // Only JavaScript packages participate in the JS lockfile subgraph:
+    // other toolchains' external-dependency keys (e.g. Cargo's rustc and
+    // crates.io identities) mean nothing to it and must not leak in.
+    let js_workspaces: Vec<PackageName> = workspaces
+        .iter()
+        .filter(|workspace| {
+            prune
+                .package_graph
+                .package_info(workspace)
+                .is_none_or(|info| info.toolchain == ToolchainId::JAVASCRIPT)
+        })
+        .cloned()
+        .collect();
+    let lockfile_keys = prune.lockfile_keys(&js_workspaces)?;
+    let mut kept_by_toolchain: HashMap<ToolchainId, Vec<String>> = HashMap::new();
     for workspace in workspaces {
         let entry = prune
             .package_graph
@@ -184,6 +205,26 @@ pub async fn prune(
 
         // We don't want to do any copying for the root workspace
         if let PackageName::Other(workspace) = workspace {
+            if entry.toolchain != ToolchainId::JAVASCRIPT {
+                // A package anchored at the repo root (the synthetic Cargo
+                // workspace package) has no directory of its own; its
+                // workspace-level files come from the toolchain's prune
+                // plan below.
+                if entry.package_path().components().next().is_none() {
+                    continue;
+                }
+                prune.copy_package_dir(entry.package_json_path())?;
+                println!(" - Added {workspace}");
+                kept_by_toolchain
+                    .entry(entry.toolchain.clone())
+                    .or_default()
+                    .push(workspace.clone());
+                // Non-JS packages participate in turbo.json task pruning,
+                // but not in the JS lockfile subgraph or package.json
+                // workspaces.
+                workspace_names.push(workspace);
+                continue;
+            }
             prune.copy_workspace(entry.package_json_path(), &entry.package_json)?;
             let parent = entry
                 .package_json_path()
@@ -193,6 +234,43 @@ pub async fn prune(
 
             println!(" - Added {workspace}");
             workspace_names.push(workspace);
+        }
+    }
+
+    // Each toolchain contributes whatever the pruned repository needs
+    // beyond the packages themselves: extra members it requires, rewritten
+    // workspace files, and config files to carry over.
+    for toolchain in prune.package_graph.toolchains().iter() {
+        let kept = kept_by_toolchain
+            .remove(&toolchain.id())
+            .unwrap_or_default();
+        let Some(plan) = toolchain.prune_plan(&kept)? else {
+            continue;
+        };
+        for extra in plan.extra_packages {
+            let name = PackageName::Other(extra.clone());
+            let info = prune
+                .package_graph
+                .package_info(&name)
+                .ok_or_else(|| Error::MissingWorkspace(name.clone()))?;
+            prune.copy_package_dir(info.package_json_path())?;
+            println!(" - Added {extra} (required by kept packages)");
+            workspace_names.push(extra);
+        }
+        for (path, contents) in plan.root_files {
+            let rel = RelativeUnixPath::new(&path)?.to_anchored_system_path_buf();
+            let full_path = prune.full_directory.resolve(&rel);
+            full_path.ensure_dir()?;
+            full_path.create_with_contents(&contents)?;
+            if prune.docker {
+                let docker_path = prune.docker_directory().resolve(&rel);
+                docker_path.ensure_dir()?;
+                docker_path.create_with_contents(&contents)?;
+            }
+        }
+        for path in plan.copy_paths {
+            let rel = RelativeUnixPath::new(&path)?.to_anchored_system_path_buf();
+            prune.copy_file(&rel, Some(CopyDestination::Docker))?;
         }
     }
     prune.copy_file_dependencies(&workspace_names)?;
@@ -345,6 +423,12 @@ pub async fn prune(
                 &pruned_patches,
             )?;
         }
+    }
+
+    // The pruned output is complete; let each toolchain polish its own
+    // files in place (e.g. Cargo canonicalizes the pruned lockfile).
+    for toolchain in prune.package_graph.toolchains().iter() {
+        toolchain.prune_finalize(&prune.full_directory);
     }
 
     Ok(())
@@ -501,10 +585,14 @@ impl<'a> Prune<'a> {
         let root_package_json_path = base.repo_root.join_component("package.json");
         let root_package_json = PackageJson::load(&root_package_json_path)?;
 
-        let package_graph = PackageGraph::builder(&base.repo_root, root_package_json)
-            .with_allow_no_package_manager(allow_missing_package_manager)
-            .build()
-            .await?;
+        let mut graph_builder = PackageGraph::builder(&base.repo_root, root_package_json)
+            .with_allow_no_package_manager(allow_missing_package_manager);
+        if crate::run::builder::cargo_enabled(&base.opts().future_flags) {
+            graph_builder = graph_builder.with_toolchain(
+                turborepo_repository::cargo::CargoToolchain::new(base.repo_root.clone()),
+            );
+        }
+        let package_graph = graph_builder.build().await?;
 
         let out_directory = AbsoluteSystemPathBuf::from_unknown(&base.repo_root, output_dir);
 
@@ -523,6 +611,12 @@ impl<'a> Prune<'a> {
             let Some(info) = package_graph.package_info(&workspace) else {
                 return Err(Error::MissingWorkspace(workspace));
             };
+            // A package anchored at the repository root (e.g. the synthetic
+            // Cargo workspace package) has no directory of its own; pruning
+            // it would mean copying the whole repository.
+            if info.package_path().components().next().is_none() {
+                return Err(Error::PackageNotPruneable(target.clone()));
+            }
             trace!(
                 "target: {}",
                 info.package_json
@@ -675,6 +769,41 @@ impl<'a> Prune<'a> {
                 Some(&self.root),
             )?;
         }
+        Ok(())
+    }
+
+    /// Copy a non-JavaScript package's directory into the pruned output.
+    /// Mirrors [`Self::copy_workspace`], except the docker "json" layer
+    /// receives the package's actual manifest (e.g. `Cargo.toml`) rather
+    /// than a `package.json`, and there are no npm bin stubs to create.
+    fn copy_package_dir(&self, manifest_path: &AnchoredSystemPath) -> Result<(), Error> {
+        let abs_manifest_path = self.root.resolve(manifest_path);
+        let original_dir = abs_manifest_path
+            .parent()
+            .ok_or_else(|| Error::WorkspaceAtFilesystemRoot)?;
+        let metadata = original_dir.symlink_metadata()?;
+        let relative_package_dir = AnchoredSystemPathBuf::new(&self.root, original_dir)?;
+        let target_dir = self.full_directory.resolve(&relative_package_dir);
+        target_dir.create_dir_all_with_permissions(metadata.permissions())?;
+
+        turborepo_fs::recursive_copy(
+            original_dir,
+            &target_dir,
+            self.use_gitignore,
+            Some(&self.root),
+        )?;
+
+        if self.docker {
+            let docker_package_dir = self.docker_directory().resolve(&relative_package_dir);
+            docker_package_dir.ensure_dir()?;
+            if let Some(manifest_name) = abs_manifest_path.file_name() {
+                turborepo_fs::copy_file(
+                    &abs_manifest_path,
+                    docker_package_dir.join_component(manifest_name),
+                )?;
+            }
+        }
+
         Ok(())
     }
 

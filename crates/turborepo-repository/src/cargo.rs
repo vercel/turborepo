@@ -61,6 +61,14 @@ pub enum Error {
     LockfileRead(#[source] io::Error),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::CargoLockError),
+    #[error("failed to parse root Cargo.toml: {0}")]
+    ManifestParse(#[from] Box<toml_edit::TomlError>),
+    #[error("root Cargo.toml has no [workspace] table")]
+    NotAWorkspace,
+    #[error("Cannot prune a Cargo workspace without a Cargo.lock; run a build to generate it.")]
+    MissingLockfile,
+    #[error("failed to read workspace file: {0}")]
+    WorkspaceFileRead(#[source] io::Error),
 }
 
 /// The version of the Rust compiler that Cargo will invoke, as a hashable
@@ -151,6 +159,9 @@ pub struct CargoPackageDetails {
     /// The crate's deliverable targets (empty for libraries and the
     /// workspace package).
     pub deliverables: Vec<Deliverable>,
+    /// The crate's directory, repo-root-relative in unix form (empty for
+    /// the synthetic workspace package).
+    pub dir: String,
 }
 
 /// Map a Turborepo task name to the Cargo subcommand that implements it for
@@ -222,6 +233,85 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "CARGO_TARGET_DIR",
     "CARGO_BUILD_TARGET",
 ];
+
+/// Rewrite the workspace root Cargo.toml for a pruned repository containing
+/// only `kept_dirs` (workspace-relative unix paths of the retained crates).
+///
+/// * `members` becomes the explicit kept list — glob patterns like `crates/*`
+///   would otherwise still match removed directories' absence, but explicitness
+///   costs nothing and `default-members`/path hygiene need the concrete set
+///   anyway.
+/// * `default-members` is filtered to kept dirs (dropped when empty), since
+///   entries referencing removed crates make Cargo error at load.
+/// * `[workspace.dependencies]` entries whose `path` points at a removed crate
+///   are dropped: no kept crate can reference them (anything referenced is in
+///   the closure and therefore kept), and Cargo validates the paths of
+///   workspace dependencies eagerly.
+///
+/// Everything else — profiles, lints, `[patch]`, non-path workspace
+/// dependencies, comments, formatting — is preserved via `toml_edit`.
+pub fn prune_root_manifest(contents: &str, kept_dirs: &[String]) -> Result<String, Error> {
+    let mut doc: toml_edit::DocumentMut = contents.parse().map_err(Box::new)?;
+    let normalized_kept: HashSet<String> = kept_dirs.iter().map(|d| normalize_dir(d)).collect();
+
+    let workspace = doc
+        .get_mut("workspace")
+        .and_then(|item| item.as_table_like_mut())
+        .ok_or(Error::NotAWorkspace)?;
+
+    let mut members = toml_edit::Array::new();
+    let mut sorted_dirs = kept_dirs.to_vec();
+    sorted_dirs.sort();
+    sorted_dirs.dedup();
+    for dir in &sorted_dirs {
+        members.push(dir.as_str());
+    }
+    workspace.insert("members", toml_edit::value(members));
+
+    if let Some(default_members) = workspace
+        .get_mut("default-members")
+        .and_then(|item| item.as_array_mut())
+    {
+        default_members.retain(|entry| {
+            entry
+                .as_str()
+                .is_some_and(|dir| normalized_kept.contains(&normalize_dir(dir)))
+        });
+        if default_members.is_empty() {
+            workspace.remove("default-members");
+        }
+    }
+
+    if let Some(dependencies) = workspace
+        .get_mut("dependencies")
+        .and_then(|item| item.as_table_like_mut())
+    {
+        let removed: Vec<String> = dependencies
+            .iter()
+            .filter(|(_, value)| {
+                value
+                    .get("path")
+                    .and_then(|path| path.as_str())
+                    .is_some_and(|path| !normalized_kept.contains(&normalize_dir(path)))
+            })
+            .map(|(name, _)| name.to_string())
+            .collect();
+        for name in removed {
+            dependencies.remove(&name);
+        }
+    }
+
+    Ok(doc.to_string())
+}
+
+/// Normalize a manifest-relative directory path for comparison: unix
+/// separators, no leading `./`, no trailing `/`.
+fn normalize_dir(dir: &str) -> String {
+    dir.replace('\\', "/")
+        .trim_start_matches("./")
+        .trim_end_matches('/')
+        .to_string()
+}
 
 fn join_prefix(prefix: &str, rel: &str) -> String {
     if prefix.is_empty() {
@@ -442,6 +532,126 @@ impl Toolchain for CargoToolchain {
         watch_spec()
     }
 
+    /// Prune the Cargo workspace machinery around the kept crates:
+    ///
+    /// * `Cargo.lock` is subset to the closure of the kept crates, so `cargo
+    ///   build --locked` succeeds in the pruned output.
+    /// * The lock walk may surface members beyond Turborepo's package-graph
+    ///   closure (Cargo.lock merges dev-dependency edges, including
+    ///   cycle-participating ones the package graph drops). Their manifests are
+    ///   referenced by kept crates, so they are reported as extra packages to
+    ///   keep.
+    /// * The root `Cargo.toml` is rewritten: explicit `members`, filtered
+    ///   `default-members`, `[workspace.dependencies]` path entries to removed
+    ///   crates dropped.
+    /// * Toolchain and Cargo config files are carried over.
+    fn prune_plan(
+        &self,
+        kept_packages: &[String],
+    ) -> Result<Option<toolchain::PrunePlan>, toolchain::Error> {
+        if kept_packages.is_empty() {
+            return Ok(None);
+        }
+        let failed = |err: Error| toolchain::Error::Failed(Box::new(err));
+
+        let lock_path = self.repo_root.join_component(CARGO_LOCK);
+        let lock_contents = match lock_path.read_to_string() {
+            Ok(contents) => contents,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                return Err(failed(Error::MissingLockfile));
+            }
+            Err(error) => return Err(failed(Error::LockfileRead(error))),
+        };
+        let pruned_lock = turborepo_lockfiles::cargo_prune_lock(&lock_contents, kept_packages)
+            .map_err(|err| failed(Error::Lockfile(err)))?;
+
+        let mut kept_dirs = Vec::with_capacity(pruned_lock.members.len());
+        let mut extra_packages = Vec::new();
+        for member in &pruned_lock.members {
+            let Some(details) = self.package_details(member) else {
+                // A lock member that discovery never saw; the lockfile and
+                // the workspace disagree. Keep going — the manifest rewrite
+                // simply won't list it, and cargo will report specifics.
+                tracing::warn!(
+                    "Cargo.lock member {member} is not a discovered workspace crate; skipping"
+                );
+                continue;
+            };
+            kept_dirs.push(details.dir.clone());
+            if !kept_packages.contains(member) {
+                extra_packages.push(member.clone());
+            }
+        }
+
+        let manifest_contents = self
+            .repo_root
+            .join_component(CARGO_TOML)
+            .read_to_string()
+            .map_err(|err| failed(Error::WorkspaceFileRead(err)))?;
+        let pruned_manifest =
+            prune_root_manifest(&manifest_contents, &kept_dirs).map_err(failed)?;
+
+        Ok(Some(toolchain::PrunePlan {
+            extra_packages,
+            root_files: vec![
+                (CARGO_LOCK.to_string(), pruned_lock.lockfile),
+                (CARGO_TOML.to_string(), pruned_manifest),
+            ],
+            copy_paths: [
+                "rust-toolchain.toml",
+                "rust-toolchain",
+                ".cargo/config.toml",
+                ".cargo/config",
+            ]
+            .iter()
+            .map(|path| path.to_string())
+            .collect(),
+        }))
+    }
+
+    /// Our lock subset is reachability-based, but Cargo's real resolution
+    /// is feature-aware: shrinking the workspace can deactivate features
+    /// that were the only reason some packages were in the closure. Rather
+    /// than reimplement feature unification, let Cargo minimally sync its
+    /// own lockfile (every retained pin is preserved; only feature-dead
+    /// entries are dropped) so `cargo build --locked` passes in the pruned
+    /// output. Try `--offline` first — removals need no network — but
+    /// workspaces with git patches need their git databases, which a cold
+    /// machine won't have cached, so fall back to a networked sync. Failure
+    /// is not fatal: the superset lock still builds correctly, it just
+    /// isn't `--locked`-clean.
+    fn prune_finalize(&self, pruned_root: &AbsoluteSystemPath) {
+        let sync = |offline: bool| {
+            let mut cmd = std::process::Command::new("cargo");
+            cmd.args(["metadata", "--format-version", "1"]);
+            if offline {
+                cmd.arg("--offline");
+            }
+            cmd.current_dir(pruned_root.as_std_path()).output()
+        };
+        match sync(true).and_then(|offline| {
+            if offline.status.success() {
+                Ok(offline)
+            } else {
+                sync(false)
+            }
+        }) {
+            Ok(output) if output.status.success() => {}
+            Ok(output) => {
+                tracing::warn!(
+                    "unable to canonicalize the pruned Cargo.lock; `cargo build --locked` may \
+                     require a lockfile refresh: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                );
+            }
+            Err(error) => {
+                tracing::warn!(
+                    "unable to run cargo to canonicalize the pruned Cargo.lock: {error}"
+                );
+            }
+        }
+    }
+
     fn derived_task_io(
         &self,
         package: &crate::package_graph::PackageInfo,
@@ -567,11 +777,20 @@ impl Toolchain for CargoToolchain {
                 } else {
                     CargoPackageKind::Library
                 };
+                let dir = cargo_crate
+                    .manifest_path
+                    .parent()
+                    .and_then(|dir| {
+                        turbopath::AnchoredSystemPathBuf::new(&self.repo_root, dir).ok()
+                    })
+                    .map(|dir| dir.to_unix().to_string())
+                    .unwrap_or_default();
                 self.record_details(
                     cargo_crate.name.clone(),
                     CargoPackageDetails {
                         kind,
                         deliverables: cargo_crate.deliverables,
+                        dir,
                     },
                 );
                 let external_dependencies: HashSet<turborepo_lockfiles::Package> = closures
@@ -601,6 +820,7 @@ impl Toolchain for CargoToolchain {
                     CargoPackageDetails {
                         kind: CargoPackageKind::Workspace,
                         deliverables: Vec::new(),
+                        dir: String::new(),
                     },
                 );
                 let dependencies = crate_names
