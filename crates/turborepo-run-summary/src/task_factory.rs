@@ -119,12 +119,14 @@ where
         display_task: impl Fn(&TaskId<'static>) -> Option<T> + Copy,
     ) -> Result<SharedTaskSummary<T>, Error> {
         // TODO: command should be optional
-        let command = workspace_info
-            .package_json
-            .scripts
-            .get(task_id.task())
-            .map(|script| script.as_inner())
-            .cloned()
+        // The package's toolchain owns the display string (JavaScript: the
+        // script text; Cargo: the cargo invocation), derived from the same
+        // tables as execution so display cannot drift from what runs.
+        let command = self
+            .package_graph
+            .toolchains()
+            .get(&workspace_info.toolchain)
+            .and_then(|toolchain| toolchain.task_display_command(workspace_info, task_id.task()))
             .unwrap_or_else(|| "<NONEXISTENT>".to_string());
 
         let task_definition = self.task_definition(task_id)?;

@@ -3,11 +3,7 @@
 //! This module provides the trait and factory for creating commands to execute
 //! tasks.
 
-use std::{
-    collections::HashSet,
-    ffi::OsString,
-    path::{Path, PathBuf},
-};
+use std::collections::HashSet;
 
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, PathError, RelativeUnixPath};
@@ -27,47 +23,6 @@ fn apply_environment(cmd: &mut Command, environment: &EnvironmentVariableMap) {
     cmd.envs(environment.iter());
 }
 
-#[cfg(windows)]
-// Avoid npm.cmd so Windows Ctrl+C reaches npm/node without cmd.exe emitting
-// "Terminate batch job (Y/N)?" during graceful shutdown.
-fn npm_direct_command(package_manager_binary: &Path) -> Option<(PathBuf, OsString)> {
-    if package_manager_binary.file_name()?.to_str()? != "npm.cmd" {
-        return None;
-    }
-
-    let node_dir = package_manager_binary.parent()?;
-    let node = node_dir.join("node.exe");
-    let npm_cli = node_dir
-        .join("node_modules")
-        .join("npm")
-        .join("bin")
-        .join("npm-cli.js");
-
-    (node.is_file() && npm_cli.is_file()).then(|| (node, npm_cli.into_os_string()))
-}
-
-#[cfg(windows)]
-fn package_manager_command(
-    package_manager: &PackageManager,
-    package_manager_binary: &Path,
-) -> (OsString, Vec<OsString>) {
-    if package_manager == &PackageManager::Npm
-        && let Some((node, npm_cli)) = npm_direct_command(package_manager_binary)
-    {
-        return (node.into_os_string(), vec![npm_cli]);
-    }
-
-    (package_manager_binary.as_os_str().to_owned(), Vec::new())
-}
-
-#[cfg(not(windows))]
-fn package_manager_command(
-    _package_manager: &PackageManager,
-    package_manager_binary: &Path,
-) -> (OsString, Vec<OsString>) {
-    (package_manager_binary.as_os_str().to_owned(), Vec::new())
-}
-
 /// Trait for providing commands to execute tasks.
 ///
 /// Implementors of this trait are responsible for determining how to execute
@@ -80,8 +35,8 @@ fn package_manager_command(
 /// - `E`: The error type returned when command creation fails
 ///
 /// # Implementors
-/// - `PackageGraphCommandProvider` in turborepo-lib (executes package.json
-///   scripts)
+/// - `ToolchainCommandProvider` (resolves commands through the package's
+///   toolchain: package.json scripts for JavaScript, cargo verbs for Cargo)
 /// - `MicroFrontendProxyProvider` in turborepo-lib (starts MFE proxy)
 pub trait CommandProvider<E> {
     /// Create a command for the given task.
@@ -169,6 +124,13 @@ pub enum CommandProviderError {
     },
     #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
+    #[error("No toolchain '{toolchain}' registered for package {package_name}.")]
+    MissingToolchain {
+        toolchain: turborepo_repository::toolchain::ToolchainId,
+        package_name: PackageName,
+    },
+    #[error(transparent)]
+    Toolchain(#[from] turborepo_repository::toolchain::Error),
 }
 
 /// A trait for fetching package information required to execute commands
@@ -188,31 +150,32 @@ impl PackageInfoProvider for PackageGraph {
     }
 }
 
-/// Command provider that creates commands from package.json scripts.
+/// Command provider that resolves commands through the package's toolchain.
 ///
-/// This provider looks up the task's script in the package's package.json
-/// and creates a command to execute it via the package manager.
+/// The toolchain owns command construction (JavaScript: run the package.json
+/// script via the package manager; Cargo: `cargo <verb>` scoped to the
+/// crate or workspace). This provider adapts the resolved [`TaskCommand`]
+/// data into a process command and applies concerns that are not
+/// toolchain-specific: the task environment, stdin policy, and
+/// microfrontends proxy decorations.
 #[derive(Debug)]
-pub struct PackageGraphCommandProvider<'a, M = crate::NoMfeConfig> {
+pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     repo_root: &'a AbsoluteSystemPath,
     package_graph: &'a PackageGraph,
-    package_manager_binary: Result<PathBuf, which::Error>,
     task_args: TaskArgs<'a>,
     mfe_configs: Option<&'a M>,
 }
 
-impl<'a, M: MfeConfigProvider> PackageGraphCommandProvider<'a, M> {
+impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
     pub fn new(
         repo_root: &'a AbsoluteSystemPath,
         package_graph: &'a PackageGraph,
         task_args: TaskArgs<'a>,
         mfe_configs: Option<&'a M>,
     ) -> Self {
-        let package_manager_binary = which::which(package_graph.package_manager().command());
         Self {
             repo_root,
             package_graph,
-            package_manager_binary,
             task_args,
             mfe_configs,
         }
@@ -229,7 +192,7 @@ impl<'a, M: MfeConfigProvider> PackageGraphCommandProvider<'a, M> {
 }
 
 impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
-    for PackageGraphCommandProvider<'a, M>
+    for ToolchainCommandProvider<'a, M>
 {
     fn command(
         &self,
@@ -237,37 +200,33 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
         environment: &EnvironmentVariableMap,
     ) -> Result<Option<Command>, E> {
         let workspace_info = self.package_info(task_id)?;
+        let toolchain = self
+            .package_graph
+            .toolchains()
+            .get(&workspace_info.toolchain)
+            .ok_or_else(|| CommandProviderError::MissingToolchain {
+                toolchain: workspace_info.toolchain.clone(),
+                package_name: task_id.package().into(),
+            })?;
 
-        // bail if the script doesn't exist or is empty
-        if workspace_info
-            .package_json
-            .scripts
-            .get(task_id.task())
-            .is_none_or(|script| script.is_empty())
-        {
+        let spec = toolchain
+            .task_command(
+                self.repo_root,
+                workspace_info,
+                task_id.task(),
+                self.task_args.args_for_task(task_id),
+            )
+            .map_err(CommandProviderError::from)?;
+        let Some(spec) = spec else {
             return Ok(None);
-        }
-        let package_manager_binary = self
-            .package_manager_binary
-            .as_deref()
-            .map_err(|e| CommandProviderError::from(*e))?;
-        let (program, mut args) =
-            package_manager_command(self.package_graph.package_manager(), package_manager_binary);
-        args.extend([OsString::from("run"), OsString::from(task_id.task())]);
-        if let Some(pass_through_args) = self.task_args.args_for_task(task_id) {
-            args.extend(
-                self.package_graph
-                    .package_manager()
-                    .arg_separator(pass_through_args)
-                    .map(OsString::from),
-            );
-            args.extend(pass_through_args.iter().map(OsString::from));
-        }
-        let mut cmd = Command::new(program);
-        cmd.args(args);
+        };
 
-        let package_dir = self.repo_root.resolve(workspace_info.package_path());
-        cmd.current_dir(package_dir);
+        let mut cmd = Command::new(spec.program);
+        cmd.args(spec.args);
+        cmd.current_dir(spec.cwd);
+        if let Some(group) = spec.serial_group {
+            cmd.serial_group(group);
+        }
 
         apply_environment(&mut cmd, environment);
 
@@ -754,43 +713,6 @@ mod tests {
             .command(&task_id, &EnvironmentVariableMap::default())
             .unwrap();
         assert!(cmd.is_none(), "expected no cmd, got {cmd:?}");
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn npm_cmd_unwraps_to_node_and_npm_cli() {
-        let tempdir = tempfile::tempdir().unwrap();
-        let npm_cmd = tempdir.path().join("npm.cmd");
-        let node = tempdir.path().join("node.exe");
-        let npm_cli = tempdir
-            .path()
-            .join("node_modules")
-            .join("npm")
-            .join("bin")
-            .join("npm-cli.js");
-
-        fs::write(&npm_cmd, "").unwrap();
-        fs::write(&node, "").unwrap();
-        fs::create_dir_all(npm_cli.parent().unwrap()).unwrap();
-        fs::write(&npm_cli, "").unwrap();
-
-        let (program, args) = package_manager_command(&PackageManager::Npm, &npm_cmd);
-
-        assert_eq!(program, node.into_os_string());
-        assert_eq!(args, vec![npm_cli.into_os_string()]);
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn npm_cmd_falls_back_when_npm_cli_missing() {
-        let tempdir = tempfile::tempdir().unwrap();
-        let npm_cmd = tempdir.path().join("npm.cmd");
-        fs::write(&npm_cmd, "").unwrap();
-
-        let (program, args) = package_manager_command(&PackageManager::Npm, &npm_cmd);
-
-        assert_eq!(program, npm_cmd.into_os_string());
-        assert!(args.is_empty());
     }
 
     #[tokio::test]

@@ -41,9 +41,9 @@
 //!   Lockfile handling gains a trait surface with external dependency hashing;
 //!   dependency splitting remains JS-native for now.
 
-use std::{borrow::Cow, fmt, future::Future, pin::Pin, sync::Arc};
+use std::{borrow::Cow, ffi::OsString, fmt, future::Future, pin::Pin, sync::Arc};
 
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use crate::{
     discovery::{self, PackageDiscovery},
@@ -124,6 +124,25 @@ pub enum Error {
 pub type DiscoverPackagesFuture<'a> =
     Pin<Box<dyn Future<Output = Result<Vec<DiscoveredPackage>, Error>> + Send + 'a>>;
 
+/// A command resolved by a toolchain for a task, as plain data. The executor
+/// turns it into a process, applying the task's environment, stdin policy,
+/// and any decorations that are not toolchain concerns (e.g.
+/// microfrontends proxy variables).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskCommand {
+    /// The program to execute. `OsString` rather than `String` only to
+    /// tolerate non-UTF-8 binary paths; the value is still plain data.
+    pub program: OsString,
+    pub args: Vec<OsString>,
+    /// Absolute directory to run in.
+    pub cwd: AbsoluteSystemPathBuf,
+    /// Mutually-exclusive execution group: the executor runs at most one
+    /// command per group at a time, process-wide. For tools that hold
+    /// global locks (e.g. Cargo's build directory), where concurrent
+    /// processes cannot make progress anyway.
+    pub serial_group: Option<String>,
+}
+
 /// A language ecosystem that contributes packages to the repository.
 ///
 /// See the module docs for the design rules trait methods must follow.
@@ -133,6 +152,36 @@ pub trait Toolchain: Send + Sync {
 
     /// Discover this toolchain's packages.
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_>;
+
+    /// Resolve the command that implements `task` for `package`, or `None`
+    /// when the toolchain defines no command for it — the task is then a
+    /// no-op, like a missing package.json script.
+    ///
+    /// `pass_through_args` are user-supplied arguments (`turbo run task --
+    /// <args>`); the toolchain owns how they are attached, since separator
+    /// conventions differ per tool.
+    fn task_command(
+        &self,
+        repo_root: &AbsoluteSystemPath,
+        package: &crate::package_graph::PackageInfo,
+        task: &str,
+        pass_through_args: Option<&[String]>,
+    ) -> Result<Option<TaskCommand>, Error> {
+        let _ = (repo_root, package, task, pass_through_args);
+        Ok(None)
+    }
+
+    /// A one-line description of what `task` runs for `package`, for
+    /// dry-run output and run summaries. Derived from the same tables as
+    /// [`Toolchain::task_command`] so display cannot drift from execution.
+    fn task_display_command(
+        &self,
+        package: &crate::package_graph::PackageInfo,
+        task: &str,
+    ) -> Option<String> {
+        let _ = (package, task);
+        None
+    }
 }
 
 /// The set of toolchains contributing packages to the repository.
@@ -190,11 +239,29 @@ impl fmt::Debug for ToolchainRegistry {
 /// and parses each manifest into the package descriptor.
 pub struct JavaScriptToolchain<P> {
     discovery: P,
+    /// The package manager as resolved during graph construction, recorded
+    /// by the builder so synchronous concerns (command resolution) can use
+    /// it without re-running discovery.
+    resolved_package_manager: std::sync::OnceLock<PackageManager>,
+    /// The package manager binary, resolved lazily on first command.
+    package_manager_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+}
+
+#[derive(Debug, thiserror::Error)]
+enum JavaScriptCommandError {
+    // Message kept identical to the pre-toolchain provider error for
+    // output compatibility.
+    #[error("Unable to find package manager binary: {0}")]
+    Which(#[from] which::Error),
 }
 
 impl<P: PackageDiscovery + Send + Sync> JavaScriptToolchain<P> {
     pub fn new(discovery: P) -> Self {
-        Self { discovery }
+        Self {
+            discovery,
+            resolved_package_manager: std::sync::OnceLock::new(),
+            package_manager_binary: std::sync::OnceLock::new(),
+        }
     }
 
     /// The repository's JavaScript package manager.
@@ -205,11 +272,120 @@ impl<P: PackageDiscovery + Send + Sync> JavaScriptToolchain<P> {
     pub async fn package_manager(&self) -> Result<PackageManager, discovery::Error> {
         Ok(self.discovery.discover_packages().await?.package_manager)
     }
+
+    /// Record the package manager resolved during graph construction. Called
+    /// by the package graph builder; later calls are no-ops.
+    pub fn set_resolved_package_manager(&self, package_manager: PackageManager) {
+        let _ = self.resolved_package_manager.set(package_manager);
+    }
+}
+
+#[cfg(windows)]
+// Avoid npm.cmd so Windows Ctrl+C reaches npm/node without cmd.exe emitting
+// "Terminate batch job (Y/N)?" during graceful shutdown.
+fn npm_direct_command(
+    package_manager_binary: &std::path::Path,
+) -> Option<(std::path::PathBuf, OsString)> {
+    if package_manager_binary.file_name()?.to_str()? != "npm.cmd" {
+        return None;
+    }
+
+    let node_dir = package_manager_binary.parent()?;
+    let node = node_dir.join("node.exe");
+    let npm_cli = node_dir
+        .join("node_modules")
+        .join("npm")
+        .join("bin")
+        .join("npm-cli.js");
+
+    (node.is_file() && npm_cli.is_file()).then(|| (node, npm_cli.into_os_string()))
+}
+
+#[cfg(windows)]
+fn package_manager_command(
+    package_manager: &PackageManager,
+    package_manager_binary: &std::path::Path,
+) -> (OsString, Vec<OsString>) {
+    if package_manager == &PackageManager::Npm
+        && let Some((node, npm_cli)) = npm_direct_command(package_manager_binary)
+    {
+        return (node.into_os_string(), vec![npm_cli]);
+    }
+
+    (package_manager_binary.as_os_str().to_owned(), Vec::new())
+}
+
+#[cfg(not(windows))]
+fn package_manager_command(
+    _package_manager: &PackageManager,
+    package_manager_binary: &std::path::Path,
+) -> (OsString, Vec<OsString>) {
+    (package_manager_binary.as_os_str().to_owned(), Vec::new())
 }
 
 impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
     fn id(&self) -> ToolchainId {
         ToolchainId::JAVASCRIPT
+    }
+
+    fn task_command(
+        &self,
+        repo_root: &AbsoluteSystemPath,
+        package: &crate::package_graph::PackageInfo,
+        task: &str,
+        pass_through_args: Option<&[String]>,
+    ) -> Result<Option<TaskCommand>, Error> {
+        // No script (or an empty one) means the task is a no-op.
+        if package
+            .package_json
+            .scripts
+            .get(task)
+            .is_none_or(|script| script.is_empty())
+        {
+            return Ok(None);
+        }
+        let Some(package_manager) = self.resolved_package_manager.get() else {
+            // The graph was not built through this toolchain instance;
+            // without a package manager there is no way to run a script.
+            return Ok(None);
+        };
+
+        let package_manager_binary = self
+            .package_manager_binary
+            .get_or_init(|| which::which(package_manager.command()))
+            .as_deref()
+            .map_err(|err| Error::Failed(Box::new(JavaScriptCommandError::Which(*err))))?;
+        let (program, mut args) = package_manager_command(package_manager, package_manager_binary);
+        args.extend([OsString::from("run"), OsString::from(task)]);
+        if let Some(pass_through_args) = pass_through_args {
+            args.extend(
+                package_manager
+                    .arg_separator(pass_through_args)
+                    .map(OsString::from),
+            );
+            args.extend(pass_through_args.iter().map(OsString::from));
+        }
+
+        Ok(Some(TaskCommand {
+            program,
+            args,
+            cwd: repo_root.resolve(package.package_path()),
+            serial_group: None,
+        }))
+    }
+
+    fn task_display_command(
+        &self,
+        package: &crate::package_graph::PackageInfo,
+        task: &str,
+    ) -> Option<String> {
+        // Summaries show the script text itself, matching historical
+        // behavior.
+        package
+            .package_json
+            .scripts
+            .get(task)
+            .map(|script| script.as_inner().clone())
     }
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
@@ -257,6 +433,124 @@ mod tests {
         assert_eq!(custom.to_string(), "cargo");
         let dynamic = ToolchainId::new(String::from("python-uv"));
         assert_eq!(dynamic.as_str(), "python-uv");
+    }
+
+    #[test]
+    fn test_javascript_task_command() {
+        struct StubDiscovery;
+        impl PackageDiscovery for StubDiscovery {
+            async fn discover_packages(
+                &self,
+            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+                Ok(discovery::DiscoveryResponse {
+                    package_manager: PackageManager::Npm,
+                    workspaces: vec![],
+                })
+            }
+            async fn discover_packages_blocking(
+                &self,
+            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+                self.discover_packages().await
+            }
+        }
+
+        let repo_root_buf =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let repo_root = repo_root_buf.as_ref() as &AbsoluteSystemPath;
+
+        let toolchain = JavaScriptToolchain::new(StubDiscovery);
+        toolchain.set_resolved_package_manager(PackageManager::Npm);
+
+        let package = crate::package_graph::PackageInfo {
+            package_json: PackageJson::from_value(serde_json::json!({
+                "name": "web",
+                "scripts": { "build": "next build", "empty": "" }
+            }))
+            .unwrap(),
+            package_json_path: turbopath::AnchoredSystemPathBuf::from_raw(
+                ["apps", "web", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
+            )
+            .unwrap(),
+            ..Default::default()
+        };
+
+        let command = toolchain
+            .task_command(repo_root, &package, "build", None)
+            .unwrap()
+            .expect("script exists, command resolves");
+        // The program is the resolved npm binary (or node.exe on Windows);
+        // the invocation shape is what matters.
+        assert!(
+            command
+                .args
+                .ends_with(&[OsString::from("run"), OsString::from("build")]),
+            "expected `run build` invocation, got {:?}",
+            command.args
+        );
+        assert_eq!(
+            command.cwd,
+            repo_root.join_components(&["apps", "web"]),
+            "command runs in the package directory"
+        );
+        assert_eq!(command.serial_group, None);
+
+        // Missing and empty scripts are no-ops.
+        assert!(
+            toolchain
+                .task_command(repo_root, &package, "lint", None)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            toolchain
+                .task_command(repo_root, &package, "empty", None)
+                .unwrap()
+                .is_none()
+        );
+
+        // Display shows the script text itself.
+        assert_eq!(
+            toolchain.task_display_command(&package, "build").as_deref(),
+            Some("next build")
+        );
+        assert_eq!(toolchain.task_display_command(&package, "lint"), None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn npm_cmd_unwraps_to_node_and_npm_cli() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let npm_cmd = tempdir.path().join("npm.cmd");
+        let node = tempdir.path().join("node.exe");
+        let npm_cli = tempdir
+            .path()
+            .join("node_modules")
+            .join("npm")
+            .join("bin")
+            .join("npm-cli.js");
+
+        std::fs::write(&npm_cmd, "").unwrap();
+        std::fs::write(&node, "").unwrap();
+        std::fs::create_dir_all(npm_cli.parent().unwrap()).unwrap();
+        std::fs::write(&npm_cli, "").unwrap();
+
+        let (program, args) = package_manager_command(&PackageManager::Npm, &npm_cmd);
+
+        assert_eq!(program, node.into_os_string());
+        assert_eq!(args, vec![npm_cli.into_os_string()]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn npm_cmd_falls_back_when_npm_cli_missing() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let npm_cmd = tempdir.path().join("npm.cmd");
+        std::fs::write(&npm_cmd, "").unwrap();
+
+        let (program, args) = package_manager_command(&PackageManager::Npm, &npm_cmd);
+
+        assert_eq!(program, npm_cmd.into_os_string());
+        assert!(args.is_empty());
     }
 
     #[test]

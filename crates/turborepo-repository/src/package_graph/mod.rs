@@ -65,6 +65,10 @@ pub struct PackageGraph {
     /// `dependencies` and `ancestors` consult them on every call; the set is
     /// invariant once the graph is built.
     root_internal_dependencies: OnceLock<HashSet<PackageNode>>,
+    /// The toolchains that contributed packages to this graph. The single
+    /// lookup path for toolchain concerns after graph construction (command
+    /// resolution, summaries).
+    toolchains: crate::toolchain::ToolchainRegistry,
 }
 
 /// The WorkspacePackage.
@@ -361,6 +365,11 @@ impl PackageGraph {
 
     pub fn package_manager(&self) -> &PackageManager {
         &self.package_manager
+    }
+
+    /// The toolchains that contributed packages to this graph.
+    pub fn toolchains(&self) -> &crate::toolchain::ToolchainRegistry {
+        &self.toolchains
     }
 
     pub fn repo_root(&self) -> &AbsoluteSystemPath {
