@@ -24,6 +24,10 @@ const TURBO_EXTENDS: &str = "$TURBO_EXTENDS$";
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
+fn contains_parent_dir_segment(glob: &str) -> bool {
+    glob.split('/').any(|segment| segment == "..")
+}
+
 /// Helper function to check for and remove $TURBO_EXTENDS$ from an array
 /// Returns (processed_array, extends_found)
 fn extract_turbo_extends(
@@ -110,7 +114,14 @@ impl ProcessedGlob {
 
     /// Creates a ProcessedGlob for outputs (validates as output field)
     pub fn from_spanned_output(value: Spanned<UnescapedString>) -> Result<Self, Error> {
-        Self::from_spanned_internal(value, "outputs")
+        let source = value.clone();
+        let glob = Self::from_spanned_internal(value, "outputs")?;
+        if contains_parent_dir_segment(&glob.glob) {
+            let (span, text) = source.span_and_text("turbo.json");
+            return Err(Error::OutputPathTraversal { span, text });
+        }
+
+        Ok(glob)
     }
 
     /// Creates a ProcessedGlob for inputs (validates as input field)
@@ -783,6 +794,47 @@ mod tests {
 
         let resolved = glob.resolve(replacement);
         assert_eq!(resolved, expected);
+    }
+
+    #[test_case("../../target.txt" ; "direct traversal")]
+    #[test_case("..///../target.txt" ; "extra slashes")]
+    #[test_case("extra/../../target.txt" ; "intermediate directory")]
+    #[test_case("./../../target.txt" ; "leading current directory")]
+    #[test_case("!../../target.txt" ; "negated traversal")]
+    #[test_case("../../{file1,file2,fileN}" ; "brace expansion")]
+    fn test_processed_outputs_reject_parent_directory_segments(input: &str) {
+        let result = ProcessedGlob::from_spanned_output(
+            Spanned::new(UnescapedString::from(input.to_string()))
+                .with_path(Arc::from("turbo.json"))
+                .with_text(format!("\"{}\"", input))
+                .with_range(1..input.len() + 1),
+        );
+
+        assert_matches!(result, Err(Error::OutputPathTraversal { .. }));
+    }
+
+    #[test]
+    fn test_processed_outputs_allow_turbo_root() {
+        let result = ProcessedGlob::from_spanned_output(Spanned::new(UnescapedString::from(
+            "$TURBO_ROOT$/README.md",
+        )));
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_incremental_outputs_reject_parent_directory_segments() {
+        let raw_task = RawTaskDefinition {
+            incremental: Some(vec![crate::raw::RawIncrementalPartition {
+                outputs: Some(vec![Spanned::new(UnescapedString::from("../target.txt"))]),
+                ..Default::default()
+            }]),
+            ..Default::default()
+        };
+
+        let result = ProcessedTaskDefinition::from_raw(raw_task, &FutureFlags::default());
+
+        assert_matches!(result, Err(Error::OutputPathTraversal { .. }));
     }
 
     #[test]

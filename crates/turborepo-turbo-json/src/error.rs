@@ -214,6 +214,15 @@ pub enum Error {
         text: NamedSource<String>,
     },
 
+    #[error("`outputs` cannot contain path traversal.")]
+    #[diagnostic(help("Use `$TURBO_ROOT$` to declare outputs relative to the repository root."))]
+    OutputPathTraversal {
+        #[label("path traversal found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
     #[error("found absolute path in `cacheDir`")]
     #[diagnostic(help("If absolute paths are required, use `--cache-dir` or `TURBO_CACHE_DIR`."))]
     AbsoluteCacheDir {
