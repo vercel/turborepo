@@ -991,6 +991,14 @@ impl Run {
             debug!("sccache compile cache disabled: not running in CI");
             return None;
         }
+        // The compile cache *is* the remote cache; when remote cache use is
+        // off for this run (e.g. `TURBO_CACHE=local:rw` in PR CI, where the
+        // credentials are placeholders), a proxy would only convert every
+        // sccache request into a doomed API call and a logged warning.
+        if !self.opts.cache_opts.cache.remote.should_use() {
+            debug!("sccache compile cache disabled: remote cache is not enabled for this run");
+            return None;
+        }
         let (Some(client), Some(auth)) = (self.api_client.clone(), self.api_auth.clone()) else {
             debug!("sccache compile cache disabled: Remote Cache is not configured");
             return None;
