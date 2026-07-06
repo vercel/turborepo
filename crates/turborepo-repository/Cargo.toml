@@ -18,6 +18,7 @@ biome_json_parser = { workspace = true }
 
 dunce = { workspace = true }
 either = { workspace = true }
+futures = { workspace = true }
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 itertools = { workspace = true }
 lazy-regex = "2.5.0"
@@ -31,7 +32,6 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml_ng = { workspace = true }
 thiserror = { workspace = true }
-tokio-stream = "0.1.14"
 tokio.workspace = true
 tracing.workspace = true
 turbopath = { workspace = true, features = ["biome"] }

@@ -9,8 +9,9 @@
 //! these strategies will implement some sort of monad-style composition so that
 //! we can track areas of run that are performing sub-optimally.
 
+use futures::StreamExt;
 use tokio::time::error::Elapsed;
-use tokio_stream::{StreamExt, iter};
+use tracing::Instrument;
 use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
@@ -144,6 +145,7 @@ impl PackageDiscovery for LocalPackageDiscovery {
     async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
         tracing::debug!("discovering packages using local strategy");
 
+        let glob_span = tracing::info_span!("workspace_glob_walk").entered();
         let package_paths = match self.package_manager.get_package_jsons(&self.repo_root) {
             Ok(packages) => packages,
             // if there is not a list of workspaces, it is not necessarily an error. just report no
@@ -157,27 +159,34 @@ impl PackageDiscovery for LocalPackageDiscovery {
             Err(e) => return Err(Error::Failed(Box::new(e))),
         };
 
-        iter(package_paths)
-            .then(|path| async move {
-                let potential_turbo = path
-                    .parent()
-                    .expect("non-root")
-                    .join_component("turbo.json");
-                let potential_turbo_exists = tokio::fs::try_exists(potential_turbo.as_path()).await;
+        drop(glob_span);
+        // `buffered` keeps discovery order deterministic while letting the
+        // per-workspace turbo.json stats run concurrently — sequentially
+        // these 1-per-workspace syscalls cost ~20ms on large monorepos.
+        futures::stream::iter(package_paths.into_iter().map(|path| async move {
+            let potential_turbo = path
+                .parent()
+                .expect("non-root")
+                .join_component("turbo.json");
+            let potential_turbo_exists = tokio::fs::try_exists(potential_turbo.as_path()).await;
 
-                Ok(WorkspaceData {
-                    package_json: path,
-                    turbo_json: potential_turbo_exists
-                        .unwrap_or_default()
-                        .then_some(potential_turbo),
-                })
+            Ok(WorkspaceData {
+                package_json: path,
+                turbo_json: potential_turbo_exists
+                    .unwrap_or_default()
+                    .then_some(potential_turbo),
             })
-            .collect::<Result<Vec<_>, _>>()
-            .await
-            .map(|workspaces| DiscoveryResponse {
-                workspaces,
-                package_manager: self.package_manager.clone(),
-            })
+        }))
+        .buffered(64)
+        .collect::<Vec<Result<WorkspaceData, Error>>>()
+        .instrument(tracing::info_span!("turbo_json_stat_stream"))
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map(|workspaces| DiscoveryResponse {
+            workspaces,
+            package_manager: self.package_manager.clone(),
+        })
     }
 
     // there is no notion of waiting for upstream deps here, so this is the same as
