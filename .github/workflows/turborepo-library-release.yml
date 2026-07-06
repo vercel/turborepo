@@ -66,6 +66,7 @@ jobs:
             install: |
               apk update && apk upgrade
               apk add libc6-compat curl
+              npm i -g pnpm@10.28.0
               echo /root/.cargo/bin >> ${GITHUB_PATH}
               echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
             setup: |
@@ -80,6 +81,7 @@ jobs:
             install: |
               apk update && apk upgrade
               apk add libc6-compat curl
+              npm i -g pnpm@10.28.0
               echo /root/.cargo/bin >> ${GITHUB_PATH}
               echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
               echo /aarch64-linux-musl-cross/bin >> ${GITHUB_PATH}
