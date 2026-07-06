@@ -425,13 +425,7 @@ jobs:
       TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
       TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
-      # AWS-backed sccache is disabled.
-      # SCCACHE_BUCKET: turborepo-sccache
-      # SCCACHE_REGION: us-east-2
-      # RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
       CARGO_INCREMENTAL: 0
-      # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -445,9 +439,6 @@ jobs:
 
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
-
-      # - name: Run sccache-cache
-      #   uses: mozilla-actions/sccache-action@v0.0.6
 
       - name: Build turbo binary
         run: cargo build
