@@ -236,6 +236,22 @@ whether anything changed; Cargo decides how and in what order to build.**
   (sccache) is the sound layer, and it participates in task hashes so
   toggling it invalidates caches.
 
+- **Watch mode** (`Toolchain::watch_spec`, consumed by
+  `turborepo-lib/src/package_changes_watcher.rs`): each toolchain declares
+  its workspace-definition files and build-byproduct directories. For
+  Cargo, any `Cargo.toml` or the root `Cargo.lock` triggers full
+  rediscovery (the crate set or its edges may have changed), while events
+  under the root `target/` directory are dropped — Cargo writes there
+  continuously during builds, and the feedback loop must not depend on a
+  `.gitignore` entry (`Cargo.toml` files under `target/` are build
+  byproducts, not workspace definition). The watcher builds its package
+  graph with the same toolchains a run would register, so watch sees the
+  same package set. JavaScript declares nothing extra: workspace
+  redefinition is caught by the change mapper's conservative
+  all-packages fallback. Known gap: the hash watcher's content-hash dedup
+  is JS-glob-based, so a no-op save inside a crate re-runs its tasks as a
+  fast cache hit rather than being suppressed.
+
 A `--filter` that names a crate while support is disabled gets an error
 hint pointing at the flag. Released turbo versions hard-error on unknown
 `futureFlags` keys, so a repo can only adopt the flag once every consumer

@@ -299,6 +299,16 @@ impl WatchClient {
             recv.clone(),
             scm,
         ));
+        // The watcher builds its own package graph; register the same
+        // toolchains a run would so it watches the same package set.
+        let mut extra_toolchains: Vec<
+            std::sync::Arc<dyn turborepo_repository::toolchain::Toolchain>,
+        > = Vec::new();
+        if crate::run::builder::cargo_enabled(&base.opts().future_flags) {
+            extra_toolchains.push(turborepo_repository::cargo::CargoToolchain::new(
+                base.repo_root.clone(),
+            ));
+        }
         let package_changes_watcher = PackageChangesWatcher::new(
             base.repo_root.clone(),
             recv,
@@ -306,6 +316,7 @@ impl WatchClient {
             custom_turbo_json_path,
             base.opts().run_opts.single_package,
             base.opts().repo_opts.allow_no_package_manager,
+            extra_toolchains,
         );
 
         // Subscribe before building the Run so we don't miss the initial
