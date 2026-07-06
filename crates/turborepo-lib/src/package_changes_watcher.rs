@@ -21,6 +21,7 @@ use turborepo_repository::{
     },
     package_graph::{PackageGraph, PackageGraphBuilder, PackageName, WorkspacePackage},
     package_json::PackageJson,
+    toolchain::{Toolchain, WatchSpec},
 };
 use turborepo_scm::GitHashes;
 
@@ -58,6 +59,7 @@ pub(crate) fn startup_timeout_secs() -> u64 {
 }
 
 impl PackageChangesWatcher {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         repo_root: AbsoluteSystemPathBuf,
         file_events_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
@@ -65,6 +67,7 @@ impl PackageChangesWatcher {
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
         allow_no_package_manager: bool,
+        extra_toolchains: Vec<Arc<dyn Toolchain>>,
     ) -> Self {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (package_change_events_tx, package_change_events_rx) =
@@ -77,6 +80,7 @@ impl PackageChangesWatcher {
             custom_turbo_json_path,
             single_package,
             allow_no_package_manager,
+            extra_toolchains,
         );
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
@@ -124,6 +128,10 @@ struct Subscriber {
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     single_package: bool,
     allow_no_package_manager: bool,
+    /// Toolchains registered in addition to JavaScript (e.g. Cargo when
+    /// futureFlags.experimentalCargoWorkspaces is enabled), mirroring the
+    /// run builder so the watcher sees the same package graph a run would.
+    extra_toolchains: Vec<Arc<dyn Toolchain>>,
 }
 
 // This is a workaround because `ignore` doesn't match against a path's
@@ -183,6 +191,7 @@ fn classify_changed_files(
     root_gitignore: &Gitignore,
     custom_turbo_json_path: Option<&AbsoluteSystemPathBuf>,
     change_mapper: &ChangeMapper<'_, GlobalDepsPackageChangeMapper<'_>>,
+    watch_spec: &WatchSpec,
 ) -> FileChangeAction {
     let turbo_json_path = repo_root.join_component(CONFIG_FILE);
     let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
@@ -198,6 +207,48 @@ fn classify_changed_files(
         return FileChangeAction::ConfigChanged;
     }
 
+    // Whether an anchored path is under one of the toolchains'
+    // build-byproduct directories.
+    let in_ignored_prefix = |path: &AnchoredSystemPathBuf| {
+        watch_spec.ignore_prefixes.iter().any(|prefix| {
+            path.components()
+                .next()
+                .is_some_and(|component| component.as_str() == prefix)
+        })
+    };
+
+    // Toolchain workspace-definition files (e.g. Cargo manifests and the
+    // Cargo lockfile) define the package set and its edges; the watcher's
+    // package graph is stale after any of them change, so trigger full
+    // rediscovery. Definition-named files inside a byproduct directory
+    // (e.g. a Cargo.toml cargo itself writes under target/) are exempt.
+    if !watch_spec.definition_file_names.is_empty() || !watch_spec.definition_paths.is_empty() {
+        let definition_changed = trie.keys().any(|p| {
+            let Some(anchored) = AbsoluteSystemPathBuf::new(p)
+                .ok()
+                .and_then(|p| repo_root.anchor(p).ok())
+            else {
+                return false;
+            };
+            if in_ignored_prefix(&anchored) {
+                return false;
+            }
+            let unix = anchored.to_unix();
+            watch_spec
+                .definition_paths
+                .iter()
+                .any(|path| unix.as_str() == path)
+                || watch_spec.definition_file_names.iter().any(|name| {
+                    std::path::Path::new(p)
+                        .file_name()
+                        .is_some_and(|file_name| file_name == name.as_str())
+                })
+        });
+        if definition_changed {
+            return FileChangeAction::ConfigChanged;
+        }
+    }
+
     let changed_files: HashSet<_> = trie
         .keys()
         .filter_map(|p| {
@@ -211,6 +262,11 @@ fn classify_changed_files(
             repo_root.anchor(p).ok()
         })
         .filter(|p| !(ancestors_is_ignored(root_gitignore, p) || is_in_git_folder(p)))
+        // Toolchain build byproducts (e.g. Cargo's target/) are written
+        // continuously by the very tasks a change would re-trigger; letting
+        // them through would create a feedback loop. Usually gitignored and
+        // dropped above, but the loop must not depend on that.
+        .filter(|p| !in_ignored_prefix(p))
         .collect();
 
     if changed_files.is_empty() {
@@ -251,6 +307,7 @@ impl RepoState {
 }
 
 impl Subscriber {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         repo_root: AbsoluteSystemPathBuf,
         file_events_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
@@ -259,6 +316,7 @@ impl Subscriber {
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
         allow_no_package_manager: bool,
+        extra_toolchains: Vec<Arc<dyn Toolchain>>,
     ) -> Self {
         // Try to canonicalize the custom path to match what the file watcher reports
         let normalized_custom_path = custom_turbo_json_path.map(|path| {
@@ -301,6 +359,7 @@ impl Subscriber {
             custom_turbo_json_path: normalized_custom_path,
             single_package,
             allow_no_package_manager,
+            extra_toolchains,
         }
     }
 
@@ -311,13 +370,13 @@ impl Subscriber {
             tracing::debug!("no package.json found, package watcher not available");
             return None;
         };
-        let Ok(pkg_dep_graph) =
-            PackageGraphBuilder::new(&self.repo_root, root_package_json.clone())
-                .with_single_package_mode(self.single_package)
-                .with_allow_no_package_manager(self.allow_no_package_manager)
-                .build()
-                .await
-        else {
+        let mut builder = PackageGraphBuilder::new(&self.repo_root, root_package_json.clone())
+            .with_single_package_mode(self.single_package)
+            .with_allow_no_package_manager(self.allow_no_package_manager);
+        for toolchain in &self.extra_toolchains {
+            builder = builder.with_toolchain(toolchain.clone());
+        }
+        let Ok(pkg_dep_graph) = builder.build().await else {
             tracing::debug!("package graph not available, package watcher not available");
             return None;
         };
@@ -554,12 +613,14 @@ impl Subscriber {
                     root_gitignore = new_root_gitignore;
                 }
 
+                let watch_spec = repo_state.pkg_dep_graph.toolchains().watch_spec();
                 let action = classify_changed_files(
                     &trie,
                     &self.repo_root,
                     &root_gitignore,
                     self.custom_turbo_json_path.as_ref(),
                     &change_mapper,
+                    &watch_spec,
                 );
                 tracing::debug!(?action, "classified file changes");
 
@@ -647,6 +708,7 @@ mod test {
         change_mapper::{ChangeMapper, GlobalDepsPackageChangeMapper, PackageChanges},
         package_graph::{PackageGraph, PackageGraphBuilder},
         package_json::PackageJson,
+        toolchain::WatchSpec,
     };
     use turborepo_scm::SCM;
 
@@ -729,6 +791,21 @@ mod test {
             gitignore_lines: &[&str],
             custom_turbo_json: Option<&AbsoluteSystemPathBuf>,
         ) -> FileChangeAction {
+            self.classify_with_spec(
+                trie,
+                gitignore_lines,
+                custom_turbo_json,
+                WatchSpec::default(),
+            )
+        }
+
+        fn classify_with_spec(
+            &self,
+            trie: &Trie<String, ()>,
+            gitignore_lines: &[&str],
+            custom_turbo_json: Option<&AbsoluteSystemPathBuf>,
+            watch_spec: WatchSpec,
+        ) -> FileChangeAction {
             let mapper =
                 GlobalDepsPackageChangeMapper::new(&self.pkg_graph, std::iter::empty::<&str>())
                     .unwrap();
@@ -740,6 +817,7 @@ mod test {
                 &gitignore,
                 custom_turbo_json,
                 &change_mapper,
+                &watch_spec,
             )
         }
     }
@@ -862,6 +940,71 @@ mod test {
 
         let action = f.classify(&trie, &[], None);
         assert!(matches!(action, FileChangeAction::ConfigChanged));
+    }
+
+    #[tokio::test]
+    async fn classify_cargo_manifest_triggers_rediscovery() {
+        let f = ClassifyFixture::new().await;
+        let manifest = f
+            .repo_root
+            .join_components(&["crates", "foo", "Cargo.toml"]);
+        let mut trie = Trie::new();
+        trie.insert(manifest.to_string(), ());
+
+        // Manifests define the crate set and its edges; the watcher's graph
+        // is stale after any manifest change.
+        let action =
+            f.classify_with_spec(&trie, &[], None, turborepo_repository::cargo::watch_spec());
+        assert!(matches!(action, FileChangeAction::ConfigChanged));
+
+        // Without the Cargo toolchain registered, the same file is ordinary
+        // content.
+        let action = f.classify_with_spec(&trie, &[], None, WatchSpec::default());
+        assert!(matches!(action, FileChangeAction::PackagesChanged(..)));
+    }
+
+    #[tokio::test]
+    async fn classify_cargo_lock_triggers_rediscovery() {
+        let f = ClassifyFixture::new().await;
+        let lock = f.repo_root.join_component("Cargo.lock");
+        let mut trie = Trie::new();
+        trie.insert(lock.to_string(), ());
+
+        let action =
+            f.classify_with_spec(&trie, &[], None, turborepo_repository::cargo::watch_spec());
+        assert!(matches!(action, FileChangeAction::ConfigChanged));
+    }
+
+    #[tokio::test]
+    async fn classify_target_dir_writes_ignored() {
+        let f = ClassifyFixture::new().await;
+        let mut trie = Trie::new();
+        // Build byproducts, including a manifest cargo itself writes under
+        // target/ — neither may re-trigger the tasks that produced them.
+        trie.insert(
+            f.repo_root
+                .join_components(&["target", "debug", "foo"])
+                .to_string(),
+            (),
+        );
+        trie.insert(
+            f.repo_root
+                .join_components(&["target", "package", "foo", "Cargo.toml"])
+                .to_string(),
+            (),
+        );
+
+        let action =
+            f.classify_with_spec(&trie, &[], None, turborepo_repository::cargo::watch_spec());
+        assert!(
+            matches!(action, FileChangeAction::NoRelevantChanges),
+            "target/ writes must be dropped, got {action:?}"
+        );
+
+        // Without the Cargo toolchain, a directory named target/ is
+        // ordinary.
+        let action = f.classify_with_spec(&trie, &[], None, WatchSpec::default());
+        assert!(matches!(action, FileChangeAction::PackagesChanged(..)));
     }
 
     #[tokio::test]
@@ -1201,6 +1344,7 @@ mod test {
             None,
             single_package,
             allow_no_package_manager,
+            Vec::new(),
         );
 
         TestWatcherHandle {
@@ -1301,7 +1445,14 @@ mod test {
         let mut trie = Trie::new();
         trie.insert(changed_file.to_string(), ());
 
-        let action = classify_changed_files(&trie, &repo_root, &gitignore, None, &change_mapper);
+        let action = classify_changed_files(
+            &trie,
+            &repo_root,
+            &gitignore,
+            None,
+            &change_mapper,
+            &WatchSpec::default(),
+        );
 
         match &action {
             FileChangeAction::PackagesChanged(PackageChanges::Some(pkgs), _) => {

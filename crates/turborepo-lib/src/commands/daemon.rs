@@ -343,15 +343,29 @@ pub async fn daemon_server(
         exit_signal,
         custom_turbo_json_path,
         allow_no_package_manager,
-        |args| {
-            PackageChangesWatcher::new(
-                args.repo_root,
-                args.file_events,
-                args.hash_watcher,
-                args.custom_turbo_json_path,
-                false,
-                args.allow_no_package_manager,
-            )
+        {
+            let cargo_enabled = crate::run::builder::cargo_enabled(&base.opts().future_flags);
+            move |args| {
+                // Mirror the run builder: the daemon-side watcher must see
+                // the same package set a run would.
+                let mut extra_toolchains: Vec<
+                    std::sync::Arc<dyn turborepo_repository::toolchain::Toolchain>,
+                > = Vec::new();
+                if cargo_enabled {
+                    extra_toolchains.push(turborepo_repository::cargo::CargoToolchain::new(
+                        args.repo_root.clone(),
+                    ));
+                }
+                PackageChangesWatcher::new(
+                    args.repo_root,
+                    args.file_events,
+                    args.hash_watcher,
+                    args.custom_turbo_json_path,
+                    false,
+                    args.allow_no_package_manager,
+                    extra_toolchains,
+                )
+            }
         },
     );
 

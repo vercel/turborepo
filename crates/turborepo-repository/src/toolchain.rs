@@ -248,6 +248,42 @@ pub trait Toolchain: Send + Sync {
         let _ = (package, task);
         false
     }
+
+    /// How filesystem events relate to this toolchain in watch mode:
+    /// workspace-definition files whose change requires rediscovery, and
+    /// build-byproduct directories whose events must be ignored.
+    fn watch_spec(&self) -> WatchSpec {
+        WatchSpec::default()
+    }
+}
+
+/// How filesystem events relate to a toolchain in watch mode. See
+/// [`Toolchain::watch_spec`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WatchSpec {
+    /// Manifest file names that define the toolchain's workspace membership
+    /// or edges wherever they appear in the repository (outside
+    /// [`WatchSpec::ignore_prefixes`]): a change means the package set may
+    /// have changed, requiring full rediscovery.
+    pub definition_file_names: Vec<String>,
+    /// Repo-root-relative unix paths that define the workspace, with the
+    /// same rediscovery consequence.
+    pub definition_paths: Vec<String>,
+    /// Repo-root-relative unix directory prefixes containing the
+    /// toolchain's own build byproducts. Events under them are dropped:
+    /// they are written by the very tasks a change would re-trigger, and
+    /// must not feed back into the watcher even when not gitignored.
+    pub ignore_prefixes: Vec<String>,
+}
+
+impl WatchSpec {
+    /// Merge another spec into this one.
+    pub fn extend(&mut self, other: WatchSpec) {
+        self.definition_file_names
+            .extend(other.definition_file_names);
+        self.definition_paths.extend(other.definition_paths);
+        self.ignore_prefixes.extend(other.ignore_prefixes);
+    }
 }
 
 /// Hash wiring derived by a toolchain for one task. See
@@ -300,6 +336,15 @@ impl ToolchainRegistry {
 
     pub fn iter(&self) -> impl Iterator<Item = &dyn Toolchain> {
         self.toolchains.iter().map(AsRef::as_ref)
+    }
+
+    /// The union of every registered toolchain's [`WatchSpec`].
+    pub fn watch_spec(&self) -> WatchSpec {
+        let mut merged = WatchSpec::default();
+        for toolchain in self.iter() {
+            merged.extend(toolchain.watch_spec());
+        }
+        merged
     }
 }
 
@@ -490,6 +535,16 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
         // whatever the user declares, and no tool-level files or env vars
         // are implied. This is the real answer, not an unimplemented stub.
         None
+    }
+
+    fn watch_spec(&self) -> WatchSpec {
+        // Deliberately nothing: JavaScript workspace redefinition (a new or
+        // removed package.json, a lockfile change) is caught by the change
+        // mapper's conservative fallback — unattributable files map to
+        // "all packages", which triggers rediscovery — and JS build outputs
+        // land inside package directories where gitignore filtering already
+        // applies. This is the real answer, not an unimplemented stub.
+        WatchSpec::default()
     }
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
