@@ -311,6 +311,18 @@ pub(crate) fn check_file_import(
     if resolved_import_path.as_str() == package_path.as_str() {
         return Ok(None);
     }
+    // Imports that resolve into `node_modules` point at vendored
+    // dependencies, not at another workspace package's source. Generated
+    // code (e.g. SvelteKit's `.svelte-kit` output) commonly imports
+    // dependencies via long relative paths like
+    // `../../../node_modules/@sveltejs/kit/...`, which should not be
+    // flagged as leaving the package.
+    if resolved_import_path
+        .components()
+        .any(|c| c.as_str() == "node_modules")
+    {
+        return Ok(None);
+    }
     // We use `relation_to_path` and not `contains` because `contains`
     // panics on invalid paths with too many `..` components
     if !matches!(
@@ -1046,5 +1058,75 @@ mod test {
             "{import} should resolve through the tsconfig alias"
         );
         assert!(diag.is_none());
+    }
+
+    /// Relative imports that resolve into `node_modules` (e.g. SvelteKit's
+    /// generated `../../../node_modules/@sveltejs/kit/...` imports) must not
+    /// be flagged as leaving the package.
+    #[test]
+    fn file_import_into_node_modules_is_not_a_violation() {
+        let tmp = tempfile::tempdir().expect("create temp project");
+        let root = dunce::canonicalize(tmp.path()).expect("canonicalize temp project");
+
+        let repo_root = AbsoluteSystemPath::new(root.to_str().expect("root path is utf-8"))
+            .expect("root path is absolute");
+        let package_root = repo_root.join_components(&["apps", "web"]);
+        let file_path =
+            package_root.join_components(&[".svelte-kit", "generated", "nodes", "1.js"]);
+        let resolved_import_path = repo_root.join_components(&[
+            "node_modules",
+            "@sveltejs",
+            "kit",
+            "src",
+            "runtime",
+            "components",
+            "error.svelte",
+        ]);
+
+        let diag = check_file_import(
+            &file_path,
+            &package_root,
+            &PackageName::from("web"),
+            "../../../../node_modules/@sveltejs/kit/src/runtime/components/error.svelte",
+            &resolved_import_path,
+            SourceSpan::new(0.into(), 0),
+            "",
+        )
+        .expect("check file import");
+
+        assert!(
+            diag.is_none(),
+            "imports resolving into node_modules should not be flagged"
+        );
+    }
+
+    /// Relative imports that resolve outside the package (and not into
+    /// `node_modules`) must still be flagged as leaving the package.
+    #[test]
+    fn file_import_outside_package_is_still_a_violation() {
+        let tmp = tempfile::tempdir().expect("create temp project");
+        let root = dunce::canonicalize(tmp.path()).expect("canonicalize temp project");
+
+        let repo_root = AbsoluteSystemPath::new(root.to_str().expect("root path is utf-8"))
+            .expect("root path is absolute");
+        let package_root = repo_root.join_components(&["apps", "web"]);
+        let file_path = package_root.join_component("index.ts");
+        let resolved_import_path = repo_root.join_components(&["apps", "docs", "utils.ts"]);
+
+        let diag = check_file_import(
+            &file_path,
+            &package_root,
+            &PackageName::from("web"),
+            "../docs/utils",
+            &resolved_import_path,
+            SourceSpan::new(0.into(), 0),
+            "",
+        )
+        .expect("check file import");
+
+        assert!(
+            matches!(diag, Some(BoundariesDiagnostic::ImportLeavesPackage { .. })),
+            "imports resolving outside the package should still be flagged"
+        );
     }
 }
