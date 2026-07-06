@@ -550,77 +550,81 @@ impl<'a> Visitor<'a> {
             waves[d].push(node_idx);
         }
 
-        let results: Arc<Mutex<HashMap<TaskId<'static>, PrecomputedTask>>> =
-            Arc::new(Mutex::new(HashMap::with_capacity(sorted.len())));
+        let mut results: HashMap<TaskId<'static>, PrecomputedTask> =
+            HashMap::with_capacity(sorted.len());
+        // Task IDs that resolved to `PrecomputedTask::Deferred` so far.
+        // Deferral is rare (JIT inputs or dependency-output inputs), so
+        // most runs never insert here and the per-task dependency scan
+        // below short-circuits on `is_empty`.
+        let mut deferred: HashSet<TaskId<'static>> = HashSet::new();
 
         // Process each wave in parallel. Within a wave, all dependencies
-        // have already been hashed in earlier waves.
+        // have already been hashed in earlier waves, and `results` /
+        // `deferred` are only written between waves, so wave workers read
+        // them without locking.
+        //
+        // Deep dependency chains produce long tails of single-task waves;
+        // dispatching those through rayon costs more than the hashing
+        // itself, so small waves run inline.
+        const PAR_WAVE_MIN_TASKS: usize = 4;
+        type HashResult = Result<Option<(TaskId<'static>, PrecomputedTask)>, Error>;
         for wave in &waves {
-            type HashResult = Result<Option<(TaskId<'static>, PrecomputedTask)>, Error>;
-            let wave_results: Vec<HashResult> = wave
-                .par_iter()
-                .map(|&node_idx| {
-                    let node = &graph[node_idx];
-                    let TaskNode::Task(task_id) = node else {
-                        return Ok(None);
-                    };
+            let hash_one = |&node_idx: &petgraph::graph::NodeIndex| -> HashResult {
+                let node = &graph[node_idx];
+                let TaskNode::Task(task_id) = node else {
+                    return Ok(None);
+                };
 
-                    let task_definition = engine
-                        .task_definition(task_id)
-                        .ok_or(Error::MissingDefinition)?;
-                    let task_env_mode = task_definition.env_mode.unwrap_or(self.global_env_mode);
+                let task_definition = engine
+                    .task_definition(task_id)
+                    .ok_or(Error::MissingDefinition)?;
+                let task_env_mode = task_definition.env_mode.unwrap_or(self.global_env_mode);
 
-                    let dependency_set = engine
-                        .dependencies(task_id)
-                        .ok_or(Error::MissingDefinition)?;
+                let dependency_set = engine
+                    .dependencies(task_id)
+                    .ok_or(Error::MissingDefinition)?;
 
-                    let has_deferred_dependency = {
-                        let map = results
-                            .lock()
-                            .unwrap_or_else(|poisoned| poisoned.into_inner());
-                        dependency_set.iter().any(|dependency| {
-                            let TaskNode::Task(dependency_task_id) = dependency else {
-                                return false;
-                            };
+                let has_deferred_dependency = !deferred.is_empty()
+                    && dependency_set.iter().any(|dependency| {
+                        let TaskNode::Task(dependency_task_id) = dependency else {
+                            return false;
+                        };
 
-                            matches!(map.get(dependency_task_id), Some(PrecomputedTask::Deferred))
-                        })
-                    };
+                        deferred.contains(dependency_task_id)
+                    });
 
-                    if task_definition.inputs.has_deferred_inputs() || has_deferred_dependency {
-                        if self.dry {
-                            self.task_hasher.insert_deferred_hash(
-                                task_id,
-                                task_definition,
-                                task_env_mode,
-                            )?;
-                        }
-                        return Ok(Some((task_id.clone(), PrecomputedTask::Deferred)));
+                if task_definition.inputs.has_deferred_inputs() || has_deferred_dependency {
+                    if self.dry {
+                        self.task_hasher.insert_deferred_hash(
+                            task_id,
+                            task_definition,
+                            task_env_mode,
+                        )?;
                     }
+                    return Ok(Some((task_id.clone(), PrecomputedTask::Deferred)));
+                }
 
-                    self.precompute_ready_task_hash(engine, telemetry, task_id)
-                        .map(|precomputed_task| Some((task_id.clone(), precomputed_task)))
-                })
-                .collect();
+                self.precompute_ready_task_hash(engine, telemetry, task_id)
+                    .map(|precomputed_task| Some((task_id.clone(), precomputed_task)))
+            };
 
-            let mut map = results
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let wave_results: Vec<HashResult> = if wave.len() >= PAR_WAVE_MIN_TASKS {
+                wave.par_iter().map(hash_one).collect()
+            } else {
+                wave.iter().map(hash_one).collect()
+            };
+
             for result in wave_results {
                 if let Some((task_id, precomputed)) = result? {
-                    map.insert(task_id, precomputed);
+                    if matches!(precomputed, PrecomputedTask::Deferred) {
+                        deferred.insert(task_id.clone());
+                    }
+                    results.insert(task_id, precomputed);
                 }
             }
         }
 
-        match Arc::try_unwrap(results) {
-            Ok(mutex) => Ok(mutex
-                .into_inner()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())),
-            Err(arc) => Ok(std::mem::take(
-                &mut *arc.lock().unwrap_or_else(|poisoned| poisoned.into_inner()),
-            )),
-        }
+        Ok(results)
     }
 
     #[tracing::instrument(skip_all)]
