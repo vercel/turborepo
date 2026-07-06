@@ -10,11 +10,6 @@ packages:
 
 minimumReleaseAge: 2880
 
-# We dogfood our own canaries, which are always younger than minimumReleaseAge.
-minimumReleaseAgeExclude:
-  - turbo
-  - "@turbo/*"
-
 onlyBuiltDependencies:
   - "@swc/core"
   - "@vercel/speed-insights"
