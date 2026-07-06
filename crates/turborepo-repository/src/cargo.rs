@@ -136,10 +136,12 @@ pub fn display_command(kind: CargoPackageKind, task: &str, package: &str) -> Opt
 }
 
 /// Whether pass-through args for `subcommand` must follow a `--` separator.
-/// `cargo run` forwards everything after `--` to the built binary; for other
-/// subcommands the args are cargo's own flags.
+/// These subcommands forward everything after `--` to the underlying tool
+/// (the built binary for `run`, the test/bench harness, clippy's lint
+/// flags); the remaining subcommands take no trailing args, so pass-through
+/// args are attached directly as cargo flags.
 pub fn pass_through_uses_separator(subcommand: &str) -> bool {
-    subcommand == "run"
+    matches!(subcommand, "test" | "bench" | "run" | "clippy")
 }
 
 /// The Cargo toolchain. Registered in the
@@ -980,6 +982,22 @@ mod test {
             .expect("workspace lint resolves to clippy");
         assert_eq!(cmd.args, os_args(&["clippy", "--workspace"]));
         assert_eq!(cmd.serial_group.as_deref(), Some("cargo"));
+
+        // Harness-forwarding subcommands separate pass-through args with
+        // `--`; e.g. `turbo test -- --nocapture` reaches the test harness.
+        let cmd = toolchain
+            .task_command(
+                &root,
+                &workspace,
+                "test",
+                Some(&["--nocapture".to_string()]),
+            )
+            .unwrap()
+            .expect("workspace test resolves");
+        assert_eq!(
+            cmd.args,
+            os_args(&["test", "--workspace", "--", "--nocapture"])
+        );
         assert!(
             toolchain
                 .task_command(&root, &workspace, "build", None)
