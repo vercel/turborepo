@@ -809,8 +809,10 @@ export interface FutureFlags {
    * Treat the crates of a Cargo workspace as Turborepo packages.
    *
    * When enabled, Rust crates are discovered via `cargo metadata` and
-   * participate in the package graph. Experimental: support is landing
-   * incrementally, and this flag currently has no effect.
+   * participate in the package graph: they resolve in `--filter`
+   * expressions, propagate `--affected`, and appear in `turbo query`.
+   * Experimental: support is landing incrementally — task execution and
+   * caching for crates are not wired up yet, so their tasks are no-ops.
    *
    * @defaultValue `false`
    */

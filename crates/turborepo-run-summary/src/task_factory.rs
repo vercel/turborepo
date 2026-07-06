@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use turbopath::AnchoredSystemPath;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_lockfiles::Package;
@@ -22,6 +24,10 @@ pub struct TaskSummaryFactory<'a, E, H, R> {
     env_at_start: &'a EnvironmentVariableMap,
     run_opts: &'a R,
     global_env_mode: EnvMode,
+    /// Per-package external dependency hashes computed during task hashing.
+    /// When present, summaries reuse these instead of re-sorting and
+    /// re-hashing each package's transitive closure per task.
+    external_deps_hashes: Option<&'a HashMap<String, String>>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -55,6 +61,7 @@ where
         env_at_start: &'a EnvironmentVariableMap,
         run_opts: &'a R,
         global_env_mode: EnvMode,
+        external_deps_hashes: Option<&'a HashMap<String, String>>,
     ) -> Self {
         Self {
             package_graph,
@@ -63,6 +70,7 @@ where
             env_at_start,
             run_opts,
             global_env_mode,
+            external_deps_hashes,
         }
     }
 
@@ -175,11 +183,15 @@ where
             .unwrap_or_default();
 
         // The hash is precomputed where the closure is computed; the
-        // recompute below only runs for graphs built without a closure
-        // hasher.
+        // per-run cache and the recompute below only apply to graphs built
+        // without a closure hasher. All three produce identical output.
         let hash_of_external_dependencies = workspace_info
             .external_deps_hash
             .clone()
+            .or_else(|| {
+                self.external_deps_hashes
+                    .and_then(|hashes| hashes.get(task_id.package()).cloned())
+            })
             .unwrap_or_else(|| get_external_deps_hash(&workspace_info.transitive_dependencies));
 
         Ok(SharedTaskSummary {

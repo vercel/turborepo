@@ -22,7 +22,9 @@ use crate::{
     },
     package_json::{DependencyKind, PackageJson},
     package_manager::{PackageManager, pnpm::PnpmCatalogs},
-    toolchain::{DiscoveredPackage, JavaScriptToolchain, ToolchainId, ToolchainRegistry},
+    toolchain::{
+        DiscoveredPackage, JavaScriptToolchain, Toolchain, ToolchainId, ToolchainRegistry,
+    },
 };
 
 pub struct PackageGraphBuilder<'a, T> {
@@ -35,6 +37,11 @@ pub struct PackageGraphBuilder<'a, T> {
     package_manager: Option<PackageManager>,
     defer_closures: bool,
     closure_hasher: Option<ClosureHasher>,
+    /// Toolchains registered in addition to JavaScript (e.g. Cargo when
+    /// `futureFlags.experimentalCargoWorkspaces` is enabled). Their packages
+    /// are discovered alongside JavaScript packages; name collisions across
+    /// toolchains are a hard error.
+    extra_toolchains: Vec<Arc<dyn Toolchain>>,
 }
 
 #[derive(Debug, Diagnostic, thiserror::Error)]
@@ -62,10 +69,12 @@ pub enum Error {
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error(transparent)]
     Discovery(#[from] crate::discovery::Error),
+    #[error(transparent)]
+    Toolchain(Box<dyn std::error::Error + Send + Sync>),
 }
 
-// Toolchain errors map onto the pre-existing variants rather than adding a
-// new one: consumers match on `Error::PackageJson` (diagnostic rendering,
+// JavaScript toolchain errors map onto the pre-existing variants rather than
+// new ones: consumers match on `Error::PackageJson` (diagnostic rendering,
 // io-NotFound telemetry in the run builder), and those contracts must not
 // depend on whether the error surfaced through a toolchain.
 impl From<crate::toolchain::Error> for Error {
@@ -73,6 +82,7 @@ impl From<crate::toolchain::Error> for Error {
         match err {
             crate::toolchain::Error::Discovery(err) => Error::Discovery(err),
             crate::toolchain::Error::Descriptor(err) => Error::PackageJson(err),
+            crate::toolchain::Error::Failed(err) => Error::Toolchain(err),
         }
     }
 }
@@ -108,6 +118,7 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
             package_manager: None,
             defer_closures: false,
             closure_hasher: None,
+            extra_toolchains: Vec::new(),
         }
     }
 
@@ -163,6 +174,14 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         self
     }
 
+    /// Register a toolchain in addition to JavaScript. Its packages are
+    /// discovered alongside JavaScript packages; a package name collision
+    /// across toolchains is a hard error, like any duplicate package name.
+    pub fn with_toolchain(mut self, toolchain: Arc<dyn Toolchain>) -> Self {
+        self.extra_toolchains.push(toolchain);
+        self
+    }
+
     /// Set the package discovery strategy to use. Note that whatever strategy
     /// selected here will be wrapped in a `CachingPackageDiscovery` to
     /// prevent unnecessary work during building.
@@ -180,6 +199,7 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
             package_manager: self.package_manager,
             defer_closures: self.defer_closures,
             closure_hasher: self.closure_hasher,
+            extra_toolchains: self.extra_toolchains,
         }
     }
 }
@@ -296,6 +316,7 @@ where
             lockfile,
             package_discovery,
             package_manager: _,
+            extra_toolchains,
         } = builder;
         let mut workspaces = HashMap::new();
         let root_package_info = PackageInfo {
@@ -327,7 +348,13 @@ where
             package_discovery.build().map_err(Into::into)?,
         )));
         let mut toolchains = ToolchainRegistry::new();
+        // JavaScript registers first: its packages claim names before any
+        // other toolchain's, so a cross-toolchain collision surfaces as the
+        // non-JS package failing to add.
         toolchains.register(javascript.clone());
+        for toolchain in extra_toolchains {
+            toolchains.register(toolchain);
+        }
 
         Ok(BuildState {
             repo_root,
@@ -396,13 +423,17 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
     // need our own type
     #[tracing::instrument(skip(self))]
     async fn parse_package_jsons(mut self) -> Result<BuildState<'a, ResolvedWorkspaces, T>, Error> {
-        let discovered: Vec<(ToolchainId, DiscoveredPackage)> = match self.package_jsons.take() {
-            // A pre-supplied set of parsed package.json files (used by the
-            // package-change watcher and tests) stands in for JavaScript
-            // discovery.
-            Some(jsons) => jsons
-                .into_iter()
-                .map(|(path, json)| {
+        // A pre-supplied set of parsed package.json files (used by the
+        // package-change watcher and tests) stands in for JavaScript
+        // discovery only; other toolchains always discover for themselves.
+        let mut pre_supplied = self.package_jsons.take();
+        let mut discovered: Vec<(ToolchainId, DiscoveredPackage)> = Vec::new();
+        for toolchain in self.toolchains.iter() {
+            let id = toolchain.id();
+            if id == ToolchainId::JAVASCRIPT
+                && let Some(jsons) = pre_supplied.take()
+            {
+                discovered.extend(jsons.into_iter().map(|(path, json)| {
                     (
                         ToolchainId::JAVASCRIPT,
                         DiscoveredPackage {
@@ -410,18 +441,12 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                             manifest_path: path,
                         },
                     )
-                })
-                .collect(),
-            None => {
-                let mut discovered = Vec::new();
-                for toolchain in self.toolchains.iter() {
-                    let id = toolchain.id();
-                    let packages = toolchain.discover_packages().await?;
-                    discovered.extend(packages.into_iter().map(|package| (id.clone(), package)));
-                }
-                discovered
+                }));
+                continue;
             }
-        };
+            let packages = toolchain.discover_packages().await?;
+            discovered.extend(packages.into_iter().map(|package| (id.clone(), package)));
+        }
 
         self.workspaces.reserve(discovered.len());
         self.node_lookup.reserve(discovered.len());
@@ -694,6 +719,14 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
     ) -> Result<HashMap<String, BTreeMap<String, String>>, Error> {
         self.workspaces
             .values()
+            // Only JavaScript packages participate in the JS lockfile's
+            // external-dependency closures. This map is keyed by directory,
+            // and a non-JS package can share a directory with a JS one (the
+            // synthetic Cargo workspace package lives at the repo root, like
+            // the root package) — including both would let HashMap iteration
+            // order decide which entry survives, flipping the root's
+            // external-dependency hash run to run.
+            .filter(|entry| entry.toolchain == ToolchainId::JAVASCRIPT)
             .map(|entry| {
                 let workspace_path = entry
                     .package_json_path
@@ -734,6 +767,12 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             .map(|hasher| hasher(&closures))
             .unwrap_or_default();
         for (_, entry) in self.workspaces.iter_mut() {
+            // Mirror of the filter in all_external_dependencies: a non-JS
+            // package sharing a directory with a JS package must not steal
+            // its closure.
+            if entry.toolchain != ToolchainId::JAVASCRIPT {
+                continue;
+            }
             let dir = entry.unix_dir_str()?;
             entry.transitive_dependencies = closures.remove(&dir);
             entry.external_deps_hash = hashes.remove(&dir);

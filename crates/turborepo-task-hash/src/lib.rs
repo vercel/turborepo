@@ -360,6 +360,13 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         self.external_deps_hash_cache = cache;
     }
 
+    /// Per-package external dependency hashes computed for task hashing.
+    /// Exposed so run-summary construction can reuse them instead of
+    /// re-sorting and re-hashing each package's transitive closure.
+    pub fn external_deps_hash_cache(&self) -> &HashMap<String, String> {
+        &self.external_deps_hash_cache
+    }
+
     #[tracing::instrument(skip(self, task_definition, task_env_mode, workspace, dependency_set))]
     pub fn calculate_task_hash<T: TaskDefinitionHashInfo>(
         &self,

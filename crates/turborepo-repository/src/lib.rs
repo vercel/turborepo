@@ -11,6 +11,7 @@
 #![allow(clippy::result_large_err)]
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+pub mod cargo;
 pub mod change_mapper;
 pub mod discovery;
 pub mod inference;
