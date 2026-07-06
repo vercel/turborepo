@@ -182,6 +182,65 @@ pub trait Toolchain: Send + Sync {
         let _ = (package, task);
         None
     }
+
+    /// Whether this toolchain defines an executable command for `task` in
+    /// `package`. Tasks without one are phantom/transit tasks (they exist
+    /// solely for dependency ordering via `dependsOn: ["^task"]`): they do
+    /// not execute, so hashing concerns like global input files must not
+    /// apply to them.
+    fn defines_task(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
+        let _ = (package, task);
+        false
+    }
+
+    /// Hash wiring this toolchain derives for `task` in `package`, beyond
+    /// what turbo.json declares: extra input globs and env vars that
+    /// participate in the task hash, output globs to cache, and whether the
+    /// package's own default (git-index based) file hashing applies.
+    ///
+    /// `path_to_root` is the unix path from the package directory to the
+    /// repo root (empty for a package at the root); returned globs are
+    /// relative to the package directory. `dependencies` are the package's
+    /// transitive internal dependencies. `wants_automatic_inputs` reflects
+    /// the task's `inputs` configuration: `true` unless explicit inputs
+    /// omitted `$TURBO_DEFAULT$` — for toolchains that derive inputs,
+    /// `$TURBO_DEFAULT$` means "everything the toolchain derives", so users
+    /// can append inputs without forfeiting automatic invalidation.
+    ///
+    /// `None` means the toolchain derives nothing and turbo.json is the
+    /// whole story.
+    fn derived_task_io(
+        &self,
+        package: &crate::package_graph::PackageInfo,
+        task: &str,
+        path_to_root: &str,
+        dependencies: &[&crate::package_graph::PackageInfo],
+        wants_automatic_inputs: bool,
+    ) -> Option<DerivedTaskIO> {
+        let _ = (
+            package,
+            task,
+            path_to_root,
+            dependencies,
+            wants_automatic_inputs,
+        );
+        None
+    }
+}
+
+/// Hash wiring derived by a toolchain for one task. See
+/// [`Toolchain::derived_task_io`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DerivedTaskIO {
+    /// Extra input globs, relative to the package directory.
+    pub input_globs: Vec<String>,
+    /// When `Some`, overrides whether the package's own default (git-index
+    /// based) file hashing applies to this task.
+    pub package_default_inputs: Option<bool>,
+    /// Env vars that participate in the task hash.
+    pub env: Vec<String>,
+    /// Output globs to cache, relative to the package directory.
+    pub output_globs: Vec<String>,
 }
 
 /// The set of toolchains contributing packages to the repository.
@@ -386,6 +445,29 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
             .scripts
             .get(task)
             .map(|script| script.as_inner().clone())
+    }
+
+    fn defines_task(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
+        package
+            .package_json
+            .scripts
+            .get(task)
+            .is_some_and(|script| !script.is_empty())
+    }
+
+    fn derived_task_io(
+        &self,
+        _package: &crate::package_graph::PackageInfo,
+        _task: &str,
+        _path_to_root: &str,
+        _dependencies: &[&crate::package_graph::PackageInfo],
+        _wants_automatic_inputs: bool,
+    ) -> Option<DerivedTaskIO> {
+        // Deliberately nothing: for JavaScript, turbo.json is the whole
+        // story — inputs default to the package's files, outputs are
+        // whatever the user declares, and no tool-level files or env vars
+        // are implied. This is the real answer, not an unimplemented stub.
+        None
     }
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
