@@ -76,6 +76,39 @@ pub(crate) enum RemoteCacheStatus {
     Unavailable(RemoteCacheUnavailableReason),
 }
 
+/// A repo index whose untracked-file scan may still be running in the
+/// background. Holding this instead of the finished index lets `Run`
+/// construction complete without waiting for the scan; consumers await
+/// [`PendingRepoIndex::get`] at their barrier point and share the result.
+///
+/// A scan task that fails to join (panic/cancellation) resolves to `None`:
+/// every consumer treats the index as an optimization and has a slower
+/// index-free fallback.
+#[derive(Clone)]
+pub struct PendingRepoIndex {
+    index: futures::future::Shared<futures::future::BoxFuture<'static, Arc<Option<RepoGitIndex>>>>,
+}
+
+impl PendingRepoIndex {
+    pub(crate) fn new(task: tokio::task::JoinHandle<Option<RepoGitIndex>>) -> Self {
+        use futures::FutureExt;
+        Self {
+            index: async move {
+                Arc::new(task.await.unwrap_or_else(|e| {
+                    tracing::debug!("repo index task failed to join: {e}");
+                    None
+                }))
+            }
+            .boxed()
+            .shared(),
+        }
+    }
+
+    pub(crate) async fn get(&self) -> Arc<Option<RepoGitIndex>> {
+        self.index.clone().await
+    }
+}
+
 #[derive(Clone)]
 pub struct Run {
     version: &'static str,
@@ -98,7 +131,7 @@ pub struct Run {
     engine: Arc<Engine>,
     task_access: TaskAccess,
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
-    repo_index: Arc<Option<RepoGitIndex>>,
+    repo_index: PendingRepoIndex,
     observability_handle: Option<ObservabilityHandle>,
     pub(crate) query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
     shutdown_started_emitted: Arc<AtomicBool>,
@@ -962,7 +995,17 @@ impl Run {
         )>,
     ) -> Result<i32, Error> {
         let workspaces = self.pkg_dep_graph.packages().collect();
-        let repo_index = self.repo_index.as_ref().as_ref();
+        // Barrier for the untracked-file scan: file hashing below needs the
+        // complete index. Nothing executes before this resolves, so hash
+        // error semantics are unchanged from when `Run` construction waited.
+        let repo_index_arc = {
+            use tracing::Instrument;
+            self.repo_index
+                .get()
+                .instrument(tracing::info_span!("repo_index_untracked_await"))
+                .await
+        };
+        let repo_index = repo_index_arc.as_ref().as_ref();
 
         let root_workspace = self
             .pkg_dep_graph
