@@ -2,7 +2,10 @@
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
   "noUpdateNotifier": true,
-  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "experimentalCargoSccache": true
+  },
   // The following are used by tools such as pnpm, gh actions to setup pnpm, etc.
   "globalPassThroughEnv": [
     "Path",

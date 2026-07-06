@@ -493,6 +493,12 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
+      # Install-only: turbo wires sccache to the Remote Cache itself via
+      # futureFlags.experimentalCargoSccache (engages on push runs, where
+      # real Remote Cache credentials are present).
+      - name: Install sccache
+        uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
+
       - name: Run tests
         run: |
           TURBO_API= turbo run test --filter "@turbo/repository" --color --env-mode=strict
