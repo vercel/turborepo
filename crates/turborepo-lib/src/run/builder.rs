@@ -353,7 +353,21 @@ impl RunBuilder {
             pkg_dep_graph,
             scm,
             root_turbo_json,
-        )?;
+        )
+        .map_err(|err| match err {
+            // A filter that names a Rust crate is a likely mistake when the
+            // repository has a Cargo workspace but Cargo package support is
+            // not enabled; point at the opt-in.
+            ResolutionError::NoPackagesMatchedWithName(name)
+                if !cargo_enabled(&opts.future_flags)
+                    && repo_root
+                        .join_component(turborepo_repository::cargo::CARGO_TOML)
+                        .exists() =>
+            {
+                Error::PackageMayBeCargoCrate { name }
+            }
+            err => Error::Scope(err),
+        })?;
 
         let should_include_root_tasks = match filter_mode {
             FilterMode::AllPackages => true,
@@ -491,9 +505,14 @@ impl RunBuilder {
         }
 
         let mut pkg_dep_graph = {
-            let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
+            let mut builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.opts.run_opts.single_package)
                 .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
+            if cargo_enabled(&self.opts.future_flags) {
+                builder = builder.with_toolchain(turborepo_repository::cargo::CargoToolchain::new(
+                    self.repo_root.to_owned(),
+                ));
+            }
 
             let graph = builder
                 .build()
@@ -1091,6 +1110,14 @@ impl RunBuilder {
 
         Ok(engine)
     }
+}
+
+/// Whether experimental Cargo package support is enabled, via
+/// `futureFlags.experimentalCargoWorkspaces` in the root turbo.json. The
+/// future flag is the only switch: it is repo-level configuration, so every
+/// invoker sees the same package graph.
+pub(crate) fn cargo_enabled(future_flags: &turborepo_turbo_json::FutureFlags) -> bool {
+    future_flags.experimental_cargo_workspaces
 }
 
 fn origins_match(url1: &str, url2: &str) -> bool {

@@ -10,6 +10,11 @@ use crate::package_manager::pnpm::PnpmCatalogs;
 
 /// Reverse index from package path to package name, built once and shared
 /// across all `DependencySplitter` instances.
+///
+/// Non-JavaScript packages are excluded: JS `workspace:`/`file:` path
+/// specifiers can never target them, and the synthetic Cargo workspace
+/// package lives at the repo root, which would otherwise collide with the
+/// Root package's path.
 pub struct WorkspacePathIndex<'a>(HashMap<&'a AnchoredSystemPath, &'a PackageName>);
 
 impl<'a> WorkspacePathIndex<'a> {
@@ -17,6 +22,7 @@ impl<'a> WorkspacePathIndex<'a> {
         Self(
             workspaces
                 .iter()
+                .filter(|(_, info)| info.toolchain == crate::toolchain::ToolchainId::JAVASCRIPT)
                 .map(|(name, info)| (info.package_path(), name))
                 .collect(),
         )
