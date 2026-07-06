@@ -28,6 +28,8 @@ pub enum Error {
     Berry(#[from] crate::berry::Error),
     #[error(transparent)]
     CargoLock(#[from] crate::cargo::Error),
+    #[error(transparent)]
+    UvLock(#[from] crate::uv::Error),
     #[error("Lockfile contains invalid path: {0}")]
     Path(#[from] turbopath::PathError),
 }

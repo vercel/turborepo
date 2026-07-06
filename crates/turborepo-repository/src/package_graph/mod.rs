@@ -71,13 +71,15 @@ impl WorkspacePackage {
 ///
 /// Packages discovered from a `package.json` (regardless of runtime or
 /// package manager) are [`PackageToolchain::JavaScript`]; crates discovered
-/// from a Cargo workspace are [`PackageToolchain::Cargo`]. This drives how a
-/// task's command is resolved during execution.
+/// from a Cargo workspace are [`PackageToolchain::Cargo`]; Python projects
+/// discovered from a uv workspace are [`PackageToolchain::Uv`]. This drives
+/// how a task's command is resolved during execution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PackageToolchain {
     #[default]
     JavaScript,
     Cargo,
+    Uv,
 }
 
 /// PackageInfo represents a package within the workspace.
@@ -86,7 +88,8 @@ pub struct PackageInfo {
     pub package_json: PackageJson,
     /// Path to the package's manifest, anchored to the repo root. For
     /// JavaScript packages this is a `package.json`; for Cargo crates it is
-    /// the crate's `Cargo.toml` (and `package_json` is synthesized — only its
+    /// the crate's `Cargo.toml`, and for uv projects the project's
+    /// `pyproject.toml` (and `package_json` is synthesized — only its
     /// `name` and `dependencies` fields are meaningful).
     pub package_json_path: AnchoredSystemPathBuf,
     pub unresolved_external_dependencies: Option<BTreeMap<PackageKey, PackageVersion>>, /* name -> version */
@@ -96,6 +99,9 @@ pub struct PackageInfo {
     /// Cargo-specific details, present iff `toolchain` is
     /// [`PackageToolchain::Cargo`].
     pub cargo: Option<crate::cargo::CargoPackageDetails>,
+    /// uv-specific details, present iff `toolchain` is
+    /// [`PackageToolchain::Uv`].
+    pub uv: Option<crate::uv::UvPackageDetails>,
 }
 
 impl PackageInfo {

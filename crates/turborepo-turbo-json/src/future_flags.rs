@@ -100,6 +100,17 @@ pub struct FutureFlags {
     /// this feature.
     #[serde(default)]
     pub cargo_workspaces: bool,
+    /// Treat the members of a uv workspace as Turborepo packages.
+    ///
+    /// When enabled, Python projects are discovered from the root
+    /// pyproject.toml's `[tool.uv.workspace]` globs and participate in the
+    /// package graph: packaged projects get `build` tasks
+    /// (`uv build --package=<name>`), virtual projects propagate
+    /// `--filter`/`--affected`, and a synthetic `uv` package hosts
+    /// workspace-scoped verbs like `uv#sync`. The `TURBO_EXPERIMENTAL_UV`
+    /// environment variable also enables this feature.
+    #[serde(default)]
+    pub uv_workspaces: bool,
 }
 
 // Manual TS impl because #[derive(TS)] conflicts with the Iterable and
@@ -117,7 +128,7 @@ impl TS for FutureFlags {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
          boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
          pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
-         boolean, cargoWorkspaces?: boolean }"
+         boolean, cargoWorkspaces?: boolean, uvWorkspaces?: boolean }"
             .to_string()
     }
 
@@ -125,7 +136,7 @@ impl TS for FutureFlags {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
          boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
          pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
-         boolean, cargoWorkspaces?: boolean }"
+         boolean, cargoWorkspaces?: boolean, uvWorkspaces?: boolean }"
             .to_string()
     }
 
@@ -133,7 +144,7 @@ impl TS for FutureFlags {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
          boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         globalConfiguration?: boolean, cargoWorkspaces?: boolean };"
+         globalConfiguration?: boolean, cargoWorkspaces?: boolean, uvWorkspaces?: boolean };"
             .to_string()
     }
 
@@ -141,7 +152,7 @@ impl TS for FutureFlags {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
          boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         globalConfiguration?: boolean, cargoWorkspaces?: boolean };"
+         globalConfiguration?: boolean, cargoWorkspaces?: boolean, uvWorkspaces?: boolean };"
             .to_string()
     }
 

@@ -5,6 +5,7 @@ use turborepo_errors::Spanned;
 use turborepo_repository::{
     cargo,
     package_graph::{PackageGraph, PackageName, PackageNode, PackageToolchain},
+    uv,
 };
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{
@@ -30,6 +31,25 @@ fn crate_source_globs(prefix: &str, crate_path: &str) -> [String; 2] {
         format!("{prefix}/{crate_path}")
     };
     [format!("{base}/**"), format!("!{base}/.turbo/**")]
+}
+
+/// Input globs covering a uv project's sources. Beyond the `.turbo` log-dir
+/// exclusion (see [`crate_source_globs`]), uv projects exclude environment
+/// and bytecode directories: `uv sync` materializes `.venv` and the
+/// interpreter writes `__pycache__` as a side effect of running, so hashing
+/// them would invalidate tasks that didn't change any source.
+fn uv_source_globs(prefix: &str, project_path: &str) -> [String; 4] {
+    let base = if prefix.is_empty() {
+        project_path.to_string()
+    } else {
+        format!("{prefix}/{project_path}")
+    };
+    [
+        format!("{base}/**"),
+        format!("!{base}/.turbo/**"),
+        format!("!{base}/.venv/**"),
+        format!("!{base}/**/__pycache__/**"),
+    ]
 }
 
 impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
@@ -220,6 +240,16 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let cargo_subcommand = cargo_details
             .and_then(|details| cargo::task_subcommand(details.kind, task_id_inner.task()));
 
+        let uv_details = package_info
+            .filter(|info| info.toolchain == PackageToolchain::Uv)
+            .and_then(|info| info.uv.as_ref());
+        // A uv task "has a script" when its task name maps to a uv
+        // subcommand for the package's kind: `build` for packaged projects,
+        // workspace verbs for the workspace package, and nothing for
+        // virtual projects (there is nothing for uv to build).
+        let uv_subcommand =
+            uv_details.and_then(|details| uv::task_subcommand(details.kind, task_id_inner.task()));
+
         // Only prepend global inputs to tasks that actually execute (a
         // matching package.json script, or a Cargo verb for this package).
         // Phantom/transit tasks (packages without a matching script that
@@ -231,7 +261,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             .and_then(|info| info.package_json.scripts.get(task_id_inner.task()))
             .is_some_and(|script| !script.is_empty());
 
-        if !self.global_deps.is_empty() && (package_has_script || cargo_subcommand.is_some()) {
+        if !self.global_deps.is_empty()
+            && (package_has_script || cargo_subcommand.is_some() || uv_subcommand.is_some())
+        {
             crate::task_definition::prepend_global_inputs(
                 &mut task_def.inputs,
                 had_explicit_inputs,
@@ -311,6 +343,66 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             }
         }
 
+        // uv tasks that will execute get the same hashing wiring: the
+        // workspace root manifest, uv config, and pinned interpreter
+        // version are hashed (membership, resolution, or interpreter
+        // changes invalidate the cache), along with the env vars that
+        // change what uv resolves. Explicit user `inputs` are respected.
+        if let Some(details) = uv_details
+            && let Some(subcommand) = uv_subcommand
+        {
+            let prefix = path_to_root.as_str();
+            task_def.inputs.globs.extend(uv::hash_input_globs(prefix));
+            for var in uv::HASHED_ENV_VARS {
+                if !task_def.env.iter().any(|existing| existing == var) {
+                    task_def.env.push(var.to_string());
+                }
+            }
+            task_def.env.sort();
+
+            // As with Cargo, `$TURBO_DEFAULT$` means "everything turbo
+            // hashes automatically", so users can append extra inputs
+            // without forfeiting automatic invalidation.
+            let wants_automatic_inputs = !had_explicit_inputs || task_def.inputs.default;
+            match details.kind {
+                // A packaged project's build may consume other members'
+                // sources (uv resolves workspace dependencies from their
+                // directories), so the closure's sources are flattened into
+                // this task's inputs — invalidation must not depend on
+                // users wiring up `dependsOn` between members. The
+                // wheel/sdist in the workspace root's dist/ are the
+                // deliverables worth caching.
+                uv::UvPackageKind::Packaged => {
+                    if wants_automatic_inputs {
+                        task_def.inputs.default = true;
+                        task_def
+                            .inputs
+                            .globs
+                            .extend(self.uv_dependency_globs(task_id_inner.package(), prefix));
+                    }
+                    if subcommand == "build" {
+                        task_def
+                            .outputs
+                            .inclusions
+                            .extend(uv::deliverable_output_globs(prefix, &details.deliverables));
+                    }
+                }
+                // The workspace package's directory is the repo root, so
+                // default hashing would pull in the entire repository
+                // (including JS packages). Hash the member directories
+                // instead.
+                uv::UvPackageKind::Workspace => {
+                    if wants_automatic_inputs {
+                        task_def.inputs.default = false;
+                        task_def.inputs.globs.extend(self.uv_member_globs());
+                    }
+                }
+                // Virtual tasks never map to a subcommand, so this branch
+                // is unreachable while `uv_subcommand` is `Some`.
+                uv::UvPackageKind::Virtual => {}
+            }
+        }
+
         Ok(task_def)
     }
 
@@ -355,6 +447,53 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                         .is_some_and(|details| details.kind != cargo::CargoPackageKind::Workspace)
             })
             .flat_map(|(_, info)| crate_source_globs("", info.package_path().to_unix().as_str()))
+            .collect();
+        globs.sort();
+        globs
+    }
+
+    /// Source globs for a uv packaged project's transitive internal
+    /// dependencies, relative to the project's directory via `prefix`. uv
+    /// resolves workspace dependencies from their source directories as
+    /// part of the project's build, so they participate in its hash.
+    fn uv_dependency_globs(&self, package: &str, prefix: &str) -> Vec<String> {
+        let node = PackageNode::Workspace(PackageName::from(package));
+        let mut globs: Vec<String> = self
+            .package_graph
+            .dependencies(&node)
+            .into_iter()
+            .filter_map(|dep| match dep {
+                PackageNode::Workspace(name) => self.package_graph.package_info(name),
+                _ => None,
+            })
+            .filter(|info| {
+                info.toolchain == PackageToolchain::Uv
+                    && info
+                        .uv
+                        .as_ref()
+                        .is_some_and(|details| details.kind != uv::UvPackageKind::Workspace)
+            })
+            .flat_map(|info| uv_source_globs(prefix, info.package_path().to_unix().as_str()))
+            .collect();
+        globs.sort();
+        globs
+    }
+
+    /// Source globs for every uv member, relative to the repo root (the
+    /// synthetic workspace package's directory). Used to hash the workspace
+    /// package's tasks without pulling the whole repository into the hash.
+    fn uv_member_globs(&self) -> Vec<String> {
+        let mut globs: Vec<String> = self
+            .package_graph
+            .packages()
+            .filter(|(_, info)| {
+                info.toolchain == PackageToolchain::Uv
+                    && info
+                        .uv
+                        .as_ref()
+                        .is_some_and(|details| details.kind != uv::UvPackageKind::Workspace)
+            })
+            .flat_map(|(_, info)| uv_source_globs("", info.package_path().to_unix().as_str()))
             .collect();
         globs.sort();
         globs

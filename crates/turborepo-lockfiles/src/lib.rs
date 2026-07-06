@@ -18,6 +18,7 @@ mod cargo;
 mod error;
 mod npm;
 mod pnpm;
+mod uv;
 mod yarn1;
 
 use std::{
@@ -38,6 +39,7 @@ pub use pnpm::{PnpmLockfile, pnpm_global_change, pnpm_subgraph};
 use rayon::prelude::*;
 use serde::Serialize;
 use turbopath::RelativeUnixPathBuf;
+pub use uv::{Error as UvLockError, PrunedUvLock, uv_external_closures, uv_prune_lock};
 pub use yarn1::{Yarn1Lockfile, yarn_subgraph};
 
 type ResolveCache = DashMap<String, Option<Package>>;

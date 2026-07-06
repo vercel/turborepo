@@ -22,6 +22,7 @@ use turborepo_repository::{
     },
     package_graph::{PackageGraph, PackageGraphBuilder, PackageName, WorkspacePackage},
     package_json::PackageJson,
+    uv,
 };
 use turborepo_scm::GitHashes;
 
@@ -41,6 +42,16 @@ pub struct PackageChangesWatcher {
 /// A little arbitrary, so feel free to tune accordingly.
 const CHANGE_EVENT_CHANNEL_CAPACITY: usize = 50;
 
+/// Which non-JS toolchains participate in the watched package graph. Each
+/// enabled toolchain contributes workspace-defining files (whose changes
+/// trigger full rediscovery) and build-output directories (whose events are
+/// suppressed so tasks don't re-trigger themselves).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WatchedToolchains {
+    pub cargo: bool,
+    pub uv: bool,
+}
+
 impl PackageChangesWatcher {
     pub fn new(
         repo_root: AbsoluteSystemPathBuf,
@@ -48,7 +59,7 @@ impl PackageChangesWatcher {
         hash_watcher: Arc<HashWatcher>,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
-        cargo_enabled: bool,
+        toolchains: WatchedToolchains,
     ) -> Self {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (package_change_events_tx, package_change_events_rx) =
@@ -60,7 +71,7 @@ impl PackageChangesWatcher {
             hash_watcher,
             custom_turbo_json_path,
             single_package,
-            cargo_enabled,
+            toolchains,
         );
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
@@ -107,7 +118,7 @@ struct Subscriber {
     hash_watcher: Arc<HashWatcher>,
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     single_package: bool,
-    cargo_enabled: bool,
+    toolchains: WatchedToolchains,
 }
 
 /// Whether an absolute path string is inside the repository's root `target`
@@ -121,6 +132,20 @@ fn in_root_target_dir(repo_root: &AbsoluteSystemPathBuf, path: &str) -> bool {
                 .components()
                 .next()
                 .is_some_and(|c| c.as_str() == "target")
+        })
+}
+
+/// Whether an absolute path string is inside a Python environment directory
+/// (`.venv` or `__pycache__`), where installed copies of manifests are
+/// byproducts rather than workspace definition.
+fn in_uv_environment_dir(repo_root: &AbsoluteSystemPathBuf, path: &str) -> bool {
+    AbsoluteSystemPathBuf::new(path)
+        .ok()
+        .and_then(|p| repo_root.anchor(p).ok())
+        .is_some_and(|anchored| {
+            anchored
+                .components()
+                .any(|c| c.as_str() == ".venv" || c.as_str() == "__pycache__")
         })
 }
 
@@ -181,7 +206,7 @@ fn classify_changed_files(
     root_gitignore: &Gitignore,
     custom_turbo_json_path: Option<&AbsoluteSystemPathBuf>,
     change_mapper: &ChangeMapper<'_, GlobalDepsPackageChangeMapper<'_>>,
-    cargo_enabled: bool,
+    toolchains: WatchedToolchains,
 ) -> FileChangeAction {
     let turbo_json_path = repo_root.join_component(CONFIG_FILE);
     let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
@@ -201,7 +226,7 @@ fn classify_changed_files(
     // the watcher's package graph is stale after any of them change, so
     // trigger full rediscovery (Cargo.toml files inside target/ are build
     // byproducts, not workspace definition).
-    if cargo_enabled {
+    if toolchains.cargo {
         let cargo_lock_path = repo_root.join_component(cargo::CARGO_LOCK);
         let cargo_definition_changed = trie.keys().any(|p| {
             if p == cargo_lock_path.as_str() {
@@ -213,6 +238,26 @@ fn classify_changed_files(
                 && !in_root_target_dir(repo_root, p)
         });
         if cargo_definition_changed {
+            return FileChangeAction::ConfigChanged;
+        }
+    }
+
+    // pyproject.toml files and uv.lock define the member set and its edges;
+    // the watcher's package graph is stale after any of them change, so
+    // trigger full rediscovery (pyproject.toml files inside environment
+    // directories are installation byproducts, not workspace definition).
+    if toolchains.uv {
+        let uv_lock_path = repo_root.join_component(uv::UV_LOCK);
+        let uv_definition_changed = trie.keys().any(|p| {
+            if p == uv_lock_path.as_str() {
+                return true;
+            }
+            std::path::Path::new(p)
+                .file_name()
+                .is_some_and(|name| name == uv::PYPROJECT_TOML)
+                && !in_uv_environment_dir(repo_root, p)
+        });
+        if uv_definition_changed {
             return FileChangeAction::ConfigChanged;
         }
     }
@@ -235,10 +280,20 @@ fn classify_changed_files(
         // produced them. Usually target/ is gitignored (and dropped above),
         // but don't rely on it.
         .filter(|p| {
-            !(cargo_enabled
+            !(toolchains.cargo
                 && p.components()
                     .next()
                     .is_some_and(|c| c.as_str() == "target"))
+        })
+        // uv writes continuously into environment directories during syncs
+        // and into the root dist/ during builds; letting those events
+        // through would re-trigger the very tasks that produced them.
+        .filter(|p| {
+            !(toolchains.uv
+                && (p
+                    .components()
+                    .any(|c| c.as_str() == ".venv" || c.as_str() == "__pycache__")
+                    || p.components().next().is_some_and(|c| c.as_str() == "dist")))
         })
         .collect();
 
@@ -287,7 +342,7 @@ impl Subscriber {
         hash_watcher: Arc<HashWatcher>,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
-        cargo_enabled: bool,
+        toolchains: WatchedToolchains,
     ) -> Self {
         // Try to canonicalize the custom path to match what the file watcher reports
         let normalized_custom_path = custom_turbo_json_path.map(|path| {
@@ -329,7 +384,7 @@ impl Subscriber {
             hash_watcher,
             custom_turbo_json_path: normalized_custom_path,
             single_package,
-            cargo_enabled,
+            toolchains,
         }
     }
 
@@ -343,7 +398,8 @@ impl Subscriber {
         let Ok(pkg_dep_graph) =
             PackageGraphBuilder::new(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.single_package)
-                .with_cargo(self.cargo_enabled)
+                .with_cargo(self.toolchains.cargo)
+                .with_uv(self.toolchains.uv)
                 .build()
                 .await
         else {
@@ -588,7 +644,7 @@ impl Subscriber {
                     &root_gitignore,
                     self.custom_turbo_json_path.as_ref(),
                     &change_mapper,
-                    self.cargo_enabled,
+                    self.toolchains,
                 );
                 tracing::debug!(?action, "classified file changes");
 
@@ -681,7 +737,8 @@ mod test {
 
     use super::{
         ancestors_is_ignored, classify_changed_files, is_in_git_folder, ChangedFiles,
-        FileChangeAction, PackageChangeEvent, PackageChangesWatcher, CONFIG_FILE,
+        FileChangeAction, PackageChangeEvent, PackageChangesWatcher, WatchedToolchains,
+        CONFIG_FILE,
     };
 
     fn anchored(s: &str) -> AnchoredSystemPathBuf {
@@ -758,7 +815,12 @@ mod test {
             gitignore_lines: &[&str],
             custom_turbo_json: Option<&AbsoluteSystemPathBuf>,
         ) -> FileChangeAction {
-            self.classify_with_cargo(trie, gitignore_lines, custom_turbo_json, false)
+            self.classify_with_toolchains(
+                trie,
+                gitignore_lines,
+                custom_turbo_json,
+                WatchedToolchains::default(),
+            )
         }
 
         fn classify_with_cargo(
@@ -767,6 +829,42 @@ mod test {
             gitignore_lines: &[&str],
             custom_turbo_json: Option<&AbsoluteSystemPathBuf>,
             cargo_enabled: bool,
+        ) -> FileChangeAction {
+            self.classify_with_toolchains(
+                trie,
+                gitignore_lines,
+                custom_turbo_json,
+                WatchedToolchains {
+                    cargo: cargo_enabled,
+                    uv: false,
+                },
+            )
+        }
+
+        fn classify_with_uv(
+            &self,
+            trie: &Trie<String, ()>,
+            gitignore_lines: &[&str],
+            custom_turbo_json: Option<&AbsoluteSystemPathBuf>,
+            uv_enabled: bool,
+        ) -> FileChangeAction {
+            self.classify_with_toolchains(
+                trie,
+                gitignore_lines,
+                custom_turbo_json,
+                WatchedToolchains {
+                    cargo: false,
+                    uv: uv_enabled,
+                },
+            )
+        }
+
+        fn classify_with_toolchains(
+            &self,
+            trie: &Trie<String, ()>,
+            gitignore_lines: &[&str],
+            custom_turbo_json: Option<&AbsoluteSystemPathBuf>,
+            toolchains: WatchedToolchains,
         ) -> FileChangeAction {
             let mapper =
                 GlobalDepsPackageChangeMapper::new(&self.pkg_graph, std::iter::empty::<&str>())
@@ -779,7 +877,7 @@ mod test {
                 &gitignore,
                 custom_turbo_json,
                 &change_mapper,
-                cargo_enabled,
+                toolchains,
             )
         }
     }
@@ -961,6 +1059,79 @@ mod test {
 
         // Without cargo support, a directory named target/ is ordinary.
         let action = f.classify_with_cargo(&trie, &[], None, false);
+        assert!(matches!(action, FileChangeAction::PackagesChanged(..)));
+    }
+
+    #[tokio::test]
+    async fn classify_pyproject_triggers_rediscovery_when_uv_enabled() {
+        let f = ClassifyFixture::new().await;
+        let manifest = f
+            .repo_root
+            .join_components(&["packages", "foo", "pyproject.toml"]);
+        let mut trie = Trie::new();
+        trie.insert(manifest.to_string(), ());
+
+        // Manifests define the member set and its edges; the watcher's
+        // graph is stale after any manifest change.
+        let action = f.classify_with_uv(&trie, &[], None, true);
+        assert!(matches!(action, FileChangeAction::ConfigChanged));
+
+        // Without uv support the same file is ordinary content.
+        let action = f.classify_with_uv(&trie, &[], None, false);
+        assert!(matches!(action, FileChangeAction::PackagesChanged(..)));
+    }
+
+    #[tokio::test]
+    async fn classify_uv_lock_triggers_rediscovery_when_uv_enabled() {
+        let f = ClassifyFixture::new().await;
+        let lock = f.repo_root.join_component("uv.lock");
+        let mut trie = Trie::new();
+        trie.insert(lock.to_string(), ());
+
+        let action = f.classify_with_uv(&trie, &[], None, true);
+        assert!(matches!(action, FileChangeAction::ConfigChanged));
+    }
+
+    #[tokio::test]
+    async fn classify_python_environment_writes_ignored_when_uv_enabled() {
+        let f = ClassifyFixture::new().await;
+        let mut trie = Trie::new();
+        // Sync/build byproducts, including a manifest of an installed
+        // package inside .venv — none may re-trigger the tasks that
+        // produced them.
+        trie.insert(
+            f.repo_root
+                .join_components(&[".venv", "lib", "python3.12", "foo.py"])
+                .to_string(),
+            (),
+        );
+        trie.insert(
+            f.repo_root
+                .join_components(&[".venv", "src", "foo", "pyproject.toml"])
+                .to_string(),
+            (),
+        );
+        trie.insert(
+            f.repo_root
+                .join_components(&["packages", "foo", "__pycache__", "foo.pyc"])
+                .to_string(),
+            (),
+        );
+        trie.insert(
+            f.repo_root
+                .join_components(&["dist", "foo-0.1.0-py3-none-any.whl"])
+                .to_string(),
+            (),
+        );
+
+        let action = f.classify_with_uv(&trie, &[], None, true);
+        assert!(
+            matches!(action, FileChangeAction::NoRelevantChanges),
+            "environment writes must be dropped, got {action:?}"
+        );
+
+        // Without uv support, those directories are ordinary.
+        let action = f.classify_with_uv(&trie, &[], None, false);
         assert!(matches!(action, FileChangeAction::PackagesChanged(..)));
     }
 
@@ -1299,7 +1470,7 @@ mod test {
             hash_watcher,
             None,
             single_package,
-            false,
+            WatchedToolchains::default(),
         );
 
         TestWatcherHandle {
@@ -1400,8 +1571,14 @@ mod test {
         let mut trie = Trie::new();
         trie.insert(changed_file.to_string(), ());
 
-        let action =
-            classify_changed_files(&trie, &repo_root, &gitignore, None, &change_mapper, false);
+        let action = classify_changed_files(
+            &trie,
+            &repo_root,
+            &gitignore,
+            None,
+            &change_mapper,
+            WatchedToolchains::default(),
+        );
 
         match &action {
             FileChangeAction::PackagesChanged(PackageChanges::Some(pkgs), _) => {

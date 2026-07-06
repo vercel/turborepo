@@ -277,4 +277,5 @@ mod core;
 mod extends;
 mod inheritance;
 mod syntax;
+mod uv;
 mod workspace;

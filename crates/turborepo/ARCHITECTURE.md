@@ -6,7 +6,7 @@ This document serves as a sketch of the architecture of the `turbo run` command
 
 A run consists of the following steps:
 
-1. Build a package graph based on the JavaScript package manager settings (and, behind `TURBO_EXPERIMENTAL_CARGO`, Cargo workspace crates)
+1. Build a package graph based on the JavaScript package manager settings (and, behind `TURBO_EXPERIMENTAL_CARGO`/`TURBO_EXPERIMENTAL_UV`, Cargo workspace crates and uv workspace members)
 2. Build a task graph based on package dependencies and configuration
 3. Determine global/task hashes
 4. Execute tasks in topological order
@@ -294,6 +294,54 @@ Known limitations of the experiment:
 - Pass-through args after `--` are forwarded to the harness/binary for
   `test`/`bench`/`run`/`clippy`; for `build`/`check`/`doc` they are appended
   as cargo flags instead.
+
+#### Experimental uv Support (`crates/turborepo-repository/src/uv.rs`)
+
+uv workspaces (Python) follow the same architecture as Cargo support, with
+uv analogs at every layer. Opting in: `futureFlags.uvWorkspaces` in the
+root turbo.json, or `TURBO_EXPERIMENTAL_UV=1` in the environment. The
+Cargo → uv mapping:
+
+- **Discovery** (`discover_projects`) parses the root `pyproject.toml`'s
+  `[tool.uv.workspace]` member/exclude globs and each member's `[project]`
+  table directly — uv has no machine-readable metadata command, but its
+  membership semantics are a small, documented surface. Names are PEP
+  503-normalized at the discovery boundary (uv normalizes them in
+  `uv.lock` and `--package` matching, so the normalized form is the
+  canonical identity). Workspace edges come from dependencies with
+  `{ workspace = true }` sources; PEP 735 dependency-group edges that
+  would form a cycle are dropped.
+- **Package shapes** (`UvPackageKind`): *Packaged* projects (those with a
+  `[build-system]`, or `tool.uv.package = true`) map `build` to
+  `uv build --package=<name>`, producing a wheel + sdist in the workspace
+  root's `dist/` (the cached deliverables, `dist/<dist_name>-*`).
+  *Virtual* projects are graph-only no-ops. The synthetic *workspace*
+  package (named `uv`) maps `sync` to `uv sync --locked` — `--locked` so a
+  task never rewrites `uv.lock`, which is an input to every uv task hash.
+- **Hashing**: packaged tasks hash their own sources plus their transitive
+  dependency members' sources (with `.venv`/`__pycache__` excluded on top
+  of the `.turbo` log exclusion), the workspace files (root
+  `pyproject.toml`, `uv.toml`, `.python-version`), and uv-relevant env
+  vars (`UV_PYTHON`, `UV_INDEX_URL`, `UV_EXTRA_INDEX_URL`).
+- **External dependencies** (`turborepo-lockfiles/src/uv.rs`): per-member
+  closures from `uv.lock` (members have `editable`/`virtual` sources;
+  identity = version + source + sdist/wheel hashes), plus `uv --version`
+  as the tool identity. Multi-version resolutions (disjoint environment
+  markers) resolve name-only references to every matching entry —
+  over-inclusive, the safe direction.
+- **Prune**: `turbo prune <member>` copies the member closure, subsets
+  `uv.lock` (rewriting `[manifest].members`), rewrites the root
+  `pyproject.toml` (explicit members, filtered workspace
+  `[tool.uv.sources]`), carries `.python-version`/`uv.toml`, and runs
+  `uv lock --offline` (networked fallback) in the output so
+  `uv sync --locked` passes.
+- **Watch mode**: `pyproject.toml`/`uv.lock` changes trigger rediscovery;
+  events under `.venv`, `__pycache__`, and the root `dist/` are dropped.
+
+End-to-end coverage lives in `crates/turborepo/tests/uv_workspace_test.rs`
+against the `uv_monorepo` fixture. Unlike the Cargo suite (whose toolchain
+is guaranteed because the tests are built with one), tests that execute uv
+skip when it is not installed; graph-only assertions run everywhere.
 
 ### 3. Task Graph (`crates/turborepo-lib/src/engine/`)
 

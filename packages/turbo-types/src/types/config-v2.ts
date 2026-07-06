@@ -313,6 +313,17 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   cargoWorkspaces?: boolean;
+  /**
+   * Treat the members of a uv workspace as Turborepo packages.
+   *
+   * When enabled, Python projects are discovered from the root
+   * pyproject.toml's `[tool.uv.workspace]` globs and participate in the
+   * package graph. The `TURBO_EXPERIMENTAL_UV` environment variable also
+   * enables this feature.
+   *
+   * @defaultValue `false`
+   */
+  uvWorkspaces?: boolean;
 }
 
 export interface GlobalConfig {

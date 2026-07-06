@@ -21,6 +21,7 @@ use crate::{
     },
     package_json::{DependencyKind, PackageJson},
     package_manager::{PackageManager, pnpm::PnpmCatalogs},
+    uv,
 };
 
 pub struct PackageGraphBuilder<'a, T> {
@@ -34,6 +35,9 @@ pub struct PackageGraphBuilder<'a, T> {
     /// When enabled, Rust crates discovered from a Cargo workspace at the repo
     /// root are added to the package graph alongside JS packages.
     cargo: bool,
+    /// When enabled, Python projects discovered from a uv workspace at the
+    /// repo root are added to the package graph alongside JS packages.
+    uv: bool,
 }
 
 #[derive(Debug, Diagnostic, thiserror::Error)]
@@ -63,6 +67,8 @@ pub enum Error {
     Discovery(#[from] crate::discovery::Error),
     #[error(transparent)]
     Cargo(#[from] crate::cargo::Error),
+    #[error(transparent)]
+    Uv(#[from] crate::uv::Error),
 }
 
 /// Attempts to extract the file path that caused the error from the error chain
@@ -95,6 +101,7 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
             lockfile: None,
             package_manager: None,
             cargo: false,
+            uv: false,
         }
     }
 
@@ -121,6 +128,13 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
     /// Enable discovery of Rust crates from a Cargo workspace at the repo root.
     pub fn with_cargo(mut self, cargo: bool) -> Self {
         self.cargo = cargo;
+        self
+    }
+
+    /// Enable discovery of Python projects from a uv workspace at the repo
+    /// root.
+    pub fn with_uv(mut self, uv: bool) -> Self {
+        self.uv = uv;
         self
     }
 
@@ -153,6 +167,7 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
             package_discovery: discovery,
             package_manager: self.package_manager,
             cargo: self.cargo,
+            uv: self.uv,
         }
     }
 }
@@ -254,6 +269,7 @@ where
             package_discovery,
             package_manager: _,
             cargo,
+            uv,
         } = builder;
         let mut workspaces = HashMap::new();
         let root_package_info = PackageInfo {
@@ -348,7 +364,7 @@ where
                     ..Default::default()
                 };
                 crate_names.push(cargo_crate.name.clone());
-                insert_cargo_package(
+                insert_toolchain_package(
                     cargo_crate.name,
                     info,
                     &mut workspaces,
@@ -382,8 +398,114 @@ where
                     transitive_dependencies: Some(workspace_externals),
                     ..Default::default()
                 };
-                insert_cargo_package(
+                insert_toolchain_package(
                     cargo::WORKSPACE_PACKAGE_NAME.to_string(),
+                    info,
+                    &mut workspaces,
+                    &mut workspace_graph,
+                    &mut node_lookup,
+                )?;
+            }
+        }
+
+        // Discover Python projects from a uv workspace and add them as
+        // packages, mirroring the Cargo path above: internal dependencies
+        // become `workspace:*` specifiers for the dependency splitter,
+        // packaged projects run `uv build --package=<name>`, virtual
+        // projects are no-ops, and a synthetic workspace package hosts
+        // workspace-scoped verbs like `uv sync --locked`. Discovery reads
+        // manifests synchronously, so keep it off the async runtime like
+        // the package.json parsing path.
+        if uv && !single {
+            let projects =
+                turborepo_rayon_compat::block_in_place(|| crate::uv::discover_projects(repo_root))?;
+            // Locked external packages plus uv itself participate in each
+            // member task's hash through the same external-dependency
+            // mechanism JS packages use, scoped to the member's transitive
+            // closure — a dependency bump only invalidates members that
+            // actually depend on it, and a uv upgrade invalidates
+            // everything.
+            let all_names: Vec<String> = projects.iter().map(|p| p.name.clone()).collect();
+            let uv_binary = crate::uv::uv_version(repo_root);
+            let mut external_closures = crate::uv::external_closures(repo_root, &all_names)?;
+            let workspace_externals: HashSet<turborepo_lockfiles::Package> = external_closures
+                .values()
+                .flatten()
+                .cloned()
+                .chain(uv_binary.clone())
+                .collect();
+            let mut project_names = Vec::with_capacity(projects.len());
+            for project in projects {
+                let manifest_path =
+                    AnchoredSystemPathBuf::relative_path_between(repo_root, &project.manifest_path);
+                let dependencies = project
+                    .internal_dependencies
+                    .iter()
+                    .map(|dep| (dep.clone(), "workspace:*".to_string()))
+                    .collect();
+                let transitive_dependencies: HashSet<turborepo_lockfiles::Package> =
+                    external_closures
+                        .remove(&project.name)
+                        .unwrap_or_default()
+                        .into_iter()
+                        .chain(uv_binary.clone())
+                        .collect();
+                let info = PackageInfo {
+                    package_json: PackageJson {
+                        name: Some(Spanned::new(project.name.clone())),
+                        dependencies: Some(dependencies),
+                        ..Default::default()
+                    },
+                    package_json_path: manifest_path,
+                    toolchain: PackageToolchain::Uv,
+                    uv: Some(uv::UvPackageDetails {
+                        kind: if project.is_packaged() {
+                            uv::UvPackageKind::Packaged
+                        } else {
+                            uv::UvPackageKind::Virtual
+                        },
+                        deliverables: project.deliverables,
+                    }),
+                    transitive_dependencies: Some(transitive_dependencies),
+                    ..Default::default()
+                };
+                project_names.push(project.name.clone());
+                insert_toolchain_package(
+                    project.name,
+                    info,
+                    &mut workspaces,
+                    &mut workspace_graph,
+                    &mut node_lookup,
+                )?;
+            }
+            // Synthetic workspace package hosting workspace-scoped verbs
+            // (`uv#sync` -> `uv sync --locked`). It depends on every member
+            // so `--affected` and dependent-filters propagate member
+            // changes to it.
+            if !project_names.is_empty() {
+                let dependencies = project_names
+                    .iter()
+                    .map(|name| (name.clone(), "workspace:*".to_string()))
+                    .collect();
+                let info = PackageInfo {
+                    package_json: PackageJson {
+                        name: Some(Spanned::new(uv::WORKSPACE_PACKAGE_NAME.to_string())),
+                        dependencies: Some(dependencies),
+                        ..Default::default()
+                    },
+                    package_json_path: AnchoredSystemPathBuf::from_raw(uv::PYPROJECT_TOML)?,
+                    toolchain: PackageToolchain::Uv,
+                    uv: Some(uv::UvPackageDetails {
+                        kind: uv::UvPackageKind::Workspace,
+                        deliverables: Vec::new(),
+                    }),
+                    // Workspace-scoped verbs sync every member, so the union
+                    // of all closures is this package's external surface.
+                    transitive_dependencies: Some(workspace_externals),
+                    ..Default::default()
+                };
+                insert_toolchain_package(
+                    uv::WORKSPACE_PACKAGE_NAME.to_string(),
                     info,
                     &mut workspaces,
                     &mut workspace_graph,
@@ -721,13 +843,14 @@ impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
     ) -> Result<HashMap<String, BTreeMap<String, String>>, Error> {
         self.workspaces
             .values()
-            // Cargo packages have no JS externals, and the synthetic
-            // workspace package shares the repo-root directory with the
-            // root package — including it here would nondeterministically
-            // replace the root's entry in the directory-keyed map (HashMap
-            // iteration order decides the winner), flipping the root's
-            // external-dependency hash and with it the global hash.
-            .filter(|entry| entry.toolchain != PackageToolchain::Cargo)
+            // Non-JS (Cargo/uv) packages have no JS externals, and their
+            // synthetic workspace packages share the repo-root directory
+            // with the root package — including them here would
+            // nondeterministically replace the root's entry in the
+            // directory-keyed map (HashMap iteration order decides the
+            // winner), flipping the root's external-dependency hash and
+            // with it the global hash.
+            .filter(|entry| entry.toolchain == PackageToolchain::JavaScript)
             .map(|entry| {
                 let workspace_path = entry
                     .package_json_path
@@ -763,12 +886,12 @@ impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
             false,
         )?;
         for (_, entry) in self.workspaces.iter_mut() {
-            // Cargo packages get their closures from Cargo.lock at insertion
-            // time; the JS lockfile knows nothing about them. Overwriting
-            // would clear them — and the synthetic workspace package shares
-            // the repo-root directory with the root JS package, so it could
-            // even steal the root's closure here.
-            if entry.toolchain == PackageToolchain::Cargo {
+            // Cargo/uv packages get their closures from their own lockfiles
+            // at insertion time; the JS lockfile knows nothing about them.
+            // Overwriting would clear them — and their synthetic workspace
+            // packages share the repo-root directory with the root JS
+            // package, so one could even steal the root's closure here.
+            if entry.toolchain != PackageToolchain::JavaScript {
                 continue;
             }
             entry.transitive_dependencies = closures.remove(&entry.unix_dir_str()?);
@@ -815,10 +938,11 @@ impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
     }
 }
 
-/// Insert a Cargo-toolchain package into the build state, hard-erroring on
-/// name collisions (duplicate names are invalid in Cargo; fail loudly like
-/// JS package collisions do).
-fn insert_cargo_package(
+/// Insert a non-JavaScript-toolchain package (a Cargo crate or a uv project)
+/// into the build state, hard-erroring on name collisions (duplicate names
+/// are invalid in both ecosystems; fail loudly like JS package collisions
+/// do).
+fn insert_toolchain_package(
     name: String,
     info: PackageInfo,
     workspaces: &mut HashMap<PackageName, PackageInfo>,
@@ -1801,6 +1925,215 @@ checksum = "abc123"
             map
         }))
         .with_cargo(true)
+        .build()
+        .await;
+        assert_matches!(result, Err(Error::DuplicateWorkspace { .. }));
+    }
+
+    /// A small uv workspace with a packaged project (`app`) depending on a
+    /// packaged library (`lib-a`) and a virtual project (`virt`), plus a
+    /// uv.lock pinning app's external dependency. Discovery parses these
+    /// directly; no uv binary is required.
+    fn write_uv_workspace(root: &AbsoluteSystemPathBuf) {
+        write_cargo_fixture(
+            root,
+            &[
+                (
+                    &["pyproject.toml"],
+                    "[project]\nname = \"root-project\"\nversion = \
+                     \"0.1.0\"\n\n[tool.uv.workspace]\nmembers = [\"packages/*\"]\n",
+                ),
+                (
+                    &["packages", "lib-a", "pyproject.toml"],
+                    "[project]\nname = \"lib-a\"\nversion = \"0.1.0\"\ndependencies = \
+                     []\n\n[build-system]\nrequires = [\"uv_build\"]\nbuild-backend = \
+                     \"uv_build\"\n",
+                ),
+                (
+                    &["packages", "app", "pyproject.toml"],
+                    "[project]\nname = \"app\"\nversion = \"0.1.0\"\ndependencies = [\"lib-a\", \
+                     \"requests>=2\"]\n\n[build-system]\nrequires = [\"uv_build\"]\nbuild-backend \
+                     = \"uv_build\"\n\n[tool.uv.sources]\nlib-a = { workspace = true }\n",
+                ),
+                (
+                    &["packages", "virt", "pyproject.toml"],
+                    "[project]\nname = \"virt\"\nversion = \"0.1.0\"\ndependencies = []\n",
+                ),
+                (
+                    &["uv.lock"],
+                    r#"version = 1
+
+[manifest]
+members = ["app", "lib-a", "virt"]
+
+[[package]]
+name = "app"
+version = "0.1.0"
+source = { editable = "packages/app" }
+dependencies = [
+    { name = "lib-a" },
+    { name = "requests" },
+]
+
+[[package]]
+name = "lib-a"
+version = "0.1.0"
+source = { editable = "packages/lib-a" }
+
+[[package]]
+name = "requests"
+version = "2.34.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { hash = "sha256:requests-sdist" }
+
+[[package]]
+name = "virt"
+version = "0.1.0"
+source = { virtual = "packages/virt" }
+"#,
+                ),
+            ],
+        );
+    }
+
+    #[tokio::test]
+    async fn test_uv_projects_added_to_graph_with_edges() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        write_uv_workspace(&root);
+
+        let graph = PackageGraphBuilder::new(
+            &root,
+            PackageJson {
+                name: Some(Spanned::new("root".into())),
+                ..Default::default()
+            },
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(HashMap::new()))
+        .with_uv(true)
+        .build()
+        .await
+        .unwrap();
+
+        let app = PackageName::from("app");
+        let lib_a = PackageName::from("lib-a");
+        let virt = PackageName::from("virt");
+        let app_info = graph.package_info(&app).expect("app should be a package");
+        assert_eq!(app_info.toolchain, PackageToolchain::Uv);
+        assert!(
+            app_info
+                .package_json_path
+                .as_str()
+                .ends_with("pyproject.toml"),
+            "project manifest path should be its pyproject.toml"
+        );
+        let app_details = app_info.uv.as_ref().expect("uv details");
+        assert_eq!(app_details.kind, crate::uv::UvPackageKind::Packaged);
+        assert_eq!(
+            app_details.deliverables,
+            vec![crate::uv::Deliverable {
+                dist_name: "app".to_string(),
+            }]
+        );
+
+        let virt_info = graph.package_info(&virt).expect("virt should be a package");
+        assert_eq!(
+            virt_info.uv.as_ref().map(|details| details.kind),
+            Some(crate::uv::UvPackageKind::Virtual)
+        );
+
+        let app_deps = graph
+            .immediate_dependencies(&PackageNode::Workspace(app.clone()))
+            .unwrap();
+        assert!(
+            app_deps.contains(&PackageNode::Workspace(lib_a.clone())),
+            "app should depend on lib-a, got: {app_deps:?}"
+        );
+
+        // The synthetic workspace package hosts workspace-scoped verbs and
+        // depends on every member so affected/filtering propagate to it.
+        let workspace_pkg = PackageName::from(crate::uv::WORKSPACE_PACKAGE_NAME);
+        let workspace_info = graph
+            .package_info(&workspace_pkg)
+            .expect("synthetic uv workspace package should exist");
+        assert_eq!(
+            workspace_info.uv.as_ref().map(|details| details.kind),
+            Some(crate::uv::UvPackageKind::Workspace)
+        );
+        let workspace_deps = graph
+            .immediate_dependencies(&PackageNode::Workspace(workspace_pkg.clone()))
+            .unwrap();
+        assert!(
+            workspace_deps.contains(&PackageNode::Workspace(app.clone()))
+                && workspace_deps.contains(&PackageNode::Workspace(lib_a.clone()))
+                && workspace_deps.contains(&PackageNode::Workspace(virt.clone())),
+            "workspace package should depend on all members, got: {workspace_deps:?}"
+        );
+
+        // uv projects must not leak dependencies into the JS lockfile's
+        // unresolved externals: their edges resolve internally by
+        // construction, and registry deps are invalidated via the
+        // external-dependency hash instead.
+        let app_external = app_info.unresolved_external_dependencies.as_ref().unwrap();
+        assert!(
+            app_external.is_empty(),
+            "uv projects should have no unresolved externals, got: {app_external:?}"
+        );
+
+        // External dependencies come from uv.lock, scoped per member: a
+        // requests bump must invalidate app but not lib-a. The uv binary's
+        // own version also participates when uv is installed, so it is
+        // filtered out here to keep the test independent of the machine.
+        let external_keys = |info: &PackageInfo| -> Vec<String> {
+            let mut keys: Vec<String> = info
+                .transitive_dependencies
+                .as_ref()
+                .expect("uv packages should have external dependencies")
+                .iter()
+                .map(|package| package.key.clone())
+                .filter(|key| key != "uv")
+                .collect();
+            keys.sort();
+            keys
+        };
+        assert_eq!(external_keys(app_info), vec!["requests"]);
+        assert_eq!(external_keys(virt_info), Vec::<String>::new());
+        assert_eq!(external_keys(workspace_info), vec!["requests"]);
+    }
+
+    #[tokio::test]
+    async fn test_uv_project_and_js_package_name_collision_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        write_uv_workspace(&root);
+
+        let result = PackageGraphBuilder::new(
+            &root,
+            PackageJson {
+                name: Some(Spanned::new("root".into())),
+                ..Default::default()
+            },
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut map = HashMap::new();
+            map.insert(
+                root.join_components(&["packages", "js-app", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("app".into())),
+                    ..Default::default()
+                },
+            );
+            map
+        }))
+        .with_uv(true)
         .build()
         .await;
         assert_matches!(result, Err(Error::DuplicateWorkspace { .. }));

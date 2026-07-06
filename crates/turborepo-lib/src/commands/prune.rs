@@ -18,6 +18,7 @@ use turborepo_repository::{
     package_graph::{self, PackageGraph, PackageName, PackageNode, PackageToolchain},
     package_json::PackageJson,
     package_manager::{npmrc::NpmRc, PackageManager},
+    uv,
 };
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::BOLD;
@@ -81,6 +82,17 @@ pub enum Error {
     Cargo(#[from] cargo::Error),
     #[error(transparent)]
     CargoLock(#[from] turborepo_lockfiles::CargoLockError),
+    #[error("Cannot prune a uv workspace without a uv.lock; run `uv lock` to generate it.")]
+    MissingUvLockfile,
+    #[error(
+        "'{0}' is the synthetic uv workspace package; prune a workspace member or an application \
+         package instead."
+    )]
+    UvWorkspacePackageNotPruneable(String),
+    #[error(transparent)]
+    Uv(#[from] uv::Error),
+    #[error(transparent)]
+    UvLock(#[from] turborepo_lockfiles::UvLockError),
 }
 
 static ADDITIONAL_FILES: LazyLock<Vec<(&'static RelativeUnixPath, Option<CopyDestination>)>> =
@@ -176,6 +188,7 @@ pub async fn prune(
     let mut workspace_paths = Vec::new();
     let mut workspace_names = Vec::new();
     let mut cargo_crate_names = Vec::new();
+    let mut uv_member_names = Vec::new();
     let workspaces = prune.internal_dependencies();
     let lockfile_keys = prune.lockfile_keys(&workspaces)?;
     for workspace in workspaces {
@@ -203,6 +216,23 @@ pub async fn prune(
                 workspace_names.push(workspace);
                 continue;
             }
+            if entry.toolchain == PackageToolchain::Uv {
+                // The synthetic workspace package has no directory of its
+                // own (it is anchored at the root pyproject.toml); the root
+                // manifest is handled by prune_uv_workspace.
+                if entry.uv.as_ref().map(|details| details.kind)
+                    == Some(uv::UvPackageKind::Workspace)
+                {
+                    continue;
+                }
+                prune.copy_uv_member(entry.package_json_path())?;
+                println!(" - Added {workspace}");
+                uv_member_names.push(workspace.clone());
+                // Members participate in turbo.json task pruning, but not
+                // in the JS lockfile subgraph or package.json workspaces.
+                workspace_names.push(workspace);
+                continue;
+            }
             prune.copy_workspace(entry.package_json_path(), &entry.package_json)?;
             let parent = entry
                 .package_json_path()
@@ -218,6 +248,11 @@ pub async fn prune(
 
     if !cargo_crate_names.is_empty() {
         let extra_members = prune.prune_cargo_workspace(&cargo_crate_names)?;
+        workspace_names.extend(extra_members);
+    }
+
+    if !uv_member_names.is_empty() {
+        let extra_members = prune.prune_uv_workspace(&uv_member_names)?;
         workspace_names.extend(extra_members);
     }
 
@@ -537,6 +572,7 @@ impl<'a> Prune<'a> {
             .with_cargo(crate::run::builder::cargo_enabled(
                 &base.opts().future_flags,
             ))
+            .with_uv(crate::run::builder::uv_enabled(&base.opts().future_flags))
             .build()
             .await?;
 
@@ -562,6 +598,9 @@ impl<'a> Prune<'a> {
                 == Some(cargo::CargoPackageKind::Workspace)
             {
                 return Err(Error::CargoWorkspacePackageNotPruneable(target.clone()));
+            }
+            if info.uv.as_ref().map(|details| details.kind) == Some(uv::UvPackageKind::Workspace) {
+                return Err(Error::UvWorkspacePackageNotPruneable(target.clone()));
             }
             trace!(
                 "target: {}",
@@ -926,6 +965,157 @@ impl<'a> Prune<'a> {
         Ok(extra_members)
     }
 
+    /// Copy a uv workspace member's directory into the pruned output.
+    /// Mirrors [`Self::copy_workspace`], except the docker "json" layer
+    /// receives the member's `pyproject.toml` (its manifest) rather than a
+    /// `package.json`, and there are no npm bin stubs to create.
+    fn copy_uv_member(&self, manifest_path: &AnchoredSystemPath) -> Result<(), Error> {
+        let manifest_path = self.root.resolve(manifest_path);
+        let original_dir = manifest_path
+            .parent()
+            .ok_or_else(|| Error::WorkspaceAtFilesystemRoot)?;
+        let metadata = original_dir.symlink_metadata()?;
+        let relative_member_dir = AnchoredSystemPathBuf::new(&self.root, original_dir)?;
+        let target_dir = self.full_directory.resolve(&relative_member_dir);
+        target_dir.create_dir_all_with_permissions(metadata.permissions())?;
+
+        turborepo_fs::recursive_copy(
+            original_dir,
+            &target_dir,
+            self.use_gitignore,
+            Some(&self.root),
+        )?;
+
+        if self.docker {
+            let docker_member_dir = self.docker_directory().resolve(&relative_member_dir);
+            docker_member_dir.ensure_dir()?;
+            turborepo_fs::copy_file(
+                &manifest_path,
+                docker_member_dir.join_component(uv::PYPROJECT_TOML),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    /// Prune the uv workspace machinery around the copied members:
+    ///
+    /// * `uv.lock` is subset to the closure of the kept members, so `uv sync
+    ///   --locked` succeeds in the pruned output.
+    /// * The lock walk may surface members beyond Turborepo's package-graph
+    ///   closure (uv.lock merges optional and dev dependency-group edges,
+    ///   including cycle-participating ones the package graph drops). Their
+    ///   manifests are referenced by the lockfile, so their directories are
+    ///   copied too.
+    /// * The root `pyproject.toml` is rewritten: explicit
+    ///   `[tool.uv.workspace].members` and filtered workspace
+    ///   `[tool.uv.sources]`.
+    /// * Interpreter pin and uv config files are carried over.
+    ///
+    /// Returns the names of any extra members added beyond `member_names`.
+    fn prune_uv_workspace(&self, member_names: &[String]) -> Result<Vec<String>, Error> {
+        let lock_path = self.root.join_component(uv::UV_LOCK);
+        if !lock_path.try_exists()? {
+            return Err(Error::MissingUvLockfile);
+        }
+        let lock_contents = lock_path.read_to_string()?;
+        let pruned_lock = turborepo_lockfiles::uv_prune_lock(&lock_contents, member_names)?;
+
+        let mut kept_dirs = Vec::new();
+        let mut extra_members = Vec::new();
+        for member in &pruned_lock.members {
+            let name = PackageName::Other(member.clone());
+            let Some(info) = self.package_graph.package_info(&name) else {
+                // The root project appears in uv.lock as a member but is
+                // not a Turborepo package (its directory is the whole
+                // repository); its manifest is rewritten below.
+                continue;
+            };
+            let manifest_path = info.package_json_path();
+            let dir = manifest_path
+                .parent()
+                .ok_or_else(|| Error::WorkspaceAtFilesystemRoot)?;
+            kept_dirs.push(dir.to_unix().to_string());
+
+            if !member_names.contains(member) {
+                self.copy_uv_member(manifest_path)?;
+                println!(" - Added {member} (dev-dependency of a kept member)");
+                extra_members.push(member.clone());
+            }
+        }
+
+        // The pruned lockfile goes to the full layer and, for docker, the
+        // json layer — it is part of "everything needed to fetch
+        // dependencies".
+        self.full_directory
+            .join_component(uv::UV_LOCK)
+            .create_with_contents(&pruned_lock.lockfile)?;
+
+        let manifest_contents = self
+            .root
+            .join_component(uv::PYPROJECT_TOML)
+            .read_to_string()?;
+        let pruned_manifest =
+            uv::prune_root_manifest(&manifest_contents, &kept_dirs, &pruned_lock.members)?;
+        self.full_directory
+            .join_component(uv::PYPROJECT_TOML)
+            .create_with_contents(&pruned_manifest)?;
+
+        // Our lock subset is reachability-based, but uv validates its
+        // lockfile against the workspace's manifests (member list, marker
+        // coverage, revision metadata). Rather than reimplement that
+        // validation, let uv minimally sync its own lockfile (every
+        // retained pin is preserved) so `uv sync --locked` passes in the
+        // pruned output. Try `--offline` first — removals need no network —
+        // but cold machines have no uv cache to satisfy metadata reads, so
+        // fall back to a networked sync. Failure is not fatal: the superset
+        // lock still syncs correctly, it just isn't `--locked`-clean.
+        let sync = |offline: bool| {
+            let mut cmd = std::process::Command::new("uv");
+            cmd.arg("lock");
+            if offline {
+                cmd.arg("--offline");
+            }
+            cmd.current_dir(self.full_directory.as_std_path()).output()
+        };
+        match sync(true).and_then(|offline| {
+            if offline.status.success() {
+                Ok(offline)
+            } else {
+                sync(false)
+            }
+        }) {
+            Ok(output) if output.status.success() => {}
+            Ok(output) => {
+                tracing::warn!(
+                    "unable to canonicalize the pruned uv.lock; `uv sync --locked` may require a \
+                     lockfile refresh: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                );
+            }
+            Err(error) => {
+                tracing::warn!("unable to run uv to canonicalize the pruned uv.lock: {error}");
+            }
+        }
+
+        if self.docker {
+            turborepo_fs::copy_file(
+                self.full_directory.join_component(uv::UV_LOCK),
+                self.docker_directory().join_component(uv::UV_LOCK),
+            )?;
+            self.docker_directory()
+                .join_component(uv::PYPROJECT_TOML)
+                .create_with_contents(&pruned_manifest)?;
+        }
+
+        for aux in [".python-version", "uv.toml"] {
+            let path = RelativeUnixPath::new(aux)?.to_anchored_system_path_buf();
+            self.copy_file(&path, Some(CopyDestination::Docker))?;
+        }
+
+        Ok(extra_members)
+    }
+
     fn create_docker_bin_stubs(
         &self,
         package_json: &PackageJson,
@@ -1072,15 +1262,15 @@ impl<'a> Prune<'a> {
     }
 
     fn lockfile_keys(&self, workspaces: &[PackageName]) -> Result<Vec<String>, Error> {
-        // Cargo packages' external dependencies live in Cargo.lock (rustc,
-        // crates.io/git packages); their keys mean nothing to the JS
-        // lockfile's subgraph and must not leak into it.
+        // Cargo/uv packages' external dependencies live in their own
+        // lockfiles (Cargo.lock, uv.lock); their keys mean nothing to the
+        // JS lockfile's subgraph and must not leak into it.
         let workspaces: Vec<PackageName> = workspaces
             .iter()
             .filter(|workspace| {
                 self.package_graph
                     .package_info(workspace)
-                    .is_none_or(|info| info.toolchain != PackageToolchain::Cargo)
+                    .is_none_or(|info| info.toolchain == PackageToolchain::JavaScript)
             })
             .cloned()
             .collect();

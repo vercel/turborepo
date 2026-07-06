@@ -342,7 +342,10 @@ pub async fn daemon_server(
         exit_signal,
         custom_turbo_json_path,
         {
-            let cargo_enabled = crate::run::builder::cargo_enabled(&base.opts().future_flags);
+            let toolchains = crate::package_changes_watcher::WatchedToolchains {
+                cargo: crate::run::builder::cargo_enabled(&base.opts().future_flags),
+                uv: crate::run::builder::uv_enabled(&base.opts().future_flags),
+            };
             move |args| {
                 PackageChangesWatcher::new(
                     args.repo_root,
@@ -350,7 +353,7 @@ pub async fn daemon_server(
                     args.hash_watcher,
                     args.custom_turbo_json_path,
                     false,
-                    cargo_enabled,
+                    toolchains,
                 )
             }
         },

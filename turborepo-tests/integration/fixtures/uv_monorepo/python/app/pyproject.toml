@@ -1,0 +1,15 @@
+[project]
+name = "app"
+version = "0.1.0"
+requires-python = ">=3.9"
+dependencies = ["lib-a"]
+
+[project.scripts]
+app = "app:main"
+
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+lib-a = { workspace = true }

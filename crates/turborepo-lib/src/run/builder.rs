@@ -363,6 +363,15 @@ impl RunBuilder {
             {
                 Error::PackageMayBeCargoCrate { name }
             }
+            // Likewise for a filter naming a uv workspace member.
+            ResolutionError::NoPackagesMatchedWithName(name)
+                if !uv_enabled(&opts.future_flags)
+                    && repo_root
+                        .join_component(turborepo_repository::uv::PYPROJECT_TOML)
+                        .exists() =>
+            {
+                Error::PackageMayBeUvProject { name }
+            }
             err => Error::Scope(err),
         })?;
 
@@ -493,7 +502,8 @@ impl RunBuilder {
             let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.opts.run_opts.single_package)
                 .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager)
-                .with_cargo(cargo_enabled(&self.opts.future_flags));
+                .with_cargo(cargo_enabled(&self.opts.future_flags))
+                .with_uv(uv_enabled(&self.opts.future_flags));
 
             let graph = builder
                 .build()
@@ -1087,6 +1097,20 @@ pub(crate) fn cargo_enabled(future_flags: &turborepo_turbo_json::FutureFlags) ->
 /// Whether the `TURBO_EXPERIMENTAL_CARGO` environment override is set.
 pub(crate) fn experimental_cargo_enabled() -> bool {
     env_flag_enabled(std::env::var("TURBO_EXPERIMENTAL_CARGO").ok().as_deref())
+}
+
+/// Whether experimental uv package support is enabled: opted into via
+/// `futureFlags.uvWorkspaces` in the root turbo.json (the durable,
+/// repo-level surface — every invoker sees the same graph), or via the
+/// `TURBO_EXPERIMENTAL_UV` environment variable (the greppable
+/// per-invocation escape hatch while the feature is experimental).
+pub(crate) fn uv_enabled(future_flags: &turborepo_turbo_json::FutureFlags) -> bool {
+    future_flags.uv_workspaces || experimental_uv_enabled()
+}
+
+/// Whether the `TURBO_EXPERIMENTAL_UV` environment override is set.
+pub(crate) fn experimental_uv_enabled() -> bool {
+    env_flag_enabled(std::env::var("TURBO_EXPERIMENTAL_UV").ok().as_deref())
 }
 
 /// Standard truthiness for turbo boolean env flags: set, non-empty, and not

@@ -85,6 +85,19 @@ impl<'a> ExecContextFactory<'a> {
                 visitor.run_opts.task_args(),
             ));
         }
+        // Likewise for uv projects (`uv build --package <name>`), only
+        // registered when the graph actually contains uv packages.
+        if visitor
+            .package_graph
+            .packages()
+            .any(|(_, info)| info.toolchain == PackageToolchain::Uv)
+        {
+            command_factory.add_provider(turborepo_task_executor::UvCommandProvider::new(
+                visitor.repo_root,
+                visitor.package_graph.as_ref(),
+                visitor.run_opts.task_args(),
+            ));
+        }
         command_factory.add_provider(pkg_graph_provider);
 
         Ok(Self {

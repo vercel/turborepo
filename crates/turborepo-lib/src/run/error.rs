@@ -84,4 +84,11 @@ pub enum Error {
          turbo.json (or when TURBO_EXPERIMENTAL_CARGO=1 is in the environment)."
     ))]
     PackageMayBeCargoCrate { name: String },
+    #[error("No package found with name '{name}' in workspace")]
+    #[diagnostic(help(
+        "This repository contains a uv workspace, but uv package support is not enabled. uv \
+         workspace members become packages when `futureFlags.uvWorkspaces` is set in the root \
+         turbo.json (or when TURBO_EXPERIMENTAL_UV=1 is in the environment)."
+    ))]
+    PackageMayBeUvProject { name: String },
 }

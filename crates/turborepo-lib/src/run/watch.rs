@@ -266,7 +266,10 @@ impl WatchClient {
             hash_watcher,
             custom_turbo_json_path,
             base.opts().run_opts.single_package,
-            crate::run::builder::cargo_enabled(&base.opts().future_flags),
+            crate::package_changes_watcher::WatchedToolchains {
+                cargo: crate::run::builder::cargo_enabled(&base.opts().future_flags),
+                uv: crate::run::builder::uv_enabled(&base.opts().future_flags),
+            },
         );
 
         // Subscribe before building the Run so we don't miss the initial

@@ -17,6 +17,7 @@ use turborepo_repository::{
     cargo,
     package_graph::{PackageGraph, PackageInfo, PackageName},
     package_manager::PackageManager,
+    uv,
 };
 use turborepo_task_id::TaskId;
 use turborepo_types::TaskArgs;
@@ -403,6 +404,113 @@ impl<T: PackageInfoProvider, E: From<CommandProviderError>> CommandProvider<E>
         if subcommand != "run" {
             cmd.serial_group("cargo");
         }
+        apply_environment(&mut cmd, environment);
+        cmd.open_stdin();
+
+        Ok(Some(cmd))
+    }
+}
+
+/// Command provider that runs uv subcommands for Python packages.
+///
+/// Turborepo leans on uv's own resolution instead of re-scheduling it:
+///
+/// * **Packaged projects** (those with a build backend) map `build` tasks to
+///   `uv build --package=<name>`. uv resolves the project's workspace
+///   dependencies internally, in one process.
+/// * The synthetic **workspace package** maps environment verbs to
+///   workspace-wide uv invocations (e.g. `uv#sync` -> `uv sync --locked`).
+/// * **Virtual projects** never produce commands — there is nothing for uv to
+///   build, so their tasks are no-ops (like a missing package.json script).
+///
+/// The verb tables live in [`turborepo_repository::uv`], shared with run
+/// summaries so display can't drift from execution. No mapped uv verb
+/// accepts a `--` separator, so pass-through args are appended directly as
+/// uv flags.
+#[derive(Debug)]
+pub struct UvCommandProvider<'a, T = PackageGraph> {
+    repo_root: &'a AbsoluteSystemPath,
+    package_info: &'a T,
+    // Resolved lazily so runs without uv tasks never pay for a PATH scan.
+    uv_binary: std::sync::OnceLock<Result<PathBuf, which::Error>>,
+    task_args: TaskArgs<'a>,
+}
+
+impl<'a, T: PackageInfoProvider> UvCommandProvider<'a, T> {
+    pub fn new(
+        repo_root: &'a AbsoluteSystemPath,
+        package_info: &'a T,
+        task_args: TaskArgs<'a>,
+    ) -> Self {
+        Self {
+            repo_root,
+            package_info,
+            uv_binary: std::sync::OnceLock::new(),
+            task_args,
+        }
+    }
+}
+
+impl<T: PackageInfoProvider, E: From<CommandProviderError>> CommandProvider<E>
+    for UvCommandProvider<'_, T>
+{
+    fn command(
+        &self,
+        task_id: &TaskId,
+        environment: &EnvironmentVariableMap,
+    ) -> Result<Option<Command>, E> {
+        let Some(info) = self
+            .package_info
+            .package_info(&PackageName::from(task_id.package()))
+        else {
+            return Ok(None);
+        };
+        let Some(details) = &info.uv else {
+            return Ok(None);
+        };
+        let Some(subcommand) = uv::task_subcommand(details.kind, task_id.task()) else {
+            return Ok(None);
+        };
+
+        let uv_binary = self
+            .uv_binary
+            .get_or_init(|| which::which("uv"))
+            .as_deref()
+            .map_err(|e| CommandProviderError::from(*e))?;
+
+        let mut args: Vec<OsString> = vec![OsString::from(subcommand)];
+        match details.kind {
+            // `--package=<name>` as a single token so a hostile project
+            // name can never be interpreted as a separate flag.
+            uv::UvPackageKind::Packaged => {
+                args.push(OsString::from(format!("--package={}", task_id.package())));
+            }
+            uv::UvPackageKind::Workspace => {
+                args.extend(
+                    uv::workspace_subcommand_flags(subcommand)
+                        .iter()
+                        .map(OsString::from),
+                );
+            }
+            // Virtual kinds never map to a subcommand.
+            uv::UvPackageKind::Virtual => return Ok(None),
+        }
+        if let Some(pass_through_args) = self.task_args.args_for_task(task_id) {
+            if uv::pass_through_uses_separator(subcommand) {
+                args.push(OsString::from("--"));
+            }
+            args.extend(pass_through_args.iter().map(OsString::from));
+        }
+
+        let mut cmd = Command::new(uv_binary);
+        cmd.args(args);
+        // Scoping flags select the work, so we always run from the
+        // workspace root.
+        cmd.current_dir(self.repo_root.to_owned());
+        // Concurrent uv processes contend on the workspace environment and
+        // uv's own file locks, so run them one at a time and let each uv
+        // parallelize internally.
+        cmd.serial_group("uv");
         apply_environment(&mut cmd, environment);
         cmd.open_stdin();
 
@@ -1076,6 +1184,150 @@ mod tests {
             command_args(&cmd),
             vec!["test", "--workspace", "--", "--nocapture"]
         );
+    }
+
+    fn uv_provider_fixture(
+        kind: uv::UvPackageKind,
+    ) -> (AbsoluteSystemPathBuf, MockPackageInfoProvider) {
+        use turborepo_repository::package_graph::PackageToolchain;
+
+        let repo_root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let provider = MockPackageInfoProvider {
+            package_info: PackageInfo {
+                package_json_path: AnchoredSystemPathBuf::from_raw(
+                    ["packages", "web", "pyproject.toml"].join(std::path::MAIN_SEPARATOR_STR),
+                )
+                .unwrap(),
+                toolchain: PackageToolchain::Uv,
+                uv: Some(uv::UvPackageDetails {
+                    kind,
+                    deliverables: vec![uv::Deliverable {
+                        dist_name: "web".to_string(),
+                    }],
+                }),
+                ..Default::default()
+            },
+            package_manager: PackageManager::Npm,
+        };
+        (repo_root, provider)
+    }
+
+    fn uv_command(
+        kind: uv::UvPackageKind,
+        task: &str,
+        pass_through_args: &[String],
+        tasks: &[String],
+    ) -> Option<Command> {
+        let (repo_root, info_provider) = uv_provider_fixture(kind);
+        let provider = UvCommandProvider::new(
+            &repo_root,
+            &info_provider,
+            TaskArgs::new(pass_through_args, tasks),
+        );
+        CommandProvider::<CommandProviderError>::command(
+            &provider,
+            &TaskId::new("web", task),
+            &EnvironmentVariableMap::default(),
+        )
+        .unwrap()
+    }
+
+    /// Whether uv is installed. Unlike cargo (guaranteed because these
+    /// tests are built with a Rust toolchain), uv may be absent; tests that
+    /// need to construct a real command skip in that case.
+    fn uv_available() -> bool {
+        if which::which("uv").is_ok() {
+            true
+        } else {
+            eprintln!("skipping: uv is not installed");
+            false
+        }
+    }
+
+    #[test]
+    fn test_uv_provider_packaged_builds_scoped_to_project() {
+        if !uv_available() {
+            return;
+        }
+        let cmd = uv_command(uv::UvPackageKind::Packaged, "build", &[], &[])
+            .expect("packaged build maps to uv build");
+        assert_eq!(command_args(&cmd), vec!["build", "--package=web"]);
+        assert_eq!(cmd.serial_group_name(), Some("uv"));
+    }
+
+    #[test]
+    fn test_uv_provider_workspace_sync_runs_locked() {
+        if !uv_available() {
+            return;
+        }
+        let cmd = uv_command(uv::UvPackageKind::Workspace, "sync", &[], &[])
+            .expect("sync maps to uv sync at workspace scope");
+        assert_eq!(command_args(&cmd), vec!["sync", "--locked"]);
+        assert_eq!(cmd.serial_group_name(), Some("uv"));
+    }
+
+    #[test]
+    fn test_uv_provider_pass_through_args_appended_directly() {
+        if !uv_available() {
+            return;
+        }
+        // No mapped uv verb accepts a `--` separator; args are uv flags.
+        let args = vec!["--no-sources".to_string()];
+        let tasks = vec!["build".to_string()];
+        let cmd = uv_command(uv::UvPackageKind::Packaged, "build", &args, &tasks)
+            .expect("build maps to build");
+        assert_eq!(
+            command_args(&cmd),
+            vec!["build", "--package=web", "--no-sources"]
+        );
+    }
+
+    #[test]
+    fn test_uv_provider_virtual_tasks_are_noops() {
+        // There is nothing for uv to build in a virtual project; its tasks
+        // never produce commands.
+        for task in ["build", "sync", "test"] {
+            assert!(
+                uv_command(uv::UvPackageKind::Virtual, task, &[], &[]).is_none(),
+                "virtual {task} task should be a no-op"
+            );
+        }
+    }
+
+    #[test]
+    fn test_uv_provider_falls_through_for_unmapped_task() {
+        assert!(uv_command(uv::UvPackageKind::Packaged, "test", &[], &[]).is_none());
+        assert!(uv_command(uv::UvPackageKind::Packaged, "sync", &[], &[]).is_none());
+        assert!(uv_command(uv::UvPackageKind::Workspace, "build", &[], &[]).is_none());
+    }
+
+    #[test]
+    fn test_uv_provider_falls_through_for_js_package() {
+        let (repo_root, mut info_provider) = uv_provider_fixture(uv::UvPackageKind::Packaged);
+        info_provider.package_info.toolchain = Default::default();
+        info_provider.package_info.uv = None;
+        let provider = UvCommandProvider::new(&repo_root, &info_provider, TaskArgs::new(&[], &[]));
+        let cmd = CommandProvider::<CommandProviderError>::command(
+            &provider,
+            &TaskId::new("web", "build"),
+            &EnvironmentVariableMap::default(),
+        )
+        .unwrap();
+        assert!(cmd.is_none());
+    }
+
+    #[test]
+    fn test_uv_provider_falls_through_for_unknown_package() {
+        let (repo_root, info_provider) = uv_provider_fixture(uv::UvPackageKind::Packaged);
+        let provider = UvCommandProvider::new(&repo_root, &info_provider, TaskArgs::new(&[], &[]));
+        let cmd = CommandProvider::<CommandProviderError>::command(
+            &provider,
+            &TaskId::new("unknown", "build"),
+            &EnvironmentVariableMap::default(),
+        )
+        .unwrap();
+        assert!(cmd.is_none());
     }
 
     #[tokio::test]

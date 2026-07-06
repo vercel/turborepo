@@ -330,6 +330,11 @@
           "default": false,
           "type": "boolean"
         },
+        "uvWorkspaces": {
+          "description": "Treat the members of a uv workspace as Turborepo packages.\n\nWhen enabled, Python projects are discovered from the root pyproject.toml's `[tool.uv.workspace]` globs and participate in the package graph: packaged projects get `build` tasks (`uv build --package=<name>`), virtual projects propagate `--filter`/`--affected`, and a synthetic `uv` package hosts workspace-scoped verbs like `uv#sync`. The `TURBO_EXPERIMENTAL_UV` environment variable also enables this feature.",
+          "default": false,
+          "type": "boolean"
+        },
         "watchUsingTaskInputs": {
           "description": "Use task-level `inputs` globs to determine which tasks to re-run when files change in `turbo watch`. When enabled, only tasks whose declared inputs match the changed files are re-executed, rather than re-running all tasks in changed packages.",
           "default": false,

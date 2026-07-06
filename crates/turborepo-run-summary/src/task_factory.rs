@@ -6,6 +6,7 @@ use turborepo_lockfiles::Package;
 use turborepo_repository::{
     cargo,
     package_graph::{PackageGraph, PackageInfo, PackageName},
+    uv,
 };
 use turborepo_task_id::TaskId;
 use turborepo_types::{
@@ -120,6 +121,9 @@ where
             // Derived from the same tables the executor uses, so summaries
             // always show the command that actually runs.
             cargo::display_command(details.kind, task_id.task(), task_id.package())
+                .unwrap_or_else(|| "<NONEXISTENT>".to_string())
+        } else if let Some(details) = &workspace_info.uv {
+            uv::display_command(details.kind, task_id.task(), task_id.package())
                 .unwrap_or_else(|| "<NONEXISTENT>".to_string())
         } else {
             workspace_info
