@@ -124,6 +124,7 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
             env_mode: processed.env_mode.map(|mode| *mode.as_inner()),
             with,
             incremental,
+            experimental_ci: processed.experimental_ci.map(Spanned::into_inner),
         })
     }
 

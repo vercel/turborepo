@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use async_graphql::Object;
+use async_graphql::{Json, Object};
 use turborepo_engine::TaskNode;
 use turborepo_errors::Spanned;
 use turborepo_task_id::TaskId;
@@ -64,6 +64,21 @@ impl RepositoryTask {
 
     async fn script(&self) -> Option<String> {
         self.script.as_ref().map(|script| script.value.to_string())
+    }
+
+    /// The fully resolved `experimentalCI` configuration for this task from
+    /// turbo.json, including Package Configuration overrides. Either a
+    /// boolean or an object with arbitrary keys. Null if the key is not set.
+    #[graphql(name = "experimentalCI")]
+    async fn experimental_ci(&self) -> Result<Option<Json<serde_json::Value>>, Error> {
+        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
+        self.package
+            .run()
+            .engine()
+            .task_definition(&task_id)
+            .and_then(|definition| definition.experimental_ci.as_ref())
+            .map(|config| serde_json::to_value(config).map(Json).map_err(Error::from))
+            .transpose()
     }
 
     async fn direct_dependents(&self) -> Result<Array<RepositoryTask>, Error> {

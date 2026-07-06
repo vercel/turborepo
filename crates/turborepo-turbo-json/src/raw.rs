@@ -15,7 +15,7 @@ use turborepo_boundaries::BoundariesConfig;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::ROOT_PKG_NAME;
 use turborepo_task_id::TaskName;
-use turborepo_types::{EnvMode, OutputLogsMode, UIMode};
+use turborepo_types::{EnvMode, ExperimentalCIConfig, OutputLogsMode, UIMode};
 use turborepo_unescape::UnescapedString;
 
 use crate::{error::Error, future_flags::FutureFlags};
@@ -104,13 +104,6 @@ impl IntoIterator for Pipeline {
 /// empty marker.
 pub trait HasConfigBeyondExtends {
     fn has_config_beyond_extends(&self) -> bool;
-}
-
-#[derive(Serialize, Debug, PartialEq, Clone)]
-#[serde(untagged)]
-pub enum RawExperimentalCIConfig {
-    Enabled(bool),
-    Options(serde_json::Map<String, serde_json::Value>),
 }
 
 /// Configuration options that control how turbo interfaces with the remote
@@ -866,7 +859,7 @@ pub struct RawTaskDefinition {
     #[deserializable(rename = "experimentalCI")]
     #[schemars(skip)]
     #[ts(skip)]
-    pub experimental_ci: Option<Spanned<RawExperimentalCIConfig>>,
+    pub experimental_ci: Option<Spanned<ExperimentalCIConfig>>,
 
     /// Incremental cache partitions for tool-specific incremental artifacts.
     ///
@@ -896,6 +889,7 @@ impl HasConfigBeyondExtends for RawTaskDefinition {
             || self.interactive.is_some()
             || self.with.is_some()
             || self.incremental.is_some()
+            || self.experimental_ci.is_some()
     }
 }
 

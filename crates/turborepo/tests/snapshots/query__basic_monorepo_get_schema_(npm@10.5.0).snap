@@ -325,6 +325,18 @@ expression: query_output
               "deprecationReason": null
             },
             {
+              "name": "experimentalCI",
+              "description": "The fully resolved `experimentalCI` configuration for this task from\nturbo.json, including Package Configuration overrides. Either a\nboolean or an object with arbitrary keys. Null if the key is not set.",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "JSON",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
               "name": "directDependents",
               "description": null,
               "args": [],
@@ -2432,6 +2444,18 @@ expression: query_output
               "type": {
                 "kind": "SCALAR",
                 "name": "String",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "experimentalCI",
+              "description": "The fully resolved `experimentalCI` configuration for this task from\nturbo.json, including Package Configuration overrides. Either a\nboolean or an object with arbitrary keys. Null if the key is not set.",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "JSON",
                 "ofType": null
               },
               "isDeprecated": false,

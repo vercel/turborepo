@@ -163,6 +163,7 @@ impl ProcessedTaskDefinition {
         set_field!(self, other, interactive);
         set_field!(self, other, env_mode);
         set_field!(self, other, incremental);
+        set_field!(self, other, experimental_ci);
     }
 }
 
@@ -214,6 +215,7 @@ mod test {
             env_mode: None,
             with: None,
             incremental: None,
+            experimental_ci: None,
         }
     }
 
@@ -252,6 +254,7 @@ mod test {
             env_mode: None,
             with: None,
             incremental: None,
+            experimental_ci: None,
         }
     }
 
@@ -272,6 +275,7 @@ mod test {
             env_mode: None,
             with: None,
             incremental: None,
+            experimental_ci: None,
         }
     }
 
@@ -540,6 +544,39 @@ mod test {
             globs: vec![],
             extends: true,
         }
+    }
+
+    #[test]
+    fn test_merge_experimental_ci_package_overrides_root() {
+        use turborepo_types::ExperimentalCIConfig;
+
+        let root = ProcessedTaskDefinition {
+            experimental_ci: Some(Spanned::new(ExperimentalCIConfig::Enabled(true))),
+            ..Default::default()
+        };
+
+        // A package configuration without the key inherits the root value.
+        let package_without_key = ProcessedTaskDefinition {
+            cache: Some(Spanned::new(false)),
+            ..Default::default()
+        };
+        let result =
+            ProcessedTaskDefinition::from_iter(vec![root.clone(), package_without_key.clone()]);
+        assert_eq!(result.experimental_ci, root.experimental_ci);
+
+        // A package configuration with the key replaces the root value.
+        let mut options = serde_json::Map::new();
+        options.insert("provider".to_string(), serde_json::Value::from("github"));
+        options.insert("attempts".to_string(), serde_json::Value::from(3));
+        let package_with_key = ProcessedTaskDefinition {
+            experimental_ci: Some(Spanned::new(ExperimentalCIConfig::Options(options.clone()))),
+            ..Default::default()
+        };
+        let result = ProcessedTaskDefinition::from_iter(vec![root, package_with_key]);
+        assert_eq!(
+            result.experimental_ci,
+            Some(Spanned::new(ExperimentalCIConfig::Options(options)))
+        );
     }
 
     #[test]

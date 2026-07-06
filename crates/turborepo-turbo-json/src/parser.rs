@@ -22,8 +22,8 @@ use turborepo_task_id::TaskName;
 use turborepo_unescape::UnescapedString;
 
 use crate::raw::{
-    Pipeline, RawExperimentalCIConfig, RawExperimentalObservability, RawGlobalConfig,
-    RawObservabilityOtel, RawObservabilityOtelMetrics, RawObservabilityOtelRunAttributes,
+    Pipeline, RawExperimentalObservability, RawGlobalConfig, RawObservabilityOtel,
+    RawObservabilityOtelMetrics, RawObservabilityOtelRunAttributes,
     RawObservabilityOtelTaskAttributes, RawPackageTurboJson, RawRemoteCacheOptions,
     RawRootTurboJson, RawStructuredInput, RawTaskDefinition, RawTaskInput, RawTurboJson,
 };
@@ -209,53 +209,6 @@ impl WithMetadata for Pipeline {
             entry.add_path(path.clone());
             entry.value.add_path(path.clone());
         }
-    }
-}
-
-impl Deserializable for RawExperimentalCIConfig {
-    fn deserialize(
-        value: &impl DeserializableValue,
-        name: &str,
-        diagnostics: &mut Vec<DeserializationDiagnostic>,
-    ) -> Option<Self> {
-        value.deserialize(RawExperimentalCIConfigVisitor, name, diagnostics)
-    }
-}
-
-struct RawExperimentalCIConfigVisitor;
-
-impl DeserializationVisitor for RawExperimentalCIConfigVisitor {
-    type Output = RawExperimentalCIConfig;
-
-    const EXPECTED_TYPE: VisitableType = VisitableType::BOOL.union(VisitableType::MAP);
-
-    fn visit_bool(
-        self,
-        value: bool,
-        _range: TextRange,
-        _name: &str,
-        _diagnostics: &mut Vec<DeserializationDiagnostic>,
-    ) -> Option<Self::Output> {
-        Some(RawExperimentalCIConfig::Enabled(value))
-    }
-
-    fn visit_map(
-        self,
-        members: impl Iterator<Item = Option<(impl DeserializableValue, impl DeserializableValue)>>,
-        _range: TextRange,
-        _name: &str,
-        diagnostics: &mut Vec<DeserializationDiagnostic>,
-    ) -> Option<Self::Output> {
-        let entries = members
-            .filter_map(|entry| {
-                let (key, value) = entry?;
-                let key = String::deserialize(&key, "", diagnostics)?;
-                let value = serde_json::Value::deserialize(&value, "", diagnostics)?;
-                Some((key, value))
-            })
-            .collect();
-
-        Some(RawExperimentalCIConfig::Options(entries))
     }
 }
 
@@ -747,7 +700,7 @@ mod tests {
 
         assert_eq!(
             task.experimental_ci.as_ref().map(|v| v.as_inner()),
-            Some(&RawExperimentalCIConfig::Enabled(true))
+            Some(&turborepo_types::ExperimentalCIConfig::Enabled(true))
         );
     }
 
@@ -775,7 +728,7 @@ mod tests {
 
         assert_eq!(
             task.experimental_ci.as_ref().map(|v| v.as_inner()),
-            Some(&RawExperimentalCIConfig::Options(
+            Some(&turborepo_types::ExperimentalCIConfig::Options(
                 serde_json::json!({
                     "provider": "github",
                     "enabled": true,

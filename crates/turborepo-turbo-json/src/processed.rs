@@ -8,7 +8,7 @@ use camino::Utf8Path;
 use turbopath::RelativeUnixPath;
 use turborepo_errors::Spanned;
 use turborepo_task_id::TaskName;
-use turborepo_types::{EnvMode, OutputLogsMode};
+use turborepo_types::{EnvMode, ExperimentalCIConfig, OutputLogsMode};
 use turborepo_unescape::UnescapedString;
 
 use crate::{
@@ -578,6 +578,7 @@ pub struct ProcessedTaskDefinition {
     pub env_mode: Option<Spanned<EnvMode>>,
     pub with: Option<ProcessedWith>,
     pub incremental: Option<Vec<ProcessedIncrementalPartition>>,
+    pub experimental_ci: Option<Spanned<ExperimentalCIConfig>>,
 }
 
 impl ProcessedTaskDefinition {
@@ -670,6 +671,7 @@ impl ProcessedTaskDefinition {
                 .map(|with| ProcessedWith::new(with, future_flags))
                 .transpose()?,
             incremental,
+            experimental_ci: raw_task.experimental_ci,
         })
     }
 
@@ -688,6 +690,7 @@ impl ProcessedTaskDefinition {
             || self.interactive.is_some()
             || self.with.is_some()
             || self.incremental.is_some()
+            || self.experimental_ci.is_some()
     }
 }
 
@@ -780,6 +783,23 @@ mod tests {
 
         let resolved = glob.resolve(replacement);
         assert_eq!(resolved, expected);
+    }
+
+    #[test]
+    fn test_from_raw_carries_experimental_ci() {
+        let raw_task = RawTaskDefinition {
+            experimental_ci: Some(Spanned::new(ExperimentalCIConfig::Enabled(true))),
+            ..Default::default()
+        };
+
+        let processed =
+            ProcessedTaskDefinition::from_raw(raw_task, &FutureFlags::default()).unwrap();
+
+        assert_eq!(
+            processed.experimental_ci,
+            Some(Spanned::new(ExperimentalCIConfig::Enabled(true)))
+        );
+        assert!(processed.has_config_beyond_extends());
     }
 
     #[test]
