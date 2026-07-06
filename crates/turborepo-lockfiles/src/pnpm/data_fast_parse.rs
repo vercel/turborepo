@@ -65,11 +65,226 @@ pub(super) fn parse(bytes: &[u8]) -> Option<PnpmLockfile> {
 }
 
 fn parse_with_scanner(text: &str) -> Option<PnpmLockfile> {
+    if text.len() >= PARALLEL_PARSE_MIN_BYTES
+        && let Some(lockfile) = parse_fragments_parallel(text)
+    {
+        return Some(lockfile);
+    }
+    // Unsplittable, small, or rejected-by-fragment input: sequential scan
+    // over the whole document, exactly as before. This keeps the parallel
+    // path a pure optimization: anything it bails on gets the same
+    // treatment the input would have gotten without it.
     let mut events = Events {
         source: Source::Lines(scanner::LineScanner::new(text)),
         peeked: None,
     };
     parse_lockfile(&mut events).ok()
+}
+
+/// Minimum input size for the parallel path; below this the sequential
+/// scan wins because rayon dispatch and per-fragment stream framing cost
+/// more than they save.
+const PARALLEL_PARSE_MIN_BYTES: usize = 64 * 1024;
+
+/// Byte slices of the document's top-level blocks: each fragment starts at
+/// a column-zero key line and runs to the next one, so it is itself a
+/// valid single-key document for the line scanner.
+///
+/// The split is purely positional and deliberately conservative: it only
+/// recognizes boundaries whose first byte could begin a plain pnpm map key
+/// (alphanumeric or `_`). Anything else at column zero — document markers,
+/// flow collections, quoted keys, tabs — returns `None` and the caller
+/// falls back to the sequential scan. Comment and blank lines are not
+/// boundaries; they attach to the preceding fragment, where the scanner
+/// skips them.
+///
+/// The first fragment always starts at byte zero so nothing is dropped:
+/// leading comments are skipped by the scanner, and leading *content*
+/// (e.g. an indented first line) makes the fragment scan fail exactly like
+/// the sequential scan would.
+fn split_top_level(text: &str) -> Option<Vec<&str>> {
+    let bytes = text.as_bytes();
+    let mut starts = Vec::new();
+    let mut pos = 0;
+    while pos < bytes.len() {
+        match bytes[pos] {
+            b' ' | b'\n' | b'\r' | b'#' => {}
+            c if c.is_ascii_alphanumeric() || c == b'_' => starts.push(pos),
+            _ => return None,
+        }
+        pos = match memchr::memchr(b'\n', &bytes[pos..]) {
+            Some(i) => pos + i + 1,
+            None => bytes.len(),
+        };
+    }
+    if starts.len() < 2 {
+        return None;
+    }
+    let mut fragments = Vec::with_capacity(starts.len());
+    let mut begin = 0;
+    for &start in &starts[1..] {
+        fragments.push(&text[begin..start]);
+        begin = start;
+    }
+    fragments.push(&text[begin..]);
+    Some(fragments)
+}
+
+/// Scan the document's top-level blocks in parallel and merge the results.
+/// The `packages`, `snapshots`, and `importers` blocks are comparable in
+/// size and dominate parse time, so this approaches a 3x speedup on large
+/// lockfiles. Returns `None` when the input isn't worth splitting or any
+/// fragment uses YAML the scanner doesn't support.
+fn parse_fragments_parallel(text: &str) -> Option<PnpmLockfile> {
+    use rayon::prelude::*;
+
+    let fragments = split_top_level(text)?;
+    let parsed = fragments
+        .into_par_iter()
+        .map(parse_fragment)
+        .collect::<FResult<Vec<_>>>()
+        .ok()?;
+
+    let mut fields = TopLevelFields::default();
+    for fragment_fields in parsed {
+        fields.merge(fragment_fields).ok()?;
+    }
+    fields.into_lockfile().ok()
+}
+
+/// Minimum fragment size before it's worth re-splitting into chunks of
+/// child entries.
+const CHUNKED_FRAGMENT_MIN_BYTES: usize = 256 * 1024;
+
+/// Parse one top-level block. Fragments large enough to dominate the
+/// parallel schedule (`importers`/`packages`/`snapshots` on big repos) are
+/// re-split at their child keys and parsed as concurrent chunks; anything
+/// else — or any chunk the scanner rejects — is parsed sequentially so the
+/// chunked path stays a pure optimization.
+fn parse_fragment(fragment: &str) -> FResult<TopLevelFields> {
+    if fragment.len() >= CHUNKED_FRAGMENT_MIN_BYTES
+        && let Some(fields) = parse_fragment_chunked(fragment, rayon::current_num_threads().max(2))
+    {
+        return Ok(fields);
+    }
+    let mut events = Events {
+        source: Source::Lines(scanner::LineScanner::new(fragment)),
+        peeked: None,
+    };
+    let mut fields = TopLevelFields::default();
+    parse_root_mapping(&mut events, &mut fields)?;
+    Ok(fields)
+}
+
+/// Byte offsets of child-entry starts: lines indented by exactly two
+/// spaces whose first content byte could begin a pnpm map key (package
+/// keys like `'@scope/name@1.0.0':`, importer paths like `packages/foo` or
+/// `.`). `-` is excluded so block-sequence items never look like keys, and
+/// any line indented by exactly one space aborts (the two-space level
+/// would not be a direct child). Continuation lines of multi-line scalars
+/// are indented deeper than two spaces, so a boundary can never land
+/// inside an entry the scanner accepts.
+fn child_entry_starts(fragment: &str) -> Option<Vec<usize>> {
+    let bytes = fragment.as_bytes();
+    let mut starts = Vec::new();
+    // Skip the `key:` header line.
+    let mut pos = memchr::memchr(b'\n', bytes)? + 1;
+    while pos < bytes.len() {
+        let line_start = pos;
+        pos = match memchr::memchr(b'\n', &bytes[pos..]) {
+            Some(i) => pos + i + 1,
+            None => bytes.len(),
+        };
+        match bytes[line_start] {
+            b'\n' | b'\r' | b'#' => continue,
+            b' ' => {}
+            // Content at column zero after the header: not a splittable
+            // block (split_top_level only produces this via CR quirks).
+            _ => return None,
+        }
+        if line_start + 1 >= bytes.len() {
+            continue;
+        }
+        match bytes[line_start + 1] {
+            b' ' => {}
+            // Indent of exactly one: two-space lines would not be direct
+            // children, so give up on chunking this fragment.
+            _ => return None,
+        }
+        let Some(&third) = bytes.get(line_start + 2) else {
+            continue;
+        };
+        match third {
+            // Deeper indentation or blank remainder: interior line.
+            b' ' | b'\n' | b'\r' => continue,
+            c if c.is_ascii_alphanumeric()
+                || matches!(c, b'_' | b'\'' | b'"' | b'@' | b'.' | b'/') =>
+            {
+                starts.push(line_start)
+            }
+            // `-` (sequence item), `#` (comment), tags, anchors, flow:
+            // don't risk chunking.
+            _ => return None,
+        }
+    }
+    Some(starts)
+}
+
+/// Parse a big top-level block by splitting its children into roughly
+/// core-count chunks, parsing `header + chunk` mini-documents in parallel,
+/// and unioning the resulting single-field accumulators. The union rejects
+/// duplicate child keys exactly like the sequential parsers'
+/// insert-checks, and duplicate scalar fields via `set_once`, so accepted
+/// inputs mean the same thing they would sequentially.
+fn parse_fragment_chunked(fragment: &str, chunk_count: usize) -> Option<TopLevelFields> {
+    use rayon::prelude::*;
+
+    let header_end = memchr::memchr(b'\n', fragment.as_bytes())? + 1;
+    let header = &fragment[..header_end];
+    // Only the sections whose sequential parsers reject duplicate child
+    // keys with an insert-check, which the chunk union mirrors exactly.
+    if !matches!(header.trim_end(), "importers:" | "packages:" | "snapshots:") {
+        return None;
+    }
+    let starts = child_entry_starts(fragment)?;
+    if starts.len() < chunk_count * 2 {
+        return None;
+    }
+    let target_bytes = fragment.len() / chunk_count;
+
+    // Group child starts into chunks of at least `target_bytes`.
+    let mut chunk_bounds = vec![starts[0]];
+    let mut chunk_begin = starts[0];
+    for &start in &starts[1..] {
+        if start - chunk_begin >= target_bytes {
+            chunk_bounds.push(start);
+            chunk_begin = start;
+        }
+    }
+    chunk_bounds.push(fragment.len());
+
+    let parsed = chunk_bounds
+        .windows(2)
+        .map(|w| (w[0], w[1]))
+        .collect::<Vec<_>>()
+        .into_par_iter()
+        .map(|(begin, end)| {
+            let doc = format!("{header}{}", &fragment[begin..end]);
+            let mut events = Events {
+                source: Source::Lines(scanner::LineScanner::new(&doc)),
+                peeked: None,
+            };
+            let mut fields = TopLevelFields::default();
+            parse_root_mapping(&mut events, &mut fields).map(|()| fields)
+        })
+        .collect::<FResult<Vec<_>>>()
+        .ok()?;
+
+    let mut merged = TopLevelFields::default();
+    for chunk_fields in parsed {
+        merged.union(chunk_fields).ok()?;
+    }
+    Some(merged)
 }
 
 fn parse_with_saphyr(text: &str) -> Option<PnpmLockfile> {
@@ -830,7 +1045,168 @@ fn parse_lockfile_version(events: &mut Events) -> FResult<LockfileVersion> {
     }
 }
 
-fn parse_lockfile(events: &mut Events) -> FResult<PnpmLockfile> {
+/// Top-level lockfile fields accumulated while parsing the root mapping.
+/// The parallel path (see [`parse_fragments_parallel`]) fills one
+/// accumulator per top-level block and merges them; `set_once` in both
+/// `consume` and `merge` keeps duplicate-key behavior identical to a
+/// sequential pass over the whole document.
+#[derive(Default)]
+struct TopLevelFields {
+    lockfile_version: Option<LockfileVersion>,
+    settings: Option<LockfileSettings>,
+    catalogs: Option<Map<String, Map<String, Dependency>>>,
+    pnpmfile_checksum: Option<String>,
+    never_built_dependencies: Option<Vec<String>>,
+    only_built_dependencies: Option<Vec<String>>,
+    ignored_optional_dependencies: Option<Vec<String>>,
+    overrides: Option<Map<String, String>>,
+    package_extensions_checksum: Option<String>,
+    patched_dependencies: Option<Map<String, PatchFile>>,
+    importers: Option<BTreeMap<String, ProjectSnapshot>>,
+    packages: Option<Packages>,
+    snapshots: Option<Snapshots>,
+    time: Option<Map<String, String>>,
+}
+
+impl TopLevelFields {
+    /// Parse the value for one root-mapping key.
+    fn consume(&mut self, key: &str, events: &mut Events) -> FResult<()> {
+        match key {
+            "lockfileVersion" => {
+                set_once(&mut self.lockfile_version, parse_lockfile_version(events)?)?
+            }
+            "settings" => set_once(&mut self.settings, parse_settings(events)?)?,
+            "catalogs" => set_once(&mut self.catalogs, parse_catalogs(events)?)?,
+            "pnpmfileChecksum" => set_once(&mut self.pnpmfile_checksum, events.string()?)?,
+            "neverBuiltDependencies" => set_once(
+                &mut self.never_built_dependencies,
+                parse_string_seq(events)?,
+            )?,
+            "onlyBuiltDependencies" => {
+                set_once(&mut self.only_built_dependencies, parse_string_seq(events)?)?
+            }
+            "ignoredOptionalDependencies" => set_once(
+                &mut self.ignored_optional_dependencies,
+                parse_string_seq(events)?,
+            )?,
+            "overrides" => set_once(&mut self.overrides, parse_string_map(events)?)?,
+            "packageExtensionsChecksum" => {
+                set_once(&mut self.package_extensions_checksum, events.string()?)?
+            }
+            "patchedDependencies" => set_once(
+                &mut self.patched_dependencies,
+                parse_patched_dependencies(events)?,
+            )?,
+            "importers" => set_once(&mut self.importers, parse_importers(events)?)?,
+            "packages" => set_once(&mut self.packages, parse_packages(events)?)?,
+            "snapshots" => set_once(&mut self.snapshots, parse_snapshots(events)?)?,
+            "time" => set_once(&mut self.time, parse_string_map(events)?)?,
+            // Unknown root keys are ignored by the serde struct.
+            _ => events.skip_node()?,
+        }
+        Ok(())
+    }
+
+    /// Fold another accumulator into this one, rejecting duplicate fields
+    /// exactly like repeated keys in a single pass would be.
+    fn merge(&mut self, other: TopLevelFields) -> FResult<()> {
+        fn fold<T>(slot: &mut Option<T>, value: Option<T>) -> FResult<()> {
+            match value {
+                Some(value) => set_once(slot, value),
+                None => Ok(()),
+            }
+        }
+        fold(&mut self.lockfile_version, other.lockfile_version)?;
+        fold(&mut self.settings, other.settings)?;
+        fold(&mut self.catalogs, other.catalogs)?;
+        fold(&mut self.pnpmfile_checksum, other.pnpmfile_checksum)?;
+        fold(
+            &mut self.never_built_dependencies,
+            other.never_built_dependencies,
+        )?;
+        fold(
+            &mut self.only_built_dependencies,
+            other.only_built_dependencies,
+        )?;
+        fold(
+            &mut self.ignored_optional_dependencies,
+            other.ignored_optional_dependencies,
+        )?;
+        fold(&mut self.overrides, other.overrides)?;
+        fold(
+            &mut self.package_extensions_checksum,
+            other.package_extensions_checksum,
+        )?;
+        fold(&mut self.patched_dependencies, other.patched_dependencies)?;
+        fold(&mut self.importers, other.importers)?;
+        fold(&mut self.packages, other.packages)?;
+        fold(&mut self.snapshots, other.snapshots)?;
+        fold(&mut self.time, other.time)?;
+        Ok(())
+    }
+
+    /// Fold chunks of a single re-split section back together. Map
+    /// sections union with a duplicate-key check, mirroring the sequential
+    /// parsers' insert-checks; every other field uses `set_once`, exactly
+    /// like [`TopLevelFields::merge`].
+    fn union(&mut self, other: TopLevelFields) -> FResult<()> {
+        fn union_map<V>(
+            slot: &mut Option<BTreeMap<String, V>>,
+            value: Option<BTreeMap<String, V>>,
+        ) -> FResult<()> {
+            let Some(value) = value else {
+                return Ok(());
+            };
+            match slot {
+                None => *slot = Some(value),
+                Some(existing) => {
+                    for (key, entry) in value {
+                        if existing.insert(key, entry).is_some() {
+                            return Err(Unsupported::here());
+                        }
+                    }
+                }
+            }
+            Ok(())
+        }
+        let mut other = other;
+        union_map(&mut self.importers, other.importers.take())?;
+        union_map(&mut self.packages, other.packages.take())?;
+        union_map(&mut self.snapshots, other.snapshots.take())?;
+        // Chunked fragments only carry the three sections above; merge the
+        // rest anyway so this stays correct if the whitelist ever grows.
+        self.merge(other)
+    }
+
+    fn into_lockfile(self) -> FResult<PnpmLockfile> {
+        Ok(PnpmLockfile {
+            lockfile_version: self.lockfile_version.ok_or_else(Unsupported::here)?,
+            cached_version: Default::default(),
+            leading_documents: Vec::new(),
+            settings: self.settings,
+            catalogs: self.catalogs,
+            pnpmfile_checksum: self.pnpmfile_checksum,
+            never_built_dependencies: self.never_built_dependencies,
+            only_built_dependencies: self.only_built_dependencies,
+            ignored_optional_dependencies: self.ignored_optional_dependencies,
+            overrides: self.overrides,
+            package_extensions_checksum: self.package_extensions_checksum,
+            patched_dependencies: self.patched_dependencies,
+            // `importers` has no `#[serde(default)]`; a missing field is a
+            // serde error, so let the fallback path report it.
+            importers: self.importers.ok_or_else(Unsupported::here)?,
+            packages: self.packages,
+            snapshots: self.snapshots,
+            dependency_index: rustc_hash::FxHashMap::default(),
+            time: self.time,
+        })
+    }
+}
+
+/// Parse one document containing a root block mapping into `fields`.
+/// Consumes the entire event stream: used both for whole documents and for
+/// single top-level blocks re-framed as standalone documents.
+fn parse_root_mapping(events: &mut Events, fields: &mut TopLevelFields) -> FResult<()> {
     // StreamStart, then exactly one document.
     match events.next()? {
         Event::StreamStart => {}
@@ -843,53 +1219,9 @@ fn parse_lockfile(events: &mut Events) -> FResult<PnpmLockfile> {
 
     events.mapping_start()?;
 
-    let mut lockfile_version = None;
-    let mut settings = None;
-    let mut catalogs = None;
-    let mut pnpmfile_checksum = None;
-    let mut never_built_dependencies = None;
-    let mut only_built_dependencies = None;
-    let mut ignored_optional_dependencies = None;
-    let mut overrides = None;
-    let mut package_extensions_checksum = None;
-    let mut patched_dependencies = None;
-    let mut importers = None;
-    let mut packages = None;
-    let mut snapshots = None;
-    let mut time = None;
-
     while !events.at_mapping_end()? {
         let key = events.string()?;
-        match key.as_str() {
-            "lockfileVersion" => set_once(&mut lockfile_version, parse_lockfile_version(events)?)?,
-            "settings" => set_once(&mut settings, parse_settings(events)?)?,
-            "catalogs" => set_once(&mut catalogs, parse_catalogs(events)?)?,
-            "pnpmfileChecksum" => set_once(&mut pnpmfile_checksum, events.string()?)?,
-            "neverBuiltDependencies" => {
-                set_once(&mut never_built_dependencies, parse_string_seq(events)?)?
-            }
-            "onlyBuiltDependencies" => {
-                set_once(&mut only_built_dependencies, parse_string_seq(events)?)?
-            }
-            "ignoredOptionalDependencies" => set_once(
-                &mut ignored_optional_dependencies,
-                parse_string_seq(events)?,
-            )?,
-            "overrides" => set_once(&mut overrides, parse_string_map(events)?)?,
-            "packageExtensionsChecksum" => {
-                set_once(&mut package_extensions_checksum, events.string()?)?
-            }
-            "patchedDependencies" => set_once(
-                &mut patched_dependencies,
-                parse_patched_dependencies(events)?,
-            )?,
-            "importers" => set_once(&mut importers, parse_importers(events)?)?,
-            "packages" => set_once(&mut packages, parse_packages(events)?)?,
-            "snapshots" => set_once(&mut snapshots, parse_snapshots(events)?)?,
-            "time" => set_once(&mut time, parse_string_map(events)?)?,
-            // Unknown root keys are ignored by the serde struct.
-            _ => events.skip_node()?,
-        }
+        fields.consume(&key, events)?;
     }
 
     // Exactly one document: anything after DocumentEnd other than stream end
@@ -903,28 +1235,13 @@ fn parse_lockfile(events: &mut Events) -> FResult<PnpmLockfile> {
         Event::StreamEnd => {}
         _ => return Err(Unsupported::here()),
     }
+    Ok(())
+}
 
-    Ok(PnpmLockfile {
-        lockfile_version: lockfile_version.ok_or_else(Unsupported::here)?,
-        cached_version: Default::default(),
-        leading_documents: Vec::new(),
-        settings,
-        catalogs,
-        pnpmfile_checksum,
-        never_built_dependencies,
-        only_built_dependencies,
-        ignored_optional_dependencies,
-        overrides,
-        package_extensions_checksum,
-        patched_dependencies,
-        // `importers` has no `#[serde(default)]`; a missing field is a serde
-        // error, so let the fallback path report it.
-        importers: importers.ok_or_else(Unsupported::here)?,
-        packages,
-        snapshots,
-        dependency_index: rustc_hash::FxHashMap::default(),
-        time,
-    })
+fn parse_lockfile(events: &mut Events) -> FResult<PnpmLockfile> {
+    let mut fields = TopLevelFields::default();
+    parse_root_mapping(events, &mut fields)?;
+    fields.into_lockfile()
 }
 
 #[cfg(test)]
@@ -956,6 +1273,15 @@ mod tests {
             scanned.build_dependency_index();
             assert_eq!(scanned, serde, "scanner tier must agree with serde");
         }
+
+        // The parallel splitter is size-gated in production; run it here on
+        // every corpus input so its accept/agree behavior is checked
+        // differentially just like the tiers above.
+        if let Some(mut split) = parse_fragments_parallel(yaml) {
+            split.cached_version = split.compute_version();
+            split.build_dependency_index();
+            assert_eq!(split, serde, "parallel split must agree with serde");
+        }
     }
 
     /// Like [`assert_fast_matches_serde`], but additionally requires the
@@ -974,6 +1300,13 @@ mod tests {
         assert!(
             parse(yaml.as_bytes()).is_none(),
             "input should be outside the fast-path subset"
+        );
+        // The parallel splitter must not accept anything the sequential
+        // tiers reject: at production sizes it runs first, so accepting
+        // here would widen `parse`'s accepted language.
+        assert!(
+            parse_fragments_parallel(yaml).is_none(),
+            "parallel split must reject inputs outside the fast-path subset"
         );
     }
 
@@ -1328,5 +1661,131 @@ packages:
         let bytes = std::fs::read(&lockfile_path).expect("repo lockfile readable");
         let text = std::str::from_utf8(&bytes).expect("utf8");
         assert_scanner_matches_serde(text);
+    }
+
+    /// A lockfile large enough to cross the production size gates, so
+    /// `parse` runs the parallel splitter and the chunked section parsers
+    /// for real.
+    fn synthetic_large_lockfile() -> String {
+        let mut yaml =
+            String::from("lockfileVersion: '9.0'\n\nsettings:\n  autoInstallPeers: true\n");
+        yaml.push_str("\nimporters:\n\n  .:\n    dependencies:\n      dep-0:\n        specifier: 1.0.0\n        version: 1.0.0\n");
+        for i in 0..6000 {
+            yaml.push_str(&format!(
+                "\n  packages/pkg-{i}:\n    dependencies:\n      dep-{i}:\n        specifier: \
+                 ^{i}.0.0\n        version: {i}.4.2\n"
+            ));
+        }
+        yaml.push_str("\npackages:\n");
+        for i in 0..6000 {
+            yaml.push_str(&format!(
+                "\n  dep-{i}@{i}.4.2:\n    resolution: {{integrity: sha512-abc{i}}}\n"
+            ));
+        }
+        yaml.push_str("\nsnapshots:\n");
+        for i in 0..6000 {
+            yaml.push_str(&format!(
+                "\n  dep-{i}@{i}.4.2:\n    dependencies:\n      other-{i}: {i}.0.0\n"
+            ));
+        }
+        yaml
+    }
+
+    #[test]
+    fn test_parallel_split_large_lockfile_differential() {
+        let yaml = synthetic_large_lockfile();
+        assert!(yaml.len() >= PARALLEL_PARSE_MIN_BYTES);
+        assert!(
+            parse_fragments_parallel(&yaml).is_some(),
+            "parallel splitter must accept a mainline large lockfile"
+        );
+        assert_scanner_matches_serde(&yaml);
+
+        // The big sections must be over the chunking threshold so the
+        // assertion above exercised the chunked path, not just the
+        // top-level split.
+        let fragments = split_top_level(&yaml).expect("splittable");
+        let packages = fragments
+            .iter()
+            .find(|f| f.starts_with("packages:"))
+            .expect("packages fragment");
+        assert!(packages.len() >= CHUNKED_FRAGMENT_MIN_BYTES);
+    }
+
+    #[test]
+    fn test_split_top_level_fragments() {
+        let yaml = "a: 1\n# comment\nb:\n  x: y\n\nc: 2\n";
+        let fragments = split_top_level(yaml).expect("splittable");
+        // Comments and blank lines attach to the preceding fragment.
+        assert_eq!(
+            fragments,
+            vec!["a: 1\n# comment\n", "b:\n  x: y\n\n", "c: 2\n"]
+        );
+        // Reassembly is lossless by construction.
+        assert_eq!(fragments.concat(), yaml);
+
+        // Column-zero characters that can't start a plain key refuse to
+        // split: document markers, flow collections, directives.
+        assert_eq!(split_top_level("---\na: 1\nb: 2\n"), None);
+        assert_eq!(split_top_level("{a: 1}\nb: 2\n"), None);
+        assert_eq!(split_top_level("%YAML 1.2\na: 1\nb: 2\n"), None);
+        // A single block can't be split.
+        assert_eq!(split_top_level("a:\n  b: c\n"), None);
+    }
+
+    #[test]
+    fn test_parallel_split_duplicate_top_level_sections_rejected() {
+        // Duplicate root keys land in different fragments; the merge must
+        // reject them just like `set_once` does sequentially.
+        let yaml = "lockfileVersion: '9.0'\nimporters:\n  .: {}\npackages:\n  a@1.0.0:\n    \
+                    resolution: {integrity: sha512-a}\npackages:\n  b@1.0.0:\n    resolution: \
+                    {integrity: sha512-b}\n";
+        assert!(parse_fragments_parallel(yaml).is_none());
+    }
+
+    #[test]
+    fn test_chunked_fragment_matches_sequential() {
+        let mut fragment = String::from("packages:\n");
+        for i in 0..12 {
+            fragment.push_str(&format!(
+                "\n  dep-{i}@1.0.{i}:\n    resolution: {{integrity: sha512-abc{i}}}\n"
+            ));
+        }
+        let chunked = parse_fragment_chunked(&fragment, 3).expect("chunkable");
+        let Ok(sequential) = parse_fragment(&fragment) else {
+            panic!("fragment must parse sequentially");
+        };
+        assert_eq!(chunked.packages, sequential.packages);
+        assert_eq!(
+            chunked.packages.as_ref().map(|map| map.len()),
+            Some(12),
+            "all children accounted for across chunk boundaries"
+        );
+    }
+
+    #[test]
+    fn test_chunked_fragment_duplicate_child_keys_rejected() {
+        let mut fragment = String::from("packages:\n");
+        for i in 0..12 {
+            fragment.push_str(&format!(
+                "\n  dep-{i}@1.0.{i}:\n    resolution: {{integrity: sha512-abc{i}}}\n"
+            ));
+        }
+        // Duplicate an early key at the end so the copies land in
+        // different chunks and only the union check can catch them.
+        fragment.push_str("\n  dep-0@1.0.0:\n    resolution: {integrity: sha512-dup}\n");
+        assert!(parse_fragment_chunked(&fragment, 3).is_none());
+        // The sequential parser rejects them too, so behavior is identical
+        // with or without chunking.
+        assert!(parse_fragment(&fragment).is_err());
+    }
+
+    #[test]
+    fn test_chunking_restricted_to_known_sections() {
+        let mut fragment = String::from("time:\n");
+        for i in 0..12 {
+            fragment.push_str(&format!("  dep-{i}: '2024-01-0{}'\n", i % 9 + 1));
+        }
+        assert!(parse_fragment_chunked(&fragment, 3).is_none());
     }
 }
