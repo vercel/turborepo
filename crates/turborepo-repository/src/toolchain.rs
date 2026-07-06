@@ -205,9 +205,16 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
         Box::pin(async move {
-            let workspaces = self.discovery.discover_packages().await?.workspaces;
+            use tracing::Instrument;
+            let workspaces = self
+                .discovery
+                .discover_packages()
+                .instrument(tracing::info_span!("workspace_discovery"))
+                .await?
+                .workspaces;
             // Parse manifests in parallel; manifest parsing dominates
             // discovery time on large repositories.
+            let _span = tracing::info_span!("manifest_parse").entered();
             turborepo_rayon_compat::block_in_place(|| {
                 use rayon::prelude::*;
                 workspaces

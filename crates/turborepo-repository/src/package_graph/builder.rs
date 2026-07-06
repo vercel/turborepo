@@ -426,6 +426,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
         self.workspaces.reserve(discovered.len());
         self.node_lookup.reserve(discovered.len());
 
+        let _span = tracing::info_span!("add_packages").entered();
         for (toolchain, package) in discovered {
             match self.add_package(toolchain, package) {
                 Ok(()) => {}
