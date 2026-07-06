@@ -49,7 +49,7 @@ jobs:
               chmod +x rustup-init
               ./rustup-init -y
               rm rustup-init
-              npm i -g pnpm@10.28.0
+              npm i -g --force pnpm@10.28.0
               mkdir ../zig
               curl --fail --show-error --silent --location --output zig.tar.xz https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz
               echo "473ec26806133cf4d1918caf1a410f8403a13d979726a9045b421b685031a982  zig.tar.xz" | sha256sum --check --strict
@@ -66,7 +66,7 @@ jobs:
             install: |
               apk update && apk upgrade
               apk add libc6-compat curl
-              npm i -g pnpm@10.28.0
+              npm i -g --force pnpm@10.28.0
               echo /root/.cargo/bin >> ${GITHUB_PATH}
               echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
             setup: |
@@ -81,7 +81,7 @@ jobs:
             install: |
               apk update && apk upgrade
               apk add libc6-compat curl
-              npm i -g pnpm@10.28.0
+              npm i -g --force pnpm@10.28.0
               echo /root/.cargo/bin >> ${GITHUB_PATH}
               echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
               echo /aarch64-linux-musl-cross/bin >> ${GITHUB_PATH}
