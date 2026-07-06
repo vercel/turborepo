@@ -985,8 +985,12 @@ impl Run {
             debug!("sccache compile cache disabled: Remote Cache is not configured");
             return None;
         };
+        // Debug, not warn: the flag is repo-level configuration, so in a
+        // repository that dogfoods it, every contributor without sccache
+        // installed would otherwise see a warning on every run. Missing
+        // sccache is an absent optimization, not a problem with the run.
         if which::which("sccache").is_err() {
-            warn!("sccache not found on PATH; compile cache disabled");
+            debug!("sccache not found on PATH; compile cache disabled");
             return None;
         }
 
