@@ -598,6 +598,43 @@ mod tests {
         assert_eq!(toolchain.task_display_command(&package, "lint"), None);
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn npm_cmd_unwraps_to_node_and_npm_cli() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let npm_cmd = tempdir.path().join("npm.cmd");
+        let node = tempdir.path().join("node.exe");
+        let npm_cli = tempdir
+            .path()
+            .join("node_modules")
+            .join("npm")
+            .join("bin")
+            .join("npm-cli.js");
+
+        std::fs::write(&npm_cmd, "").unwrap();
+        std::fs::write(&node, "").unwrap();
+        std::fs::create_dir_all(npm_cli.parent().unwrap()).unwrap();
+        std::fs::write(&npm_cli, "").unwrap();
+
+        let (program, args) = package_manager_command(&PackageManager::Npm, &npm_cmd);
+
+        assert_eq!(program, node.into_os_string());
+        assert_eq!(args, vec![npm_cli.into_os_string()]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn npm_cmd_falls_back_when_npm_cli_missing() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let npm_cmd = tempdir.path().join("npm.cmd");
+        std::fs::write(&npm_cmd, "").unwrap();
+
+        let (program, args) = package_manager_command(&PackageManager::Npm, &npm_cmd);
+
+        assert_eq!(program, npm_cmd.into_os_string());
+        assert!(args.is_empty());
+    }
+
     #[test]
     fn test_registry_lookup() {
         struct Fake(ToolchainId);
