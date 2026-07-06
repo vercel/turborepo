@@ -159,6 +159,7 @@ mod tests {
           env_mode: None,
           with: None,
           incremental: None,
+          experimental_ci: None,
         }
       ; "full"
     )]
@@ -210,6 +211,7 @@ mod tests {
             env_mode: None,
             with: None,
             incremental: None,
+            experimental_ci: None,
         }
       ; "full (windows)"
     )]

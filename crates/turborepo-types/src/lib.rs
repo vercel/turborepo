@@ -807,6 +807,85 @@ mod tests {
     }
 }
 
+/// Configuration for the experimental `experimentalCI` task key.
+///
+/// The key accepts either a boolean toggle or an object with arbitrary
+/// options. Turborepo does not interpret the contents; the value is parsed
+/// and carried through task resolution so that external tooling can read
+/// the fully resolved configuration (e.g. via `turbo query`).
+#[derive(Debug, PartialEq, Clone, Serialize)]
+#[serde(untagged)]
+pub enum ExperimentalCIConfig {
+    Enabled(bool),
+    Options(serde_json::Map<String, serde_json::Value>),
+}
+
+// `serde_json::Value` is not `Eq` because JSON numbers may be floats, but
+// values parsed from JSON text are never NaN, so equality is reflexive in
+// practice.
+impl Eq for ExperimentalCIConfig {}
+
+impl biome_deserialize::Deserializable for ExperimentalCIConfig {
+    fn deserialize(
+        value: &impl biome_deserialize::DeserializableValue,
+        name: &str,
+        diagnostics: &mut Vec<biome_deserialize::DeserializationDiagnostic>,
+    ) -> Option<Self> {
+        value.deserialize(ExperimentalCIConfigVisitor, name, diagnostics)
+    }
+}
+
+struct ExperimentalCIConfigVisitor;
+
+impl biome_deserialize::DeserializationVisitor for ExperimentalCIConfigVisitor {
+    type Output = ExperimentalCIConfig;
+
+    const EXPECTED_TYPE: biome_deserialize::VisitableType =
+        biome_deserialize::VisitableType::BOOL.union(biome_deserialize::VisitableType::MAP);
+
+    fn visit_bool(
+        self,
+        value: bool,
+        _range: biome_deserialize::TextRange,
+        _name: &str,
+        _diagnostics: &mut Vec<biome_deserialize::DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        Some(ExperimentalCIConfig::Enabled(value))
+    }
+
+    fn visit_map(
+        self,
+        members: impl Iterator<
+            Item = Option<(
+                impl biome_deserialize::DeserializableValue,
+                impl biome_deserialize::DeserializableValue,
+            )>,
+        >,
+        _range: biome_deserialize::TextRange,
+        _name: &str,
+        diagnostics: &mut Vec<biome_deserialize::DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        let entries = members
+            .filter_map(|entry| {
+                let (key, value) = entry?;
+                let key = <String as biome_deserialize::Deserializable>::deserialize(
+                    &key,
+                    "",
+                    diagnostics,
+                )?;
+                let value = <serde_json::Value as biome_deserialize::Deserializable>::deserialize(
+                    &value,
+                    "",
+                    diagnostics,
+                )?;
+                Some((key, value))
+            })
+            .collect();
+
+        Some(ExperimentalCIConfig::Options(entries))
+    }
+}
+
 /// Constructed from a RawTaskDefinition, this represents the fully resolved
 /// configuration for a task.
 #[derive(Debug, PartialEq, Clone, Eq)]
@@ -864,6 +943,10 @@ pub struct TaskDefinition {
     // tool-managed incremental artifacts to persist across runs via remote
     // cache, enabling faster re-execution on cache misses.
     pub incremental: Option<Vec<IncrementalPartition>>,
+
+    // Experimental CI configuration. Not interpreted by turborepo; carried
+    // through resolution so tooling can read it (e.g. via `turbo query`).
+    pub experimental_ci: Option<ExperimentalCIConfig>,
 }
 
 impl Default for TaskDefinition {
@@ -883,6 +966,7 @@ impl Default for TaskDefinition {
             env_mode: Default::default(),
             with: Default::default(),
             incremental: Default::default(),
+            experimental_ci: Default::default(),
         }
     }
 }
