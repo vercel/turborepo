@@ -2,10 +2,6 @@
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
   "noUpdateNotifier": true,
-  // Dogfood native Cargo support: every crate in this workspace is a
-  // Turborepo package. Requires a turbo that knows this key (>= 2.10.4
-  // canaries); older binaries hard-error on unknown future flags — update
-  // your global turbo if the pre-push hook fails here.
   "futureFlags": { "experimentalCargoWorkspaces": true },
   // The following are used by tools such as pnpm, gh actions to setup pnpm, etc.
   "globalPassThroughEnv": [
