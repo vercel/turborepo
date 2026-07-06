@@ -181,6 +181,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             self.tasks.clone()
         };
 
+        let entrypoints_span = tracing::info_span!("engine_entrypoints").entered();
         for (workspace, task) in self.workspaces.iter().cartesian_product(tasks.iter()) {
             // When a task uses package#task syntax (e.g. "web#build"), the task_id
             // always resolves to that specific package regardless of which workspace
@@ -216,7 +217,10 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             }
         }
 
+        drop(entrypoints_span);
+
         {
+            let _span = tracing::info_span!("engine_missing_tasks").entered();
             // We can encounter IO errors trying to load turbo.jsons which prevents using
             // `retain` in the standard way. Instead we store the possible error
             // outside of the loop and short circuit checks if we've encountered an error.
@@ -278,9 +282,12 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
         let allowed_tasks = self.allowed_tasks();
 
+        let traversal_span = tracing::info_span!("engine_traversal").entered();
         let mut visited = HashSet::new();
         let mut engine: Engine<Building, TaskDefinition> = Engine::default();
         let mut turbo_json_chain_cache: HashMap<PackageName, Vec<&TurboJson>> = HashMap::new();
+        let mut task_def_memo: HashMap<definitions::TaskDefMemoKey, TaskDefinition> =
+            HashMap::new();
 
         while let Some(task_id) = traversal_queue.pop_front() {
             {
@@ -358,6 +365,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 &task_id,
                 &task_id.as_non_workspace_task_name(),
                 &mut turbo_json_chain_cache,
+                &mut task_def_memo,
             )?;
 
             visited.insert(task_id.as_inner().clone());
@@ -448,6 +456,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             }
         }
 
+        drop(traversal_span);
+
+        let _span = tracing::info_span!("engine_validate").entered();
         // This is the sole cycle/self-dependency check in the pipeline. Package
         // graph cycles are intentionally allowed; only task graph cycles prevent
         // execution. See #2559.
