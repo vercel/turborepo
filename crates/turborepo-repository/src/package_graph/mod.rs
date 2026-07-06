@@ -513,6 +513,17 @@ impl PackageGraph {
     ///
     /// immediate_dependencies(a) -> {b}
     pub fn immediate_dependencies(&self, package: &PackageNode) -> Option<HashSet<&PackageNode>> {
+        Some(self.immediate_dependencies_iter(package)?.collect())
+    }
+
+    /// [`PackageGraph::immediate_dependencies`] without materializing a
+    /// set. Hot paths that only iterate the dependencies (engine graph
+    /// construction queries this once per task) skip hashing every
+    /// package name into a `HashSet`.
+    pub fn immediate_dependencies_iter(
+        &self,
+        package: &PackageNode,
+    ) -> Option<impl Iterator<Item = &PackageNode> + Clone + '_> {
         let index = self.node_lookup.get(package)?;
         Some(
             self.graph
@@ -521,8 +532,7 @@ impl PackageGraph {
                     self.graph
                         .node_weight(index)
                         .expect("node index from neighbors should be present")
-                })
-                .collect(),
+                }),
         )
     }
 

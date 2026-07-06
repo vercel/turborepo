@@ -394,14 +394,14 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
             let dep_pkgs = self
                 .package_graph
-                .immediate_dependencies(&PackageNode::Workspace(to_task_id.package().into()));
+                .immediate_dependencies_iter(&PackageNode::Workspace(to_task_id.package().into()));
 
             let mut has_deps = false;
             let mut has_topo_deps = false;
 
             topo_deps
                 .iter()
-                .cartesian_product(dep_pkgs.iter().flatten())
+                .cartesian_product(dep_pkgs.into_iter().flatten())
                 .for_each(|((from, span), dependency_workspace)| {
                     // We don't need to add an edge from the root node if we're in this branch
                     if let PackageNode::Workspace(dependency_workspace) = dependency_workspace {

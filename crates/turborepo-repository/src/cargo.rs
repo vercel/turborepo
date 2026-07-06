@@ -432,6 +432,12 @@ impl Toolchain for CargoToolchain {
             .is_some()
     }
 
+    fn derives_task_io(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
+        // Mirrors the early returns of `derived_task_io`: a known crate
+        // with a Cargo subcommand for this task.
+        self.defines_task(package, task)
+    }
+
     fn derived_task_io(
         &self,
         package: &crate::package_graph::PackageInfo,
