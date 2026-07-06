@@ -59,23 +59,202 @@ pub enum Error {
     Parse(#[from] serde_json::Error),
 }
 
+/// How a Cargo-toolchain package participates in task execution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CargoPackageKind {
+    /// An internal library crate: present in the package graph for
+    /// `--filter`/`--affected` propagation, but tasks are no-ops — Cargo
+    /// builds libraries implicitly as part of an entrypoint's closure.
+    Library,
+    /// A crate with `bin`/`cdylib`/`staticlib` targets: a deliverable.
+    /// `build`/`run` tasks execute `cargo <verb> --package=<crate>`.
+    Entrypoint,
+    /// The synthetic [`WORKSPACE_PACKAGE_NAME`] package hosting
+    /// workspace-scoped verification verbs (`cargo test --workspace`, ...).
+    Workspace,
+}
+
+/// Cargo-specific details for a discovered package, retained by the
+/// [`CargoToolchain`] (keyed by package name) rather than attached to the
+/// toolchain-neutral `PackageInfo`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CargoPackageDetails {
+    pub kind: CargoPackageKind,
+    /// The crate's deliverable targets (empty for libraries and the
+    /// workspace package).
+    pub deliverables: Vec<Deliverable>,
+}
+
+/// Map a Turborepo task name to the Cargo subcommand that implements it for
+/// an entrypoint crate. Entrypoints only build and run — verification verbs
+/// happen at workspace scope.
+pub fn entrypoint_subcommand(task: &str) -> Option<&'static str> {
+    match task {
+        "build" => Some("build"),
+        "run" | "dev" => Some("run"),
+        _ => None,
+    }
+}
+
+/// Map a Turborepo task name to the Cargo subcommand that implements it at
+/// workspace scope (the synthetic [`WORKSPACE_PACKAGE_NAME`] package).
+///
+/// `build` is deliberately absent: building is entrypoint-scoped
+/// (`cargo build --package=<crate>`), and a workspace-wide build would
+/// duplicate that work in a second cargo process.
+pub fn workspace_subcommand(task: &str) -> Option<&'static str> {
+    match task {
+        "test" => Some("test"),
+        "check" => Some("check"),
+        "lint" | "clippy" => Some("clippy"),
+        "doc" | "docs" => Some("doc"),
+        "bench" => Some("bench"),
+        _ => None,
+    }
+}
+
+/// The Cargo subcommand a task resolves to for a package, given its
+/// [`CargoPackageKind`]. `None` means the task is a no-op for this package
+/// (like a missing package.json script).
+pub fn task_subcommand(kind: CargoPackageKind, task: &str) -> Option<&'static str> {
+    match kind {
+        CargoPackageKind::Entrypoint => entrypoint_subcommand(task),
+        CargoPackageKind::Workspace => workspace_subcommand(task),
+        CargoPackageKind::Library => None,
+    }
+}
+
+/// The display string for a Cargo task's command, derived from the same
+/// tables as execution so it cannot drift.
+pub fn display_command(kind: CargoPackageKind, task: &str, package: &str) -> Option<String> {
+    let subcommand = task_subcommand(kind, task)?;
+    Some(match kind {
+        CargoPackageKind::Entrypoint => format!("cargo {subcommand} --package={package}"),
+        CargoPackageKind::Workspace => format!("cargo {subcommand} --workspace"),
+        CargoPackageKind::Library => return None,
+    })
+}
+
+/// Whether pass-through args for `subcommand` must follow a `--` separator.
+/// `cargo run` forwards everything after `--` to the built binary; for other
+/// subcommands the args are cargo's own flags.
+pub fn pass_through_uses_separator(subcommand: &str) -> bool {
+    subcommand == "run"
+}
+
 /// The Cargo toolchain. Registered in the
 /// [`crate::toolchain::ToolchainRegistry`] when
 /// `futureFlags.experimentalCargoWorkspaces` is enabled and the repository
 /// root contains a `Cargo.toml`.
 pub struct CargoToolchain {
     repo_root: AbsoluteSystemPathBuf,
+    /// Per-package details recorded during discovery, consumed by command
+    /// resolution. Keyed by package name.
+    details: std::sync::Mutex<HashMap<String, CargoPackageDetails>>,
+    /// The cargo binary, resolved lazily so runs without Cargo tasks never
+    /// pay for a PATH scan.
+    cargo_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+}
+
+#[derive(Debug, thiserror::Error)]
+enum CargoCommandError {
+    #[error("Unable to find cargo binary: {0}")]
+    Which(#[from] which::Error),
 }
 
 impl CargoToolchain {
     pub fn new(repo_root: AbsoluteSystemPathBuf) -> Arc<Self> {
-        Arc::new(Self { repo_root })
+        Arc::new(Self {
+            repo_root,
+            details: std::sync::Mutex::new(HashMap::new()),
+            cargo_binary: std::sync::OnceLock::new(),
+        })
+    }
+
+    fn package_details(&self, package: &str) -> Option<CargoPackageDetails> {
+        self.details
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(package)
+            .cloned()
+    }
+
+    fn record_details(&self, package: String, details: CargoPackageDetails) {
+        self.details
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(package, details);
     }
 }
 
 impl Toolchain for CargoToolchain {
     fn id(&self) -> ToolchainId {
         ToolchainId::CARGO
+    }
+
+    fn task_command(
+        &self,
+        repo_root: &AbsoluteSystemPath,
+        package: &crate::package_graph::PackageInfo,
+        task: &str,
+        pass_through_args: Option<&[String]>,
+    ) -> Result<Option<toolchain::TaskCommand>, toolchain::Error> {
+        let Some(name) = package.package_name() else {
+            return Ok(None);
+        };
+        let Some(details) = self.package_details(&name) else {
+            return Ok(None);
+        };
+        let Some(subcommand) = task_subcommand(details.kind, task) else {
+            return Ok(None);
+        };
+
+        let cargo_binary = self
+            .cargo_binary
+            .get_or_init(|| which::which("cargo"))
+            .as_deref()
+            .map_err(|err| toolchain::Error::Failed(Box::new(CargoCommandError::Which(*err))))?;
+
+        let scope = match details.kind {
+            // `--package=<name>` as a single token so a hostile crate name
+            // can never be interpreted as a separate flag.
+            CargoPackageKind::Entrypoint => format!("--package={name}"),
+            CargoPackageKind::Workspace => "--workspace".to_string(),
+            // Libraries never map to a subcommand.
+            CargoPackageKind::Library => return Ok(None),
+        };
+        let mut args: Vec<std::ffi::OsString> = vec![subcommand.into(), scope.into()];
+        if let Some(pass_through_args) = pass_through_args {
+            if pass_through_uses_separator(subcommand) {
+                args.push("--".into());
+            }
+            args.extend(pass_through_args.iter().map(std::ffi::OsString::from));
+        }
+
+        Ok(Some(toolchain::TaskCommand {
+            program: cargo_binary.as_os_str().to_owned(),
+            args,
+            // Scoping flags select the work, so we always run from the
+            // workspace root.
+            cwd: repo_root.to_owned(),
+            // Concurrent cargo processes serialize on Cargo's
+            // build-directory lock anyway (while emitting "Blocking waiting
+            // for file lock" noise), so run them one at a time and let each
+            // cargo use all cores internally. `cargo run` is exempt: the
+            // process outlives its build phase (dev servers etc.) and would
+            // starve the group.
+            serial_group: (subcommand != "run").then(|| "cargo".to_string()),
+        }))
+    }
+
+    fn task_display_command(
+        &self,
+        package: &crate::package_graph::PackageInfo,
+        task: &str,
+    ) -> Option<String> {
+        let name = package.package_name()?;
+        let details = self.package_details(&name)?;
+        display_command(details.kind, task, &name)
     }
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
@@ -101,6 +280,18 @@ impl Toolchain for CargoToolchain {
                     .iter()
                     .map(|dep| (dep.clone(), "workspace:*".to_string()))
                     .collect();
+                let kind = if cargo_crate.is_entrypoint() {
+                    CargoPackageKind::Entrypoint
+                } else {
+                    CargoPackageKind::Library
+                };
+                self.record_details(
+                    cargo_crate.name.clone(),
+                    CargoPackageDetails {
+                        kind,
+                        deliverables: cargo_crate.deliverables,
+                    },
+                );
                 crate_names.push(cargo_crate.name.clone());
                 packages.push(DiscoveredPackage {
                     descriptor: PackageJson {
@@ -116,6 +307,13 @@ impl Toolchain for CargoToolchain {
             // Cargo.toml. It depends on every crate so `--affected` and
             // dependent-filters propagate crate changes to it.
             if !crate_names.is_empty() {
+                self.record_details(
+                    WORKSPACE_PACKAGE_NAME.to_string(),
+                    CargoPackageDetails {
+                        kind: CargoPackageKind::Workspace,
+                        deliverables: Vec::new(),
+                    },
+                );
                 let dependencies = crate_names
                     .into_iter()
                     .map(|name| (name, "workspace:*".to_string()))
@@ -700,5 +898,107 @@ mod test {
         let (_tmp, root) = tempdir_root();
         let toolchain = CargoToolchain::new(root);
         assert!(toolchain.discover_packages().await.unwrap().is_empty());
+    }
+
+    fn package_info(name: &str, manifest_rel: &str) -> crate::package_graph::PackageInfo {
+        crate::package_graph::PackageInfo {
+            package_json: PackageJson {
+                name: Some(Spanned::new(name.to_string())),
+                ..Default::default()
+            },
+            package_json_path: turbopath::AnchoredSystemPathBuf::from_raw(
+                manifest_rel.replace('/', std::path::MAIN_SEPARATOR_STR),
+            )
+            .unwrap(),
+            toolchain: ToolchainId::CARGO,
+            ..Default::default()
+        }
+    }
+
+    fn os_args(args: &[&str]) -> Vec<std::ffi::OsString> {
+        args.iter().map(std::ffi::OsString::from).collect()
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_task_commands() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+
+        let toolchain = CargoToolchain::new(root.clone());
+        // Discovery records the per-package details command resolution uses.
+        toolchain.discover_packages().await.unwrap();
+
+        let app = package_info("app", "crates/app/Cargo.toml");
+        let lib_a = package_info("lib-a", "crates/lib-a/Cargo.toml");
+        let workspace = package_info(WORKSPACE_PACKAGE_NAME, "Cargo.toml");
+
+        // Entrypoint build: scoped to the crate, serialized on the cargo
+        // group, run from the workspace root.
+        let cmd = toolchain
+            .task_command(&root, &app, "build", None)
+            .unwrap()
+            .expect("entrypoint build resolves");
+        assert_eq!(cmd.args, os_args(&["build", "--package=app"]));
+        assert_eq!(cmd.cwd, root);
+        assert_eq!(cmd.serial_group.as_deref(), Some("cargo"));
+
+        // `run` is exempt from the serial group and forwards pass-through
+        // args to the binary after `--`.
+        let cmd = toolchain
+            .task_command(&root, &app, "dev", Some(&["--port".to_string()]))
+            .unwrap()
+            .expect("entrypoint dev resolves to cargo run");
+        assert_eq!(cmd.args, os_args(&["run", "--package=app", "--", "--port"]));
+        assert_eq!(cmd.serial_group, None);
+
+        // Other subcommands attach pass-through args as cargo flags, no
+        // separator.
+        let cmd = toolchain
+            .task_command(&root, &app, "build", Some(&["--release".to_string()]))
+            .unwrap()
+            .expect("entrypoint build resolves");
+        assert_eq!(cmd.args, os_args(&["build", "--package=app", "--release"]));
+
+        // Libraries are no-ops; entrypoints do not run verification verbs.
+        assert!(
+            toolchain
+                .task_command(&root, &lib_a, "build", None)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            toolchain
+                .task_command(&root, &app, "test", None)
+                .unwrap()
+                .is_none()
+        );
+
+        // The workspace package hosts verification verbs at workspace scope.
+        let cmd = toolchain
+            .task_command(&root, &workspace, "lint", None)
+            .unwrap()
+            .expect("workspace lint resolves to clippy");
+        assert_eq!(cmd.args, os_args(&["clippy", "--workspace"]));
+        assert_eq!(cmd.serial_group.as_deref(), Some("cargo"));
+        assert!(
+            toolchain
+                .task_command(&root, &workspace, "build", None)
+                .unwrap()
+                .is_none(),
+            "workspace-wide build would duplicate entrypoint builds"
+        );
+
+        // Display strings derive from the same tables.
+        assert_eq!(
+            toolchain.task_display_command(&app, "build").as_deref(),
+            Some("cargo build --package=app")
+        );
+        assert_eq!(
+            toolchain
+                .task_display_command(&workspace, "test")
+                .as_deref(),
+            Some("cargo test --workspace")
+        );
+        assert_eq!(toolchain.task_display_command(&lib_a, "build"), None);
     }
 }

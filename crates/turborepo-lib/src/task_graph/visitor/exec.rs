@@ -14,7 +14,7 @@ use turborepo_task_hash::TaskHashTracker;
 use turborepo_task_id::TaskId;
 
 use super::{
-    command::{CommandFactory, MicroFrontendProxyProvider, PackageGraphCommandProvider},
+    command::{CommandFactory, MicroFrontendProxyProvider, ToolchainCommandProvider},
     Visitor,
 };
 use crate::{
@@ -53,7 +53,7 @@ impl<'a> ExecContextFactory<'a> {
         manager: ProcessManager,
         engine: &'a Arc<Engine>,
     ) -> Result<Self, super::Error> {
-        let pkg_graph_provider = PackageGraphCommandProvider::new(
+        let pkg_graph_provider = ToolchainCommandProvider::new(
             visitor.repo_root,
             &visitor.package_graph,
             visitor.run_opts.task_args(),

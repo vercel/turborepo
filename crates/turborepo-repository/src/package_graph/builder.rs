@@ -477,6 +477,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             root_package_json,
             lockfile,
             javascript,
+            toolchains,
             repo_root,
             ..
         } = self;
@@ -485,6 +486,9 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             .package_manager()
             .await?
             .with_resolved_nub_lockfile(repo_root);
+        // Command resolution is synchronous; record the resolved package
+        // manager on the toolchain so it does not re-run discovery.
+        javascript.set_resolved_package_manager(package_manager.clone());
 
         debug_assert!(single, "expected single package graph");
         Ok(PackageGraph {
@@ -499,6 +503,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             repo_root: repo_root.to_owned(),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
             root_internal_dependencies: std::sync::OnceLock::new(),
+            toolchains,
         })
     }
 }
@@ -736,6 +741,10 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             .instrument(tracing::debug_span!("package discovery"))
             .await?
             .with_resolved_nub_lockfile(self.repo_root);
+        // Command resolution is synchronous; record the resolved package
+        // manager on the toolchain so it does not re-run discovery.
+        self.javascript
+            .set_resolved_package_manager(package_manager.clone());
         let Self {
             workspaces,
             workspace_graph,
@@ -744,6 +753,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             node_lookup,
             root_package_json,
             lockfile,
+            toolchains,
             repo_root,
             ..
         } = self;
@@ -759,6 +769,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             repo_root: repo_root.to_owned(),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
             root_internal_dependencies: std::sync::OnceLock::new(),
+            toolchains,
         })
     }
 }

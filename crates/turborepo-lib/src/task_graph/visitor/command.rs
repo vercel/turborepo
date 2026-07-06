@@ -4,10 +4,10 @@ use crate::microfrontends::MicrofrontendsConfigs;
 // Re-export CommandFactory from turborepo-task-executor with our Error type
 pub type CommandFactory<'a> = turborepo_task_executor::CommandFactory<'a, Error>;
 
-// Re-export PackageGraphCommandProvider from turborepo-task-executor with our
+// Re-export ToolchainCommandProvider from turborepo-task-executor with our
 // MicrofrontendsConfigs type
-pub type PackageGraphCommandProvider<'a> =
-    turborepo_task_executor::PackageGraphCommandProvider<'a, MicrofrontendsConfigs>;
+pub type ToolchainCommandProvider<'a> =
+    turborepo_task_executor::ToolchainCommandProvider<'a, MicrofrontendsConfigs>;
 
 // Re-export MicroFrontendProxyProvider from turborepo-task-executor with our
 // MicrofrontendsConfigs type
