@@ -33,13 +33,15 @@
 //! cost: each chunk pass touches every condensation edge once.
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap},
     sync::Arc,
 };
 
 use rustc_hash::FxHashMap;
 
-use crate::{Error, Lockfile, Package, TransitiveEdgeResolution, TransitiveEdgeResolver};
+use crate::{
+    Error, Lockfile, Package, SortedClosures, TransitiveEdgeResolution, TransitiveEdgeResolver,
+};
 
 /// Upper bound for one chunk's closure bitsets. 64MiB of transient memory
 /// keeps large graphs to a handful of passes without noticeable pressure.
@@ -56,7 +58,7 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
     resolver: &dyn TransitiveEdgeResolver,
     workspaces: &HashMap<String, BTreeMap<String, String>>,
     ignore_missing_packages: bool,
-) -> Result<Option<HashMap<String, HashSet<Package>>>, Error> {
+) -> Result<Option<SortedClosures>, Error> {
     // Interned package table. Ids index `packages` and bitset positions.
     let mut ids: FxHashMap<Package, u32> = FxHashMap::default();
     let mut packages: Vec<Arc<Package>> = Vec::new();
@@ -144,10 +146,24 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
         return Ok(Some(
             roots
                 .into_iter()
-                .map(|(ws, _)| (ws.clone(), HashSet::new()))
+                .map(|(ws, _)| (ws.clone(), Vec::new()))
                 .collect(),
         ));
     }
+
+    // Rank permutation: position of each package id under (key, version)
+    // ordering (`Package`'s derived `Ord`). Closure members are emitted in id
+    // order per chunk; a final u32 sort by rank yields the canonical sorted
+    // closure without comparing strings per element.
+    let rank: Vec<u32> = {
+        let mut order: Vec<u32> = (0..node_count as u32).collect();
+        order.sort_unstable_by(|&a, &b| packages[a as usize].cmp(&packages[b as usize]));
+        let mut rank = vec![0u32; node_count];
+        for (pos, &id) in order.iter().enumerate() {
+            rank[id as usize] = pos as u32;
+        }
+        rank
+    };
 
     // 3. SCC condensation. Tarjan emits SCCs successors-first, so a later SCC's
     //    closure only references already-computed rows.
@@ -197,9 +213,9 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
         return Ok(None);
     }
 
-    let mut result: HashMap<String, HashSet<Package>> = workspace_root_sccs
+    let mut member_ids: HashMap<String, Vec<u32>> = workspace_root_sccs
         .iter()
-        .map(|(ws, _)| ((*ws).clone(), HashSet::new()))
+        .map(|(ws, _)| ((*ws).clone(), Vec::new()))
         .collect();
 
     let words_per_chunk = chunk_bits / 64;
@@ -243,10 +259,10 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
                     *dst |= src;
                 }
             }
-            // Inserted for every workspace when `result` was built; a miss
-            // is unreachable but must not panic under the workspace lint
-            // policy.
-            let Some(set) = result.get_mut(*workspace) else {
+            // Inserted for every workspace when `member_ids` was built; a
+            // miss is unreachable but must not panic under the workspace
+            // lint policy.
+            let Some(ids) = member_ids.get_mut(*workspace) else {
                 continue;
             };
             for (word_idx, &word) in accumulator.iter().enumerate() {
@@ -255,11 +271,23 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
                     let bit = word.trailing_zeros() as usize;
                     word &= word - 1;
                     let id = chunk_start + word_idx * 64 + bit;
-                    set.insert((*packages[id]).clone());
+                    ids.push(id as u32);
                 }
             }
         }
     }
+
+    let result: SortedClosures = member_ids
+        .into_iter()
+        .map(|(ws, mut ids)| {
+            ids.sort_unstable_by_key(|&id| rank[id as usize]);
+            let closure = ids
+                .into_iter()
+                .map(|id| Arc::clone(&packages[id as usize]))
+                .collect();
+            (ws, closure)
+        })
+        .collect();
 
     Ok(Some(result))
 }
@@ -341,6 +369,8 @@ fn tarjan_scc(adjacency: &[Vec<u32>]) -> SccResult {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -368,7 +398,22 @@ mod tests {
             })
             .collect();
         match via_dp {
-            Some(dp) => assert_eq!(dp, legacy, "dp result must match the legacy walk"),
+            Some(dp) => {
+                let dp_as_sets: HashMap<String, HashSet<Package>> = dp
+                    .iter()
+                    .map(|(ws, closure)| {
+                        assert!(
+                            closure.is_sorted_by(|a, b| a <= b),
+                            "dp closure for {ws} must be sorted by (key, version)"
+                        );
+                        (
+                            ws.clone(),
+                            closure.iter().map(|pkg| (**pkg).clone()).collect(),
+                        )
+                    })
+                    .collect();
+                assert_eq!(dp_as_sets, legacy, "dp result must match the legacy walk");
+            }
             None => panic!("dp unexpectedly fell back for a uniform lockfile"),
         }
     }
