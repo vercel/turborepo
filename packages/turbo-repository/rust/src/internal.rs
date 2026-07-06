@@ -71,21 +71,19 @@ impl Workspace {
         // declaration is missing or unusable — mirroring the CLI's
         // `--dangerously-allow-missing-package-manager` behavior. If detection
         // also fails, surface the original declaration error below.
-        if workspace_state.package_manager.is_err() {
-            if let Ok(detected) =
+        if workspace_state.package_manager.is_err()
+            && let Ok(detected) =
                 package_manager::PackageManager::detect_package_manager(&workspace_state.root)
-            {
-                // `mode` was derived while the package manager was unresolved,
-                // so workspace globs could not be read; recompute it with the
-                // detected package manager.
-                workspace_state.mode =
-                    if detected.get_workspace_globs(&workspace_state.root).is_ok() {
-                        WorkspaceType::MultiPackage
-                    } else {
-                        WorkspaceType::SinglePackage
-                    };
-                workspace_state.package_manager = Ok(detected);
-            }
+        {
+            // `mode` was derived while the package manager was unresolved,
+            // so workspace globs could not be read; recompute it with the
+            // detected package manager.
+            workspace_state.mode = if detected.get_workspace_globs(&workspace_state.root).is_ok() {
+                WorkspaceType::MultiPackage
+            } else {
+                WorkspaceType::SinglePackage
+            };
+            workspace_state.package_manager = Ok(detected);
         }
         let workspace_state = workspace_state;
         let is_multi_package = workspace_state.mode == WorkspaceType::MultiPackage;

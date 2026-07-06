@@ -432,6 +432,10 @@ impl Toolchain for CargoToolchain {
             .is_some()
     }
 
+    fn watch_spec(&self) -> toolchain::WatchSpec {
+        watch_spec()
+    }
+
     fn derived_task_io(
         &self,
         package: &crate::package_graph::PackageInfo,
@@ -612,6 +616,26 @@ impl Toolchain for CargoToolchain {
 
             Ok(packages)
         })
+    }
+}
+
+/// The Cargo default build directory, relative to the repo root.
+pub const TARGET_DIR: &str = "target";
+
+/// How filesystem events relate to Cargo in watch mode. Manifests and the
+/// lockfile define the crate set and its edges — any change makes the
+/// watcher's package graph stale, so they trigger full rediscovery
+/// (`Cargo.toml` files under `target/` are build byproducts, not workspace
+/// definition, and are exempted via the ignore prefix). Events under the
+/// root `target/` directory are dropped entirely: Cargo writes there
+/// continuously during builds, and letting those events through would
+/// re-trigger the very tasks that produced them — usually `target/` is
+/// gitignored, but a feedback loop must not depend on a `.gitignore` entry.
+pub fn watch_spec() -> toolchain::WatchSpec {
+    toolchain::WatchSpec {
+        definition_file_names: vec![CARGO_TOML.to_string()],
+        definition_paths: vec![CARGO_LOCK.to_string()],
+        ignore_prefixes: vec![TARGET_DIR.to_string()],
     }
 }
 
