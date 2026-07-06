@@ -108,9 +108,11 @@ pub struct PackageInfo {
     /// The workspace's external dependency closure, sorted by `Package`'s
     /// `(key, version)` ordering. Members are `Arc`-shared across workspaces.
     pub transitive_dependencies: Option<Vec<Arc<turborepo_lockfiles::Package>>>,
-    /// Hash of `transitive_dependencies`, precomputed where the closure is
-    /// computed so task hashing and run summaries never re-sort or re-hash
-    /// closures. `Some` exactly when `transitive_dependencies` is `Some`.
+    /// Hash of `transitive_dependencies`, precomputed by the JavaScript
+    /// lockfile phase so task hashing and run summaries never re-sort or
+    /// re-hash closures. When `None` with a `Some` closure (toolchain-
+    /// resolved closures, e.g. Cargo's), consumers compute the hash from
+    /// the sorted closure on demand.
     pub external_deps_hash: Option<String>,
     /// The toolchain that discovered this package. Defaults to JavaScript.
     pub toolchain: crate::toolchain::ToolchainId,
@@ -2016,9 +2018,17 @@ mod test {
                     Arc::new(turborepo_lockfiles::Package::new("key:c", "1")),
                 ],
             );
-            assert_eq!(
-                workspace_pkg.transitive_dependencies, None,
-                "the cargo workspace package has no JS lockfile closure"
+            // Cargo packages carry toolchain-resolved closures (here just
+            // the rustc stamp — the fixture has no Cargo.lock), never JS
+            // lockfile entries.
+            assert!(
+                workspace_pkg
+                    .transitive_dependencies
+                    .iter()
+                    .flatten()
+                    .all(|package| package.key == "rustc"),
+                "the cargo workspace package must not carry JS lockfile entries, got {:?}",
+                workspace_pkg.transitive_dependencies
             );
         }
     }

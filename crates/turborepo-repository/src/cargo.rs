@@ -57,6 +57,74 @@ pub enum Error {
     Metadata { stderr: String },
     #[error("failed to parse `cargo metadata` output: {0}")]
     Parse(#[from] serde_json::Error),
+    #[error("failed to read Cargo.lock: {0}")]
+    LockfileRead(#[source] io::Error),
+    #[error(transparent)]
+    Lockfile(#[from] turborepo_lockfiles::CargoLockError),
+}
+
+/// The version of the Rust compiler that Cargo will invoke, as a hashable
+/// external-dependency identity, or `None` (with a warning) when rustc
+/// can't be queried.
+///
+/// Run from `repo_root` so rustup's shim resolves `rust-toolchain`
+/// overrides the same way a task's `cargo` invocation will. Participating
+/// in the external-dependency hash means compiling with a different
+/// toolchain never restores another toolchain's artifacts — the gap that
+/// makes remote cache sharing unsound when no toolchain file is committed.
+pub fn rustc_version(repo_root: &AbsoluteSystemPath) -> Option<turborepo_lockfiles::Package> {
+    let output = std::process::Command::new("rustc")
+        .arg("--version")
+        .current_dir(repo_root.as_std_path())
+        .output();
+    match output {
+        Ok(output) if output.status.success() => {
+            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            (!version.is_empty()).then_some(turborepo_lockfiles::Package {
+                key: "rustc".to_string(),
+                version,
+            })
+        }
+        Ok(output) => {
+            tracing::warn!(
+                "`rustc --version` failed; the compiler version will not participate in Cargo \
+                 task hashes: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+            None
+        }
+        Err(error) => {
+            tracing::warn!(
+                "unable to run `rustc --version`; the compiler version will not participate in \
+                 Cargo task hashes: {error}"
+            );
+            None
+        }
+    }
+}
+
+/// Per-crate external dependency closures from Cargo.lock, for the crates'
+/// external-dependency hashes.
+///
+/// A missing Cargo.lock yields an empty map (the workspace is unpinned;
+/// Cargo will create the lockfile on first build). An unreadable or
+/// unparsable lockfile is a hard error — silently hashing nothing would be
+/// unsound.
+pub fn external_closures(
+    repo_root: &AbsoluteSystemPath,
+    members: &[String],
+) -> Result<HashMap<String, HashSet<turborepo_lockfiles::Package>>, Error> {
+    let lock_path = repo_root.join_component(CARGO_LOCK);
+    let contents = match lock_path.read_to_string() {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(HashMap::new());
+        }
+        Err(error) => return Err(Error::LockfileRead(error)),
+    };
+    Ok(turborepo_lockfiles::cargo_external_closures(
+        &contents, members,
+    )?)
 }
 
 /// How a Cargo-toolchain package participates in task execution.
@@ -164,22 +232,20 @@ fn join_prefix(prefix: &str, rel: &str) -> String {
 }
 
 /// Input globs whose changes should invalidate a Cargo task's cache: the
-/// workspace lockfile and root manifest (locked dependencies, profiles,
-/// lints, `[patch]`, and feature unification all live there), Cargo config
-/// files, and pinned toolchain files — expressed relative to the task's
-/// package directory via `prefix` (the path from the package to the repo
-/// root, e.g. `../..`; empty for the workspace package). Globs that don't
-/// match anything (e.g. a missing `rust-toolchain` file) simply contribute
-/// nothing.
+/// workspace root manifest (profiles, lints, `[patch]`, and feature
+/// unification all live there), Cargo config files, and pinned toolchain
+/// files — expressed relative to the task's package directory via `prefix`
+/// (the path from the package to the repo root, e.g. `../..`; empty for the
+/// workspace package). Globs that don't match anything (e.g. a missing
+/// `rust-toolchain` file) simply contribute nothing.
 ///
-/// Cargo.lock as a raw input makes every dependency change invalidate every
-/// crate task — coarse but sound. It will move to per-crate
-/// external-dependency closures when the external-dependency hashing
-/// surface lands, so a dependency bump only invalidates the crates whose
-/// closures contain it.
+/// Cargo.lock is deliberately absent: locked dependencies participate in
+/// each crate task's external-dependency hash, scoped to that crate's
+/// transitive closure (see [`external_closures`]), so a dependency bump only
+/// invalidates the crates that actually depend on it. The compiler version
+/// participates the same way (see [`rustc_version`]).
 pub fn hash_input_globs(prefix: &str) -> Vec<String> {
     [
-        CARGO_LOCK,
         "Cargo.toml",
         ".cargo/config.toml",
         ".cargo/config",
@@ -459,6 +525,25 @@ impl Toolchain for CargoToolchain {
             // Discovery only reports dependencies on other discovered
             // crates, so every synthesized specifier resolves internally and
             // Cargo edges never leak into unresolved externals.
+            // External dependencies (locked crates.io/git packages plus the
+            // compiler itself) participate in each crate task's hash through
+            // the same external-dependency mechanism JS packages use, scoped
+            // to the crate's transitive closure — a dependency bump only
+            // invalidates crates that actually depend on it, and a toolchain
+            // change invalidates everything.
+            let all_names: Vec<String> = crates.iter().map(|c| c.name.clone()).collect();
+            let rustc = rustc_version(&self.repo_root);
+            let mut closures = turborepo_rayon_compat::block_in_place(|| {
+                external_closures(&self.repo_root, &all_names)
+            })
+            .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+            let workspace_externals: HashSet<turborepo_lockfiles::Package> = closures
+                .values()
+                .flatten()
+                .cloned()
+                .chain(rustc.clone())
+                .collect();
+
             let mut packages = Vec::with_capacity(crates.len() + 1);
             let mut crate_names = Vec::with_capacity(crates.len());
             for cargo_crate in crates {
@@ -479,6 +564,12 @@ impl Toolchain for CargoToolchain {
                         deliverables: cargo_crate.deliverables,
                     },
                 );
+                let external_dependencies: HashSet<turborepo_lockfiles::Package> = closures
+                    .remove(&cargo_crate.name)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .chain(rustc.clone())
+                    .collect();
                 crate_names.push(cargo_crate.name.clone());
                 packages.push(DiscoveredPackage {
                     descriptor: PackageJson {
@@ -487,6 +578,7 @@ impl Toolchain for CargoToolchain {
                         ..Default::default()
                     },
                     manifest_path: cargo_crate.manifest_path,
+                    external_dependencies: Some(external_dependencies),
                 });
             }
 
@@ -512,6 +604,9 @@ impl Toolchain for CargoToolchain {
                         ..Default::default()
                     },
                     manifest_path: self.repo_root.join_component(CARGO_TOML),
+                    // Workspace-scoped verbs run every crate, so the union
+                    // of all closures is this package's external surface.
+                    external_dependencies: Some(workspace_externals),
                 });
             }
 
@@ -919,6 +1014,34 @@ mod test {
              \"2021\"\n\n[dependencies]\nlib-a = { path = \"../lib-a\" }\n",
         );
         write(root, &["crates", "lib-a-test-util", "src", "lib.rs"], "");
+        // A lockfile pinning an external dependency of app only. Metadata
+        // discovery (--no-deps) never reads it; only closure parsing does.
+        write(
+            root,
+            &["Cargo.lock"],
+            r#"version = 4
+
+[[package]]
+name = "app"
+version = "0.1.0"
+dependencies = ["lib-a", "serde"]
+
+[[package]]
+name = "lib-a"
+version = "0.1.0"
+
+[[package]]
+name = "lib-a-test-util"
+version = "0.1.0"
+dependencies = ["lib-a"]
+
+[[package]]
+name = "serde"
+version = "1.0.200"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abc123"
+"#,
+        );
     }
 
     #[test]
@@ -1078,6 +1201,28 @@ mod test {
         let workspace_deps = workspace.descriptor.dependencies.as_ref().unwrap();
         assert_eq!(workspace_deps.len(), 3);
         assert!(workspace_deps.values().all(|v| v == "workspace:*"));
+
+        // External identities from Cargo.lock are scoped per crate: app's
+        // closure pins serde, lib-a's does not. The compiler version stamps
+        // every closure (rustc is available wherever discovery ran, since
+        // discovery shells out to cargo).
+        let app_externals = app.external_dependencies.as_ref().unwrap();
+        assert!(
+            app_externals.iter().any(|p| p.key == "serde"),
+            "app depends on serde via Cargo.lock, got {app_externals:?}"
+        );
+        assert!(
+            app_externals.iter().any(|p| p.key == "rustc"),
+            "compiler version stamps the closure, got {app_externals:?}"
+        );
+        let lib_a_externals = packages[2].external_dependencies.as_ref().unwrap();
+        assert!(
+            !lib_a_externals.iter().any(|p| p.key == "serde"),
+            "a serde bump must not invalidate lib-a, got {lib_a_externals:?}"
+        );
+        // The workspace package unions every closure.
+        let workspace_externals = workspace.external_dependencies.as_ref().unwrap();
+        assert!(workspace_externals.iter().any(|p| p.key == "serde"));
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1230,7 +1375,13 @@ mod test {
         let io = toolchain
             .derived_task_io(&app, "build", "../..", &deps, true)
             .expect("entrypoint build derives IO");
-        assert!(io.input_globs.contains(&"../../Cargo.lock".to_string()));
+        assert!(
+            !io.input_globs
+                .iter()
+                .any(|glob| glob.contains("Cargo.lock")),
+            "Cargo.lock is hashed via per-crate closures, not as a raw input: {:?}",
+            io.input_globs
+        );
         assert!(
             io.input_globs
                 .contains(&"../../rust-toolchain.toml".to_string())
@@ -1264,7 +1415,7 @@ mod test {
         let io = toolchain
             .derived_task_io(&app, "build", "../..", &deps, false)
             .expect("entrypoint build derives IO");
-        assert!(io.input_globs.contains(&"../../Cargo.lock".to_string()));
+        assert!(io.input_globs.contains(&"../../Cargo.toml".to_string()));
         assert!(!io.input_globs.iter().any(|glob| glob.contains("lib-a")));
         assert_eq!(io.package_default_inputs, None);
 
@@ -1283,7 +1434,7 @@ mod test {
         assert_eq!(io.package_default_inputs, Some(false));
         assert!(io.input_globs.contains(&"crates/app/**".to_string()));
         assert!(io.input_globs.contains(&"crates/lib-a/**".to_string()));
-        assert!(io.input_globs.contains(&"Cargo.lock".to_string()));
+        assert!(io.input_globs.contains(&"Cargo.toml".to_string()));
         assert!(io.output_globs.is_empty());
 
         // Libraries derive nothing.

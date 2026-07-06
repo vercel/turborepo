@@ -386,6 +386,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
         let DiscoveredPackage {
             descriptor: json,
             manifest_path,
+            external_dependencies,
         } = package;
         let relative_json_path =
             AnchoredSystemPathBuf::relative_path_between(self.repo_root, &manifest_path);
@@ -395,10 +396,22 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                 .ok_or(Error::PackageJsonMissingName(manifest_path))?
                 .into_inner(),
         );
+        // Toolchain-resolved external identities (e.g. Cargo's per-crate
+        // lockfile closures), in the sorted representation the JS lockfile
+        // phase produces. That phase later fills this for JavaScript
+        // packages and never touches non-JS ones; the external-dependency
+        // hash is computed on demand from the sorted closure.
+        let transitive_dependencies = external_dependencies.map(|externals| {
+            let mut sorted: Vec<std::sync::Arc<turborepo_lockfiles::Package>> =
+                externals.into_iter().map(std::sync::Arc::new).collect();
+            sorted.sort_by(|a, b| (&a.key, &a.version).cmp(&(&b.key, &b.version)));
+            sorted
+        });
         let entry = PackageInfo {
             package_json: json,
             package_json_path: relative_json_path,
             toolchain,
+            transitive_dependencies,
             ..Default::default()
         };
         match self.workspaces.entry(name) {
@@ -439,6 +452,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                         DiscoveredPackage {
                             descriptor: json,
                             manifest_path: path,
+                            external_dependencies: None,
                         },
                     )
                 }));
