@@ -1,4 +1,4 @@
 {
-  "installCommand": "pnpm install --filter=docs...",
-  "buildCommand": "cd ../.. && pnpm dlx turbo@canary run build --filter={apps/docs}..."
+  "installCommand": "npm install --global turbo@canary && pnpm install --filter=docs...",
+  "buildCommand": "cd ../.. && turbo run build --filter={apps/docs}..."
 }
