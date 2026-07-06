@@ -4,7 +4,7 @@ use itertools::Itertools;
 use tracing::warn;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
 use turborepo_microfrontends::{Error, TurborepoMfeConfig as MfeConfig, MICROFRONTENDS_PACKAGE};
-use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
 use turborepo_task_executor::MfeConfigProvider;
 use turborepo_task_id::{TaskId, TaskName};
 
@@ -53,13 +53,38 @@ impl MicrofrontendsConfigs {
             any_has_mfe_dep
         );
 
-        let metadata = package_graph.packages().fold(
+        type LoadedConfig<'a> = (
+            &'a PackageName,
+            &'a PackageInfo,
+            Result<Option<MfeConfig>, Error>,
+        );
+        // Probing every package directory for a config is two file reads per
+        // package; do them in parallel. Package order is preserved (rayon's
+        // indexed collect), so downstream config processing is unaffected.
+        let loaded: Vec<LoadedConfig> = crate::rayon_compat::block_in_place(|| {
+            use rayon::prelude::*;
+            package_graph
+                .packages()
+                .collect::<Vec<_>>()
+                .into_par_iter()
+                .map(|(name, info)| {
+                    let config_result = MfeConfig::load_from_dir_with_mfe_dep(
+                        repo_root,
+                        info.package_path(),
+                        any_has_mfe_dep,
+                    );
+                    (name, info, config_result)
+                })
+                .collect()
+        });
+
+        let metadata = loaded.into_iter().fold(
             PackageMetadata {
                 names: HashSet::new(),
                 has_mfe_dep: HashMap::new(),
                 configs: Vec::new(),
             },
-            |mut acc, (name, info)| {
+            |mut acc, (name, info, config_result)| {
                 let name_str = name.as_str();
                 acc.names.insert(name_str);
                 let has_dep = info
@@ -73,11 +98,6 @@ impl MicrofrontendsConfigs {
                 );
                 acc.has_mfe_dep.insert(name_str, has_dep);
 
-                let config_result = MfeConfig::load_from_dir_with_mfe_dep(
-                    repo_root,
-                    info.package_path(),
-                    any_has_mfe_dep,
-                );
                 if let Ok(Some(ref _config)) = config_result {
                     tracing::debug!(
                         "from_disk - found config in package: {}, path: {:?}",
