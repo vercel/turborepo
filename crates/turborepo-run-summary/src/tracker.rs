@@ -4,7 +4,11 @@
 //! displaying it. We have this split because the tracker representation is not
 //! exactly what we want to display to the user.
 
-use std::{collections::HashSet, io, io::Write};
+use std::{
+    collections::{HashMap, HashSet},
+    io,
+    io::Write,
+};
 
 use chrono::{DateTime, Local};
 use itertools::Itertools;
@@ -230,6 +234,7 @@ impl RunTracker {
         env_at_execution_start: &'a EnvironmentVariableMap,
         scm: &SCM,
         is_watch: bool,
+        external_deps_hashes: Option<&HashMap<String, String>>,
     ) -> Result<(), Error>
     where
         E: EngineInfo + Sync,
@@ -282,6 +287,7 @@ impl RunTracker {
             env_at_execution_start,
             run_opts,
             global_env_mode,
+            external_deps_hashes,
         );
 
         let run_summary: RunSummary = self
