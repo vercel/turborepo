@@ -924,11 +924,11 @@ impl RunBuilder {
                 });
                 observability::Handle::try_init(opts, token)
             });
-        let repo_index = Arc::new(
-            repo_index_task
-                .instrument(tracing::info_span!("repo_index_untracked_await"))
-                .await?,
-        );
+        // The untracked-file scan keeps running in the background;
+        // `execute_visitor` awaits it right before file hashing. Deferring
+        // the barrier lets everything between `Run` construction and
+        // hashing overlap the scan.
+        let repo_index = crate::run::PendingRepoIndex::new(repo_index_task);
 
         {
             let scm_state = scm_state.clone();
@@ -937,6 +937,7 @@ impl RunBuilder {
             tokio::spawn(
                 async move {
                     let sha = scm_state_task.await.ok().flatten();
+                    let repo_index = repo_index.get().await;
                     let dirty_hash =
                         tokio::task::spawn_blocking(move || match repo_index.as_ref() {
                             Some(repo_index) => scm.get_dirty_hash_from_repo_index(repo_index),
