@@ -144,6 +144,105 @@ pub fn pass_through_uses_separator(subcommand: &str) -> bool {
     matches!(subcommand, "test" | "bench" | "run" | "clippy")
 }
 
+/// Environment variables that change what Cargo builds or where it writes
+/// artifacts. These participate in a crate task's hash so flipping them
+/// invalidates the cache. `RUSTC_WRAPPER` is included so enabling a compile
+/// cache like sccache invalidates prior task results.
+pub const HASHED_ENV_VARS: &[&str] = &[
+    "RUSTFLAGS",
+    "RUSTC_WRAPPER",
+    "CARGO_TARGET_DIR",
+    "CARGO_BUILD_TARGET",
+];
+
+fn join_prefix(prefix: &str, rel: &str) -> String {
+    if prefix.is_empty() {
+        rel.to_string()
+    } else {
+        format!("{prefix}/{rel}")
+    }
+}
+
+/// Input globs whose changes should invalidate a Cargo task's cache: the
+/// workspace lockfile and root manifest (locked dependencies, profiles,
+/// lints, `[patch]`, and feature unification all live there), Cargo config
+/// files, and pinned toolchain files — expressed relative to the task's
+/// package directory via `prefix` (the path from the package to the repo
+/// root, e.g. `../..`; empty for the workspace package). Globs that don't
+/// match anything (e.g. a missing `rust-toolchain` file) simply contribute
+/// nothing.
+///
+/// Cargo.lock as a raw input makes every dependency change invalidate every
+/// crate task — coarse but sound. It will move to per-crate
+/// external-dependency closures when the external-dependency hashing
+/// surface lands, so a dependency bump only invalidates the crates whose
+/// closures contain it.
+pub fn hash_input_globs(prefix: &str) -> Vec<String> {
+    [
+        CARGO_LOCK,
+        "Cargo.toml",
+        ".cargo/config.toml",
+        ".cargo/config",
+        "rust-toolchain.toml",
+        "rust-toolchain",
+    ]
+    .iter()
+    .map(|rel| join_prefix(prefix, rel))
+    .collect()
+}
+
+/// Input globs covering a Cargo crate's sources, with Turborepo's own task
+/// log directory excluded. Explicit input globs hash the filesystem (unlike
+/// default hashing, which is git-index based), so without the exclusion the
+/// `.turbo/turbo-<task>.log` written by each run would invalidate the next
+/// run's hash.
+fn crate_source_globs(prefix: &str, crate_path: &str) -> [String; 2] {
+    let base = join_prefix(prefix, crate_path);
+    [format!("{base}/**"), format!("!{base}/.turbo/**")]
+}
+
+/// Output globs for an entrypoint crate's `build` task: the artifacts Cargo
+/// places in `target/<profile>/` — uplifted binaries plus cdylib/staticlib
+/// libraries. These are the workspace's deliverables — the only artifacts
+/// worth caching at the task level. Cargo's internal `target/` state (deps,
+/// fingerprints) is deliberately not cached: it is Cargo's own incremental
+/// cache, and tarballing it fights Cargo instead of leaning on it.
+///
+/// The profile segment is a wildcard, so `--release` and custom profiles
+/// (`--profile=my-profile`) are cached without configuration — pass-through
+/// args participate in the task hash, so each profile gets its own cache
+/// entry. Every platform's file name is emitted for each deliverable
+/// (`.so`, `.dylib`, `.dll`, ...); globs that match nothing contribute
+/// nothing, and task hashes already segment by platform via the artifacts
+/// themselves.
+///
+/// Builds using `CARGO_TARGET_DIR` or `--target <triple>` write elsewhere
+/// (`CARGO_TARGET_DIR` and `CARGO_BUILD_TARGET` are hashed, but the
+/// artifact locations differ); declare explicit `outputs` in turbo.json for
+/// those layouts.
+pub fn deliverable_output_globs(prefix: &str, deliverables: &[Deliverable]) -> Vec<String> {
+    deliverables
+        .iter()
+        .flat_map(|deliverable| {
+            let name = &deliverable.name;
+            let basenames = match deliverable.kind {
+                DeliverableKind::Bin => vec![name.clone(), format!("{name}.exe")],
+                DeliverableKind::Cdylib => vec![
+                    format!("lib{name}.so"),
+                    format!("lib{name}.dylib"),
+                    format!("{name}.dll"),
+                ],
+                DeliverableKind::Staticlib => {
+                    vec![format!("lib{name}.a"), format!("{name}.lib")]
+                }
+            };
+            basenames
+                .into_iter()
+                .map(move |basename| join_prefix(prefix, &format!("target/*/{basename}")))
+        })
+        .collect()
+}
+
 /// The Cargo toolchain. Registered in the
 /// [`crate::toolchain::ToolchainRegistry`] when
 /// `futureFlags.experimentalCargoWorkspaces` is enabled and the repository
@@ -257,6 +356,92 @@ impl Toolchain for CargoToolchain {
         let name = package.package_name()?;
         let details = self.package_details(&name)?;
         display_command(details.kind, task, &name)
+    }
+
+    fn defines_task(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
+        package
+            .package_name()
+            .and_then(|name| self.package_details(&name))
+            .and_then(|details| task_subcommand(details.kind, task))
+            .is_some()
+    }
+
+    fn derived_task_io(
+        &self,
+        package: &crate::package_graph::PackageInfo,
+        task: &str,
+        path_to_root: &str,
+        dependencies: &[&crate::package_graph::PackageInfo],
+        wants_automatic_inputs: bool,
+    ) -> Option<toolchain::DerivedTaskIO> {
+        let name = package.package_name()?;
+        let details = self.package_details(&name)?;
+        let subcommand = task_subcommand(details.kind, task)?;
+
+        // The workspace lockfile/manifest, Cargo config, and pinned
+        // rust-toolchain files are hashed (dependency, profile, or toolchain
+        // changes invalidate the cache), along with the env vars that change
+        // what Cargo builds. These apply regardless of explicit user
+        // `inputs`.
+        let mut io = toolchain::DerivedTaskIO {
+            input_globs: hash_input_globs(path_to_root),
+            env: HASHED_ENV_VARS.iter().map(|var| var.to_string()).collect(),
+            ..Default::default()
+        };
+
+        // Source globs for the crates whose code this task compiles,
+        // filtered to real crates (the synthetic workspace package has no
+        // sources of its own).
+        let dependency_globs = || {
+            let mut globs: Vec<String> = dependencies
+                .iter()
+                .filter(|dep| dep.toolchain == ToolchainId::CARGO)
+                .filter(|dep| {
+                    dep.package_name()
+                        .and_then(|dep_name| self.package_details(&dep_name))
+                        .is_some_and(|details| details.kind != CargoPackageKind::Workspace)
+                })
+                .flat_map(|dep| {
+                    crate_source_globs(path_to_root, dep.package_path().to_unix().as_str())
+                })
+                .collect();
+            globs.sort();
+            globs
+        };
+
+        match details.kind {
+            // An entrypoint build compiles its whole dependency closure in
+            // one cargo process, so the closure's sources are flattened
+            // into this task's inputs — invalidation must not depend on
+            // users wiring up `dependsOn` between crates. The crate's
+            // bin/cdylib/staticlib artifacts are the deliverables and the
+            // only target/ contents worth caching; Cargo's internal target/
+            // state is its own incremental cache and is left alone.
+            CargoPackageKind::Entrypoint => {
+                if wants_automatic_inputs {
+                    io.package_default_inputs = Some(true);
+                    io.input_globs.extend(dependency_globs());
+                }
+                if subcommand == "build" {
+                    io.output_globs = deliverable_output_globs(path_to_root, &details.deliverables);
+                }
+            }
+            // The workspace package's directory is the repo root, so
+            // default hashing would pull in the entire repository
+            // (including JS packages). Hash the crate directories instead —
+            // its dependencies are exactly the crates.
+            CargoPackageKind::Workspace => {
+                if wants_automatic_inputs {
+                    io.package_default_inputs = Some(false);
+                    io.input_globs.extend(dependency_globs());
+                }
+            }
+            // Libraries never map to a subcommand; unreachable while
+            // `subcommand` is `Some`.
+            CargoPackageKind::Library => return None,
+        }
+
+        Some(io)
     }
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
@@ -1018,5 +1203,94 @@ mod test {
             Some("cargo test --workspace")
         );
         assert_eq!(toolchain.task_display_command(&lib_a, "build"), None);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_derived_task_io() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+
+        let toolchain = CargoToolchain::new(root.clone());
+        toolchain.discover_packages().await.unwrap();
+
+        let app = package_info("app", "crates/app/Cargo.toml");
+        let lib_a = package_info("lib-a", "crates/lib-a/Cargo.toml");
+        let workspace = package_info(WORKSPACE_PACKAGE_NAME, "Cargo.toml");
+
+        // defines_task mirrors the verb tables.
+        assert!(toolchain.defines_task(&app, "build"));
+        assert!(!toolchain.defines_task(&app, "test"));
+        assert!(toolchain.defines_task(&workspace, "test"));
+        assert!(!toolchain.defines_task(&lib_a, "build"));
+
+        // Entrypoint build with automatic inputs: workspace files + the
+        // dependency crate closure as inputs (own sources via default
+        // hashing), deliverables as outputs.
+        let deps = [&lib_a];
+        let io = toolchain
+            .derived_task_io(&app, "build", "../..", &deps, true)
+            .expect("entrypoint build derives IO");
+        assert!(io.input_globs.contains(&"../../Cargo.lock".to_string()));
+        assert!(
+            io.input_globs
+                .contains(&"../../rust-toolchain.toml".to_string())
+        );
+        assert!(
+            io.input_globs
+                .contains(&"../../crates/lib-a/**".to_string()),
+            "dependency crate sources are inputs, got {:?}",
+            io.input_globs
+        );
+        assert!(
+            io.input_globs
+                .contains(&"!../../crates/lib-a/.turbo/**".to_string()),
+            "dependency crate task logs are excluded, got {:?}",
+            io.input_globs
+        );
+        assert_eq!(io.package_default_inputs, Some(true));
+        assert!(io.env.contains(&"RUSTC_WRAPPER".to_string()));
+        assert!(
+            io.output_globs.contains(&"../../target/*/app".to_string()),
+            "bin deliverable is cached with a wildcard profile, got {:?}",
+            io.output_globs
+        );
+        assert!(
+            io.output_globs
+                .contains(&"../../target/*/app.exe".to_string())
+        );
+
+        // Explicit inputs without $TURBO_DEFAULT$: workspace files still
+        // apply, but no closure globs and no default-hashing override.
+        let io = toolchain
+            .derived_task_io(&app, "build", "../..", &deps, false)
+            .expect("entrypoint build derives IO");
+        assert!(io.input_globs.contains(&"../../Cargo.lock".to_string()));
+        assert!(!io.input_globs.iter().any(|glob| glob.contains("lib-a")));
+        assert_eq!(io.package_default_inputs, None);
+
+        // Non-build entrypoint verbs cache no deliverables.
+        let io = toolchain
+            .derived_task_io(&app, "dev", "../..", &deps, true)
+            .expect("entrypoint dev derives IO");
+        assert!(io.output_globs.is_empty());
+
+        // The workspace package hashes crate directories instead of the
+        // repo root's default file set.
+        let deps = [&app, &lib_a];
+        let io = toolchain
+            .derived_task_io(&workspace, "test", "", &deps, true)
+            .expect("workspace test derives IO");
+        assert_eq!(io.package_default_inputs, Some(false));
+        assert!(io.input_globs.contains(&"crates/app/**".to_string()));
+        assert!(io.input_globs.contains(&"crates/lib-a/**".to_string()));
+        assert!(io.input_globs.contains(&"Cargo.lock".to_string()));
+        assert!(io.output_globs.is_empty());
+
+        // Libraries derive nothing.
+        assert!(
+            toolchain
+                .derived_task_io(&lib_a, "build", "../..", &[], true)
+                .is_none()
+        );
     }
 }

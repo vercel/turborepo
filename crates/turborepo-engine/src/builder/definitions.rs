@@ -2,7 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use miette::{NamedSource, SourceSpan};
 use turborepo_errors::Spanned;
-use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_repository::{
+    package_graph::{PackageGraph, PackageName, PackageNode},
+    toolchain::ToolchainId,
+};
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{
     HasConfigBeyondExtends, ProcessedTaskDefinition, RawTaskDefinition, TurboJson,
@@ -18,13 +21,14 @@ use crate::{
 /// Memo key for resolved task definitions: the turbo.json chain (by
 /// address; loader-owned for the duration of a build), the task name, and
 /// the two package-dependent inputs that survive resolution — path to the
-/// repo root and script presence. See `task_definition_cached`.
+/// repo root and whether the package's toolchain defines a command for the
+/// task. See `task_definition_cached`.
 #[derive(PartialEq, Eq, Hash)]
 pub(super) struct TaskDefMemoKey {
     chain: Vec<usize>,
     task_name: TaskName<'static>,
     path_to_root: turbopath::RelativeUnixPathBuf,
-    package_has_script: bool,
+    defines_task: bool,
 }
 
 impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
@@ -199,15 +203,29 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         };
 
         let path_to_root = self.path_to_root(task_id.as_inner())?;
-        let package_has_script = self.package_has_script(task_id.as_inner());
+        let package_info = self
+            .package_graph
+            .package_info(&PackageName::from(task_id.as_inner().package()));
+        let toolchain =
+            package_info.and_then(|info| self.package_graph.toolchains().get(&info.toolchain));
+        // Whether the package's toolchain defines a command for this task.
+        // Tasks without one are phantom/transit tasks (they exist solely for
+        // dependency ordering via `dependsOn: ["^task"]`) and must not hash
+        // global input files — they don't execute, and including the files
+        // would cause their hash to change and cascade into downstream
+        // tasks that depend on them.
+        let defines_task = package_info
+            .zip(toolchain)
+            .is_some_and(|(info, toolchain)| toolchain.defines_task(info, task_id.task()));
 
         // Most tasks resolve to an identical definition: the same turbo.json
         // chain and task name, differing only by the package's depth (for
-        // `$TURBO_ROOT$`/global-input anchoring) and whether the package has
-        // a matching script. Memoize on exactly those inputs. The one way a
-        // definition can additionally depend on the package is a
-        // package-scoped task key (`web#build`) in the chain, which
-        // `TurboJson::task` consults first — skip the memo for those.
+        // `$TURBO_ROOT$`/global-input anchoring) and whether the package's
+        // toolchain defines a command for the task. Memoize on exactly
+        // those inputs. Two exceptions must skip the memo: a package-scoped
+        // task key (`web#build`) in the chain, which `TurboJson::task`
+        // consults first, and packages whose toolchain derives per-package
+        // hash wiring (e.g. Cargo crate closures differ per crate).
         let memo_key = {
             let package_scoped = turbo_json_chain.iter().any(|turbo_json| {
                 turbo_json
@@ -215,14 +233,16 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .get(&task_id.as_inner().as_task_name())
                     .is_some()
             });
-            (!package_scoped).then(|| TaskDefMemoKey {
+            let javascript =
+                package_info.is_none_or(|info| info.toolchain == ToolchainId::JAVASCRIPT);
+            (!package_scoped && javascript).then(|| TaskDefMemoKey {
                 chain: turbo_json_chain
                     .iter()
                     .map(|turbo_json| *turbo_json as *const TurboJson as usize)
                     .collect(),
                 task_name: task_name.clone().into_owned(),
                 path_to_root: path_to_root.clone(),
-                package_has_script,
+                defines_task,
             })
         };
         if let Some(key) = &memo_key
@@ -247,7 +267,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             task_def.incremental = None;
         }
 
-        if !self.global_deps.is_empty() && package_has_script {
+        if !self.global_deps.is_empty() && defines_task {
             crate::task_definition::prepend_global_inputs(
                 &mut task_def.inputs,
                 had_explicit_inputs,
@@ -256,24 +276,53 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             );
         }
 
+        // Apply toolchain-derived hash wiring: extra input globs and env
+        // vars, cacheable outputs, and default-hashing behavior. For
+        // JavaScript this is nothing (turbo.json is the whole story); for
+        // Cargo it is the workspace files, crate closures, and deliverable
+        // artifacts. `$TURBO_DEFAULT$` on a derived task means "everything
+        // the toolchain derives automatically", so explicit `inputs` can
+        // append without forfeiting automatic invalidation; explicit inputs
+        // without `$TURBO_DEFAULT$` take full control.
+        if let Some((info, toolchain)) = package_info.zip(toolchain) {
+            let wants_automatic_inputs = !had_explicit_inputs || task_def.inputs.default;
+            let dependencies: Vec<_> = self
+                .package_graph
+                .dependencies(&PackageNode::Workspace(PackageName::from(
+                    task_id.as_inner().package(),
+                )))
+                .into_iter()
+                .filter_map(|dep| match dep {
+                    PackageNode::Workspace(name) => self.package_graph.package_info(name),
+                    _ => None,
+                })
+                .collect();
+            if let Some(derived) = toolchain.derived_task_io(
+                info,
+                task_id.as_inner().task(),
+                path_to_root.as_str(),
+                &dependencies,
+                wants_automatic_inputs,
+            ) {
+                task_def.inputs.globs.extend(derived.input_globs);
+                if let Some(default) = derived.package_default_inputs {
+                    task_def.inputs.default = default;
+                }
+                for var in derived.env {
+                    if !task_def.env.contains(&var) {
+                        task_def.env.push(var);
+                    }
+                }
+                task_def.env.sort();
+                task_def.outputs.inclusions.extend(derived.output_globs);
+            }
+        }
+
         if let Some(key) = memo_key {
             def_memo.insert(key, task_def.clone());
         }
 
         Ok(task_def)
-    }
-
-    /// Whether the task's package has a non-empty script for it. Tasks
-    /// without one are phantom/transit tasks (they exist solely for
-    /// dependency ordering via `dependsOn: ["^task"]`) and must not hash
-    /// global input files — they don't execute, and including the files
-    /// would cause their hash to change and cascade into downstream tasks
-    /// that depend on them.
-    fn package_has_script(&self, task_id: &TaskId) -> bool {
-        self.package_graph
-            .package_json(&PackageName::from(task_id.package()))
-            .and_then(|pj| pj.scripts.get(task_id.task()))
-            .is_some_and(|script| !script.is_empty())
     }
 
     pub fn task_definition_chain(
