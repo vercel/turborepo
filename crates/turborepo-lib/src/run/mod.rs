@@ -1049,6 +1049,7 @@ impl Run {
             url: server.endpoint(),
             token,
             wrapper,
+            server_port: turborepo_sccache_proxy::derive_server_port(&self.repo_root),
         };
         let shutdown = server.shutdown_handle();
         info!("sccache compile cache proxy listening on {}", endpoint.url);

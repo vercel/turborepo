@@ -22,6 +22,12 @@ turborepo-api-client = { workspace = true }
 turborepo-types = { workspace = true }
 
 [dev-dependencies]
+# The same webdav client (and version) sccache uses for storage; the
+# regression tests must exercise the proxy through the real client, not
+# hand-rolled HTTP.
+opendal = { version = "0.55.0", default-features = false, features = [
+  "services-webdav",
+] }
 port_scanner = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 tempfile = { workspace = true }

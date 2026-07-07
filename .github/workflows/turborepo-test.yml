@@ -151,7 +151,9 @@ jobs:
           echo "Checking path patterns..."
 
           check_paths "docs" "docs/"
-          check_paths "native-lib" "packages/turbo-repository/,crates/"
+          # Root turbo.json is included because it configures the Cargo task
+          # pipeline these packages build through (futureFlags, task defs).
+          check_paths "native-lib" "packages/turbo-repository/,crates/,turbo.json"
 
           # Handle the "rest" pattern - files that are NOT in examples/ or docs/
           CHANGED_FILES=$(git diff --name-only $BASE_COMMIT $HEAD_COMMIT)
