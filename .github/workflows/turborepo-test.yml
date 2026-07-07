@@ -382,16 +382,25 @@ jobs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # For the OIDC token exchanged for a Remote Cache access token.
+      id-token: write
     env:
-      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
-      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
+      TURBO_CACHE: remote:rw
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
+
+      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+      - name: Set up Turborepo Remote Cache
+        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
+        with:
+          team: ${{ vars.TURBO_TEAM }}
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -423,9 +432,11 @@ jobs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # For the OIDC token exchanged for a Remote Cache access token.
+      id-token: write
     env:
-      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
       TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
       CARGO_INCREMENTAL: 0
     steps:
@@ -433,6 +444,16 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
+
+      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+      # Push events only: fork PRs cannot mint OIDC tokens, and PR runs use
+      # the local cache anyway.
+      - name: Set up Turborepo Remote Cache
+        if: github.event_name == 'push'
+        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
+        with:
+          team: ${{ vars.TURBO_TEAM }}
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -469,9 +490,11 @@ jobs:
           - 20
           - 22
           - 24
+    permissions:
+      contents: read
+      # For the OIDC token exchanged for a Remote Cache access token.
+      id-token: write
     env:
-      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
       TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
     steps:
       - name: Determine fetch depth
@@ -485,6 +508,16 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
           persist-credentials: false
+
+      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+      # Push events only: fork PRs cannot mint OIDC tokens, and PR runs use
+      # the local cache anyway.
+      - name: Set up Turborepo Remote Cache
+        if: github.event_name == 'push'
+        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
+        with:
+          team: ${{ vars.TURBO_TEAM }}
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
