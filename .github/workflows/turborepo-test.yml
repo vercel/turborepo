@@ -17,8 +17,56 @@ permissions:
   contents: read
 
 jobs:
+  # Everything runs on ubuntu; only the Rust workspace tests are
+  # platform-sensitive enough to repeat elsewhere (see rust-test).
   test:
-    name: Test (${{ matrix.os.name }})
+    name: Test
+    runs-on: ubuntu-latest-8-core-oss
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      # For the OIDC token exchanged for a Remote Cache access token.
+      id-token: write
+    env:
+      CARGO_INCREMENTAL: 0
+      # PRs read the remote cache but cannot write to it; pushes to main
+      # populate it.
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw,remote:r' || 'remote:rw' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+      # Fork PRs cannot mint OIDC tokens; they fall through to local-only
+      # caching.
+      - name: Set up Turborepo Remote Cache
+        continue-on-error: true
+        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
+        with:
+          team: ${{ vars.TURBO_TEAM }}
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Test
+        run: turbo run test check-types check-lockfiles --continue --env-mode=loose --color
+
+  # The Rust workspace tests repeated on the platforms ubuntu can't vouch
+  # for. `cargo` is the synthetic package the Cargo toolchain anchors at
+  # the workspace root; its `test` task is `cargo test --workspace`.
+  rust-test:
+    name: Rust tests (${{ matrix.os.name }})
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 45
     permissions:
@@ -29,8 +77,6 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - name: ubuntu
-            runner: ubuntu-latest-8-core-oss
           - name: macos
             runner: macos-15-xlarge
           - name: windows
@@ -99,7 +145,7 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Test
-        run: turbo run test check-types check-lockfiles --continue --env-mode=loose --color
+        run: turbo run test --filter=cargo --env-mode=loose --color
 
   check-examples:
     name: Check examples
@@ -154,13 +200,15 @@ jobs:
     if: always()
     needs:
       - test
+      - rust-test
       - check-examples
     steps:
       - name: Check results
         run: |
           test_result="${{ needs.test.result }}"
+          rust_result="${{ needs.rust-test.result }}"
           examples_result="${{ needs.check-examples.result }}"
-          for result in "$test_result" "$examples_result"; do
+          for result in "$test_result" "$rust_result" "$examples_result"; do
             if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
               echo "A required job finished with result: $result"
               exit 1
