@@ -43,6 +43,22 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Build turborepo-napi through turbo (compile cache engaged)
+        env:
+          # Surface the proxy's per-object debug lines (hit/miss/stored).
+          TURBO_LOG_VERBOSITY: "warn,turborepo_sccache_proxy=debug"
+          # Loose mode passes these to the task env, and from there into the
+          # sccache server the first wrapper invocation spawns.
+          SCCACHE_LOG: debug
+          SCCACHE_ERROR_LOG: /tmp/sccache-server.log
         run: |
           turbo --version
-          TURBO_API= time turbo run build --filter=turborepo-napi --force -v --env-mode=strict
+          TURBO_API= time turbo run build --filter=turborepo-napi --force --env-mode=loose
+
+      - name: Compile cache summary
+        if: always()
+        run: |
+          # Give the (detached) sccache server a moment to attempt trailing
+          # uploads, then show its view of the world.
+          sleep 20
+          echo "=== sccache server log (last 100 lines) ==="
+          tail -100 /tmp/sccache-server.log || echo "no server log written"
