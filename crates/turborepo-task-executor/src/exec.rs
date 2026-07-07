@@ -363,8 +363,6 @@ where
         task_handle: &mut turborepo_log::grouping::TaskHandle,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<ExecOutcome, InternalError> {
-        task_output.start(self.task_cache.output_logs().into());
-
         if !self.task_cache.is_caching_disabled() {
             let missing_platform_env = self.platform_env.validate(&self.execution_env);
             if !missing_platform_env.is_empty() {
@@ -429,6 +427,12 @@ where
             Some(group) => Some(serial_group_lock(group).lock_owned().await),
             None => None,
         };
+
+        // The task is only presented as running once its process is about
+        // to exist. Everything before this point — cache restore, waiting
+        // on the serial group — happens while the task is still pending,
+        // and cache hits finish without ever starting.
+        task_output.start(self.task_cache.output_logs().into());
 
         // Spawn the process
         let cmd = self.cmd.clone();
