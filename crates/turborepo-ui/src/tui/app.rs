@@ -506,8 +506,11 @@ impl<W> App<W> {
         Ok(())
     }
 
-    /// Mark the given running task as finished
-    /// Errors if given task wasn't a running task
+    /// Mark the given running or planned task as finished.
+    ///
+    /// A task is only marked as started once its process actually spawns,
+    /// so cache hits legitimately finish straight from the planned state —
+    /// they never ran. Errors if the task is unknown or already finished.
     #[tracing::instrument(skip(self, result))]
     pub fn finish_task(&mut self, task: &str, result: TaskResult) -> Result<(), Error> {
         debug!("finishing task {task}");
@@ -518,16 +521,32 @@ impl<W> App<W> {
             .task_name(self.selected_task_index)?
             .to_string();
 
-        let running_idx = self
+        let finished = if let Some(running_idx) = self
             .tasks_by_status
             .running
             .iter()
             .position(|running| running.name() == task)
-            .ok_or_else(|| Error::TaskNotFound { name: task.into() })?;
-
-        let running = self.tasks_by_status.running.remove(running_idx);
-        self.tasks_by_status
-            .insert_finished_task(running.finish(result));
+        {
+            self.tasks_by_status
+                .running
+                .remove(running_idx)
+                .finish(result)
+        } else {
+            let planned_idx = self
+                .tasks_by_status
+                .planned
+                .iter()
+                .position(|planned| planned.name() == task)
+                .ok_or_else(|| Error::TaskNotFound { name: task.into() })?;
+            // start().finish() back to back: a task that never ran has a
+            // (truthful) zero duration.
+            self.tasks_by_status
+                .planned
+                .remove(planned_idx)
+                .start()
+                .finish(result)
+        };
+        self.tasks_by_status.insert_finished_task(finished);
 
         self.tasks
             .get_mut(task)
@@ -725,6 +744,7 @@ impl<W> App<W> {
         task: String,
         status: String,
         result: CacheResult,
+        output_logs: OutputLogs,
     ) -> Result<(), Error> {
         let task = self
             .tasks
@@ -734,6 +754,9 @@ impl<W> App<W> {
             })?;
         task.status = Some(status);
         task.cache_result = Some(result);
+        // Cache hits finish without ever starting, so `StartTask` cannot be
+        // relied on to deliver the output verbosity before persistence.
+        task.output_logs = Some(output_logs);
         Ok(())
     }
 
@@ -1551,8 +1574,9 @@ fn update(
             task,
             status,
             result,
+            output_logs,
         } => {
-            app.set_status(task, status, result)?;
+            app.set_status(task, status, result, output_logs)?;
         }
         Event::InternalStop => {
             debug!("shutting down due to internal failure");
@@ -2137,13 +2161,89 @@ mod test {
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
         // set status for a
-        app.set_status("a".to_string(), "building".to_string(), CacheResult::Hit)?;
+        app.set_status(
+            "a".to_string(),
+            "building".to_string(),
+            CacheResult::Hit,
+            OutputLogs::Full,
+        )?;
 
         assert_eq!(
             app.tasks.get("a").unwrap().status.as_deref(),
             Some("building")
         );
         assert!(app.tasks.get("b").unwrap().status.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn test_finish_task_from_planned_state() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new_for_test(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Cache hits finish without ever starting: planned -> finished.
+        app.finish_task("a", TaskResult::CacheHit)?;
+        assert!(
+            app.tasks_by_status
+                .finished
+                .iter()
+                .any(|task| task.name() == "a"),
+            "task should be finished"
+        );
+        assert!(
+            !app.tasks_by_status
+                .planned
+                .iter()
+                .any(|task| task.name() == "a"),
+            "task should no longer be planned"
+        );
+        // Persistence on TUI exit covers finished tasks, so the replayed
+        // logs of a never-started cache hit still land in the terminal.
+        assert!(
+            app.tasks_by_status
+                .tasks_started()
+                .contains(&"a".to_string())
+        );
+
+        // Unknown tasks remain a hard error.
+        assert!(app.finish_task("missing", TaskResult::Success).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_set_status_carries_output_logs() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new_for_test(
+            100,
+            100,
+            vec!["a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        app.set_status(
+            "a".to_string(),
+            "cache hit, replaying logs".to_string(),
+            CacheResult::Hit,
+            OutputLogs::HashOnly,
+        )?;
+        assert_eq!(
+            app.tasks.get("a").unwrap().output_logs,
+            Some(OutputLogs::HashOnly),
+            "status must deliver output verbosity for tasks that never start"
+        );
         Ok(())
     }
 
@@ -2830,6 +2930,7 @@ mod test {
     fn test_should_start_terminal_on_cache_miss() {
         // Cache miss should trigger terminal start
         let miss_event = Event::Status {
+            output_logs: OutputLogs::Full,
             task: "task-a".to_string(),
             status: "building".to_string(),
             // This includes cache bypasses via `--force`
@@ -2845,6 +2946,7 @@ mod test {
     fn test_should_not_start_terminal_on_cache_hit() {
         // Cache hit should NOT trigger terminal start
         let hit_event = Event::Status {
+            output_logs: OutputLogs::Full,
             task: "task-a".to_string(),
             status: "cached".to_string(),
             result: CacheResult::Hit,
@@ -2915,8 +3017,18 @@ mod test {
 
         // Simulate a full cache hit scenario:
         // 1. Set status as cache hit (this doesn't start the task in running state)
-        app.set_status("a".to_string(), "cached".to_string(), CacheResult::Hit)?;
-        app.set_status("b".to_string(), "cached".to_string(), CacheResult::Hit)?;
+        app.set_status(
+            "a".to_string(),
+            "cached".to_string(),
+            CacheResult::Hit,
+            OutputLogs::Full,
+        )?;
+        app.set_status(
+            "b".to_string(),
+            "cached".to_string(),
+            CacheResult::Hit,
+            OutputLogs::Full,
+        )?;
 
         // 2. Start and finish tasks with CacheHit result
         app.start_task("a", OutputLogs::Full)?;
@@ -3421,7 +3533,12 @@ mod test {
         // The run proceeds: each task gets StartTask, Status(Hit), EndTask(CacheHit).
         for task in &tasks {
             app.start_task(task, OutputLogs::Full)?;
-            app.set_status(task.clone(), "cached".to_string(), CacheResult::Hit)?;
+            app.set_status(
+                task.clone(),
+                "cached".to_string(),
+                CacheResult::Hit,
+                OutputLogs::Full,
+            )?;
             app.finish_task(task, TaskResult::CacheHit)?;
         }
 

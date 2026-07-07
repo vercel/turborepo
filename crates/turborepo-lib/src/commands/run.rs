@@ -1,6 +1,6 @@
 use std::{env, future::Future, sync::Arc};
 
-use tracing::{error, Instrument};
+use tracing::Instrument;
 use turborepo_api_client::SharedHttpClient;
 use turborepo_log::StructuredLogSink;
 use turborepo_query_api::QueryServer;
@@ -140,7 +140,9 @@ pub async fn run(
         let (sender, handle) = {
             let _span = tracing::info_span!("start_ui").entered();
             // The TUI needs a handle to the terminal sink so it can re-enable
-            // streamed output when the user toggles out of the alternate screen.
+            // streamed output when the user toggles out of the alternate
+            // screen, and its watchdog restores streamed output if the
+            // render thread exits mid-run.
             run.start_ui(sinks.terminal.clone())?.unzip()
         };
 
@@ -175,12 +177,11 @@ pub async fn run(
             sender.stop().await;
         }
 
+        // Wait for TUI cleanup (terminal restoration, task persistence)
+        // before printing anything else; render errors are logged by the
+        // watchdog inside `start_ui`.
         if let Some(handle) = handle {
-            match handle.await {
-                Ok(Err(e)) => error!("error encountered rendering tui: {e}"),
-                Err(e) => error!("render thread panicked: {e}"),
-                Ok(Ok(())) => {}
-            }
+            handle.await.ok();
         }
 
         if let Some(path) = subscriber.stderr_redirect_path() {
