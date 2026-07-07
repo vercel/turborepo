@@ -274,11 +274,16 @@ whether anything changed; Cargo decides how and in what order to build.**
 - **Compile cache** (`Toolchain::compile_cache_env`, consumed by
   `ToolchainCommandProvider`; gated by `futureFlags.experimentalCargoSccache`):
   when enabled alongside `experimentalCargoWorkspaces` in a CI environment
-  with a linked Remote Cache and `sccache` on `PATH`, the run serves a
-  local HTTP proxy
+  with a linked Remote Cache, the run serves a local HTTP proxy
   (`turborepo-sccache-proxy`) that presents an sccache-compatible webdav
   storage backend and translates `GET`/`PUT`/`HEAD` into Remote Cache
-  artifact calls. Cargo tasks get `RUSTC_WRAPPER=sccache`,
+  artifact calls. Nothing needs installing: turbo embeds sccache as a
+  library (a Vercel fork of mozilla/sccache pinned in Cargo.toml, adding
+  an explicit-args entrypoint) and acts as the compiler wrapper itself —
+  `main.rs` dispatches invocations marked with `TURBO_SCCACHE_WRAPPER=1`
+  (and sccache's internal `SCCACHE_START_SERVER=1` respawn) to
+  `sccache::main_from_args`, alongside the LSP and Windows ctrl-c shims.
+  Cargo tasks get `RUSTC_WRAPPER=<turbo>`, the wrapper marker,
   `SCCACHE_WEBDAV_ENDPOINT`/`SCCACHE_WEBDAV_TOKEN`, and
   `CARGO_INCREMENTAL=0` injected at execution time; JavaScript injects
   nothing. Objects are fetched lazily per rustc invocation, so nothing is

@@ -92,6 +92,18 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    // Embedded sccache dispatch. These are hot per-rustc invocations from
+    // Cargo tasks (plus sccache's own background-server respawn), so they
+    // must bypass the normal CLI entirely. `main_from_args` never returns.
+    if let Some(args) = embedded_sccache_args(
+        std::env::args_os(),
+        std::env::var_os("SCCACHE_START_SERVER").is_some_and(|v| v == "1"),
+        std::env::var_os(turborepo_repository::toolchain::COMPILE_CACHE_WRAPPER_ENV)
+            .is_some_and(|v| v == "1"),
+    ) {
+        sccache::main_from_args(args);
+    }
+
     std::panic::set_hook(Box::new(turborepo_lib::panic_handler));
 
     let query_server: Arc<dyn turborepo_lib::QueryServer> = Arc::new(TurboQueryServer);
@@ -164,6 +176,52 @@ where
     }
 }
 
+/// Args for routing this invocation to the embedded sccache, or `None` for
+/// normal turbo operation. The returned args are shaped as an invocation of
+/// a binary named `sccache`.
+///
+/// Two invocation shapes route to sccache:
+///
+/// - The internal background-server respawn: sccache's client spawns
+///   `current_exe()` — this binary — with `SCCACHE_START_SERVER=1` and no
+///   meaningful args.
+/// - `RUSTC_WRAPPER` invocations from Cargo tasks: turbo injects itself as the
+///   wrapper (with the marker env var alongside), and cargo invokes `<wrapper>
+///   <compiler> <args...>`. The compiler must actually look like rustc so a
+///   stray `turbo` invocation inside a marked task environment cannot be
+///   misrouted into sccache executing its first argument.
+fn embedded_sccache_args<T>(
+    args: impl IntoIterator<Item = T>,
+    start_server: bool,
+    wrapper_marker: bool,
+) -> Option<Vec<std::ffi::OsString>>
+where
+    T: AsRef<OsStr>,
+{
+    if start_server {
+        return Some(vec!["sccache".into()]);
+    }
+    if !wrapper_marker {
+        return None;
+    }
+
+    let mut args = args.into_iter().skip(1);
+    let compiler = args.next()?;
+    let stem = std::path::Path::new(compiler.as_ref())
+        .file_stem()?
+        .to_str()?;
+    // `clippy-driver`: cargo clippy routes compilation through RUSTC_WRAPPER
+    // with the driver as the compiler argument.
+    if !matches!(stem, "rustc" | "clippy-driver") {
+        return None;
+    }
+
+    let mut sccache_args: Vec<std::ffi::OsString> =
+        vec!["sccache".into(), compiler.as_ref().to_owned()];
+    sccache_args.extend(args.map(|arg| arg.as_ref().to_owned()));
+    Some(sccache_args)
+}
+
 fn internal_lsp_command<T>(args: impl IntoIterator<Item = T>) -> Option<InternalLspCommand>
 where
     T: AsRef<OsStr>,
@@ -194,10 +252,71 @@ where
 mod tests {
     use std::ffi::OsString;
 
-    use super::{InternalLspCommand, internal_lsp_command};
+    use super::{InternalLspCommand, embedded_sccache_args, internal_lsp_command};
 
     fn args(args: &[&str]) -> Vec<OsString> {
         args.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn sccache_server_respawn_dispatches_regardless_of_args() {
+        assert_eq!(
+            embedded_sccache_args(args(&["turbo"]), true, false),
+            Some(args(&["sccache"]))
+        );
+    }
+
+    #[test]
+    fn sccache_wrapper_invocation_dispatches_with_marker() {
+        assert_eq!(
+            embedded_sccache_args(
+                args(&["turbo", "/toolchain/bin/rustc", "--crate-name", "foo"]),
+                false,
+                true,
+            ),
+            Some(args(&[
+                "sccache",
+                "/toolchain/bin/rustc",
+                "--crate-name",
+                "foo"
+            ]))
+        );
+        // Clippy routes compilation through the wrapper with its driver.
+        assert!(
+            embedded_sccache_args(args(&["turbo", "/bin/clippy-driver", "-vV"]), false, true)
+                .is_some()
+        );
+    }
+
+    /// Windows path parsing (`\` separators, `.exe`) only applies on
+    /// Windows, where `Path` handles both natively.
+    #[cfg(windows)]
+    #[test]
+    fn sccache_wrapper_dispatches_windows_compiler_paths() {
+        assert_eq!(
+            embedded_sccache_args(
+                args(&["turbo", r"C:\toolchain\rustc.exe", "-vV"]),
+                false,
+                true
+            ),
+            Some(args(&["sccache", r"C:\toolchain\rustc.exe", "-vV"]))
+        );
+    }
+
+    #[test]
+    fn sccache_wrapper_requires_marker_and_compiler_shape() {
+        // No marker: a normal turbo invocation, even if argv[1] is a path.
+        assert_eq!(
+            embedded_sccache_args(args(&["turbo", "/toolchain/bin/rustc"]), false, false),
+            None
+        );
+        // Marker leaked into a non-wrapper turbo invocation: first arg is
+        // not a compiler, so this must stay a normal turbo run.
+        assert_eq!(
+            embedded_sccache_args(args(&["turbo", "run", "build"]), false, true),
+            None
+        );
+        assert_eq!(embedded_sccache_args(args(&["turbo"]), false, true), None);
     }
 
     #[test]
