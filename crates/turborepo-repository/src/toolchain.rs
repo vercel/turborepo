@@ -299,7 +299,16 @@ pub struct CompileCacheEndpoint {
     pub url: String,
     /// Bearer token the proxy requires.
     pub token: String,
+    /// Absolute path to the compiler-wrapper executable — the running
+    /// `turbo` binary itself, which embeds sccache and dispatches wrapper
+    /// invocations to it (see [`COMPILE_CACHE_WRAPPER_ENV`]).
+    pub wrapper: String,
 }
+
+/// Environment variable marking task processes whose `RUSTC_WRAPPER` is the
+/// turbo binary itself. The turbo entrypoint dispatches invocations carrying
+/// this marker to the embedded sccache instead of the normal CLI.
+pub const COMPILE_CACHE_WRAPPER_ENV: &str = "TURBO_SCCACHE_WRAPPER";
 
 /// A toolchain's contribution to a pruned repository. See
 /// [`Toolchain::prune_plan`].

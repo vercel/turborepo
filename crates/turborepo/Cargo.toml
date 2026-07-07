@@ -38,10 +38,12 @@ workspace = true
 anyhow = { workspace = true, features = ["backtrace"] }
 dhat = { workspace = true, optional = true }
 miette.workspace = true
+sccache = { workspace = true }
 turborepo-lib = { workspace = true, default-features = false }
 turborepo-lsp = { workspace = true, default-features = false }
 turborepo-query = { workspace = true }
 turborepo-query-api = { workspace = true }
+turborepo-repository = { workspace = true }
 turborepo-signals = { workspace = true }
 turborepo-ui = { workspace = true }
 
