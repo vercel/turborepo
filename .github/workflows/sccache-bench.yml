@@ -23,15 +23,26 @@ jobs:
     name: Cargo build through the compile cache
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      # For the OIDC token exchanged for a Remote Cache access token below.
+      id-token: write
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_CACHE: remote:rw
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
+
+      # Exchanges a GitHub OIDC token for a short-lived Turborepo access
+      # token with Remote Cache read/write, exported as TURBO_TOKEN and
+      # TURBO_TEAM for subsequent steps. Requires a matching Turborepo CLI
+      # OIDC policy on the Vercel team.
+      - name: Set up Turborepo Remote Cache
+        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
+        with:
+          team: ${{ vars.TURBO_TEAM }}
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
