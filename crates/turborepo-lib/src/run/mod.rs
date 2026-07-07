@@ -141,7 +141,9 @@ pub struct Run {
     shutdown_started_emitted: Arc<AtomicBool>,
 }
 
-type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
+// The join handle covers the render thread plus its sink-restoring
+// watchdog; render errors are logged there, not surfaced to the caller.
+type UIResult<T> = Result<Option<(T, JoinHandle<()>)>, Error>;
 
 type TuiResult = UIResult<TuiSender>;
 
@@ -602,8 +604,23 @@ impl Run {
             repo_root,
             scrollback_len,
             Some(interrupt),
-            terminal_sink,
+            terminal_sink.clone(),
         )?;
+
+        // The terminal sink is disabled while the TUI owns the screen.
+        // Whatever ends the render thread — normal shutdown, a render
+        // error, a panic — output must return to the stream sink
+        // immediately: a mid-run TUI death would otherwise leave the rest
+        // of the run executing in silence, with every task's output
+        // dropped. Task output must always have a live sink.
+        let handle = tokio::spawn(async move {
+            match handle.await {
+                Ok(Err(e)) => tracing::error!("error encountered rendering tui: {e}"),
+                Err(e) => tracing::error!("render thread panicked: {e}"),
+                Ok(Ok(())) => {}
+            }
+            terminal_sink.enable();
+        });
 
         Ok(Some((sender, handle)))
     }
