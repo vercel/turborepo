@@ -991,18 +991,34 @@ impl Run {
             debug!("sccache compile cache disabled: not running in CI");
             return None;
         }
+        // The compile cache *is* the remote cache; when remote cache use is
+        // off for this run (e.g. `TURBO_CACHE=local:rw` in PR CI, where the
+        // credentials are placeholders), a proxy would only convert every
+        // sccache request into a doomed API call and a logged warning.
+        if !self.opts.cache_opts.cache.remote.should_use() {
+            debug!("sccache compile cache disabled: remote cache is not enabled for this run");
+            return None;
+        }
         let (Some(client), Some(auth)) = (self.api_client.clone(), self.api_auth.clone()) else {
             debug!("sccache compile cache disabled: Remote Cache is not configured");
             return None;
         };
-        // Debug, not warn: the flag is repo-level configuration, so in a
-        // repository that dogfoods it, every contributor without sccache
-        // installed would otherwise see a warning on every run. Missing
-        // sccache is an absent optimization, not a problem with the run.
-        if which::which("sccache").is_err() {
-            debug!("sccache not found on PATH; compile cache disabled");
-            return None;
-        }
+        // The compiler wrapper is this very binary: turbo embeds sccache
+        // and dispatches wrapper invocations to it, so nothing needs to be
+        // installed. Cargo needs the wrapper as an executable path.
+        let wrapper = match std::env::current_exe() {
+            Ok(path) => match path.into_os_string().into_string() {
+                Ok(path) => path,
+                Err(_) => {
+                    warn!("compile cache disabled: turbo's path is not valid UTF-8");
+                    return None;
+                }
+            },
+            Err(err) => {
+                warn!("compile cache disabled: cannot determine turbo's path: {err}");
+                return None;
+            }
+        };
 
         let token_path = self
             .repo_root
@@ -1032,6 +1048,7 @@ impl Run {
         let endpoint = turborepo_repository::toolchain::CompileCacheEndpoint {
             url: server.endpoint(),
             token,
+            wrapper,
         };
         let shutdown = server.shutdown_handle();
         info!("sccache compile cache proxy listening on {}", endpoint.url);

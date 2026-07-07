@@ -514,10 +514,13 @@ impl Toolchain for CargoToolchain {
         display_command(details.kind, task, &name)
     }
 
-    /// Route rustc invocations through sccache, with the Turborepo-served
-    /// endpoint as its webdav storage backend. sccache fetches per
-    /// compilation-unit objects lazily at rustc invocation time, so no state
-    /// needs restoring before the task starts.
+    /// Route rustc invocations through the embedded sccache, with the
+    /// Turborepo-served endpoint as its webdav storage backend. The wrapper
+    /// is the running turbo binary itself (which dispatches invocations
+    /// marked by [`toolchain::COMPILE_CACHE_WRAPPER_ENV`] to the sccache it
+    /// embeds), so nothing needs to be installed. sccache fetches per
+    /// compilation-unit objects lazily at rustc invocation time, so no
+    /// state needs restoring before the task starts.
     ///
     /// `CARGO_INCREMENTAL=0` accompanies the wrapper because sccache cannot
     /// cache incrementally-compiled crates and would fall back to plain
@@ -534,7 +537,11 @@ impl Toolchain for CargoToolchain {
         endpoint: &toolchain::CompileCacheEndpoint,
     ) -> Vec<(String, String)> {
         vec![
-            ("RUSTC_WRAPPER".to_string(), "sccache".to_string()),
+            ("RUSTC_WRAPPER".to_string(), endpoint.wrapper.clone()),
+            (
+                toolchain::COMPILE_CACHE_WRAPPER_ENV.to_string(),
+                "1".to_string(),
+            ),
             ("SCCACHE_WEBDAV_ENDPOINT".to_string(), endpoint.url.clone()),
             ("SCCACHE_WEBDAV_TOKEN".to_string(), endpoint.token.clone()),
             ("CARGO_INCREMENTAL".to_string(), "0".to_string()),
@@ -1445,11 +1452,13 @@ checksum = "abc123"
         let endpoint = toolchain::CompileCacheEndpoint {
             url: "http://127.0.0.1:42123".to_string(),
             token: "proxy-token".to_string(),
+            wrapper: "/path/to/turbo".to_string(),
         };
         assert_eq!(
             toolchain.compile_cache_env(&endpoint),
             vec![
-                ("RUSTC_WRAPPER".to_string(), "sccache".to_string()),
+                ("RUSTC_WRAPPER".to_string(), "/path/to/turbo".to_string()),
+                ("TURBO_SCCACHE_WRAPPER".to_string(), "1".to_string()),
                 (
                     "SCCACHE_WEBDAV_ENDPOINT".to_string(),
                     "http://127.0.0.1:42123".to_string()

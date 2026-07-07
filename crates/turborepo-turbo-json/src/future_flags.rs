@@ -106,8 +106,9 @@ pub struct FutureFlags {
     ///
     /// Only engages in CI: cold environments are where a compile cache
     /// pays off, while local development is better served by cargo's own
-    /// incremental compilation (which sccache would disable). Requires
-    /// `sccache` on `PATH`; silently disabled otherwise.
+    /// incremental compilation (which sccache would disable). Nothing needs
+    /// to be installed: `turbo` embeds sccache and acts as the compiler
+    /// wrapper itself.
     #[serde(default)]
     #[schemars(skip)]
     pub experimental_cargo_sccache: bool,
