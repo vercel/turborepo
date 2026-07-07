@@ -1,4 +1,9 @@
 name: Test
+
+# One job per OS, one turbo invocation per job. No hand-rolled path
+# filters: the task graph knows what changed. PRs read main's remote
+# cache (fork PRs degrade to local-only); pushes to main populate it.
+
 on:
   pull_request:
   push:
@@ -12,264 +17,35 @@ permissions:
   contents: read
 
 jobs:
-  find-changes:
-    name: Find path changes
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  test:
+    name: Test (${{ matrix.os.name }})
+    runs-on: ${{ matrix.os.runner }}
+    timeout-minutes: 45
     permissions:
       contents: read
-      pull-requests: read
-    outputs:
-      is-release-pr: ${{ steps.check-release.outputs.is-release-pr }}
-      docs: ${{ steps.filter.outputs.docs }}
-      rest: ${{ steps.filter.outputs.rest }}
-      rust: ${{ steps.filter.outputs.rust }}
-      native-lib: ${{ steps.filter.outputs.native-lib }}
-    steps:
-      # Detect automated release PRs which only contain generated release updates.
-      # These PRs are created by the release workflow after code has already
-      # been tested on main. Skipping tests on generated release lets us auto-merge release PRs.
-      - name: Check if automated release PR
-        id: check-release
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          REPOSITORY: ${{ github.repository }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-
-          if [[ "$EVENT_NAME" != "pull_request" ]]; then
-            echo "is-release-pr=false" >> "$GITHUB_OUTPUT"
-            echo "Not a pull_request event, skipping release PR check"
-            exit 0
-          fi
-
-          if [[ "$PR_AUTHOR" != "github-actions[bot]" || ! "$PR_TITLE" =~ ^release\(turborepo\): ]]; then
-            echo "is-release-pr=false" >> "$GITHUB_OUTPUT"
-            echo "Not a release PR (author: $PR_AUTHOR, title: $PR_TITLE)"
-            exit 0
-          fi
-
-          if [[ "$PR_HEAD_REPO" != "$REPOSITORY" || ! "$PR_HEAD_REF" =~ ^staging-[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
-            echo "is-release-pr=false" >> "$GITHUB_OUTPUT"
-            echo "Not a release PR branch (head: $PR_HEAD_REPO:$PR_HEAD_REF)"
-            exit 0
-          fi
-
-          CHANGED_FILES=$(gh api --paginate "repos/${REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename')
-          if [[ -z "$CHANGED_FILES" ]]; then
-            echo "::error::Unable to determine changed files for release PR"
-            exit 1
-          fi
-
-          echo "Changed files in release PR:"
-          printf '%s\n' "$CHANGED_FILES"
-
-          ALLOWED_PATTERN="^(version\.txt|.*/package\.json|package\.json|Cargo\.toml|Cargo\.lock|.*/Cargo\.toml|CHANGELOG.*|pnpm-lock\.yaml|skills/turborepo/SKILL\.md|skills/turborepo/references/best-practices/structure\.md|skills/turborepo/references/configuration/RULE\.md|skills/turborepo/references/environment/RULE\.md|skills/turborepo/references/environment/gotchas\.md)$"
-          INVALID_FILES=""
-          while IFS= read -r file; do
-            if [[ -n "$file" && ! "$file" =~ $ALLOWED_PATTERN ]]; then
-              INVALID_FILES="$INVALID_FILES$file"$'\n'
-            fi
-          done <<< "$CHANGED_FILES"
-
-          if [[ -n "$INVALID_FILES" ]]; then
-            echo "::error::Release PR contains unexpected files that are not generated release updates:"
-            printf '%s\n' "$INVALID_FILES"
-            echo "::error::Release PRs should only modify version.txt, package.json, Cargo.toml, Cargo.lock, CHANGELOG, pnpm-lock.yaml, or generated Turborepo skill files"
-            exit 1
-          fi
-
-          echo "is-release-pr=true" >> "$GITHUB_OUTPUT"
-          echo "Release PR content validation passed - only generated release files changed"
-
-      - name: Checkout
-        if: steps.check-release.outputs.is-release-pr != 'true'
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-
-      - name: Check path changes
-        if: steps.check-release.outputs.is-release-pr != 'true'
-        id: filter
-        run: |
-          # Determine the base and head commits to compare
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            # For pull requests, compare the base branch to the current HEAD
-            git fetch origin ${{ github.base_ref }}
-            BASE_COMMIT="origin/${{ github.base_ref }}"
-            HEAD_COMMIT="HEAD"
-          else
-            # For pushes, use the before and after SHAs
-            BASE_COMMIT="${{ github.event.before }}"
-            HEAD_COMMIT="${{ github.event.after }}"
-          fi
-
-          echo "Comparing changes between $BASE_COMMIT and $HEAD_COMMIT"
-
-          # Function to check if files in given paths have changed
-          check_path_changes() {
-            local name=$1
-            shift
-            local paths=("$@")
-
-            # Create a command that checks all paths
-            local cmd="git diff --name-only $BASE_COMMIT $HEAD_COMMIT -- "
-            for path in "${paths[@]}"; do
-              cmd+="\"$path\" "
-            done
-
-            # Run the command and check if there are any results
-            if eval "$cmd" | grep -q .; then
-              echo "$name=true" >> $GITHUB_OUTPUT
-              echo "Changes detected in $name paths"
-            else
-              echo "$name=false" >> $GITHUB_OUTPUT
-              echo "No changes in $name paths"
-            fi
-          }
-
-          # Function to make path checking more readable
-          check_paths() {
-            local name=$1
-            local path_string=$2
-
-            # Convert the comma-separated string to an array
-            IFS=',' read -ra path_array <<< "$path_string"
-
-            # Call the check_path_changes function with the name and paths
-            check_path_changes "$name" "${path_array[@]}"
-          }
-
-          # Check each path pattern with a more readable syntax
-          echo "Checking path patterns..."
-
-          check_paths "docs" "docs/"
-          # Root turbo.json is included because it configures the Cargo task
-          # pipeline these packages build through (futureFlags, task defs).
-          check_paths "native-lib" "packages/turbo-repository/,crates/,turbo.json"
-
-          # Handle the "rest" pattern - files that are NOT in examples/ or docs/
-          CHANGED_FILES=$(git diff --name-only $BASE_COMMIT $HEAD_COMMIT)
-
-          # Filter to only include files that do NOT start with examples/ or docs/
-          FILES_NOT_IN_EXAMPLES_OR_DOCS=$(echo "$CHANGED_FILES" | grep -v -E "^(examples/|docs/)" || true)
-
-          if [ -n "$FILES_NOT_IN_EXAMPLES_OR_DOCS" ]; then
-            echo "rest=true" >> $GITHUB_OUTPUT
-            echo "Changes detected outside examples/ and docs/ directories"
-          else
-            echo "rest=false" >> $GITHUB_OUTPUT
-            echo "No changes outside examples/ and docs/ directories"
-          fi
-
-          # Detect if Rust/core code changed (requires Rust tests + integration tests)
-          # This excludes JS-only changes like packages/*, lockfile, etc.
-          RUST_PATTERNS="^(crates/|cli/|Cargo\.|rust-toolchain|\.cargo/|\.config/|\.github/|turborepo-tests/)"
-          RUST_CHANGES=$(echo "$CHANGED_FILES" | grep -E "$RUST_PATTERNS" || true)
-
-          if [ -n "$RUST_CHANGES" ]; then
-            echo "rust=true" >> $GITHUB_OUTPUT
-            echo "Rust/core changes detected:"
-            echo "$RUST_CHANGES"
-          else
-            echo "rust=false" >> $GITHUB_OUTPUT
-            echo "No Rust/core changes detected (JS-only change)"
-          fi
-
-  turbo_types_check:
-    name: "@turbo/types codegen check"
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-
-      - name: Generate schemas from Rust
-        run: |
-          cargo run -p turborepo-schema-gen -- schema -o packages/turbo-types/schemas/schema.json
-          cargo run -p turborepo-schema-gen -- typescript -o packages/turbo-types/src/types/config-v2.ts
-          pnpm exec oxfmt packages/turbo-types/schemas/schema.json packages/turbo-types/src/types/config-v2.ts
-
-      - name: Check for uncommitted changes
-        run: |
-          if ! git diff --exit-code; then
-            echo "::error::Generated schema files are out of sync with Rust types"
-            echo "::error::Please run 'pnpm generate-schema' in packages/turbo-types and commit the changes"
-            git diff
-            exit 1
-          fi
-
-  rust_test_macos:
-    runs-on: macos-15-xlarge
-    timeout-minutes: 15
+      # For the OIDC token exchanged for a Remote Cache access token.
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest-8-core-oss
+          - name: macos
+            runner: macos-15-xlarge
+          - name: windows
+            runner: windows-latest-8-core-oss
     env:
       CARGO_INCREMENTAL: 0
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on macos
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
-          package-install: "false"
-
-      - name: Install Bun
-        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
-
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
-        with:
-          tool: nextest
-
-      - name: Run tests
-        timeout-minutes: 15
-        run: |
-          cargo nextest run --workspace \
-            --exclude turborepo-lsp \
-            --exclude turborepo-schema-gen \
-            --exclude turborepo-napi \
-            --no-fail-fast
-        shell: bash
-
-  rust_test_windows:
-    runs-on: windows-latest-8-core-oss
-    timeout-minutes: 15
-    env:
-      CARGO_INCREMENTAL: 0
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on windows
+      # PRs read the remote cache but cannot write to it; pushes to main
+      # populate it.
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw,remote:r' || 'remote:rw' }}
+      # Snapshot tests need a stable workspace root on Windows; harmless
+      # (and correct) elsewhere.
+      INSTA_WORKSPACE_ROOT: ${{ github.workspace }}
     steps:
       - name: Install git (Windows larger runners)
+        if: matrix.os.name == 'windows'
         shell: cmd
         run: |
           where git >nul 2>nul
@@ -289,11 +65,9 @@ jobs:
           echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
 
       - name: Set git to use LF line endings
-        # Ensures the turborepo source code is checked out with LF endings
-        # so the Rust build and test fixtures work correctly. Turbo's CRLF
-        # normalization is driven by .gitattributes (not core.autocrlf).
-        # Tests create CRLF content directly and configure repos per-test —
-        # see turborepo-scm's crlf.rs and package_deps.rs CRLF tests.
+        # .gitattributes drives turbo's CRLF handling; tests create CRLF
+        # content deliberately (see turborepo-scm's crlf.rs).
+        if: matrix.os.name == 'windows'
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
@@ -303,84 +77,34 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
+      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+      # Fork PRs cannot mint OIDC tokens; they fall through to local-only
+      # caching.
+      - name: Set up Turborepo Remote Cache
+        continue-on-error: true
+        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
-          # Local archive builds need Rust and capnproto even when remote cache is unavailable.
-          # capnproto: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
-          # rust: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
-          package-install: "false"
-          rust-cache: "true"
-
-      - name: Install Bun
-        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
-
-      - name: Install cargo-nextest
-        shell: cmd
-        run: |
-          curl -L -o "%TEMP%\nextest.zip" "https://get.nexte.st/latest/windows"
-          tar -xf "%TEMP%\nextest.zip" -C "%USERPROFILE%\.cargo\bin"
-
-      - name: Run tests
-        timeout-minutes: 15
-        run: |
-          cargo nextest run --workspace \
-            --exclude turborepo-lsp \
-            --exclude turborepo-schema-gen \
-            --exclude turborepo-napi \
-            --no-fail-fast
-        shell: bash
-        env:
-          INSTA_WORKSPACE_ROOT: ${{ github.workspace }}
-
-  rust_test_ubuntu:
-    runs-on: ubuntu-latest-8-core-oss
-    timeout-minutes: 15
-    env:
-      CARGO_INCREMENTAL: 0
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on ubuntu
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
+          team: ${{ vars.TURBO_TEAM }}
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
-          package-install: "false"
 
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
 
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
-        with:
-          tool: nextest
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
 
-      - name: Run tests
-        timeout-minutes: 15
-        run: |
-          cargo nextest run --workspace \
-            --exclude turborepo-lsp \
-            --exclude turborepo-schema-gen \
-            --exclude turborepo-napi \
-            --no-fail-fast
-        shell: bash
+      - name: Test
+        run: turbo run test check-types check-lockfiles --continue --env-mode=loose --color
 
   check-examples:
     name: Check examples
     timeout-minutes: 40
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && github.event_name == 'push' }}
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -395,8 +119,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
-      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
       - name: Set up Turborepo Remote Cache
         uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
         with:
@@ -425,178 +147,26 @@ jobs:
       - name: Run examples check
         run: turbo run check-examples --filter=turborepo-examples --env-mode=strict
 
-  check-lockfiles:
-    name: Integration - Lockfile parsers
-    timeout-minutes: 15
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      # For the OIDC token exchanged for a Remote Cache access token.
-      id-token: write
-    env:
-      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
-      CARGO_INCREMENTAL: 0
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-
-      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
-      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
-      # Push events only: fork PRs cannot mint OIDC tokens, and PR runs use
-      # the local cache anyway.
-      - name: Set up Turborepo Remote Cache
-        if: github.event_name == 'push'
-        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
-        with:
-          team: ${{ vars.TURBO_TEAM }}
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install Bun
-        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
-
-      - name: Build turbo binary
-        run: cargo build
-
-      - name: Run lockfile tests
-        run: pnpm check-lockfiles
-        working-directory: lockfile-tests
-
-  js_native_packages:
-    name: "@turbo/repository (${{matrix.os.name}}, Node ${{matrix.node-version}})"
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.native-lib == 'true' }}
-    timeout-minutes: 15
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - name: ubuntu
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
-        node-version:
-          - 18
-          - 20
-          - 22
-          - 24
-    permissions:
-      contents: read
-      # For the OIDC token exchanged for a Remote Cache access token.
-      id-token: write
-    env:
-      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
-    steps:
-      - name: Determine fetch depth
-        id: fetch-depth
-        run: |
-          echo "depth=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> $GITHUB_OUTPUT
-
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          ref: ${{ github.ref }}
-          fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
-          persist-credentials: false
-
-      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
-      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
-      # Push events only: fork PRs cannot mint OIDC tokens, and PR runs use
-      # the local cache anyway.
-      - name: Set up Turborepo Remote Cache
-        if: github.event_name == 'push'
-        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
-        with:
-          team: ${{ vars.TURBO_TEAM }}
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: ${{ matrix.node-version }}
-
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-
-      - name: Run tests
-        run: |
-          TURBO_API= turbo run test --filter "@turbo/repository" --color --env-mode=strict
-        env:
-          NODE_VERSION: ${{ matrix.node-version }}
-
   summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     if: always()
     needs:
-      - find-changes
-      - turbo_types_check
-      - rust_test_macos
-      - rust_test_windows
-      - rust_test_ubuntu
+      - test
       - check-examples
-      - check-lockfiles
-      - js_native_packages
     steps:
-      - name: Fail if change detection failed
-        if: needs.find-changes.result != 'success'
-        run: exit 1
-
-      - name: Skip for release PR
-        if: needs.find-changes.outputs.is-release-pr == 'true'
+      - name: Check results
         run: |
-          echo "Release PR detected - skipping tests (code already tested on main)"
-
-      - name: Compute info
-        id: info
-        if: needs.find-changes.outputs.is-release-pr != 'true'
-        run: |
-          cancelled=false
-          failure=false
-
-          subjob () {
-            local result=$1
-            if [ "$result" = "cancelled" ]; then
-              cancelled=true
-            elif [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
-              failure=true
+          test_result="${{ needs.test.result }}"
+          examples_result="${{ needs.check-examples.result }}"
+          for result in "$test_result" "$examples_result"; do
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              echo "A required job finished with result: $result"
+              exit 1
             fi
-          }
-
-          subjob ${{needs.turbo_types_check.result}}
-          subjob ${{needs.rust_test_macos.result}}
-          subjob ${{needs.rust_test_windows.result}}
-          subjob ${{needs.rust_test_ubuntu.result}}
-          subjob ${{needs.check-examples.result}}
-          subjob ${{needs.check-lockfiles.result}}
-          subjob ${{needs.js_native_packages.result}}
-
-          if [ "$cancelled" = "true" ]; then
-            echo "cancelled=true" >> $GITHUB_OUTPUT
-          elif [ "$failure" = "true" ]; then
-            echo "failure=true" >> $GITHUB_OUTPUT
-          else
-            echo "success=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Failed
-        if: needs.find-changes.outputs.is-release-pr != 'true' && steps.info.outputs.failure == 'true'
-        run: exit 1
-
-      - name: Succeeded
-        if: needs.find-changes.outputs.is-release-pr != 'true' && steps.info.outputs.success == 'true'
-        run: echo Ok
+          done
+          echo Ok
 
   cleanup:
     name: Cleanup
