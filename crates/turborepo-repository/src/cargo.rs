@@ -528,15 +528,32 @@ impl Toolchain for CargoToolchain {
     ///
     /// These are injected at execution time only and deliberately do not
     /// participate in the task hash: a compile cache is output-transparent,
-    /// so enabling it must not invalidate existing task artifacts. A
-    /// user-supplied `RUSTC_WRAPPER` (which does participate, via
-    /// [`HASHED_ENV_VARS`]) suppresses this injection entirely — see
-    /// [`Toolchain::compile_cache_env`].
+    /// so enabling it must not invalidate existing task artifacts.
+    ///
+    /// Composition with the task environment:
+    ///
+    /// - A pre-existing `RUSTC_WRAPPER` or any `SCCACHE_*` variable signals a
+    ///   competing compiler-cache configuration; injecting on top of it could
+    ///   hijack that setup's backend, so the whole set stands down.
+    ///   (`RUSTC_WRAPPER` participates in task hashes via [`HASHED_ENV_VARS`],
+    ///   so a user wrapper also invalidates caches — the injected one
+    ///   deliberately does not.)
+    /// - A pre-existing `CARGO_INCREMENTAL` is common CI hygiene, not a
+    ///   competing cache: the rest is injected and the explicit value is left
+    ///   alone. (When absent, `CARGO_INCREMENTAL=0` is injected because sccache
+    ///   cannot cache incrementally-compiled crates.)
     fn compile_cache_env(
         &self,
         endpoint: &toolchain::CompileCacheEndpoint,
+        task_env: &std::collections::HashMap<String, String>,
     ) -> Vec<(String, String)> {
-        vec![
+        if task_env.contains_key("RUSTC_WRAPPER")
+            || task_env.keys().any(|key| key.starts_with("SCCACHE_"))
+        {
+            return Vec::new();
+        }
+
+        let mut vars = vec![
             ("RUSTC_WRAPPER".to_string(), endpoint.wrapper.clone()),
             (
                 toolchain::COMPILE_CACHE_WRAPPER_ENV.to_string(),
@@ -548,8 +565,11 @@ impl Toolchain for CargoToolchain {
                 "SCCACHE_SERVER_PORT".to_string(),
                 endpoint.server_port.to_string(),
             ),
-            ("CARGO_INCREMENTAL".to_string(), "0".to_string()),
-        ]
+        ];
+        if !task_env.contains_key("CARGO_INCREMENTAL") {
+            vars.push(("CARGO_INCREMENTAL".to_string(), "0".to_string()));
+        }
+        vars
     }
 
     fn defines_task(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
@@ -1460,7 +1480,7 @@ checksum = "abc123"
             server_port: 46123,
         };
         assert_eq!(
-            toolchain.compile_cache_env(&endpoint),
+            toolchain.compile_cache_env(&endpoint, &std::collections::HashMap::new()),
             vec![
                 ("RUSTC_WRAPPER".to_string(), "/path/to/turbo".to_string()),
                 ("TURBO_SCCACHE_WRAPPER".to_string(), "1".to_string()),
@@ -1480,6 +1500,61 @@ checksum = "abc123"
         // user-supplied wrapper invalidates task results (the injected one
         // is execution-only and deliberately does not).
         assert!(HASHED_ENV_VARS.contains(&"RUSTC_WRAPPER"));
+    }
+
+    #[test]
+    fn test_compile_cache_env_stands_down_for_competing_configuration() {
+        let (_tmp, root) = tempdir_root();
+        let toolchain = CargoToolchain::new(root);
+        let endpoint = toolchain::CompileCacheEndpoint {
+            url: "http://127.0.0.1:42123".to_string(),
+            token: "proxy-token".to_string(),
+            wrapper: "/path/to/turbo".to_string(),
+            server_port: 46123,
+        };
+
+        // A user-supplied wrapper wins; injecting SCCACHE_* on top of it
+        // could hijack its backend, so nothing is injected.
+        let env = std::collections::HashMap::from([(
+            "RUSTC_WRAPPER".to_string(),
+            "/home/user/bin/my-wrapper".to_string(),
+        )]);
+        assert!(toolchain.compile_cache_env(&endpoint, &env).is_empty());
+
+        // Any SCCACHE_* variable signals a user-managed sccache setup.
+        let env = std::collections::HashMap::from([(
+            "SCCACHE_GHA_ENABLED".to_string(),
+            "true".to_string(),
+        )]);
+        assert!(toolchain.compile_cache_env(&endpoint, &env).is_empty());
+    }
+
+    #[test]
+    fn test_compile_cache_env_tolerates_ambient_cargo_incremental() {
+        // CI images commonly export CARGO_INCREMENTAL=0 (this repository's
+        // own setup-environment action does). That is ambient hygiene, not
+        // a competing compiler cache: the injection proceeds and the
+        // explicit value is left alone.
+        let (_tmp, root) = tempdir_root();
+        let toolchain = CargoToolchain::new(root);
+        let endpoint = toolchain::CompileCacheEndpoint {
+            url: "http://127.0.0.1:42123".to_string(),
+            token: "proxy-token".to_string(),
+            wrapper: "/path/to/turbo".to_string(),
+            server_port: 46123,
+        };
+        let env =
+            std::collections::HashMap::from([("CARGO_INCREMENTAL".to_string(), "0".to_string())]);
+
+        let vars = toolchain.compile_cache_env(&endpoint, &env);
+        assert!(
+            vars.iter().any(|(key, _)| key == "RUSTC_WRAPPER"),
+            "injection must proceed despite ambient CARGO_INCREMENTAL"
+        );
+        assert!(
+            !vars.iter().any(|(key, _)| key == "CARGO_INCREMENTAL"),
+            "an explicit CARGO_INCREMENTAL must not be overridden"
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]

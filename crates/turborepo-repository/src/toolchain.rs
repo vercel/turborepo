@@ -281,12 +281,22 @@ pub trait Toolchain: Send + Sync {
     /// front of the remote cache that a compiler wrapper like sccache can
     /// use as its storage backend).
     ///
-    /// An empty result means the toolchain has no compile-cache integration
-    /// (the JavaScript default). The executor never applies these variables
-    /// over ones already present in the task's environment: a user-supplied
-    /// configuration (e.g. their own `RUSTC_WRAPPER`) always wins.
-    fn compile_cache_env(&self, endpoint: &CompileCacheEndpoint) -> Vec<(String, String)> {
-        let _ = endpoint;
+    /// `task_env` is the environment the task process will receive; the
+    /// toolchain decides how its injection composes with it. Only the
+    /// toolchain knows which pre-existing variables signal a *competing*
+    /// configuration that must win (e.g. a user-supplied `RUSTC_WRAPPER`)
+    /// versus ones that are merely common ambient settings (e.g. CI images
+    /// exporting `CARGO_INCREMENTAL=0`, which is exactly what the compile
+    /// cache wants anyway). The executor injects the returned variables
+    /// verbatim; an empty result means inject nothing — either no
+    /// integration exists (the JavaScript default) or the toolchain chose
+    /// to stand down.
+    fn compile_cache_env(
+        &self,
+        endpoint: &CompileCacheEndpoint,
+        task_env: &std::collections::HashMap<String, String>,
+    ) -> Vec<(String, String)> {
+        let _ = (endpoint, task_env);
         Vec::new()
     }
 }
