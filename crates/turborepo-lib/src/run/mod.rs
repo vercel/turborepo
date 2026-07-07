@@ -991,12 +991,18 @@ impl Run {
             debug!("sccache compile cache disabled: not running in CI");
             return None;
         }
-        // The compile cache *is* the remote cache; when remote cache use is
-        // off for this run (e.g. `TURBO_CACHE=local:rw` in PR CI, where the
-        // credentials are placeholders), a proxy would only convert every
-        // sccache request into a doomed API call and a logged warning.
-        if !self.opts.cache_opts.cache.remote.should_use() {
-            debug!("sccache compile cache disabled: remote cache is not enabled for this run");
+        // The compile cache *is* the remote cache; gate on the resolved
+        // runtime status, not just configuration. `Disabled` covers config
+        // (e.g. `TURBO_CACHE=local:rw` in PR CI, where credentials are
+        // placeholders); `Unavailable` covers what the preflight learned at
+        // run start (bad credentials, unreachable API, team over limit).
+        // Handing sccache a backend the run already knows is doomed would
+        // make its server refuse to start — its storage self-check failure
+        // is fatal — and every wrapper invocation error out.
+        // (`SCCACHE_IGNORE_SERVER_IO_ERROR` is the second layer of that
+        // defense, for failures that appear mid-run.)
+        if !matches!(self.remote_cache_status, RemoteCacheStatus::Enabled) {
+            debug!("sccache compile cache disabled: remote cache is not available for this run");
             return None;
         }
         let (Some(client), Some(auth)) = (self.api_client.clone(), self.api_auth.clone()) else {

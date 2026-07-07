@@ -538,10 +538,13 @@ impl Toolchain for CargoToolchain {
     ///   (`RUSTC_WRAPPER` participates in task hashes via [`HASHED_ENV_VARS`],
     ///   so a user wrapper also invalidates caches — the injected one
     ///   deliberately does not.)
-    /// - A pre-existing `CARGO_INCREMENTAL` is common CI hygiene, not a
+    /// - A pre-existing `CARGO_INCREMENTAL=0` is common CI hygiene, not a
     ///   competing cache: the rest is injected and the explicit value is left
     ///   alone. (When absent, `CARGO_INCREMENTAL=0` is injected because sccache
-    ///   cannot cache incrementally-compiled crates.)
+    ///   cannot cache incrementally-compiled crates.) Any *other* explicit
+    ///   `CARGO_INCREMENTAL` value stands the set down: incremental compilation
+    ///   was deliberately requested, and sccache's wrapper hard-exits when it
+    ///   sees `CARGO_INCREMENTAL=1`, which would fail the build.
     fn compile_cache_env(
         &self,
         endpoint: &toolchain::CompileCacheEndpoint,
@@ -550,6 +553,10 @@ impl Toolchain for CargoToolchain {
         if task_env.contains_key("RUSTC_WRAPPER")
             || task_env.keys().any(|key| key.starts_with("SCCACHE_"))
         {
+            return Vec::new();
+        }
+        let ambient_incremental = task_env.get("CARGO_INCREMENTAL").map(String::as_str);
+        if ambient_incremental.is_some_and(|value| value != "0") {
             return Vec::new();
         }
 
@@ -565,8 +572,16 @@ impl Toolchain for CargoToolchain {
                 "SCCACHE_SERVER_PORT".to_string(),
                 endpoint.server_port.to_string(),
             ),
+            // The compile cache is an optimization: if the server cannot be
+            // reached or started (storage outage mid-run, port trouble),
+            // the wrapper warns and runs the compiler directly instead of
+            // failing the build.
+            (
+                "SCCACHE_IGNORE_SERVER_IO_ERROR".to_string(),
+                "1".to_string(),
+            ),
         ];
-        if !task_env.contains_key("CARGO_INCREMENTAL") {
+        if ambient_incremental.is_none() {
             vars.push(("CARGO_INCREMENTAL".to_string(), "0".to_string()));
         }
         vars
@@ -1493,6 +1508,10 @@ checksum = "abc123"
                     "proxy-token".to_string()
                 ),
                 ("SCCACHE_SERVER_PORT".to_string(), "46123".to_string()),
+                (
+                    "SCCACHE_IGNORE_SERVER_IO_ERROR".to_string(),
+                    "1".to_string()
+                ),
                 ("CARGO_INCREMENTAL".to_string(), "0".to_string()),
             ]
         );
@@ -1549,12 +1568,19 @@ checksum = "abc123"
         let vars = toolchain.compile_cache_env(&endpoint, &env);
         assert!(
             vars.iter().any(|(key, _)| key == "RUSTC_WRAPPER"),
-            "injection must proceed despite ambient CARGO_INCREMENTAL"
+            "injection must proceed despite ambient CARGO_INCREMENTAL=0"
         );
         assert!(
             !vars.iter().any(|(key, _)| key == "CARGO_INCREMENTAL"),
             "an explicit CARGO_INCREMENTAL must not be overridden"
         );
+
+        // Any other explicit value means incremental compilation was
+        // deliberately requested — incompatible with sccache, whose wrapper
+        // hard-exits on CARGO_INCREMENTAL=1. Stand down entirely.
+        let env =
+            std::collections::HashMap::from([("CARGO_INCREMENTAL".to_string(), "1".to_string())]);
+        assert!(toolchain.compile_cache_env(&endpoint, &env).is_empty());
     }
 
     #[tokio::test(flavor = "multi_thread")]
