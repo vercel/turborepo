@@ -293,10 +293,13 @@ whether anything changed; Cargo decides how and in what order to build.**
   background server captures it at startup and outlives the run: the port
   is derived from the repo root and the bearer token is persisted at
   `.turbo/sccache-proxy-token`. Injection is execution-only and does not
-  participate in task hashes (a compile cache is output-transparent); a
-  user-supplied `RUSTC_WRAPPER` in the task environment suppresses the
-  whole injected set, and every unmet precondition disables the proxy
-  softly. CI-only by design: cold environments are where a compile cache
+  participate in task hashes (a compile cache is output-transparent). The
+  toolchain decides how injection composes with the task environment: a
+  user-supplied `RUSTC_WRAPPER` or any `SCCACHE_*` variable signals a
+  competing compiler-cache configuration and suppresses the whole injected
+  set, while an ambient `CARGO_INCREMENTAL` (CI images commonly export
+  `=0`) is tolerated — injection proceeds without overriding it. Every
+  unmet precondition disables the proxy softly. CI-only by design: cold environments are where a compile cache
   pays off, while local development is served by cargo's own incremental
   compilation — which the injected `CARGO_INCREMENTAL=0` would disable.
   Lifecycle: started in `Run::execute_visitor` before the visitor,

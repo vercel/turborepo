@@ -262,17 +262,17 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             cmd.env("TURBO_MFE_PORT", port.to_string());
         }
 
+        // The toolchain decides how the injection composes with the task's
+        // environment (competing configuration suppresses it, ambient
+        // settings are tolerated) and returns exactly what to inject; see
+        // `Toolchain::compile_cache_env`.
         if let Some(endpoint) = self.compile_cache {
-            match compile_cache_env_to_inject(toolchain.compile_cache_env(endpoint), environment) {
-                Ok(vars) => {
-                    for (key, value) in vars {
-                        cmd.env(key, value);
-                    }
-                }
-                Err(conflict) => debug!(
-                    "not injecting compile cache env for {task_id}: task environment already sets \
-                     {conflict}"
-                ),
+            let vars = toolchain.compile_cache_env(endpoint, environment);
+            if vars.is_empty() {
+                debug!("no compile cache env to inject for {task_id}");
+            }
+            for (key, value) in vars {
+                cmd.env(key, value);
             }
         }
 
@@ -281,29 +281,6 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
         cmd.open_stdin();
 
         Ok(Some(cmd))
-    }
-}
-
-/// The compile-cache variables to apply for a task, given what the
-/// toolchain wants injected
-/// ([`turborepo_repository::toolchain::Toolchain::compile_cache_env`], empty
-/// for toolchains without an integration) and the task's environment.
-///
-/// Never overrides variables the task environment already sets: a
-/// user-supplied configuration (e.g. their own `RUSTC_WRAPPER` pointing at
-/// a different cache) wins, and partially applying ours on top of theirs
-/// could hijack its backend — so one conflicting variable suppresses the
-/// whole set. Returns the conflicting variable name as the error.
-fn compile_cache_env_to_inject(
-    vars: Vec<(String, String)>,
-    environment: &EnvironmentVariableMap,
-) -> Result<Vec<(String, String)>, String> {
-    match vars
-        .iter()
-        .find(|(key, _)| environment.contains_key(key.as_str()))
-    {
-        Some((conflict, _)) => Err(conflict.clone()),
-        None => Ok(vars),
     }
 }
 
@@ -757,51 +734,6 @@ mod tests {
             .command(&task_id, &EnvironmentVariableMap::default())
             .unwrap();
         assert!(cmd.is_none(), "expected no cmd, got {cmd:?}");
-    }
-
-    #[test]
-    fn test_compile_cache_env_injected_when_unconflicted() {
-        let vars = vec![
-            ("RUSTC_WRAPPER".to_owned(), "sccache".to_owned()),
-            ("SCCACHE_WEBDAV_ENDPOINT".to_owned(), "http://x".to_owned()),
-        ];
-        let environment = EnvironmentVariableMap::from(HashMap::from([(
-            "PATH".to_owned(),
-            "/usr/bin".to_owned(),
-        )]));
-        assert_eq!(
-            compile_cache_env_to_inject(vars.clone(), &environment),
-            Ok(vars)
-        );
-    }
-
-    #[test]
-    fn test_compile_cache_env_suppressed_entirely_on_conflict() {
-        // A user-supplied RUSTC_WRAPPER must suppress the whole set:
-        // injecting only SCCACHE_* on top of it could hijack the backend of
-        // the user's own wrapper.
-        let vars = vec![
-            ("RUSTC_WRAPPER".to_owned(), "sccache".to_owned()),
-            ("SCCACHE_WEBDAV_ENDPOINT".to_owned(), "http://x".to_owned()),
-        ];
-        let environment = EnvironmentVariableMap::from(HashMap::from([(
-            "RUSTC_WRAPPER".to_owned(),
-            "/home/user/bin/my-wrapper".to_owned(),
-        )]));
-        assert_eq!(
-            compile_cache_env_to_inject(vars, &environment),
-            Err("RUSTC_WRAPPER".to_owned())
-        );
-    }
-
-    #[test]
-    fn test_empty_compile_cache_env_injects_nothing() {
-        // The JavaScript default: no compile-cache integration.
-        let environment = EnvironmentVariableMap::default();
-        assert_eq!(
-            compile_cache_env_to_inject(Vec::new(), &environment),
-            Ok(Vec::new())
-        );
     }
 
     #[tokio::test]
