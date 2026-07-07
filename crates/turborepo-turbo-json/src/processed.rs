@@ -813,6 +813,27 @@ mod tests {
         assert_matches!(result, Err(Error::OutputPathTraversal { .. }));
     }
 
+    // No literal `..` segment (no shell/URL/unicode decoding happens before
+    // globbing), so these inert literals must not be rejected as traversal.
+    #[test_case("%2e%2e/target.txt" ; "url encoded dots")]
+    #[test_case("．．/target.txt" ; "full width dots")]
+    #[test_case("..\\target.txt" ; "windows backslash")]
+    #[test_case("~/target.txt" ; "leading tilde")]
+    #[test_case("dist/**" ; "ordinary glob")]
+    fn test_processed_outputs_allow_dotdot_lookalikes(input: &str) {
+        let result = ProcessedGlob::from_spanned_output(
+            Spanned::new(UnescapedString::from(input.to_string()))
+                .with_path(Arc::from("turbo.json"))
+                .with_text(format!("\"{}\"", input))
+                .with_range(1..input.len() + 1),
+        );
+
+        assert!(
+            !matches!(result, Err(Error::OutputPathTraversal { .. })),
+            "{input} should not be rejected as path traversal"
+        );
+    }
+
     #[test]
     fn test_processed_outputs_allow_turbo_root() {
         let result = ProcessedGlob::from_spanned_output(Spanned::new(UnescapedString::from(
@@ -822,11 +843,46 @@ mod tests {
         assert!(result.is_ok());
     }
 
+    // A leading absolute path is rejected, but as an absolute-path error rather
+    // than a traversal error.
+    #[test]
+    fn test_processed_outputs_reject_absolute_path() {
+        let absolute_path = if cfg!(windows) {
+            "C:\\win32\\target.txt"
+        } else {
+            "/etc/passwd"
+        };
+        let result =
+            ProcessedGlob::from_spanned_output(Spanned::new(UnescapedString::from(absolute_path)));
+
+        assert_matches!(result, Err(Error::AbsolutePathInConfig { .. }));
+    }
+
     #[test]
     fn test_incremental_outputs_reject_parent_directory_segments() {
         let raw_task = RawTaskDefinition {
             incremental: Some(vec![crate::raw::RawIncrementalPartition {
                 outputs: Some(vec![Spanned::new(UnescapedString::from("../target.txt"))]),
+                ..Default::default()
+            }]),
+            ..Default::default()
+        };
+
+        let result = ProcessedTaskDefinition::from_raw(raw_task, &FutureFlags::default());
+
+        assert_matches!(result, Err(Error::OutputPathTraversal { .. }));
+    }
+
+    // Negated incremental outputs share the same `from_spanned_output` path
+    // (`!` stripped before the segment check), so traversal is still rejected.
+    #[test]
+    fn test_incremental_negated_outputs_reject_parent_directory_segments() {
+        let raw_task = RawTaskDefinition {
+            incremental: Some(vec![crate::raw::RawIncrementalPartition {
+                outputs: Some(vec![
+                    Spanned::new(UnescapedString::from("dist/**")),
+                    Spanned::new(UnescapedString::from("!../../secret.txt")),
+                ]),
                 ..Default::default()
             }]),
             ..Default::default()
