@@ -180,10 +180,11 @@ mod unix {
 
     fn spawn_noninteractive_turbo(test_dir: &Path) -> ChildGuard {
         let mut cmd = Command::new(turbo_bin());
-        cmd.arg("run")
-            .arg("dev")
-            .arg("--filter=app-a")
-            .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+        cmd.arg("run").arg("dev").arg("--filter=app-a");
+        for key in common::ambient_turbo_env_keys() {
+            cmd.env_remove(&key);
+        }
+        cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
             .env("TURBO_PRINT_VERSION_DISABLED", "1")
             .env("DO_NOT_TRACK", "1")
@@ -202,8 +203,11 @@ mod unix {
         cmd.arg(turbo_node_wrapper())
             .arg("run")
             .arg("dev")
-            .arg("--filter=app-a")
-            .env("TURBO_BINARY_PATH", turbo_bin())
+            .arg("--filter=app-a");
+        for key in common::ambient_turbo_env_keys() {
+            cmd.env_remove(&key);
+        }
+        cmd.env("TURBO_BINARY_PATH", turbo_bin())
             .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
             .env("TURBO_PRINT_VERSION_DISABLED", "1")
@@ -258,6 +262,9 @@ mod unix {
         command.arg("dev");
         command.arg("--filter=app-a");
         command.cwd(test_dir);
+        for key in common::ambient_turbo_env_keys() {
+            command.env_remove(&key);
+        }
         command.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1");
         command.env("TURBO_GLOBAL_WARNING_DISABLED", "1");
         command.env("TURBO_PRINT_VERSION_DISABLED", "1");

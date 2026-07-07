@@ -417,7 +417,7 @@ impl TaskCache {
         result: turborepo_ui::tui::event::CacheResult,
     ) {
         if let Some(sender) = tui_sender {
-            sender.status(message, result);
+            sender.status(message, result, self.task_output_logs.into());
         }
         if !message.is_empty() {
             let line = format!("{message}\n");

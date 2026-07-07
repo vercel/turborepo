@@ -574,13 +574,22 @@ impl PnpmLockfile {
         for dependency in pruned_packages.keys() {
             let dp = DepPath::parse(self.version(), dependency.as_str())?;
 
-            let patch_key = format!("{}@{}", dp.name, dp.version);
-            if let Some(patch) = patches.get(&patch_key).filter(|patch| {
+            let hash_matches = |patch: &PatchFile| {
                 // In V7 patch hash isn't included in packages key, so no need to check
                 matches!(self.version(), SupportedLockfileVersion::V7AndV9)
                     || dp.patch_hash() == Some(patch.hash())
-            }) {
+            };
+
+            let patch_key = format!("{}@{}", dp.name, dp.version);
+            if let Some(patch) = patches.get(&patch_key).filter(|patch| hash_matches(patch)) {
                 pruned_patches.insert(patch_key, patch.clone());
+                continue;
+            }
+
+            if let Some((range_key, patch)) = Self::find_version_range_patch(patches, &dp)
+                && hash_matches(patch)
+            {
+                pruned_patches.insert(range_key.clone(), patch.clone());
                 continue;
             }
 
@@ -590,6 +599,31 @@ impl PnpmLockfile {
             }
         }
         Ok(pruned_patches)
+    }
+
+    /// pnpm allows patch keys to target a semver range, e.g. `foo@^2.0.0` or
+    /// `foo@<=2.1.0`. Returns the first patch whose range matches the
+    /// dependency's version.
+    fn find_version_range_patch<'a>(
+        patches: &'a Map<String, PatchFile>,
+        dp: &DepPath,
+    ) -> Option<(&'a String, &'a PatchFile)> {
+        let version = Version::parse(dp.version).ok()?;
+        patches.iter().find(|(key, _)| {
+            let Some(range) = key
+                .strip_prefix(dp.name)
+                .and_then(|rest| rest.strip_prefix('@'))
+            else {
+                return false;
+            };
+            // A bare version key is an exact match in pnpm (handled by the
+            // direct lookup above), not a caret range like VersionReq would
+            // treat it.
+            if Version::parse(range).is_ok() {
+                return false;
+            }
+            semver::VersionReq::parse(range).is_ok_and(|req| req.matches(&version))
+        })
     }
 
     // Create a projection of all fields in the lockfile that could affect all
@@ -2198,6 +2232,129 @@ snapshots:
 
         assert!(packages.contains_key("lodash@4.17.21"));
         assert!(!packages.contains_key("is-odd@3.0.1"));
+        assert_eq!(pruned_lockfile.patched_dependencies, Some(BTreeMap::new()));
+    }
+
+    /// Regression test for https://github.com/vercel/turborepo/issues/13301
+    ///
+    /// pnpm supports semver ranges in `patchedDependencies` keys (e.g.
+    /// `is-odd@<=3.0.1`). Patches whose range matches a package in the pruned
+    /// closure must be kept.
+    #[test]
+    fn test_subgraph_keeps_version_range_patched_dependencies() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+patchedDependencies:
+  is-odd@<=3.0.1:
+    hash: abc
+    path: patches/is-odd.patch
+  '@scope/pkg@^1.0.0':
+    hash: def
+    path: patches/scope-pkg.patch
+  lodash@>=5.0.0:
+    hash: ghi
+    path: patches/lodash.patch
+
+importers:
+
+  .: {}
+
+  apps/web:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+      '@scope/pkg':
+        specifier: 1.2.3
+        version: 1.2.3
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
+
+packages:
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-bbb}
+    patched: true
+
+  '@scope/pkg@1.2.3':
+    resolution: {integrity: sha512-ccc}
+    patched: true
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-aaa}
+
+snapshots:
+
+  is-odd@3.0.1: {}
+
+  '@scope/pkg@1.2.3': {}
+
+  lodash@4.17.21: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/web".to_string()];
+        let resolved_packages = vec![
+            "is-odd@3.0.1".to_string(),
+            "@scope/pkg@1.2.3".to_string(),
+            "lodash@4.17.21".to_string(),
+        ];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+        let patches = pruned_lockfile
+            .patched_dependencies
+            .as_ref()
+            .expect("should have patched dependencies");
+
+        assert!(patches.contains_key("is-odd@<=3.0.1"));
+        assert!(patches.contains_key("@scope/pkg@^1.0.0"));
+        // lodash@4.17.21 does not satisfy >=5.0.0
+        assert!(!patches.contains_key("lodash@>=5.0.0"));
+    }
+
+    /// A bare version patch key is an exact match in pnpm, not a caret range.
+    /// `is-odd@3.0.0` must not apply to `is-odd@3.0.1`.
+    #[test]
+    fn test_subgraph_does_not_treat_exact_patch_key_as_range() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+patchedDependencies:
+  is-odd@3.0.0:
+    hash: abc
+    path: patches/is-odd.patch
+
+importers:
+
+  .: {}
+
+  apps/web:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+
+packages:
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-bbb}
+
+snapshots:
+
+  is-odd@3.0.1: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let pruned = lockfile
+            .subgraph(&["apps/web".to_string()], &["is-odd@3.0.1".to_string()])
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
         assert_eq!(pruned_lockfile.patched_dependencies, Some(BTreeMap::new()));
     }
 

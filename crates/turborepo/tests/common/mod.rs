@@ -28,6 +28,25 @@ pub fn turbo_output_filters() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
+/// Env keys in the test process that can carry real turbo configuration
+/// into spawned turbo children — TURBO_TEAM/TURBO_TOKEN exported by CI
+/// credential steps, VERCEL_ARTIFACTS_* on Vercel builds, or a developer's
+/// local settings. Tests assert against turbo's defaults, so every harness
+/// that spawns turbo must remove these before applying its own vars;
+/// per-test overrides (explicit env sets after removal) still win because
+/// later ops on a key replace earlier ones.
+pub fn ambient_turbo_env_keys() -> Vec<std::ffi::OsString> {
+    std::env::vars_os()
+        .map(|(key, _)| key)
+        .filter(|key| {
+            let key = key.to_string_lossy();
+            key.starts_with("TURBO_")
+                || key == "VERCEL_ARTIFACTS_OWNER"
+                || key == "VERCEL_ARTIFACTS_TOKEN"
+        })
+        .collect()
+}
+
 /// Return a pre-configured `Command` for the turbo binary with all standard
 /// env var suppression applied. Callers can chain `.arg()`, `.env()`, etc.
 /// before calling `.output()`.
@@ -37,6 +56,9 @@ pub fn turbo_command(test_dir: &Path) -> assert_cmd::Command {
     if corepack_dir.exists() {
         cmd.env("PATH", setup::prepend_to_path(&corepack_dir))
             .env("COREPACK_HOME", setup::corepack_home());
+    }
+    for key in ambient_turbo_env_keys() {
+        cmd.env_remove(&key);
     }
     cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
         .env("TURBO_GLOBAL_WARNING_DISABLED", "1")

@@ -21,6 +21,10 @@ pub enum Event {
         task: String,
         status: String,
         result: CacheResult,
+        /// The task's configured output verbosity. Carried here (in
+        /// addition to `StartTask`) because cache hits finish without ever
+        /// starting, and log persistence must still respect the setting.
+        output_logs: OutputLogs,
     },
     PaneSizeQuery(oneshot::Sender<PaneSize>),
     Stop(oneshot::Sender<()>),

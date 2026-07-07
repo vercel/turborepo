@@ -68,12 +68,19 @@ impl TuiSender {
         self.primary.send(Event::EndTask { task, result }).ok();
     }
 
-    pub fn status(&self, task: String, status: String, result: CacheResult) {
+    pub fn status(
+        &self,
+        task: String,
+        status: String,
+        result: CacheResult,
+        output_logs: OutputLogs,
+    ) {
         self.primary
             .send(Event::Status {
                 task,
                 status,
                 result,
+                output_logs,
             })
             .ok();
     }
