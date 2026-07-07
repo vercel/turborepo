@@ -113,6 +113,9 @@ fn spawn_turbo_watch_with_tasks_and_stdio(
     for task in tasks {
         cmd.arg(task);
     }
+    for key in common::ambient_turbo_env_keys() {
+        cmd.env_remove(&key);
+    }
     cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
         .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
