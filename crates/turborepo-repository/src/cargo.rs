@@ -544,6 +544,10 @@ impl Toolchain for CargoToolchain {
             ),
             ("SCCACHE_WEBDAV_ENDPOINT".to_string(), endpoint.url.clone()),
             ("SCCACHE_WEBDAV_TOKEN".to_string(), endpoint.token.clone()),
+            (
+                "SCCACHE_SERVER_PORT".to_string(),
+                endpoint.server_port.to_string(),
+            ),
             ("CARGO_INCREMENTAL".to_string(), "0".to_string()),
         ]
     }
@@ -1453,6 +1457,7 @@ checksum = "abc123"
             url: "http://127.0.0.1:42123".to_string(),
             token: "proxy-token".to_string(),
             wrapper: "/path/to/turbo".to_string(),
+            server_port: 46123,
         };
         assert_eq!(
             toolchain.compile_cache_env(&endpoint),
@@ -1467,6 +1472,7 @@ checksum = "abc123"
                     "SCCACHE_WEBDAV_TOKEN".to_string(),
                     "proxy-token".to_string()
                 ),
+                ("SCCACHE_SERVER_PORT".to_string(), "46123".to_string()),
                 ("CARGO_INCREMENTAL".to_string(), "0".to_string()),
             ]
         );
