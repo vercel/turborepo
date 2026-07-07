@@ -1,8 +1,10 @@
 name: Test
 
-# One job per OS, one turbo invocation per job. No hand-rolled path
-# filters: the task graph knows what changed. PRs read main's remote
-# cache (fork PRs degrade to local-only); pushes to main populate it.
+# Fixed matrices, one turbo invocation per job, no scheduling analysis:
+# the task graph and its cache decide what actually executes. Rust tests
+# run on every supported platform, JS tests on every supported Node.js
+# version. PRs read main's remote cache (fork PRs degrade to
+# local-only); pushes to main populate it.
 
 on:
   pull_request:
@@ -17,54 +19,9 @@ permissions:
   contents: read
 
 jobs:
-  # Everything runs on ubuntu; only the Rust workspace tests are
-  # platform-sensitive enough to repeat elsewhere (see rust-test).
-  test:
-    name: Test
-    runs-on: ubuntu-latest-8-core-oss
-    timeout-minutes: 45
-    permissions:
-      contents: read
-      # For the OIDC token exchanged for a Remote Cache access token.
-      id-token: write
-    env:
-      CARGO_INCREMENTAL: 0
-      # PRs read the remote cache but cannot write to it; pushes to main
-      # populate it.
-      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw,remote:r' || 'remote:rw' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-
-      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
-      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
-      # Fork PRs cannot mint OIDC tokens; they fall through to local-only
-      # caching.
-      - name: Set up Turborepo Remote Cache
-        continue-on-error: true
-        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
-        with:
-          team: ${{ vars.TURBO_TEAM }}
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Install Bun
-        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
-
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-
-      - name: Test
-        run: turbo run test check-types check-lockfiles --continue --env-mode=loose --color
-
-  # The Rust workspace tests repeated on the platforms ubuntu can't vouch
-  # for. `cargo` is the synthetic package the Cargo toolchain anchors at
-  # the workspace root; its `test` task is `cargo test --workspace`.
+  # The Rust workspace tests on every supported platform. `cargo` is the
+  # synthetic package the Cargo toolchain anchors at the workspace root;
+  # its `test` task is `cargo test --workspace`.
   rust-test:
     name: Rust tests (${{ matrix.os.name }})
     runs-on: ${{ matrix.os.runner }}
@@ -77,6 +34,8 @@ jobs:
       fail-fast: false
       matrix:
         os:
+          - name: ubuntu
+            runner: ubuntu-latest-8-core-oss
           - name: macos
             runner: macos-15-xlarge
           - name: windows
@@ -147,6 +106,102 @@ jobs:
       - name: Test
         run: turbo run test --filter=cargo --env-mode=loose --color
 
+  # JS package tests on every Node.js version we support. `test` is a
+  # no-op for crate packages (only the synthetic `cargo` package defines
+  # it), so excluding it leaves exactly the JS side of the graph — while
+  # dependencies like the napi crate build still run when needed.
+  js-test:
+    name: JS tests (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest-8-core-oss
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      # For the OIDC token exchanged for a Remote Cache access token.
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18, 20, 22, 24]
+    env:
+      CARGO_INCREMENTAL: 0
+      # PRs read the remote cache but cannot write to it; pushes to main
+      # populate it.
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw,remote:r' || 'remote:rw' }}
+      # Declared on the test task in turbo.json, so each Node version
+      # caches independently.
+      NODE_VERSION: ${{ matrix.node-version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+      # Fork PRs cannot mint OIDC tokens; they fall through to local-only
+      # caching.
+      - name: Set up Turborepo Remote Cache
+        continue-on-error: true
+        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
+        with:
+          team: ${{ vars.TURBO_TEAM }}
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Test
+        run: turbo run test --filter=!cargo --continue --env-mode=loose --color
+
+  # Version-independent checks, run once.
+  checks:
+    name: Checks
+    runs-on: ubuntu-latest-8-core-oss
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      # For the OIDC token exchanged for a Remote Cache access token.
+      id-token: write
+    env:
+      CARGO_INCREMENTAL: 0
+      # PRs read the remote cache but cannot write to it; pushes to main
+      # populate it.
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw,remote:r' || 'remote:rw' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+      # Fork PRs cannot mint OIDC tokens; they fall through to local-only
+      # caching.
+      - name: Set up Turborepo Remote Cache
+        continue-on-error: true
+        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
+        with:
+          team: ${{ vars.TURBO_TEAM }}
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Check
+        run: turbo run check-types check-lockfiles --continue --env-mode=loose --color
+
   check-examples:
     name: Check examples
     timeout-minutes: 40
@@ -199,16 +254,18 @@ jobs:
     timeout-minutes: 5
     if: always()
     needs:
-      - test
       - rust-test
+      - js-test
+      - checks
       - check-examples
     steps:
       - name: Check results
         run: |
-          test_result="${{ needs.test.result }}"
-          rust_result="${{ needs.rust-test.result }}"
-          examples_result="${{ needs.check-examples.result }}"
-          for result in "$test_result" "$rust_result" "$examples_result"; do
+          for result in \
+            "${{ needs.rust-test.result }}" \
+            "${{ needs.js-test.result }}" \
+            "${{ needs.checks.result }}" \
+            "${{ needs.check-examples.result }}"; do
             if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
               echo "A required job finished with result: $result"
               exit 1
