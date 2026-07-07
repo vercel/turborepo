@@ -79,11 +79,17 @@ impl EngineExt for Engine<Built> {
             })
             .filter_map(|task| {
                 let pkg_name = PackageName::from(task.package());
-                let json = pkg_graph.package_json(&pkg_name)?;
-                // TODO: delegate to command factory to filter down tasks to those that will
-                // have a runnable command.
-                (task.task() == "proxy" || json.command(task.task()).is_some())
-                    .then(|| task.to_string())
+                let info = pkg_graph.package_info(&pkg_name)?;
+                // Ask the package's toolchain whether the task resolves to a
+                // runnable command — the same authority execution uses. For
+                // JS packages this is the package.json scripts lookup; for
+                // Cargo packages it consults the verb tables, so toolchain
+                // tasks appear in the TUI task list.
+                let defines_task = pkg_graph
+                    .toolchains()
+                    .get(&info.toolchain)
+                    .is_some_and(|toolchain| toolchain.defines_task(info, task.task()));
+                (task.task() == "proxy" || defines_task).then(|| task.to_string())
             })
             .collect()
     }
@@ -301,6 +307,67 @@ mod test {
         > {
             self.discover_packages().await
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_tasks_with_command_asks_toolchains() {
+        // The TUI task list must come from the same authority execution
+        // uses: the package's toolchain. JS packages resolve via
+        // package.json scripts; Cargo packages resolve via the toolchain's
+        // verb tables — no scripts anywhere.
+        let tmp = tempfile::TempDir::with_prefix("tasks_with_command").unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+
+        // A minimal Cargo workspace with one binary crate.
+        root.join_component("Cargo.toml")
+            .create_with_contents("[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n")
+            .unwrap();
+        let crate_dir = root.join_components(&["crates", "my-crate"]);
+        crate_dir.join_component("src").create_dir_all().unwrap();
+        crate_dir
+            .join_component("Cargo.toml")
+            .create_with_contents(
+                "[package]\nname = \"my-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            )
+            .unwrap();
+        crate_dir
+            .join_components(&["src", "main.rs"])
+            .create_with_contents("fn main() {}\n")
+            .unwrap();
+
+        let mut engine: Engine<Building> = Engine::new();
+        for (package, task) in [
+            // JS package with a build script (DummyDiscovery gives "a" one).
+            ("a", "build"),
+            // JS package without any scripts.
+            ("c", "build"),
+            // The synthetic Cargo workspace package.
+            ("cargo", "test"),
+            // A binary crate.
+            ("my-crate", "build"),
+        ] {
+            let task_id = TaskId::new(package, task);
+            engine.get_index(&task_id);
+            engine.add_definition(task_id, TaskDefinition::default());
+        }
+        let engine = engine.seal();
+
+        let graph = PackageGraph::builder(root, PackageJson::default())
+            .with_package_discovery(DummyDiscovery(
+                turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+            ))
+            .with_toolchain(turborepo_repository::cargo::CargoToolchain::new(
+                root.to_owned(),
+            ))
+            .build()
+            .await
+            .unwrap();
+
+        let mut tasks = engine.tasks_with_command(&graph);
+        tasks.sort();
+        // "c#build" is absent: no script defines it. Both Cargo tasks are
+        // present without any package.json involvement.
+        assert_eq!(tasks, vec!["a#build", "cargo#test", "my-crate#build"]);
     }
 
     #[tokio::test]
