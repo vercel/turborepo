@@ -1057,7 +1057,6 @@ dependencies = [
  "anstyle",
  "clap_lex",
  "strsim",
- "terminal_size",
 ]
 
 [[package]]
@@ -1792,7 +1791,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users 0.5.2",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5352,7 +5351,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "343d3bd7056eda839b03204e68deff7d1b13aba7af2b2fd16890697274262ee7"
 dependencies = [
  "heck",
- "itertools 0.14.0",
+ "itertools 0.10.5",
  "log",
  "multimap",
  "petgraph 0.8.3",
@@ -5386,7 +5385,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27c6023962132f4b30eb4c172c91ce92d933da334c59c23cddee82358ddafb0b"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -6032,7 +6031,7 @@ dependencies = [
 [[package]]
 name = "sccache"
 version = "0.16.0"
-source = "git+https://github.com/vercel/sccache?rev=2ae38fb94790cc8534e0fb9d7eef83dd95986a71#2ae38fb94790cc8534e0fb9d7eef83dd95986a71"
+source = "git+https://github.com/vercel/sccache?rev=8da042dcbff2c1269dcb491ef9127823563f76cb#8da042dcbff2c1269dcb491ef9127823563f76cb"
 dependencies = [
  "anyhow",
  "ar",
