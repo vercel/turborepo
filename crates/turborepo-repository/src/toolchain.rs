@@ -303,6 +303,11 @@ pub struct CompileCacheEndpoint {
     /// `turbo` binary itself, which embeds sccache and dispatches wrapper
     /// invocations to it (see [`COMPILE_CACHE_WRAPPER_ENV`]).
     pub wrapper: String,
+    /// Port for the compile cache's background server, stable per
+    /// repository. Isolates turbo's server from any user- or image-managed
+    /// sccache server on the global default port, whose storage
+    /// configuration would otherwise capture turbo's wrapper traffic.
+    pub server_port: u16,
 }
 
 /// Environment variable marking task processes whose `RUSTC_WRAPPER` is the

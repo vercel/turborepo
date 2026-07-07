@@ -33,10 +33,9 @@ use std::sync::Arc;
 use axum::{
     Router,
     body::Body,
-    extract::{Path, State},
+    extract::State,
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
-    routing::head,
 };
 use sha2::{Digest, Sha256};
 use tokio::net::TcpListener;
@@ -77,6 +76,18 @@ pub fn derive_port(repo_root: &AbsoluteSystemPath) -> u16 {
     // Two bytes of the digest are ample for a 3000-slot range.
     let n = u16::from_be_bytes([digest[0], digest[1]]);
     PORT_RANGE_START + (n % PORT_RANGE_LEN)
+}
+
+/// Derive the port for the sccache background server itself
+/// (`SCCACHE_SERVER_PORT`), also stable per repository but distinct from
+/// the proxy port. Without this, sccache uses its global default (4226):
+/// a developer's or CI image's own sccache server would then capture
+/// turbo's wrapper traffic with whatever storage *it* was started with,
+/// silently bypassing the Remote Cache — and vice versa.
+pub fn derive_server_port(repo_root: &AbsoluteSystemPath) -> u16 {
+    let digest = Sha256::digest(repo_root.as_str().as_bytes());
+    let n = u16::from_be_bytes([digest[2], digest[3]]);
+    PORT_RANGE_START + PORT_RANGE_LEN + (n % PORT_RANGE_LEN)
 }
 
 /// Load the per-repository bearer token, creating it on first use.
@@ -172,9 +183,12 @@ impl SccacheProxyServer {
             auth,
             expected_authorization: format!("Bearer {token}"),
         });
-        let router = Router::new()
-            .route("/{*key}", head(handle_head).get(handle_get).put(handle_put))
-            .with_state(state);
+        // A single fallback dispatcher rather than per-method routes: the
+        // webdav surface opendal (sccache's storage client) speaks includes
+        // extension methods (`PROPFIND`, `MKCOL`) that axum's method routers
+        // don't cover, plus the root path `/` that a `/{*key}` wildcard
+        // doesn't match.
+        let router = Router::new().fallback(handle_request).with_state(state);
 
         let (shutdown_tx, _) = tokio::sync::broadcast::channel(1);
         Ok(Self {
@@ -218,14 +232,106 @@ fn authorized(state: &ProxyState, headers: &HeaderMap) -> bool {
         .is_some_and(|value| value == state.expected_authorization)
 }
 
-async fn handle_get(
+/// Dispatch a request by method. opendal's webdav backend (sccache's
+/// storage client) uses `GET` for reads, but its write path first stats
+/// ancestor "directories" with `PROPFIND` and creates them with `MKCOL`
+/// before `PUT`ting the object. The Remote Cache is a flat object store, so
+/// collections are purely virtual: `MKCOL` always succeeds and `PROPFIND`
+/// reports every directory-shaped path as an existing collection.
+async fn handle_request(
     State(state): State<Arc<ProxyState>>,
-    Path(key): Path<String>,
-    headers: HeaderMap,
+    request: axum::extract::Request,
 ) -> Response {
-    if !authorized(&state, &headers) {
+    let (parts, body) = request.into_parts();
+    if !authorized(&state, &parts.headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+    let key = parts.uri.path().trim_start_matches('/').to_string();
+
+    match parts.method.as_str() {
+        "GET" => handle_get(state, key).await,
+        "HEAD" => handle_head(state, key).await,
+        "PUT" => {
+            let body = match axum::body::to_bytes(body, MAX_OBJECT_SIZE).await {
+                Ok(bytes) => bytes,
+                Err(err) => {
+                    warn!("sccache proxy rejected body for key {key}: {err}");
+                    return StatusCode::PAYLOAD_TOO_LARGE.into_response();
+                }
+            };
+            handle_put(state, key, body).await
+        }
+        "MKCOL" => StatusCode::CREATED.into_response(),
+        "PROPFIND" => handle_propfind(state, key).await,
+        "OPTIONS" => (
+            [(header::ALLOW, "OPTIONS, GET, HEAD, PUT, MKCOL, PROPFIND")],
+            "",
+        )
+            .into_response(),
+        _ => StatusCode::METHOD_NOT_ALLOWED.into_response(),
+    }
+}
+
+/// Compilation units are single objects; anything larger than this is not a
+/// plausible cache entry.
+const MAX_OBJECT_SIZE: usize = 512 * 1024 * 1024;
+
+/// Minimal WebDAV `207 Multistatus` answer for a stat. Directory-shaped
+/// paths (root or trailing slash) always exist as collections; object paths
+/// are answered from the Remote Cache.
+async fn handle_propfind(state: Arc<ProxyState>, key: String) -> Response {
+    fn multistatus(href: &str, resourcetype: &str, content_length: Option<u64>) -> Response {
+        // The cache has no meaningful mtimes; opendal's parser requires the
+        // field to be present, not truthful.
+        let length_prop = content_length
+            .map(|len| format!("<D:getcontentlength>{len}</D:getcontentlength>"))
+            .unwrap_or_default();
+        let body = format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>/{href}</D:href>
+    <D:propstat>
+      <D:prop>
+        <D:resourcetype>{resourcetype}</D:resourcetype>
+        <D:getlastmodified>Thu, 01 Jan 1970 00:00:00 GMT</D:getlastmodified>
+        {length_prop}
+      </D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+</D:multistatus>"#
+        );
+        (
+            StatusCode::MULTI_STATUS,
+            [(header::CONTENT_TYPE, "application/xml; charset=utf-8")],
+            body,
+        )
+            .into_response()
+    }
+
+    if key.is_empty() || key.ends_with('/') {
+        return multistatus(&key, "<D:collection/>", None);
+    }
+    let id = artifact_id_for_key(&key);
+    match state
+        .client
+        .artifact_exists(&id, state.token(), state.team_id(), state.team_slug())
+        .await
+    {
+        Ok(Some(response)) => {
+            let content_length = response.content_length();
+            multistatus(&key, "", content_length.or(Some(0)))
+        }
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(err) => {
+            warn!("sccache proxy stat failed for key {key}: {err}");
+            StatusCode::BAD_GATEWAY.into_response()
+        }
+    }
+}
+
+async fn handle_get(state: Arc<ProxyState>, key: String) -> Response {
     let id = artifact_id_for_key(&key);
     match state
         .client
@@ -247,14 +353,7 @@ async fn handle_get(
     }
 }
 
-async fn handle_head(
-    State(state): State<Arc<ProxyState>>,
-    Path(key): Path<String>,
-    headers: HeaderMap,
-) -> Response {
-    if !authorized(&state, &headers) {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
+async fn handle_head(state: Arc<ProxyState>, key: String) -> Response {
     let id = artifact_id_for_key(&key);
     match state
         .client
@@ -270,15 +369,7 @@ async fn handle_head(
     }
 }
 
-async fn handle_put(
-    State(state): State<Arc<ProxyState>>,
-    Path(key): Path<String>,
-    headers: HeaderMap,
-    body: bytes::Bytes,
-) -> Response {
-    if !authorized(&state, &headers) {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
+async fn handle_put(state: Arc<ProxyState>, key: String, body: bytes::Bytes) -> Response {
     let id = artifact_id_for_key(&key);
     let len = body.len();
     let stream = futures::stream::once(async move { Ok(body) });
@@ -374,6 +465,64 @@ mod tests {
         let port = derive_port(root);
         assert_eq!(port, derive_port(root));
         assert!((PORT_RANGE_START..PORT_RANGE_START + PORT_RANGE_LEN).contains(&port));
+    }
+
+    #[test]
+    fn derived_server_port_is_stable_and_disjoint_from_proxy_range() {
+        let root = if cfg!(windows) {
+            AbsoluteSystemPath::new("C:\\some\\repo").expect("path")
+        } else {
+            AbsoluteSystemPath::new("/some/repo").expect("path")
+        };
+        let port = derive_server_port(root);
+        assert_eq!(port, derive_server_port(root));
+        assert!(
+            (PORT_RANGE_START + PORT_RANGE_LEN..PORT_RANGE_START + 2 * PORT_RANGE_LEN)
+                .contains(&port)
+        );
+        assert_ne!(port, derive_port(root));
+        // Never sccache's global default, which a user-managed server may own.
+        assert_ne!(port, 4226);
+    }
+
+    /// The proxy must be writable and readable through the exact webdav
+    /// client sccache uses (opendal), whose write path stats ancestors with
+    /// PROPFIND and creates them with MKCOL before PUT. Hand-rolled HTTP in
+    /// the other tests would not catch a missing method — this is the test
+    /// for the 100%-write-failure bug found in dogfooding.
+    #[tokio::test]
+    async fn opendal_webdav_client_round_trip() {
+        let (backend_port, backend) = start_backend().await;
+        let bearer = "opendal-test-token";
+        let (server, port) = start_proxy(backend_port, bearer).await;
+        let shutdown = server.shutdown_handle();
+        let proxy = tokio::spawn(server.run());
+
+        let builder = opendal::services::Webdav::default()
+            .endpoint(&format!("http://127.0.0.1:{port}"))
+            .token(bearer);
+        let op = opendal::Operator::new(builder).expect("operator").finish();
+
+        // sccache's startup check writes and reads a probe object.
+        op.write(".sccache_check", "a".as_bytes())
+            .await
+            .expect("probe write through opendal");
+
+        // Fan-out shaped key, exactly like sccache cache entries.
+        let key = "b/2/1/b21968b0f44324b39f68e21c5a8c2eb7608964f9089a2e19d35710b33fa7c4cb";
+        assert!(
+            op.read(key).await.is_err(),
+            "read before write must be a miss"
+        );
+        op.write(key, "object bytes".as_bytes())
+            .await
+            .expect("cache write through opendal");
+        let read = op.read(key).await.expect("cache read through opendal");
+        assert_eq!(read.to_bytes().as_ref(), b"object bytes");
+
+        let _ = shutdown.send(());
+        let _ = proxy.await;
+        backend.abort();
     }
 
     #[test]
