@@ -140,6 +140,7 @@ mod tests {
             with: None,
             experimental_ci: None,
             incremental: None,
+            command: None,
         },
         TaskDefinition {
           env: vec!["OS".to_string()],
@@ -192,6 +193,7 @@ mod tests {
             with: None,
             experimental_ci: None,
             incremental: None,
+            command: None,
         },
         TaskDefinition {
             env: vec!["OS".to_string()],

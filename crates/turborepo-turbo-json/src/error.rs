@@ -289,6 +289,99 @@ pub enum Error {
         text: NamedSource<String>,
     },
 
+    #[error(
+        "The `command` field requires `futureFlags.experimentalTaskCommand` in the root \
+         turbo.json."
+    )]
+    TaskCommandRequiresFlag {
+        #[label("`command` used here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error("Unknown toolchain {key:?} in `command`. {hint}")]
+    TaskCommandUnknownToolchain {
+        key: String,
+        hint: String,
+        #[label("unknown toolchain")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error(
+        "`command` defines both {alias:?} and {canonical:?} — these are the same toolchain. Use \
+         one key."
+    )]
+    TaskCommandAliasConflict {
+        alias: String,
+        canonical: String,
+        #[label("same toolchain as {canonical}")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error(
+        "The {key:?} toolchain in `command` requires `futureFlags.experimentalCargoWorkspaces`."
+    )]
+    TaskCommandToolchainRequiresFlag {
+        key: String,
+        #[label("toolchain is not enabled")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error(
+        "`command` arguments cannot be empty strings. Remove the empty element or replace it with \
+         a real argument."
+    )]
+    TaskCommandEmptyArgument {
+        #[label("empty argument")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error(
+        "`{token}` is not supported in `command`. A command is atomic: define the whole argv in \
+         one place."
+    )]
+    TaskCommandNoExtends {
+        token: String,
+        #[label("unsupported token")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error(
+        "The per-toolchain map form of `command` is only valid on unscoped root tasks. \
+         \"{task_name}\" already determines its package's toolchain — use an argv array."
+    )]
+    TaskCommandMapInScopedPosition {
+        task_name: String,
+        #[label("use an array here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error(
+        "A `command` opt-out (`null` or `[]`) is only valid in package-scoped positions. An \
+         unscoped default of nothing is meaningless — omit `command` instead, or opt out \
+         per-package (e.g. \"my-package#{task_name}\")."
+    )]
+    TaskCommandOptOutUnscoped {
+        task_name: String,
+        #[label("opt-out on an unscoped task")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
     #[error("Invalid inputs for task.\n\n{message}")]
     StructuredInput {
         message: String,

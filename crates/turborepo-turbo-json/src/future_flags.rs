@@ -112,6 +112,14 @@ pub struct FutureFlags {
     #[serde(default)]
     #[schemars(skip)]
     pub experimental_cargo_sccache: bool,
+    /// Allow task definitions to declare the command they run via the
+    /// `command` field, replacing the toolchain's own resolution
+    /// (package.json scripts, Cargo verb tables). Using `command` without
+    /// this flag is a hard error — silently ignoring it would change what
+    /// executes.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub experimental_task_command: bool,
 }
 
 // Manual TS impl because #[derive(TS)] conflicts with the Iterable and
@@ -129,7 +137,7 @@ impl TS for FutureFlags {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
          boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
          pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
-         boolean, experimentalCargoWorkspaces?: boolean }"
+         boolean, experimentalCargoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
             .to_string()
     }
 
@@ -137,7 +145,7 @@ impl TS for FutureFlags {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
          boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
          pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
-         boolean, experimentalCargoWorkspaces?: boolean }"
+         boolean, experimentalCargoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
             .to_string()
     }
 
@@ -145,7 +153,8 @@ impl TS for FutureFlags {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
          boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean };"
+         globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
+         experimentalTaskCommand?: boolean };"
             .to_string()
     }
 
@@ -153,7 +162,8 @@ impl TS for FutureFlags {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
          boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean };"
+         globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
+         experimentalTaskCommand?: boolean };"
             .to_string()
     }
 
