@@ -70,6 +70,12 @@ pub struct TaskHashable<'a> {
     pub resolved_env_vars: EnvVarPairs,
     pub pass_through_env: &'a [String],
     pub env_mode: EnvMode,
+
+    // The task's resolved `command` override: the argv when one applies
+    // (empty otherwise), plus whether the task is an explicit opt-out.
+    // Changing what a task runs must invalidate its cached results.
+    pub command_override: &'a [String],
+    pub command_opt_out: bool,
 }
 
 impl TaskHashable<'_> {
@@ -396,6 +402,16 @@ impl HashableMessage for TaskHashable<'_> {
             }
         }
 
+        {
+            let mut command_override_builder = builder
+                .reborrow()
+                .init_command_override(task_hashable.command_override.len() as u32);
+            for (i, arg) in task_hashable.command_override.iter().enumerate() {
+                command_override_builder.set(i as u32, arg);
+            }
+        }
+        builder.set_command_opt_out(task_hashable.command_opt_out);
+
         canonical_builder::<proto_capnp::task_hashable::Owned>(
             builder.total_size(),
             builder.reborrow_as_reader(),
@@ -528,9 +544,13 @@ mod test {
             resolved_env_vars: vec![],
             pass_through_env: &["pass_thru_env".to_string()],
             env_mode: EnvMode::Loose,
+            command_override: &[],
+            command_opt_out: false,
         };
 
-        assert_eq!(task_hashable.hash(), "1f8b13161f57fca1");
+        // Pinned; changed when commandOverride/commandOptOut joined the
+        // schema (the documented one-time hash bust).
+        assert_eq!(task_hashable.hash(), "5b1b0c3f695623bd");
     }
 
     #[test]
@@ -555,12 +575,14 @@ mod test {
             resolved_env_vars: vec![],
             pass_through_env: &["pass_thru_env".to_string()],
             env_mode: EnvMode::Strict,
+            command_override: &[],
+            command_opt_out: false,
         };
 
         let hash = task_hashable.hash();
         assert!(!hash.is_empty());
         // Pin the hash so any serialization change is caught
-        assert_eq!(hash, "7676d7bb7c86d257");
+        assert_eq!(hash, "3337b32209ccdb9e");
     }
 
     #[test]

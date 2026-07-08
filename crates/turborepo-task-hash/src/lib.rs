@@ -35,7 +35,7 @@ use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{generic::GenericEventBuilder, task::PackageTaskEventBuilder};
 use turborepo_types::{
     EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap, HashTrackerInfo, RunOptsHashInfo,
-    TaskDefinitionHashInfo, TaskInputs,
+    TaskCommandOverride, TaskDefinitionHashInfo, TaskInputs,
 };
 
 fn env_var_names_for_debug_log(env_vars: &EnvironmentVariableMap) -> Vec<String> {
@@ -549,6 +549,14 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             resolved_env_vars: hashable_env_pairs,
             pass_through_env: task_definition.pass_through_env().unwrap_or_default(),
             env_mode: task_env_mode,
+            command_override: match task_definition.command() {
+                Some(TaskCommandOverride::Argv(argv)) => argv.as_slice(),
+                _ => &[],
+            },
+            command_opt_out: matches!(
+                task_definition.command(),
+                Some(TaskCommandOverride::OptOut)
+            ),
         };
 
         let task_hash = task_hashable.calculate_task_hash()?;

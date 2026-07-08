@@ -14,6 +14,11 @@ struct TaskHashable {
     resolvedEnvVars @9 :List(Text);
     passThruEnv @10 :List(Text);
     envMode @11 :EnvMode;
+    # The task's resolved `command` override argv, empty when none applies.
+    # Changing what a task runs must invalidate its cached results.
+    commandOverride @12 :List(Text);
+    # Distinguishes an opt-out (explicit no-op) from no override at all.
+    commandOptOut @13 :Bool;
 
     enum EnvMode {
       loose @0;
