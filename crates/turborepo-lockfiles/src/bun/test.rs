@@ -2481,3 +2481,117 @@ fn test_subgraph_relocates_ancestor_scoped_dep_for_renamed_dependent() {
         }
     }
 }
+
+/// Regression test for https://github.com/vercel/turborepo/issues/13310
+/// When pruning for workspace 'app', nested dependencies from the 'mobile'
+/// workspace (e.g., @expo/cli/ora/chalk) should NOT appear in the pruned
+/// lockfile. The `include_duplicate_alias_children` function previously
+/// looked up child entries from the original (unpruned) lockfile, which
+/// could re-introduce entries from non-target workspaces.
+#[test]
+fn test_subgraph_excludes_extraneous_nested_entries() {
+    // Scenario: 'app' depends on 'chalk', 'mobile' depends on 'eas-cli'
+    // which has nested '@expo/cli' -> '@expo/cli/ora' -> '@expo/cli/ora/chalk'.
+    // Both 'chalk' (top-level) and '@expo/cli/ora/chalk' share the same ident
+    // "chalk@5.4.1". After pruning for 'app', only the top-level 'chalk'
+    // should remain — NOT '@expo/cli/ora/chalk' or any other entries from the
+    // mobile workspace's dependency tree.
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": {
+                "name": "repro-root"
+            },
+            "apps/app": {
+                "name": "app",
+                "dependencies": {
+                    "chalk": "^5.0.0"
+                }
+            },
+            "apps/mobile": {
+                "name": "mobile",
+                "devDependencies": {
+                    "eas-cli": "19.0.5"
+                }
+            }
+        },
+        "packages": {
+            // Top-level chalk, used by 'app'
+            "chalk": ["chalk@5.4.1", "", {}, "sha512-chalk"],
+            // eas-cli from 'mobile' workspace
+            "eas-cli": ["eas-cli@19.0.5", "", {
+                "dependencies": {
+                    "@expo/cli": "^1.0.0"
+                }
+            }, "sha512-eas"],
+            // @expo/cli, a dependency of eas-cli
+            "@expo/cli": ["@expo/cli@1.0.0", "", {
+                "dependencies": {
+                    "ora": "^5.0.0"
+                }
+            }, "sha512-expo-cli"],
+            // ora nested under @expo/cli
+            "@expo/cli/ora": ["ora@5.4.1", "", {
+                "dependencies": {
+                    "chalk": "^5.0.0"
+                }
+            }, "sha512-ora"],
+            // chalk nested under @expo/cli/ora — SAME ident as top-level chalk
+            "@expo/cli/ora/chalk": ["chalk@5.4.1", "", {}, "sha512-chalk"]
+        }
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+    // Compute transitive closure for 'app' workspace
+    let mut app_deps = std::collections::BTreeMap::new();
+    app_deps.insert("chalk".to_string(), "^5.0.0".to_string());
+
+    let closure =
+        crate::transitive_closure(&lockfile, "apps/app", app_deps, false).unwrap();
+    let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+
+    let subgraph = lockfile
+        .subgraph(&["apps/app".into()], &package_idents)
+        .unwrap();
+    let data = subgraph.lockfile().unwrap();
+
+    // 'app' only depends on chalk, so only chalk should be in the pruned lockfile
+    assert!(
+        data.packages.contains_key("chalk"),
+        "top-level chalk must be present for 'app' workspace"
+    );
+
+    // None of the mobile/eas-cli dependency chain should be present
+    assert!(
+        !data.packages.contains_key("eas-cli"),
+        "eas-cli from mobile workspace must NOT be in pruned lockfile"
+    );
+    assert!(
+        !data.packages.contains_key("@expo/cli"),
+        "@expo/cli from mobile workspace must NOT be in pruned lockfile"
+    );
+    assert!(
+        !data.packages.contains_key("@expo/cli/ora"),
+        "@expo/cli/ora from mobile workspace must NOT be in pruned lockfile"
+    );
+    assert!(
+        !data.packages.contains_key("@expo/cli/ora/chalk"),
+        "@expo/cli/ora/chalk must NOT be re-introduced from the original lockfile (issue #13310)"
+    );
+
+    // Verify workspace filtering
+    assert!(
+        data.workspaces.contains_key(""),
+        "root workspace must be present"
+    );
+    assert!(
+        data.workspaces.contains_key("apps/app"),
+        "target workspace must be present"
+    );
+    assert!(
+        !data.workspaces.contains_key("apps/mobile"),
+        "mobile workspace must NOT be present"
+    );
+}

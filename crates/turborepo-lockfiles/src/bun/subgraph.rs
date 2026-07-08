@@ -43,7 +43,7 @@ impl BunLockfile {
                         if current_keys.contains(&child_key) || additions.contains_key(&child_key) {
                             continue;
                         }
-                        if let Some(entry) = self.data.packages.get(&child_key) {
+                        if let Some(entry) = pruned_data.packages.get(&child_key) {
                             additions.insert(child_key, entry.clone());
                         }
                     }
