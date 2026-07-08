@@ -330,7 +330,10 @@ mod test {
 
         // A minimal Cargo workspace with one binary crate.
         root.join_component("Cargo.toml")
-            .create_with_contents("[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n")
+            .create_with_contents(
+                "[workspace]\nmembers = [\"crates/*\"]\nresolver = \
+                 \"2\"\n\n[workspace.metadata]\nname = \"acme\"\n",
+            )
             .unwrap();
         let crate_dir = root.join_components(&["crates", "my-crate"]);
         crate_dir.join_component("src").create_dir_all().unwrap();
@@ -352,7 +355,7 @@ mod test {
             // JS package without any scripts.
             ("c", "build"),
             // The synthetic Cargo workspace package.
-            ("rust", "test"),
+            ("acme", "test"),
             // A binary crate.
             ("my-crate", "build"),
         ] {
@@ -377,7 +380,7 @@ mod test {
         tasks.sort();
         // "c#build" is absent: no script defines it. Both Cargo tasks are
         // present without any package.json involvement.
-        assert_eq!(tasks, vec!["a#build", "my-crate#build", "rust#test"]);
+        assert_eq!(tasks, vec!["a#build", "acme#test", "my-crate#build"]);
     }
 
     #[tokio::test]
