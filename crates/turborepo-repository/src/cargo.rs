@@ -18,8 +18,8 @@
 //!
 //! A synthetic package named [`WORKSPACE_PACKAGE_NAME`], anchored at the
 //! root `Cargo.toml` and depending on every crate, represents the workspace
-//! itself; it will host workspace-scoped verification verbs (`cargo test
-//! --workspace`, ...) once command resolution gains a toolchain surface.
+//! itself; it hosts the workspace-scoped verification verbs (`rust#test` →
+//! `cargo test --workspace`, ...; see [`workspace_subcommand`]).
 //!
 //! Support is experimental and gated behind
 //! `futureFlags.experimentalCargoWorkspaces`.
@@ -46,8 +46,10 @@ pub const CARGO_TOML: &str = "Cargo.toml";
 pub const CARGO_LOCK: &str = "Cargo.lock";
 
 /// Name of the synthetic package that represents the Cargo workspace itself.
-/// A real workspace member with this name is skipped with a warning.
-pub const WORKSPACE_PACKAGE_NAME: &str = "cargo";
+/// Matches the toolchain id ([`ToolchainId::RUST`]): task keys read
+/// `rust#test`, `rust#lint`. A real workspace member with this name is
+/// skipped with a warning.
+pub const WORKSPACE_PACKAGE_NAME: &str = "rust";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -446,7 +448,7 @@ impl CargoToolchain {
 
 impl Toolchain for CargoToolchain {
     fn id(&self) -> ToolchainId {
-        ToolchainId::CARGO
+        ToolchainId::RUST
     }
 
     fn task_command(
@@ -754,7 +756,7 @@ impl Toolchain for CargoToolchain {
         let dependency_globs = || {
             let mut globs: Vec<String> = dependencies
                 .iter()
-                .filter(|dep| dep.toolchain == ToolchainId::CARGO)
+                .filter(|dep| dep.toolchain == ToolchainId::RUST)
                 .filter(|dep| {
                     dep.package_name()
                         .and_then(|dep_name| self.package_details(&dep_name))
@@ -1589,7 +1591,7 @@ checksum = "abc123"
         write_fixture_workspace(&root);
 
         let toolchain = CargoToolchain::new(root.clone());
-        assert_eq!(toolchain.id(), ToolchainId::CARGO);
+        assert_eq!(toolchain.id(), ToolchainId::RUST);
 
         let mut packages = toolchain.discover_packages().await.unwrap();
         packages.sort_by(|a, b| {
@@ -1604,7 +1606,7 @@ checksum = "abc123"
             .iter()
             .map(|p| p.descriptor.name.as_ref().unwrap().as_inner().as_str())
             .collect();
-        assert_eq!(names, vec!["app", "cargo", "lib-a", "lib-a-test-util"]);
+        assert_eq!(names, vec!["app", "lib-a", "lib-a-test-util", "rust"]);
 
         let app = &packages[0];
         assert_eq!(
@@ -1618,7 +1620,7 @@ checksum = "abc123"
 
         // The synthetic workspace package is anchored at the root manifest
         // and depends on every crate.
-        let workspace = &packages[1];
+        let workspace = &packages[3];
         assert_eq!(workspace.manifest_path, root.join_component(CARGO_TOML));
         let workspace_deps = workspace.descriptor.dependencies.as_ref().unwrap();
         assert_eq!(workspace_deps.len(), 3);
@@ -1637,7 +1639,7 @@ checksum = "abc123"
             app_externals.iter().any(|p| p.key == "rustc"),
             "compiler version stamps the closure, got {app_externals:?}"
         );
-        let lib_a_externals = packages[2].external_dependencies.as_ref().unwrap();
+        let lib_a_externals = packages[1].external_dependencies.as_ref().unwrap();
         assert!(
             !lib_a_externals.iter().any(|p| p.key == "serde"),
             "a serde bump must not invalidate lib-a, got {lib_a_externals:?}"
@@ -1664,7 +1666,7 @@ checksum = "abc123"
                 manifest_rel.replace('/', std::path::MAIN_SEPARATOR_STR),
             )
             .unwrap(),
-            toolchain: ToolchainId::CARGO,
+            toolchain: ToolchainId::RUST,
             ..Default::default()
         }
     }

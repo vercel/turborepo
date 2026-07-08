@@ -25,7 +25,7 @@
 //! 2. [`ToolchainId`] is an open identifier, never a closed enum. A future
 //!    toolchain (or plugin) mints a new id without touching existing code.
 //! 3. All toolchain lookups go through the [`ToolchainRegistry`]. Scattered
-//!    per-toolchain branch points (`if id == "cargo"`) are a design defect.
+//!    per-toolchain branch points (`if id == "rust"`) are a design defect.
 //!
 //! # Known debt
 //!
@@ -67,10 +67,11 @@ impl ToolchainId {
     /// manifests, regardless of package manager or runtime.
     pub const JAVASCRIPT: ToolchainId = ToolchainId(Cow::Borrowed("javascript"));
 
-    /// The Cargo toolchain: Rust crates discovered from a Cargo workspace
-    /// (see [`crate::cargo`]). Experimental, gated behind
-    /// `futureFlags.experimentalCargoWorkspaces`.
-    pub const CARGO: ToolchainId = ToolchainId(Cow::Borrowed("cargo"));
+    /// The Rust toolchain: crates discovered from a Cargo workspace (see
+    /// [`crate::cargo`]). Named for the language — the public axis users
+    /// think in — while the implementation is Cargo-specific.
+    /// Experimental, gated behind `futureFlags.experimentalCargoWorkspaces`.
+    pub const RUST: ToolchainId = ToolchainId(Cow::Borrowed("rust"));
 
     pub fn new(id: impl Into<Cow<'static, str>>) -> Self {
         Self(id.into())
@@ -686,9 +687,9 @@ mod tests {
         assert_eq!(js.as_str(), "javascript");
 
         // Any string is a valid id; no closed set to extend.
-        let custom = ToolchainId::new("cargo");
+        let custom = ToolchainId::new("gleam");
         assert_ne!(custom, js);
-        assert_eq!(custom.to_string(), "cargo");
+        assert_eq!(custom.to_string(), "gleam");
         let dynamic = ToolchainId::new(String::from("python-uv"));
         assert_eq!(dynamic.as_str(), "python-uv");
     }
@@ -825,10 +826,10 @@ mod tests {
 
         let mut registry = ToolchainRegistry::new();
         registry.register(Arc::new(Fake(ToolchainId::JAVASCRIPT)));
-        registry.register(Arc::new(Fake(ToolchainId::new("cargo"))));
+        registry.register(Arc::new(Fake(ToolchainId::new("gleam"))));
 
         assert!(registry.get(&ToolchainId::JAVASCRIPT).is_some());
-        assert!(registry.get(&ToolchainId::new("cargo")).is_some());
+        assert!(registry.get(&ToolchainId::new("gleam")).is_some());
         assert!(registry.get(&ToolchainId::new("zig")).is_none());
         assert_eq!(registry.iter().count(), 2);
     }
