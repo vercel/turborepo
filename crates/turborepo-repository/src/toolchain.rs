@@ -218,7 +218,13 @@ pub trait Toolchain: Send + Sync {
         pass_through_args: Option<&[String]>,
         override_command: Option<&[String]>,
     ) -> Result<Option<TaskCommand>, Error> {
-        let _ = (repo_root, package, task, pass_through_args, override_command);
+        let _ = (
+            repo_root,
+            package,
+            task,
+            pass_through_args,
+            override_command,
+        );
         Ok(None)
     }
 

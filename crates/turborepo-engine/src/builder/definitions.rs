@@ -8,8 +8,7 @@ use turborepo_repository::{
 };
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{
-    HasConfigBeyondExtends, ProcessedCommand, ProcessedTaskDefinition, RawTaskDefinition,
-    TurboJson,
+    HasConfigBeyondExtends, ProcessedCommand, ProcessedTaskDefinition, RawTaskDefinition, TurboJson,
 };
 use turborepo_types::{TaskCommandOverride, TaskDefinition};
 
@@ -625,8 +624,8 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 /// 1. `command` in a Package Configuration
 /// 2. `command` on a package-scoped root key (`web#test`)
 /// 3. a package-authored native definition — a package.json script
-/// 4. `command` on an unscoped root task (argv, or per-toolchain map fanned
-///    out to this package's toolchain)
+/// 4. `command` on an unscoped root task (argv, or per-toolchain map fanned out
+///    to this package's toolchain)
 /// 5. the toolchain's synthesized command (Cargo verb tables)
 ///
 /// Levels 1–2 arrive merged as `scoped_command` (most specific already
@@ -657,9 +656,7 @@ fn resolve_command_override(
     // lean into what the toolchain does natively. Toolchain-synthesized
     // fallbacks (Cargo verb tables) are authored by nobody and sit below
     // the defaults instead.
-    if package_toolchain
-        .is_some_and(|(info, toolchain)| toolchain.authors_task(info, task))
-    {
+    if package_toolchain.is_some_and(|(info, toolchain)| toolchain.authors_task(info, task)) {
         return None;
     }
 
@@ -703,9 +700,7 @@ mod command_override_tests {
             self.id.clone()
         }
 
-        fn discover_packages(
-            &self,
-        ) -> turborepo_repository::toolchain::DiscoverPackagesFuture<'_> {
+        fn discover_packages(&self) -> turborepo_repository::toolchain::DiscoverPackagesFuture<'_> {
             Box::pin(async { Ok(Vec::new()) })
         }
 
@@ -715,9 +710,7 @@ mod command_override_tests {
     }
 
     fn argv(items: &[&str]) -> ProcessedCommand {
-        ProcessedCommand::Argv(Spanned::new(
-            items.iter().map(|s| s.to_string()).collect(),
-        ))
+        ProcessedCommand::Argv(Spanned::new(items.iter().map(|s| s.to_string()).collect()))
     }
 
     fn per_toolchain(entries: &[(&str, &[&str])]) -> ProcessedCommand {
@@ -815,12 +808,7 @@ mod command_override_tests {
             ])),
         );
         assert_eq!(
-            resolve_command_override(
-                None,
-                Some(map),
-                Some((&js_pkg, &js_without_script)),
-                "test"
-            ),
+            resolve_command_override(None, Some(map), Some((&js_pkg, &js_without_script)), "test"),
             None,
             "a toolchain without a map key is untouched",
         );

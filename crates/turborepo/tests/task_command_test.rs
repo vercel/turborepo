@@ -13,7 +13,10 @@ use common::{combined_output, git, run_turbo, setup};
 fn setup_with_turbo_json(dir: &std::path::Path, turbo_json: &str) {
     setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", false).unwrap();
     fs::write(dir.join("turbo.json"), turbo_json).unwrap();
-    git(dir, &["commit", "-am", "turbo.json", "--quiet", "--allow-empty"]);
+    git(
+        dir,
+        &["commit", "-am", "turbo.json", "--quiet", "--allow-empty"],
+    );
 }
 
 #[test]

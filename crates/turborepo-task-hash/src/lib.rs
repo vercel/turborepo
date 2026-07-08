@@ -553,10 +553,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 Some(TaskCommandOverride::Argv(argv)) => argv.as_slice(),
                 _ => &[],
             },
-            command_opt_out: matches!(
-                task_definition.command(),
-                Some(TaskCommandOverride::OptOut)
-            ),
+            command_opt_out: matches!(task_definition.command(), Some(TaskCommandOverride::OptOut)),
         };
 
         let task_hash = task_hashable.calculate_task_hash()?;

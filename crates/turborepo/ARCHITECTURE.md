@@ -335,6 +335,20 @@ The core task graph consists of:
 - Creates task nodes and dependency edges
 - Validates task definitions and is the sole layer that checks for circular
   dependencies (both cycles and self-dependencies in the task graph)
+- Resolves each task's `command` override
+  (`futureFlags.experimentalTaskCommand`) in one place
+  (`resolve_command_override`, `turborepo-engine`'s
+  `builder/definitions.rs`), across five precedence levels: Package
+  Configuration `command` → root `pkg#task` `command` → package-authored
+  script (`Toolchain::authors_task`) → unscoped root default (per-toolchain
+  maps fan out by toolchain id) → the toolchain's own resolution. The
+  resolved override is authoritative in both directions — an argv executes
+  even where the toolchain defines nothing, an opt-out never executes even
+  where it does — and feeds global-deps hashing, the TUI task list, the
+  executor (`ToolchainCommandProvider`), and the task hash
+  (`TaskHashable.commandOverride`/`commandOptOut`). Toolchains place the
+  argv in their frame: cwd is the package directory, nothing is prepended,
+  and Cargo keeps its serial group when the override still invokes cargo.
 
 #### Engine Execution (`crates/turborepo-lib/src/engine/execute.rs`)
 
