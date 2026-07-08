@@ -109,6 +109,20 @@ jobs:
             # For pushes, use the before and after SHAs
             BASE_COMMIT="${{ github.event.before }}"
             HEAD_COMMIT="${{ github.event.after }}"
+
+            # The shallow checkout doesn't contain the before commit; fetch
+            # it by SHA (a depth-1 fetch brings its tree, which is all a
+            # diff needs). An all-zero SHA (branch creation) or a failed
+            # fetch (force push discarding the old commit) means there is
+            # no base to compare against: report everything as changed so
+            # every test runs.
+            if [[ "$BASE_COMMIT" =~ ^0+$ ]] || ! git fetch --no-tags --depth=1 origin "$BASE_COMMIT"; then
+              echo "No usable base commit; treating all paths as changed"
+              for name in docs native-lib rest rust; do
+                echo "$name=true" >> "$GITHUB_OUTPUT"
+              done
+              exit 0
+            fi
           fi
 
           echo "Comparing changes between $BASE_COMMIT and $HEAD_COMMIT"
