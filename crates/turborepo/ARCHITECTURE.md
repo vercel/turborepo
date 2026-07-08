@@ -187,14 +187,15 @@ whether anything changed; Cargo decides how and in what order to build.**
   workspace's deliverables. *Libraries* exist in the package graph — so
   `--filter` and `--affected` propagate through them — but their tasks are
   no-ops: Cargo builds them implicitly as part of an entrypoint's closure. A
-  synthetic *workspace* package (named `cargo`) depends on every crate and
+  synthetic *workspace* package (named `rust`, matching the toolchain id)
+  depends on every crate and
   hosts workspace-scoped verbs.
 - **Execution** (`Toolchain::task_command`, adapted into the provider chain
   by `ToolchainCommandProvider` in `turborepo-task-executor`): entrypoint
   `build`/`run`/`dev` tasks run `cargo <verb> --package=<crate>` — one cargo
   process that builds the crate's whole dependency closure with Cargo's own
-  parallelism. Verification verbs run once at workspace scope: `cargo#test`
-  → `cargo test --workspace`, `cargo#lint` → `cargo clippy --workspace`,
+  parallelism. Verification verbs run once at workspace scope: `rust#test`
+  → `cargo test --workspace`, `rust#lint` → `cargo clippy --workspace`,
   etc. Cargo commands (except `cargo run`) share a mutually-exclusive
   serial group: concurrent cargo processes serialize on the build-directory
   lock anyway, so the executor runs one at a time without the "waiting for
@@ -268,7 +269,7 @@ whether anything changed; Cargo decides how and in what order to build.**
   sync its own lockfile; failure downgrades to a warning. In docker
   layout, the json layer carries the root manifest, each kept crate's
   `Cargo.toml`, and the pruned lock; sources go to the full layer. A
-  package anchored at the repo root (the synthetic `cargo` package) is not
+  package anchored at the repo root (the synthetic `rust` package) is not
   a pruneable target.
 
 - **Compile cache** (`Toolchain::compile_cache_env`, consumed by
