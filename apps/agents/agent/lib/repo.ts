@@ -193,7 +193,19 @@ export async function runCommand(
   timeoutMs: number
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, shell: false });
+    // 1. استنساخ متغيرات البيئة الحالية وتصفيتها من الأسرار الحساسة
+    const safeEnv = { ...process.env };
+    delete safeEnv.GITHUB_APP_PRIVATE_KEY;
+    delete safeEnv.GITHUB_APP_ID;
+    delete safeEnv.GITHUB_INSTALLATION_ID;
+
+    // 2. تمرير الكائن الآمن 'safeEnv' إلى خاصية env
+    const child = spawn(command, args, { 
+      cwd, 
+      shell: false, 
+      env: safeEnv 
+    });
+    
     const commandLine = [command, ...args].join(" ");
     let stdout = "";
     let stderr = "";
