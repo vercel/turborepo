@@ -253,14 +253,14 @@ fn test_prune_js_target_unaffected_by_cargo() {
     assert!(!out.join("Cargo.toml").exists());
 }
 
-/// The synthetic `rust` package has no directory of its own and is not a
-/// pruneable target.
+/// The synthetic workspace package has no directory of its own and is not
+/// a pruneable target.
 #[test]
 fn test_prune_cargo_workspace_package_rejected() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_cargo_monorepo(tempdir.path());
 
-    let output = run_turbo(tempdir.path(), &["prune", "rust"]);
+    let output = run_turbo(tempdir.path(), &["prune", "acme"]);
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
