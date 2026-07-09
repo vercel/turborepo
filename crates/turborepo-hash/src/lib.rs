@@ -402,7 +402,13 @@ impl HashableMessage for TaskHashable<'_> {
             }
         }
 
-        {
+        // Only written when set: an explicitly initialized empty list is a
+        // non-null pointer in capnp, encoded differently from the default
+        // null pointer. Canonical form truncates trailing default-valued
+        // fields, so guarding here keeps every existing task hash stable —
+        // only tasks that actually use a `command` override hash
+        // differently.
+        if !task_hashable.command_override.is_empty() {
             let mut command_override_builder = builder
                 .reborrow()
                 .init_command_override(task_hashable.command_override.len() as u32);
@@ -410,7 +416,9 @@ impl HashableMessage for TaskHashable<'_> {
                 command_override_builder.set(i as u32, arg);
             }
         }
-        builder.set_command_opt_out(task_hashable.command_opt_out);
+        if task_hashable.command_opt_out {
+            builder.set_command_opt_out(true);
+        }
 
         canonical_builder::<proto_capnp::task_hashable::Owned>(
             builder.total_size(),
@@ -548,9 +556,7 @@ mod test {
             command_opt_out: false,
         };
 
-        // Pinned; changed when commandOverride/commandOptOut joined the
-        // schema (the documented one-time hash bust).
-        assert_eq!(task_hashable.hash(), "5b1b0c3f695623bd");
+        assert_eq!(task_hashable.hash(), "1f8b13161f57fca1");
     }
 
     #[test]
@@ -582,7 +588,7 @@ mod test {
         let hash = task_hashable.hash();
         assert!(!hash.is_empty());
         // Pin the hash so any serialization change is caught
-        assert_eq!(hash, "3337b32209ccdb9e");
+        assert_eq!(hash, "7676d7bb7c86d257");
     }
 
     #[test]
