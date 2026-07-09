@@ -987,6 +987,7 @@ impl Run {
     ) -> Option<(
         turborepo_repository::toolchain::CompileCacheEndpoint,
         tokio::sync::broadcast::Sender<()>,
+        std::sync::Arc<turborepo_sccache_proxy::IncrementalCacheStats>,
     )> {
         if !self.opts.future_flags.experimental_cargo_sccache {
             return None;
@@ -1075,13 +1076,14 @@ impl Run {
             server_port: turborepo_sccache_proxy::derive_server_port(&self.repo_root),
         };
         let shutdown = server.shutdown_handle();
+        let stats = server.stats();
         info!("sccache compile cache proxy listening on {}", endpoint.url);
         tokio::spawn(async move {
             if let Err(err) = server.run().await {
                 error!("sccache compile cache proxy error: {err}");
             }
         });
-        Some((endpoint, shutdown))
+        Some((endpoint, shutdown, stats))
     }
 
     async fn cleanup_proxy(
@@ -1288,10 +1290,11 @@ impl Run {
         drop(_setup_span);
 
         let sccache_proxy = self.start_sccache_proxy_if_needed().await;
-        let (compile_cache_endpoint, sccache_shutdown) = match sccache_proxy {
-            Some((endpoint, shutdown)) => (Some(endpoint), Some(shutdown)),
-            None => (None, None),
-        };
+        let (compile_cache_endpoint, sccache_shutdown, incremental_cache_stats) =
+            match sccache_proxy {
+                Some((endpoint, shutdown, stats)) => (Some(endpoint), Some(shutdown), Some(stats)),
+                None => (None, None, None),
+            };
 
         let mut visitor = Visitor::new(
             self.pkg_dep_graph.clone(),
@@ -1365,6 +1368,18 @@ impl Run {
             self.processes.stop().await;
         }
 
+        // Snapshot the incremental-cache traffic now that every task (and
+        // its tools) has finished. `None` when the proxy never started —
+        // the summary line only appears for runs that attempted
+        // incremental caching.
+        let incremental_cache = incremental_cache_stats.map(|stats| {
+            let snapshot = stats.snapshot();
+            turborepo_run_summary::IncrementalCacheSummary {
+                hits: snapshot.hits,
+                misses: snapshot.misses,
+            }
+        });
+
         visitor
             .finish(
                 exit_code,
@@ -1374,6 +1389,7 @@ impl Run {
                 &self.env_at_execution_start,
                 &self.scm,
                 self.opts.scope_opts.pkg_inference_root.as_deref(),
+                incremental_cache,
             )
             .await?;
 

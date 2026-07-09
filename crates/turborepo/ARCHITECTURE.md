@@ -304,7 +304,11 @@ whether anything changed; Cargo decides how and in what order to build.**
   pays off, while local development is served by cargo's own incremental
   compilation — which the injected `CARGO_INCREMENTAL=0` would disable.
   Lifecycle: started in `Run::execute_visitor` before the visitor,
-  shut down fire-and-forget after it.
+  shut down fire-and-forget after it. The proxy counts the work-unit
+  traffic it serves (hits/misses/stores, health-check probe excluded)
+  and the run summary footer reports it as a toolchain-agnostic
+  "Incremental cache" line — reuse below the task boundary — shown only
+  when the run actually exchanged work units.
 
 A `--filter` that names a crate while support is disabled gets an error
 hint pointing at the flag. Released turbo versions hard-error on unknown

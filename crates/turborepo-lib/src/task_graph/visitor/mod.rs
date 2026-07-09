@@ -1015,6 +1015,7 @@ impl<'a> Visitor<'a> {
         env_at_execution_start,
         scm,
     ))]
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn finish(
         self,
         exit_code: i32,
@@ -1024,6 +1025,7 @@ impl<'a> Visitor<'a> {
         env_at_execution_start: &EnvironmentVariableMap,
         scm: &SCM,
         pkg_inference_root: Option<&AnchoredSystemPath>,
+        incremental_cache: Option<turborepo_run_summary::IncrementalCacheSummary>,
     ) -> Result<(), Error> {
         let Self {
             package_graph,
@@ -1077,6 +1079,7 @@ impl<'a> Visitor<'a> {
                 scm,
                 is_watch,
                 Some(task_hasher.external_deps_hash_cache()),
+                incremental_cache,
             )
             .await?)
     }

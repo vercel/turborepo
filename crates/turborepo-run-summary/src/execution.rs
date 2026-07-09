@@ -45,6 +45,36 @@ pub struct ExecutionSummary<'a> {
     pub exit_code: i32,
 }
 
+/// Totals for reuse below the task boundary: work units a tool running
+/// inside a task fetched from (hits) or had to rebuild (misses) via the
+/// incremental cache. Toolchain-agnostic — for Rust this is sccache
+/// compile units served through the Remote Cache; other toolchains can
+/// contribute the same shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IncrementalCacheSummary {
+    pub hits: u64,
+    pub misses: u64,
+}
+
+/// The summary footer's "Incremental cache" line: reuse below the task
+/// boundary. `None` — and therefore absent from the output — unless the
+/// run actually exchanged work units: a repo that never engaged
+/// incremental caching should not see the line at all.
+fn incremental_cache_line(
+    ui: ColorConfig,
+    incremental_cache: Option<IncrementalCacheSummary>,
+) -> Option<(&'static str, String)> {
+    let incremental = incremental_cache.filter(|s| s.hits + s.misses > 0)?;
+    Some((
+        "Incremental cache",
+        format!(
+            "{}, {} misses",
+            color!(ui, BOLD, "{} hits", incremental.hits),
+            incremental.misses,
+        ),
+    ))
+}
+
 impl<'a> ExecutionSummary<'a> {
     pub fn new(
         command: String,
@@ -77,6 +107,7 @@ impl<'a> ExecutionSummary<'a> {
         ui: ColorConfig,
         path: AbsoluteSystemPathBuf,
         failed_tasks: Vec<&T>,
+        incremental_cache: Option<IncrementalCacheSummary>,
     ) {
         let maybe_full_turbo = if self.cached == self.attempted && self.attempted > 0 {
             match std::env::var("TERM_PROGRAM").as_deref() {
@@ -114,6 +145,10 @@ impl<'a> ExecutionSummary<'a> {
                 ),
             ),
         ];
+
+        if let Some(line) = incremental_cache_line(ui, incremental_cache) {
+            line_data.insert(2, line);
+        }
 
         if path.exists() {
             line_data.push(("Summary", path.to_string()));
@@ -473,6 +508,39 @@ mod test {
     use test_case::test_case;
 
     use super::*;
+
+    #[test]
+    fn test_incremental_cache_line_conditional() {
+        // strip_ansi: label/value text is what users see uncolored.
+        let ui = ColorConfig::new(true);
+
+        // No incremental caching attempted: no line.
+        assert!(incremental_cache_line(ui, None).is_none());
+
+        // Attempted, but no work units exchanged (e.g. every task was a
+        // task-cache hit and no tool ever ran): still no line.
+        assert!(
+            incremental_cache_line(ui, Some(IncrementalCacheSummary { hits: 0, misses: 0 }))
+                .is_none()
+        );
+
+        // Real traffic renders, misses included even when zero.
+        let (label, value) = incremental_cache_line(
+            ui,
+            Some(IncrementalCacheSummary {
+                hits: 407,
+                misses: 12,
+            }),
+        )
+        .unwrap();
+        assert_eq!(label, "Incremental cache");
+        assert_eq!(value, "407 hits, 12 misses");
+
+        let (_, value) =
+            incremental_cache_line(ui, Some(IncrementalCacheSummary { hits: 0, misses: 3 }))
+                .unwrap();
+        assert_eq!(value, "0 hits, 3 misses");
+    }
 
     #[tokio::test]
     async fn test_multiple_tasks() -> Result<(), Box<dyn std::error::Error>> {

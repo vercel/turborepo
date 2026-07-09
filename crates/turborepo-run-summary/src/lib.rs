@@ -14,7 +14,8 @@ mod tracker;
 
 pub use duration::TurboDuration;
 pub use execution::{
-    ExecutionSummary, ExecutionTracker, SummaryState, TaskState, TaskSummaryInfo, TaskTracker,
+    ExecutionSummary, ExecutionTracker, IncrementalCacheSummary, SummaryState, TaskState,
+    TaskSummaryInfo, TaskTracker,
 };
 pub use global_hash::{GlobalEnvConfiguration, GlobalEnvVarSummary, GlobalHashSummary};
 pub use observability::Handle as ObservabilityHandle;
