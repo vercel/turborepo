@@ -185,7 +185,9 @@ jobs:
 
           # Detect if Rust/core code changed (requires Rust tests + integration tests)
           # This excludes JS-only changes like packages/*, lockfile, etc.
-          RUST_PATTERNS="^(crates/|cli/|Cargo\.|rust-toolchain|\.cargo/|\.config/|\.github/|turborepo-tests/)"
+          # turbo.json is included because it defines the command the Rust
+          # test task runs (turborepo-crates#test).
+          RUST_PATTERNS="^(crates/|cli/|Cargo\.|rust-toolchain|\.cargo/|\.config/|\.github/|turborepo-tests/|turbo\.json)"
           RUST_CHANGES=$(echo "$CHANGED_FILES" | grep -E "$RUST_PATTERNS" || true)
 
           if [ -n "$RUST_CHANGES" ]; then
@@ -263,14 +265,15 @@ jobs:
         with:
           tool: nextest
 
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      # The nextest invocation (and its excludes) lives in turbo.json as
+      # the turborepo-crates#test command; dogfooding the task command
+      # override keeps CI and local runs identical.
       - name: Run tests
         timeout-minutes: 15
-        run: |
-          cargo nextest run --workspace \
-            --exclude turborepo-lsp \
-            --exclude turborepo-schema-gen \
-            --exclude turborepo-napi \
-            --no-fail-fast
+        run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream
         shell: bash
 
   rust_test_windows:
@@ -337,14 +340,15 @@ jobs:
           curl -L -o "%TEMP%\nextest.zip" "https://get.nexte.st/latest/windows"
           tar -xf "%TEMP%\nextest.zip" -C "%USERPROFILE%\.cargo\bin"
 
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      # The nextest invocation (and its excludes) lives in turbo.json as
+      # the turborepo-crates#test command; dogfooding the task command
+      # override keeps CI and local runs identical.
       - name: Run tests
         timeout-minutes: 15
-        run: |
-          cargo nextest run --workspace \
-            --exclude turborepo-lsp \
-            --exclude turborepo-schema-gen \
-            --exclude turborepo-napi \
-            --no-fail-fast
+        run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream
         shell: bash
         env:
           INSTA_WORKSPACE_ROOT: ${{ github.workspace }}
@@ -379,14 +383,15 @@ jobs:
         with:
           tool: nextest
 
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      # The nextest invocation (and its excludes) lives in turbo.json as
+      # the turborepo-crates#test command; dogfooding the task command
+      # override keeps CI and local runs identical.
       - name: Run tests
         timeout-minutes: 15
-        run: |
-          cargo nextest run --workspace \
-            --exclude turborepo-lsp \
-            --exclude turborepo-schema-gen \
-            --exclude turborepo-napi \
-            --no-fail-fast
+        run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream
         shell: bash
 
   check-examples:
