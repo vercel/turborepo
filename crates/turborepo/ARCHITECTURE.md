@@ -187,14 +187,15 @@ whether anything changed; Cargo decides how and in what order to build.**
   workspace's deliverables. *Libraries* exist in the package graph — so
   `--filter` and `--affected` propagate through them — but their tasks are
   no-ops: Cargo builds them implicitly as part of an entrypoint's closure. A
-  synthetic *workspace* package (named `cargo`) depends on every crate and
-  hosts workspace-scoped verbs.
+  synthetic *workspace* package — named by the user via
+  `[workspace.metadata] name` in the root Cargo.toml, a hard requirement —
+  depends on every crate and hosts workspace-scoped verbs.
 - **Execution** (`Toolchain::task_command`, adapted into the provider chain
   by `ToolchainCommandProvider` in `turborepo-task-executor`): entrypoint
   `build`/`run`/`dev` tasks run `cargo <verb> --package=<crate>` — one cargo
   process that builds the crate's whole dependency closure with Cargo's own
-  parallelism. Verification verbs run once at workspace scope: `cargo#test`
-  → `cargo test --workspace`, `cargo#lint` → `cargo clippy --workspace`,
+  parallelism. Verification verbs run once at workspace scope: `<name>#test`
+  → `cargo test --workspace`, `<name>#lint` → `cargo clippy --workspace`,
   etc. Cargo commands (except `cargo run`) share a mutually-exclusive
   serial group: concurrent cargo processes serialize on the build-directory
   lock anyway, so the executor runs one at a time without the "waiting for
@@ -268,7 +269,7 @@ whether anything changed; Cargo decides how and in what order to build.**
   sync its own lockfile; failure downgrades to a warning. In docker
   layout, the json layer carries the root manifest, each kept crate's
   `Cargo.toml`, and the pruned lock; sources go to the full layer. A
-  package anchored at the repo root (the synthetic `cargo` package) is not
+  package anchored at the repo root (the synthetic workspace package) is not
   a pruneable target.
 
 - **Compile cache** (`Toolchain::compile_cache_env`, consumed by
@@ -293,10 +294,13 @@ whether anything changed; Cargo decides how and in what order to build.**
   background server captures it at startup and outlives the run: the port
   is derived from the repo root and the bearer token is persisted at
   `.turbo/sccache-proxy-token`. Injection is execution-only and does not
-  participate in task hashes (a compile cache is output-transparent); a
-  user-supplied `RUSTC_WRAPPER` in the task environment suppresses the
-  whole injected set, and every unmet precondition disables the proxy
-  softly. CI-only by design: cold environments are where a compile cache
+  participate in task hashes (a compile cache is output-transparent). The
+  toolchain decides how injection composes with the task environment: a
+  user-supplied `RUSTC_WRAPPER` or any `SCCACHE_*` variable signals a
+  competing compiler-cache configuration and suppresses the whole injected
+  set, while an ambient `CARGO_INCREMENTAL` (CI images commonly export
+  `=0`) is tolerated — injection proceeds without overriding it. Every
+  unmet precondition disables the proxy softly. CI-only by design: cold environments are where a compile cache
   pays off, while local development is served by cargo's own incremental
   compilation — which the injected `CARGO_INCREMENTAL=0` would disable.
   Lifecycle: started in `Run::execute_visitor` before the visitor,
@@ -331,6 +335,20 @@ The core task graph consists of:
 - Creates task nodes and dependency edges
 - Validates task definitions and is the sole layer that checks for circular
   dependencies (both cycles and self-dependencies in the task graph)
+- Resolves each task's `command` override
+  (`futureFlags.experimentalTaskCommand`) in one place
+  (`resolve_command_override`, `turborepo-engine`'s
+  `builder/definitions.rs`), across five precedence levels: Package
+  Configuration `command` → root `pkg#task` `command` → package-authored
+  script (`Toolchain::authors_task`) → unscoped root default (per-toolchain
+  maps fan out by toolchain id) → the toolchain's own resolution. The
+  resolved override is authoritative in both directions — an argv executes
+  even where the toolchain defines nothing, an opt-out never executes even
+  where it does — and feeds global-deps hashing, the TUI task list, the
+  executor (`ToolchainCommandProvider`), and the task hash
+  (`TaskHashable.commandOverride`/`commandOptOut`). Toolchains place the
+  argv in their frame: cwd is the package directory, nothing is prepended,
+  and Cargo keeps its serial group when the override still invokes cargo.
 
 #### Engine Execution (`crates/turborepo-lib/src/engine/execute.rs`)
 

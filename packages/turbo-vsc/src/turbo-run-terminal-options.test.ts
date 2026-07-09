@@ -54,6 +54,25 @@ for (const [index, taskName] of invalidTaskNames.entries()) {
   });
 }
 
+const metacharacterPaths = [
+  "/tmp/$(touch /tmp/pwned)/turbo",
+  "/tmp/`touch /tmp/pwned`/turbo",
+  "/tmp/a; touch /tmp/pwned/turbo",
+  "/tmp/a | sh/turbo",
+  "/tmp/a && calc/turbo"
+];
+
+for (const [index, turboPath] of metacharacterPaths.entries()) {
+  test(`keeps metacharacter turbo path ${index} as a literal executable`, () => {
+    const options = createTurboRunTerminalOptions(turboPath, "build");
+
+    // shellPath is handed to VS Code as the executable, not a /bin/sh string,
+    // so metacharacters must survive verbatim rather than being interpreted.
+    assert.equal(options.shellPath, turboPath);
+    assert.deepEqual(options.shellArgs, ["run", "build"]);
+  });
+}
+
 test("rejects non-string task names", () => {
   assert.equal(sanitizeTurboRunTaskName(undefined), undefined);
   assert.equal(sanitizeTurboRunTaskName(["build"]), undefined);

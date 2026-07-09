@@ -30,9 +30,15 @@ impl UISender {
         }
     }
 
-    pub fn status(&self, task: String, status: String, result: CacheResult) {
+    pub fn status(
+        &self,
+        task: String,
+        status: String,
+        result: CacheResult,
+        output_logs: OutputLogs,
+    ) {
         match self {
-            UISender::Tui(sender) => sender.status(task, status, result),
+            UISender::Tui(sender) => sender.status(task, status, result, output_logs),
         }
     }
     fn set_stdin(&self, task: String, stdin: Box<dyn std::io::Write + Send>) {
@@ -115,12 +121,13 @@ impl TaskSender {
         self.handle.set_stdin(self.name.clone(), stdin);
     }
 
-    pub fn status(&self, status: &str, result: CacheResult) {
+    pub fn status(&self, status: &str, result: CacheResult, output_logs: OutputLogs) {
         // Since this will be rendered via ratatui we any ANSI escape codes will not be
         // handled.
         // TODO: prevent the status from having ANSI codes in this scenario
         let status = console::strip_ansi_codes(status).into_owned();
-        self.handle.status(self.name.clone(), status, result);
+        self.handle
+            .status(self.name.clone(), status, result, output_logs);
     }
 }
 

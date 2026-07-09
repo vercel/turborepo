@@ -1915,7 +1915,8 @@ mod test {
         };
         write(
             &["Cargo.toml"],
-            "[workspace]\nmembers = [\"rust/*\"]\nresolver = \"2\"\n",
+            "[workspace]\nmembers = [\"rust/*\"]\nresolver = \"2\"\n\n[workspace.metadata]\nname \
+             = \"acme\"\n",
         );
         write(
             &["rust", "app", "Cargo.toml"],
@@ -1984,16 +1985,13 @@ mod test {
 
             // All packages present, tagged with their toolchain.
             let app = pkg_graph.package_info(&PackageName::from("app")).unwrap();
-            assert_eq!(app.toolchain, crate::toolchain::ToolchainId::CARGO);
+            assert_eq!(app.toolchain, crate::toolchain::ToolchainId::RUST);
             let js_pkg = pkg_graph
                 .package_info(&PackageName::from("js-pkg"))
                 .unwrap();
             assert_eq!(js_pkg.toolchain, crate::toolchain::ToolchainId::JAVASCRIPT);
-            let workspace_pkg = pkg_graph.package_info(&PackageName::from("cargo")).unwrap();
-            assert_eq!(
-                workspace_pkg.toolchain,
-                crate::toolchain::ToolchainId::CARGO
-            );
+            let workspace_pkg = pkg_graph.package_info(&PackageName::from("acme")).unwrap();
+            assert_eq!(workspace_pkg.toolchain, crate::toolchain::ToolchainId::RUST);
 
             // Crate path dependencies became graph edges.
             let app_deps = pkg_graph
@@ -2004,7 +2002,7 @@ mod test {
                 "app should depend on lib-a, got {app_deps:?}"
             );
             let workspace_deps = pkg_graph
-                .immediate_dependencies(&PackageNode::Workspace(PackageName::from("cargo")))
+                .immediate_dependencies(&PackageNode::Workspace(PackageName::from("acme")))
                 .unwrap();
             assert!(
                 workspace_deps.contains(&PackageNode::Workspace(PackageName::from("app")))

@@ -153,7 +153,7 @@ pub struct WatchClient {
     telemetry: CommandEventBuilder,
     handler: SignalHandler,
     ui_sender: Option<UISender>,
-    ui_handle: Option<JoinHandle<Result<(), turborepo_ui::Error>>>,
+    ui_handle: Option<JoinHandle<()>>,
     experimental_write_cache: bool,
     query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
 }
@@ -661,12 +661,9 @@ impl WatchClient {
         if let Some(sender) = &self.ui_sender {
             sender.stop().await;
         }
+        // Render errors are logged by the watchdog inside `start_ui`.
         if let Some(handle) = self.ui_handle.take() {
-            match handle.await {
-                Ok(Err(err)) => tracing::error!("error encountered rendering tui: {err}"),
-                Err(err) => tracing::error!("render thread panicked: {err}"),
-                Ok(Ok(())) => {}
-            }
+            handle.await.ok();
         }
     }
 

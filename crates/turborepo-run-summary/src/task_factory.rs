@@ -118,18 +118,26 @@ where
         workspace_info: &PackageInfo,
         display_task: impl Fn(&TaskId<'static>) -> Option<T> + Copy,
     ) -> Result<SharedTaskSummary<T>, Error> {
-        // TODO: command should be optional
-        // The package's toolchain owns the display string (JavaScript: the
-        // script text; Cargo: the cargo invocation), derived from the same
-        // tables as execution so display cannot drift from what runs.
-        let command = self
-            .package_graph
-            .toolchains()
-            .get(&workspace_info.toolchain)
-            .and_then(|toolchain| toolchain.task_display_command(workspace_info, task_id.task()))
-            .unwrap_or_else(|| "<NONEXISTENT>".to_string());
-
         let task_definition = self.task_definition(task_id)?;
+
+        // TODO: command should be optional
+        // A resolved `command` override displays as its literal argv —
+        // truthful by construction. Otherwise the package's toolchain owns
+        // the display string (JavaScript: the script text; Cargo: the cargo
+        // invocation), derived from the same tables as execution so display
+        // cannot drift from what runs.
+        let command = match &task_definition.command {
+            Some(turborepo_types::TaskCommandOverride::Argv(argv)) => argv.join(" "),
+            Some(turborepo_types::TaskCommandOverride::OptOut) => "<OPT OUT>".to_string(),
+            None => self
+                .package_graph
+                .toolchains()
+                .get(&workspace_info.toolchain)
+                .and_then(|toolchain| {
+                    toolchain.task_display_command(workspace_info, task_id.task())
+                })
+                .unwrap_or_else(|| "<NONEXISTENT>".to_string()),
+        };
 
         let expanded_outputs = self
             .hash_tracker

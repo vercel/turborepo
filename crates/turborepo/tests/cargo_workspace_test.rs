@@ -253,14 +253,14 @@ fn test_prune_js_target_unaffected_by_cargo() {
     assert!(!out.join("Cargo.toml").exists());
 }
 
-/// The synthetic `cargo` package has no directory of its own and is not a
-/// pruneable target.
+/// The synthetic workspace package has no directory of its own and is not
+/// a pruneable target.
 #[test]
 fn test_prune_cargo_workspace_package_rejected() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_cargo_monorepo(tempdir.path());
 
-    let output = run_turbo(tempdir.path(), &["prune", "cargo"]);
+    let output = run_turbo(tempdir.path(), &["prune", "acme"]);
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -292,5 +292,55 @@ fn test_filter_hint_when_cargo_disabled() {
     assert!(
         stderr.contains("experimentalCargoWorkspaces"),
         "expected the opt-in hint: {stderr}"
+    );
+}
+
+/// A `command` override on Cargo packages: replaces the verb table, applies
+/// via the `rust` map key, and defines tasks even for library crates.
+#[test]
+fn test_command_override_on_cargo_packages() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_monorepo(tempdir.path());
+
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+            "futureFlags": {
+                "experimentalCargoWorkspaces": true,
+                "experimentalTaskCommand": true
+            },
+            "tasks": {
+                "greet": { "command": { "rust": ["echo", "hello-from-rust-map"] } },
+                "acme#test": { "command": ["echo", "replaced-cargo-test"] }
+            }
+        }"#,
+    )
+    .unwrap();
+
+    // The rust map key grants `greet` to every Cargo package, libraries
+    // included — no verb table involved.
+    let output = run_turbo(tempdir.path(), &["run", "greet", "--filter=lib-a"]);
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.status.success(), "greet failed: {combined}");
+    assert!(
+        combined.contains("hello-from-rust-map"),
+        "map default should apply to crates: {combined}"
+    );
+
+    // A scoped override on the workspace package replaces `cargo test`.
+    let output = run_turbo(tempdir.path(), &["run", "test", "--filter=acme"]);
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.status.success(), "test failed: {combined}");
+    assert!(
+        combined.contains("replaced-cargo-test"),
+        "override should replace the verb table: {combined}"
     );
 }

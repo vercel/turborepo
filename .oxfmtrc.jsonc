@@ -21,6 +21,10 @@
     "examples/",
     "packages/eslint-plugin-turbo/__fixtures__",
     "packages/create-turbo/templates",
+    // Lockfile fixtures are vendored inputs; package managers validate
+    // package.json content (including key order) against the lockfile, so
+    // reformatting them breaks the fixtures.
+    "lockfile-tests/fixtures/",
     "turborepo-tests/",
     "buildcontainer/",
     "scripts/",

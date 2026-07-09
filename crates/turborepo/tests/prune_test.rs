@@ -199,6 +199,60 @@ patchedDependencies:
     }
 }
 
+/// Regression test for https://github.com/vercel/turborepo/issues/13301
+///
+/// pnpm supports semver ranges in `patchedDependencies` keys (e.g.
+/// `is-number@<=7.0.0`). Prune must keep patches whose range matches a
+/// package in the pruned closure.
+#[test]
+fn test_prune_docker_keeps_version_range_patches() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("monorepo_with_root_dep", tempdir.path()).unwrap();
+
+    // Rewrite the exact patch key to a semver range everywhere it's declared.
+    for file in ["pnpm-lock.yaml", "package.json"] {
+        let path = tempdir.path().join(file);
+        let contents = fs::read_to_string(&path).unwrap();
+        fs::write(
+            &path,
+            contents
+                .replace("is-number@7.0.0:", "is-number@<=7.0.0:")
+                .replace("\"is-number@7.0.0\"", "\"is-number@<=7.0.0\""),
+        )
+        .unwrap();
+    }
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let pruned_lockfile = fs::read_to_string(tempdir.path().join("out/pnpm-lock.yaml")).unwrap();
+    assert!(
+        pruned_lockfile.contains("is-number@<=7.0.0"),
+        "pruned lockfile should retain range patch key:\n{pruned_lockfile}"
+    );
+
+    let pkg_json: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(tempdir.path().join("out/json/package.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        pkg_json["pnpm"]["patchedDependencies"]["is-number@<=7.0.0"],
+        "patches/is-number@7.0.0.patch"
+    );
+
+    assert!(
+        tempdir
+            .path()
+            .join("out/json/patches/is-number@7.0.0.patch")
+            .exists(),
+        "patch file should be copied into pruned output"
+    );
+}
+
 #[test]
 fn test_prune_rejects_patch_paths_with_parent_dir() {
     let tempdir = tempfile::tempdir().unwrap();

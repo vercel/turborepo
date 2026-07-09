@@ -164,6 +164,10 @@ impl ProcessedTaskDefinition {
         set_field!(self, other, env_mode);
         set_field!(self, other, incremental);
         set_field!(self, other, experimental_ci);
+        // A command is atomic: the most specific definition's whole value
+        // wins (array, opt-out, or map — maps never deep-merge, and
+        // `$TURBO_EXTENDS$` is rejected at processing time).
+        set_field!(self, other, command);
     }
 }
 
@@ -216,6 +220,7 @@ mod test {
             with: None,
             incremental: None,
             experimental_ci: None,
+            command: None,
         }
     }
 
@@ -255,6 +260,7 @@ mod test {
             with: None,
             incremental: None,
             experimental_ci: None,
+            command: None,
         }
     }
 
@@ -276,7 +282,55 @@ mod test {
             with: None,
             incremental: None,
             experimental_ci: None,
+            command: None,
         }
+    }
+
+    #[test]
+    fn test_command_merges_atomically() {
+        use crate::processed::ProcessedCommand;
+
+        let argv = |items: &[&str]| {
+            ProcessedCommand::Argv(Spanned::new(
+                items.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            ))
+        };
+        let map = |entries: &[(&str, &[&str])]| {
+            ProcessedCommand::PerToolchain(Spanned::new(
+                entries
+                    .iter()
+                    .map(|(k, v)| {
+                        (
+                            k.to_string(),
+                            v.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            ))
+        };
+
+        // More specific definition's whole value wins: argv replaced by
+        // opt-out, map replaced by argv — never appended or deep-merged.
+        let mut base = create_base_task();
+        base.command = Some(argv(&["cargo", "test"]));
+        let mut other = create_base_task();
+        other.command = Some(ProcessedCommand::OptOut(Spanned::new(())));
+        base.merge(other);
+        assert!(matches!(base.command, Some(ProcessedCommand::OptOut(_))));
+
+        let mut base = create_base_task();
+        base.command = Some(map(&[("rust", &["cargo", "test"])]));
+        let mut other = create_base_task();
+        other.command = Some(argv(&["vitest", "run"]));
+        base.merge(other.clone());
+        assert_eq!(base.command, other.command);
+
+        // A definition without `command` inherits it untouched.
+        let mut base = create_base_task();
+        base.command = Some(argv(&["vitest"]));
+        let expected = base.command.clone();
+        base.merge(create_base_task());
+        assert_eq!(base.command, expected);
     }
 
     #[test]

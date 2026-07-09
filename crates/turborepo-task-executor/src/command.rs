@@ -3,7 +3,7 @@
 //! This module provides the trait and factory for creating commands to execute
 //! tasks.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, PathError, RelativeUnixPath};
@@ -15,7 +15,7 @@ use turborepo_repository::{
     toolchain::CompileCacheEndpoint,
 };
 use turborepo_task_id::TaskId;
-use turborepo_types::TaskArgs;
+use turborepo_types::{TaskArgs, TaskCommandOverride};
 
 use crate::MfeConfigProvider;
 
@@ -169,6 +169,10 @@ pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     /// [`turborepo_repository::toolchain::Toolchain::compile_cache_env`]), when
     /// one is running for this run.
     compile_cache: Option<&'a CompileCacheEndpoint>,
+    /// Resolved `command` overrides by task, from the engine's task
+    /// definitions. An argv replaces the toolchain's own resolution; an
+    /// opt-out makes the task an explicit no-op.
+    command_overrides: HashMap<TaskId<'static>, TaskCommandOverride>,
 }
 
 impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
@@ -178,6 +182,7 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
         task_args: TaskArgs<'a>,
         mfe_configs: Option<&'a M>,
         compile_cache: Option<&'a CompileCacheEndpoint>,
+        command_overrides: HashMap<TaskId<'static>, TaskCommandOverride>,
     ) -> Self {
         Self {
             repo_root,
@@ -185,6 +190,7 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
             task_args,
             mfe_configs,
             compile_cache,
+            command_overrides,
         }
     }
 
@@ -216,12 +222,23 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
                 package_name: task_id.package().into(),
             })?;
 
+        // A resolved `command` override is authoritative in both
+        // directions: an opt-out is an explicit no-op (same outcome as a
+        // missing script), and an argv replaces the toolchain's own
+        // resolution while the toolchain keeps framing it.
+        let override_command = match self.command_overrides.get(task_id) {
+            Some(TaskCommandOverride::OptOut) => return Ok(None),
+            Some(TaskCommandOverride::Argv(argv)) => Some(argv.as_slice()),
+            None => None,
+        };
+
         let spec = toolchain
             .task_command(
                 self.repo_root,
                 workspace_info,
                 task_id.task(),
                 self.task_args.args_for_task(task_id),
+                override_command,
             )
             .map_err(CommandProviderError::from)?;
         let Some(spec) = spec else {
@@ -262,17 +279,17 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             cmd.env("TURBO_MFE_PORT", port.to_string());
         }
 
+        // The toolchain decides how the injection composes with the task's
+        // environment (competing configuration suppresses it, ambient
+        // settings are tolerated) and returns exactly what to inject; see
+        // `Toolchain::compile_cache_env`.
         if let Some(endpoint) = self.compile_cache {
-            match compile_cache_env_to_inject(toolchain.compile_cache_env(endpoint), environment) {
-                Ok(vars) => {
-                    for (key, value) in vars {
-                        cmd.env(key, value);
-                    }
-                }
-                Err(conflict) => debug!(
-                    "not injecting compile cache env for {task_id}: task environment already sets \
-                     {conflict}"
-                ),
+            let vars = toolchain.compile_cache_env(endpoint, environment);
+            if vars.is_empty() {
+                debug!("no compile cache env to inject for {task_id}");
+            }
+            for (key, value) in vars {
+                cmd.env(key, value);
             }
         }
 
@@ -281,29 +298,6 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
         cmd.open_stdin();
 
         Ok(Some(cmd))
-    }
-}
-
-/// The compile-cache variables to apply for a task, given what the
-/// toolchain wants injected
-/// ([`turborepo_repository::toolchain::Toolchain::compile_cache_env`], empty
-/// for toolchains without an integration) and the task's environment.
-///
-/// Never overrides variables the task environment already sets: a
-/// user-supplied configuration (e.g. their own `RUSTC_WRAPPER` pointing at
-/// a different cache) wins, and partially applying ours on top of theirs
-/// could hijack its backend — so one conflicting variable suppresses the
-/// whole set. Returns the conflicting variable name as the error.
-fn compile_cache_env_to_inject(
-    vars: Vec<(String, String)>,
-    environment: &EnvironmentVariableMap,
-) -> Result<Vec<(String, String)>, String> {
-    match vars
-        .iter()
-        .find(|(key, _)| environment.contains_key(key.as_str()))
-    {
-        Some((conflict, _)) => Err(conflict.clone()),
-        None => Ok(vars),
     }
 }
 
@@ -757,51 +751,6 @@ mod tests {
             .command(&task_id, &EnvironmentVariableMap::default())
             .unwrap();
         assert!(cmd.is_none(), "expected no cmd, got {cmd:?}");
-    }
-
-    #[test]
-    fn test_compile_cache_env_injected_when_unconflicted() {
-        let vars = vec![
-            ("RUSTC_WRAPPER".to_owned(), "sccache".to_owned()),
-            ("SCCACHE_WEBDAV_ENDPOINT".to_owned(), "http://x".to_owned()),
-        ];
-        let environment = EnvironmentVariableMap::from(HashMap::from([(
-            "PATH".to_owned(),
-            "/usr/bin".to_owned(),
-        )]));
-        assert_eq!(
-            compile_cache_env_to_inject(vars.clone(), &environment),
-            Ok(vars)
-        );
-    }
-
-    #[test]
-    fn test_compile_cache_env_suppressed_entirely_on_conflict() {
-        // A user-supplied RUSTC_WRAPPER must suppress the whole set:
-        // injecting only SCCACHE_* on top of it could hijack the backend of
-        // the user's own wrapper.
-        let vars = vec![
-            ("RUSTC_WRAPPER".to_owned(), "sccache".to_owned()),
-            ("SCCACHE_WEBDAV_ENDPOINT".to_owned(), "http://x".to_owned()),
-        ];
-        let environment = EnvironmentVariableMap::from(HashMap::from([(
-            "RUSTC_WRAPPER".to_owned(),
-            "/home/user/bin/my-wrapper".to_owned(),
-        )]));
-        assert_eq!(
-            compile_cache_env_to_inject(vars, &environment),
-            Err("RUSTC_WRAPPER".to_owned())
-        );
-    }
-
-    #[test]
-    fn test_empty_compile_cache_env_injects_nothing() {
-        // The JavaScript default: no compile-cache integration.
-        let environment = EnvironmentVariableMap::default();
-        assert_eq!(
-            compile_cache_env_to_inject(Vec::new(), &environment),
-            Ok(Vec::new())
-        );
     }
 
     #[tokio::test]

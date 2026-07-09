@@ -53,12 +53,23 @@ impl<'a> ExecContextFactory<'a> {
         manager: ProcessManager,
         engine: &'a Arc<Engine>,
     ) -> Result<Self, super::Error> {
+        // Resolved `command` overrides travel from the engine's task
+        // definitions into the provider: an argv replaces the toolchain's
+        // own resolution, an opt-out is an explicit no-op.
+        let command_overrides = engine
+            .task_ids()
+            .filter_map(|task_id| {
+                let command = engine.task_definition(task_id)?.command.clone()?;
+                Some((task_id.clone(), command))
+            })
+            .collect();
         let pkg_graph_provider = ToolchainCommandProvider::new(
             visitor.repo_root,
             &visitor.package_graph,
             visitor.run_opts.task_args(),
             visitor.micro_frontends_configs,
             visitor.compile_cache_endpoint.as_ref(),
+            command_overrides,
         );
         let mut command_factory = CommandFactory::new();
         if let Some(micro_frontends_configs) = visitor.micro_frontends_configs {

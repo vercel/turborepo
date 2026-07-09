@@ -109,6 +109,20 @@ jobs:
             # For pushes, use the before and after SHAs
             BASE_COMMIT="${{ github.event.before }}"
             HEAD_COMMIT="${{ github.event.after }}"
+
+            # The shallow checkout doesn't contain the before commit; fetch
+            # it by SHA (a depth-1 fetch brings its tree, which is all a
+            # diff needs). An all-zero SHA (branch creation) or a failed
+            # fetch (force push discarding the old commit) means there is
+            # no base to compare against: report everything as changed so
+            # every test runs.
+            if [[ "$BASE_COMMIT" =~ ^0+$ ]] || ! git fetch --no-tags --depth=1 origin "$BASE_COMMIT"; then
+              echo "No usable base commit; treating all paths as changed"
+              for name in docs native-lib rest rust; do
+                echo "$name=true" >> "$GITHUB_OUTPUT"
+              done
+              exit 0
+            fi
           fi
 
           echo "Comparing changes between $BASE_COMMIT and $HEAD_COMMIT"
@@ -171,7 +185,9 @@ jobs:
 
           # Detect if Rust/core code changed (requires Rust tests + integration tests)
           # This excludes JS-only changes like packages/*, lockfile, etc.
-          RUST_PATTERNS="^(crates/|cli/|Cargo\.|rust-toolchain|\.cargo/|\.config/|\.github/|turborepo-tests/)"
+          # turbo.json is included because it defines the command the Rust
+          # test task runs (turborepo-crates#test).
+          RUST_PATTERNS="^(crates/|cli/|Cargo\.|rust-toolchain|\.cargo/|\.config/|\.github/|turborepo-tests/|turbo\.json)"
           RUST_CHANGES=$(echo "$CHANGED_FILES" | grep -E "$RUST_PATTERNS" || true)
 
           if [ -n "$RUST_CHANGES" ]; then
@@ -249,14 +265,15 @@ jobs:
         with:
           tool: nextest
 
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      # The nextest invocation (and its excludes) lives in turbo.json as
+      # the turborepo-crates#test command; dogfooding the task command
+      # override keeps CI and local runs identical.
       - name: Run tests
         timeout-minutes: 15
-        run: |
-          cargo nextest run --workspace \
-            --exclude turborepo-lsp \
-            --exclude turborepo-schema-gen \
-            --exclude turborepo-napi \
-            --no-fail-fast
+        run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream
         shell: bash
 
   rust_test_windows:
@@ -323,14 +340,15 @@ jobs:
           curl -L -o "%TEMP%\nextest.zip" "https://get.nexte.st/latest/windows"
           tar -xf "%TEMP%\nextest.zip" -C "%USERPROFILE%\.cargo\bin"
 
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      # The nextest invocation (and its excludes) lives in turbo.json as
+      # the turborepo-crates#test command; dogfooding the task command
+      # override keeps CI and local runs identical.
       - name: Run tests
         timeout-minutes: 15
-        run: |
-          cargo nextest run --workspace \
-            --exclude turborepo-lsp \
-            --exclude turborepo-schema-gen \
-            --exclude turborepo-napi \
-            --no-fail-fast
+        run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream
         shell: bash
         env:
           INSTA_WORKSPACE_ROOT: ${{ github.workspace }}
@@ -365,14 +383,15 @@ jobs:
         with:
           tool: nextest
 
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      # The nextest invocation (and its excludes) lives in turbo.json as
+      # the turborepo-crates#test command; dogfooding the task command
+      # override keeps CI and local runs identical.
       - name: Run tests
         timeout-minutes: 15
-        run: |
-          cargo nextest run --workspace \
-            --exclude turborepo-lsp \
-            --exclude turborepo-schema-gen \
-            --exclude turborepo-napi \
-            --no-fail-fast
+        run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream
         shell: bash
 
   check-examples:
@@ -382,16 +401,25 @@ jobs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # For the OIDC token exchanged for a Remote Cache access token.
+      id-token: write
     env:
-      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
-      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
+      TURBO_CACHE: remote:rw
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
+
+      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+      - name: Set up Turborepo Remote Cache
+        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
+        with:
+          team: ${{ vars.TURBO_TEAM }}
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -423,9 +451,11 @@ jobs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # For the OIDC token exchanged for a Remote Cache access token.
+      id-token: write
     env:
-      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
       TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
       CARGO_INCREMENTAL: 0
     steps:
@@ -433,6 +463,16 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
+
+      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+      # Push events only: fork PRs cannot mint OIDC tokens, and PR runs use
+      # the local cache anyway.
+      - name: Set up Turborepo Remote Cache
+        if: github.event_name == 'push'
+        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
+        with:
+          team: ${{ vars.TURBO_TEAM }}
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -469,9 +509,11 @@ jobs:
           - 20
           - 22
           - 24
+    permissions:
+      contents: read
+      # For the OIDC token exchanged for a Remote Cache access token.
+      id-token: write
     env:
-      TURBO_TOKEN: ${{ github.event_name == 'pull_request' && 'unused' || secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ github.event_name == 'pull_request' && 'unused' || vars.TURBO_TEAM }}
       TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
     steps:
       - name: Determine fetch depth
@@ -485,6 +527,16 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
           persist-credentials: false
+
+      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+      # Push events only: fork PRs cannot mint OIDC tokens, and PR runs use
+      # the local cache anyway.
+      - name: Set up Turborepo Remote Cache
+        if: github.event_name == 'push'
+        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
+        with:
+          team: ${{ vars.TURBO_TEAM }}
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
