@@ -474,7 +474,24 @@ impl Toolchain for CargoToolchain {
         package: &crate::package_graph::PackageInfo,
         task: &str,
         pass_through_args: Option<&[String]>,
+        override_command: Option<&[String]>,
     ) -> Result<Option<toolchain::TaskCommand>, toolchain::Error> {
+        // An override replaces the verb-table resolution and applies to any
+        // crate — including libraries, which map no verbs of their own. The
+        // serial group survives when the override still invokes cargo: the
+        // group exists because of cargo's build-directory lock, a property
+        // of the binary, not of the verb table.
+        if let Some(override_command) = override_command {
+            let serial_group = (override_command.first().map(String::as_str) == Some("cargo"))
+                .then(|| "cargo".to_string());
+            return Ok(toolchain::override_task_command(
+                repo_root,
+                package,
+                override_command,
+                pass_through_args,
+                serial_group,
+            ));
+        }
         let Some(name) = package.package_name() else {
             return Ok(None);
         };
@@ -1854,7 +1871,7 @@ checksum = "abc123"
         // Entrypoint build: scoped to the crate, serialized on the cargo
         // group, run from the workspace root.
         let cmd = toolchain
-            .task_command(&root, &app, "build", None)
+            .task_command(&root, &app, "build", None, None)
             .unwrap()
             .expect("entrypoint build resolves");
         assert_eq!(cmd.args, os_args(&["build", "--package=app"]));
@@ -1864,7 +1881,7 @@ checksum = "abc123"
         // `run` is exempt from the serial group and forwards pass-through
         // args to the binary after `--`.
         let cmd = toolchain
-            .task_command(&root, &app, "dev", Some(&["--port".to_string()]))
+            .task_command(&root, &app, "dev", Some(&["--port".to_string()]), None)
             .unwrap()
             .expect("entrypoint dev resolves to cargo run");
         assert_eq!(cmd.args, os_args(&["run", "--package=app", "--", "--port"]));
@@ -1873,7 +1890,7 @@ checksum = "abc123"
         // Other subcommands attach pass-through args as cargo flags, no
         // separator.
         let cmd = toolchain
-            .task_command(&root, &app, "build", Some(&["--release".to_string()]))
+            .task_command(&root, &app, "build", Some(&["--release".to_string()]), None)
             .unwrap()
             .expect("entrypoint build resolves");
         assert_eq!(cmd.args, os_args(&["build", "--package=app", "--release"]));
@@ -1881,20 +1898,20 @@ checksum = "abc123"
         // Libraries are no-ops; entrypoints do not run verification verbs.
         assert!(
             toolchain
-                .task_command(&root, &lib_a, "build", None)
+                .task_command(&root, &lib_a, "build", None, None)
                 .unwrap()
                 .is_none()
         );
         assert!(
             toolchain
-                .task_command(&root, &app, "test", None)
+                .task_command(&root, &app, "test", None, None)
                 .unwrap()
                 .is_none()
         );
 
         // The workspace package hosts verification verbs at workspace scope.
         let cmd = toolchain
-            .task_command(&root, &workspace, "lint", None)
+            .task_command(&root, &workspace, "lint", None, None)
             .unwrap()
             .expect("workspace lint resolves to clippy");
         assert_eq!(cmd.args, os_args(&["clippy", "--workspace"]));
@@ -1908,6 +1925,7 @@ checksum = "abc123"
                 &workspace,
                 "test",
                 Some(&["--nocapture".to_string()]),
+                None,
             )
             .unwrap()
             .expect("workspace test resolves");
@@ -1917,7 +1935,7 @@ checksum = "abc123"
         );
         assert!(
             toolchain
-                .task_command(&root, &workspace, "build", None)
+                .task_command(&root, &workspace, "build", None, None)
                 .unwrap()
                 .is_none(),
             "workspace-wide build would duplicate entrypoint builds"
@@ -1935,6 +1953,51 @@ checksum = "abc123"
             Some("cargo test --workspace")
         );
         assert_eq!(toolchain.task_display_command(&lib_a, "build"), None);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_command_override_frame() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+
+        let toolchain = CargoToolchain::new(root.clone());
+        toolchain.discover_packages().await.unwrap();
+
+        let lib_a = package_info("lib-a", "crates/lib-a/Cargo.toml");
+        let workspace = package_info("fixture-ws", "Cargo.toml");
+
+        // An override applies to any crate — including libraries, which map
+        // no verbs of their own. cwd is the package's directory, and an
+        // argv still invoking cargo keeps the serial group (the group
+        // exists because of cargo's build-directory lock).
+        let override_argv = vec!["cargo".to_string(), "fuzz".to_string(), "run".to_string()];
+        let cmd = toolchain
+            .task_command(&root, &lib_a, "fuzz", None, Some(&override_argv))
+            .unwrap()
+            .expect("override defines the task for a library crate");
+        assert_eq!(cmd.program, std::ffi::OsString::from("cargo"));
+        assert_eq!(cmd.args, os_args(&["fuzz", "run"]));
+        assert_eq!(cmd.cwd, root.join_components(&["crates", "lib-a"]));
+        assert_eq!(cmd.serial_group.as_deref(), Some("cargo"));
+
+        // A non-cargo argv drops the group; pass-through args append
+        // verbatim (no separator injection).
+        let override_argv = vec!["./scripts/test.sh".to_string()];
+        let cmd = toolchain
+            .task_command(
+                &root,
+                &workspace,
+                "test",
+                Some(&["--fast".to_string()]),
+                Some(&override_argv),
+            )
+            .unwrap()
+            .expect("override resolves");
+        assert_eq!(cmd.program, std::ffi::OsString::from("./scripts/test.sh"));
+        assert_eq!(cmd.args, os_args(&["--fast"]));
+        // The workspace package's directory is the repo root.
+        assert_eq!(cmd.cwd, root);
+        assert_eq!(cmd.serial_group, None);
     }
 
     #[tokio::test(flavor = "multi_thread")]

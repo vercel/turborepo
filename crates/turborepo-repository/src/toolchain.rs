@@ -160,6 +160,32 @@ pub struct TaskCommand {
     pub serial_group: Option<String>,
 }
 
+/// Build a [`TaskCommand`] from a task's `command` override: element 0 is
+/// the program, the rest its arguments — nothing is prepended, by any
+/// toolchain. Pass-through args append verbatim (turbo cannot know an
+/// arbitrary command's separator convention). The working directory is the
+/// package's own, uniformly across toolchains; the caller supplies its
+/// toolchain-specific serial group.
+pub fn override_task_command(
+    repo_root: &AbsoluteSystemPath,
+    package: &crate::package_graph::PackageInfo,
+    override_command: &[String],
+    pass_through_args: Option<&[String]>,
+    serial_group: Option<String>,
+) -> Option<TaskCommand> {
+    let (program, args) = override_command.split_first()?;
+    let mut args: Vec<OsString> = args.iter().map(OsString::from).collect();
+    if let Some(pass_through_args) = pass_through_args {
+        args.extend(pass_through_args.iter().map(OsString::from));
+    }
+    Some(TaskCommand {
+        program: OsString::from(program),
+        args,
+        cwd: repo_root.resolve(package.package_path()),
+        serial_group,
+    })
+}
+
 /// A language ecosystem that contributes packages to the repository.
 ///
 /// See the module docs for the design rules trait methods must follow.
@@ -177,14 +203,28 @@ pub trait Toolchain: Send + Sync {
     /// `pass_through_args` are user-supplied arguments (`turbo run task --
     /// <args>`); the toolchain owns how they are attached, since separator
     /// conventions differ per tool.
+    ///
+    /// `override_command`, when present, replaces the argv the toolchain
+    /// would have constructed — element 0 is the program, nothing is
+    /// prepended. The toolchain still owns the frame (working directory,
+    /// serial grouping); the shared placement lives in
+    /// [`override_task_command`]. Pass-through args append verbatim: turbo
+    /// cannot know an arbitrary command's separator convention.
     fn task_command(
         &self,
         repo_root: &AbsoluteSystemPath,
         package: &crate::package_graph::PackageInfo,
         task: &str,
         pass_through_args: Option<&[String]>,
+        override_command: Option<&[String]>,
     ) -> Result<Option<TaskCommand>, Error> {
-        let _ = (repo_root, package, task, pass_through_args);
+        let _ = (
+            repo_root,
+            package,
+            task,
+            pass_through_args,
+            override_command,
+        );
         Ok(None)
     }
 
@@ -198,6 +238,18 @@ pub trait Toolchain: Send + Sync {
     ) -> Option<String> {
         let _ = (package, task);
         None
+    }
+
+    /// Whether the package itself *authors* a definition for `task` — a
+    /// package.json script, written by the package's owner. Distinct from
+    /// [`Toolchain::defines_task`]: toolchain-synthesized fallbacks (Cargo's
+    /// verb tables) define tasks without the package authoring anything.
+    ///
+    /// Authored definitions shadow unscoped `command` defaults from the
+    /// root turbo.json; synthesized ones sit below them.
+    fn authors_task(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
+        let _ = (package, task);
+        false
     }
 
     /// Whether this toolchain defines an executable command for `task` in
@@ -546,7 +598,20 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
         package: &crate::package_graph::PackageInfo,
         task: &str,
         pass_through_args: Option<&[String]>,
+        override_command: Option<&[String]>,
     ) -> Result<Option<TaskCommand>, Error> {
+        // An override replaces the whole package-manager indirection: the
+        // argv is executed directly from the package directory. Note this
+        // bypasses `<pm> run`, so `node_modules/.bin` is not added to PATH.
+        if let Some(override_command) = override_command {
+            return Ok(override_task_command(
+                repo_root,
+                package,
+                override_command,
+                pass_through_args,
+                None,
+            ));
+        }
         // No script (or an empty one) means the task is a no-op.
         if package
             .package_json
@@ -606,6 +671,12 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
             .scripts
             .get(task)
             .is_some_and(|script| !script.is_empty())
+    }
+
+    /// package.json scripts are authored by the package: they shadow
+    /// unscoped `command` defaults.
+    fn authors_task(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
+        self.defines_task(package, task)
     }
 
     fn derived_task_io(
@@ -734,7 +805,7 @@ mod tests {
         };
 
         let command = toolchain
-            .task_command(repo_root, &package, "build", None)
+            .task_command(repo_root, &package, "build", None, None)
             .unwrap()
             .expect("script exists, command resolves");
         // The program is the resolved npm binary (or node.exe on Windows);
@@ -756,13 +827,13 @@ mod tests {
         // Missing and empty scripts are no-ops.
         assert!(
             toolchain
-                .task_command(repo_root, &package, "lint", None)
+                .task_command(repo_root, &package, "lint", None, None)
                 .unwrap()
                 .is_none()
         );
         assert!(
             toolchain
-                .task_command(repo_root, &package, "empty", None)
+                .task_command(repo_root, &package, "empty", None, None)
                 .unwrap()
                 .is_none()
         );
@@ -773,6 +844,29 @@ mod tests {
             Some("next build")
         );
         assert_eq!(toolchain.task_display_command(&package, "lint"), None);
+
+        // A `command` override replaces the whole package-manager
+        // indirection: argv[0] is the program, nothing is prepended, cwd is
+        // the package directory. It also defines tasks no script does, and
+        // pass-through args append verbatim.
+        let override_argv = vec!["vitest".to_string(), "run".to_string()];
+        let cmd = toolchain
+            .task_command(
+                repo_root,
+                &package,
+                "lint",
+                Some(&["--bail".to_string()]),
+                Some(&override_argv),
+            )
+            .unwrap()
+            .expect("override defines the task");
+        assert_eq!(cmd.program, OsString::from("vitest"));
+        assert_eq!(
+            cmd.args,
+            vec![OsString::from("run"), OsString::from("--bail")]
+        );
+        assert_eq!(cmd.cwd, repo_root.resolve(package.package_path()));
+        assert_eq!(cmd.serial_group, None);
     }
 
     #[cfg(windows)]

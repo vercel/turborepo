@@ -3,7 +3,7 @@
 //! This module provides the trait and factory for creating commands to execute
 //! tasks.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, PathError, RelativeUnixPath};
@@ -15,7 +15,7 @@ use turborepo_repository::{
     toolchain::CompileCacheEndpoint,
 };
 use turborepo_task_id::TaskId;
-use turborepo_types::TaskArgs;
+use turborepo_types::{TaskArgs, TaskCommandOverride};
 
 use crate::MfeConfigProvider;
 
@@ -169,6 +169,10 @@ pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     /// [`turborepo_repository::toolchain::Toolchain::compile_cache_env`]), when
     /// one is running for this run.
     compile_cache: Option<&'a CompileCacheEndpoint>,
+    /// Resolved `command` overrides by task, from the engine's task
+    /// definitions. An argv replaces the toolchain's own resolution; an
+    /// opt-out makes the task an explicit no-op.
+    command_overrides: HashMap<TaskId<'static>, TaskCommandOverride>,
 }
 
 impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
@@ -178,6 +182,7 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
         task_args: TaskArgs<'a>,
         mfe_configs: Option<&'a M>,
         compile_cache: Option<&'a CompileCacheEndpoint>,
+        command_overrides: HashMap<TaskId<'static>, TaskCommandOverride>,
     ) -> Self {
         Self {
             repo_root,
@@ -185,6 +190,7 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
             task_args,
             mfe_configs,
             compile_cache,
+            command_overrides,
         }
     }
 
@@ -216,12 +222,23 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
                 package_name: task_id.package().into(),
             })?;
 
+        // A resolved `command` override is authoritative in both
+        // directions: an opt-out is an explicit no-op (same outcome as a
+        // missing script), and an argv replaces the toolchain's own
+        // resolution while the toolchain keeps framing it.
+        let override_command = match self.command_overrides.get(task_id) {
+            Some(TaskCommandOverride::OptOut) => return Ok(None),
+            Some(TaskCommandOverride::Argv(argv)) => Some(argv.as_slice()),
+            None => None,
+        };
+
         let spec = toolchain
             .task_command(
                 self.repo_root,
                 workspace_info,
                 task_id.task(),
                 self.task_args.args_for_task(task_id),
+                override_command,
             )
             .map_err(CommandProviderError::from)?;
         let Some(spec) = spec else {

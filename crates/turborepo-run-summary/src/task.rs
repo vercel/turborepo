@@ -412,6 +412,9 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             incremental,
             // Not surfaced in the run summary; queryable via `turbo query`.
             experimental_ci: _,
+            // Surfaced through the summary's `command` display string
+            // instead (see the task factory).
+            command: _,
         } = value;
 
         let mut outputs = inclusions;

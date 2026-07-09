@@ -125,6 +125,11 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
             with,
             incremental,
             experimental_ci: processed.experimental_ci.map(Spanned::into_inner),
+            // Deliberately not converted here: the engine builder resolves
+            // the override across the whole chain (scoped vs unscoped
+            // positions, toolchain fan-out) and sets it afterward. See
+            // `resolve_command_override`.
+            command: None,
         })
     }
 

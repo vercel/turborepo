@@ -161,6 +161,7 @@ mod tests {
           with: None,
           incremental: None,
           experimental_ci: None,
+          command: None,
         }
       ; "full"
     )]
@@ -214,6 +215,7 @@ mod tests {
             with: None,
             incremental: None,
             experimental_ci: None,
+            command: None,
         }
       ; "full (windows)"
     )]
