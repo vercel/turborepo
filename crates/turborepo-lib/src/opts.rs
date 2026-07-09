@@ -1006,70 +1006,101 @@ mod test {
             }, "remote-cache-read-only_remote_rw,local_r"
     )]
     fn test_resolve_cache_config(run_args: RunArgs, name: &str) -> Result<(), anyhow::Error> {
-        let mut args = Args::default();
-        args.command = Some(Command::Run {
-            execution_args: Box::default(),
-            run_args: Box::new(run_args),
-        });
-        // set token and team to simulate a logged in/linked user
-        args.token = Some("token".to_string());
-        args.team = Some("team".to_string());
+        with_clean_turbo_env(|| {
+            let mut args = Args::default();
+            args.command = Some(Command::Run {
+                execution_args: Box::default(),
+                run_args: Box::new(run_args),
+            });
+            // set token and team to simulate a logged in/linked user
+            args.token = Some("token".to_string());
+            args.team = Some("team".to_string());
 
-        let cache_config = CommandBase::new(
-            args,
-            AbsoluteSystemPathBuf::default(),
-            "1.0.0",
-            ColorConfig::new(true),
-        )
-        .map(|base| base.opts().cache_opts.cache);
+            let cache_config = CommandBase::new(
+                args,
+                AbsoluteSystemPathBuf::default(),
+                "1.0.0",
+                ColorConfig::new(true),
+            )
+            .map(|base| base.opts().cache_opts.cache);
 
-        insta::assert_debug_snapshot!(name, cache_config);
+            insta::assert_debug_snapshot!(name, cache_config);
 
-        Ok(())
+            Ok(())
+        })
+    }
+
+    /// Config resolution reads the real process environment, and the
+    /// environment running these tests legitimately carries turbo
+    /// configuration — TURBO_CACHE in CI, an OIDC-minted TURBO_TOKEN, a
+    /// developer's local settings. None of it may leak into tests that
+    /// assert against resolution defaults. temp-env serializes
+    /// env-mutating tests behind a mutex, so this is safe under both
+    /// `cargo test` (threads) and nextest (processes).
+    fn with_clean_turbo_env<R>(f: impl FnOnce() -> R) -> R {
+        const TURBO_ENV: &[&str] = &[
+            "TURBO_API",
+            "TURBO_CACHE",
+            "TURBO_DAEMON",
+            "TURBO_FORCE",
+            "TURBO_LOGIN",
+            "TURBO_PREFLIGHT",
+            "TURBO_REMOTE_CACHE_ENABLED",
+            "TURBO_REMOTE_CACHE_READ_ONLY",
+            "TURBO_REMOTE_ONLY",
+            "TURBO_TEAM",
+            "TURBO_TEAMID",
+            "TURBO_TOKEN",
+            "VERCEL_ARTIFACTS_OWNER",
+            "VERCEL_ARTIFACTS_TOKEN",
+        ];
+        temp_env::with_vars_unset(TURBO_ENV, f)
     }
 
     #[test]
     fn test_cache_config_force_remote_enable() -> Result<(), anyhow::Error> {
-        let tmpdir = TempDir::new()?;
-        let repo_root = AbsoluteSystemPathBuf::try_from(tmpdir.path())?;
+        with_clean_turbo_env(|| {
+            let tmpdir = TempDir::new()?;
+            let repo_root = AbsoluteSystemPathBuf::try_from(tmpdir.path())?;
 
-        repo_root.join_component(CONFIG_FILE).create_with_contents(
-            serde_json::to_string_pretty(&serde_json::json!({
-                "remoteCache": { "enabled": true }
-            }))?,
-        )?;
+            repo_root.join_component(CONFIG_FILE).create_with_contents(
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "remoteCache": { "enabled": true }
+                }))?,
+            )?;
 
-        let mut args = Args::default();
-        args.command = Some(Command::Run {
-            execution_args: Box::default(),
-            run_args: Box::new(RunArgs {
-                force: Some(Some(true)),
-                ..Default::default()
-            }),
-        });
+            let mut args = Args::default();
+            args.command = Some(Command::Run {
+                execution_args: Box::default(),
+                run_args: Box::new(RunArgs {
+                    force: Some(Some(true)),
+                    ..Default::default()
+                }),
+            });
 
-        // set token and team to simulate a logged in/linked user
-        args.token = Some("token".to_string());
-        args.team = Some("team".to_string());
+            // set token and team to simulate a logged in/linked user
+            args.token = Some("token".to_string());
+            args.team = Some("team".to_string());
 
-        let base = CommandBase::new(args, repo_root, "1.0.0", ColorConfig::new(false))?;
-        let actual = base.opts().cache_opts.cache;
+            let base = CommandBase::new(args, repo_root, "1.0.0", ColorConfig::new(false))?;
+            let actual = base.opts().cache_opts.cache;
 
-        assert_eq!(
-            actual,
-            CacheConfig {
-                remote: CacheActions {
-                    read: false,
-                    write: true
-                },
-                local: CacheActions {
-                    read: false,
-                    write: true
+            assert_eq!(
+                actual,
+                CacheConfig {
+                    remote: CacheActions {
+                        read: false,
+                        write: true
+                    },
+                    local: CacheActions {
+                        read: false,
+                        write: true
+                    }
                 }
-            }
-        );
+            );
 
-        Ok(())
+            Ok(())
+        })
     }
 
     #[test_case(
