@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SiVercel } from "@icons-pack/react-simple-icons";
+import { ThemeToggle } from "@vercel/geistdocs/controls";
 import { footerLinks } from "@/geistdocs";
-import { ThemeToggle } from "./theme-toggle";
 
 type FooterLink = {
   href: string;

@@ -1,48 +1,14 @@
-import { DocsLayout as FumadocsDocsLayout } from "fumadocs-ui/layouts/docs";
-import type { ComponentProps, CSSProperties, ReactNode } from "react";
-import { i18n } from "@/lib/geistdocs/i18n";
-import { Folder, Item, Separator, sidebarSlots } from "./sidebar";
+import { GeistdocsHomeLayout as PackageHomeLayout } from "@vercel/geistdocs/home-layout";
+import type { ComponentProps, ReactNode } from "react";
+import { config } from "@/lib/geistdocs/config";
 
-type HomeLayoutProps = {
-  tree: ComponentProps<typeof FumadocsDocsLayout>["tree"];
+interface HomeLayoutProps {
   children: ReactNode;
-};
+  tree: ComponentProps<typeof PackageHomeLayout>["tree"];
+}
 
 export const HomeLayout = ({ tree, children }: HomeLayoutProps) => (
-  <FumadocsDocsLayout
-    containerProps={{
-      className: "p-0! max-w-full mx-0 [&_[data-sidebar-placeholder]]:hidden",
-      style: {
-        display: "flex",
-        flexDirection: "column",
-        "--fd-docs-row-1": "4rem"
-      } as CSSProperties
-    }}
-    i18n={i18n}
-    nav={{
-      enabled: false
-    }}
-    searchToggle={{
-      enabled: false
-    }}
-    sidebar={{
-      className: "md:hidden",
-      collapsible: false,
-      components: {
-        Folder,
-        Item,
-        Separator
-      }
-    }}
-    slots={{
-      sidebar: sidebarSlots
-    }}
-    tabMode="auto"
-    themeSwitch={{
-      enabled: false
-    }}
-    tree={tree}
-  >
+  <PackageHomeLayout config={config} tree={tree}>
     {children}
-  </FumadocsDocsLayout>
+  </PackageHomeLayout>
 );

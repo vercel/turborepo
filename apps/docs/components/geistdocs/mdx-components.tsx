@@ -1,35 +1,19 @@
+import { createMdxComponents } from "@vercel/geistdocs/mdx";
 import { DynamicLink } from "fumadocs-core/dynamic-link";
+import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { Heading } from "fumadocs-ui/components/heading";
-import { TypeTable } from "fumadocs-ui/components/type-table";
-import { PackageManagerTabs, PlatformTabs, Tab, Tabs } from "./tabs";
-import defaultMdxComponents from "fumadocs-ui/mdx";
+import { Step, Steps } from "fumadocs-ui/components/steps";
 import type { MDXComponents } from "mdx/types";
+import { Mermaid } from "@/components/diagram/diagram";
 import type { SerializedBadge } from "@/lib/rehype-strip-heading-jsx";
 import { cn } from "@/lib/utils";
-import { Accordion, Accordions } from "./accordion";
-import {
-  Callout,
-  CalloutContainer,
-  CalloutDescription,
-  CalloutTitle
-} from "./callout";
-import { Card, Cards } from "./card";
-import { CodeBlock } from "./code-block";
-import {
-  CodeBlockTab,
-  CodeBlockTabs,
-  CodeBlockTabsList,
-  CodeBlockTabsTrigger
-} from "./code-block-tabs";
 import { ExamplesTable } from "./examples-table";
 import { ExperimentalBadge } from "./experimental-badge";
 import { File, Files, Folder } from "./files";
 import { InVersion } from "./in-version";
 import { LinkToDocumentation } from "./link-to-documentation";
-import { Mermaid } from "@/components/diagram/diagram";
-import { Step, Steps } from "./steps";
+import { PackageManagerTabs, PlatformTabs, Tab, Tabs } from "./tabs";
 import { ThemeAwareImage } from "./theme-aware-image";
-import { Video } from "./video";
 
 const BADGE_COMPONENTS: Record<
   string,
@@ -79,8 +63,7 @@ export const getMDXComponents = (
 ): MDXComponents => {
   const { components, isBlog } = options;
 
-  return {
-    ...defaultMdxComponents,
+  return createMdxComponents({
     ...components,
     h2: (props: React.ComponentProps<"h2">) => (
       <HeadingWithBadges as="h2" {...props} />
@@ -112,8 +95,7 @@ export const getMDXComponents = (
         );
       }
     }),
-    pre: CodeBlock,
-    a: ({ href, ...props }) =>
+    a: ({ href, ...props }: React.ComponentProps<"a">) =>
       href?.startsWith("/") ? (
         <DynamicLink
           className="font-normal text-primary no-underline"
@@ -127,24 +109,12 @@ export const getMDXComponents = (
           className="font-normal text-primary no-underline"
         />
       ),
-    CodeBlockTabs,
-    CodeBlockTabsList,
-    CodeBlockTabsTrigger,
-    CodeBlockTab,
-    TypeTable,
     Tabs,
     Tab,
     PackageManagerTabs,
     PlatformTabs,
-    Callout,
-    CalloutContainer,
-    CalloutTitle,
-    CalloutDescription,
     Mermaid,
-    Video,
     LinkToDocumentation,
-    Cards,
-    Card,
     Files,
     File,
     Folder,
@@ -156,5 +126,5 @@ export const getMDXComponents = (
     ThemeAwareImage,
     InVersion,
     ExperimentalBadge
-  };
+  });
 };
