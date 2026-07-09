@@ -785,7 +785,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             .as_ref()
             .map(|hasher| hasher(&closures))
             .unwrap_or_default();
-        for (_, entry) in self.workspaces.iter_mut() {
+        for entry in self.workspaces.values_mut() {
             // Mirror of the filter in all_external_dependencies: a non-JS
             // package sharing a directory with a JS package must not steal
             // its closure.

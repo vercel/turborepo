@@ -400,7 +400,7 @@ impl PackageGraph {
                 mut closures,
                 mut hashes,
             })) => {
-                for (_, info) in self.packages.iter_mut() {
+                for info in self.packages.values_mut() {
                     // Mirror of the filter in the inline path
                     // (`populate_transitive_dependencies`): a non-JS package
                     // sharing a directory with a JS package must not steal
