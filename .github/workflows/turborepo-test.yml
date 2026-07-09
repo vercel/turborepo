@@ -237,9 +237,16 @@ jobs:
 
   rust_test_macos:
     runs-on: macos-15-xlarge
-    timeout-minutes: 15
+    # Padded beyond the usual 15: the first push-to-main run populates the
+    # compile cache, and artifact writes make it slower than a plain build.
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      # For the OIDC token exchanged for a Remote Cache access token.
+      id-token: write
     env:
       CARGO_INCREMENTAL: 0
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
@@ -249,6 +256,18 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
+
+      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+      # Push events only: fork PRs cannot mint OIDC tokens, and PR runs use
+      # the local cache anyway. With credentials present, turbo caches the
+      # test task remotely and engages the sccache compile cache
+      # (futureFlags.experimentalCargoSccache).
+      - name: Set up Turborepo Remote Cache
+        if: github.event_name == 'push'
+        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
+        with:
+          team: ${{ vars.TURBO_TEAM }}
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -272,15 +291,22 @@ jobs:
       # the turborepo-crates#test command; dogfooding the task command
       # override keeps CI and local runs identical.
       - name: Run tests
-        timeout-minutes: 15
+        timeout-minutes: 20
         run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream
         shell: bash
 
   rust_test_windows:
     runs-on: windows-latest-8-core-oss
-    timeout-minutes: 15
+    # Padded beyond the usual 15: the first push-to-main run populates the
+    # compile cache, and artifact writes make it slower than a plain build.
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      # For the OIDC token exchanged for a Remote Cache access token.
+      id-token: write
     env:
       CARGO_INCREMENTAL: 0
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
@@ -320,6 +346,18 @@ jobs:
         with:
           persist-credentials: false
 
+      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+      # Push events only: fork PRs cannot mint OIDC tokens, and PR runs use
+      # the local cache anyway. With credentials present, turbo caches the
+      # test task remotely and engages the sccache compile cache
+      # (futureFlags.experimentalCargoSccache).
+      - name: Set up Turborepo Remote Cache
+        if: github.event_name == 'push'
+        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
+        with:
+          team: ${{ vars.TURBO_TEAM }}
+
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
         with:
@@ -347,7 +385,7 @@ jobs:
       # the turborepo-crates#test command; dogfooding the task command
       # override keeps CI and local runs identical.
       - name: Run tests
-        timeout-minutes: 15
+        timeout-minutes: 20
         run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream
         shell: bash
         env:
@@ -355,9 +393,16 @@ jobs:
 
   rust_test_ubuntu:
     runs-on: ubuntu-latest-8-core-oss
-    timeout-minutes: 15
+    # Padded beyond the usual 15: the first push-to-main run populates the
+    # compile cache, and artifact writes make it slower than a plain build.
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      # For the OIDC token exchanged for a Remote Cache access token.
+      id-token: write
     env:
       CARGO_INCREMENTAL: 0
+      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
@@ -367,6 +412,18 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
+
+      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+      # Push events only: fork PRs cannot mint OIDC tokens, and PR runs use
+      # the local cache anyway. With credentials present, turbo caches the
+      # test task remotely and engages the sccache compile cache
+      # (futureFlags.experimentalCargoSccache).
+      - name: Set up Turborepo Remote Cache
+        if: github.event_name == 'push'
+        uses: vercel/setup-turborepo-remote-cache-action@e3e5e565104ce34a9609db885e5cf7b59238479c # main
+        with:
+          team: ${{ vars.TURBO_TEAM }}
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -390,7 +447,7 @@ jobs:
       # the turborepo-crates#test command; dogfooding the task command
       # override keeps CI and local runs identical.
       - name: Run tests
-        timeout-minutes: 15
+        timeout-minutes: 20
         run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream
         shell: bash
 
