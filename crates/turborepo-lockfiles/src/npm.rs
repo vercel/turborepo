@@ -322,7 +322,7 @@ impl NpmLockfile {
             candidates.entry(hoisted_key).or_default().push(key.clone());
         }
 
-        let to_rehoist: Vec<(String, String)> = candidates
+        let mut to_rehoist: Vec<(String, String)> = candidates
             .into_iter()
             .filter_map(|(hoisted_key, nested_keys)| {
                 if nested_keys.len() == 1 {
@@ -335,8 +335,12 @@ impl NpmLockfile {
                 }
             })
             .collect();
+        // Candidates come from HashMap iteration; sort so relocation placement
+        // decisions below don't depend on hash ordering.
+        // See https://github.com/vercel/turborepo/issues/13321
+        to_rehoist.sort();
 
-        for (nested_key, hoisted_key) in to_rehoist {
+        for (nested_key, hoisted_key) in &to_rehoist {
             // Remove old hoisted entry and its sub-deps.
             let old_prefix = format!("{hoisted_key}/");
             let old_sub: Vec<String> = pruned
@@ -347,10 +351,10 @@ impl NpmLockfile {
             for k in old_sub {
                 pruned.remove(&k);
             }
-            pruned.remove(&hoisted_key);
+            pruned.remove(hoisted_key);
 
             // Promote nested entry.
-            if let Some(pkg) = pruned.remove(&nested_key) {
+            if let Some(pkg) = pruned.remove(nested_key) {
                 pruned.insert(hoisted_key.clone(), pkg);
             }
 
@@ -368,18 +372,27 @@ impl NpmLockfile {
                     pruned.insert(new_key, pkg);
                 }
             }
+        }
 
-            // Promoting the package changed its position in the tree, so any of
-            // its transitive deps that were resolved through workspace-nested
-            // siblings (e.g. `apps/app-a/node_modules/mime`) are no longer
-            // reachable from the new hoisted position. Walk the promoted
-            // package's dependency closure and relocate any stranded versions.
+        // Promoting a package changes its position in the tree, so any of its
+        // transitive deps that were resolved through workspace-nested siblings
+        // (e.g. `apps/app-a/node_modules/mime`) are no longer reachable from
+        // the new hoisted position. Walk each promoted package's dependency
+        // closure and relocate any stranded versions.
+        //
+        // This runs as a separate pass after all promotions: a relocation can
+        // copy a sibling to the root slot and remove its nested source, and if
+        // that sibling were itself a still-pending promotion candidate, the
+        // interleaved processing would remove the root entry and then find
+        // nothing left to promote, dropping the package entirely.
+        // See https://github.com/vercel/turborepo/issues/13321
+        for (nested_key, hoisted_key) in &to_rehoist {
             let mut visited = std::collections::HashSet::new();
             Self::relocate_stranded_closure(
                 pruned,
                 original_packages,
-                &nested_key,
-                &hoisted_key,
+                nested_key,
+                hoisted_key,
                 &mut visited,
             );
         }
@@ -1165,6 +1178,118 @@ mod test {
             Some("1.0.2"),
             "hoisted encodeurl@1.0.2 (what send@0.17.2 needs) should remain"
         );
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/13321
+    //
+    // The original lockfile has dev-only hoisted copies of send/http-errors/
+    // fresh at the root, and the app workspace has its own nested copies of
+    // all three (send@1.2.1 depending on the nested http-errors@2.0.1 and
+    // fresh@2.0.0). Pruning to the app makes all three nested entries rehoist
+    // candidates. Candidate processing order used to come from HashMap
+    // iteration, and relocate_stranded_closure ran interleaved with
+    // promotions: if send was promoted first, its relocation moved the nested
+    // http-errors/fresh to the root and removed the nested sources, then the
+    // still-queued http-errors/fresh candidates removed the root entries and
+    // found nothing left to promote — dropping the packages entirely.
+    //
+    // Run the prune repeatedly since the old failure depended on hash order.
+    #[test]
+    fn test_subgraph_rehoist_is_deterministic_and_complete() {
+        let json = r#"{
+            "lockfileVersion": 3,
+            "requires": true,
+            "packages": {
+                "": {
+                    "name": "monorepo",
+                    "workspaces": ["apps/*"],
+                    "devDependencies": {
+                        "fresh": "0.5.2",
+                        "http-errors": "2.0.0",
+                        "send": "0.19.0"
+                    }
+                },
+                "node_modules/app": {
+                    "resolved": "apps/app",
+                    "link": true
+                },
+                "node_modules/fresh": {
+                    "version": "0.5.2",
+                    "dev": true
+                },
+                "node_modules/http-errors": {
+                    "version": "2.0.0",
+                    "dev": true
+                },
+                "node_modules/send": {
+                    "version": "0.19.0",
+                    "dev": true,
+                    "dependencies": {
+                        "fresh": "0.5.2",
+                        "http-errors": "2.0.0"
+                    }
+                },
+                "apps/app": {
+                    "version": "1.0.0",
+                    "dependencies": { "send": "^1.2.1" }
+                },
+                "apps/app/node_modules/fresh": {
+                    "version": "2.0.0"
+                },
+                "apps/app/node_modules/http-errors": {
+                    "version": "2.0.1"
+                },
+                "apps/app/node_modules/send": {
+                    "version": "1.2.1",
+                    "dependencies": {
+                        "fresh": "^2.0.0",
+                        "http-errors": "^2.0.0"
+                    }
+                }
+            }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/app".to_string()];
+        let packages = vec![
+            "apps/app/node_modules/send".to_string(),
+            "apps/app/node_modules/http-errors".to_string(),
+            "apps/app/node_modules/fresh".to_string(),
+        ];
+
+        let mut first_encoded: Option<Vec<u8>> = None;
+        for run in 0..32 {
+            let pruned = lockfile.subgraph(&workspace_packages, &packages).unwrap();
+            let encoded = pruned.encode().unwrap();
+            let reparsed: NpmLockfile = NpmLockfile::load(&encoded).unwrap();
+
+            // The promoted send@1.2.1 must always be able to resolve its
+            // production deps at their correct versions.
+            for (key, version) in [
+                ("node_modules/send", "1.2.1"),
+                ("node_modules/http-errors", "2.0.1"),
+                ("node_modules/fresh", "2.0.0"),
+            ] {
+                assert_eq!(
+                    reparsed
+                        .packages
+                        .get(key)
+                        .and_then(|p| p.version.as_deref()),
+                    Some(version),
+                    "run {run}: expected {key}@{version} in pruned lockfile"
+                );
+            }
+
+            // The pruned output must be byte-for-byte identical across runs.
+            match &first_encoded {
+                None => first_encoded = Some(encoded),
+                Some(first) => assert_eq!(
+                    first, &encoded,
+                    "run {run}: pruned lockfile differs between runs"
+                ),
+            }
+        }
     }
 
     #[test]
