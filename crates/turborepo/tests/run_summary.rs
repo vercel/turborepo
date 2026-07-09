@@ -152,9 +152,7 @@ fn test_run_summary_error() {
     // Task summary for failed task
     let task = get_task(summary, "my-app#maybefails");
     assert!(!task.is_null());
-    // Pinned; changed when commandOverride/commandOptOut joined the
-    // TaskHashable schema (the documented one-time hash bust).
-    assert_eq!(task["hash"], "2c247eed108c3bdd");
+    assert_eq!(task["hash"], "9f05a7188fdf4e93");
     assert_eq!(task["cache"]["status"], "MISS");
     assert!([1, 4].contains(&task["execution"]["exitCode"].as_i64().unwrap()));
     let error = task["execution"]["error"].as_str().unwrap();

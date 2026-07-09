@@ -1,13 +1,12 @@
 ---
 source: crates/turborepo/tests/unnamed_packages_test.rs
-assertion_line: 24
 expression: stdout.to_string()
 ---
    • Packages in scope: my-app, util
    • Running build in 2 packages
    • Remote caching disabled
 
-my-app:build: cache miss, executing b1aea3a474ebaa56
+my-app:build: cache miss, executing 6fa89b5c9a7d4158
 my-app:build: 
 my-app:build: > build
 my-app:build: > echo building
