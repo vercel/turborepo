@@ -550,6 +550,21 @@ impl Toolchain for CargoToolchain {
         display_command(details.kind, task, &name)
     }
 
+    fn task_defaults(
+        &self,
+        package: &crate::package_graph::PackageInfo,
+        task: &str,
+    ) -> toolchain::TaskDefaults {
+        let cache = package
+            .package_name()
+            .and_then(|name| self.package_details(&name))
+            .and_then(|details| task_subcommand(details.kind, task))
+            .is_some_and(|subcommand| subcommand == "run")
+            .then_some(false);
+
+        toolchain::TaskDefaults { cache }
+    }
+
     /// Route rustc invocations through the embedded sccache, with the
     /// Turborepo-served endpoint as its webdav storage backend. The wrapper
     /// is the running turbo binary itself (which dispatches invocations
@@ -1953,6 +1968,12 @@ checksum = "abc123"
             Some("cargo test --workspace")
         );
         assert_eq!(toolchain.task_display_command(&lib_a, "build"), None);
+
+        assert_eq!(toolchain.task_defaults(&app, "run").cache, Some(false));
+        assert_eq!(toolchain.task_defaults(&app, "dev").cache, Some(false));
+        assert_eq!(toolchain.task_defaults(&app, "build").cache, None);
+        assert_eq!(toolchain.task_defaults(&workspace, "test").cache, None);
+        assert_eq!(toolchain.task_defaults(&lib_a, "run").cache, None);
     }
 
     #[tokio::test(flavor = "multi_thread")]

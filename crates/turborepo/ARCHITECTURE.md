@@ -235,7 +235,9 @@ whether anything changed; Cargo decides how and in what order to build.**
   tarballing it fights Cargo instead of leaning on it (it is also
   multi-gigabyte). For fine-grained compile caching, `RUSTC_WRAPPER`
   (sccache) is the sound layer, and it participates in task hashes so
-  toggling it invalidates caches.
+  toggling it invalidates caches. Entrypoint `run` and `dev` tasks default to
+  `cache: false`, because a cache hit must not suppress the requested process;
+  an explicit turbo.json `cache` setting overrides the toolchain default.
 
 - **Watch mode** (`Toolchain::watch_spec`, consumed by
   `turborepo-lib/src/package_changes_watcher.rs`): each toolchain declares
@@ -318,10 +320,10 @@ hint pointing at the flag. Released turbo versions hard-error on unknown
 End-to-end coverage lives in `crates/turborepo/tests/cargo_workspace_test.rs`
 against the `cargo_monorepo` fixture (a mixed npm + Cargo workspace):
 graph shape, execution, caching, deliverable restoration, cross-crate
-invalidation, and the filter hint. `turbo query` serves Cargo packages
-through the same graph. Discovery adds roughly 170ms to invocations on a
-~60-crate workspace (`cargo metadata`, `rustc --version`, and lockfile
-parsing); daemon-side caching is the optimization path if that ever
+invalidation, uncached `run`/`dev` execution, and the filter hint. `turbo query`
+serves Cargo packages through the same graph. Discovery adds roughly 170ms to
+invocations on a ~60-crate workspace (`cargo metadata`, `rustc --version`, and
+lockfile parsing); daemon-side caching is the optimization path if that ever
 matters.
 
 ### 3. Task Graph (`crates/turborepo-lib/src/engine/`)
