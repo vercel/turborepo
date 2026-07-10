@@ -129,11 +129,65 @@ fn artifact_id_for_key(key: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
+/// Live counters for the compile-unit traffic the proxy serves, feeding the
+/// run summary's "Incremental cache" line. Object-granular: one GET hit is
+/// one reused work unit, one GET miss is one unit the tool rebuilt (and
+/// usually stored afterward). Health-check traffic (`.sccache_check`) is
+/// excluded — it says nothing about reuse.
+#[derive(Debug, Default)]
+pub struct IncrementalCacheStats {
+    hits: std::sync::atomic::AtomicU64,
+    misses: std::sync::atomic::AtomicU64,
+    stores: std::sync::atomic::AtomicU64,
+}
+
+/// A point-in-time copy of [`IncrementalCacheStats`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IncrementalCacheSnapshot {
+    pub hits: u64,
+    pub misses: u64,
+    pub stores: u64,
+}
+
+impl IncrementalCacheStats {
+    pub fn snapshot(&self) -> IncrementalCacheSnapshot {
+        use std::sync::atomic::Ordering;
+        IncrementalCacheSnapshot {
+            hits: self.hits.load(Ordering::Relaxed),
+            misses: self.misses.load(Ordering::Relaxed),
+            stores: self.stores.load(Ordering::Relaxed),
+        }
+    }
+
+    fn record_hit(&self) {
+        self.hits.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn record_miss(&self) {
+        self.misses
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn record_store(&self) {
+        self.stores
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// The storage self-check object sccache reads and writes at server
+/// startup. Infrastructure traffic, not work-unit reuse.
+const SCCACHE_HEALTH_CHECK_KEY: &str = ".sccache_check";
+
+fn is_health_check(key: &str) -> bool {
+    key == SCCACHE_HEALTH_CHECK_KEY
+}
+
 struct ProxyState {
     client: APIClient,
     auth: APIAuth,
     /// Expected `Authorization` header value: `Bearer {token}`.
     expected_authorization: String,
+    stats: Arc<IncrementalCacheStats>,
 }
 
 impl ProxyState {
@@ -159,6 +213,7 @@ pub struct SccacheProxyServer {
     router: Router,
     port: u16,
     shutdown_tx: tokio::sync::broadcast::Sender<()>,
+    stats: Arc<IncrementalCacheStats>,
 }
 
 impl SccacheProxyServer {
@@ -178,10 +233,12 @@ impl SccacheProxyServer {
             .map_err(|source| Error::Bind { port, source })?
             .port();
 
+        let stats = Arc::new(IncrementalCacheStats::default());
         let state = Arc::new(ProxyState {
             client,
             auth,
             expected_authorization: format!("Bearer {token}"),
+            stats: stats.clone(),
         });
         // A single fallback dispatcher rather than per-method routes: the
         // webdav surface opendal (sccache's storage client) speaks includes
@@ -196,7 +253,14 @@ impl SccacheProxyServer {
             router,
             port,
             shutdown_tx,
+            stats,
         })
+    }
+
+    /// Live counters for the traffic this proxy serves. Snapshot at run end
+    /// for the run summary's "Incremental cache" line.
+    pub fn stats(&self) -> Arc<IncrementalCacheStats> {
+        self.stats.clone()
     }
 
     pub fn port(&self) -> u16 {
@@ -340,10 +404,16 @@ async fn handle_get(state: Arc<ProxyState>, key: String) -> Response {
     {
         Ok(Some(response)) => {
             debug!("sccache proxy hit for key {key}");
+            if !is_health_check(&key) {
+                state.stats.record_hit();
+            }
             Body::from_stream(response.bytes_stream()).into_response()
         }
         Ok(None) => {
             debug!("sccache proxy miss for key {key}");
+            if !is_health_check(&key) {
+                state.stats.record_miss();
+            }
             StatusCode::NOT_FOUND.into_response()
         }
         Err(err) => {
@@ -391,6 +461,9 @@ async fn handle_put(state: Arc<ProxyState>, key: String, body: bytes::Bytes) -> 
     {
         Ok(()) => {
             debug!("sccache proxy stored key {key} ({len} bytes)");
+            if !is_health_check(&key) {
+                state.stats.record_store();
+            }
             StatusCode::OK.into_response()
         }
         Err(err) => {
@@ -496,6 +569,7 @@ mod tests {
         let bearer = "opendal-test-token";
         let (server, port) = start_proxy(backend_port, bearer).await;
         let shutdown = server.shutdown_handle();
+        let stats = server.stats();
         let proxy = tokio::spawn(server.run());
 
         let builder = opendal::services::Webdav::default()
@@ -519,6 +593,16 @@ mod tests {
             .expect("cache write through opendal");
         let read = op.read(key).await.expect("cache read through opendal");
         assert_eq!(read.to_bytes().as_ref(), b"object bytes");
+
+        // The stats feeding the run summary's "Incremental cache" line
+        // count real work-unit traffic and exclude the health-check probe.
+        let snapshot = stats.snapshot();
+        assert_eq!(snapshot.hits, 1, "one successful cache read");
+        assert_eq!(snapshot.stores, 1, "one cache write (probe excluded)");
+        assert!(
+            snapshot.misses >= 1,
+            "the read-before-write must count at least one miss, got {snapshot:?}"
+        );
 
         let _ = shutdown.send(());
         let _ = proxy.await;

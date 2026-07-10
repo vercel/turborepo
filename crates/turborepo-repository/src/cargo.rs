@@ -16,10 +16,17 @@
 //!   `--filter` and `--affected` propagate through them): being buildable is
 //!   not the same as being an entrypoint.
 //!
-//! A synthetic package named [`WORKSPACE_PACKAGE_NAME`], anchored at the
-//! root `Cargo.toml` and depending on every crate, represents the workspace
-//! itself; it will host workspace-scoped verification verbs (`cargo test
-//! --workspace`, ...) once command resolution gains a toolchain surface.
+//! A synthetic package anchored at the root `Cargo.toml` and depending on
+//! every crate represents the workspace itself; it hosts the
+//! workspace-scoped verification verbs (`<name>#test` → `cargo test
+//! --workspace`, ...; see [`workspace_subcommand`]). Its name is declared
+//! by the user in the root manifest — using Turborepo with Rust requires
+//! naming the workspace:
+//!
+//! ```toml
+//! [workspace.metadata]
+//! name = "acme"
+//! ```
 //!
 //! Support is experimental and gated behind
 //! `futureFlags.experimentalCargoWorkspaces`.
@@ -45,10 +52,6 @@ pub const CARGO_TOML: &str = "Cargo.toml";
 /// The conventional file name for a Cargo lockfile.
 pub const CARGO_LOCK: &str = "Cargo.lock";
 
-/// Name of the synthetic package that represents the Cargo workspace itself.
-/// A real workspace member with this name is skipped with a warning.
-pub const WORKSPACE_PACKAGE_NAME: &str = "cargo";
-
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("failed to run `cargo metadata`: {0}")]
@@ -65,6 +68,22 @@ pub enum Error {
     ManifestParse(#[from] Box<toml_edit::TomlError>),
     #[error("root Cargo.toml has no [workspace] table")]
     NotAWorkspace,
+    #[error(
+        "The Cargo workspace has no name.\n\nTurborepo needs a name for the workspace's tasks \
+         (`<name>#test`), filters (`--filter=<name>`), and configuration. Add one to the root \
+         Cargo.toml:\n\n    [workspace.metadata]\n    name = \"my-workspace\""
+    )]
+    MissingWorkspaceName,
+    #[error(
+        "invalid Cargo workspace name {name:?}: {reason}. Set a valid name in the root Cargo.toml \
+         under `[workspace.metadata] name`."
+    )]
+    InvalidWorkspaceName { name: String, reason: String },
+    #[error(
+        "the Cargo workspace name {name:?} collides with the crate of the same name at {dir}. \
+         Pick a different `[workspace.metadata] name`."
+    )]
+    WorkspaceNameCollision { name: String, dir: String },
     #[error("Cannot prune a Cargo workspace without a Cargo.lock; run a build to generate it.")]
     MissingLockfile,
     #[error("failed to read workspace file: {0}")]
@@ -145,7 +164,7 @@ pub enum CargoPackageKind {
     /// A crate with `bin`/`cdylib`/`staticlib` targets: a deliverable.
     /// `build`/`run` tasks execute `cargo <verb> --package=<crate>`.
     Entrypoint,
-    /// The synthetic [`WORKSPACE_PACKAGE_NAME`] package hosting
+    /// The synthetic user-named workspace package hosting
     /// workspace-scoped verification verbs (`cargo test --workspace`, ...).
     Workspace,
 }
@@ -176,7 +195,7 @@ pub fn entrypoint_subcommand(task: &str) -> Option<&'static str> {
 }
 
 /// Map a Turborepo task name to the Cargo subcommand that implements it at
-/// workspace scope (the synthetic [`WORKSPACE_PACKAGE_NAME`] package).
+/// workspace scope (the synthetic user-named workspace package).
 ///
 /// `build` is deliberately absent: building is entrypoint-scoped
 /// (`cargo build --package=<crate>`), and a workspace-wide build would
@@ -446,7 +465,7 @@ impl CargoToolchain {
 
 impl Toolchain for CargoToolchain {
     fn id(&self) -> ToolchainId {
-        ToolchainId::CARGO
+        ToolchainId::RUST
     }
 
     fn task_command(
@@ -455,7 +474,24 @@ impl Toolchain for CargoToolchain {
         package: &crate::package_graph::PackageInfo,
         task: &str,
         pass_through_args: Option<&[String]>,
+        override_command: Option<&[String]>,
     ) -> Result<Option<toolchain::TaskCommand>, toolchain::Error> {
+        // An override replaces the verb-table resolution and applies to any
+        // crate — including libraries, which map no verbs of their own. The
+        // serial group survives when the override still invokes cargo: the
+        // group exists because of cargo's build-directory lock, a property
+        // of the binary, not of the verb table.
+        if let Some(override_command) = override_command {
+            let serial_group = (override_command.first().map(String::as_str) == Some("cargo"))
+                .then(|| "cargo".to_string());
+            return Ok(toolchain::override_task_command(
+                repo_root,
+                package,
+                override_command,
+                pass_through_args,
+                serial_group,
+            ));
+        }
         let Some(name) = package.package_name() else {
             return Ok(None);
         };
@@ -754,7 +790,7 @@ impl Toolchain for CargoToolchain {
         let dependency_globs = || {
             let mut globs: Vec<String> = dependencies
                 .iter()
-                .filter(|dep| dep.toolchain == ToolchainId::CARGO)
+                .filter(|dep| dep.toolchain == ToolchainId::RUST)
                 .filter(|dep| {
                     dep.package_name()
                         .and_then(|dep_name| self.package_details(&dep_name))
@@ -807,9 +843,25 @@ impl Toolchain for CargoToolchain {
         Box::pin(async move {
             // Discovery spawns `cargo metadata` synchronously, so keep it off
             // the async runtime like the JavaScript manifest-parsing path.
-            let crates =
+            let workspace =
                 turborepo_rayon_compat::block_in_place(|| discover_crates(&self.repo_root))
                     .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+            let crates = workspace.crates;
+
+            // Using Turborepo with Rust requires naming the workspace: the
+            // synthetic workspace package is a real package (task keys,
+            // filters), and every package must have a name. Only enforced
+            // when there are crates to host — a memberless manifest doesn't
+            // demand a name for nothing.
+            let workspace_name = match workspace.name {
+                Some(name) => name,
+                None if crates.is_empty() => String::new(),
+                None => {
+                    return Err(toolchain::Error::Failed(Box::new(
+                        Error::MissingWorkspaceName,
+                    )));
+                }
+            };
 
             // Each crate becomes a package. Internal dependencies are
             // expressed as `workspace:*` specifiers in the synthesized
@@ -885,11 +937,12 @@ impl Toolchain for CargoToolchain {
             }
 
             // The synthetic workspace package, anchored at the root
-            // Cargo.toml. It depends on every crate so `--affected` and
+            // Cargo.toml and named by the user via `[workspace.metadata]
+            // name`. It depends on every crate so `--affected` and
             // dependent-filters propagate crate changes to it.
             if !crate_names.is_empty() {
                 self.record_details(
-                    WORKSPACE_PACKAGE_NAME.to_string(),
+                    workspace_name.clone(),
                     CargoPackageDetails {
                         kind: CargoPackageKind::Workspace,
                         deliverables: Vec::new(),
@@ -902,7 +955,7 @@ impl Toolchain for CargoToolchain {
                     .collect();
                 packages.push(DiscoveredPackage {
                     descriptor: PackageJson {
-                        name: Some(Spanned::new(WORKSPACE_PACKAGE_NAME.to_string())),
+                        name: Some(Spanned::new(workspace_name)),
                         dependencies: Some(dependencies),
                         ..Default::default()
                     },
@@ -997,22 +1050,38 @@ impl CargoCrate {
     }
 }
 
+/// The result of Cargo workspace discovery: the member crates plus the
+/// user-declared workspace name.
+#[derive(Debug)]
+pub struct DiscoveredWorkspace {
+    /// The workspace's name from `[workspace.metadata] name`, validated
+    /// against the crate set when present. Not required at this layer —
+    /// it only becomes mandatory when the workspace package is actually
+    /// synthesized (see [`Toolchain::discover_packages`]), so manifests
+    /// without members don't demand a name for nothing.
+    pub name: Option<String>,
+    pub crates: Vec<CargoCrate>,
+}
+
 /// Discover all Rust crates in the Cargo workspace rooted at `repo_root` by
 /// invoking `cargo metadata --no-deps`.
 ///
-/// Returns an empty vec if `repo_root` has no `Cargo.toml`. A root manifest
-/// that exists but that Cargo rejects is an error — the user opted into
-/// Cargo support, so silently discovering nothing would be misleading.
+/// Returns an empty workspace if `repo_root` has no `Cargo.toml`. A root
+/// manifest that exists but that Cargo rejects is an error — the user opted
+/// into Cargo support, so silently discovering nothing would be misleading.
 /// `--no-deps` skips registry resolution, so no lockfile or network access
 /// is required.
 ///
 /// Crates whose manifests live outside the repository root, or whose names
 /// are invalid, are skipped with a warning. A `[package]` in the root
 /// manifest is skipped too: its directory would be the entire repository.
-pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Result<Vec<CargoCrate>, Error> {
+pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWorkspace, Error> {
     let root_manifest_path = repo_root.join_component(CARGO_TOML);
     if !root_manifest_path.exists() {
-        return Ok(Vec::new());
+        return Ok(DiscoveredWorkspace {
+            name: None,
+            crates: Vec::new(),
+        });
     }
 
     let output = std::process::Command::new("cargo")
@@ -1034,11 +1103,54 @@ pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Result<Vec<CargoCrate>
     }
     let metadata: Metadata = serde_json::from_slice(&output.stdout)?;
 
-    Ok(connect_crates(parse_members(
-        repo_root,
-        &root_manifest_path,
-        metadata,
-    )))
+    let name = workspace_name(&metadata)?;
+    let crates = connect_crates(parse_members(repo_root, &root_manifest_path, metadata));
+
+    if let Some(name) = &name
+        && let Some(collision) = crates.iter().find(|c| &c.name == name)
+    {
+        return Err(Error::WorkspaceNameCollision {
+            name: name.clone(),
+            dir: collision
+                .manifest_path
+                .parent()
+                .map(|dir| dir.to_string())
+                .unwrap_or_default(),
+        });
+    }
+
+    Ok(DiscoveredWorkspace { name, crates })
+}
+
+/// Extract and validate the user-declared workspace name from the
+/// `[workspace.metadata]` table. The name becomes a package name — it
+/// appears in task keys (`<name>#test`) and `--filter` expressions — so it
+/// follows the same shape rules as crate names.
+fn workspace_name(metadata: &Metadata) -> Result<Option<String>, Error> {
+    let Some(value) = metadata.metadata.get("name") else {
+        return Ok(None);
+    };
+    let Some(name) = value.as_str() else {
+        return Err(Error::InvalidWorkspaceName {
+            name: value.to_string(),
+            reason: "must be a string".to_string(),
+        });
+    };
+    if !is_valid_crate_name(name) {
+        return Err(Error::InvalidWorkspaceName {
+            name: name.to_string(),
+            reason: "names may only contain alphanumeric characters, `-`, and `_`".to_string(),
+        });
+    }
+    // Legal, but re-introduces exactly the toolchain-id/package-name
+    // confusion user-chosen names exist to remove.
+    if name == "rust" || name == "javascript" {
+        tracing::warn!(
+            "the Cargo workspace is named {name:?}, which is also a toolchain id; consider a more \
+             distinctive name"
+        );
+    }
+    Ok(Some(name.to_string()))
 }
 
 /// A workspace member parsed from `cargo metadata`, before dependency edges
@@ -1102,14 +1214,6 @@ fn parse_members(
         if !is_valid_crate_name(&package.name) {
             tracing::warn!(
                 "skipping Cargo manifest {manifest_path}: invalid crate name {:?}",
-                package.name
-            );
-            continue;
-        }
-        if package.name == WORKSPACE_PACKAGE_NAME {
-            tracing::warn!(
-                "skipping Cargo crate {:?}: the name is reserved for Turborepo's synthetic \
-                 workspace package",
                 package.name
             );
             continue;
@@ -1255,6 +1359,10 @@ fn reaches(adjacency: &HashMap<&str, BTreeSet<&str>>, start: &str, target: &str)
 #[derive(Debug, Deserialize)]
 struct Metadata {
     packages: Vec<MetadataPackage>,
+    /// The `[workspace.metadata]` table, serialized as JSON. Carries the
+    /// user-declared workspace name.
+    #[serde(default)]
+    metadata: serde_json::Value,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1314,7 +1422,8 @@ mod test {
         write(
             root,
             &["Cargo.toml"],
-            "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n",
+            "[workspace]\nmembers = [\"crates/*\"]\nresolver = \
+             \"2\"\n\n[workspace.metadata]\nname = \"fixture-ws\"\n",
         );
         write(
             root,
@@ -1372,7 +1481,7 @@ checksum = "abc123"
         let (_tmp, root) = tempdir_root();
         write_fixture_workspace(&root);
 
-        let mut crates = discover_crates(&root).unwrap();
+        let mut crates = discover_crates(&root).unwrap().crates;
         crates.sort_by(|a, b| a.name.cmp(&b.name));
 
         assert_eq!(
@@ -1412,7 +1521,80 @@ checksum = "abc123"
     #[test]
     fn test_discover_crates_not_a_workspace() {
         let (_tmp, root) = tempdir_root();
-        assert!(discover_crates(&root).unwrap().is_empty());
+        let workspace = discover_crates(&root).unwrap();
+        assert!(workspace.crates.is_empty());
+        assert!(workspace.name.is_none());
+    }
+
+    #[test]
+    fn test_workspace_name_discovered_and_validated() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+
+        let workspace = discover_crates(&root).unwrap();
+        assert_eq!(workspace.name.as_deref(), Some("fixture-ws"));
+
+        // A name colliding with a crate is an error naming the crate's
+        // location, not a silent skip.
+        write(
+            &root,
+            &["Cargo.toml"],
+            "[workspace]\nmembers = [\"crates/*\"]\nresolver = \
+             \"2\"\n\n[workspace.metadata]\nname = \"lib-a\"\n",
+        );
+        let err = discover_crates(&root).unwrap_err();
+        assert!(
+            matches!(err, Error::WorkspaceNameCollision { ref name, .. } if name == "lib-a"),
+            "expected collision error, got: {err}"
+        );
+
+        // Shape rules match crate names: `#` can never appear in a task key.
+        write(
+            &root,
+            &["Cargo.toml"],
+            "[workspace]\nmembers = [\"crates/*\"]\nresolver = \
+             \"2\"\n\n[workspace.metadata]\nname = \"bad#name\"\n",
+        );
+        assert!(matches!(
+            discover_crates(&root).unwrap_err(),
+            Error::InvalidWorkspaceName { .. }
+        ));
+
+        // A non-string name is rejected rather than coerced.
+        write(
+            &root,
+            &["Cargo.toml"],
+            "[workspace]\nmembers = [\"crates/*\"]\nresolver = \
+             \"2\"\n\n[workspace.metadata]\nname = 42\n",
+        );
+        assert!(matches!(
+            discover_crates(&root).unwrap_err(),
+            Error::InvalidWorkspaceName { .. }
+        ));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_missing_workspace_name_is_an_error() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+        // Remove the name: crates exist, so the workspace package would be
+        // synthesized — and every package must have a name.
+        write(
+            &root,
+            &["Cargo.toml"],
+            "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n",
+        );
+
+        let toolchain = CargoToolchain::new(root.clone());
+        let err = toolchain.discover_packages().await.unwrap_err();
+        assert!(
+            err.to_string().contains("[workspace.metadata]"),
+            "the error must show the fix, got: {err}"
+        );
+
+        // Crate discovery itself still works: the name is only mandatory
+        // for package synthesis.
+        assert_eq!(discover_crates(&root).unwrap().crates.len(), 3);
     }
 
     #[test]
@@ -1442,7 +1624,7 @@ checksum = "abc123"
         );
         write(&root, &["crates", "member", "src", "lib.rs"], "");
 
-        let crates = discover_crates(&root).unwrap();
+        let crates = discover_crates(&root).unwrap().crates;
         assert_eq!(
             crates.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
             vec!["member"],
@@ -1475,7 +1657,7 @@ checksum = "abc123"
         );
         write(&root, &["tools", "helper", "src", "lib.rs"], "");
 
-        let mut crates = discover_crates(&root).unwrap();
+        let mut crates = discover_crates(&root).unwrap().crates;
         crates.sort_by(|a, b| a.name.cmp(&b.name));
         assert_eq!(
             crates.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
@@ -1589,7 +1771,7 @@ checksum = "abc123"
         write_fixture_workspace(&root);
 
         let toolchain = CargoToolchain::new(root.clone());
-        assert_eq!(toolchain.id(), ToolchainId::CARGO);
+        assert_eq!(toolchain.id(), ToolchainId::RUST);
 
         let mut packages = toolchain.discover_packages().await.unwrap();
         packages.sort_by(|a, b| {
@@ -1604,7 +1786,7 @@ checksum = "abc123"
             .iter()
             .map(|p| p.descriptor.name.as_ref().unwrap().as_inner().as_str())
             .collect();
-        assert_eq!(names, vec!["app", "cargo", "lib-a", "lib-a-test-util"]);
+        assert_eq!(names, vec!["app", "fixture-ws", "lib-a", "lib-a-test-util"]);
 
         let app = &packages[0];
         assert_eq!(
@@ -1664,7 +1846,7 @@ checksum = "abc123"
                 manifest_rel.replace('/', std::path::MAIN_SEPARATOR_STR),
             )
             .unwrap(),
-            toolchain: ToolchainId::CARGO,
+            toolchain: ToolchainId::RUST,
             ..Default::default()
         }
     }
@@ -1684,12 +1866,12 @@ checksum = "abc123"
 
         let app = package_info("app", "crates/app/Cargo.toml");
         let lib_a = package_info("lib-a", "crates/lib-a/Cargo.toml");
-        let workspace = package_info(WORKSPACE_PACKAGE_NAME, "Cargo.toml");
+        let workspace = package_info("fixture-ws", "Cargo.toml");
 
         // Entrypoint build: scoped to the crate, serialized on the cargo
         // group, run from the workspace root.
         let cmd = toolchain
-            .task_command(&root, &app, "build", None)
+            .task_command(&root, &app, "build", None, None)
             .unwrap()
             .expect("entrypoint build resolves");
         assert_eq!(cmd.args, os_args(&["build", "--package=app"]));
@@ -1699,7 +1881,7 @@ checksum = "abc123"
         // `run` is exempt from the serial group and forwards pass-through
         // args to the binary after `--`.
         let cmd = toolchain
-            .task_command(&root, &app, "dev", Some(&["--port".to_string()]))
+            .task_command(&root, &app, "dev", Some(&["--port".to_string()]), None)
             .unwrap()
             .expect("entrypoint dev resolves to cargo run");
         assert_eq!(cmd.args, os_args(&["run", "--package=app", "--", "--port"]));
@@ -1708,7 +1890,7 @@ checksum = "abc123"
         // Other subcommands attach pass-through args as cargo flags, no
         // separator.
         let cmd = toolchain
-            .task_command(&root, &app, "build", Some(&["--release".to_string()]))
+            .task_command(&root, &app, "build", Some(&["--release".to_string()]), None)
             .unwrap()
             .expect("entrypoint build resolves");
         assert_eq!(cmd.args, os_args(&["build", "--package=app", "--release"]));
@@ -1716,20 +1898,20 @@ checksum = "abc123"
         // Libraries are no-ops; entrypoints do not run verification verbs.
         assert!(
             toolchain
-                .task_command(&root, &lib_a, "build", None)
+                .task_command(&root, &lib_a, "build", None, None)
                 .unwrap()
                 .is_none()
         );
         assert!(
             toolchain
-                .task_command(&root, &app, "test", None)
+                .task_command(&root, &app, "test", None, None)
                 .unwrap()
                 .is_none()
         );
 
         // The workspace package hosts verification verbs at workspace scope.
         let cmd = toolchain
-            .task_command(&root, &workspace, "lint", None)
+            .task_command(&root, &workspace, "lint", None, None)
             .unwrap()
             .expect("workspace lint resolves to clippy");
         assert_eq!(cmd.args, os_args(&["clippy", "--workspace"]));
@@ -1743,6 +1925,7 @@ checksum = "abc123"
                 &workspace,
                 "test",
                 Some(&["--nocapture".to_string()]),
+                None,
             )
             .unwrap()
             .expect("workspace test resolves");
@@ -1752,7 +1935,7 @@ checksum = "abc123"
         );
         assert!(
             toolchain
-                .task_command(&root, &workspace, "build", None)
+                .task_command(&root, &workspace, "build", None, None)
                 .unwrap()
                 .is_none(),
             "workspace-wide build would duplicate entrypoint builds"
@@ -1773,6 +1956,51 @@ checksum = "abc123"
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_command_override_frame() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+
+        let toolchain = CargoToolchain::new(root.clone());
+        toolchain.discover_packages().await.unwrap();
+
+        let lib_a = package_info("lib-a", "crates/lib-a/Cargo.toml");
+        let workspace = package_info("fixture-ws", "Cargo.toml");
+
+        // An override applies to any crate — including libraries, which map
+        // no verbs of their own. cwd is the package's directory, and an
+        // argv still invoking cargo keeps the serial group (the group
+        // exists because of cargo's build-directory lock).
+        let override_argv = vec!["cargo".to_string(), "fuzz".to_string(), "run".to_string()];
+        let cmd = toolchain
+            .task_command(&root, &lib_a, "fuzz", None, Some(&override_argv))
+            .unwrap()
+            .expect("override defines the task for a library crate");
+        assert_eq!(cmd.program, std::ffi::OsString::from("cargo"));
+        assert_eq!(cmd.args, os_args(&["fuzz", "run"]));
+        assert_eq!(cmd.cwd, root.join_components(&["crates", "lib-a"]));
+        assert_eq!(cmd.serial_group.as_deref(), Some("cargo"));
+
+        // A non-cargo argv drops the group; pass-through args append
+        // verbatim (no separator injection).
+        let override_argv = vec!["./scripts/test.sh".to_string()];
+        let cmd = toolchain
+            .task_command(
+                &root,
+                &workspace,
+                "test",
+                Some(&["--fast".to_string()]),
+                Some(&override_argv),
+            )
+            .unwrap()
+            .expect("override resolves");
+        assert_eq!(cmd.program, std::ffi::OsString::from("./scripts/test.sh"));
+        assert_eq!(cmd.args, os_args(&["--fast"]));
+        // The workspace package's directory is the repo root.
+        assert_eq!(cmd.cwd, root);
+        assert_eq!(cmd.serial_group, None);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_cargo_derived_task_io() {
         let (_tmp, root) = tempdir_root();
         write_fixture_workspace(&root);
@@ -1782,7 +2010,7 @@ checksum = "abc123"
 
         let app = package_info("app", "crates/app/Cargo.toml");
         let lib_a = package_info("lib-a", "crates/lib-a/Cargo.toml");
-        let workspace = package_info(WORKSPACE_PACKAGE_NAME, "Cargo.toml");
+        let workspace = package_info("fixture-ws", "Cargo.toml");
 
         // defines_task mirrors the verb tables.
         assert!(toolchain.defines_task(&app, "build"));

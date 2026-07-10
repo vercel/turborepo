@@ -84,12 +84,22 @@ impl EngineExt for Engine<Built> {
                 // runnable command — the same authority execution uses. For
                 // JS packages this is the package.json scripts lookup; for
                 // Cargo packages it consults the verb tables, so toolchain
-                // tasks appear in the TUI task list.
-                let defines_task = pkg_graph
-                    .toolchains()
-                    .get(&info.toolchain)
-                    .is_some_and(|toolchain| toolchain.defines_task(info, task.task()));
-                (task.task() == "proxy" || defines_task).then(|| task.to_string())
+                // tasks appear in the TUI task list. A resolved `command`
+                // override is authoritative in both directions: an argv
+                // executes even where the toolchain defines nothing, and an
+                // opt-out never executes even where it does.
+                let has_command = match self
+                    .task_definition(task)
+                    .and_then(|def| def.command.as_ref())
+                {
+                    Some(turborepo_types::TaskCommandOverride::Argv(_)) => true,
+                    Some(turborepo_types::TaskCommandOverride::OptOut) => false,
+                    None => pkg_graph
+                        .toolchains()
+                        .get(&info.toolchain)
+                        .is_some_and(|toolchain| toolchain.defines_task(info, task.task())),
+                };
+                (task.task() == "proxy" || has_command).then(|| task.to_string())
             })
             .collect()
     }
@@ -320,7 +330,10 @@ mod test {
 
         // A minimal Cargo workspace with one binary crate.
         root.join_component("Cargo.toml")
-            .create_with_contents("[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n")
+            .create_with_contents(
+                "[workspace]\nmembers = [\"crates/*\"]\nresolver = \
+                 \"2\"\n\n[workspace.metadata]\nname = \"acme\"\n",
+            )
             .unwrap();
         let crate_dir = root.join_components(&["crates", "my-crate"]);
         crate_dir.join_component("src").create_dir_all().unwrap();
@@ -342,7 +355,7 @@ mod test {
             // JS package without any scripts.
             ("c", "build"),
             // The synthetic Cargo workspace package.
-            ("cargo", "test"),
+            ("acme", "test"),
             // A binary crate.
             ("my-crate", "build"),
         ] {
@@ -367,7 +380,7 @@ mod test {
         tasks.sort();
         // "c#build" is absent: no script defines it. Both Cargo tasks are
         // present without any package.json involvement.
-        assert_eq!(tasks, vec!["a#build", "cargo#test", "my-crate#build"]);
+        assert_eq!(tasks, vec!["a#build", "acme#test", "my-crate#build"]);
     }
 
     #[tokio::test]

@@ -947,6 +947,26 @@ pub struct TaskDefinition {
     // Experimental CI configuration. Not interpreted by turborepo; carried
     // through resolution so tooling can read it (e.g. via `turbo query`).
     pub experimental_ci: Option<ExperimentalCIConfig>,
+
+    // The task's resolved `command` override, when one applies to this
+    // package. `None` means the toolchain resolves the command as usual;
+    // per-toolchain map defaults have already been fanned out to their
+    // packages by the engine builder.
+    pub command: Option<TaskCommandOverride>,
+}
+
+/// A task's resolved `command` override.
+///
+/// Replaces the process argv the toolchain would have constructed. The
+/// toolchain still owns the frame: working directory, serial grouping,
+/// hash wiring, and env composition.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TaskCommandOverride {
+    /// Explicitly no command: the task is a no-op for this package.
+    OptOut,
+    /// The argv to execute: program first, arguments after. Executed
+    /// directly — no shell.
+    Argv(Vec<String>),
 }
 
 impl Default for TaskDefinition {
@@ -967,6 +987,7 @@ impl Default for TaskDefinition {
             with: Default::default(),
             incremental: Default::default(),
             experimental_ci: Default::default(),
+            command: Default::default(),
         }
     }
 }
@@ -1269,6 +1290,10 @@ pub struct HashTrackerCacheHitMetadata {
 pub trait TaskDefinitionHashInfo {
     /// Returns the list of environment variable patterns for this task
     fn env(&self) -> &[String];
+    /// Returns the task's resolved `command` override, if any. Participates
+    /// in the task hash: changing what a task runs must invalidate its
+    /// cached results.
+    fn command(&self) -> Option<&TaskCommandOverride>;
     /// Returns the pass-through environment variables
     fn pass_through_env(&self) -> Option<&[String]>;
     /// Returns the task inputs configuration
@@ -1282,6 +1307,10 @@ pub trait TaskDefinitionHashInfo {
 impl TaskDefinitionHashInfo for TaskDefinition {
     fn env(&self) -> &[String] {
         &self.env
+    }
+
+    fn command(&self) -> Option<&TaskCommandOverride> {
+        self.command.as_ref()
     }
 
     fn pass_through_env(&self) -> Option<&[String]> {

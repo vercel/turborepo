@@ -728,76 +728,7 @@ impl BunLockfile {
         // After pruning removes some versions, nested entries that now match
         // the hoisted entry are redundant and must be removed — bun's
         // --frozen-lockfile rejects them.
-        {
-            let hoisted_idents: HashMap<String, String> = pruned_data
-                .packages
-                .iter()
-                .filter(|(key, entry)| {
-                    let parsed = PackageKey::parse(key);
-                    if parsed.parent().is_some() {
-                        return false;
-                    }
-                    let ident = PackageIdent::parse(&entry.ident);
-                    let pkg_name = ident.name();
-                    *key == pkg_name
-                })
-                .map(|(_, entry)| {
-                    let ident = PackageIdent::parse(&entry.ident);
-                    (ident.name().to_string(), entry.ident.clone())
-                })
-                .collect();
-
-            // A nested entry that matches the hoisted top-level is redundant ONLY
-            // if removing it would not change resolution. Bun resolves a nested
-            // package by walking up parent scopes (nearest ancestor wins). If an
-            // INTERMEDIATE ancestor scope pins a different version of the same
-            // package, the nested entry shadows it and must be kept — otherwise
-            // bun resolves to the intermediate (wrong) version instead of the
-            // hoisted one. See vercel/turborepo#12962 follow-up: a 3-level split
-            // such as `@vite-pwa/nuxt/@nuxt/kit/pathe@2` sitting above
-            // `@vite-pwa/nuxt/pathe@1` was incorrectly dropped.
-            let redundant_keys: Vec<String> = pruned_data
-                .packages
-                .iter()
-                .filter_map(|(key, entry)| {
-                    PackageKey::parse(key).parent()?;
-                    let ident = PackageIdent::parse(&entry.ident);
-                    if ident.is_workspace() {
-                        return None;
-                    }
-                    let name = ident.name();
-                    // Only a candidate if it matches the hoisted top-level ident.
-                    match hoisted_idents.get(name) {
-                        Some(hoisted_ident) if hoisted_ident == &entry.ident => {}
-                        _ => return None,
-                    }
-                    let suffix = format!("/{name}");
-                    let parent_scope = key.strip_suffix(&suffix)?;
-                    // Find the nearest ancestor scope (longest strict prefix-scope
-                    // of parent_scope) that also provides `name`.
-                    let nearest = pruned_data
-                        .packages
-                        .iter()
-                        .filter_map(|(other_key, other_entry)| {
-                            let anc = other_key.strip_suffix(&suffix)?;
-                            let descends =
-                                parent_scope == anc || parent_scope.starts_with(&format!("{anc}/"));
-                            (anc.len() < parent_scope.len() && descends)
-                                .then_some((anc.len(), &other_entry.ident))
-                        })
-                        .max_by_key(|(len, _)| *len)
-                        .map(|(_, ident)| ident);
-                    // Without this entry, resolution falls to the nearest ancestor
-                    // (or the hoisted top-level when none). Redundant only if that
-                    // resolves to the same ident.
-                    let resolves_to = nearest.unwrap_or(&entry.ident);
-                    (resolves_to == &entry.ident).then(|| key.clone())
-                })
-                .collect();
-            for key in redundant_keys {
-                pruned_data.packages.remove(&key);
-            }
-        }
+        Self::remove_redundant_nested_entries(&mut pruned_data);
 
         // De-aliasing can turn a workspace-scoped package key like
         // `@repo/app/pkg` into `pkg`. Its nested resolutions need to remain
@@ -878,42 +809,59 @@ impl BunLockfile {
                     };
 
                     let source_prefix = format!("{source_parent_key}/");
-                    let pruned_dep_key =
-                        if let Some(suffix) = source_dep_key.strip_prefix(&source_prefix) {
-                            format!("{key}/{suffix}")
-                        } else {
-                            // The entry was found in an ancestor scope of the source
-                            // key, so its key can't be re-parented under the
-                            // dependent's pruned key. Bun resolves dependencies by
-                            // walking up the dependent's scope chain by name, so the
-                            // verbatim key is fine as long as SOME entry named
-                            // dep_name is reachable from the dependent. When none is
-                            // (the dependent was renamed by de-aliasing/promotion and
-                            // the ancestor chain was pruned), bun fails to parse the
-                            // lockfile; nest the entry directly under the dependent
-                            // instead. See
-                            // https://github.com/vercel/turborepo/issues/13233
-                            let name_resolvable = pruned_data.packages.contains_key(dep_name) || {
-                                let mut resolvable = false;
-                                let mut scope = Some(key.clone());
-                                while let Some(scope_key) = scope {
-                                    if pruned_data
-                                        .packages
-                                        .contains_key(&format!("{scope_key}/{dep_name}"))
-                                    {
-                                        resolvable = true;
-                                        break;
-                                    }
-                                    scope = PackageKey::parse(&scope_key).parent();
+                    let pruned_dep_key = if let Some(suffix) =
+                        source_dep_key.strip_prefix(&source_prefix)
+                    {
+                        format!("{key}/{suffix}")
+                    } else {
+                        // The entry was found in an ancestor scope of the source
+                        // key, so its key can't be re-parented under the
+                        // dependent's pruned key. Bun resolves dependencies by
+                        // walking up the dependent's scope chain by name, so the
+                        // verbatim key is fine as long as SOME entry named
+                        // dep_name is reachable from the dependent. When none is
+                        // (the dependent was renamed by de-aliasing/promotion and
+                        // the ancestor chain was pruned), bun fails to parse the
+                        // lockfile; nest the entry directly under the dependent
+                        // instead. See
+                        // https://github.com/vercel/turborepo/issues/13233
+                        let name_resolvable = pruned_data.packages.contains_key(dep_name) || {
+                            let mut resolvable = false;
+                            let mut scope = Some(key.clone());
+                            while let Some(scope_key) = scope {
+                                if pruned_data
+                                    .packages
+                                    .contains_key(&format!("{scope_key}/{dep_name}"))
+                                {
+                                    resolvable = true;
+                                    break;
                                 }
-                                resolvable
-                            };
-                            if name_resolvable {
-                                source_dep_key
-                            } else {
-                                format!("{key}/{dep_name}")
+                                scope = PackageKey::parse(&scope_key).parent();
                             }
+                            resolvable
                         };
+                        // The verbatim key only makes sense if its root scope
+                        // survived pruning. When the entire chain was pruned
+                        // away (e.g. "@expo/cli/ora/chalk" when "@expo/cli"
+                        // is gone), nothing can ever resolve to the verbatim
+                        // key, so bun's lockfile clean pass strips the
+                        // package and `bun install --frozen-lockfile` fails.
+                        // Nest the entry under the dependent instead so the
+                        // dependent resolves the version it was locked to.
+                        // See https://github.com/vercel/turborepo/issues/13310
+                        let root_scope_exists = {
+                            let mut topmost = source_dep_key.clone();
+                            while let Some(parent) = PackageKey::parse(&topmost).parent() {
+                                topmost = parent;
+                            }
+                            topmost == source_dep_key || pruned_data.packages.contains_key(&topmost)
+                        };
+                        if name_resolvable && root_scope_exists {
+                            source_dep_key
+                        } else {
+                            format!("{key}/{dep_name}")
+                        }
+                    };
 
                     if pruned_data.packages.contains_key(&pruned_dep_key) {
                         continue;
@@ -937,6 +885,16 @@ impl BunLockfile {
         // sync; keeping only one sibling makes `bun install --frozen-lockfile`
         // rewrite the pruned lockfile.
         self.include_duplicate_alias_children(&mut pruned_data);
+
+        // FINAL SWEEP: emulate bun's lockfile "clean" pass. Bun resolves every
+        // dependency edge from the workspaces by walking up the dependent's
+        // scope chain by name, and strips any package whose resolution is
+        // never reached that way. If the pruned lockfile still contains such
+        // packages (e.g. a nested "chalk@2.4.2" whose only dependents were
+        // pruned away), `bun install --frozen-lockfile` rejects the lockfile.
+        // Drop them the same way bun would. See
+        // https://github.com/vercel/turborepo/issues/13310
+        Self::remove_unreachable_entries(&mut pruned_data);
 
         self.preserve_patched_dependencies(&mut pruned_data);
 
@@ -968,6 +926,184 @@ impl BunLockfile {
             key_to_entry,
             index,
         })
+    }
+
+    /// Remove nested entries that resolve to the same ident bun would pick
+    /// anyway. A nested entry that matches the hoisted top-level is redundant
+    /// ONLY if removing it would not change resolution. Bun resolves a nested
+    /// package by walking up parent scopes (nearest ancestor wins). If an
+    /// INTERMEDIATE ancestor scope pins a different version of the same
+    /// package, the nested entry shadows it and must be kept — otherwise bun
+    /// resolves to the intermediate (wrong) version instead of the hoisted
+    /// one. See vercel/turborepo#12962 follow-up: a 3-level split such as
+    /// `@vite-pwa/nuxt/@nuxt/kit/pathe@2` sitting above
+    /// `@vite-pwa/nuxt/pathe@1` was incorrectly dropped.
+    fn remove_redundant_nested_entries(pruned_data: &mut BunLockfileData) {
+        let hoisted_idents: HashMap<String, String> = pruned_data
+            .packages
+            .iter()
+            .filter(|(key, entry)| {
+                let parsed = PackageKey::parse(key);
+                if parsed.parent().is_some() {
+                    return false;
+                }
+                let ident = PackageIdent::parse(&entry.ident);
+                let pkg_name = ident.name();
+                *key == pkg_name
+            })
+            .map(|(_, entry)| {
+                let ident = PackageIdent::parse(&entry.ident);
+                (ident.name().to_string(), entry.ident.clone())
+            })
+            .collect();
+
+        let redundant_keys: Vec<String> = pruned_data
+            .packages
+            .iter()
+            .filter_map(|(key, entry)| {
+                PackageKey::parse(key).parent()?;
+                let ident = PackageIdent::parse(&entry.ident);
+                if ident.is_workspace() {
+                    return None;
+                }
+                let name = ident.name();
+                // Only a candidate if it matches the hoisted top-level ident.
+                match hoisted_idents.get(name) {
+                    Some(hoisted_ident) if hoisted_ident == &entry.ident => {}
+                    _ => return None,
+                }
+                let suffix = format!("/{name}");
+                let parent_scope = key.strip_suffix(&suffix)?;
+                // Find the nearest ancestor scope (longest strict prefix-scope
+                // of parent_scope) that also provides `name`.
+                let nearest = pruned_data
+                    .packages
+                    .iter()
+                    .filter_map(|(other_key, other_entry)| {
+                        let anc = other_key.strip_suffix(&suffix)?;
+                        let descends =
+                            parent_scope == anc || parent_scope.starts_with(&format!("{anc}/"));
+                        (anc.len() < parent_scope.len() && descends)
+                            .then_some((anc.len(), &other_entry.ident))
+                    })
+                    .max_by_key(|(len, _)| *len)
+                    .map(|(_, ident)| ident);
+                // Without this entry, resolution falls to the nearest ancestor
+                // (or the hoisted top-level when none). Redundant only if that
+                // resolves to the same ident.
+                let resolves_to = nearest.unwrap_or(&entry.ident);
+                (resolves_to == &entry.ident).then(|| key.clone())
+            })
+            .collect();
+        for key in redundant_keys {
+            pruned_data.packages.remove(&key);
+        }
+    }
+
+    /// Resolve a dependency name the way bun does: try the scope itself, then
+    /// walk up the scope chain, finally falling back to the top level.
+    fn resolve_dependency_key(
+        packages: &Map<String, PackageEntry>,
+        scope: &str,
+        dep_name: &str,
+    ) -> Option<String> {
+        let mut scope = (!scope.is_empty()).then(|| scope.to_string());
+        while let Some(scope_key) = scope {
+            let candidate = format!("{scope_key}/{dep_name}");
+            if packages.contains_key(&candidate) {
+                return Some(candidate);
+            }
+            scope = PackageKey::parse(&scope_key).parent();
+        }
+        packages
+            .contains_key(dep_name)
+            .then(|| dep_name.to_string())
+    }
+
+    /// Remove packages that bun's lockfile clean pass would strip: resolutions
+    /// (idents) where no key is ever reached when resolving dependency edges
+    /// from the workspaces via bun's scope-walking name resolution. Bun
+    /// tolerates individual unreferenced keys as long as the package they
+    /// resolve to is referenced somewhere, so keys of reachable idents are
+    /// kept even when the keys themselves are never resolved to. Workspace
+    /// mapping entries are always kept, matching bun's behavior.
+    fn remove_unreachable_entries(pruned_data: &mut BunLockfileData) {
+        let mut visited: HashSet<String> = HashSet::new();
+        let mut queue: Vec<String> = Vec::new();
+
+        let visit = |visited: &mut HashSet<String>,
+                     queue: &mut Vec<String>,
+                     scope: &str,
+                     dep_name: &str| {
+            if let Some(key) = Self::resolve_dependency_key(&pruned_data.packages, scope, dep_name)
+                && visited.insert(key.clone())
+            {
+                queue.push(key);
+            }
+        };
+
+        for (ws_path, ws_entry) in &pruned_data.workspaces {
+            let scope = if ws_path.is_empty() {
+                ""
+            } else {
+                ws_entry.name.as_str()
+            };
+            for deps in [
+                ws_entry.dependencies.as_ref(),
+                ws_entry.dev_dependencies.as_ref(),
+                ws_entry.optional_dependencies.as_ref(),
+                ws_entry.peer_dependencies.as_ref(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                for dep_name in deps.keys() {
+                    visit(&mut visited, &mut queue, scope, dep_name);
+                }
+            }
+        }
+
+        while let Some(key) = queue.pop() {
+            let Some(entry) = pruned_data.packages.get(&key) else {
+                continue;
+            };
+            let ident = PackageIdent::parse(&entry.ident);
+            // Workspace mapping entries resolve their dependencies from the
+            // workspace's own scope (keys are prefixed with the workspace
+            // name), not from the mapping entry's key.
+            let scope = if ident.is_workspace() {
+                ident.name().to_string()
+            } else {
+                key.clone()
+            };
+            let Some(info) = &entry.info else {
+                continue;
+            };
+            let dep_names: Vec<String> = info
+                .dependencies
+                .keys()
+                .chain(info.optional_dependencies.keys())
+                .chain(info.peer_dependencies.keys())
+                .cloned()
+                .collect();
+            for dep_name in dep_names {
+                visit(&mut visited, &mut queue, &scope, &dep_name);
+            }
+        }
+
+        let reachable_idents: HashSet<String> = visited
+            .iter()
+            .filter_map(|key| {
+                pruned_data
+                    .packages
+                    .get(key)
+                    .map(|entry| entry.ident.clone())
+            })
+            .collect();
+
+        pruned_data.packages.retain(|_key, entry| {
+            entry.ident.contains("@workspace:") || reachable_idents.contains(&entry.ident)
+        });
     }
 
     fn workspace_required_patched_idents(
