@@ -84,8 +84,18 @@ pub enum Error {
          Pick a different `[workspace.metadata] name`."
     )]
     WorkspaceNameCollision { name: String, dir: String },
-    #[error("Cannot prune a Cargo workspace without a Cargo.lock; run a build to generate it.")]
+    #[error(
+        "Cargo.lock is required for Cargo workspace caching. Run `cargo generate-lockfile` and \
+         commit the result."
+    )]
     MissingLockfile,
+    #[error(
+        "Cargo.lock is out of date or could not be validated. Run `cargo metadata` to refresh it, \
+         then commit the result.\n\nCargo reported:\n{stderr}"
+    )]
+    InvalidLockfile { stderr: String },
+    #[error("failed to validate Cargo.lock with `cargo metadata --locked`: {0}")]
+    LockfileValidationSpawn(#[source] io::Error),
     #[error("failed to read workspace file: {0}")]
     WorkspaceFileRead(#[source] io::Error),
     #[error("failed to run `rustc -vV`: {0}")]
@@ -162,10 +172,8 @@ pub fn rustc_identity(
 /// Per-crate external dependency closures from Cargo.lock, for the crates'
 /// external-dependency hashes.
 ///
-/// A missing Cargo.lock yields an empty map (the workspace is unpinned;
-/// Cargo will create the lockfile on first build). An unreadable or
-/// unparsable lockfile is a hard error — silently hashing nothing would be
-/// unsound.
+/// A missing, unreadable, or unparsable lockfile is a hard error — silently
+/// hashing nothing would be unsound.
 pub fn external_closures(
     repo_root: &AbsoluteSystemPath,
     members: &[String],
@@ -174,13 +182,48 @@ pub fn external_closures(
     let contents = match lock_path.read_to_string() {
         Ok(contents) => contents,
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            return Ok(HashMap::new());
+            return Err(Error::MissingLockfile);
         }
         Err(error) => return Err(Error::LockfileRead(error)),
     };
     Ok(turborepo_lockfiles::cargo_external_closures(
         &contents, members,
     )?)
+}
+
+/// Verify Cargo can resolve the workspace without changing Cargo.lock.
+/// Validation happens before task hashes and cache lookup, so artifacts are
+/// always keyed by the dependency resolution Cargo will execute.
+pub fn validate_lockfile(repo_root: &AbsoluteSystemPath) -> Result<(), Error> {
+    let lock_path = repo_root.join_component(CARGO_LOCK);
+    match lock_path.read_to_string() {
+        Ok(_) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Err(Error::MissingLockfile);
+        }
+        Err(error) => return Err(Error::LockfileRead(error)),
+    }
+
+    let root_manifest_path = repo_root.join_component(CARGO_TOML);
+    let output = std::process::Command::new("cargo")
+        .args([
+            "metadata",
+            "--format-version",
+            "1",
+            "--locked",
+            "--manifest-path",
+            root_manifest_path.as_str(),
+        ])
+        .current_dir(repo_root.as_std_path())
+        .output()
+        .map_err(Error::LockfileValidationSpawn)?;
+    if !output.status.success() {
+        return Err(Error::InvalidLockfile {
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        });
+    }
+
+    Ok(())
 }
 
 /// How a Cargo-toolchain package participates in task execution.
@@ -256,8 +299,10 @@ pub fn task_subcommand(kind: CargoPackageKind, task: &str) -> Option<&'static st
 pub fn display_command(kind: CargoPackageKind, task: &str, package: &str) -> Option<String> {
     let subcommand = task_subcommand(kind, task)?;
     Some(match kind {
-        CargoPackageKind::Entrypoint => format!("cargo {subcommand} --package={package}"),
-        CargoPackageKind::Workspace => format!("cargo {subcommand} --workspace"),
+        CargoPackageKind::Entrypoint => {
+            format!("cargo {subcommand} --package={package} --locked")
+        }
+        CargoPackageKind::Workspace => format!("cargo {subcommand} --workspace --locked"),
         CargoPackageKind::Library => return None,
     })
 }
@@ -545,7 +590,8 @@ impl Toolchain for CargoToolchain {
             // Libraries never map to a subcommand.
             CargoPackageKind::Library => return Ok(None),
         };
-        let mut args: Vec<std::ffi::OsString> = vec![subcommand.into(), scope.into()];
+        let mut args: Vec<std::ffi::OsString> =
+            vec![subcommand.into(), scope.into(), "--locked".into()];
         if let Some(pass_through_args) = pass_through_args {
             if pass_through_uses_separator(subcommand) {
                 args.push("--".into());
@@ -920,6 +966,7 @@ impl Toolchain for CargoToolchain {
             // change invalidates everything.
             let all_names: Vec<String> = crates.iter().map(|c| c.name.clone()).collect();
             let (rustc, mut closures) = turborepo_rayon_compat::block_in_place(|| {
+                validate_lockfile(&self.repo_root)?;
                 Ok::<_, Error>((
                     rustc_identity(&self.repo_root)?,
                     external_closures(&self.repo_root, &all_names)?,
@@ -1490,8 +1537,8 @@ mod test {
              \"2021\"\n\n[dependencies]\nlib-a = { path = \"../lib-a\" }\n",
         );
         write(root, &["crates", "lib-a-test-util", "src", "lib.rs"], "");
-        // A lockfile pinning an external dependency of app only. Metadata
-        // discovery (--no-deps) never reads it; only closure parsing does.
+        // The lockfile must match the manifests exactly: discovery validates
+        // it with `cargo metadata --locked` before computing closures.
         write(
             root,
             &["Cargo.lock"],
@@ -1500,24 +1547,44 @@ mod test {
 [[package]]
 name = "app"
 version = "0.1.0"
-dependencies = ["lib-a", "serde"]
+dependencies = ["lib-a"]
 
 [[package]]
 name = "lib-a"
 version = "0.1.0"
+dependencies = ["lib-a-test-util"]
 
 [[package]]
 name = "lib-a-test-util"
 version = "0.1.0"
 dependencies = ["lib-a"]
-
-[[package]]
-name = "serde"
-version = "1.0.200"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abc123"
 "#,
         );
+    }
+
+    #[test]
+    fn test_validate_lockfile_rejects_missing_and_stale_files() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+        let lock_path = root.join_component(CARGO_LOCK);
+        let original_lock = lock_path.read_to_string().unwrap();
+
+        validate_lockfile(&root).unwrap();
+        assert_eq!(lock_path.read_to_string().unwrap(), original_lock);
+
+        write(
+            &root,
+            &["crates", "app", "Cargo.toml"],
+            "[package]\nname = \"app\"\nversion = \"0.2.0\"\nedition = \
+             \"2021\"\n\n[dependencies]\nlib-a = { path = \"../lib-a\" }\n",
+        );
+        let error = validate_lockfile(&root).unwrap_err();
+        assert!(matches!(error, Error::InvalidLockfile { .. }));
+        assert_eq!(lock_path.read_to_string().unwrap(), original_lock);
+
+        std::fs::remove_file(lock_path.as_std_path()).unwrap();
+        let error = validate_lockfile(&root).unwrap_err();
+        assert!(matches!(error, Error::MissingLockfile));
     }
 
     #[test]
@@ -1917,21 +1984,14 @@ release: 1.96.0-nightly\n",
         assert_eq!(workspace_deps.len(), 3);
         assert!(workspace_deps.values().all(|v| v == "workspace:*"));
 
-        // External identities from Cargo.lock are scoped per crate: app's
-        // closure pins serde, lib-a's does not.
+        // This all-local fixture has no external lockfile dependencies; the
+        // compiler identity is the only external identity.
         let app_externals = app.external_dependencies.as_ref().unwrap();
-        assert!(
-            app_externals.iter().any(|p| p.key == "serde"),
-            "app depends on serde via Cargo.lock, got {app_externals:?}"
-        );
+        assert_eq!(app_externals.len(), 1);
         let lib_a_externals = packages[2].external_dependencies.as_ref().unwrap();
-        assert!(
-            !lib_a_externals.iter().any(|p| p.key == "serde"),
-            "a serde bump must not invalidate lib-a, got {lib_a_externals:?}"
-        );
-        // The workspace package unions every closure.
+        assert_eq!(lib_a_externals.len(), 1);
         let workspace_externals = workspace.external_dependencies.as_ref().unwrap();
-        assert!(workspace_externals.iter().any(|p| p.key == "serde"));
+        assert_eq!(workspace_externals.len(), 1);
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1988,7 +2048,7 @@ release: 1.96.0-nightly\n",
             .task_command(&root, &app, "build", None, None)
             .unwrap()
             .expect("entrypoint build resolves");
-        assert_eq!(cmd.args, os_args(&["build", "--package=app"]));
+        assert_eq!(cmd.args, os_args(&["build", "--package=app", "--locked"]));
         assert_eq!(cmd.cwd, root);
         assert_eq!(cmd.serial_group.as_deref(), Some("cargo"));
 
@@ -1998,7 +2058,10 @@ release: 1.96.0-nightly\n",
             .task_command(&root, &app, "dev", Some(&["--port".to_string()]), None)
             .unwrap()
             .expect("entrypoint dev resolves to cargo run");
-        assert_eq!(cmd.args, os_args(&["run", "--package=app", "--", "--port"]));
+        assert_eq!(
+            cmd.args,
+            os_args(&["run", "--package=app", "--locked", "--", "--port"])
+        );
         assert_eq!(cmd.serial_group, None);
 
         // Other subcommands attach pass-through args as cargo flags, no
@@ -2007,7 +2070,10 @@ release: 1.96.0-nightly\n",
             .task_command(&root, &app, "build", Some(&["--release".to_string()]), None)
             .unwrap()
             .expect("entrypoint build resolves");
-        assert_eq!(cmd.args, os_args(&["build", "--package=app", "--release"]));
+        assert_eq!(
+            cmd.args,
+            os_args(&["build", "--package=app", "--locked", "--release"])
+        );
 
         // Libraries are no-ops; entrypoints do not run verification verbs.
         assert!(
@@ -2028,7 +2094,7 @@ release: 1.96.0-nightly\n",
             .task_command(&root, &workspace, "lint", None, None)
             .unwrap()
             .expect("workspace lint resolves to clippy");
-        assert_eq!(cmd.args, os_args(&["clippy", "--workspace"]));
+        assert_eq!(cmd.args, os_args(&["clippy", "--workspace", "--locked"]));
         assert_eq!(cmd.serial_group.as_deref(), Some("cargo"));
 
         // Harness-forwarding subcommands separate pass-through args with
@@ -2045,7 +2111,7 @@ release: 1.96.0-nightly\n",
             .expect("workspace test resolves");
         assert_eq!(
             cmd.args,
-            os_args(&["test", "--workspace", "--", "--nocapture"])
+            os_args(&["test", "--workspace", "--locked", "--", "--nocapture"])
         );
         assert!(
             toolchain
@@ -2058,13 +2124,13 @@ release: 1.96.0-nightly\n",
         // Display strings derive from the same tables.
         assert_eq!(
             toolchain.task_display_command(&app, "build").as_deref(),
-            Some("cargo build --package=app")
+            Some("cargo build --package=app --locked")
         );
         assert_eq!(
             toolchain
                 .task_display_command(&workspace, "test")
                 .as_deref(),
-            Some("cargo test --workspace")
+            Some("cargo test --workspace --locked")
         );
         assert_eq!(toolchain.task_display_command(&lib_a, "build"), None);
 
