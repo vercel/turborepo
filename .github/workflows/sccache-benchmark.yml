@@ -121,7 +121,7 @@ jobs:
           measure clean-no-cache \
             env TURBO_CACHE=local: SCCACHE_BENCHMARK_DISABLED=1 CARGO_INCREMENTAL=0 \
             turbo run build --filter=turbo --env-mode=loose --log-order=stream
-          if rg -q 'Incremental cache:' "$RUNNER_TEMP/clean-no-cache.log"; then
+          if grep -aFq 'Incremental cache:' "$RUNNER_TEMP/clean-no-cache.log"; then
             echo "::error::Clean no-cache strategy unexpectedly used the compile cache"
             exit 1
           fi
@@ -131,7 +131,7 @@ jobs:
           measure distributed-compile-cache \
             env TURBO_CACHE=remote:rw CARGO_INCREMENTAL=0 \
             turbo run build --filter=turbo --force --env-mode=loose --log-order=stream
-          if ! rg -q 'Incremental cache:' "$RUNNER_TEMP/distributed-compile-cache.log"; then
+          if ! grep -aFq 'Incremental cache:' "$RUNNER_TEMP/distributed-compile-cache.log"; then
             echo "::error::Distributed compile cache strategy did not engage"
             exit 1
           fi
@@ -144,7 +144,7 @@ jobs:
           measure retained-cargo-target \
             env TURBO_CACHE=local: SCCACHE_BENCHMARK_DISABLED=1 CARGO_INCREMENTAL=1 \
             turbo run build --filter=turbo --env-mode=loose --log-order=stream
-          if rg -q 'Incremental cache:' "$RUNNER_TEMP/retained-cargo-target.log"; then
+          if grep -aFq 'Incremental cache:' "$RUNNER_TEMP/retained-cargo-target.log"; then
             echo "::error::Retained Cargo target strategy unexpectedly used the compile cache"
             exit 1
           fi
@@ -157,7 +157,7 @@ jobs:
           measure exact-turbo-task-cache \
             env TURBO_CACHE=remote:rw CARGO_INCREMENTAL=0 \
             turbo run build --filter=turbo --env-mode=loose --log-order=stream
-          if ! rg -q 'cache hit, replaying logs' "$RUNNER_TEMP/exact-turbo-task-cache.log"; then
+          if ! grep -aFq 'cache hit, replaying logs' "$RUNNER_TEMP/exact-turbo-task-cache.log"; then
             echo "::error::Exact Turbo task cache strategy did not record a cache hit"
             exit 1
           fi
