@@ -38,6 +38,12 @@ When making changes to the codebase, check if the following docs need updates:
 - Crates with existing implementation-code violations may temporarily allow `clippy::unwrap_used` and `clippy::expect_used` at the crate root; remove those allows as each crate is cleaned up.
 - Tests are exempt from this panic-extraction policy, but still linted by `cargo lint` with panic-extraction lints allowed under `cfg(test)`.
 
+### CI task scheduling
+
+- Test and lint workflows do not pre-classify changed paths. PR jobs run consistently and use the Turborepo task graph and cache where applicable.
+- Same-repository PRs authenticate to Remote Cache through OIDC; fork PRs remain local-only.
+- Example validation remains push-only because it requires Vercel credentials and project state.
+
 ### PR Title Format
 
 PR titles must follow [Conventional Commits](https://www.conventionalcommits.org/). See [`.github/workflows/lint-pr-title.yml`](./.github/workflows/lint-pr-title.yml) for the enforced constraints.

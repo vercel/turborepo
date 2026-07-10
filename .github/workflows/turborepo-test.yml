@@ -12,8 +12,8 @@ permissions:
   contents: read
 
 jobs:
-  find-changes:
-    name: Find path changes
+  release-pr:
+    name: Validate release PR
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -21,14 +21,7 @@ jobs:
       pull-requests: read
     outputs:
       is-release-pr: ${{ steps.check-release.outputs.is-release-pr }}
-      docs: ${{ steps.filter.outputs.docs }}
-      rest: ${{ steps.filter.outputs.rest }}
-      rust: ${{ steps.filter.outputs.rust }}
-      native-lib: ${{ steps.filter.outputs.native-lib }}
     steps:
-      # Detect automated release PRs which only contain generated release updates.
-      # These PRs are created by the release workflow after code has already
-      # been tested on main. Skipping tests on generated release lets us auto-merge release PRs.
       - name: Check if automated release PR
         id: check-release
         shell: bash
@@ -89,121 +82,10 @@ jobs:
           echo "is-release-pr=true" >> "$GITHUB_OUTPUT"
           echo "Release PR content validation passed - only generated release files changed"
 
-      - name: Checkout
-        if: steps.check-release.outputs.is-release-pr != 'true'
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-
-      - name: Check path changes
-        if: steps.check-release.outputs.is-release-pr != 'true'
-        id: filter
-        run: |
-          # Determine the base and head commits to compare
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            # For pull requests, compare the base branch to the current HEAD
-            git fetch origin ${{ github.base_ref }}
-            BASE_COMMIT="origin/${{ github.base_ref }}"
-            HEAD_COMMIT="HEAD"
-          else
-            # For pushes, use the before and after SHAs
-            BASE_COMMIT="${{ github.event.before }}"
-            HEAD_COMMIT="${{ github.event.after }}"
-
-            # The shallow checkout doesn't contain the before commit; fetch
-            # it by SHA (a depth-1 fetch brings its tree, which is all a
-            # diff needs). An all-zero SHA (branch creation) or a failed
-            # fetch (force push discarding the old commit) means there is
-            # no base to compare against: report everything as changed so
-            # every test runs.
-            if [[ "$BASE_COMMIT" =~ ^0+$ ]] || ! git fetch --no-tags --depth=1 origin "$BASE_COMMIT"; then
-              echo "No usable base commit; treating all paths as changed"
-              for name in docs native-lib rest rust; do
-                echo "$name=true" >> "$GITHUB_OUTPUT"
-              done
-              exit 0
-            fi
-          fi
-
-          echo "Comparing changes between $BASE_COMMIT and $HEAD_COMMIT"
-
-          # Function to check if files in given paths have changed
-          check_path_changes() {
-            local name=$1
-            shift
-            local paths=("$@")
-
-            # Create a command that checks all paths
-            local cmd="git diff --name-only $BASE_COMMIT $HEAD_COMMIT -- "
-            for path in "${paths[@]}"; do
-              cmd+="\"$path\" "
-            done
-
-            # Run the command and check if there are any results
-            if eval "$cmd" | grep -q .; then
-              echo "$name=true" >> $GITHUB_OUTPUT
-              echo "Changes detected in $name paths"
-            else
-              echo "$name=false" >> $GITHUB_OUTPUT
-              echo "No changes in $name paths"
-            fi
-          }
-
-          # Function to make path checking more readable
-          check_paths() {
-            local name=$1
-            local path_string=$2
-
-            # Convert the comma-separated string to an array
-            IFS=',' read -ra path_array <<< "$path_string"
-
-            # Call the check_path_changes function with the name and paths
-            check_path_changes "$name" "${path_array[@]}"
-          }
-
-          # Check each path pattern with a more readable syntax
-          echo "Checking path patterns..."
-
-          check_paths "docs" "docs/"
-          # Root turbo.json is included because it configures the Cargo task
-          # pipeline these packages build through (futureFlags, task defs).
-          check_paths "native-lib" "packages/turbo-repository/,crates/,turbo.json"
-
-          # Handle the "rest" pattern - files that are NOT in examples/ or docs/
-          CHANGED_FILES=$(git diff --name-only $BASE_COMMIT $HEAD_COMMIT)
-
-          # Filter to only include files that do NOT start with examples/ or docs/
-          FILES_NOT_IN_EXAMPLES_OR_DOCS=$(echo "$CHANGED_FILES" | grep -v -E "^(examples/|docs/)" || true)
-
-          if [ -n "$FILES_NOT_IN_EXAMPLES_OR_DOCS" ]; then
-            echo "rest=true" >> $GITHUB_OUTPUT
-            echo "Changes detected outside examples/ and docs/ directories"
-          else
-            echo "rest=false" >> $GITHUB_OUTPUT
-            echo "No changes outside examples/ and docs/ directories"
-          fi
-
-          # Detect if Rust/core code changed (requires Rust tests + integration tests)
-          # This excludes JS-only changes like packages/*, lockfile, etc.
-          # turbo.json is included because it defines the command the Rust
-          # test task runs (turborepo-crates#test).
-          RUST_PATTERNS="^(crates/|cli/|Cargo\.|rust-toolchain|\.cargo/|\.config/|\.github/|turborepo-tests/|turbo\.json)"
-          RUST_CHANGES=$(echo "$CHANGED_FILES" | grep -E "$RUST_PATTERNS" || true)
-
-          if [ -n "$RUST_CHANGES" ]; then
-            echo "rust=true" >> $GITHUB_OUTPUT
-            echo "Rust/core changes detected:"
-            echo "$RUST_CHANGES"
-          else
-            echo "rust=false" >> $GITHUB_OUTPUT
-            echo "No Rust/core changes detected (JS-only change)"
-          fi
-
   turbo_types_check:
     name: "@turbo/types codegen check"
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    needs: release-pr
+    if: needs.release-pr.outputs.is-release-pr != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -216,9 +98,6 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
 
       - name: Generate schemas from Rust
         run: |
@@ -235,84 +114,34 @@ jobs:
             exit 1
           fi
 
-  rust_test_macos:
-    runs-on: macos-15-xlarge
+  rust_test:
+    name: Rust testing on ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
     # Padded beyond the usual 15: the first push-to-main run populates the
     # compile cache, and artifact writes make it slower than a plain build.
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos
+            runner: macos-15-xlarge
+          - name: ubuntu
+            runner: ubuntu-latest-8-core-oss
+          - name: windows
+            runner: windows-latest-8-core-oss
     permissions:
       contents: read
       # For the OIDC token exchanged for a Remote Cache access token.
       id-token: write
+    needs: release-pr
+    if: needs.release-pr.outputs.is-release-pr != 'true'
     env:
       CARGO_INCREMENTAL: 0
-      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on macos
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-
-      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
-      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
-      # Push events only: fork PRs cannot mint OIDC tokens, and PR runs use
-      # the local cache anyway. With credentials present, turbo caches the
-      # test task remotely and engages the sccache compile cache
-      # (futureFlags.experimentalCargoSccache).
-      - name: Set up Turborepo Remote Cache
-        if: github.event_name == 'push'
-        uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
-        with:
-          team: ${{ vars.TURBO_TEAM }}
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
-          package-install: "false"
-
-      - name: Install Bun
-        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
-
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
-        with:
-          tool: nextest
-
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-
-      # The nextest invocation (and its excludes) lives in turbo.json as
-      # the turborepo-crates#test command; dogfooding the task command
-      # override keeps CI and local runs identical.
-      - name: Run tests
-        timeout-minutes: 20
-        run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream
-        shell: bash
-
-  rust_test_windows:
-    runs-on: windows-latest-8-core-oss
-    # Padded beyond the usual 15: the first push-to-main run populates the
-    # compile cache, and artifact writes make it slower than a plain build.
-    timeout-minutes: 25
-    permissions:
-      contents: read
-      # For the OIDC token exchanged for a Remote Cache access token.
-      id-token: write
-    env:
-      CARGO_INCREMENTAL: 0
-      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on windows
+      TURBO_CACHE: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && 'remote:rw' || 'local:rw' }}
     steps:
       - name: Install git (Windows larger runners)
+        if: runner.os == 'Windows'
         shell: cmd
         run: |
           where git >nul 2>nul
@@ -332,6 +161,7 @@ jobs:
           echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
 
       - name: Set git to use LF line endings
+        if: runner.os == 'Windows'
         # Ensures the turborepo source code is checked out with LF endings
         # so the Rust build and test fixtures work correctly. Turbo's CRLF
         # normalization is driven by .gitattributes (not core.autocrlf).
@@ -348,12 +178,11 @@ jobs:
 
       # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
       # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
-      # Push events only: fork PRs cannot mint OIDC tokens, and PR runs use
-      # the local cache anyway. With credentials present, turbo caches the
-      # test task remotely and engages the sccache compile cache
-      # (futureFlags.experimentalCargoSccache).
+      # Pushes and same-repository PRs can mint OIDC tokens. Fork PRs remain
+      # local-only. With credentials present, turbo caches the test task
+      # remotely and engages the sccache compile cache.
       - name: Set up Turborepo Remote Cache
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
         with:
           team: ${{ vars.TURBO_TEAM }}
@@ -363,82 +192,28 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
-          # Local archive builds need Rust and capnproto even when remote cache is unavailable.
-          # capnproto: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
-          # rust: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
           package-install: "false"
-          rust-cache: "true"
 
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
 
       - name: Install cargo-nextest
+        if: runner.os == 'Windows'
         shell: cmd
         run: |
           curl -L -o "%TEMP%\nextest.zip" "https://get.nexte.st/latest/windows"
           tar -xf "%TEMP%\nextest.zip" -C "%USERPROFILE%\.cargo\bin"
 
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-
-      # The nextest invocation (and its excludes) lives in turbo.json as
-      # the turborepo-crates#test command; dogfooding the task command
-      # override keeps CI and local runs identical.
-      - name: Run tests
-        timeout-minutes: 20
-        run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream
-        shell: bash
-        env:
-          INSTA_WORKSPACE_ROOT: ${{ github.workspace }}
-
-  rust_test_ubuntu:
-    runs-on: ubuntu-latest-8-core-oss
-    # Padded beyond the usual 15: the first push-to-main run populates the
-    # compile cache, and artifact writes make it slower than a plain build.
-    timeout-minutes: 25
-    permissions:
-      contents: read
-      # For the OIDC token exchanged for a Remote Cache access token.
-      id-token: write
-    env:
-      CARGO_INCREMENTAL: 0
-      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on ubuntu
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-
-      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
-      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
-      # Push events only: fork PRs cannot mint OIDC tokens, and PR runs use
-      # the local cache anyway. With credentials present, turbo caches the
-      # test task remotely and engages the sccache compile cache
-      # (futureFlags.experimentalCargoSccache).
-      - name: Set up Turborepo Remote Cache
-        if: github.event_name == 'push'
-        uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
-        with:
-          team: ${{ vars.TURBO_TEAM }}
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
-          package-install: "false"
-
-      - name: Install Bun
-        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
-
       - name: Install cargo-nextest
+        if: runner.os != 'Windows'
         uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
         with:
           tool: nextest
+
+      - name: Configure Insta workspace root
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "INSTA_WORKSPACE_ROOT=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
@@ -454,9 +229,8 @@ jobs:
   check-examples:
     name: Check examples
     timeout-minutes: 40
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && github.event_name == 'push' }}
+    needs: release-pr
+    if: needs.release-pr.outputs.is-release-pr != 'true' && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -504,16 +278,15 @@ jobs:
   check-lockfiles:
     name: Integration - Lockfile parsers
     timeout-minutes: 15
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' }}
+    needs: release-pr
+    if: needs.release-pr.outputs.is-release-pr != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       # For the OIDC token exchanged for a Remote Cache access token.
       id-token: write
     env:
-      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
+      TURBO_CACHE: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && 'remote:rw' || 'local:rw' }}
       CARGO_INCREMENTAL: 0
     steps:
       - name: Checkout
@@ -523,10 +296,10 @@ jobs:
 
       # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
       # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
-      # Push events only: fork PRs cannot mint OIDC tokens, and PR runs use
-      # the local cache anyway.
+      # Pushes and same-repository PRs can mint OIDC tokens. Fork PRs remain
+      # local-only.
       - name: Set up Turborepo Remote Cache
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
         with:
           team: ${{ vars.TURBO_TEAM }}
@@ -539,18 +312,16 @@ jobs:
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
 
-      - name: Build turbo binary
-        run: cargo build
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
 
       - name: Run lockfile tests
-        run: pnpm check-lockfiles
-        working-directory: lockfile-tests
+        run: turbo run check-lockfiles --filter=lockfile-tests --env-mode=strict --log-order=stream
 
   js_native_packages:
     name: "@turbo/repository (${{matrix.os.name}}, Node ${{matrix.node-version}})"
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.native-lib == 'true' }}
+    needs: release-pr
+    if: needs.release-pr.outputs.is-release-pr != 'true'
     timeout-minutes: 15
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -571,26 +342,19 @@ jobs:
       # For the OIDC token exchanged for a Remote Cache access token.
       id-token: write
     env:
-      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'local:rw' || 'remote:rw' }}
+      TURBO_CACHE: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && 'remote:rw' || 'local:rw' }}
     steps:
-      - name: Determine fetch depth
-        id: fetch-depth
-        run: |
-          echo "depth=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> $GITHUB_OUTPUT
-
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          ref: ${{ github.ref }}
-          fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
           persist-credentials: false
 
       # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
       # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
-      # Push events only: fork PRs cannot mint OIDC tokens, and PR runs use
-      # the local cache anyway.
+      # Pushes and same-repository PRs can mint OIDC tokens. Fork PRs remain
+      # local-only.
       - name: Set up Turborepo Remote Cache
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
         with:
           team: ${{ vars.TURBO_TEAM }}
@@ -616,27 +380,24 @@ jobs:
     timeout-minutes: 15
     if: always()
     needs:
-      - find-changes
+      - release-pr
       - turbo_types_check
-      - rust_test_macos
-      - rust_test_windows
-      - rust_test_ubuntu
+      - rust_test
       - check-examples
       - check-lockfiles
       - js_native_packages
     steps:
-      - name: Fail if change detection failed
-        if: needs.find-changes.result != 'success'
+      - name: Fail if release PR validation failed
+        if: needs.release-pr.result != 'success'
         run: exit 1
 
       - name: Skip for release PR
-        if: needs.find-changes.outputs.is-release-pr == 'true'
-        run: |
-          echo "Release PR detected - skipping tests (code already tested on main)"
+        if: needs.release-pr.outputs.is-release-pr == 'true'
+        run: echo "Release PR detected - skipping tests (code already tested on main)"
 
       - name: Compute info
         id: info
-        if: needs.find-changes.outputs.is-release-pr != 'true'
+        if: needs.release-pr.outputs.is-release-pr != 'true'
         run: |
           cancelled=false
           failure=false
@@ -651,9 +412,7 @@ jobs:
           }
 
           subjob ${{needs.turbo_types_check.result}}
-          subjob ${{needs.rust_test_macos.result}}
-          subjob ${{needs.rust_test_windows.result}}
-          subjob ${{needs.rust_test_ubuntu.result}}
+          subjob ${{needs.rust_test.result}}
           subjob ${{needs.check-examples.result}}
           subjob ${{needs.check-lockfiles.result}}
           subjob ${{needs.js_native_packages.result}}
@@ -667,11 +426,11 @@ jobs:
           fi
 
       - name: Failed
-        if: needs.find-changes.outputs.is-release-pr != 'true' && steps.info.outputs.failure == 'true'
+        if: needs.release-pr.outputs.is-release-pr != 'true' && steps.info.outputs.failure == 'true'
         run: exit 1
 
       - name: Succeeded
-        if: needs.find-changes.outputs.is-release-pr != 'true' && steps.info.outputs.success == 'true'
+        if: needs.release-pr.outputs.is-release-pr != 'true' && steps.info.outputs.success == 'true'
         run: echo Ok
 
   cleanup:
