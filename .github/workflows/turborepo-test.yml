@@ -21,8 +21,6 @@ jobs:
       pull-requests: read
     outputs:
       is-release-pr: ${{ steps.check-release.outputs.is-release-pr }}
-      docs: ${{ steps.filter.outputs.docs }}
-      rest: ${{ steps.filter.outputs.rest }}
       rust: ${{ steps.filter.outputs.rust }}
       native-lib: ${{ steps.filter.outputs.native-lib }}
     steps:
@@ -118,7 +116,7 @@ jobs:
             # every test runs.
             if [[ "$BASE_COMMIT" =~ ^0+$ ]] || ! git fetch --no-tags --depth=1 origin "$BASE_COMMIT"; then
               echo "No usable base commit; treating all paths as changed"
-              for name in docs native-lib rest rust; do
+              for name in native-lib rust; do
                 echo "$name=true" >> "$GITHUB_OUTPUT"
               done
               exit 0
@@ -164,24 +162,11 @@ jobs:
           # Check each path pattern with a more readable syntax
           echo "Checking path patterns..."
 
-          check_paths "docs" "docs/"
           # Root turbo.json is included because it configures the Cargo task
           # pipeline these packages build through (futureFlags, task defs).
           check_paths "native-lib" "packages/turbo-repository/,crates/,turbo.json"
 
-          # Handle the "rest" pattern - files that are NOT in examples/ or docs/
           CHANGED_FILES=$(git diff --name-only $BASE_COMMIT $HEAD_COMMIT)
-
-          # Filter to only include files that do NOT start with examples/ or docs/
-          FILES_NOT_IN_EXAMPLES_OR_DOCS=$(echo "$CHANGED_FILES" | grep -v -E "^(examples/|docs/)" || true)
-
-          if [ -n "$FILES_NOT_IN_EXAMPLES_OR_DOCS" ]; then
-            echo "rest=true" >> $GITHUB_OUTPUT
-            echo "Changes detected outside examples/ and docs/ directories"
-          else
-            echo "rest=false" >> $GITHUB_OUTPUT
-            echo "No changes outside examples/ and docs/ directories"
-          fi
 
           # Detect if Rust/core code changed (requires Rust tests + integration tests)
           # This excludes JS-only changes like packages/*, lockfile, etc.
@@ -539,12 +524,8 @@ jobs:
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
 
-      - name: Build turbo binary
-        run: cargo build
-
       - name: Run lockfile tests
-        run: pnpm check-lockfiles
-        working-directory: lockfile-tests
+        run: turbo run check-lockfiles --filter=lockfile-tests --env-mode=strict --log-order=stream
 
   js_native_packages:
     name: "@turbo/repository (${{matrix.os.name}}, Node ${{matrix.node-version}})"
