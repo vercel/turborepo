@@ -30,9 +30,10 @@ pub fn turbo_output_filters() -> Vec<(&'static str, &'static str)> {
 
 /// Env keys in the test process that can carry real turbo configuration
 /// into spawned turbo children — TURBO_TEAM/TURBO_TOKEN exported by CI
-/// credential steps, VERCEL_ARTIFACTS_* on Vercel builds, or a developer's
-/// local settings. Tests assert against turbo's defaults, so every harness
-/// that spawns turbo must remove these before applying its own vars;
+/// credential steps, the paired RUSTC_WRAPPER used by turbo's embedded
+/// sccache, VERCEL_ARTIFACTS_* on Vercel builds, or a developer's local
+/// settings. Tests assert against turbo's defaults, so every harness that
+/// spawns turbo must remove these before applying its own vars;
 /// per-test overrides (explicit env sets after removal) still win because
 /// later ops on a key replace earlier ones.
 pub fn ambient_turbo_env_keys() -> Vec<std::ffi::OsString> {
@@ -41,6 +42,7 @@ pub fn ambient_turbo_env_keys() -> Vec<std::ffi::OsString> {
         .filter(|key| {
             let key = key.to_string_lossy();
             key.starts_with("TURBO_")
+                || key == "RUSTC_WRAPPER"
                 || key == "VERCEL_ARTIFACTS_OWNER"
                 || key == "VERCEL_ARTIFACTS_TOKEN"
         })
