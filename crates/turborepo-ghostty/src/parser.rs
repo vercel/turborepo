@@ -104,6 +104,13 @@ impl Parser {
         Ok(())
     }
 
+    pub fn begin_selection(&mut self, row: u16, col: u16) -> Result<()> {
+        self.clear_selection()?;
+        self.selection_start = Some((row, col));
+        self.selection_start_ref = Some(self.terminal.track_grid_ref(viewport_point(row, col))?);
+        Ok(())
+    }
+
     pub fn update_selection(
         &mut self,
         start_row: u16,
@@ -111,13 +118,17 @@ impl Parser {
         end_row: u16,
         end_col: u16,
     ) -> Result<()> {
-        self.selection_range = Some((start_row, start_col, end_row, end_col));
         if self.selection_start_ref.is_none() {
-            self.selection_start_ref = Some(
-                self.terminal
-                    .track_grid_ref(viewport_point(start_row, start_col))?,
-            );
+            self.begin_selection(start_row, start_col)?;
         }
+        self.update_selection_end(end_row, end_col)
+    }
+
+    pub fn update_selection_end(&mut self, end_row: u16, end_col: u16) -> Result<()> {
+        let Some((start_row, start_col)) = self.selection_start else {
+            return Ok(());
+        };
+        self.selection_range = Some((start_row, start_col, end_row, end_col));
         self.selection_end_ref = Some(
             self.terminal
                 .track_grid_ref(viewport_point(end_row, end_col))?,
@@ -130,10 +141,15 @@ impl Parser {
             self.terminal.set_selection(None)?;
             return Ok(());
         };
-        let (Some(start), Some(end)) = (
+        let snapshots = (
             start.snapshot(&self.terminal)?,
             end.snapshot(&self.terminal)?,
-        ) else {
+        );
+        let (Some(start), Some(end)) = snapshots else {
+            self.selection_start = None;
+            self.selection_range = None;
+            self.selection_start_ref = None;
+            self.selection_end_ref = None;
             self.terminal.set_selection(None)?;
             return Ok(());
         };
@@ -156,6 +172,14 @@ impl Parser {
 
     pub fn has_selection(&self) -> bool {
         self.selection_range.is_some()
+            && self
+                .selection_start_ref
+                .as_ref()
+                .is_some_and(TrackedGridRef::has_value)
+            && self
+                .selection_end_ref
+                .as_ref()
+                .is_some_and(TrackedGridRef::has_value)
     }
 
     pub fn selection_range(&self) -> Option<(u16, u16, u16, u16)> {
@@ -239,6 +263,41 @@ mod selection_tests {
         let text = parser.selected_text().expect("selected text");
         assert_eq!(text.as_deref(), Some("hello"));
         assert!(parser.has_selection());
+    }
+
+    #[test]
+    fn pinned_anchor_survives_output_before_drag() {
+        let mut parser = Parser::try_new(2, 40, 100).expect("parser");
+        parser.process(b"anchor\r\nnext");
+        parser.begin_selection(0, 0).expect("begin selection");
+        assert!(!parser.has_selection());
+        assert_eq!(parser.selected_text().expect("selected text"), None);
+
+        parser.process(b"\r\nnew");
+        parser
+            .update_selection_end(1, 2)
+            .expect("update selection end");
+        let text = parser
+            .selected_text()
+            .expect("selected text")
+            .expect("selection");
+        assert!(text.starts_with("anchor"));
+    }
+
+    #[test]
+    fn invalid_selection_refs_clear_logical_state() {
+        let mut parser = Parser::try_new(2, 40, 1).expect("parser");
+        parser.process(b"anchor\r\nnext");
+        parser.begin_selection(0, 0).expect("begin selection");
+        parser
+            .update_selection_end(1, 3)
+            .expect("update selection end");
+        assert!(parser.has_selection());
+
+        parser.terminal.reset();
+        parser.prepare_render().expect("prepare render");
+        assert!(!parser.has_selection());
+        assert_eq!(parser.selection_range(), None);
     }
 
     #[test]

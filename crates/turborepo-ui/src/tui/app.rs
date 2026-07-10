@@ -990,6 +990,7 @@ impl<W> App<W> {
     }
 
     pub fn copy_selection(&mut self) -> Result<(), Error> {
+        self.cancel_selection_drag();
         let task = self.get_full_task_mut()?;
         let Some(text) = task.copy_selection() else {
             return Ok(());
@@ -1386,6 +1387,7 @@ fn handle_toggle_stream(
     scope: &StreamScope,
     color_config: ColorConfig,
 ) -> Result<(), Error> {
+    app.cancel_selection_drag();
     match *display {
         DisplayState::Tui => {
             let Some(term) = terminal.as_mut() else {
@@ -3836,6 +3838,88 @@ mod test {
         app.clear_task_logs()?;
         assert!(!app.get_full_task()?.has_pending_selection_anchor());
         assert!(app.selection_drag_task.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn manual_copy_cancels_selection_drag_and_autoscroll() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<Vec<u8>> = App::new(
+            10,
+            80,
+            vec!["app-a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        )?;
+        app.process_output("app-a", b"zero\none\ntwo\nthree\nfour\nfive")?;
+        let pane_column = app.size.task_list_width();
+
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            2,
+            pane_column,
+        ))?;
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Drag(MouseButton::Left),
+            0,
+            pane_column,
+        ))?;
+        assert!(app.selection_autoscroll.is_some());
+
+        app.copy_selection()?;
+        assert!(app.selection_drag_task.is_none());
+        assert!(app.selection_autoscroll.is_none());
+        assert!(!app.get_full_task()?.is_selecting());
+        Ok(())
+    }
+
+    #[test]
+    fn stream_toggle_cancels_selection_drag_and_autoscroll() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<Box<dyn io::Write + Send>> = App::new_for_test(
+            10,
+            80,
+            vec!["app-a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        let pane_column = app.size.task_list_width();
+
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            2,
+            pane_column,
+        ))?;
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Drag(MouseButton::Left),
+            0,
+            pane_column,
+        ))?;
+        assert!(app.selection_autoscroll.is_some());
+
+        let mut terminal = None;
+        let mut display = DisplayState::Inactive;
+        let sink = TerminalSink::new(ColorConfig::new(true));
+        handle_toggle_stream(
+            &mut terminal,
+            &mut display,
+            &mut app,
+            &sink,
+            &StreamScope::All,
+            ColorConfig::new(true),
+        )?;
+
+        assert!(app.selection_drag_task.is_none());
+        assert!(app.selection_autoscroll.is_none());
+        assert!(!app.get_full_task()?.is_selecting());
         Ok(())
     }
 

@@ -173,32 +173,28 @@ impl<W> TerminalOutput<W> {
     ) -> Result<(), Error> {
         match event.kind {
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                self.parser.clear_selection()?;
                 // Shift held at click time means the user is preventing the
                 // copy before it starts, so don't anchor a selection. Most
                 // terminals never deliver shifted mouse events (shift
                 // bypasses mouse capture for native selection), but honor
                 // them when they do arrive.
-                self.selection_start = (!event
+                let selection_start = (!event
                     .modifiers
                     .contains(crossterm::event::KeyModifiers::SHIFT))
                 .then_some((event.row, event.column));
+                if let Some((row, column)) = selection_start {
+                    self.parser.begin_selection(row, column)?;
+                } else {
+                    self.parser.clear_selection()?;
+                }
+                self.selection_start = selection_start;
             }
             crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
-                if let Some((start_row, start_col)) = self.selection_start {
-                    // Pin the anchor before scrolling. Ghostty's tracked grid
-                    // reference then keeps it attached to the original log cell.
+                if self.selection_start.is_some() {
                     if let Some(direction) = selection_scroll {
-                        self.parser.update_selection(
-                            start_row,
-                            start_col,
-                            event.row,
-                            event.column,
-                        )?;
                         self.scroll(direction)?;
                     }
-                    self.parser
-                        .update_selection(start_row, start_col, event.row, event.column)?;
+                    self.parser.update_selection_end(event.row, event.column)?;
                 }
             }
             crossterm::event::MouseEventKind::ScrollDown => (),
@@ -225,11 +221,11 @@ impl<W> TerminalOutput<W> {
         row: u16,
         column: u16,
     ) -> Result<(), Error> {
-        self.scroll(direction)?;
-        if let Some((start_row, start_col)) = self.selection_start {
-            self.parser
-                .update_selection(start_row, start_col, row, column)?;
+        if self.selection_start.is_none() {
+            return Ok(());
         }
+        self.scroll(direction)?;
+        self.parser.update_selection_end(row, column)?;
         Ok(())
     }
 
@@ -343,6 +339,78 @@ mod newline_tests {
         // layer so `App` can copy it before clearing the highlight.
         assert!(!output.is_selecting());
         assert!(output.has_selection());
+        Ok(())
+    }
+
+    #[test]
+    fn click_without_drag_has_no_selection() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+
+        let mut output: TerminalOutput<()> = TerminalOutput::new(10, 40, None, 100)?;
+        output.process(b"hello world\r\n");
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+
+        assert!(!output.has_selection());
+        assert_eq!(output.copy_selection(), None);
+        Ok(())
+    }
+
+    #[test]
+    fn mouse_down_pins_anchor_before_output_arrives() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+
+        let mut output: TerminalOutput<()> = TerminalOutput::new(2, 40, None, 100)?;
+        output.process(b"anchor\r\nnext");
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+        output.process(b"\r\nnew");
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 2,
+            row: 1,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+
+        assert!(
+            output
+                .copy_selection()
+                .is_some_and(|text| text.starts_with("anchor"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn selection_tick_without_anchor_does_not_scroll() -> Result<(), Error> {
+        let mut output: TerminalOutput<()> = TerminalOutput::new(2, 40, None, 100)?;
+        output.process(b"zero\r\none\r\ntwo\r\nthree");
+        output.scroll_to_top()?;
+        let before = output
+            .parser
+            .terminal
+            .scrollbar()
+            .expect("scrollbar")
+            .offset;
+
+        output.continue_selection_drag(Direction::Down, 1, 0)?;
+
+        assert_eq!(
+            output
+                .parser
+                .terminal
+                .scrollbar()
+                .expect("scrollbar")
+                .offset,
+            before
+        );
         Ok(())
     }
 
