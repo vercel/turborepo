@@ -2,6 +2,7 @@ use libghostty_vt::{
     RenderState, Terminal,
     error::Error as GhosttyInnerError,
     fmt::{Format, Formatter, FormatterOptions},
+    screen::TrackedGridRef,
     selection::{FormatOptions, Selection},
     terminal::{Options as TerminalOptions, Point, PointCoordinate, ScrollViewport},
 };
@@ -16,9 +17,10 @@ pub struct Parser {
     pub terminal: Terminal<'static, 'static>,
     pub render_state: RenderState<'static>,
     selection_start: Option<(u16, u16)>,
-    /// Last viewport selection endpoints, used to refresh grid refs before
-    /// copy.
+    /// Last viewport selection endpoints, retained for introspection.
     selection_range: Option<(u16, u16, u16, u16)>,
+    selection_start_ref: Option<TrackedGridRef>,
+    selection_end_ref: Option<TrackedGridRef>,
     max_scrollback: usize,
 }
 
@@ -36,6 +38,8 @@ impl Parser {
             render_state,
             selection_start: None,
             selection_range: None,
+            selection_start_ref: None,
+            selection_end_ref: None,
             max_scrollback: scrollback_len,
         })
     }
@@ -94,6 +98,8 @@ impl Parser {
     pub fn clear_selection(&mut self) -> Result<()> {
         self.selection_start = None;
         self.selection_range = None;
+        self.selection_start_ref = None;
+        self.selection_end_ref = None;
         self.terminal.set_selection(None)?;
         Ok(())
     }
@@ -106,19 +112,31 @@ impl Parser {
         end_col: u16,
     ) -> Result<()> {
         self.selection_range = Some((start_row, start_col, end_row, end_col));
+        if self.selection_start_ref.is_none() {
+            self.selection_start_ref = Some(
+                self.terminal
+                    .track_grid_ref(viewport_point(start_row, start_col))?,
+            );
+        }
+        self.selection_end_ref = Some(
+            self.terminal
+                .track_grid_ref(viewport_point(end_row, end_col))?,
+        );
         self.refresh_selection()
     }
 
     fn refresh_selection(&mut self) -> Result<()> {
-        let Some((start_row, start_col, end_row, end_col)) = self.selection_range else {
+        let (Some(start), Some(end)) = (&self.selection_start_ref, &self.selection_end_ref) else {
             self.terminal.set_selection(None)?;
             return Ok(());
         };
-
-        let start = self
-            .terminal
-            .grid_ref(viewport_point(start_row, start_col))?;
-        let end = self.terminal.grid_ref(viewport_point(end_row, end_col))?;
+        let (Some(start), Some(end)) = (
+            start.snapshot(&self.terminal)?,
+            end.snapshot(&self.terminal)?,
+        ) else {
+            self.terminal.set_selection(None)?;
+            return Ok(());
+        };
         let selection = Selection::new(start, end, false);
         self.terminal.set_selection(Some(&selection))?;
         Ok(())
@@ -168,6 +186,8 @@ impl Parser {
         self.terminal.reset();
         self.selection_start = None;
         self.selection_range = None;
+        self.selection_start_ref = None;
+        self.selection_end_ref = None;
     }
 
     pub fn max_scrollback(&self) -> usize {

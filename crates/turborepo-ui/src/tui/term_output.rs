@@ -163,6 +163,14 @@ impl<W> TerminalOutput<W> {
     }
 
     pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
+        self.handle_mouse_with_scroll(event, None)
+    }
+
+    pub fn handle_mouse_with_scroll(
+        &mut self,
+        event: crossterm::event::MouseEvent,
+        selection_scroll: Option<Direction>,
+    ) -> Result<(), Error> {
         match event.kind {
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
                 self.parser.clear_selection()?;
@@ -178,6 +186,17 @@ impl<W> TerminalOutput<W> {
             }
             crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
                 if let Some((start_row, start_col)) = self.selection_start {
+                    // Pin the anchor before scrolling. Ghostty's tracked grid
+                    // reference then keeps it attached to the original log cell.
+                    if let Some(direction) = selection_scroll {
+                        self.parser.update_selection(
+                            start_row,
+                            start_col,
+                            event.row,
+                            event.column,
+                        )?;
+                        self.scroll(direction)?;
+                    }
                     self.parser
                         .update_selection(start_row, start_col, event.row, event.column)?;
                 }
@@ -198,6 +217,29 @@ impl<W> TerminalOutput<W> {
             }
         }
         Ok(())
+    }
+
+    pub fn continue_selection_drag(
+        &mut self,
+        direction: Direction,
+        row: u16,
+        column: u16,
+    ) -> Result<(), Error> {
+        self.scroll(direction)?;
+        if let Some((start_row, start_col)) = self.selection_start {
+            self.parser
+                .update_selection(start_row, start_col, row, column)?;
+        }
+        Ok(())
+    }
+
+    pub fn cancel_selection_drag(&mut self) {
+        self.selection_start = None;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn has_pending_selection_anchor(&self) -> bool {
+        self.selection_start.is_some()
     }
 
     pub fn copy_selection(&mut self) -> Option<String> {
