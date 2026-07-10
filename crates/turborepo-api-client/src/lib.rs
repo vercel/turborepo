@@ -1809,11 +1809,12 @@ mod test {
 
         let oversized =
             usize::try_from(turborepo_vercel_api_mock::MAX_INCREMENTAL_ARTIFACT_SIZE + 1).unwrap();
+        let oversized_body = Bytes::from(vec![0; oversized]);
         assert!(
             client
                 .put_incremental_artifact(
                     &key,
-                    tokio_stream::once(Ok(Bytes::new())),
+                    tokio_stream::once(Ok(oversized_body)),
                     oversized,
                     &publish_token,
                     None,
