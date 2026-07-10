@@ -1,4 +1,8 @@
 name: JS Package Tests
+
+env:
+  TURBO_TELEMETRY_MESSAGE_DISABLED: "1"
+
 on:
   pull_request:
 

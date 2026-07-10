@@ -23,6 +23,7 @@ name: Release
 
 env:
   CARGO_PROFILE_RELEASE_LTO: true
+  TURBO_TELEMETRY_MESSAGE_DISABLED: "1"
   HUSKY: "0"
   RELEASE_TURBO_CLI: true # TODO: do we need this?
 

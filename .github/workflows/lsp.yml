@@ -5,6 +5,9 @@
 
 name: LSP
 
+env:
+  TURBO_TELEMETRY_MESSAGE_DISABLED: "1"
+
 run-name: LSP ${{ inputs.ref || github.ref_name }}
 
 on:
