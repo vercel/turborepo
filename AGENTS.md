@@ -42,7 +42,7 @@ When making changes to the codebase, check if the following docs need updates:
 
 - Test and lint workflows do not pre-classify changed paths. PR jobs run consistently and use the Turborepo task graph and cache where applicable.
 - Same-repository PRs authenticate to Remote Cache through OIDC; fork PRs remain local-only.
-- Rust CI is dogfooding full Cargo target restoration on Ubuntu while repository sccache dogfooding is disabled. The draft branch temporarily retains its PR cache across commits for measurement.
+- Rust CI restores full Cargo target state on Ubuntu from trusted `main` snapshots; only `main` writes. Repository sccache dogfooding is disabled.
 - Example validation remains push-only because it requires Vercel credentials and project state.
 
 ### PR Title Format

@@ -21,9 +21,7 @@ jobs:
   cleanup:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Keep the dogfood cache across commits long enough to measure restoration.
-    # Remove this branch exception before rollout.
-    if: ${{ github.ref != 'refs/heads/main' && (github.head_ref != 'shew/cargo-target-cache-dogfood' || github.event.pull_request.head.repo.full_name != github.repository) }}
+    if: ${{ github.ref != 'refs/heads/main' }}
     steps:
       - name: Cleanup
         env:
