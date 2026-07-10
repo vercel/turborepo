@@ -37,7 +37,7 @@ fn test_cargo_packages_in_task_graph() {
 
     // The bin crate is an entrypoint: it executes a real cargo command.
     let app_build = task("app#build").expect("app#build in graph");
-    assert_eq!(app_build["command"], "cargo build --package=app");
+    assert_eq!(app_build["command"], "cargo build --package=app --locked");
     // Its dependency crate participates in the graph (for --filter/--affected
     // propagation) but is a no-op — cargo builds it implicitly.
     let lib_build = task("lib-a#build").expect("lib-a#build in graph");
@@ -68,6 +68,59 @@ fn test_cargo_packages_in_task_graph() {
     assert!(
         outputs.iter().any(|o| o.ends_with("target/*/app")),
         "bin deliverable must be an output, got {outputs:?}"
+    );
+}
+
+#[test]
+fn test_cargo_workspace_requires_lockfile() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_monorepo(tempdir.path());
+    let lockfile = tempdir.path().join("Cargo.lock");
+    fs::remove_file(&lockfile).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["build", "--filter=app", "--dry-run=json"]);
+    assert!(!output.status.success(), "missing lockfile must fail");
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        combined.contains("Cargo.lock is required for Cargo workspace caching"),
+        "expected actionable lockfile error: {combined}"
+    );
+    assert!(!lockfile.exists(), "turbo must not generate Cargo.lock");
+}
+
+#[test]
+fn test_cargo_workspace_rejects_stale_lockfile() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_monorepo(tempdir.path());
+    let lockfile = tempdir.path().join("Cargo.lock");
+    let original_lockfile = fs::read_to_string(&lockfile).unwrap();
+    let manifest = tempdir.path().join("crates/app/Cargo.toml");
+    let contents = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        contents.replace("version = \"0.1.0\"", "version = \"0.2.0\""),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["build", "--filter=app", "--dry-run=json"]);
+    assert!(!output.status.success(), "stale lockfile must fail");
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        combined.contains("Cargo.lock is out of date or could not be validated"),
+        "expected actionable stale lockfile error: {combined}"
+    );
+    assert_eq!(
+        fs::read_to_string(lockfile).unwrap(),
+        original_lockfile,
+        "turbo must not update Cargo.lock"
     );
 }
 

@@ -82,14 +82,14 @@ impl LockPackage {
     }
 }
 
-/// For each named workspace member present in the lockfile, compute the set
-/// of external packages (those with a `source`) in its transitive dependency
-/// closure.
+/// For each named workspace member, compute the set of external packages
+/// (those with a `source`) in its transitive dependency closure.
 ///
-/// Members missing from the lockfile are simply absent from the result (a
-/// stale lockfile is Cargo's to repair, not ours). Cargo.lock merges normal,
-/// build, and dev dependencies into one edge list, so closures include dev
-/// dependencies — over-inclusive, which is the safe direction for hashing.
+/// A missing member is a hard error: silently hashing an incomplete closure
+/// would allow artifacts built from different dependency resolutions to share
+/// a cache key. Cargo.lock merges normal, build, and dev dependencies into one
+/// edge list, so closures include dev dependencies — over-inclusive, which is
+/// the safe direction for hashing.
 pub fn cargo_external_closures(
     contents: &str,
     members: &[String],
@@ -99,9 +99,9 @@ pub fn cargo_external_closures(
 
     let mut closures = HashMap::new();
     for member in members {
-        let Some(start) = index.member(member) else {
-            continue;
-        };
+        let start = index
+            .member(member)
+            .ok_or_else(|| Error::MissingMember(member.clone()))?;
         let mut externals = HashSet::new();
         for idx in index.reachable(start)? {
             let package = &lock.package[idx];
@@ -356,10 +356,10 @@ source = "git+https://example.com/dep#deadbeef"
     }
 
     #[test]
-    fn test_missing_member_is_skipped() {
+    fn test_missing_member_errors() {
         let members = vec!["not-in-lock".to_string()];
-        let closures = cargo_external_closures(LOCK, &members).unwrap();
-        assert!(closures.is_empty());
+        let error = cargo_external_closures(LOCK, &members).unwrap_err();
+        assert!(matches!(error, Error::MissingMember(_)));
     }
 
     #[test]

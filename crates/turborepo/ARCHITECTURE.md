@@ -192,16 +192,17 @@ whether anything changed; Cargo decides how and in what order to build.**
   depends on every crate and hosts workspace-scoped verbs.
 - **Execution** (`Toolchain::task_command`, adapted into the provider chain
   by `ToolchainCommandProvider` in `turborepo-task-executor`): entrypoint
-  `build`/`run`/`dev` tasks run `cargo <verb> --package=<crate>` — one cargo
-  process that builds the crate's whole dependency closure with Cargo's own
-  parallelism. Verification verbs run once at workspace scope: `<name>#test`
-  → `cargo test --workspace`, `<name>#lint` → `cargo clippy --workspace`,
-  etc. Cargo commands (except `cargo run`) share a mutually-exclusive
-  serial group: concurrent cargo processes serialize on the build-directory
-  lock anyway, so the executor runs one at a time without the "waiting for
-  file lock" noise. Run summaries derive display commands from the same
-  verb tables via `Toolchain::task_display_command`, so display cannot
-  drift from execution.
+  `build`/`run`/`dev` tasks run `cargo <verb> --package=<crate> --locked` — one
+  cargo process that builds the crate's whole dependency closure with Cargo's
+  own parallelism. Verification verbs run once at workspace scope:
+  `<name>#test` → `cargo test --workspace --locked`, `<name>#lint` → `cargo
+  clippy --workspace --locked`, etc. `--locked` preserves the dependency
+  resolution validated before task hashing. Cargo commands (except `cargo
+  run`) share a mutually-exclusive serial group: concurrent cargo processes
+  serialize on the build-directory lock anyway, so the executor runs one at a
+  time without the "waiting for file lock" noise. Run summaries derive display
+  commands from the same verb tables via `Toolchain::task_display_command`, so
+  display cannot drift from execution.
 - **Hashing** (`Toolchain::derived_task_io`, consumed by
   `turborepo-engine/src/builder/definitions.rs`): entrypoint tasks hash
   their own sources plus their transitive dependency crates' sources
@@ -226,8 +227,11 @@ whether anything changed; Cargo decides how and in what order to build.**
   ABIs from sharing native artifact cache entries. Explicit targets selected
   through hashed task arguments, `CARGO_BUILD_TARGET`, or repository Cargo
   configuration remain distinct. Failure to resolve the compiler identity is
-  a hard error. A missing `Cargo.lock` contributes nothing; an unparsable one
-  is a hard error.
+  a hard error. Every non-empty Cargo workspace must have a current
+  `Cargo.lock`: discovery runs full `cargo metadata --locked` before hashing,
+  then computes per-crate closures. Missing, stale, unparsable, or incomplete
+  lockfiles are hard errors. Turborepo never creates or refreshes the source
+  lockfile; users do that explicitly with Cargo and commit the result.
 - **Caching**: task caches store logs plus, for entrypoint builds, the
   deliverables: bins (`target/*/<bin>`) and cdylib/staticlib artifacts
   (`target/*/lib<name>.{so,dylib,a}`, `<name>.{dll,lib}` — all platform
@@ -324,11 +328,8 @@ hint pointing at the flag. Released turbo versions hard-error on unknown
 End-to-end coverage lives in `crates/turborepo/tests/cargo_workspace_test.rs`
 against the `cargo_monorepo` fixture (a mixed npm + Cargo workspace):
 graph shape, execution, caching, deliverable restoration, cross-crate
-invalidation, uncached `run`/`dev` execution, and the filter hint. `turbo query`
-serves Cargo packages through the same graph. Discovery adds roughly 170ms to
-invocations on a ~60-crate workspace (`cargo metadata`, `rustc -vV`, and
-lockfile parsing); daemon-side caching is the optimization path if that ever
-matters.
+invalidation, lockfile enforcement, uncached `run`/`dev` execution, and the
+filter hint. `turbo query` serves Cargo packages through the same graph.
 
 ### 3. Task Graph (`crates/turborepo-lib/src/engine/`)
 

@@ -1929,6 +1929,20 @@ mod test {
             "[package]\nname = \"lib-a\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
         );
         write(&["rust", "lib-a", "src", "lib.rs"], "");
+        write(
+            &["Cargo.lock"],
+            r#"version = 4
+
+[[package]]
+name = "app"
+version = "0.1.0"
+dependencies = ["lib-a"]
+
+[[package]]
+name = "lib-a"
+version = "0.1.0"
+"#,
+        );
     }
 
     fn canonical_tempdir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
@@ -2027,8 +2041,8 @@ mod test {
                 ],
             );
             // Cargo packages carry toolchain-resolved closures (here just
-            // the rustc stamp — the fixture has no Cargo.lock), never JS
-            // lockfile entries.
+            // the rustc stamp — the fixture has no external dependencies),
+            // never JS lockfile entries.
             assert!(
                 workspace_pkg
                     .transitive_dependencies
