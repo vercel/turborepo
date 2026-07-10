@@ -1,5 +1,8 @@
 name: Docs checks
 
+env:
+  TURBO_TELEMETRY_MESSAGE_DISABLED: "1"
+
 on:
   pull_request:
     paths:

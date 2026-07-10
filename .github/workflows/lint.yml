@@ -8,6 +8,7 @@ concurrency:
 
 env:
   RUSTFLAGS: "-D warnings"
+  TURBO_TELEMETRY_MESSAGE_DISABLED: "1"
 
 permissions:
   contents: read

@@ -1,4 +1,8 @@
 name: Test
+
+env:
+  TURBO_TELEMETRY_MESSAGE_DISABLED: "1"
+
 on:
   pull_request:
   push:

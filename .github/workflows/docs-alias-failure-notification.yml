@@ -4,6 +4,9 @@
 
 name: Docs Alias Failure Notification
 
+env:
+  TURBO_TELEMETRY_MESSAGE_DISABLED: "1"
+
 on:
   workflow_run:
     workflows: ["Release"]
