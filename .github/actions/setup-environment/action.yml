@@ -31,6 +31,10 @@ inputs:
     description: "Whether to enable the Rust cache. Set to `false` for jobs that don't compile."
     required: false
     default: "true"
+  rust-cache-save:
+    description: "Whether to save the Rust cache after the job. Only trusted main jobs should enable this."
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -50,8 +54,7 @@ runs:
       uses: ./.github/actions/setup-rust
       with:
         shared-cache-key: turborepo-debug-build
-        cache-key: ${{ inputs.target }}
-        save-cache: true
+        save-cache: ${{ inputs.rust-cache-save }}
         cache: ${{ inputs.rust-cache }}
         github-token: ${{ inputs.github-token }}
 

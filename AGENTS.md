@@ -42,6 +42,7 @@ When making changes to the codebase, check if the following docs need updates:
 
 - Test and lint workflows do not pre-classify changed paths. PR jobs run consistently and use the Turborepo task graph and cache where applicable.
 - Same-repository PRs authenticate to Remote Cache through OIDC; fork PRs remain local-only.
+- Rust CI restores dependency target state from the trusted `main` cache; only the Rust test job on `main` publishes one snapshot per OS. Repository dogfooding does not enable the experimental sccache backend.
 - Example validation remains push-only because it requires Vercel credentials and project state.
 
 ### PR Title Format

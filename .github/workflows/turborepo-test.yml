@@ -141,7 +141,6 @@ jobs:
     needs: release-pr
     if: needs.release-pr.outputs.is-release-pr != 'true'
     env:
-      CARGO_INCREMENTAL: 0
       TURBO_CACHE: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && 'remote:rw' || 'local:rw' }}
     steps:
       - name: Install git (Windows larger runners)
@@ -184,7 +183,7 @@ jobs:
       # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
       # Pushes and same-repository PRs can mint OIDC tokens. Fork PRs remain
       # local-only. With credentials present, turbo caches the test task
-      # remotely and engages the sccache compile cache.
+      # remotely; Cargo reuses target state restored by Setup Environment.
       - name: Set up Turborepo Remote Cache
         if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
@@ -197,6 +196,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
           package-install: "false"
+          rust-cache-save: ${{ github.event_name == 'push' && 'true' || 'false' }}
 
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
@@ -291,7 +291,6 @@ jobs:
       id-token: write
     env:
       TURBO_CACHE: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && 'remote:rw' || 'local:rw' }}
-      CARGO_INCREMENTAL: 0
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
