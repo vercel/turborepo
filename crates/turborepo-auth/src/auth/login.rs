@@ -761,6 +761,7 @@ mod tests {
 
             Ok(CachingStatusResponse {
                 status: CachingStatus::Enabled,
+                capabilities: None,
             })
         }
     }

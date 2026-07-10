@@ -1240,6 +1240,7 @@ mod tests {
                     };
                     Ok(CachingStatusResponse {
                         status: caching_status,
+                        capabilities: None,
                     })
                 }
                 MockCachingResponse::Error(MockErrorType::Error) => {
