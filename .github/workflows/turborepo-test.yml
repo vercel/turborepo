@@ -196,7 +196,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
           package-install: "false"
-          rust-cache-save: ${{ github.event_name == 'push' && 'true' || 'false' }}
+          rust-cache-save: ${{ (github.event_name == 'push' || github.event.pull_request.head.ref == 'shew/cargo-target-cache-dogfood') && 'true' || 'false' }}
 
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
@@ -227,7 +227,9 @@ jobs:
       # override keeps CI and local runs identical.
       - name: Run tests
         timeout-minutes: 20
-        run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream
+        env:
+          FORCE_ARG: ${{ github.head_ref == 'shew/cargo-target-cache-dogfood' && '--force' || '' }}
+        run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream $FORCE_ARG
         shell: bash
 
   check-examples:

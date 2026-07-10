@@ -50,7 +50,10 @@ runs:
       with:
         # PRs restore the trusted main cache. Only main writes, so unmerged code
         # cannot publish build scripts, proc macros, or other target artifacts.
-        shared-key: ${{ inputs.shared-cache-key && format('main-{0}', inputs.shared-cache-key) || '' }}
-        key: ${{ inputs.cache-key && format('main-{0}', inputs.cache-key) || 'main' }}
+        shared-key: ${{ inputs.shared-cache-key && format('main-v2-{0}', inputs.shared-cache-key) || '' }}
+        key: ${{ inputs.cache-key && format('main-v2-{0}', inputs.cache-key) || 'main-v2' }}
+        cache-bin: false
         # The cache is huge and GitHub limits the repository to 10 GB.
-        save-if: ${{ github.ref == 'refs/heads/main' && inputs.save-cache || 'false' }}
+        # The PR exception is temporary: it seeds this trusted dogfood branch
+        # so a follow-up commit can measure a real restore before rollout.
+        save-if: ${{ (github.ref == 'refs/heads/main' || github.event.pull_request.head.ref == 'shew/cargo-target-cache-dogfood') && inputs.save-cache || 'false' }}
