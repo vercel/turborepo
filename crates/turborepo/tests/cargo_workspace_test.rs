@@ -118,6 +118,83 @@ fn test_cargo_build_executes_caches_and_restores() {
 }
 
 #[test]
+fn test_cargo_run_and_dev_default_to_uncached() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_monorepo(tempdir.path());
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "run", "--filter=app", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "run dry-run failed: {output:?}");
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry-run emits JSON");
+    let run = json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "app#run"))
+        .expect("app#run in graph");
+    assert_eq!(run["resolvedTaskDefinition"]["cache"], false);
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "dev", "--filter=app", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "dev dry-run failed: {output:?}");
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry-run emits JSON");
+    let dev = json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "app#dev"))
+        .expect("app#dev in graph");
+    assert_eq!(dev["resolvedTaskDefinition"]["cache"], false);
+
+    for _ in 0..2 {
+        let output = run_turbo(
+            tempdir.path(),
+            &["run", "run", "--filter=app", "--log-order", "grouped"],
+        );
+        assert!(output.status.success(), "cargo run failed: {output:?}");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("cache bypass"),
+            "cargo run must execute every time: {stdout}"
+        );
+        assert!(
+            stdout.contains("hello from lib-a"),
+            "cargo run must start the requested process: {stdout}"
+        );
+    }
+}
+
+#[test]
+fn test_explicit_cache_overrides_cargo_run_default() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": { "run": { "cache": true } }
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "run", "--filter=app", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "run dry-run failed: {output:?}");
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry-run emits JSON");
+    let run = json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "app#run"))
+        .expect("app#run in graph");
+    assert_eq!(run["resolvedTaskDefinition"]["cache"], true);
+}
+
+#[test]
 fn test_dependency_crate_change_invalidates_entrypoint() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_cargo_monorepo(tempdir.path());

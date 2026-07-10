@@ -283,11 +283,17 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             task_id.as_inner().task(),
         );
 
-        let processed_task_definition = ProcessedTaskDefinition::from_iter(
+        let mut processed_task_definition = ProcessedTaskDefinition::from_iter(
             chain_definitions
                 .into_iter()
                 .map(|(definition, _)| definition),
         );
+        if let Some((info, toolchain)) = package_info.zip(toolchain) {
+            let defaults = toolchain.task_defaults(info, task_id.as_inner().task());
+            if processed_task_definition.cache.is_none() {
+                processed_task_definition.cache = defaults.cache.map(Spanned::new);
+            }
+        }
         let had_explicit_inputs = processed_task_definition.inputs.is_some();
         let mut task_def =
             TaskDefinition::from_processed(processed_task_definition, &path_to_root)?;

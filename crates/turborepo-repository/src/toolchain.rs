@@ -262,6 +262,18 @@ pub trait Toolchain: Send + Sync {
         false
     }
 
+    /// Defaults this toolchain supplies for `task` when turbo.json does not
+    /// configure the corresponding field. Explicit user configuration always
+    /// wins.
+    fn task_defaults(
+        &self,
+        package: &crate::package_graph::PackageInfo,
+        task: &str,
+    ) -> TaskDefaults {
+        let _ = (package, task);
+        TaskDefaults::default()
+    }
+
     /// Hash wiring this toolchain derives for `task` in `package`, beyond
     /// what turbo.json declares: extra input globs and env vars that
     /// participate in the task hash, output globs to cache, and whether the
@@ -412,6 +424,14 @@ pub struct WatchSpec {
     /// they are written by the very tasks a change would re-trigger, and
     /// must not feed back into the watcher even when not gitignored.
     pub ignore_prefixes: Vec<String>,
+}
+
+/// Default task behavior supplied by a toolchain. See
+/// [`Toolchain::task_defaults`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TaskDefaults {
+    /// Whether task logs and outputs are cacheable.
+    pub cache: Option<bool>,
 }
 
 impl WatchSpec {
