@@ -13,51 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  determine_changes:
-    name: Determine changes
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      rust: ${{ steps.filter.outputs.rust }}
-      formatting: ${{ steps.filter.outputs.formatting }}
-      dependencies: ${{ steps.filter.outputs.dependencies }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-
-      - name: Check for changes
-        uses: dorny/paths-filter@6852f92c20ea7fd3b0c25de3b5112db3a98da050 # v3
-        id: filter
-        with:
-          filters: |
-            rust:
-              - ".github/actions/**"
-              - ".github/workflows/lint.yml"
-              - "Cargo.**"
-              - "crates/**"
-              - ".cargo/**"
-              - "rust-toolchain.toml"
-            formatting:
-              - "**/*.{yml,yaml,md,mdx,js,jsx,ts,tsx,json,toml,css}"
-              - "pnpm-lock.yaml"
-              - "package.json"
-            dependencies:
-              - "Cargo.lock"
-              - "Cargo.toml"
-              - "crates/**/Cargo.toml"
-              - "pnpm-lock.yaml"
-              - "package.json"
-              - "packages/**/package.json"
-
   rust_fmt:
     name: Rust format
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -76,8 +33,6 @@ jobs:
 
   rust_clippy:
     name: Rust clippy
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -99,8 +54,6 @@ jobs:
 
   rust_licenses:
     name: Rust licenses
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -116,8 +69,6 @@ jobs:
 
   format_lint:
     name: Formatting
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.formatting == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -142,7 +93,6 @@ jobs:
   cleanup:
     name: Cleanup
     needs:
-      - determine_changes
       - rust_fmt
       - rust_clippy
       - rust_licenses

@@ -47,6 +47,7 @@
     "turborepo-crates#test": {
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/version.txt",
         "$TURBO_ROOT$/.config/nextest.toml",
         "$TURBO_ROOT$/.config/insta.yaml",
         "$TURBO_ROOT$/turborepo-tests/integration/**"
