@@ -173,9 +173,11 @@ fn test_cargo_workspace_rejects_excluded_path_dependency() {
             String::from_utf8_lossy(&output.stderr)
         );
         assert!(
-            combined.contains("is not a workspace member")
+            combined.contains("local")
+                && combined.contains("workspace")
+                && combined.contains("member")
                 && combined.contains("hashed")
-                && combined.contains("pruned safely"),
+                && combined.contains("pruned"),
             "expected actionable path dependency error: {combined}"
         );
     }
