@@ -219,10 +219,14 @@ whether anything changed; Cargo decides how and in what order to build.**
   (`PackageInfo.transitive_dependencies`). Each crate's closure is computed
   from `Cargo.lock` (identity = version + source + checksum, so git rev
   bumps count), so a dependency bump only invalidates crates that actually
-  depend on it. `rustc --version` (resolved from the repo root, so
-  `rust-toolchain` overrides apply) is added to every Cargo package's set —
-  compiling with a different toolchain never restores another toolchain's
-  artifacts. A missing `Cargo.lock` contributes nothing; an unparsable one
+  depend on it. The complete verbose compiler identity from `rustc -vV`,
+  including its host triple, is resolved from the repo root (so
+  `rust-toolchain` overrides apply) and added to every Cargo package's set.
+  This prevents compiler releases, operating systems, architectures, or host
+  ABIs from sharing native artifact cache entries. Explicit targets selected
+  through hashed task arguments, `CARGO_BUILD_TARGET`, or repository Cargo
+  configuration remain distinct. Failure to resolve the compiler identity is
+  a hard error. A missing `Cargo.lock` contributes nothing; an unparsable one
   is a hard error.
 - **Caching**: task caches store logs plus, for entrypoint builds, the
   deliverables: bins (`target/*/<bin>`) and cdylib/staticlib artifacts
@@ -322,7 +326,7 @@ against the `cargo_monorepo` fixture (a mixed npm + Cargo workspace):
 graph shape, execution, caching, deliverable restoration, cross-crate
 invalidation, uncached `run`/`dev` execution, and the filter hint. `turbo query`
 serves Cargo packages through the same graph. Discovery adds roughly 170ms to
-invocations on a ~60-crate workspace (`cargo metadata`, `rustc --version`, and
+invocations on a ~60-crate workspace (`cargo metadata`, `rustc -vV`, and
 lockfile parsing); daemon-side caching is the optimization path if that ever
 matters.
 

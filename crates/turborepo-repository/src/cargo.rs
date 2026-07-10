@@ -88,46 +88,75 @@ pub enum Error {
     MissingLockfile,
     #[error("failed to read workspace file: {0}")]
     WorkspaceFileRead(#[source] io::Error),
+    #[error("failed to run `rustc -vV`: {0}")]
+    RustcSpawn(#[source] io::Error),
+    #[error("`rustc -vV` failed: {stderr}")]
+    Rustc { stderr: String },
+    #[error("`rustc -vV` output is not UTF-8: {0}")]
+    RustcOutputUtf8(#[from] std::str::Utf8Error),
+    #[error("invalid `rustc -vV` output: {reason}")]
+    InvalidRustcOutput { reason: &'static str },
 }
 
-/// The version of the Rust compiler that Cargo will invoke, as a hashable
-/// external-dependency identity, or `None` (with a warning) when rustc
-/// can't be queried.
+fn parse_rustc_identity(stdout: &[u8]) -> Result<turborepo_lockfiles::Package, Error> {
+    let stdout = std::str::from_utf8(stdout)?;
+    let lines: Vec<&str> = stdout
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    lines
+        .first()
+        .filter(|line| {
+            line.strip_prefix("rustc ")
+                .is_some_and(|version| !version.trim().is_empty())
+        })
+        .ok_or(Error::InvalidRustcOutput {
+            reason: "missing compiler version",
+        })?;
+    let mut hosts = lines
+        .iter()
+        .filter_map(|line| line.strip_prefix("host:").map(str::trim));
+    hosts
+        .next()
+        .filter(|host| !host.is_empty())
+        .ok_or(Error::InvalidRustcOutput {
+            reason: "missing host triple",
+        })?;
+    if hosts.next().is_some() {
+        return Err(Error::InvalidRustcOutput {
+            reason: "multiple host triples",
+        });
+    }
+
+    Ok(turborepo_lockfiles::Package {
+        key: "rustc".to_string(),
+        version: lines.join("\n"),
+    })
+}
+
+/// The Rust compiler version and host triple, as a hashable external-dependency
+/// identity.
 ///
 /// Run from `repo_root` so rustup's shim resolves `rust-toolchain`
 /// overrides the same way a task's `cargo` invocation will. Participating
 /// in the external-dependency hash means compiling with a different
-/// toolchain never restores another toolchain's artifacts — the gap that
-/// makes remote cache sharing unsound when no toolchain file is committed.
-pub fn rustc_version(repo_root: &AbsoluteSystemPath) -> Option<turborepo_lockfiles::Package> {
+/// toolchain or on a different host never restores incompatible artifacts.
+pub fn rustc_identity(
+    repo_root: &AbsoluteSystemPath,
+) -> Result<turborepo_lockfiles::Package, Error> {
     let output = std::process::Command::new("rustc")
-        .arg("--version")
+        .arg("-vV")
         .current_dir(repo_root.as_std_path())
-        .output();
-    match output {
-        Ok(output) if output.status.success() => {
-            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            (!version.is_empty()).then_some(turborepo_lockfiles::Package {
-                key: "rustc".to_string(),
-                version,
-            })
-        }
-        Ok(output) => {
-            tracing::warn!(
-                "`rustc --version` failed; the compiler version will not participate in Cargo \
-                 task hashes: {}",
-                String::from_utf8_lossy(&output.stderr).trim()
-            );
-            None
-        }
-        Err(error) => {
-            tracing::warn!(
-                "unable to run `rustc --version`; the compiler version will not participate in \
-                 Cargo task hashes: {error}"
-            );
-            None
-        }
+        .output()
+        .map_err(Error::RustcSpawn)?;
+    if !output.status.success() {
+        return Err(Error::Rustc {
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        });
     }
+
+    parse_rustc_identity(&output.stdout)
 }
 
 /// Per-crate external dependency closures from Cargo.lock, for the crates'
@@ -351,8 +380,8 @@ fn join_prefix(prefix: &str, rel: &str) -> String {
 /// Cargo.lock is deliberately absent: locked dependencies participate in
 /// each crate task's external-dependency hash, scoped to that crate's
 /// transitive closure (see [`external_closures`]), so a dependency bump only
-/// invalidates the crates that actually depend on it. The compiler version
-/// participates the same way (see [`rustc_version`]).
+/// invalidates the crates that actually depend on it. The compiler identity
+/// participates the same way (see [`rustc_identity`]).
 pub fn hash_input_globs(prefix: &str) -> Vec<String> {
     [
         "Cargo.toml",
@@ -388,8 +417,8 @@ fn crate_source_globs(prefix: &str, crate_path: &str) -> [String; 2] {
 /// args participate in the task hash, so each profile gets its own cache
 /// entry. Every platform's file name is emitted for each deliverable
 /// (`.so`, `.dylib`, `.dll`, ...); globs that match nothing contribute
-/// nothing, and task hashes already segment by platform via the artifacts
-/// themselves.
+/// nothing. The compiler host triple in [`rustc_identity`] segments task
+/// hashes by host platform.
 ///
 /// Builds using `CARGO_TARGET_DIR` or `--target <triple>` write elsewhere
 /// (`CARGO_TARGET_DIR` and `CARGO_BUILD_TARGET` are hashed, but the
@@ -863,20 +892,18 @@ impl Toolchain for CargoToolchain {
                     .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
             let crates = workspace.crates;
 
+            if crates.is_empty() {
+                return Ok(Vec::new());
+            }
+
             // Using Turborepo with Rust requires naming the workspace: the
             // synthetic workspace package is a real package (task keys,
             // filters), and every package must have a name. Only enforced
             // when there are crates to host — a memberless manifest doesn't
             // demand a name for nothing.
-            let workspace_name = match workspace.name {
-                Some(name) => name,
-                None if crates.is_empty() => String::new(),
-                None => {
-                    return Err(toolchain::Error::Failed(Box::new(
-                        Error::MissingWorkspaceName,
-                    )));
-                }
-            };
+            let workspace_name = workspace
+                .name
+                .ok_or_else(|| toolchain::Error::Failed(Box::new(Error::MissingWorkspaceName)))?;
 
             // Each crate becomes a package. Internal dependencies are
             // expressed as `workspace:*` specifiers in the synthesized
@@ -892,16 +919,18 @@ impl Toolchain for CargoToolchain {
             // invalidates crates that actually depend on it, and a toolchain
             // change invalidates everything.
             let all_names: Vec<String> = crates.iter().map(|c| c.name.clone()).collect();
-            let rustc = rustc_version(&self.repo_root);
-            let mut closures = turborepo_rayon_compat::block_in_place(|| {
-                external_closures(&self.repo_root, &all_names)
+            let (rustc, mut closures) = turborepo_rayon_compat::block_in_place(|| {
+                Ok::<_, Error>((
+                    rustc_identity(&self.repo_root)?,
+                    external_closures(&self.repo_root, &all_names)?,
+                ))
             })
             .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
             let workspace_externals: HashSet<turborepo_lockfiles::Package> = closures
                 .values()
                 .flatten()
                 .cloned()
-                .chain(rustc.clone())
+                .chain(std::iter::once(rustc.clone()))
                 .collect();
 
             let mut packages = Vec::with_capacity(crates.len() + 1);
@@ -937,7 +966,7 @@ impl Toolchain for CargoToolchain {
                     .remove(&cargo_crate.name)
                     .unwrap_or_default()
                     .into_iter()
-                    .chain(rustc.clone())
+                    .chain(std::iter::once(rustc.clone()))
                     .collect();
                 crate_names.push(cargo_crate.name.clone());
                 packages.push(DiscoveredPackage {
@@ -1492,6 +1521,56 @@ checksum = "abc123"
     }
 
     #[test]
+    fn test_parse_rustc_identity_includes_host() {
+        let identity = parse_rustc_identity(
+            b"rustc 1.96.0-nightly (f5eca4fcf 2026-04-09)\n\
+binary: rustc\n\
+commit-hash: f5eca4fcf\n\
+host: aarch64-apple-darwin\n\
+release: 1.96.0-nightly\n",
+        )
+        .unwrap();
+
+        assert_eq!(identity.key, "rustc");
+        assert_eq!(
+            identity.version,
+            concat!(
+                "rustc 1.96.0-nightly (f5eca4fcf 2026-04-09)\n",
+                "binary: rustc\n",
+                "commit-hash: f5eca4fcf\n",
+                "host: aarch64-apple-darwin\n",
+                "release: 1.96.0-nightly"
+            )
+        );
+    }
+
+    #[test]
+    fn test_parse_rustc_identity_changes_with_host() {
+        let macos =
+            parse_rustc_identity(b"rustc 1.85.0 (abc 2025-01-01)\nhost: x86_64-apple-darwin\n")
+                .unwrap();
+        let linux = parse_rustc_identity(
+            b"rustc 1.85.0 (abc 2025-01-01)\nhost: x86_64-unknown-linux-gnu\n",
+        )
+        .unwrap();
+
+        assert_ne!(macos, linux);
+    }
+
+    #[test]
+    fn test_parse_rustc_identity_requires_host() {
+        let error =
+            parse_rustc_identity(b"rustc 1.85.0 (abc 2025-01-01)\nrelease: 1.85.0\n").unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::InvalidRustcOutput {
+                reason: "missing host triple"
+            }
+        ));
+    }
+
+    #[test]
     fn test_discover_crates_via_metadata() {
         let (_tmp, root) = tempdir_root();
         write_fixture_workspace(&root);
@@ -1803,6 +1882,23 @@ checksum = "abc123"
             .collect();
         assert_eq!(names, vec!["app", "fixture-ws", "lib-a", "lib-a-test-util"]);
 
+        for package in &packages {
+            let rustc = package
+                .external_dependencies
+                .as_ref()
+                .and_then(|dependencies| {
+                    dependencies
+                        .iter()
+                        .find(|dependency| dependency.key == "rustc")
+                })
+                .expect("compiler identity stamps every Cargo package");
+            let mut lines = rustc.version.lines();
+            assert!(lines.next().is_some_and(|line| line.starts_with("rustc ")));
+            assert!(
+                lines.any(|line| { line.starts_with("host: ") && line.len() > "host: ".len() })
+            );
+        }
+
         let app = &packages[0];
         assert_eq!(
             app.descriptor.dependencies.as_ref().unwrap()["lib-a"],
@@ -1822,17 +1918,11 @@ checksum = "abc123"
         assert!(workspace_deps.values().all(|v| v == "workspace:*"));
 
         // External identities from Cargo.lock are scoped per crate: app's
-        // closure pins serde, lib-a's does not. The compiler version stamps
-        // every closure (rustc is available wherever discovery ran, since
-        // discovery shells out to cargo).
+        // closure pins serde, lib-a's does not.
         let app_externals = app.external_dependencies.as_ref().unwrap();
         assert!(
             app_externals.iter().any(|p| p.key == "serde"),
             "app depends on serde via Cargo.lock, got {app_externals:?}"
-        );
-        assert!(
-            app_externals.iter().any(|p| p.key == "rustc"),
-            "compiler version stamps the closure, got {app_externals:?}"
         );
         let lib_a_externals = packages[2].external_dependencies.as_ref().unwrap();
         assert!(
@@ -1847,6 +1937,15 @@ checksum = "abc123"
     #[tokio::test(flavor = "multi_thread")]
     async fn test_cargo_toolchain_empty_without_manifest() {
         let (_tmp, root) = tempdir_root();
+        let toolchain = CargoToolchain::new(root);
+        assert!(toolchain.discover_packages().await.unwrap().is_empty());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_toolchain_empty_for_memberless_workspace() {
+        let (_tmp, root) = tempdir_root();
+        write(&root, &["Cargo.toml"], "[workspace]\nmembers = []\n");
+
         let toolchain = CargoToolchain::new(root);
         assert!(toolchain.discover_packages().await.unwrap().is_empty());
     }
