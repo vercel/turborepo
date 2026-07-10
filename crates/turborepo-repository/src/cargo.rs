@@ -96,6 +96,29 @@ pub enum Error {
     InvalidLockfile { stderr: String },
     #[error("failed to validate Cargo.lock with `cargo metadata --locked`: {0}")]
     LockfileValidationSpawn(#[source] io::Error),
+    #[error(
+        "Cargo local package {name:?} at {manifest_path} is outside the repository and cannot be \
+         cached, watched, or pruned safely. Move it into the repository and make it a workspace \
+         member."
+    )]
+    OutsideRepositoryLocalPackage { name: String, manifest_path: String },
+    #[error(
+        "Cargo local package {name:?} at {manifest_path} is not a workspace member and cannot be \
+         hashed or pruned safely. Add it to `[workspace].members` and remove it from \
+         `[workspace].exclude`."
+    )]
+    NonMemberLocalPackage { name: String, manifest_path: String },
+    #[error(
+        "Cargo package {name:?} is defined in the root Cargo.toml, which Turborepo cannot model \
+         as a package safely. Move it into a subdirectory and add it to `[workspace].members`."
+    )]
+    UnsupportedRootPackage { name: String },
+    #[error("failed to resolve Cargo local package path {path}: {source}")]
+    LocalPackagePath {
+        path: String,
+        #[source]
+        source: turbopath::PathError,
+    },
     #[error("failed to read workspace file: {0}")]
     WorkspaceFileRead(#[source] io::Error),
     #[error("failed to run `rustc -vV`: {0}")]
@@ -191,9 +214,10 @@ pub fn external_closures(
     )?)
 }
 
-/// Verify Cargo can resolve the workspace without changing Cargo.lock.
+/// Verify Cargo can resolve the workspace without changing Cargo.lock and that
+/// every resolved local package is an in-repository workspace member.
 /// Validation happens before task hashes and cache lookup, so artifacts are
-/// always keyed by the dependency resolution Cargo will execute.
+/// always keyed by sources Turborepo can hash, watch, and prune.
 pub fn validate_lockfile(repo_root: &AbsoluteSystemPath) -> Result<(), Error> {
     let lock_path = repo_root.join_component(CARGO_LOCK);
     match lock_path.read_to_string() {
@@ -211,6 +235,7 @@ pub fn validate_lockfile(repo_root: &AbsoluteSystemPath) -> Result<(), Error> {
             "--format-version",
             "1",
             "--locked",
+            "--all-features",
             "--manifest-path",
             root_manifest_path.as_str(),
         ])
@@ -221,6 +246,55 @@ pub fn validate_lockfile(repo_root: &AbsoluteSystemPath) -> Result<(), Error> {
         return Err(Error::InvalidLockfile {
             stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
         });
+    }
+
+    let metadata: ResolvedMetadata = serde_json::from_slice(&output.stdout)?;
+    validate_resolved_local_packages(repo_root, metadata)
+}
+
+fn validate_resolved_local_packages(
+    repo_root: &AbsoluteSystemPath,
+    metadata: ResolvedMetadata,
+) -> Result<(), Error> {
+    let real_repo_root = repo_root
+        .to_realpath()
+        .map_err(|source| Error::LocalPackagePath {
+            path: repo_root.to_string(),
+            source,
+        })?;
+    let root_manifest_path = real_repo_root.join_component(CARGO_TOML);
+    for package in metadata.packages {
+        if package.source.is_some() {
+            continue;
+        }
+        let Some(manifest_path) = metadata_path(&package.manifest_path) else {
+            return Err(Error::OutsideRepositoryLocalPackage {
+                name: package.name,
+                manifest_path: package.manifest_path,
+            });
+        };
+        let real_manifest_path =
+            manifest_path
+                .to_realpath()
+                .map_err(|source| Error::LocalPackagePath {
+                    path: package.manifest_path.clone(),
+                    source,
+                })?;
+        if !real_repo_root.contains(&real_manifest_path) {
+            return Err(Error::OutsideRepositoryLocalPackage {
+                name: package.name,
+                manifest_path: package.manifest_path,
+            });
+        }
+        if real_manifest_path == root_manifest_path {
+            return Err(Error::UnsupportedRootPackage { name: package.name });
+        }
+        if !metadata.workspace_members.contains(&package.id) {
+            return Err(Error::NonMemberLocalPackage {
+                name: package.name,
+                manifest_path: package.manifest_path,
+            });
+        }
     }
 
     Ok(())
@@ -939,6 +1013,10 @@ impl Toolchain for CargoToolchain {
             let crates = workspace.crates;
 
             if crates.is_empty() {
+                if workspace.has_packages {
+                    turborepo_rayon_compat::block_in_place(|| validate_lockfile(&self.repo_root))
+                        .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+                }
                 return Ok(Vec::new());
             }
 
@@ -1152,6 +1230,11 @@ pub struct DiscoveredWorkspace {
     /// without members don't demand a name for nothing.
     pub name: Option<String>,
     pub crates: Vec<CargoCrate>,
+    /// Whether Cargo reported any workspace packages before Turborepo's
+    /// repository-boundary filtering. A workspace with packages that all get
+    /// filtered must still run full validation rather than be mistaken for a
+    /// memberless virtual workspace.
+    pub has_packages: bool,
 }
 
 /// Discover all Rust crates in the Cargo workspace rooted at `repo_root` by
@@ -1172,6 +1255,7 @@ pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWorks
         return Ok(DiscoveredWorkspace {
             name: None,
             crates: Vec::new(),
+            has_packages: false,
         });
     }
 
@@ -1194,6 +1278,7 @@ pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWorks
     }
     let metadata: Metadata = serde_json::from_slice(&output.stdout)?;
 
+    let has_packages = !metadata.packages.is_empty();
     let name = workspace_name(&metadata)?;
     let crates = connect_crates(parse_members(repo_root, &root_manifest_path, metadata));
 
@@ -1210,7 +1295,11 @@ pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWorks
         });
     }
 
-    Ok(DiscoveredWorkspace { name, crates })
+    Ok(DiscoveredWorkspace {
+        name,
+        crates,
+        has_packages,
+    })
 }
 
 /// Extract and validate the user-declared workspace name from the
@@ -1481,9 +1570,26 @@ struct MetadataTarget {
     kind: Vec<String>,
 }
 
+/// The subset of full `cargo metadata --locked --all-features` output needed
+/// to distinguish external packages, workspace members, and unsupported local
+/// path packages.
+#[derive(Debug, Deserialize)]
+struct ResolvedMetadata {
+    packages: Vec<ResolvedMetadataPackage>,
+    workspace_members: HashSet<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ResolvedMetadataPackage {
+    id: String,
+    name: String,
+    source: Option<String>,
+    manifest_path: String,
+}
+
 #[cfg(test)]
 mod test {
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPathBuf, IntoUnix};
 
     use super::*;
 
@@ -1505,6 +1611,52 @@ mod test {
         let path = root.join_components(rel);
         std::fs::create_dir_all(path.parent().unwrap().as_std_path()).unwrap();
         std::fs::write(path.as_std_path(), contents).unwrap();
+    }
+
+    fn generate_lockfile(root: &AbsoluteSystemPath) {
+        let output = std::process::Command::new("cargo")
+            .arg("generate-lockfile")
+            .current_dir(root.as_std_path())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "failed to generate fixture lockfile: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn write_local_dependency_workspace(
+        root: &AbsoluteSystemPathBuf,
+        dependency_table: &str,
+        exclude_local: bool,
+    ) {
+        let exclude = if exclude_local {
+            "exclude = [\"crates/local\"]\n"
+        } else {
+            ""
+        };
+        write(
+            root,
+            &["Cargo.toml"],
+            &format!("[workspace]\nmembers = [\"crates/app\"]\n{exclude}resolver = \"2\"\n"),
+        );
+        write(
+            root,
+            &["crates", "app", "Cargo.toml"],
+            &format!(
+                "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \
+                 \"2021\"\n\n{dependency_table}"
+            ),
+        );
+        write(root, &["crates", "app", "src", "main.rs"], "fn main() {}\n");
+        write(
+            root,
+            &["crates", "local", "Cargo.toml"],
+            "[package]\nname = \"local\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(root, &["crates", "local", "src", "lib.rs"], "");
+        generate_lockfile(root);
     }
 
     /// Write a small workspace: `app` (bin) depends on `lib-a` (lib), plus a
@@ -1585,6 +1737,100 @@ dependencies = ["lib-a"]
         std::fs::remove_file(lock_path.as_std_path()).unwrap();
         let error = validate_lockfile(&root).unwrap_err();
         assert!(matches!(error, Error::MissingLockfile));
+    }
+
+    #[test]
+    fn test_validate_lockfile_accepts_automatic_path_member() {
+        let (_tmp, root) = tempdir_root();
+        write_local_dependency_workspace(
+            &root,
+            "[dependencies]\nlocal = { path = \"../local\" }\n",
+            false,
+        );
+
+        validate_lockfile(&root).unwrap();
+    }
+
+    #[test]
+    fn test_validate_lockfile_rejects_nonmember_path_dependency_kinds() {
+        for dependency_table in [
+            "[dependencies]\nlocal = { path = \"../local\" }\n",
+            "[build-dependencies]\nlocal = { path = \"../local\" }\n",
+            "[dev-dependencies]\nlocal = { path = \"../local\" }\n",
+            "[target.'cfg(target_os = \"none\")'.dependencies]\nlocal = { path = \"../local\" }\n",
+            "[dependencies]\nlocal = { path = \"../local\", optional = true }\n",
+        ] {
+            let (_tmp, root) = tempdir_root();
+            write_local_dependency_workspace(&root, dependency_table, true);
+
+            let error = validate_lockfile(&root).unwrap_err();
+            assert!(
+                matches!(error, Error::NonMemberLocalPackage { ref name, .. } if name == "local"),
+                "unexpected validation result for {dependency_table:?}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_lockfile_rejects_outside_repository_path_dependency() {
+        let (_tmp, root) = tempdir_root();
+        let repo = root.join_component("repo");
+        let outside = root.join_component("outside");
+        write(
+            &repo,
+            &["Cargo.toml"],
+            "[workspace]\nmembers = [\"crates/app\"]\nresolver = \"2\"\n",
+        );
+        write(
+            &repo,
+            &["crates", "app", "Cargo.toml"],
+            &format!(
+                "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \
+                 \"2021\"\n\n[dependencies]\noutside = {{ path = '{}' }}\n",
+                outside.as_str().into_unix()
+            ),
+        );
+        write(
+            &repo,
+            &["crates", "app", "src", "main.rs"],
+            "fn main() {}\n",
+        );
+        write(
+            &outside,
+            &["Cargo.toml"],
+            "[package]\nname = \"outside\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(&outside, &["src", "lib.rs"], "");
+        generate_lockfile(&repo);
+
+        let error = validate_lockfile(&repo).unwrap_err();
+        assert!(
+            matches!(error, Error::OutsideRepositoryLocalPackage { ref name, .. } if name == "outside"),
+            "unexpected validation result: {error}"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_toolchain_rejects_root_package() {
+        let (_tmp, root) = tempdir_root();
+        write(
+            &root,
+            &["Cargo.toml"],
+            "[package]\nname = \"root-package\"\nversion = \"0.1.0\"\nedition = \
+             \"2021\"\n\n[workspace]\nmembers = []\nresolver = \"2\"\n",
+        );
+        write(&root, &["src", "lib.rs"], "");
+        generate_lockfile(&root);
+
+        let error = CargoToolchain::new(root)
+            .discover_packages()
+            .await
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("root-package")
+                && error.to_string().contains("root Cargo.toml"),
+            "unexpected validation result: {error}"
+        );
     }
 
     #[test]

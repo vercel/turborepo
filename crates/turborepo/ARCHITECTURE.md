@@ -177,11 +177,15 @@ whether anything changed; Cargo decides how and in what order to build.**
   (member globs, automatic path-dependency members, excludes, target-specific
   dependency tables, renames). Dev-dependency edges that would form a cycle
   are dropped (Cargo permits dev-dep cycles; crate edges must support
-  topological `^` ordering). Manifests outside the repository root are
-  skipped, crate names are validated, and a crate/JS package name collision
-  hard-errors. Crate path dependencies are synthesized as `workspace:*`
-  specifiers in the toolchain-neutral descriptor, so the existing dependency
-  splitter wires crate→crate edges.
+  topological `^` ordering). Crate names are validated, and a crate/JS package
+  name collision hard-errors. Crate path dependencies are synthesized as
+  `workspace:*` specifiers in the toolchain-neutral descriptor, so the existing
+  dependency splitter wires crate→crate edges. A second full `cargo metadata
+  --locked --all-features` pass validates resolution and every resolved local
+  package: automatic in-repository workspace members are supported, while
+  excluded/non-member, outside-repository, and root-manifest local packages
+  hard-error because Turborepo cannot hash, watch, or prune their sources
+  safely.
 - **Package shapes**: crates are classified via `CargoPackageKind`.
   *Entrypoints* (crates with `bin`/`cdylib`/`staticlib` targets) are the
   workspace's deliverables. *Libraries* exist in the package graph — so
@@ -228,10 +232,11 @@ whether anything changed; Cargo decides how and in what order to build.**
   through hashed task arguments, `CARGO_BUILD_TARGET`, or repository Cargo
   configuration remain distinct. Failure to resolve the compiler identity is
   a hard error. Every non-empty Cargo workspace must have a current
-  `Cargo.lock`: discovery runs full `cargo metadata --locked` before hashing,
-  then computes per-crate closures. Missing, stale, unparsable, or incomplete
-  lockfiles are hard errors. Turborepo never creates or refreshes the source
-  lockfile; users do that explicitly with Cargo and commit the result.
+  `Cargo.lock`: discovery runs full `cargo metadata --locked --all-features`
+  before hashing, then computes per-crate closures. Missing, stale, unparsable,
+  or incomplete lockfiles are hard errors. Turborepo never creates or refreshes
+  the source lockfile; users do that explicitly with Cargo and commit the
+  result.
 - **Caching**: task caches store logs plus, for entrypoint builds, the
   deliverables: bins (`target/*/<bin>`) and cdylib/staticlib artifacts
   (`target/*/lib<name>.{so,dylib,a}`, `<name>.{dll,lib}` — all platform
@@ -328,8 +333,9 @@ hint pointing at the flag. Released turbo versions hard-error on unknown
 End-to-end coverage lives in `crates/turborepo/tests/cargo_workspace_test.rs`
 against the `cargo_monorepo` fixture (a mixed npm + Cargo workspace):
 graph shape, execution, caching, deliverable restoration, cross-crate
-invalidation, lockfile enforcement, uncached `run`/`dev` execution, and the
-filter hint. `turbo query` serves Cargo packages through the same graph.
+invalidation, lockfile enforcement, unsupported local-package rejection,
+uncached `run`/`dev` execution, and the filter hint. `turbo query` serves Cargo
+packages through the same graph.
 
 ### 3. Task Graph (`crates/turborepo-lib/src/engine/`)
 
