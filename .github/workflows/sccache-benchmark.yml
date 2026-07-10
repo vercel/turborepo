@@ -4,21 +4,28 @@ on:
   pull_request:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
   benchmark:
-    name: Rust cache strategy comparison
+    name: Rust cache strategy comparison (${{ matrix.repetition }})
     if: github.event.pull_request.head.ref == 'shew/sccache-impact-benchmark' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest-8-core-oss
     timeout-minutes: 45
     permissions:
       contents: read
       id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        repetition: [1, 2, 3, 4, 5, 6]
+    env:
+      BENCHMARK_REPETITION: ${{ matrix.repetition }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -51,17 +58,19 @@ jobs:
           source_file=crates/turborepo-hash/src/lib.rs
           source_backup="$RUNNER_TEMP/turborepo-hash-lib.rs"
           results="$RUNNER_TEMP/cache-results.md"
+          results_csv="$RUNNER_TEMP/cache-results-${BENCHMARK_REPETITION}.csv"
           rows="$RUNNER_TEMP/cache-result-rows.md"
           details="$RUNNER_TEMP/cache-result-details.md"
           cp "$source_file" "$source_backup"
           : > "$rows"
           : > "$details"
+          : > "$results_csv"
           trap 'cp "$source_backup" "$source_file"' EXIT
 
           mutate_source() {
             cp "$source_backup" "$source_file"
             printf '\npub const CACHE_BENCHMARK_REVISION: &str = "%s-%s";\n' \
-              "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$source_file"
+              "$GITHUB_RUN_ID" "${GITHUB_RUN_ATTEMPT}-${BENCHMARK_REPETITION}" >> "$source_file"
           }
 
           measure() {
@@ -82,6 +91,11 @@ jobs:
 
             printf '| %s | %d.%03ds |\n' \
               "$name" "$((elapsed_ms / 1000))" "$((elapsed_ms % 1000))" >> "$rows"
+            printf '%s,%s,%s\n' \
+              "$name" "$BENCHMARK_REPETITION" "$elapsed_ms" >> "$results_csv"
+            compile_count=$(grep -ac 'Compiling' "$log" || true)
+            printf '%s-compile-count,%s,%s\n' \
+              "$name" "$BENCHMARK_REPETITION" "$compile_count" >> "$results_csv"
 
             {
               echo
@@ -114,40 +128,87 @@ jobs:
           cp "$source_backup" "$source_file"
           rm -rf target .turbo/cache
           env TURBO_CACHE=remote:rw CARGO_INCREMENTAL=0 \
-            turbo run build --filter=turbo --force --env-mode=loose --log-order=stream >/dev/null
+            turbo run build --filter=turbo --force --env-mode=loose --log-order=stream --no-color >/dev/null
 
-          mutate_source
-          rm -rf target .turbo/cache
-          measure clean-no-cache \
-            env TURBO_CACHE=local: SCCACHE_BENCHMARK_DISABLED=1 CARGO_INCREMENTAL=0 \
-            turbo run build --filter=turbo --env-mode=loose --log-order=stream
-          if grep -aFq 'Incremental cache:' "$RUNNER_TEMP/clean-no-cache.log"; then
-            echo "::error::Clean no-cache strategy unexpectedly used the compile cache"
-            exit 1
-          fi
+          measure_clean() {
+            mutate_source
+            rm -rf target .turbo/cache
+            measure clean-no-cache \
+              env TURBO_CACHE=local: SCCACHE_BENCHMARK_DISABLED=1 CARGO_INCREMENTAL=0 \
+              turbo run build --filter=turbo --env-mode=loose --log-order=stream --no-color
+            if grep -aFq 'Incremental cache:' "$RUNNER_TEMP/clean-no-cache.log"; then
+              echo "::error::Clean no-cache strategy unexpectedly used the compile cache"
+              exit 1
+            fi
+          }
 
-          mutate_source
-          rm -rf target .turbo/cache
-          measure distributed-compile-cache \
-            env TURBO_CACHE=remote:rw CARGO_INCREMENTAL=0 \
-            turbo run build --filter=turbo --force --env-mode=loose --log-order=stream
-          if ! grep -aFq 'Incremental cache:' "$RUNNER_TEMP/distributed-compile-cache.log"; then
-            echo "::error::Distributed compile cache strategy did not engage"
-            exit 1
+          measure_distributed() {
+            mutate_source
+            rm -rf target .turbo/cache
+            measure distributed-compile-cache \
+              env TURBO_CACHE=remote:rw CARGO_INCREMENTAL=0 \
+              turbo run build --filter=turbo --force --env-mode=loose --log-order=stream --no-color
+            hits=$(sed -nE 's/.*Incremental cache: +([0-9]+) hits.*/\1/p' "$RUNNER_TEMP/distributed-compile-cache.log")
+            misses=$(sed -nE 's/.*Incremental cache: +[0-9]+ hits, +([0-9]+) misses.*/\1/p' "$RUNNER_TEMP/distributed-compile-cache.log")
+            if [[ -z "$hits" || -z "$misses" || "$hits" -eq 0 ]]; then
+              echo "::error::Distributed compile cache strategy recorded no hits"
+              exit 1
+            fi
+            printf 'distributed-cache-hits,%s,%s\n' \
+              "$BENCHMARK_REPETITION" "$hits" >> "$results_csv"
+            printf 'distributed-cache-misses,%s,%s\n' \
+              "$BENCHMARK_REPETITION" "$misses" >> "$results_csv"
+          }
+
+          if ((BENCHMARK_REPETITION % 2 == 0)); then
+            measure_distributed
+            measure_clean
+          else
+            measure_clean
+            measure_distributed
           fi
 
           cp "$source_backup" "$source_file"
           rm -rf target .turbo/cache
           env TURBO_CACHE=local: SCCACHE_BENCHMARK_DISABLED=1 CARGO_INCREMENTAL=1 \
-            turbo run build --filter=turbo --env-mode=loose --log-order=stream >/dev/null
+            turbo run build --filter=turbo --env-mode=loose --log-order=stream --no-color >/dev/null
           mutate_source
           measure retained-cargo-target \
             env TURBO_CACHE=local: SCCACHE_BENCHMARK_DISABLED=1 CARGO_INCREMENTAL=1 \
-            turbo run build --filter=turbo --env-mode=loose --log-order=stream
+            turbo run build --filter=turbo --env-mode=loose --log-order=stream --no-color
           if grep -aFq 'Incremental cache:' "$RUNNER_TEMP/retained-cargo-target.log"; then
             echo "::error::Retained Cargo target strategy unexpectedly used the compile cache"
             exit 1
           fi
+
+          if [[ "$BENCHMARK_REPETITION" == "1" ]]; then
+            cp "$source_backup" "$source_file"
+            rm -rf target .turbo/cache
+            env TURBO_CACHE=local: SCCACHE_BENCHMARK_DISABLED=1 CARGO_INCREMENTAL=1 \
+              turbo run build --filter=turbo --env-mode=loose --log-order=stream --no-color >/dev/null
+          fi
+
+      - name: Start Cargo target save timer
+        if: matrix.repetition == 1
+        shell: bash
+        run: echo "TARGET_SAVE_STARTED_NS=$(date +%s%N)" >> "$GITHUB_ENV"
+
+      - name: Save Cargo target snapshot
+        if: matrix.repetition == 1
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: target
+          key: rust-target-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Record Cargo target save time
+        if: matrix.repetition == 1
+        shell: bash
+        run: |
+          finished=$(date +%s%N)
+          elapsed_ms=$(((finished - TARGET_SAVE_STARTED_NS) / 1000000))
+          printf 'cargo-target-save,%s,%s\n' \
+            "$BENCHMARK_REPETITION" "$elapsed_ms" \
+            >> "$RUNNER_TEMP/cache-results-${BENCHMARK_REPETITION}.csv"
 
       - name: Refresh Remote Cache credentials
         uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
@@ -161,16 +222,17 @@ jobs:
 
           rows="$RUNNER_TEMP/cache-result-rows.md"
           details="$RUNNER_TEMP/cache-result-details.md"
+          results_csv="$RUNNER_TEMP/cache-results-${BENCHMARK_REPETITION}.csv"
           log="$RUNNER_TEMP/exact-turbo-task-cache.log"
 
           rm -rf target .turbo/cache
           env TURBO_CACHE=remote:rw CARGO_INCREMENTAL=0 \
-            turbo run build --filter=turbo --force --env-mode=loose --log-order=stream >/dev/null
+            turbo run build --filter=turbo --force --env-mode=loose --log-order=stream --no-color >/dev/null
           rm -rf target
 
           started=$(date +%s%N)
           env TURBO_CACHE=remote:rw CARGO_INCREMENTAL=0 \
-            turbo run build --filter=turbo --env-mode=loose --log-order=stream > "$log" 2>&1
+            turbo run build --filter=turbo --env-mode=loose --log-order=stream --no-color > "$log" 2>&1
           finished=$(date +%s%N)
           elapsed_ms=$(((finished - started) / 1000000))
 
@@ -178,6 +240,10 @@ jobs:
             exact-turbo-task-cache \
             "$((elapsed_ms / 1000))" \
             "$((elapsed_ms % 1000))" >> "$rows"
+          printf '%s,%s,%s\n' \
+            exact-turbo-task-cache \
+            "$BENCHMARK_REPETITION" \
+            "$elapsed_ms" >> "$results_csv"
 
           {
             echo
@@ -196,6 +262,13 @@ jobs:
             exit 1
           fi
 
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cache-results-${{ matrix.repetition }}
+          path: ${{ runner.temp }}/cache-results-${{ matrix.repetition }}.csv
+
       - name: Summarize benchmark
         if: always()
         shell: bash
@@ -209,4 +282,238 @@ jobs:
             cat "$results" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Benchmark failed before producing results." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  restored-target:
+    name: Restored Cargo target (${{ matrix.repetition }})
+    needs: benchmark
+    if: always() && needs.benchmark.result == 'success'
+    runs-on: ubuntu-latest-8-core-oss
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        repetition: [1, 2, 3, 4, 5, 6]
+    env:
+      BENCHMARK_REPETITION: ${{ matrix.repetition }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          node-version: "18.20.2"
+          package-install: "false"
+          rust-cache: "false"
+
+      - name: Install benchmark Turbo
+        uses: ./.github/actions/install-global-turbo
+        with:
+          turbo-version: 2.10.5-canary.5
+
+      - name: Start restore timer
+        shell: bash
+        run: echo "RESTORE_STARTED_NS=$(date +%s%N)" >> "$GITHUB_ENV"
+
+      - name: Restore Cargo target snapshot
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: target
+          key: rust-target-${{ github.run_id }}-${{ github.run_attempt }}
+          fail-on-cache-miss: true
+
+      - name: Measure restored Cargo target
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          printf '\npub const CACHE_BENCHMARK_REVISION: &str = "%s-%s-v2";\n' \
+            "$GITHUB_RUN_ID" "$BENCHMARK_REPETITION" >> crates/turborepo-hash/src/lib.rs
+
+          build_started=$(date +%s%N)
+          env TURBO_CACHE=local: SCCACHE_BENCHMARK_DISABLED=1 CARGO_INCREMENTAL=1 \
+            turbo run build --filter=turbo --env-mode=loose --log-order=stream --no-color \
+            > "$RUNNER_TEMP/restored-cargo-target.log" 2>&1
+          finished=$(date +%s%N)
+
+          build_ms=$(((finished - build_started) / 1000000))
+          total_ms=$(((finished - RESTORE_STARTED_NS) / 1000000))
+          compile_count=$(grep -ac 'Compiling' "$RUNNER_TEMP/restored-cargo-target.log" || true)
+          results_csv="$RUNNER_TEMP/restored-results-${BENCHMARK_REPETITION}.csv"
+          {
+            printf 'restored-cargo-target-build,%s,%s\n' "$BENCHMARK_REPETITION" "$build_ms"
+            printf 'restored-cargo-target-total,%s,%s\n' "$BENCHMARK_REPETITION" "$total_ms"
+            printf 'restored-cargo-target-compile-count,%s,%s\n' "$BENCHMARK_REPETITION" "$compile_count"
+          } > "$results_csv"
+
+          cat "$RUNNER_TEMP/restored-cargo-target.log"
+          {
+            echo "## Restored Cargo target"
+            echo
+            printf 'Restore + build: %d.%03ds\n\n' "$((total_ms / 1000))" "$((total_ms % 1000))"
+            printf 'Build only: %d.%03ds\n' "$((build_ms / 1000))" "$((build_ms % 1000))"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload restored-target results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: restored-results-${{ matrix.repetition }}
+          path: ${{ runner.temp }}/restored-results-${{ matrix.repetition }}.csv
+
+  aggregate:
+    name: Aggregate Rust cache benchmark
+    needs: [benchmark, restored-target]
+    if: always() && needs.benchmark.result == 'success' && needs.restored-target.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download benchmark results
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: "*-results-*"
+          path: results
+          merge-multiple: true
+
+      - name: Aggregate results
+        shell: bash
+        run: |
+          node <<'NODE' | tee -a "$GITHUB_STEP_SUMMARY"
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          const groups = new Map();
+          for (const file of fs.readdirSync("results")) {
+            const content = fs.readFileSync(path.join("results", file), "utf8").trim();
+            for (const line of content.split("\n")) {
+              if (!line) continue;
+              const [strategy, repetition, elapsed] = line.split(",");
+              const values = groups.get(strategy) ?? [];
+              values.push({ repetition: Number(repetition), elapsed: Number(elapsed) });
+              groups.set(strategy, values);
+            }
+          }
+
+          const expected = new Map([
+            ["clean-no-cache", 6],
+            ["clean-no-cache-compile-count", 6],
+            ["distributed-compile-cache", 6],
+            ["distributed-compile-cache-compile-count", 6],
+            ["distributed-cache-hits", 6],
+            ["distributed-cache-misses", 6],
+            ["retained-cargo-target", 6],
+            ["retained-cargo-target-compile-count", 6],
+            ["exact-turbo-task-cache", 6],
+            ["restored-cargo-target-build", 6],
+            ["restored-cargo-target-compile-count", 6],
+            ["restored-cargo-target-total", 6],
+            ["cargo-target-save", 1],
+          ]);
+          for (const [strategy, count] of expected) {
+            const samples = groups.get(strategy) ?? [];
+            if (samples.length !== count) {
+              throw new Error(`Expected ${count} ${strategy} samples, received ${samples.length}`);
+            }
+            if (samples.some(({ repetition, elapsed }) => !Number.isFinite(repetition) || !Number.isFinite(elapsed))) {
+              throw new Error(`Invalid numeric sample for ${strategy}`);
+            }
+            if (new Set(samples.map(({ repetition }) => repetition)).size !== count) {
+              throw new Error(`Duplicate repetition for ${strategy}`);
+            }
+          }
+          for (const strategy of groups.keys()) {
+            if (!expected.has(strategy)) {
+              throw new Error(`Unexpected strategy ${strategy}`);
+            }
+          }
+
+          console.log("## Aggregate Rust cache benchmark");
+          console.log();
+          console.log("### Timings");
+          console.log();
+          console.log("| Strategy | Median | Min | Max | Samples |");
+          console.log("| --- | ---: | ---: | ---: | ---: |");
+          const median = (values) => {
+            const sorted = [...values].sort((a, b) => a - b);
+            const middle = Math.floor(sorted.length / 2);
+            return sorted.length % 2 === 0
+              ? (sorted[middle - 1] + sorted[middle]) / 2
+              : sorted[middle];
+          };
+          const timingStrategies = [...groups.keys()].filter((strategy) =>
+            !strategy.endsWith("-compile-count") &&
+            !strategy.startsWith("distributed-cache-")
+          );
+          for (const strategy of timingStrategies.sort()) {
+            const samples = groups.get(strategy);
+            const values = samples.map(({ elapsed }) => elapsed).sort((a, b) => a - b);
+            const seconds = (value) => `${(value / 1000).toFixed(3)}s`;
+            console.log(`| ${strategy} | ${seconds(median(values))} | ${seconds(values[0])} | ${seconds(values.at(-1))} | ${values.length} |`);
+          }
+
+          const byRepetition = (strategy) => new Map(
+            groups.get(strategy).map(({ repetition, elapsed }) => [repetition, elapsed])
+          );
+          const clean = byRepetition("clean-no-cache");
+          console.log();
+          console.log("### Changed-source paired comparisons");
+          console.log();
+          console.log("Positive values are faster than a clean build on the same runner.");
+          console.log();
+          console.log("| Strategy | Median improvement | Min | Max |");
+          console.log("| --- | ---: | ---: | ---: |");
+          for (const strategy of [
+            "distributed-compile-cache",
+            "retained-cargo-target",
+            "restored-cargo-target-total",
+          ]) {
+            const candidate = byRepetition(strategy);
+            const improvements = [...clean].map(([repetition, cleanMs]) =>
+              ((cleanMs - candidate.get(repetition)) / cleanMs) * 100
+            );
+            improvements.sort((a, b) => a - b);
+            const percent = (value) => `${value.toFixed(1)}%`;
+            console.log(`| ${strategy} | ${percent(median(improvements))} | ${percent(improvements[0])} | ${percent(improvements.at(-1))} |`);
+          }
+
+          console.log();
+          console.log("### Compiler work");
+          console.log();
+          console.log("| Strategy | Median rustc compilations | Min | Max |");
+          console.log("| --- | ---: | ---: | ---: |");
+          for (const strategy of [...groups.keys()].filter((name) => name.endsWith("-compile-count")).sort()) {
+            const values = groups.get(strategy).map(({ elapsed }) => elapsed).sort((a, b) => a - b);
+            console.log(`| ${strategy} | ${median(values)} | ${values[0]} | ${values.at(-1)} |`);
+          }
+
+          const hits = byRepetition("distributed-cache-hits");
+          const misses = byRepetition("distributed-cache-misses");
+          const hitRates = [...hits].map(([repetition, hitCount]) =>
+            (hitCount / (hitCount + misses.get(repetition))) * 100
+          );
+          console.log();
+          console.log(`Distributed compile-cache median hit rate: ${median(hitRates).toFixed(1)}%`);
+          NODE
+
+  cleanup-target-cache:
+    name: Cleanup benchmark target cache
+    needs: [benchmark, restored-target, aggregate]
+    if: always() && github.event.pull_request.head.ref == 'shew/sccache-impact-benchmark' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Delete target snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CACHE_KEY: rust-target-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          cache_id=$(gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/caches" \
+            -f key="$CACHE_KEY" \
+            --jq '.actions_caches[0].id // empty')
+          if [[ -n "$cache_id" ]]; then
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/caches/${cache_id}"
           fi
