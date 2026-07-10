@@ -1484,6 +1484,33 @@ mod test {
     }
 
     #[tokio::test]
+    async fn save_outputs_allows_glob_that_escapes_package_root() {
+        let temp = tempdir().unwrap();
+        let repo_dir = temp.path().join("repo");
+        std::fs::create_dir_all(repo_dir.join("packages/pkg")).unwrap();
+        std::fs::create_dir_all(repo_dir.join("packages/shared")).unwrap();
+        std::fs::write(repo_dir.join("packages/shared/output.txt"), b"output").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_dir.as_path()).unwrap();
+        let mut task_cache =
+            task_cache_for_outputs(&repo_root, vec!["packages/pkg/../shared/**".to_string()]);
+        let telemetry = PackageTaskEventBuilder::new("pkg", "build");
+
+        task_cache
+            .save_outputs(Duration::from_millis(10), &telemetry)
+            .await
+            .unwrap();
+
+        let expected = AnchoredSystemPathBuf::from_raw(format!(
+            "packages{}shared{}output.txt",
+            std::path::MAIN_SEPARATOR_STR,
+            std::path::MAIN_SEPARATOR_STR
+        ))
+        .unwrap();
+
+        assert!(task_cache.expanded_outputs().contains(&expected));
+    }
+
+    #[tokio::test]
     async fn save_outputs_rejects_glob_that_escapes_repo_root() {
         let temp = tempdir().unwrap();
         let repo_dir = temp.path().join("repo");
