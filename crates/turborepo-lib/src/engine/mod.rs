@@ -347,6 +347,11 @@ mod test {
             .join_components(&["src", "main.rs"])
             .create_with_contents("fn main() {}\n")
             .unwrap();
+        root.join_component("Cargo.lock")
+            .create_with_contents(
+                "version = 4\n\n[[package]]\nname = \"my-crate\"\nversion = \"0.1.0\"\n",
+            )
+            .unwrap();
 
         let mut engine: Engine<Building> = Engine::new();
         for (package, task) in [
