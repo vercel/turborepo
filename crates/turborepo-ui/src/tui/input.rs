@@ -496,6 +496,21 @@ mod test {
     const SHIFT_H: KeyEvent = KeyEvent::new(KeyCode::Char('H'), KeyModifiers::SHIFT);
     const S: KeyEvent = KeyEvent::new(KeyCode::Char('s'), KeyModifiers::empty());
 
+    #[test]
+    fn forwards_left_mouse_release() {
+        let event = crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::Up(crossterm::event::MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        };
+
+        assert!(matches!(
+            in_find().handle_crossterm_event(crossterm::event::Event::Mouse(event)),
+            Some(Event::Mouse(_))
+        ));
+    }
+
     #[test_case(in_find(), H, Some(Event::SearchEnterChar('h')) ; "h while searching")]
     #[test_case(in_list(), H, Some(Event::ToggleStream { scope: StreamScope::SelectedTask }) ; "h streams selected task")]
     #[test_case(in_list(), S, Some(Event::ToggleStream { scope: StreamScope::All }) ; "s streams all tasks")]

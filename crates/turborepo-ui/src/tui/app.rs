@@ -24,6 +24,7 @@ use crate::tui::popup::{popup, popup_area};
 
 pub const FRAMERATE: Duration = Duration::from_millis(3);
 const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
+const SELECTION_AUTOSCROLL_INTERVAL: Duration = Duration::from_millis(50);
 /// How long the pane footer shows "Copied to clipboard" after a copy.
 const CLIPBOARD_NOTICE_DURATION: Duration = Duration::from_secs(2);
 
@@ -78,6 +79,17 @@ pub struct App<W> {
     /// stream sink. Lets repeated TUI<->stream toggles backfill only the new
     /// output instead of re-printing the whole history each time.
     replayed_offsets: BTreeMap<String, usize>,
+    selection_drag_task: Option<String>,
+    selection_autoscroll: Option<SelectionAutoscroll>,
+}
+
+#[derive(Clone)]
+struct SelectionAutoscroll {
+    task: String,
+    direction: Direction,
+    row: u16,
+    column: u16,
+    next_scroll_at: Instant,
 }
 
 impl<W> App<W> {
@@ -138,6 +150,8 @@ impl<W> App<W> {
             showing_log_panel: false,
             clipboard_notice_expiry: None,
             replayed_offsets: BTreeMap::new(),
+            selection_drag_task: None,
+            selection_autoscroll: None,
         })
     }
 
@@ -178,6 +192,7 @@ impl<W> App<W> {
     }
 
     fn update_sidebar_toggle(&mut self) {
+        self.cancel_selection_drag();
         let value = !self.preferences.is_task_list_visible();
         self.preferences.set_is_task_list_visible(Some(value));
         // Resize terminal outputs to match new pane width
@@ -211,6 +226,25 @@ impl<W> App<W> {
         self.tasks
             .get_mut(&active_task)
             .ok_or(Error::TaskNotFound { name: active_task })
+    }
+
+    fn cancel_selection_drag(&mut self) {
+        self.selection_autoscroll = None;
+        if let Some(task_name) = self.selection_drag_task.take()
+            && let Some(task) = self.tasks.get_mut(&task_name)
+        {
+            task.cancel_selection_drag();
+        }
+    }
+
+    fn cancel_selection_drag_if_task_changed(&mut self) {
+        let task_changed = self
+            .selection_drag_task
+            .as_deref()
+            .is_some_and(|task_name| self.active_task().ok() != Some(task_name));
+        if task_changed {
+            self.cancel_selection_drag();
+        }
     }
 
     fn persist_active_task(&mut self) -> Result<(), Error> {
@@ -280,6 +314,7 @@ impl<W> App<W> {
             self.task_list_scroll.select(Some(self.selected_task_index));
         }
 
+        self.cancel_selection_drag_if_task_changed();
         self.is_task_selection_pinned = true;
         self.persist_active_task().ok();
     }
@@ -301,6 +336,7 @@ impl<W> App<W> {
             self.task_list_scroll.select(Some(self.selected_task_index));
         }
 
+        self.cancel_selection_drag_if_task_changed();
         self.is_task_selection_pinned = true;
         self.persist_active_task().ok();
     }
@@ -334,6 +370,7 @@ impl<W> App<W> {
     }
 
     pub fn enter_search(&mut self) -> Result<(), Error> {
+        self.cancel_selection_drag();
         // Ensure task list is visible when searching
         if !self.preferences.is_task_list_visible() {
             self.preferences.set_is_task_list_visible(Some(true));
@@ -349,6 +386,7 @@ impl<W> App<W> {
     }
 
     pub fn exit_search(&mut self, restore_scroll: bool) {
+        self.cancel_selection_drag();
         let mut prev_focus = LayoutSections::TaskList;
         mem::swap(&mut self.section_focus, &mut prev_focus);
         match prev_focus {
@@ -365,6 +403,7 @@ impl<W> App<W> {
     }
 
     pub fn lock_search(&mut self) {
+        self.cancel_selection_drag();
         if let LayoutSections::Search { results, .. } = &self.section_focus {
             self.section_focus = LayoutSections::SearchLocked {
                 results: results.clone(),
@@ -373,6 +412,7 @@ impl<W> App<W> {
     }
 
     pub fn search_scroll(&mut self, direction: Direction) -> Result<(), Error> {
+        self.cancel_selection_drag();
         let LayoutSections::Search { results, .. } = &self.section_focus else {
             debug!("scrolling search while not searching");
             return Ok(());
@@ -388,6 +428,7 @@ impl<W> App<W> {
     }
 
     pub fn search_enter_char(&mut self, c: char) -> Result<(), Error> {
+        self.cancel_selection_drag();
         let LayoutSections::Search { results, .. } = &mut self.section_focus else {
             debug!("modifying search query while not searching");
             return Ok(());
@@ -398,6 +439,7 @@ impl<W> App<W> {
     }
 
     pub fn search_remove_char(&mut self) -> Result<(), Error> {
+        self.cancel_selection_drag();
         let LayoutSections::Search { results, .. } = &mut self.section_focus else {
             debug!("modified search query while not searching");
             return Ok(());
@@ -760,7 +802,28 @@ impl<W> App<W> {
         Ok(())
     }
 
-    pub fn handle_mouse(&mut self, mut event: crossterm::event::MouseEvent) -> Result<(), Error> {
+    pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
+        self.handle_mouse_at(event, Instant::now())
+    }
+
+    fn handle_mouse_at(
+        &mut self,
+        mut event: crossterm::event::MouseEvent,
+        now: Instant,
+    ) -> Result<(), Error> {
+        let is_selection_down = matches!(
+            event.kind,
+            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+        );
+        let is_selection_drag = matches!(
+            event.kind,
+            crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left)
+        );
+
+        if is_selection_down {
+            self.cancel_selection_drag();
+        }
+
         // Releasing the left button ends a selection wherever the cursor is,
         // so handle it before any hit-testing. Whatever was selected gets
         // copied to the clipboard automatically.
@@ -771,13 +834,26 @@ impl<W> App<W> {
             let shift_held = event
                 .modifiers
                 .contains(crossterm::event::KeyModifiers::SHIFT);
-            let task = self.get_full_task_mut()?;
-            let was_selecting = task.is_selecting();
-            task.handle_mouse(event)?;
+            let drag_task_is_active = self
+                .selection_drag_task
+                .as_deref()
+                .is_some_and(|task_name| self.active_task().ok() == Some(task_name));
+            if !drag_task_is_active {
+                self.cancel_selection_drag();
+                return Ok(());
+            }
+            let should_copy = {
+                let task = self.get_full_task_mut()?;
+                let was_selecting = task.is_selecting();
+                task.handle_mouse(event)?;
+                was_selecting && task.has_selection() && !shift_held
+            };
+            self.selection_drag_task = None;
+            self.selection_autoscroll = None;
             // Shift prevents the automatic copy, leaving the selection in
             // place so the user can still copy it with `c` or dismiss it by
             // clicking.
-            if was_selecting && task.has_selection() && !shift_held {
+            if should_copy {
                 self.copy_selection()?;
             }
             return Ok(());
@@ -788,8 +864,26 @@ impl<W> App<W> {
         // shifted mouse events). End the drag and keep the selection, the
         // same outcome as an observed shift-release.
         if matches!(event.kind, crossterm::event::MouseEventKind::Moved) {
-            self.get_full_task_mut()?.handle_mouse(event)?;
+            if self
+                .selection_drag_task
+                .as_deref()
+                .is_some_and(|task_name| self.active_task().ok() == Some(task_name))
+            {
+                self.get_full_task_mut()?.handle_mouse(event)?;
+            }
+            self.cancel_selection_drag();
             return Ok(());
+        }
+
+        if is_selection_drag {
+            let drag_task_is_active = self
+                .selection_drag_task
+                .as_deref()
+                .is_some_and(|task_name| self.active_task().ok() == Some(task_name));
+            if !drag_task_is_active {
+                self.cancel_selection_drag();
+                return Ok(());
+            }
         }
 
         // Only offset by table width if the sidebar is visible
@@ -800,19 +894,40 @@ impl<W> App<W> {
             0
         };
         let pane_left_padding = self.size.pane_left_padding_with_sidebar(has_sidebar);
+        let pane_rows = self.size.pane_rows();
         debug!("original mouse event: {event:?}, table_width: {table_width}");
-        // We give a 1 cell buffer to make it easier to select the first column of a row
-        if event.row > 0 && event.column >= table_width {
-            // Subtract 1 from the y axis due to the title of the pane
-            event.row -= 1;
+        // Mouse-down events must start in the content. Drags may reach the pane titles
+        // to scroll.
+        if event.column >= table_width && (event.row > 0 || is_selection_drag) {
+            let selection_scroll = if is_selection_drag && event.row == 0 {
+                Some(Direction::Up)
+            } else if is_selection_drag && event.row > pane_rows {
+                Some(Direction::Down)
+            } else {
+                None
+            };
+            event.row = event.row.saturating_sub(1).min(pane_rows.saturating_sub(1));
             // Subtract the width of the table and the pane's link-safe left padding.
             event.column = event
                 .column
                 .saturating_sub(table_width.saturating_add(pane_left_padding));
             debug!("translated mouse event: {event:?}");
 
+            let task_name = self.active_task()?.to_owned();
             let task = self.get_full_task_mut()?;
-            task.handle_mouse(event)?;
+            task.handle_mouse_with_scroll(event, selection_scroll)?;
+            if is_selection_down && task.is_selecting() {
+                self.selection_drag_task = Some(task_name.clone());
+            }
+            self.selection_autoscroll = selection_scroll.map(|direction| SelectionAutoscroll {
+                task: task_name,
+                direction,
+                row: event.row,
+                column: event.column,
+                next_scroll_at: now + SELECTION_AUTOSCROLL_INTERVAL,
+            });
+        } else if is_selection_drag {
+            self.selection_autoscroll = None;
         } else if event.column < table_width
             && matches!(
                 event.kind,
@@ -823,6 +938,32 @@ impl<W> App<W> {
         }
 
         Ok(())
+    }
+
+    fn tick_selection_autoscroll(&mut self, now: Instant) -> Result<bool, Error> {
+        let Some(mut selection_autoscroll) = self.selection_autoscroll.take() else {
+            return Ok(false);
+        };
+        let is_active_task = self.active_task()? == selection_autoscroll.task;
+
+        if !is_active_task {
+            self.cancel_selection_drag();
+            return Ok(false);
+        }
+
+        if now < selection_autoscroll.next_scroll_at {
+            self.selection_autoscroll = Some(selection_autoscroll);
+            return Ok(false);
+        }
+
+        self.get_full_task_mut()?.continue_selection_drag(
+            selection_autoscroll.direction,
+            selection_autoscroll.row,
+            selection_autoscroll.column,
+        )?;
+        selection_autoscroll.next_scroll_at = now + SELECTION_AUTOSCROLL_INTERVAL;
+        self.selection_autoscroll = Some(selection_autoscroll);
+        Ok(true)
     }
 
     /// Selects the task whose row in the task list was clicked. Clicks on the
@@ -849,6 +990,7 @@ impl<W> App<W> {
     }
 
     pub fn copy_selection(&mut self) -> Result<(), Error> {
+        self.cancel_selection_drag();
         let task = self.get_full_task_mut()?;
         let Some(text) = task.copy_selection() else {
             return Ok(());
@@ -876,6 +1018,7 @@ impl<W> App<W> {
 
     fn select_task(&mut self, task_name: &str) -> Result<(), Error> {
         if !self.is_task_selection_pinned {
+            self.cancel_selection_drag_if_task_changed();
             return Ok(());
         }
 
@@ -890,6 +1033,7 @@ impl<W> App<W> {
         };
         self.selected_task_index = new_index_to_highlight;
         self.task_list_scroll.select(Some(new_index_to_highlight));
+        self.cancel_selection_drag_if_task_changed();
 
         Ok(())
     }
@@ -899,9 +1043,11 @@ impl<W> App<W> {
         self.is_task_selection_pinned = false;
         self.task_list_scroll.select(Some(0));
         self.selected_task_index = 0;
+        self.cancel_selection_drag_if_task_changed();
     }
 
     pub fn resize(&mut self, rows: u16, cols: u16) {
+        self.cancel_selection_drag();
         self.size.resize(rows, cols);
         let pane_rows = self.size.pane_rows();
         let pane_cols = self
@@ -925,6 +1071,7 @@ impl<W> App<W> {
     }
 
     pub fn clear_task_logs(&mut self) -> Result<(), Error> {
+        self.cancel_selection_drag();
         let task = self.get_full_task_mut()?;
         task.clear_logs();
         Ok(())
@@ -1179,6 +1326,10 @@ async fn run_app_inner(
             needs_rerender = true;
         }
 
+        if matches!(event, Event::Tick) && app.tick_selection_autoscroll(Instant::now())? {
+            needs_rerender = true;
+        }
+
         // The "Copied to clipboard" notice expires on its own, so ticks must
         // trigger a rerender when it does.
         if app.clear_expired_clipboard_notice() {
@@ -1236,6 +1387,7 @@ fn handle_toggle_stream(
     scope: &StreamScope,
     color_config: ColorConfig,
 ) -> Result<(), Error> {
+    app.cancel_selection_drag();
     match *display {
         DisplayState::Tui => {
             let Some(term) = terminal.as_mut() else {
@@ -1300,6 +1452,9 @@ async fn drain_after_stop(
 
     while let Some(event) = receiver.recv().await {
         if !matches!(event, Event::Tick) {
+            needs_rerender = true;
+        }
+        if matches!(event, Event::Tick) && app.tick_selection_autoscroll(Instant::now())? {
             needs_rerender = true;
         }
         update(app, event, None)?;
@@ -1768,6 +1923,19 @@ mod test {
 
     use super::*;
     use crate::{ColorConfig, tui::event::CacheResult};
+
+    fn mouse_event(
+        kind: crossterm::event::MouseEventKind,
+        row: u16,
+        column: u16,
+    ) -> crossterm::event::MouseEvent {
+        crossterm::event::MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        }
+    }
 
     #[test]
     fn record_restore_error_keeps_first_error_and_continues() {
@@ -3417,6 +3585,341 @@ mod test {
         assert!(app.get_full_task()?.has_selection());
         assert!(app.clipboard_notice_expiry.is_none());
 
+        Ok(())
+    }
+
+    #[test]
+    fn selection_autoscroll_continues_on_ticks_and_stops_away_from_boundary() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<Vec<u8>> = App::new(
+            10,
+            80,
+            vec!["app-a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        )?;
+        app.process_output(
+            "app-a",
+            b"zero\none\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven",
+        )?;
+        app.get_full_task_mut()?.scroll_to_top()?;
+        let pane_column = app.size.task_list_width();
+        let footer_row = app.size.pane_rows() + 1;
+        let start = Instant::now();
+
+        app.handle_mouse_at(
+            mouse_event(MouseEventKind::Down(MouseButton::Left), 2, pane_column),
+            start,
+        )?;
+        app.handle_mouse_at(
+            mouse_event(
+                MouseEventKind::Drag(MouseButton::Left),
+                footer_row,
+                pane_column,
+            ),
+            start,
+        )?;
+        let first_offset = app
+            .get_full_task()?
+            .parser
+            .terminal
+            .scrollbar()
+            .expect("scrollbar should be available")
+            .offset;
+        assert!(first_offset > 0);
+        let first_selection = app
+            .get_full_task_mut()?
+            .copy_selection()
+            .expect("drag should select text");
+
+        assert!(!app.tick_selection_autoscroll(
+            start + SELECTION_AUTOSCROLL_INTERVAL - Duration::from_millis(1)
+        )?);
+        assert!(app.tick_selection_autoscroll(start + SELECTION_AUTOSCROLL_INTERVAL)?);
+        let second_offset = app
+            .get_full_task()?
+            .parser
+            .terminal
+            .scrollbar()
+            .expect("scrollbar should be available")
+            .offset;
+        assert!(second_offset > first_offset);
+        let second_selection = app
+            .get_full_task_mut()?
+            .copy_selection()
+            .expect("autoscroll should preserve the selection");
+        assert!(second_selection.len() > first_selection.len());
+
+        app.handle_mouse_at(
+            mouse_event(MouseEventKind::Drag(MouseButton::Left), 2, pane_column),
+            start + SELECTION_AUTOSCROLL_INTERVAL,
+        )?;
+        assert!(!app.tick_selection_autoscroll(start + SELECTION_AUTOSCROLL_INTERVAL * 2)?);
+        assert_eq!(
+            app.get_full_task()?
+                .parser
+                .terminal
+                .scrollbar()
+                .expect("scrollbar should be available")
+                .offset,
+            second_offset
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn selection_autoscroll_stops_on_release() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<Vec<u8>> = App::new(
+            10,
+            80,
+            vec!["app-a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        )?;
+        app.process_output("app-a", b"zero\none\ntwo\nthree\nfour\nfive\nsix\nseven")?;
+        let pane_column = app.size.task_list_width();
+        let start = Instant::now();
+
+        app.handle_mouse_at(
+            mouse_event(MouseEventKind::Down(MouseButton::Left), 2, pane_column),
+            start,
+        )?;
+        app.handle_mouse_at(
+            mouse_event(MouseEventKind::Drag(MouseButton::Left), 0, pane_column),
+            start,
+        )?;
+        let mut release = mouse_event(MouseEventKind::Up(MouseButton::Left), 0, pane_column);
+        release.modifiers = KeyModifiers::SHIFT;
+        app.handle_mouse_at(release, start)?;
+        let offset = app
+            .get_full_task()?
+            .parser
+            .terminal
+            .scrollbar()
+            .expect("scrollbar should be available")
+            .offset;
+
+        assert!(!app.tick_selection_autoscroll(start + SELECTION_AUTOSCROLL_INTERVAL)?);
+        assert_eq!(
+            app.get_full_task()?
+                .parser
+                .terminal
+                .scrollbar()
+                .expect("scrollbar should be available")
+                .offset,
+            offset
+        );
+        assert!(app.get_full_task()?.has_selection());
+        Ok(())
+    }
+
+    #[test]
+    fn selection_drag_is_cancelled_on_task_navigation_and_reordering() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<()> = App::new_for_test(
+            10,
+            80,
+            vec![
+                "app-a".to_string(),
+                "app-b".to_string(),
+                "app-c".to_string(),
+            ],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        let pane_column = app.size.task_list_width();
+
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            2,
+            pane_column,
+        ))?;
+        app.next();
+        assert!(!app.tasks["app-a"].has_pending_selection_anchor());
+        assert!(app.selection_drag_task.is_none());
+
+        app.reset_scroll();
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            2,
+            pane_column,
+        ))?;
+        app.start_task("app-c", OutputLogs::Full)?;
+        assert_eq!(app.active_task()?, "app-c");
+        assert!(!app.tasks["app-a"].has_pending_selection_anchor());
+        assert!(app.selection_drag_task.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn parser_reconstruction_cancels_selection_drag_and_autoscroll() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<()> = App::new_for_test(
+            10,
+            80,
+            vec!["app-a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        let pane_column = app.size.task_list_width();
+        let start = Instant::now();
+
+        app.handle_mouse_at(
+            mouse_event(MouseEventKind::Down(MouseButton::Left), 2, pane_column),
+            start,
+        )?;
+        app.resize(11, 81);
+        assert!(!app.get_full_task()?.has_pending_selection_anchor());
+        assert!(app.selection_drag_task.is_none());
+
+        let pane_column = app.size.task_list_width();
+        app.handle_mouse_at(
+            mouse_event(MouseEventKind::Down(MouseButton::Left), 2, pane_column),
+            start,
+        )?;
+        app.handle_mouse_at(
+            mouse_event(MouseEventKind::Drag(MouseButton::Left), 0, pane_column),
+            start,
+        )?;
+        assert!(app.selection_autoscroll.is_some());
+        app.update_sidebar_toggle();
+        assert!(app.selection_drag_task.is_none());
+        assert!(app.selection_autoscroll.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn search_and_clear_logs_cancel_selection_drag() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<()> = App::new_for_test(
+            10,
+            80,
+            vec!["app-a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        let pane_column = app.size.task_list_width();
+
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            2,
+            pane_column,
+        ))?;
+        app.enter_search()?;
+        assert!(!app.get_full_task()?.has_pending_selection_anchor());
+        assert!(app.selection_drag_task.is_none());
+
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            2,
+            pane_column,
+        ))?;
+        app.clear_task_logs()?;
+        assert!(!app.get_full_task()?.has_pending_selection_anchor());
+        assert!(app.selection_drag_task.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn manual_copy_cancels_selection_drag_and_autoscroll() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<Vec<u8>> = App::new(
+            10,
+            80,
+            vec!["app-a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        )?;
+        app.process_output("app-a", b"zero\none\ntwo\nthree\nfour\nfive")?;
+        let pane_column = app.size.task_list_width();
+
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            2,
+            pane_column,
+        ))?;
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Drag(MouseButton::Left),
+            0,
+            pane_column,
+        ))?;
+        assert!(app.selection_autoscroll.is_some());
+
+        app.copy_selection()?;
+        assert!(app.selection_drag_task.is_none());
+        assert!(app.selection_autoscroll.is_none());
+        assert!(!app.get_full_task()?.is_selecting());
+        Ok(())
+    }
+
+    #[test]
+    fn stream_toggle_cancels_selection_drag_and_autoscroll() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<Box<dyn io::Write + Send>> = App::new_for_test(
+            10,
+            80,
+            vec!["app-a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        let pane_column = app.size.task_list_width();
+
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            2,
+            pane_column,
+        ))?;
+        app.handle_mouse(mouse_event(
+            MouseEventKind::Drag(MouseButton::Left),
+            0,
+            pane_column,
+        ))?;
+        assert!(app.selection_autoscroll.is_some());
+
+        let mut terminal = None;
+        let mut display = DisplayState::Inactive;
+        let sink = TerminalSink::new(ColorConfig::new(true));
+        handle_toggle_stream(
+            &mut terminal,
+            &mut display,
+            &mut app,
+            &sink,
+            &StreamScope::All,
+            ColorConfig::new(true),
+        )?;
+
+        assert!(app.selection_drag_task.is_none());
+        assert!(app.selection_autoscroll.is_none());
+        assert!(!app.get_full_task()?.is_selecting());
         Ok(())
     }
 
