@@ -592,6 +592,35 @@ mod test {
     }
 
     #[test]
+    fn loose_mode_ignores_pass_through_env() {
+        let calculate = |pass_through_env: &[String]| {
+            TaskHashable {
+                global_hash: "global_hash",
+                task_dependency_hashes: vec![],
+                package_dir: None,
+                hash_of_files: "hash_of_files",
+                external_deps_hash: None,
+                task: "task",
+                outputs: TaskOutputs::default(),
+                pass_through_args: &[],
+                env: &[],
+                resolved_env_vars: vec![],
+                pass_through_env,
+                env_mode: EnvMode::Loose,
+                command_override: &[],
+                command_opt_out: false,
+            }
+            .calculate_task_hash()
+            .unwrap()
+        };
+
+        assert_eq!(
+            calculate(&[]),
+            calculate(&["SHOULD_NOT_AFFECT_HASH".to_string()])
+        );
+    }
+
+    #[test]
     fn global_hashable() {
         let global_file_hash_map = vec![(
             turbopath::RelativeUnixPathBuf::new("global_file_hash_map").unwrap(),
