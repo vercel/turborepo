@@ -202,14 +202,14 @@ impl<W> TerminalOutput<W> {
             // Hover means the button is up; drop any stale drag anchor from
             // a release that the terminal never delivered to us.
             crossterm::event::MouseEventKind::Moved => {
-                self.selection_start = None;
+                self.cancel_selection_drag();
             }
             crossterm::event::MouseEventKind::Down(_) => (),
             crossterm::event::MouseEventKind::Drag(_) => (),
             crossterm::event::MouseEventKind::ScrollLeft
             | crossterm::event::MouseEventKind::ScrollRight => (),
             crossterm::event::MouseEventKind::Up(_) => {
-                self.selection_start = None;
+                self.cancel_selection_drag();
             }
         }
         Ok(())
@@ -231,6 +231,7 @@ impl<W> TerminalOutput<W> {
 
     pub fn cancel_selection_drag(&mut self) {
         self.selection_start = None;
+        self.parser.cancel_incomplete_selection();
     }
 
     #[cfg(test)]
@@ -357,6 +358,13 @@ mod newline_tests {
 
         assert!(!output.has_selection());
         assert_eq!(output.copy_selection(), None);
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+        assert_eq!(output.parser.selection_start(), None);
         Ok(())
     }
 

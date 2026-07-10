@@ -111,6 +111,14 @@ impl Parser {
         Ok(())
     }
 
+    pub fn cancel_incomplete_selection(&mut self) {
+        if self.selection_range.is_none() {
+            self.selection_start = None;
+            self.selection_start_ref = None;
+            self.selection_end_ref = None;
+        }
+    }
+
     pub fn update_selection(
         &mut self,
         start_row: u16,
@@ -282,6 +290,19 @@ mod selection_tests {
             .expect("selected text")
             .expect("selection");
         assert!(text.starts_with("anchor"));
+    }
+
+    #[test]
+    fn cancelling_incomplete_selection_releases_anchor() {
+        let mut parser = Parser::try_new(2, 40, 100).expect("parser");
+        parser.process(b"anchor");
+        parser.begin_selection(0, 0).expect("begin selection");
+
+        parser.cancel_incomplete_selection();
+
+        assert_eq!(parser.selection_start, None);
+        assert!(parser.selection_start_ref.is_none());
+        assert!(!parser.has_selection());
     }
 
     #[test]
