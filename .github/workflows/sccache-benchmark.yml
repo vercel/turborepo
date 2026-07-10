@@ -1,0 +1,178 @@
+name: sccache impact benchmark
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: Rust cache strategy comparison
+    if: github.event.pull_request.head.ref == 'shew/sccache-impact-benchmark' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest-8-core-oss
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Turborepo Remote Cache
+        uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
+        with:
+          team: ${{ vars.TURBO_TEAM }}
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          node-version: "18.20.2"
+          package-install: "false"
+          rust-cache: "false"
+
+      - name: Install benchmark Turbo
+        uses: ./.github/actions/install-global-turbo
+        with:
+          turbo-version: 2.10.5-canary.5
+
+      - name: Run benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          source_file=crates/turborepo-hash/src/lib.rs
+          source_backup="$RUNNER_TEMP/turborepo-hash-lib.rs"
+          results="$RUNNER_TEMP/cache-results.md"
+          rows="$RUNNER_TEMP/cache-result-rows.md"
+          details="$RUNNER_TEMP/cache-result-details.md"
+          cp "$source_file" "$source_backup"
+          : > "$rows"
+          : > "$details"
+          trap 'cp "$source_backup" "$source_file"' EXIT
+
+          mutate_source() {
+            cp "$source_backup" "$source_file"
+            printf '\npub const CACHE_BENCHMARK_REVISION: &str = "%s-%s";\n' \
+              "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$source_file"
+          }
+
+          measure() {
+            local name=$1
+            shift
+            local log="$RUNNER_TEMP/${name}.log"
+            local started
+            local finished
+            local elapsed_ms
+            local status
+            started=$(date +%s%N)
+            set +e
+            "$@" > "$log" 2>&1
+            status=$?
+            set -e
+            finished=$(date +%s%N)
+            elapsed_ms=$(((finished - started) / 1000000))
+
+            printf '| %s | %d.%03ds |\n' \
+              "$name" "$((elapsed_ms / 1000))" "$((elapsed_ms % 1000))" >> "$rows"
+
+            {
+              echo
+              echo "<details><summary>$name details</summary>"
+              echo
+              echo '```text'
+              rg 'Finished.*profile|Incremental cache:|Tasks:|Cached:|Time:' "$log" || true
+              echo '```'
+              echo "</details>"
+              echo
+            } >> "$details"
+
+            cat "$log"
+            return "$status"
+          }
+
+          {
+            echo "## Rust cache strategy comparison"
+            echo
+            echo "Turbo: $(turbo --version)"
+            echo "Commit: $GITHUB_SHA"
+            echo "Runner: $RUNNER_OS / $RUNNER_ARCH"
+            echo
+            echo "| Strategy | Wall time |"
+            echo "| --- | ---: |"
+          } > "$results"
+
+          cargo fetch --locked
+
+          cp "$source_backup" "$source_file"
+          rm -rf target .turbo/cache
+          env TURBO_CACHE=remote:rw CARGO_INCREMENTAL=0 \
+            turbo run build --filter=turbo --force --env-mode=loose --log-order=stream >/dev/null
+
+          mutate_source
+          rm -rf target .turbo/cache
+          measure clean-no-cache \
+            env TURBO_CACHE=local: SCCACHE_BENCHMARK_DISABLED=1 CARGO_INCREMENTAL=0 \
+            turbo run build --filter=turbo --env-mode=loose --log-order=stream
+          if rg -q 'Incremental cache:' "$RUNNER_TEMP/clean-no-cache.log"; then
+            echo "::error::Clean no-cache strategy unexpectedly used the compile cache"
+            exit 1
+          fi
+
+          mutate_source
+          rm -rf target .turbo/cache
+          measure distributed-compile-cache \
+            env TURBO_CACHE=remote:rw CARGO_INCREMENTAL=0 \
+            turbo run build --filter=turbo --force --env-mode=loose --log-order=stream
+          if ! rg -q 'Incremental cache:\s+[1-9][0-9]* hits' "$RUNNER_TEMP/distributed-compile-cache.log"; then
+            echo "::error::Distributed compile cache strategy recorded no hits"
+            exit 1
+          fi
+
+          cp "$source_backup" "$source_file"
+          rm -rf target .turbo/cache
+          env TURBO_CACHE=local: SCCACHE_BENCHMARK_DISABLED=1 CARGO_INCREMENTAL=1 \
+            turbo run build --filter=turbo --env-mode=loose --log-order=stream >/dev/null
+          mutate_source
+          measure retained-cargo-target \
+            env TURBO_CACHE=local: SCCACHE_BENCHMARK_DISABLED=1 CARGO_INCREMENTAL=1 \
+            turbo run build --filter=turbo --env-mode=loose --log-order=stream
+          if rg -q 'Incremental cache:' "$RUNNER_TEMP/retained-cargo-target.log"; then
+            echo "::error::Retained Cargo target strategy unexpectedly used the compile cache"
+            exit 1
+          fi
+
+          cp "$source_backup" "$source_file"
+          rm -rf target .turbo/cache
+          env TURBO_CACHE=remote:rw CARGO_INCREMENTAL=0 \
+            turbo run build --filter=turbo --force --env-mode=loose --log-order=stream >/dev/null
+          rm -rf target
+          measure exact-turbo-task-cache \
+            env TURBO_CACHE=remote:rw CARGO_INCREMENTAL=0 \
+            turbo run build --filter=turbo --env-mode=loose --log-order=stream
+          if ! rg -q 'cache hit, replaying logs' "$RUNNER_TEMP/exact-turbo-task-cache.log"; then
+            echo "::error::Exact Turbo task cache strategy did not record a cache hit"
+            exit 1
+          fi
+
+      - name: Summarize benchmark
+        if: always()
+        shell: bash
+        run: |
+          results="$RUNNER_TEMP/cache-results.md"
+          rows="$RUNNER_TEMP/cache-result-rows.md"
+          details="$RUNNER_TEMP/cache-result-details.md"
+          if [[ -f "$results" ]]; then
+            [[ -f "$rows" ]] && cat "$rows" >> "$results"
+            [[ -f "$details" ]] && cat "$details" >> "$results"
+            cat "$results" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Benchmark failed before producing results." >> "$GITHUB_STEP_SUMMARY"
+          fi
