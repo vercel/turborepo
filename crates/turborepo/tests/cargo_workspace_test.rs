@@ -125,6 +125,63 @@ fn test_cargo_workspace_rejects_stale_lockfile() {
 }
 
 #[test]
+fn test_cargo_workspace_rejects_excluded_path_dependency() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_monorepo(tempdir.path());
+
+    let root_manifest = tempdir.path().join("Cargo.toml");
+    let contents = fs::read_to_string(&root_manifest).unwrap();
+    fs::write(
+        &root_manifest,
+        contents.replace(
+            "resolver = \"2\"",
+            "exclude = [\"crates/local\"]\nresolver = \"2\"",
+        ),
+    )
+    .unwrap();
+    let app_manifest = tempdir.path().join("crates/app/Cargo.toml");
+    let contents = fs::read_to_string(&app_manifest).unwrap();
+    fs::write(
+        &app_manifest,
+        format!("{contents}local = {{ path = \"../local\" }}\n"),
+    )
+    .unwrap();
+    let local = tempdir.path().join("crates/local");
+    fs::create_dir_all(local.join("src")).unwrap();
+    fs::write(
+        local.join("Cargo.toml"),
+        "[package]\nname = \"local\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .unwrap();
+    fs::write(local.join("src/lib.rs"), "pub fn local() {}\n").unwrap();
+    let status = std::process::Command::new("cargo")
+        .arg("generate-lockfile")
+        .current_dir(tempdir.path())
+        .status()
+        .expect("cargo generate-lockfile runs");
+    assert!(status.success());
+
+    for args in [
+        &["build", "--filter=app", "--dry-run=json"][..],
+        &["prune", "app"][..],
+    ] {
+        let output = run_turbo(tempdir.path(), args);
+        assert!(!output.status.success(), "unsupported path must fail");
+        let combined = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            combined.contains("is not a workspace member")
+                && combined.contains("hashed")
+                && combined.contains("pruned safely"),
+            "expected actionable path dependency error: {combined}"
+        );
+    }
+}
+
+#[test]
 fn test_cargo_build_executes_caches_and_restores() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_cargo_monorepo(tempdir.path());
