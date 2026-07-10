@@ -1218,7 +1218,7 @@ function DevtoolsContent() {
       {!isConnected && graphState && <DisconnectedOverlay port={port} />}
 
       {error && (
-        <div className="absolute top-0 left-0 right-0 z-20 px-4 py-2 bg-red-900/30 text-red-400 text-sm">
+        <div className="absolute top-0 left-0 right-0 z-20 px-4 py-2 bg-red-1000/30 text-red-600 text-sm">
           Error: {error}
         </div>
       )}
