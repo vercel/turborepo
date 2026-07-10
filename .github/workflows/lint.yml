@@ -71,13 +71,22 @@ jobs:
     name: Formatting
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
     env:
-      TURBO_CACHE: local:rw
+      TURBO_CACHE: ${{ github.event.pull_request.head.repo.full_name == github.repository && 'remote:rw' || 'local:rw' }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
+
+      - name: Set up Turborepo Remote Cache
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
+        with:
+          team: ${{ vars.TURBO_TEAM }}
 
       - name: "Setup Node"
         uses: ./.github/actions/setup-node

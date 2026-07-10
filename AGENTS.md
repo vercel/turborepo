@@ -41,6 +41,7 @@ When making changes to the codebase, check if the following docs need updates:
 ### CI task scheduling
 
 - Test and lint workflows do not pre-classify changed paths. PR jobs run consistently and use the Turborepo task graph and cache where applicable.
+- Same-repository PRs authenticate to Remote Cache through OIDC; fork PRs remain local-only.
 - Example validation remains push-only because it requires Vercel credentials and project state.
 
 ### PR Title Format
