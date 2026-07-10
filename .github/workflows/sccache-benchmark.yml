@@ -149,15 +149,49 @@ jobs:
             exit 1
           fi
 
-          cp "$source_backup" "$source_file"
+      - name: Refresh Remote Cache credentials
+        uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
+        with:
+          team: ${{ vars.TURBO_TEAM }}
+
+      - name: Measure exact Turbo task cache
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rows="$RUNNER_TEMP/cache-result-rows.md"
+          details="$RUNNER_TEMP/cache-result-details.md"
+          log="$RUNNER_TEMP/exact-turbo-task-cache.log"
+
           rm -rf target .turbo/cache
           env TURBO_CACHE=remote:rw CARGO_INCREMENTAL=0 \
             turbo run build --filter=turbo --force --env-mode=loose --log-order=stream >/dev/null
           rm -rf target
-          measure exact-turbo-task-cache \
-            env TURBO_CACHE=remote:rw CARGO_INCREMENTAL=0 \
-            turbo run build --filter=turbo --env-mode=loose --log-order=stream
-          if ! grep -aFq 'cache hit, replaying logs' "$RUNNER_TEMP/exact-turbo-task-cache.log"; then
+
+          started=$(date +%s%N)
+          env TURBO_CACHE=remote:rw CARGO_INCREMENTAL=0 \
+            turbo run build --filter=turbo --env-mode=loose --log-order=stream > "$log" 2>&1
+          finished=$(date +%s%N)
+          elapsed_ms=$(((finished - started) / 1000000))
+
+          printf '| %s | %d.%03ds |\n' \
+            exact-turbo-task-cache \
+            "$((elapsed_ms / 1000))" \
+            "$((elapsed_ms % 1000))" >> "$rows"
+
+          {
+            echo
+            echo "<details><summary>exact-turbo-task-cache details</summary>"
+            echo
+            echo '```text'
+            rg 'Finished.*profile|Incremental cache:|Tasks:|Cached:|Time:' "$log" || true
+            echo '```'
+            echo "</details>"
+            echo
+          } >> "$details"
+
+          cat "$log"
+          if ! grep -aFq 'cache hit, replaying logs' "$log"; then
             echo "::error::Exact Turbo task cache strategy did not record a cache hit"
             exit 1
           fi
