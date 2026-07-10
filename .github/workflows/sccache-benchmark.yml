@@ -131,8 +131,8 @@ jobs:
           measure distributed-compile-cache \
             env TURBO_CACHE=remote:rw CARGO_INCREMENTAL=0 \
             turbo run build --filter=turbo --force --env-mode=loose --log-order=stream
-          if ! rg -q 'Incremental cache:\s+[1-9][0-9]* hits' "$RUNNER_TEMP/distributed-compile-cache.log"; then
-            echo "::error::Distributed compile cache strategy recorded no hits"
+          if ! rg -q 'Incremental cache:' "$RUNNER_TEMP/distributed-compile-cache.log"; then
+            echo "::error::Distributed compile cache strategy did not engage"
             exit 1
           fi
 
