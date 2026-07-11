@@ -1167,8 +1167,12 @@ fn watch_task_inputs_do_not_rerun_non_cacheable_dependencies_or_persistent_depen
     setup::setup_git(&test_dir).unwrap();
 
     let guard = WatchGuard::new(spawn_turbo_watch_with_tasks(&test_dir, &["dev"]));
-    wait_for_prefixed_markers(&test_dir, "pkg", "dev-", 1, Duration::from_secs(60));
-    wait_for_prefixed_markers(&test_dir, "app", "dev-", 1, Duration::from_secs(60));
+    let initial_pkg =
+        wait_for_prefixed_markers(&test_dir, "pkg", "dev-", 1, Duration::from_secs(60));
+    let initial_app =
+        wait_for_prefixed_markers(&test_dir, "app", "dev-", 1, Duration::from_secs(60));
+    assert_eq!(initial_pkg, 1, "package dev task should start exactly once");
+    assert_eq!(initial_app, 1, "app dev task should start exactly once");
     std::thread::sleep(Duration::from_secs(2));
 
     let pkg_before = prefixed_marker_count(&test_dir, "pkg", "dev-");
@@ -1189,6 +1193,10 @@ fn watch_task_inputs_do_not_rerun_non_cacheable_dependencies_or_persistent_depen
         "dev-",
         pkg_before + 1,
         Duration::from_secs(30),
+    );
+    assert!(
+        pkg_after_change > pkg_before,
+        "package change should rerun its dev task"
     );
     std::thread::sleep(Duration::from_secs(2));
     assert_eq!(
