@@ -98,7 +98,7 @@ pub fn render_page(status: u16, status_text: &str, body: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{render_page, ARROW_SVG};
+    use super::{ARROW_SVG, render_page};
 
     #[test]
     fn renders_complete_accessible_document() {

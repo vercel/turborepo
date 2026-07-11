@@ -10,8 +10,9 @@ use std::{
     pin::Pin,
     process::{Child, Command, ExitStatus, Stdio},
     sync::{
+        Arc, Mutex, OnceLock,
         atomic::{AtomicU64, Ordering},
-        mpsc, Arc, Mutex, OnceLock,
+        mpsc,
     },
     thread,
     time::Duration,
@@ -116,7 +117,7 @@ impl NetworkInterfaceProvider for SystemNetworkInterfaceProvider {
 #[cfg(target_os = "linux")]
 fn linux_interfaces() -> io::Result<Vec<NetworkInterfaceRow>> {
     use std::{
-        ffi::{c_char, c_int, c_uint, c_void, CStr},
+        ffi::{CStr, c_char, c_int, c_uint, c_void},
         ptr,
     };
 

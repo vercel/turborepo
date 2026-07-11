@@ -690,11 +690,10 @@ mod tests {
                 .expect("port should be available"),
             10000
         );
-        assert!(find_available_serve_port(
-            &HashSet::from([443, 8443, 10000]),
-            TailscaleMode::Funnel
-        )
-        .is_err());
+        assert!(
+            find_available_serve_port(&HashSet::from([443, 8443, 10000]), TailscaleMode::Funnel)
+                .is_err()
+        );
     }
 
     #[test]

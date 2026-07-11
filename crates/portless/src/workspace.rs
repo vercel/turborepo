@@ -8,7 +8,7 @@ use std::{
 
 use serde_json::Value;
 
-use crate::auto::{infer_project_name, sanitize_for_hostname, truncate_label, ProjectNameError};
+use crate::auto::{ProjectNameError, infer_project_name, sanitize_for_hostname, truncate_label};
 
 /// Metadata read from a workspace package's `package.json`.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -98,15 +98,15 @@ pub fn parse_pnpm_workspace_yaml(content: &str) -> Vec<String> {
 
     for raw_line in content.lines() {
         let line = raw_line.trim_end();
-        if let Some(rest) = line.strip_prefix("packages") {
-            if let Some(rest) = rest.trim_start().strip_prefix(':') {
-                let rest = rest.trim();
-                if rest.starts_with('[') {
-                    return parse_flow_sequence(rest);
-                }
-                in_packages = true;
-                continue;
+        if let Some(rest) = line.strip_prefix("packages")
+            && let Some(rest) = rest.trim_start().strip_prefix(':')
+        {
+            let rest = rest.trim();
+            if rest.starts_with('[') {
+                return parse_flow_sequence(rest);
             }
+            in_packages = true;
+            continue;
         }
 
         if !in_packages {
@@ -245,10 +245,10 @@ fn read_workspace_package(dir: PathBuf) -> Option<WorkspacePackage> {
         if raw_name.is_empty() {
             return (None, None);
         }
-        if let Some(scoped) = raw_name.strip_prefix('@') {
-            if let Some((scope, name)) = scoped.split_once('/') {
-                return (Some(name.to_owned()), Some(scope.to_owned()));
-            }
+        if let Some(scoped) = raw_name.strip_prefix('@')
+            && let Some((scope, name)) = scoped.split_once('/')
+        {
+            return (Some(name.to_owned()), Some(scope.to_owned()));
         }
         (Some(raw_name.to_owned()), None)
     });

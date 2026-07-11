@@ -13,6 +13,7 @@ use std::{
     process::Command,
 };
 
+#[cfg(unix)]
 use nix::{
     sys::signal::{self, Signal},
     unistd::Pid,
@@ -419,35 +420,36 @@ pub fn shell_command(args: &[String], child_env: &ChildEnv) -> Command {
 }
 
 /// Configure a child as the leader of a new process group on Unix.
-pub fn configure_process_group(command: &mut Command) {
+pub fn configure_process_group(_command: &mut Command) {
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt as _;
-        command.process_group(0);
+        _command.process_group(0);
     }
 }
 
-pub fn configure_tokio_process_group(command: &mut tokio::process::Command) {
+pub fn configure_tokio_process_group(_command: &mut tokio::process::Command) {
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt as _;
-        command.as_std_mut().process_group(0);
+        _command.as_std_mut().process_group(0);
     }
 }
 
 /// Signal a child's process group, falling back to the child itself if the
 /// group is already gone. Windows has no Unix process-group equivalent.
+#[cfg(unix)]
 pub fn signal_process_tree(pid: u32, signal: Signal) -> nix::Result<()> {
     let pid = i32::try_from(pid)
         .map(Pid::from_raw)
         .map_err(|_| nix::errno::Errno::EINVAL)?;
-    #[cfg(unix)]
     if signal::kill(Pid::from_raw(-pid.as_raw()), signal).is_ok() {
         return Ok(());
     }
     signal::kill(pid, signal)
 }
 
+#[cfg(unix)]
 pub const fn signal_exit_code(signal: Signal) -> i32 {
     128 + signal as i32
 }
@@ -633,15 +635,38 @@ mod tests {
     }
 
     #[test]
-    fn builds_shell_invocation_and_signal_exit_codes() {
+    fn builds_platform_shell_invocation() {
         assert_eq!(shell_escape("it's ready"), "'it'\\''s ready'");
         let (program, args) = shell_invocation(&strings(&["echo", "it's ready"]));
-        if cfg!(windows) {
-            assert_eq!(program, "cmd.exe");
-        } else {
-            assert_eq!(program, "/bin/sh");
-            assert_eq!(args, vec!["-c", "'echo' 'it'\\''s ready'"]);
-        }
+        #[cfg(windows)]
+        assert_eq!(
+            (program, args),
+            (
+                OsString::from("cmd.exe"),
+                vec![
+                    OsString::from("/d"),
+                    OsString::from("/s"),
+                    OsString::from("/c"),
+                    OsString::from("echo it's ready"),
+                ],
+            )
+        );
+        #[cfg(unix)]
+        assert_eq!(
+            (program, args),
+            (
+                OsString::from("/bin/sh"),
+                vec![
+                    OsString::from("-c"),
+                    OsString::from("'echo' 'it'\\''s ready'"),
+                ],
+            )
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn maps_unix_signals_to_shell_exit_codes() {
         assert_eq!(signal_exit_code(Signal::SIGINT), 130);
         assert_eq!(signal_exit_code(Signal::SIGTERM), 143);
     }

@@ -240,16 +240,16 @@ pub fn detect_package_manager(cwd: impl AsRef<Path>) -> PackageManager {
     ];
 
     for dir in cwd.as_ref().ancestors() {
-        if let Ok(raw) = fs::read_to_string(dir.join("package.json")) {
-            if let Ok(package) = serde_json::from_str::<Value>(&raw) {
-                let manager = package
-                    .get("packageManager")
-                    .and_then(Value::as_str)
-                    .and_then(|value| value.split('@').next())
-                    .and_then(PackageManager::from_name);
-                if let Some(manager) = manager {
-                    return manager;
-                }
+        if let Ok(raw) = fs::read_to_string(dir.join("package.json"))
+            && let Ok(package) = serde_json::from_str::<Value>(&raw)
+        {
+            let manager = package
+                .get("packageManager")
+                .and_then(Value::as_str)
+                .and_then(|value| value.split('@').next())
+                .and_then(PackageManager::from_name);
+            if let Some(manager) = manager {
+                return manager;
             }
         }
 

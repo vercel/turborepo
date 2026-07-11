@@ -93,15 +93,15 @@ pub fn infer_project_name(cwd: impl AsRef<Path>) -> Result<InferredName, Project
         }
     }
 
-    if let Some(root) = find_git_root(cwd) {
-        if let Some(file_name) = root.file_name().and_then(|name| name.to_str()) {
-            let name = sanitize_for_hostname(file_name);
-            if !name.is_empty() {
-                return Ok(InferredName {
-                    name,
-                    source: "git root",
-                });
-            }
+    if let Some(root) = find_git_root(cwd)
+        && let Some(file_name) = root.file_name().and_then(|name| name.to_str())
+    {
+        let name = sanitize_for_hostname(file_name);
+        if !name.is_empty() {
+            return Ok(InferredName {
+                name,
+                source: "git root",
+            });
         }
     }
 

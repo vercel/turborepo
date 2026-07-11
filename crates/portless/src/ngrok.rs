@@ -13,7 +13,7 @@ use tokio::{
     io::{AsyncRead, AsyncReadExt},
     process::{Child, Command as TokioCommand},
     sync::{mpsc, oneshot},
-    time::{sleep_until, Instant as TokioInstant},
+    time::{Instant as TokioInstant, sleep_until},
 };
 
 const NGROK_BINARY: &str = "ngrok";
@@ -422,21 +422,21 @@ async fn run_ngrok_child(
                         ))));
                     }
                 }
-                if started {
-                    if let Some(callback) = on_exit {
-                        callback(code, signal);
-                    }
+                if started
+                    && let Some(callback) = on_exit
+                {
+                    callback(code, signal);
                 }
                 return;
             }
             chunk = output_receiver.recv(), if output_open => {
                 if let Some(chunk) = chunk {
                     append_output(&mut output, &chunk);
-                    if let Some(url) = extract_ngrok_url(&String::from_utf8_lossy(&output)) {
-                        if let Some(sender) = startup_sender.take() {
-                            started = true;
-                            let _ = sender.send(Ok(url));
-                        }
+                    if let Some(url) = extract_ngrok_url(&String::from_utf8_lossy(&output))
+                        && let Some(sender) = startup_sender.take()
+                    {
+                        started = true;
+                        let _ = sender.send(Ok(url));
                     }
                 } else {
                     output_open = false;
@@ -467,30 +467,76 @@ fn append_output(output: &mut Vec<u8>, chunk: &[u8]) {
 
 fn terminate_child(child: &mut Child) {
     if let Some(pid) = child.id() {
-        let _ = send_sigterm(pid);
+        let _ = terminate_pid(pid);
     }
 }
 
-fn send_sigterm(pid: u32) -> io::Result<()> {
-    #[cfg(unix)]
-    {
-        let status = Command::new("kill")
-            .args(["-TERM", &pid.to_string()])
-            .status()?;
-        if status.success() {
-            Ok(())
-        } else {
-            Err(io::Error::other("failed to send SIGTERM"))
-        }
+#[cfg(unix)]
+fn terminate_pid(pid: u32) -> io::Result<()> {
+    use std::ffi::c_int;
+
+    const SIGTERM: c_int = 15;
+
+    unsafe extern "C" {
+        fn kill(pid: c_int, signal: c_int) -> c_int;
     }
-    #[cfg(not(unix))]
-    {
-        let _ = pid;
-        Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "SIGTERM is unsupported on this platform",
-        ))
+
+    let pid = c_int::try_from(pid)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "process ID exceeds c_int"))?;
+    // SAFETY: `kill` has no pointer arguments; `pid` is range-checked and
+    // SIGTERM is a valid POSIX signal.
+    if unsafe { kill(pid, SIGTERM) } == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
     }
+}
+
+#[cfg(windows)]
+fn terminate_pid(pid: u32) -> io::Result<()> {
+    use std::ffi::c_void;
+
+    type Handle = *mut c_void;
+
+    const PROCESS_TERMINATE: u32 = 0x0001;
+    const PROCESS_QUERY_INFORMATION: u32 = 0x0400;
+    const SYNCHRONIZE: u32 = 0x0010_0000;
+    const TERMINATED_EXIT_CODE: u32 = 1;
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        #[link_name = "OpenProcess"]
+        fn open_process(access: u32, inherit_handle: i32, process_id: u32) -> Handle;
+        #[link_name = "TerminateProcess"]
+        fn terminate_process(process: Handle, exit_code: u32) -> i32;
+        #[link_name = "CloseHandle"]
+        fn close_handle(handle: Handle) -> i32;
+    }
+
+    // This mirrors libuv/Node's Windows `process.kill(pid, "SIGTERM")`:
+    // Windows has no SIGTERM, so it opens the process with terminate access
+    // and calls TerminateProcess with exit code 1.
+    // SAFETY: the FFI calls use value parameters only. The returned handle is
+    // checked for null and closed exactly once before returning.
+    let access = PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | SYNCHRONIZE;
+    let process = unsafe { open_process(access, 0, pid) };
+    if process.is_null() {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: `process` is a non-null handle returned by `OpenProcess`.
+    let terminated = unsafe { terminate_process(process, TERMINATED_EXIT_CODE) };
+    let error = (terminated == 0).then(io::Error::last_os_error);
+    // SAFETY: `process` is still owned by this function and is closed once.
+    let _ = unsafe { close_handle(process) };
+    error.map_or(Ok(()), Err)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn terminate_pid(_pid: u32) -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "process termination is unsupported on this platform",
+    ))
 }
 
 fn exit_signal(status: &std::process::ExitStatus) -> Option<String> {
@@ -519,7 +565,7 @@ pub fn stop_ngrok_process(process: Option<&NgrokProcess>) {
 
 pub fn stop_ngrok(pid: Option<u32>) {
     if let Some(pid) = pid {
-        let _ = send_sigterm(pid);
+        let _ = terminate_pid(pid);
     }
 }
 
@@ -708,5 +754,43 @@ mod tests {
         .await
         .expect_err("startup should time out");
         assert!(error.0.contains("Timed out waiting for ngrok"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn cleanup_sends_sigterm_on_unix() {
+        let mut child = TokioCommand::new("sleep")
+            .arg("30")
+            .spawn()
+            .expect("sleep should spawn");
+        let pid = child.id().expect("child should have a process ID");
+
+        stop_ngrok(Some(pid));
+
+        let status = tokio::time::timeout(Duration::from_secs(2), child.wait())
+            .await
+            .expect("child should terminate promptly")
+            .expect("child wait should succeed");
+        assert_eq!(exit_signal(&status).as_deref(), Some("SIGTERM"));
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn cleanup_terminates_process_on_windows() {
+        let mut child = TokioCommand::new("ping")
+            .args(["-n", "30", "127.0.0.1"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("ping should spawn");
+        let pid = child.id().expect("child should have a process ID");
+
+        stop_ngrok(Some(pid));
+
+        let status = tokio::time::timeout(Duration::from_secs(2), child.wait())
+            .await
+            .expect("child should terminate promptly")
+            .expect("child wait should succeed");
+        assert!(!status.success());
     }
 }
