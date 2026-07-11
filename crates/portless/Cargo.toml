@@ -1,0 +1,53 @@
+[package]
+name = "portless"
+version = "0.15.1"
+edition = { workspace = true }
+rust-version = "1.88"
+authors = ["Vercel Inc."]
+license = "Apache-2.0"
+description = "Stable, named local development URLs without port numbers"
+repository = "https://github.com/vercel/turborepo"
+homepage = "https://github.com/vercel-labs/portless"
+documentation = "https://docs.rs/portless"
+readme = "README.md"
+keywords = ["localhost", "development", "proxy", "https", "turborepo"]
+categories = ["command-line-utilities", "development-tools", "web-programming"]
+include = ["Cargo.toml", "src/**/*.rs", "tests/**/*.rs", "README.md", "LICENSE"]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lib]
+name = "portless"
+path = "src/lib.rs"
+
+[[bin]]
+name = "portless"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+bytes = { workspace = true }
+http-body-util = "0.1"
+hyper = { version = "1", features = ["client", "http1", "http2", "server"] }
+hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "server", "tokio"] }
+rand = { workspace = true }
+rustls = { version = "0.23.41", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pemfile = "2.2.0"
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-rustls = { version = "0.26.4", default-features = false, features = ["ring", "tls12"] }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
+
+[target."cfg(unix)".dependencies]
+nix = { workspace = true, features = ["process", "signal", "user"] }
+

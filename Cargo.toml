@@ -2,6 +2,7 @@
 resolver = "3"
 
 members = [
+  "crates/portless",
   "crates/turbo-trace",
   "crates/turborepo*",
   "packages/turbo-repository/rust",
@@ -53,11 +54,9 @@ strip = true
 # ref: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#inheriting-a-dependency-from-a-workspace
 [workspace.dependencies]
 miette = { version = "7.5.0", features = ["fancy"] }
-
 turbo-trace = { path = "crates/turbo-trace" }
 turbo-updater = { path = "crates/turborepo-updater" }
 turbopath = { path = "crates/turborepo-paths" }
-turborepo = { path = "crates/turborepo" }
 turborepo-analytics = { path = "crates/turborepo-analytics" }
 turborepo-api-client = { path = "crates/turborepo-api-client" }
 turborepo-boundaries = { path = "crates/turborepo-boundaries" }
@@ -71,10 +70,8 @@ turborepo-env = { path = "crates/turborepo-env" }
 turborepo-errors = { path = "crates/turborepo-errors" }
 turborepo-fixed-map = { path = "crates/turborepo-fixed-map" }
 turborepo-frameworks = { path = "crates/turborepo-frameworks" }
-turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-gitignore = { path = "crates/turborepo-gitignore" }
 turborepo-hash = { path = "crates/turborepo-hash" }
-turborepo-json-rewrite = { path = "crates/turborepo-json-rewrite" }
 turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
 turborepo-lsp = { path = "crates/turborepo-lsp", default-features = false }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
@@ -114,22 +111,15 @@ turborepo-ghostty = { path = "crates/turborepo-ghostty" }
 libghostty-vt = "0.2.0"
 
 reqwest = { version = "0.12.28", default-features = false }
-rustls-native-certs = "0.8.3"
 hyper-rustls = { version = "0.27.7", default-features = false }
 
 anyhow = "1.0.69"
 assert_cmd = "2.0.8"
-async-compression = { version = "0.3.13", default-features = false, features = [
-  "gzip",
-  "tokio",
-] }
 async-graphql = { version = "7.0.17", default-features = false, features = [
   "graphiql",
 ] }
 async-graphql-axum = "7.0.16"
-async-trait = "0.1.64"
 axum = "0.8.4"
-axum-server = "0.8.0"
 biome_deserialize = { version = "0.6.0", features = ["serde"] }
 biome_deserialize_macros = { version = "0.6.0" }
 biome_diagnostics = { version = "0.5.7" }
@@ -146,7 +136,6 @@ chrono = { version = "0.4.23", default-features = false, features = [
 clap = "4.5.16"
 clap_complete = "4.5.24"
 console = "0.16.0"
-crossbeam-channel = "0.5.15"
 dashmap = "6.1.0"
 derive_setters = "0.1.6"
 dialoguer = "0.12.0"
@@ -198,11 +187,9 @@ test-case = "3.3.1"
 thiserror = "2.0.18"
 tiny-gradient = "0.1.0"
 tokio = "1.47.1"
-tokio-util = { version = "0.7.7", features = ["io"] }
 toml = "0.9.5"
 toml_edit = "0.22.15"
 tracing = "0.1.37"
-tracing-appender = "0.2.2"
 tracing-subscriber = "0.3.20"
 url = "2.2.2"
 webbrowser = "0.8.7"
