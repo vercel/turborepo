@@ -132,6 +132,11 @@ fn build_vendored(link_mode: LinkMode) {
         .arg("build")
         .arg("-Demit-lib-vt")
         .arg(format!("-Doptimize={optimize}"))
+        // Cargo artifacts can run on a different machine than the one that
+        // built them. Without an explicit CPU, Zig uses the build host's
+        // native features and can emit instructions unsupported by older
+        // machines (for example, AVX2 on pre-Haswell x86_64 CPUs).
+        .arg("-Dcpu=baseline")
         .arg("-Demit-xcframework=false")
         .arg("-Dapp-runtime=none")
         .arg("--prefix")
