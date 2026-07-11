@@ -24,10 +24,6 @@ const TURBO_EXTENDS: &str = "$TURBO_EXTENDS$";
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
-fn contains_parent_dir_segment(glob: &str) -> bool {
-    glob.split('/').any(|segment| segment == "..")
-}
-
 /// Helper function to check for and remove $TURBO_EXTENDS$ from an array
 /// Returns (processed_array, extends_found)
 fn extract_turbo_extends(
@@ -114,14 +110,7 @@ impl ProcessedGlob {
 
     /// Creates a ProcessedGlob for outputs (validates as output field)
     pub fn from_spanned_output(value: Spanned<UnescapedString>) -> Result<Self, Error> {
-        let source = value.clone();
-        let glob = Self::from_spanned_internal(value, "outputs")?;
-        if contains_parent_dir_segment(&glob.glob) {
-            let (span, text) = source.span_and_text("turbo.json");
-            return Err(Error::OutputPathTraversal { span, text });
-        }
-
-        Ok(glob)
+        Self::from_spanned_internal(value, "outputs")
     }
 
     /// Creates a ProcessedGlob for inputs (validates as input field)
@@ -1104,42 +1093,9 @@ mod tests {
     #[test_case("./../../target.txt" ; "leading current directory")]
     #[test_case("!../../target.txt" ; "negated traversal")]
     #[test_case("../../{file1,file2,fileN}" ; "brace expansion")]
-    fn test_processed_outputs_reject_parent_directory_segments(input: &str) {
-        let result = ProcessedGlob::from_spanned_output(
-            Spanned::new(UnescapedString::from(input.to_string()))
-                .with_path(Arc::from("turbo.json"))
-                .with_text(format!("\"{}\"", input))
-                .with_range(1..input.len() + 1),
-        );
-
-        assert_matches!(result, Err(Error::OutputPathTraversal { .. }));
-    }
-
-    // No literal `..` segment (no shell/URL/unicode decoding happens before
-    // globbing), so these inert literals must not be rejected as traversal.
-    #[test_case("%2e%2e/target.txt" ; "url encoded dots")]
-    #[test_case("．．/target.txt" ; "full width dots")]
-    #[test_case("..\\target.txt" ; "windows backslash")]
-    #[test_case("~/target.txt" ; "leading tilde")]
-    #[test_case("dist/**" ; "ordinary glob")]
-    fn test_processed_outputs_allow_dotdot_lookalikes(input: &str) {
-        let result = ProcessedGlob::from_spanned_output(
-            Spanned::new(UnescapedString::from(input.to_string()))
-                .with_path(Arc::from("turbo.json"))
-                .with_text(format!("\"{}\"", input))
-                .with_range(1..input.len() + 1),
-        );
-
-        assert!(
-            !matches!(result, Err(Error::OutputPathTraversal { .. })),
-            "{input} should not be rejected as path traversal"
-        );
-    }
-
-    #[test]
-    fn test_processed_outputs_allow_turbo_root() {
+    fn test_processed_outputs_allow_parent_directory_segments(input: &str) {
         let result = ProcessedGlob::from_spanned_output(Spanned::new(UnescapedString::from(
-            "$TURBO_ROOT$/README.md",
+            input.to_string(),
         )));
 
         assert!(result.is_ok());
@@ -1161,7 +1117,7 @@ mod tests {
     }
 
     #[test]
-    fn test_incremental_outputs_reject_parent_directory_segments() {
+    fn test_incremental_outputs_allow_parent_directory_segments() {
         let raw_task = RawTaskDefinition {
             incremental: Some(vec![crate::raw::RawIncrementalPartition {
                 outputs: Some(vec![Spanned::new(UnescapedString::from("../target.txt"))]),
@@ -1172,13 +1128,11 @@ mod tests {
 
         let result = ProcessedTaskDefinition::from_raw(raw_task, &FutureFlags::default());
 
-        assert_matches!(result, Err(Error::OutputPathTraversal { .. }));
+        assert!(result.is_ok());
     }
 
-    // Negated incremental outputs share the same `from_spanned_output` path
-    // (`!` stripped before the segment check), so traversal is still rejected.
     #[test]
-    fn test_incremental_negated_outputs_reject_parent_directory_segments() {
+    fn test_incremental_negated_outputs_allow_parent_directory_segments() {
         let raw_task = RawTaskDefinition {
             incremental: Some(vec![crate::raw::RawIncrementalPartition {
                 outputs: Some(vec![
@@ -1192,7 +1146,7 @@ mod tests {
 
         let result = ProcessedTaskDefinition::from_raw(raw_task, &FutureFlags::default());
 
-        assert_matches!(result, Err(Error::OutputPathTraversal { .. }));
+        assert!(result.is_ok());
     }
 
     #[test]

@@ -922,6 +922,14 @@ mod tests {
         }
         ; "with .next (windows)"
     )]
+    #[test_case(
+        r#"["../shared/**", "!../shared/cache/**"]"#,
+        TaskOutputs {
+            inclusions: vec!["../shared/**".to_string()],
+            exclusions: vec!["../shared/cache/**".to_string()]
+        }
+        ; "outside package"
+    )]
     fn test_deserialize_task_outputs(
         task_outputs_str: &str,
         expected_task_outputs: TaskOutputs,
