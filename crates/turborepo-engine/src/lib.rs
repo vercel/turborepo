@@ -1013,7 +1013,7 @@ mod affected_tasks_tests {
         engine.seal()
     }
 
-    fn task_ids_set(engine: &Engine) -> HashSet<TaskId<'static>> {
+    fn task_ids_set<T: TaskDefinitionInfo>(engine: &Engine<Built, T>) -> HashSet<TaskId<'static>> {
         engine.task_ids().cloned().collect()
     }
 
