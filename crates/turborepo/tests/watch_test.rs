@@ -1153,3 +1153,67 @@ fn watch_task_inputs_persistent_task_not_stopped_for_out_of_input_change() {
          after: {dev_after}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Regression test for #13347: watch task inputs must use watch graph semantics
+// ---------------------------------------------------------------------------
+
+#[test]
+#[cfg_attr(windows, ignore)]
+fn watch_task_inputs_do_not_rerun_non_cacheable_dependencies_or_persistent_dependents() {
+    let tempdir = tempfile::tempdir().expect("failed to create tempdir");
+    let test_dir = tempdir.path().to_path_buf();
+    setup::copy_fixture("watch_task_inputs_dependency_test", &test_dir).unwrap();
+    setup::setup_git(&test_dir).unwrap();
+
+    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks(&test_dir, &["dev"]));
+    wait_for_prefixed_markers(&test_dir, "pkg", "dev-", 1, Duration::from_secs(60));
+    wait_for_prefixed_markers(&test_dir, "app", "dev-", 1, Duration::from_secs(60));
+    std::thread::sleep(Duration::from_secs(2));
+
+    let pkg_before = prefixed_marker_count(&test_dir, "pkg", "dev-");
+    let app_before = prefixed_marker_count(&test_dir, "app", "dev-");
+
+    // A package change reruns its non-persistent task but must not restart the
+    // persistent app that depends on it.
+    fs::write(
+        test_dir.join("packages/pkg/README.md"),
+        "# Package changed\n",
+    )
+    .unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(&test_dir, &["commit", "-m", "change package", "--quiet"]);
+    let pkg_after_change = wait_for_prefixed_markers(
+        &test_dir,
+        "pkg",
+        "dev-",
+        pkg_before + 1,
+        Duration::from_secs(30),
+    );
+    std::thread::sleep(Duration::from_secs(2));
+    assert_eq!(
+        prefixed_marker_count(&test_dir, "app", "dev-"),
+        app_before,
+        "package change should not restart the persistent app"
+    );
+
+    // An app change is handled by its persistent server and must not rerun the
+    // app's non-cacheable upstream dependency.
+    fs::write(test_dir.join("packages/app/README.md"), "# App changed\n").unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(&test_dir, &["commit", "-m", "change app", "--quiet"]);
+    std::thread::sleep(Duration::from_secs(5));
+
+    drop(guard);
+
+    assert_eq!(
+        prefixed_marker_count(&test_dir, "pkg", "dev-"),
+        pkg_after_change,
+        "app change should not rerun its non-cacheable dependency"
+    );
+    assert_eq!(
+        prefixed_marker_count(&test_dir, "app", "dev-"),
+        app_before,
+        "app change should not restart its persistent task"
+    );
+}
