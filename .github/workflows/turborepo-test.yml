@@ -119,21 +119,22 @@ jobs:
           fi
 
   rust_test:
-    name: Rust testing on ${{ matrix.name }}
-    runs-on: ${{ matrix.runner }}
+    name: Rust testing on ${{ matrix.os.name }} (shard ${{ matrix.shard }}/2)
+    runs-on: ${{ matrix.os.runner }}
     # Padded beyond the usual 15: the first push-to-main run populates the
     # compile cache, and artifact writes make it slower than a plain build.
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        include:
+        os:
           - name: macos
             runner: macos-15-xlarge
           - name: ubuntu
             runner: ubuntu-latest-8-core-oss
           - name: windows
             runner: windows-latest-8-core-oss
+        shard: [1, 2]
     permissions:
       contents: read
       # For the OIDC token exchanged for a Remote Cache access token.
@@ -200,7 +201,7 @@ jobs:
 
       - name: Restore Cargo target
         id: cargo-target-restore
-        if: matrix.name == 'ubuntu'
+        if: matrix.os.name == 'ubuntu'
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: target
@@ -238,12 +239,12 @@ jobs:
       - name: Run tests
         timeout-minutes: 20
         env:
-          FORCE_ARG: ${{ matrix.name == 'ubuntu' && github.event_name == 'push' && steps.cargo-target-restore.outputs.cache-matched-key == '' && '--force' || '' }}
-        run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream $FORCE_ARG
+          FORCE_ARG: ${{ matrix.os.name == 'ubuntu' && github.event_name == 'push' && steps.cargo-target-restore.outputs.cache-matched-key == '' && '--force' || '' }}
+        run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream $FORCE_ARG -- --partition hash:${{ matrix.shard }}/2
         shell: bash
 
       - name: Save Cargo target
-        if: matrix.name == 'ubuntu' && github.event_name == 'push' && steps.cargo-target-restore.outputs.cache-hit != 'true'
+        if: matrix.os.name == 'ubuntu' && matrix.shard == 1 && github.event_name == 'push' && steps.cargo-target-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: target
