@@ -283,10 +283,13 @@ whether anything changed; Cargo decides how and in what order to build.**
   removed crates dropped — comments and formatting preserved). Toolchain
   and Cargo config files are carried over. Reachability pruning cannot see
   Cargo's feature unification, so `prune_finalize` runs `cargo metadata`
-  in the output (offline first, then networked) to let Cargo minimally
-  sync its own lockfile; failure downgrades to a warning. In docker
-  layout, the json layer carries the root manifest, each kept crate's
-  `Cargo.toml`, and the pruned lock; sources go to the full layer. A
+  once in the complete output (offline first, then networked) to let Cargo
+  minimally sync its own lockfile; failure downgrades to a warning.
+  Finalizers report files they may have changed, and prune copies those
+  finalized bytes to alternate output layers without rerunning the toolchain;
+  synchronization failures are also warnings. In docker layout, the json
+  layer carries the root manifest, each kept crate's `Cargo.toml`, and the
+  finalized lock; sources go to the full layer. A
   package anchored at the repo root (the synthetic workspace package) is not
   a pruneable target.
 

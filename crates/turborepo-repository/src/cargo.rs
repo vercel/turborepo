@@ -893,7 +893,7 @@ impl Toolchain for CargoToolchain {
     /// machine won't have cached, so fall back to a networked sync. Failure
     /// is not fatal: the superset lock still builds correctly, it just
     /// isn't `--locked`-clean.
-    fn prune_finalize(&self, pruned_root: &AbsoluteSystemPath) {
+    fn prune_finalize(&self, pruned_root: &AbsoluteSystemPath) -> Vec<String> {
         let sync = |offline: bool| {
             let mut cmd = std::process::Command::new("cargo");
             cmd.args(["metadata", "--format-version", "1"]);
@@ -923,6 +923,7 @@ impl Toolchain for CargoToolchain {
                 );
             }
         }
+        vec![CARGO_LOCK.to_string()]
     }
 
     fn derived_task_io(

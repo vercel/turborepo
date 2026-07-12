@@ -424,6 +424,21 @@ fn test_prune_docker_layout_for_cargo() {
     }
     // Sources stay out of the json layer.
     assert!(!out.join("json/crates/app/src").exists());
+
+    let full_lock = fs::read(out.join("full/Cargo.lock")).unwrap();
+    let json_lock = fs::read(out.join("json/Cargo.lock")).unwrap();
+    assert_eq!(full_lock, json_lock, "docker lockfiles must stay in sync");
+
+    let build = std::process::Command::new("cargo")
+        .args(["build", "--locked", "-p", "app"])
+        .current_dir(out.join("full"))
+        .output()
+        .expect("cargo build runs");
+    assert!(
+        build.status.success(),
+        "docker full workspace must build --locked: {}",
+        String::from_utf8_lossy(&build.stderr)
+    );
 }
 
 /// A JS-only target in a mixed repo prunes exactly as before: no crates, no

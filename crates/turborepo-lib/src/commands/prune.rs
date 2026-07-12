@@ -8,7 +8,7 @@ use std::{
 
 use globwalk::{ValidatedGlob, WalkType};
 use miette::Diagnostic;
-use tracing::trace;
+use tracing::{trace, warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
     RelativeUnixPath, RelativeUnixPathBuf,
@@ -428,10 +428,37 @@ pub async fn prune(
     // The pruned output is complete; let each toolchain polish its own
     // files in place (e.g. Cargo canonicalizes the pruned lockfile).
     for toolchain in prune.package_graph.toolchains().iter() {
-        toolchain.prune_finalize(&prune.full_directory);
+        let finalized_files = toolchain.prune_finalize(&prune.full_directory);
+        if prune.docker {
+            sync_prune_finalize_files(
+                &prune.full_directory,
+                &prune.docker_directory(),
+                finalized_files,
+            );
+        }
     }
 
     Ok(())
+}
+
+fn sync_prune_finalize_files(
+    source_root: &AbsoluteSystemPath,
+    destination_root: &AbsoluteSystemPath,
+    files: Vec<String>,
+) {
+    for path in files {
+        let Ok(relative_path) = RelativeUnixPath::new(&path) else {
+            warn!("unable to synchronize invalid finalized prune path {path:?}");
+            continue;
+        };
+        let relative_path = relative_path.to_anchored_system_path_buf();
+        if let Err(error) = turborepo_fs::copy_file(
+            source_root.resolve(&relative_path),
+            destination_root.resolve(&relative_path),
+        ) {
+            warn!("unable to synchronize finalized prune file {path:?}: {error}");
+        }
+    }
 }
 
 fn prune_package_json_workspaces(package_json: &mut serde_json::Value, workspace_paths: &[String]) {
@@ -1212,11 +1239,34 @@ mod tests {
     };
 
     use super::{
-        bin_paths, merge_preserving_key_order, prune_package_json_workspaces, Prune,
-        ADDITIONAL_FILES,
+        bin_paths, merge_preserving_key_order, prune_package_json_workspaces,
+        sync_prune_finalize_files, Prune, ADDITIONAL_FILES,
     };
 
     struct MockDiscovery;
+
+    #[test]
+    fn finalized_files_are_synchronized_nonfatally() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let full = root.join_component("full");
+        let json = root.join_component("json");
+        full.create_dir_all().unwrap();
+        json.create_dir_all().unwrap();
+        full.join_component("Cargo.lock")
+            .create_with_contents("canonical")
+            .unwrap();
+        json.join_component("Cargo.lock")
+            .create_with_contents("stale")
+            .unwrap();
+
+        sync_prune_finalize_files(&full, &json, vec!["missing".into(), "Cargo.lock".into()]);
+
+        assert_eq!(
+            json.join_component("Cargo.lock").read_to_string().unwrap(),
+            "canonical"
+        );
+    }
 
     impl PackageDiscovery for MockDiscovery {
         async fn discover_packages(
