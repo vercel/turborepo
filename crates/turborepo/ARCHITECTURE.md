@@ -212,9 +212,12 @@ whether anything changed; Cargo decides how and in what order to build.**
   their own sources plus their transitive dependency crates' sources
   (flattened, so invalidation doesn't depend on `dependsOn` wiring), the
   workspace files (root `Cargo.toml`, `.cargo/config*`, `rust-toolchain*`),
-  and cargo-relevant env vars (`RUSTFLAGS`, `RUSTC_WRAPPER`,
-  `CARGO_TARGET_DIR`, `CARGO_BUILD_TARGET`). The workspace package hashes
-  all crate directories instead of default-hashing the repo root.
+  and standard Cargo/cc-rs environment inputs: compiler and rustdoc selection
+  and flags, Cargo build/profile/target configuration, native compiler and
+  archiver settings (including target-qualified forms), and platform SDK
+  selection. Arbitrary variables consumed by project-specific build scripts
+  remain explicit task `env` configuration. The workspace package hashes all
+  crate directories instead of default-hashing the repo root.
   `$TURBO_DEFAULT$` in a Cargo task's `inputs` means "everything turbo
   derives automatically", so extra inputs (e.g. a file embedded via
   `include_str!` from outside any crate directory) are additive.

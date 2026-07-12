@@ -390,15 +390,92 @@ pub fn pass_through_uses_separator(subcommand: &str) -> bool {
     matches!(subcommand, "test" | "bench" | "run" | "clippy")
 }
 
-/// Environment variables that change what Cargo builds or where it writes
-/// artifacts. These participate in a crate task's hash so flipping them
-/// invalidates the cache. `RUSTC_WRAPPER` is included so enabling a compile
-/// cache like sccache invalidates prior task results.
+/// Standard Cargo and cc-rs environment variables that can change build
+/// outputs or select the tools that produce them. Patterns cover Cargo's
+/// profile/target configuration and cc-rs's target-qualified forms without
+/// pulling unrelated Cargo credentials or network settings into task hashes.
+/// Build-script-specific variables remain explicit task config.
 pub const HASHED_ENV_VARS: &[&str] = &[
-    "RUSTFLAGS",
+    // Compiler and rustdoc selection and flags.
+    "RUSTC",
     "RUSTC_WRAPPER",
+    "RUSTC_WORKSPACE_WRAPPER",
+    "RUSTC_BOOTSTRAP",
+    "RUSTFLAGS",
+    "CARGO_ENCODED_RUSTFLAGS",
+    "RUSTDOC",
+    "RUSTDOCFLAGS",
+    "CARGO_ENCODED_RUSTDOCFLAGS",
+    // Environment equivalents of Cargo's [build] configuration.
     "CARGO_TARGET_DIR",
+    "CARGO_BUILD_TARGET_DIR",
+    "CARGO_BUILD_BUILD_DIR",
     "CARGO_BUILD_TARGET",
+    "CARGO_BUILD_RUSTC",
+    "CARGO_BUILD_RUSTC_WRAPPER",
+    "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER",
+    "CARGO_BUILD_RUSTDOC",
+    "CARGO_BUILD_RUSTFLAGS",
+    "CARGO_BUILD_RUSTDOCFLAGS",
+    "CARGO_INCREMENTAL",
+    "CARGO_BUILD_INCREMENTAL",
+    // Cargo normalizes profile names and target triples into these families.
+    "CARGO_PROFILE_*",
+    "CARGO_TARGET_*",
+    // Native toolchain variables recognized by cc-rs. `VAR_*` covers both
+    // raw and underscore-normalized target suffixes.
+    "CC",
+    "CC_*",
+    "HOST_CC",
+    "TARGET_CC",
+    "CFLAGS",
+    "CFLAGS_*",
+    "HOST_CFLAGS",
+    "TARGET_CFLAGS",
+    "CXX",
+    "CXX_*",
+    "HOST_CXX",
+    "TARGET_CXX",
+    "CXXFLAGS",
+    "CXXFLAGS_*",
+    "HOST_CXXFLAGS",
+    "TARGET_CXXFLAGS",
+    "CXXSTDLIB",
+    "CXXSTDLIB_*",
+    "HOST_CXXSTDLIB",
+    "TARGET_CXXSTDLIB",
+    "AR",
+    "AR_*",
+    "HOST_AR",
+    "TARGET_AR",
+    "ARFLAGS",
+    "ARFLAGS_*",
+    "HOST_ARFLAGS",
+    "TARGET_ARFLAGS",
+    "RANLIB",
+    "RANLIB_*",
+    "HOST_RANLIB",
+    "TARGET_RANLIB",
+    "RANLIBFLAGS",
+    "RANLIBFLAGS_*",
+    "HOST_RANLIBFLAGS",
+    "TARGET_RANLIBFLAGS",
+    "NVCC",
+    "NVCC_*",
+    "HOST_NVCC",
+    "TARGET_NVCC",
+    "CRATE_CC_NO_DEFAULTS",
+    "CROSS_COMPILE",
+    // SDK selection is consumed directly by cc-rs on these platforms.
+    "SDKROOT",
+    "MACOSX_DEPLOYMENT_TARGET",
+    "IPHONEOS_DEPLOYMENT_TARGET",
+    "WATCHOS_DEPLOYMENT_TARGET",
+    "TVOS_DEPLOYMENT_TARGET",
+    "XROS_DEPLOYMENT_TARGET",
+    "WASI_SDK_PATH",
+    "WASI_SYSROOT",
+    "WASM_MUSL_SYSROOT",
 ];
 
 /// Rewrite the workspace root Cargo.toml for a pruned repository containing
@@ -2482,6 +2559,11 @@ release: 1.96.0-nightly\n",
         );
         assert_eq!(io.package_default_inputs, Some(true));
         assert!(io.env.contains(&"RUSTC_WRAPPER".to_string()));
+        assert!(io.env.contains(&"CARGO_ENCODED_RUSTFLAGS".to_string()));
+        assert!(io.env.contains(&"CARGO_PROFILE_*".to_string()));
+        assert!(io.env.contains(&"CARGO_TARGET_*".to_string()));
+        assert!(io.env.contains(&"CC_*".to_string()));
+        assert!(io.env.contains(&"TARGET_CFLAGS".to_string()));
         assert!(
             io.output_globs.contains(&"../../target/*/app".to_string()),
             "bin deliverable is cached with a wildcard profile, got {:?}",
