@@ -1,9 +1,9 @@
-use std::{env, path::PathBuf};
+use std::env;
+use std::path::PathBuf;
 
-use bindgen::{
-    EnumVariation,
-    callbacks::{EnumVariantValue, IntKind, ItemInfo, ItemKind, ParseCallbacks},
-};
+use bindgen::EnumVariation;
+use bindgen::callbacks::{EnumVariantValue, IntKind, ItemInfo, ItemKind, ParseCallbacks};
+
 use heck::ToShoutySnakeCase;
 
 fn main() {
@@ -48,8 +48,8 @@ fn main() {
         }
         found.unwrap_or_else(|| {
             panic!(
-                "could not find ghostty headers; run `cargo build -p libghostty-vt-sys` first, or \
-                 set GHOSTTY_INCLUDE_DIR or GHOSTTY_SOURCE_DIR"
+                "could not find ghostty headers; run `cargo build -p libghostty-vt-sys` first, \
+                 or set GHOSTTY_INCLUDE_DIR or GHOSTTY_SOURCE_DIR"
             )
         })
     };
