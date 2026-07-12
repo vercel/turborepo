@@ -223,8 +223,11 @@ whether anything changed; Cargo decides how and in what order to build.**
   external-dependency hash JS packages use
   (`PackageInfo.transitive_dependencies`). Each crate's closure is computed
   from `Cargo.lock` (identity = version + source + checksum, so git rev
-  bumps count), so a dependency bump only invalidates crates that actually
-  depend on it. The complete verbose compiler identity from `rustc -vV`,
+  bumps count). Source-qualified lockfile edges distinguish identical
+  name/version packages from different registries or git references, so each
+  closure follows Cargo's exact resolved package. A dependency bump therefore
+  only invalidates crates that actually depend on it. The complete verbose
+  compiler identity from `rustc -vV`,
   including its host triple, is resolved from the repo root (so
   `rust-toolchain` overrides apply) and added to every Cargo package's set.
   This prevents compiler releases, operating systems, architectures, or host
