@@ -375,6 +375,12 @@ The core task graph consists of:
   (`TaskHashable.commandOverride`/`commandOptOut`). Toolchains place the
   argv in their frame: cwd is the package directory, nothing is prepended,
   and Cargo keeps its serial group when the override still invokes cargo.
+  Because an argv override is otherwise arbitrary, it does not inherit the
+  native command's toolchain-derived inputs, outputs, default-input behavior,
+  or hash environment; its turbo.json `inputs`, `outputs`, and `env` are the
+  authoritative task-level I/O configuration. Toolchain task defaults and
+  execution-only compile-cache environment injection likewise apply only to
+  native toolchain-resolved commands.
 
 #### Engine Execution (`crates/turborepo-lib/src/engine/execute.rs`)
 
@@ -393,9 +399,11 @@ The core task graph consists of:
 
 - `retain_affected_tasks` keeps directly affected tasks, transitive dependents,
   and all transitive dependencies required for normal `--affected` execution
-- `create_engine_for_subgraph` is used by watch mode. It keeps changed package
-  tasks, transitive dependents, and only cacheable upstream dependencies that can
-  restore outputs without forcing non-cacheable tasks to rerun
+- `create_engine_for_subgraph` and `retain_watch_affected_tasks` are used by
+  package-level and task-input watch modes, respectively. They keep changed
+  tasks, transitive dependents, and only cacheable upstream dependencies that
+  can restore outputs without forcing non-cacheable tasks to rerun. Persistent
+  non-interruptible tasks are excluded because watch mode cannot restart them
 
 ### 4. Task Visitor (`crates/turborepo-lib/src/task_graph/visitor/`)
 

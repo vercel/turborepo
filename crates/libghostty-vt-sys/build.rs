@@ -1,6 +1,8 @@
-use std::env;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::{
+    env,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 /// Pinned ghostty commit. Update this to pull a newer version.
 const GHOSTTY_REPO: &str = "https://github.com/ghostty-org/ghostty.git";
@@ -132,6 +134,11 @@ fn build_vendored(link_mode: LinkMode) {
         .arg("build")
         .arg("-Demit-lib-vt")
         .arg(format!("-Doptimize={optimize}"))
+        // Cargo artifacts can run on a different machine than the one that
+        // built them. Without an explicit CPU, Zig uses the build host's
+        // native features and can emit instructions unsupported by older
+        // machines (for example, AVX2 on pre-Haswell x86_64 CPUs).
+        .arg("-Dcpu=baseline")
         .arg("-Demit-xcframework=false")
         .arg("-Dapp-runtime=none")
         .arg("--prefix")
@@ -225,7 +232,8 @@ fn warn_unused_xcframework(lib_dir: &Path) {
     let xcframework = lib_dir.join("ghostty-vt.xcframework");
     if xcframework.exists() {
         println!(
-            "cargo:warning=unused libghostty-vt XCFramework emitted at {}; Cargo links the dylib or archive directly",
+            "cargo:warning=unused libghostty-vt XCFramework emitted at {}; Cargo links the dylib \
+             or archive directly",
             xcframework.display()
         );
     }
@@ -295,13 +303,13 @@ fn emit_include_metadata(include_paths: &[PathBuf]) {
 
 /// Decide which Zig `OptimizeMode` to pass to `zig build`.
 ///
-/// The `LIBGHOSTTY_VT_SYS_OPTIMIZE` environment variable overrides this unconditionally; accepted
-/// values are the four Zig `OptimizeMode` names (`Debug`, `ReleaseSafe`, `ReleaseFast`,
-/// `ReleaseSmall`).
+/// The `LIBGHOSTTY_VT_SYS_OPTIMIZE` environment variable overrides this
+/// unconditionally; accepted values are the four Zig `OptimizeMode` names
+/// (`Debug`, `ReleaseSafe`, `ReleaseFast`, `ReleaseSmall`).
 ///
-/// Defaults to `ReleaseFast` for optimized builds. If `DEBUG` is `true` (as cargo sets for the
-/// `dev` profile), `Debug` mode is used. Otherwise, if `OPT_LEVEL` is `s` or `z`, `ReleaseSmall`
-/// is used.
+/// Defaults to `ReleaseFast` for optimized builds. If `DEBUG` is `true` (as
+/// cargo sets for the `dev` profile), `Debug` mode is used. Otherwise, if
+/// `OPT_LEVEL` is `s` or `z`, `ReleaseSmall` is used.
 fn zig_optimize_mode() -> &'static str {
     if let Ok(override_mode) = env::var("LIBGHOSTTY_VT_SYS_OPTIMIZE") {
         return match override_mode.as_str() {
@@ -310,7 +318,8 @@ fn zig_optimize_mode() -> &'static str {
             "ReleaseFast" => "ReleaseFast",
             "ReleaseSmall" => "ReleaseSmall",
             other => panic!(
-                "LIBGHOSTTY_VT_SYS_OPTIMIZE must be one of Debug, ReleaseSafe, ReleaseFast, ReleaseSmall (got '{other}')"
+                "LIBGHOSTTY_VT_SYS_OPTIMIZE must be one of Debug, ReleaseSafe, ReleaseFast, \
+                 ReleaseSmall (got '{other}')"
             ),
         };
     }
