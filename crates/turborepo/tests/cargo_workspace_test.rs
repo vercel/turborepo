@@ -230,6 +230,90 @@ fn test_cargo_build_executes_caches_and_restores() {
 }
 
 #[test]
+fn test_cargo_command_override_uses_only_configured_io() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "experimentalTaskCommand": true
+  },
+  "tasks": {
+    "app#build": {
+      "command": [
+        "node",
+        "-e",
+        "require('fs').writeFileSync('custom-output.txt', process.env.OVERRIDE_ENV)"
+      ],
+      "inputs": ["Cargo.toml"],
+      "outputs": ["custom-output.txt"],
+      "env": ["OVERRIDE_ENV"]
+    }
+  }
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=app", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "dry-run failed: {output:?}");
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry-run emits JSON");
+    let build = json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "app#build"))
+        .expect("app#build in graph");
+    let definition = &build["resolvedTaskDefinition"];
+    assert_eq!(definition["inputs"], serde_json::json!(["Cargo.toml"]));
+    assert_eq!(
+        definition["outputs"],
+        serde_json::json!(["custom-output.txt"])
+    );
+    assert_eq!(definition["env"], serde_json::json!(["OVERRIDE_ENV"]));
+
+    // A stale Cargo deliverable present on the override's cache miss must not
+    // become one of that arbitrary command's cached outputs.
+    let bin = tempdir
+        .path()
+        .join("target")
+        .join("debug")
+        .join(if cfg!(windows) { "app.exe" } else { "app" });
+    fs::create_dir_all(bin.parent().unwrap()).unwrap();
+    fs::write(&bin, "stale cargo deliverable").unwrap();
+
+    let run = || {
+        let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_turbo"));
+        command
+            .args(["run", "build", "--filter=app", "--log-order", "grouped"])
+            .env("OVERRIDE_ENV", "configured")
+            .current_dir(tempdir.path())
+            .output()
+            .expect("turbo runs")
+    };
+    let output = run();
+    assert!(output.status.success(), "override failed: {output:?}");
+    let custom_output = tempdir.path().join("crates/app/custom-output.txt");
+    assert_eq!(fs::read_to_string(&custom_output).unwrap(), "configured");
+
+    fs::remove_file(&bin).unwrap();
+    fs::remove_file(&custom_output).unwrap();
+    let output = run();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "cache restore failed: {output:?}");
+    assert!(
+        stdout.contains("FULL TURBO"),
+        "expected cache hit: {stdout}"
+    );
+    assert!(custom_output.exists(), "configured output must be restored");
+    assert!(!bin.exists(), "Cargo deliverable must not be restored");
+}
+
+#[test]
 fn test_cargo_run_and_dev_default_to_uncached() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_cargo_monorepo(tempdir.path());
@@ -304,6 +388,72 @@ fn test_explicit_cache_overrides_cargo_run_default() {
         .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "app#run"))
         .expect("app#run in graph");
     assert_eq!(run["resolvedTaskDefinition"]["cache"], true);
+}
+
+#[test]
+fn test_command_override_uses_generic_cache_default_across_toolchains() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "experimentalTaskCommand": true
+  },
+  "tasks": {
+    "app#run": { "command": ["node", "-e", "console.log('cargo')"] },
+    "js-pkg#run": { "command": ["node", "-e", "console.log('js')"] },
+    "app#dev": {
+      "command": ["node", "-e", "console.log('explicit')"],
+      "cache": false
+    }
+  }
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "run",
+            "--filter=app",
+            "--filter=js-pkg",
+            "--dry-run=json",
+        ],
+    );
+    assert!(output.status.success(), "run dry-run failed: {output:?}");
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry-run emits JSON");
+    let tasks = json["tasks"].as_array().expect("tasks array");
+    for task_id in ["app#run", "js-pkg#run"] {
+        let task = tasks
+            .iter()
+            .find(|task| task["taskId"] == task_id)
+            .unwrap_or_else(|| panic!("{task_id} in graph"));
+        assert_eq!(
+            task["resolvedTaskDefinition"]["cache"], true,
+            "{task_id} should use the generic cache default"
+        );
+    }
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "dev", "--filter=app", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "dev dry-run failed: {output:?}");
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry-run emits JSON");
+    let dev = json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "app#dev"))
+        .expect("app#dev in graph");
+    assert_eq!(
+        dev["resolvedTaskDefinition"]["cache"], false,
+        "explicit cache configuration must win"
+    );
 }
 
 #[test]
