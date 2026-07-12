@@ -309,8 +309,13 @@ export interface FutureFlags {
    * When enabled, Rust crates are discovered via `cargo metadata` and
    * participate in the package graph: they resolve in `--filter`
    * expressions, propagate `--affected`, and appear in `turbo query`.
-   * Experimental: support is landing incrementally — task execution and
-   * caching for crates are not wired up yet, so their tasks are no-ops.
+   * Entrypoint `build`, `run`, and `dev` tasks execute per crate, while
+   * verification tasks execute on the synthetic workspace package. Library
+   * crates remain graph nodes, but their tasks are no-ops because Cargo
+   * builds them through dependency closures.
+   *
+   * Task caching uses Cargo-derived inputs and caches entrypoint build
+   * deliverables. This feature is experimental.
    *
    * @defaultValue `false`
    */
