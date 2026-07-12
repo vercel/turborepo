@@ -285,10 +285,12 @@ whether anything changed; Cargo decides how and in what order to build.**
   Cargo's feature unification, so `prune_finalize` runs `cargo metadata`
   once in the complete output (offline first, then networked) to let Cargo
   minimally sync its own lockfile; failure downgrades to a warning.
-  Finalizers report files they may have changed, and prune copies those
-  finalized bytes to alternate output layers without rerunning the toolchain;
-  synchronization failures are also warnings. In docker layout, the json
-  layer carries the root manifest, each kept crate's `Cargo.toml`, and the
+  Only toolchains that contributed a prune plan are finalized. Finalizers
+  report files they may have changed, and prune copies those finalized bytes
+  to alternate output layers without rerunning the toolchain. Reported paths
+  must remain within both output roots lexically and after resolving symlinks;
+  invalid paths and synchronization failures are warnings. In docker layout,
+  the json layer carries the root manifest, each kept crate's `Cargo.toml`, and
   finalized lock; sources go to the full layer. A
   package anchored at the repo root (the synthetic workspace package) is not
   a pruneable target.
