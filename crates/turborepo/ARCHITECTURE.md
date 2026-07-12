@@ -387,9 +387,11 @@ The core task graph consists of:
 
 - `retain_affected_tasks` keeps directly affected tasks, transitive dependents,
   and all transitive dependencies required for normal `--affected` execution
-- `create_engine_for_subgraph` is used by watch mode. It keeps changed package
-  tasks, transitive dependents, and only cacheable upstream dependencies that can
-  restore outputs without forcing non-cacheable tasks to rerun
+- `create_engine_for_subgraph` and `retain_watch_affected_tasks` are used by
+  package-level and task-input watch modes, respectively. They keep changed
+  tasks, transitive dependents, and only cacheable upstream dependencies that
+  can restore outputs without forcing non-cacheable tasks to rerun. Persistent
+  non-interruptible tasks are excluded because watch mode cannot restart them
 
 ### 4. Task Visitor (`crates/turborepo-lib/src/task_graph/visitor/`)
 

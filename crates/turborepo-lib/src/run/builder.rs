@@ -1130,7 +1130,7 @@ impl RunBuilder {
                     changed_files = filter.existing_files.len(),
                     "watch task-level input filtering complete"
                 );
-                engine = engine.retain_affected_tasks(&filter.directly_affected);
+                engine = engine.retain_watch_affected_tasks(&filter.directly_affected);
                 true
             } else {
                 false
