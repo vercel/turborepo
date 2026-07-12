@@ -12,7 +12,20 @@ mod common;
 
 use std::{fs, path::Path};
 
-use common::{run_turbo, setup};
+use common::{run_turbo, run_turbo_with_env, setup};
+
+fn cargo_build_hash(dir: &Path, env: &[(&str, &str)]) -> String {
+    let output = run_turbo_with_env(dir, &["build", "--filter=app", "--dry-run=json"], env);
+    assert!(output.status.success(), "dry-run failed: {output:?}");
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry-run emits JSON");
+    json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "app#build"))
+        .and_then(|task| task["hash"].as_str())
+        .expect("app#build has a hash")
+        .to_string()
+}
 
 fn setup_cargo_monorepo(dir: &Path) {
     setup::setup_integration_test(dir, "cargo_monorepo", "npm@10.5.0", false).unwrap();
@@ -68,6 +81,34 @@ fn test_cargo_packages_in_task_graph() {
     assert!(
         outputs.iter().any(|o| o.ends_with("target/*/app")),
         "bin deliverable must be an output, got {outputs:?}"
+    );
+}
+
+#[test]
+fn test_cargo_semantic_environment_changes_task_hash() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_monorepo(tempdir.path());
+
+    let baseline = cargo_build_hash(tempdir.path(), &[]);
+    for (name, value) in [
+        ("CARGO_ENCODED_RUSTFLAGS", "--cfg\x1fturbo_env_hash_test"),
+        ("RUSTDOCFLAGS", "--cfg turbo_env_hash_test"),
+        ("CARGO_PROFILE_DEV_LTO", "true"),
+        ("CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER", "clang"),
+        ("CC_aarch64_unknown_linux_gnu", "clang"),
+        ("TARGET_CFLAGS", "-DTURBO_ENV_HASH_TEST"),
+        ("CROSS_COMPILE", "aarch64-linux-gnu-"),
+        ("WASI_SYSROOT", "/opt/wasi-sysroot"),
+        ("WASM_MUSL_SYSROOT", "/opt/wasm-musl-sysroot"),
+    ] {
+        let hash = cargo_build_hash(tempdir.path(), &[(name, value)]);
+        assert_ne!(hash, baseline, "{name} must participate in the task hash");
+    }
+
+    let network_only = cargo_build_hash(tempdir.path(), &[("CARGO_HTTP_TIMEOUT", "120")]);
+    assert_eq!(
+        network_only, baseline,
+        "Cargo network settings must not invalidate build outputs"
     );
 }
 
