@@ -492,10 +492,14 @@ fn sync_prune_finalize_files(
         let relative_path = relative_path.to_anchored_system_path_buf();
         let source = source_root.resolve(&relative_path);
         let destination = destination_root.resolve(&relative_path);
-        if !finalized_path_is_contained(source_root, &source)
+        let source_is_regular_file = source
+            .symlink_metadata()
+            .is_ok_and(|metadata| metadata.is_file());
+        if !source_is_regular_file
+            || !finalized_path_is_contained(source_root, &source)
             || !finalized_path_is_contained(destination_root, &destination)
         {
-            warn!("unable to synchronize finalized prune path outside output roots: {path:?}");
+            warn!("unable to synchronize unsafe finalized prune path: {path:?}");
             continue;
         }
 
@@ -1335,6 +1339,17 @@ mod tests {
         let source_copy = json.join_component("source-link.lock");
         fs::write(source_copy.as_std_path(), "stale").unwrap();
 
+        let internal_source_target = full.join_component("internal-source-target.lock");
+        fs::write(internal_source_target.as_std_path(), "inside source").unwrap();
+        let internal_source_link = full.join_component("internal-source-link.lock");
+        std::os::unix::fs::symlink(
+            internal_source_target.as_std_path(),
+            internal_source_link.as_std_path(),
+        )
+        .unwrap();
+        let internal_source_copy = json.join_component("internal-source-link.lock");
+        fs::write(internal_source_copy.as_std_path(), "stale").unwrap();
+
         let destination_target = root.join_component("destination-target.lock");
         fs::write(destination_target.as_std_path(), "outside destination").unwrap();
         full.join_component("destination-link.lock")
@@ -1350,7 +1365,11 @@ mod tests {
         sync_prune_finalize_files(
             &full,
             &json,
-            vec!["source-link.lock".into(), "destination-link.lock".into()],
+            vec![
+                "source-link.lock".into(),
+                "internal-source-link.lock".into(),
+                "destination-link.lock".into(),
+            ],
         );
 
         assert_eq!(
@@ -1363,6 +1382,10 @@ mod tests {
         );
         assert_eq!(
             fs::read_to_string(source_copy.as_std_path()).unwrap(),
+            "stale"
+        );
+        assert_eq!(
+            fs::read_to_string(internal_source_copy.as_std_path()).unwrap(),
             "stale"
         );
     }

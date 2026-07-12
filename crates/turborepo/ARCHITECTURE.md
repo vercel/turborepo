@@ -287,9 +287,10 @@ whether anything changed; Cargo decides how and in what order to build.**
   minimally sync its own lockfile; failure downgrades to a warning.
   Only toolchains that contributed a prune plan are finalized. Finalizers
   report files they may have changed, and prune copies those finalized bytes
-  to alternate output layers without rerunning the toolchain. Reported paths
-  must remain within both output roots lexically and after resolving symlinks;
-  invalid paths and synchronization failures are warnings. In docker layout,
+  to alternate output layers without rerunning the toolchain. Reported sources
+  must be regular files rather than symlinks, and paths must remain within both
+  output roots lexically and after resolving symlinks; invalid paths and
+  synchronization failures are warnings. In docker layout,
   the json layer carries the root manifest, each kept crate's `Cargo.toml`, and
   finalized lock; sources go to the full layer. A
   package anchored at the repo root (the synthetic workspace package) is not
