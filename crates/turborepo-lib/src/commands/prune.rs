@@ -8,7 +8,7 @@ use std::{
 
 use globwalk::{ValidatedGlob, WalkType};
 use miette::Diagnostic;
-use tracing::trace;
+use tracing::{trace, warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
     RelativeUnixPath, RelativeUnixPathBuf,
@@ -197,6 +197,7 @@ pub async fn prune(
         .collect();
     let lockfile_keys = prune.lockfile_keys(&js_workspaces)?;
     let mut kept_by_toolchain: HashMap<ToolchainId, Vec<String>> = HashMap::new();
+    let mut planned_toolchains = HashSet::new();
     for workspace in workspaces {
         let entry = prune
             .package_graph
@@ -241,12 +242,12 @@ pub async fn prune(
     // beyond the packages themselves: extra members it requires, rewritten
     // workspace files, and config files to carry over.
     for toolchain in prune.package_graph.toolchains().iter() {
-        let kept = kept_by_toolchain
-            .remove(&toolchain.id())
-            .unwrap_or_default();
+        let toolchain_id = toolchain.id();
+        let kept = kept_by_toolchain.remove(&toolchain_id).unwrap_or_default();
         let Some(plan) = toolchain.prune_plan(&kept)? else {
             continue;
         };
+        planned_toolchains.insert(toolchain_id);
         for extra in plan.extra_packages {
             let name = PackageName::Other(extra.clone());
             let info = prune
@@ -428,10 +429,84 @@ pub async fn prune(
     // The pruned output is complete; let each toolchain polish its own
     // files in place (e.g. Cargo canonicalizes the pruned lockfile).
     for toolchain in prune.package_graph.toolchains().iter() {
-        toolchain.prune_finalize(&prune.full_directory);
+        if !planned_toolchains.contains(&toolchain.id()) {
+            continue;
+        }
+        let finalized_files = toolchain.prune_finalize(&prune.full_directory);
+        if prune.docker {
+            sync_prune_finalize_files(
+                &prune.full_directory,
+                &prune.docker_directory(),
+                finalized_files,
+            );
+        }
     }
 
     Ok(())
+}
+
+fn finalized_path_is_contained(root: &AbsoluteSystemPath, path: &AbsoluteSystemPath) -> bool {
+    if !root.contains(path) {
+        return false;
+    }
+
+    let Ok(root_realpath) = root.to_realpath() else {
+        return false;
+    };
+    match path.symlink_metadata() {
+        Ok(_) => {
+            return path
+                .to_realpath()
+                .is_ok_and(|realpath| root_realpath.contains(&realpath));
+        }
+        Err(error) if !error.is_io_error(std::io::ErrorKind::NotFound) => {
+            return false;
+        }
+        Err(_) => {}
+    }
+
+    for ancestor in path.ancestors().skip(1) {
+        match ancestor.try_exists() {
+            Ok(true) => {
+                return ancestor
+                    .to_realpath()
+                    .is_ok_and(|realpath| root_realpath.contains(&realpath));
+            }
+            Ok(false) => {}
+            Err(_) => return false,
+        }
+    }
+    false
+}
+
+fn sync_prune_finalize_files(
+    source_root: &AbsoluteSystemPath,
+    destination_root: &AbsoluteSystemPath,
+    files: Vec<String>,
+) {
+    for path in files {
+        let Ok(relative_path) = RelativeUnixPath::new(&path) else {
+            warn!("unable to synchronize invalid finalized prune path {path:?}");
+            continue;
+        };
+        let relative_path = relative_path.to_anchored_system_path_buf();
+        let source = source_root.resolve(&relative_path);
+        let destination = destination_root.resolve(&relative_path);
+        let source_is_regular_file = source
+            .symlink_metadata()
+            .is_ok_and(|metadata| metadata.is_file());
+        if !source_is_regular_file
+            || !finalized_path_is_contained(source_root, &source)
+            || !finalized_path_is_contained(destination_root, &destination)
+        {
+            warn!("unable to synchronize unsafe finalized prune path: {path:?}");
+            continue;
+        }
+
+        if let Err(error) = turborepo_fs::copy_file(&source, destination) {
+            warn!("unable to synchronize finalized prune file {path:?}: {error}");
+        }
+    }
 }
 
 fn prune_package_json_workspaces(package_json: &mut serde_json::Value, workspace_paths: &[String]) {
@@ -1199,7 +1274,10 @@ fn merge_preserving_key_order(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{BTreeMap, HashMap};
+    use std::{
+        collections::{BTreeMap, HashMap},
+        fs,
+    };
 
     use serde_json::json;
     use turbopath::AbsoluteSystemPathBuf;
@@ -1212,11 +1290,105 @@ mod tests {
     };
 
     use super::{
-        bin_paths, merge_preserving_key_order, prune_package_json_workspaces, Prune,
-        ADDITIONAL_FILES,
+        bin_paths, finalized_path_is_contained, merge_preserving_key_order,
+        prune_package_json_workspaces, sync_prune_finalize_files, Prune, ADDITIONAL_FILES,
     };
 
     struct MockDiscovery;
+
+    #[test]
+    fn finalized_files_are_synchronized_nonfatally() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let full = root.join_component("full");
+        let json = root.join_component("json");
+        full.create_dir_all().unwrap();
+        json.create_dir_all().unwrap();
+        full.join_component("Cargo.lock")
+            .create_with_contents("canonical")
+            .unwrap();
+        json.join_component("Cargo.lock")
+            .create_with_contents("stale")
+            .unwrap();
+
+        sync_prune_finalize_files(&full, &json, vec!["missing".into(), "Cargo.lock".into()]);
+
+        assert_eq!(
+            json.join_component("Cargo.lock").read_to_string().unwrap(),
+            "canonical"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn finalized_files_reject_path_escapes() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let full = root.join_component("full");
+        let json = root.join_component("json");
+        full.create_dir_all().unwrap();
+        json.create_dir_all().unwrap();
+
+        let traversal = full.join_component("..").join_component("outside.lock");
+        assert!(!finalized_path_is_contained(&full, &traversal));
+
+        let source_target = root.join_component("source-target.lock");
+        fs::write(source_target.as_std_path(), "outside source").unwrap();
+        let source_link = full.join_component("source-link.lock");
+        std::os::unix::fs::symlink(source_target.as_std_path(), source_link.as_std_path()).unwrap();
+        let source_copy = json.join_component("source-link.lock");
+        fs::write(source_copy.as_std_path(), "stale").unwrap();
+
+        let internal_source_target = full.join_component("internal-source-target.lock");
+        fs::write(internal_source_target.as_std_path(), "inside source").unwrap();
+        let internal_source_link = full.join_component("internal-source-link.lock");
+        std::os::unix::fs::symlink(
+            internal_source_target.as_std_path(),
+            internal_source_link.as_std_path(),
+        )
+        .unwrap();
+        let internal_source_copy = json.join_component("internal-source-link.lock");
+        fs::write(internal_source_copy.as_std_path(), "stale").unwrap();
+
+        let destination_target = root.join_component("destination-target.lock");
+        fs::write(destination_target.as_std_path(), "outside destination").unwrap();
+        full.join_component("destination-link.lock")
+            .create_with_contents("canonical")
+            .unwrap();
+        let destination_link = json.join_component("destination-link.lock");
+        std::os::unix::fs::symlink(
+            destination_target.as_std_path(),
+            destination_link.as_std_path(),
+        )
+        .unwrap();
+
+        sync_prune_finalize_files(
+            &full,
+            &json,
+            vec![
+                "source-link.lock".into(),
+                "internal-source-link.lock".into(),
+                "destination-link.lock".into(),
+            ],
+        );
+
+        assert_eq!(
+            fs::read_to_string(source_target.as_std_path()).unwrap(),
+            "outside source"
+        );
+        assert_eq!(
+            fs::read_to_string(destination_target.as_std_path()).unwrap(),
+            "outside destination"
+        );
+        assert_eq!(
+            fs::read_to_string(source_copy.as_std_path()).unwrap(),
+            "stale"
+        );
+        assert_eq!(
+            fs::read_to_string(internal_source_copy.as_std_path()).unwrap(),
+            "stale"
+        );
+    }
 
     impl PackageDiscovery for MockDiscovery {
         async fn discover_packages(

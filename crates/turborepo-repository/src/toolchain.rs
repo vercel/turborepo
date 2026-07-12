@@ -335,10 +335,13 @@ pub trait Toolchain: Send + Sync {
 
     /// Called after the pruned output is fully written, with its root
     /// directory. Toolchains may polish their own files in place (e.g.
-    /// Cargo canonicalizes the pruned lockfile through `cargo metadata`).
-    /// Failures must be non-fatal: log and continue.
-    fn prune_finalize(&self, pruned_root: &AbsoluteSystemPath) {
+    /// Cargo canonicalizes the pruned lockfile through `cargo metadata`) and
+    /// return their repo-relative paths so alternate output layers can be
+    /// synchronized without repeating finalization. Failures must be
+    /// non-fatal: log and continue.
+    fn prune_finalize(&self, pruned_root: &AbsoluteSystemPath) -> Vec<String> {
         let _ = pruned_root;
+        Vec::new()
     }
 
     /// Environment variables to inject into this toolchain's task processes

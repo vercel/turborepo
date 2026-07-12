@@ -615,6 +615,21 @@ fn test_prune_docker_layout_for_cargo() {
     }
     // Sources stay out of the json layer.
     assert!(!out.join("json/crates/app/src").exists());
+
+    let full_lock = fs::read(out.join("full/Cargo.lock")).unwrap();
+    let json_lock = fs::read(out.join("json/Cargo.lock")).unwrap();
+    assert_eq!(full_lock, json_lock, "docker lockfiles must stay in sync");
+
+    let build = std::process::Command::new("cargo")
+        .args(["build", "--locked", "-p", "app"])
+        .current_dir(out.join("full"))
+        .output()
+        .expect("cargo build runs");
+    assert!(
+        build.status.success(),
+        "docker full workspace must build --locked: {}",
+        String::from_utf8_lossy(&build.stderr)
+    );
 }
 
 /// A JS-only target in a mixed repo prunes exactly as before: no crates, no
@@ -631,6 +646,27 @@ fn test_prune_js_target_unaffected_by_cargo() {
     assert!(out.join("packages/js-pkg/package.json").exists());
     assert!(!out.join("crates").exists());
     assert!(!out.join("Cargo.toml").exists());
+}
+
+#[test]
+fn test_prune_js_docker_target_skips_cargo_finalization() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_monorepo(tempdir.path());
+
+    let output = run_turbo(tempdir.path(), &["prune", "js-pkg", "--docker"]);
+    assert!(output.status.success(), "prune failed: {output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("pruned Cargo.lock"),
+        "Cargo should not finalize a JS-only prune: {stderr}"
+    );
+
+    let out = tempdir.path().join("out");
+    assert!(out.join("full/packages/js-pkg/package.json").exists());
+    assert!(out.join("json/packages/js-pkg/package.json").exists());
+    assert!(!out.join("full/crates").exists());
+    assert!(!out.join("full/Cargo.toml").exists());
+    assert!(!out.join("json/Cargo.lock").exists());
 }
 
 /// The synthetic workspace package has no directory of its own and is not
