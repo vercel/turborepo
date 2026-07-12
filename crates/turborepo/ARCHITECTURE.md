@@ -369,6 +369,10 @@ The core task graph consists of:
   (`TaskHashable.commandOverride`/`commandOptOut`). Toolchains place the
   argv in their frame: cwd is the package directory, nothing is prepended,
   and Cargo keeps its serial group when the override still invokes cargo.
+  Because an argv override is otherwise arbitrary, it does not inherit the
+  native command's toolchain-derived inputs, outputs, default-input behavior,
+  or hash environment; its turbo.json `inputs`, `outputs`, and `env` are the
+  authoritative task-level I/O configuration.
 
 #### Engine Execution (`crates/turborepo-lib/src/engine/execute.rs`)
 
