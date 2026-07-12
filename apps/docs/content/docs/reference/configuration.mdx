@@ -485,6 +485,49 @@ Using any of the old top-level keys while this flag is enabled will produce a ha
   specific global files via negation globs.
 </Callout>
 
+#### `experimentalCargoWorkspaces`
+
+Default: `false`
+
+Treat crates in a Cargo workspace at the repository root as Turborepo packages.
+Crates participate in package discovery, filtering, `--affected`, `turbo query`,
+and the package graph.
+
+Entrypoint crates with `bin`, `cdylib`, or `staticlib` targets execute `build`,
+`run`, and `dev` tasks per crate. Verification tasks execute once on a synthetic
+workspace package. Library crates remain graph nodes, but their tasks are
+no-ops because Cargo builds them through dependency closures.
+
+Task caching hashes Cargo-derived inputs. Entrypoint `build` tasks also cache
+their derived deliverables. Cargo's internal `target` state is not included.
+
+The current experimental support requires:
+
+- A workspace-only root `Cargo.toml`; a root crate is not supported
+- A name for the synthetic package in `[workspace.metadata]`
+- A committed, current `Cargo.lock`
+
+```toml title="./Cargo.toml"
+[workspace]
+members = ["crates/*"]
+
+[workspace.metadata]
+name = "rust-workspace"
+```
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+  },
+}
+```
+
+<Callout type="warn">
+  Cargo workspace support is experimental. Custom target layouts are not
+  supported for entrypoint deliverable caching.
+</Callout>
+
 #### `experimentalObservability`
 
 Default: `false`
