@@ -372,7 +372,9 @@ The core task graph consists of:
   Because an argv override is otherwise arbitrary, it does not inherit the
   native command's toolchain-derived inputs, outputs, default-input behavior,
   or hash environment; its turbo.json `inputs`, `outputs`, and `env` are the
-  authoritative task-level I/O configuration.
+  authoritative task-level I/O configuration. Toolchain task defaults and
+  execution-only compile-cache environment injection likewise apply only to
+  native toolchain-resolved commands.
 
 #### Engine Execution (`crates/turborepo-lib/src/engine/execute.rs`)
 

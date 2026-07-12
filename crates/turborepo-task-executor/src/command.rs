@@ -204,6 +204,10 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
     }
 }
 
+fn should_inject_toolchain_compile_cache(command_override: Option<&TaskCommandOverride>) -> bool {
+    command_override.is_none()
+}
+
 impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
     for ToolchainCommandProvider<'a, M>
 {
@@ -226,7 +230,8 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
         // directions: an opt-out is an explicit no-op (same outcome as a
         // missing script), and an argv replaces the toolchain's own
         // resolution while the toolchain keeps framing it.
-        let override_command = match self.command_overrides.get(task_id) {
+        let command_override = self.command_overrides.get(task_id);
+        let override_command = match command_override {
             Some(TaskCommandOverride::OptOut) => return Ok(None),
             Some(TaskCommandOverride::Argv(argv)) => Some(argv.as_slice()),
             None => None,
@@ -283,7 +288,9 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
         // environment (competing configuration suppresses it, ambient
         // settings are tolerated) and returns exactly what to inject; see
         // `Toolchain::compile_cache_env`.
-        if let Some(endpoint) = self.compile_cache {
+        if should_inject_toolchain_compile_cache(command_override)
+            && let Some(endpoint) = self.compile_cache
+        {
             let vars = toolchain.compile_cache_env(endpoint, environment);
             if vars.is_empty() {
                 debug!("no compile cache env to inject for {task_id}");
@@ -536,6 +543,17 @@ mod tests {
         fn config_filename(&self, package_name: &str) -> Option<String> {
             (package_name == "web").then(|| "web/microfrontends.json".to_owned())
         }
+    }
+
+    #[test]
+    fn command_override_suppresses_toolchain_compile_cache() {
+        assert!(should_inject_toolchain_compile_cache(None));
+        assert!(!should_inject_toolchain_compile_cache(Some(
+            &TaskCommandOverride::Argv(vec!["node".to_string()])
+        )));
+        assert!(!should_inject_toolchain_compile_cache(Some(
+            &TaskCommandOverride::OptOut
+        )));
     }
 
     fn create_test_repo() -> (TempDir, AbsoluteSystemPathBuf, PathBuf) {

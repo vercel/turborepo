@@ -391,6 +391,72 @@ fn test_explicit_cache_overrides_cargo_run_default() {
 }
 
 #[test]
+fn test_command_override_uses_generic_cache_default_across_toolchains() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "experimentalTaskCommand": true
+  },
+  "tasks": {
+    "app#run": { "command": ["node", "-e", "console.log('cargo')"] },
+    "js-pkg#run": { "command": ["node", "-e", "console.log('js')"] },
+    "app#dev": {
+      "command": ["node", "-e", "console.log('explicit')"],
+      "cache": false
+    }
+  }
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "run",
+            "--filter=app",
+            "--filter=js-pkg",
+            "--dry-run=json",
+        ],
+    );
+    assert!(output.status.success(), "run dry-run failed: {output:?}");
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry-run emits JSON");
+    let tasks = json["tasks"].as_array().expect("tasks array");
+    for task_id in ["app#run", "js-pkg#run"] {
+        let task = tasks
+            .iter()
+            .find(|task| task["taskId"] == task_id)
+            .unwrap_or_else(|| panic!("{task_id} in graph"));
+        assert_eq!(
+            task["resolvedTaskDefinition"]["cache"], true,
+            "{task_id} should use the generic cache default"
+        );
+    }
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "dev", "--filter=app", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "dev dry-run failed: {output:?}");
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry-run emits JSON");
+    let dev = json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "app#dev"))
+        .expect("app#dev in graph");
+    assert_eq!(
+        dev["resolvedTaskDefinition"]["cache"], false,
+        "explicit cache configuration must win"
+    );
+}
+
+#[test]
 fn test_dependency_crate_change_invalidates_entrypoint() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_cargo_monorepo(tempdir.path());

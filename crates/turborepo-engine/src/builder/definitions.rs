@@ -288,7 +288,11 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 .into_iter()
                 .map(|(definition, _)| definition),
         );
-        if let Some((info, toolchain)) = package_info.zip(toolchain) {
+        // Toolchain defaults describe the command the toolchain synthesizes.
+        // An override owns its behavior, including the generic cache default.
+        if should_apply_toolchain_defaults(command_override.as_ref())
+            && let Some((info, toolchain)) = package_info.zip(toolchain)
+        {
             let defaults = toolchain.task_defaults(info, task_id.as_inner().task());
             if processed_task_definition.cache.is_none() {
                 processed_task_definition.cache = defaults.cache.map(Spanned::new);
@@ -685,6 +689,10 @@ fn resolve_command_override(
     }
 }
 
+fn should_apply_toolchain_defaults(command: Option<&TaskCommandOverride>) -> bool {
+    command.is_none()
+}
+
 /// Native hash wiring describes a toolchain-synthesized command. An argv
 /// override executes arbitrary user-selected work, so only turbo.json can
 /// soundly describe its inputs, outputs, and environment.
@@ -833,6 +841,17 @@ mod command_override_tests {
             resolve_command_override(None, None, Some((&rust_pkg, &rust)), "test"),
             None,
         );
+    }
+
+    #[test]
+    fn only_native_commands_inherit_toolchain_defaults() {
+        assert!(super::should_apply_toolchain_defaults(None));
+        assert!(!super::should_apply_toolchain_defaults(Some(
+            &TaskCommandOverride::Argv(vec!["node".to_string()])
+        )));
+        assert!(!super::should_apply_toolchain_defaults(Some(
+            &TaskCommandOverride::OptOut
+        )));
     }
 
     #[test]
