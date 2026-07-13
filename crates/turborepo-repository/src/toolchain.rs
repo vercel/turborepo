@@ -278,7 +278,7 @@ pub trait Toolchain: Send + Sync {
     /// The run retains only matching keys, and the engine automatically adds
     /// every declared pattern to the task's hashed environment when derived I/O
     /// applies.
-    fn task_io_env_vars(&self) -> &'static [&'static str] {
+    fn task_io_env_vars(&self) -> &[&str] {
         &[]
     }
 
@@ -457,11 +457,52 @@ impl WatchSpec {
     }
 }
 
+/// Platform-aware environment projection for one toolchain's I/O derivation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskIOEnvironment {
+    values: std::collections::HashMap<String, String>,
+    case_insensitive: bool,
+}
+
+impl TaskIOEnvironment {
+    pub fn new(values: std::collections::HashMap<String, String>) -> Self {
+        Self {
+            values,
+            case_insensitive: cfg!(windows),
+        }
+    }
+
+    pub fn get(&self, name: &str) -> Option<&str> {
+        if self.case_insensitive {
+            self.values
+                .iter()
+                .find(|(key, _)| key.eq_ignore_ascii_case(name))
+                .map(|(_, value)| value.as_str())
+        } else {
+            self.values.get(name).map(String::as_str)
+        }
+    }
+
+    #[cfg(test)]
+    fn case_insensitive(values: std::collections::HashMap<String, String>) -> Self {
+        Self {
+            values,
+            case_insensitive: true,
+        }
+    }
+}
+
+impl Default for TaskIOEnvironment {
+    fn default() -> Self {
+        Self::new(Default::default())
+    }
+}
+
 /// Run-scoped inputs that can affect toolchain-derived task I/O.
 #[derive(Debug, Clone, Copy)]
 pub struct TaskIOContext<'a> {
-    pub task_args: &'a [String],
-    pub environment: &'a std::collections::HashMap<String, String>,
+    pub task_args: Option<&'a [String]>,
+    pub environment: &'a TaskIOEnvironment,
 }
 
 /// Whether a toolchain can resolve a task's automatic outputs.
@@ -923,6 +964,18 @@ mod tests {
         );
         assert_eq!(cmd.cwd, repo_root.resolve(package.package_path()));
         assert_eq!(cmd.serial_group, None);
+    }
+
+    #[test]
+    fn task_io_environment_supports_windows_casing() {
+        let environment = TaskIOEnvironment::case_insensitive(std::collections::HashMap::from([(
+            "Cargo_Build_Target".to_string(),
+            "x86_64-pc-windows-msvc".to_string(),
+        )]));
+        assert_eq!(
+            environment.get("CARGO_BUILD_TARGET"),
+            Some("x86_64-pc-windows-msvc")
+        );
     }
 
     #[cfg(windows)]

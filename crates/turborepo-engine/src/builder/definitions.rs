@@ -10,7 +10,7 @@ use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{
     HasConfigBeyondExtends, ProcessedCommand, ProcessedTaskDefinition, RawTaskDefinition, TurboJson,
 };
-use turborepo_types::{TaskCommandOverride, TaskDefinition};
+use turborepo_types::{TaskArgs, TaskCommandOverride, TaskDefinition};
 
 use super::EngineBuilder;
 use crate::{
@@ -358,9 +358,14 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     _ => None,
                 })
                 .collect();
+            let task_args = TaskArgs::new(&self.pass_through_args, &self.requested_tasks);
+            let empty_environment = turborepo_repository::toolchain::TaskIOEnvironment::default();
             let context = turborepo_repository::toolchain::TaskIOContext {
-                task_args: &self.task_args,
-                environment: &self.environment,
+                task_args: task_args.args_for_task(task_id.as_inner()),
+                environment: self
+                    .environments
+                    .get(&info.toolchain)
+                    .unwrap_or(&empty_environment),
             };
             if let Some(derived) = toolchain.derived_task_io(
                 info,

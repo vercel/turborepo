@@ -17,7 +17,10 @@ use itertools::Itertools;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_graph_utils as graph;
-use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME};
+use turborepo_repository::{
+    package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME},
+    toolchain::{TaskIOEnvironment, ToolchainId},
+};
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{FutureFlags, TurboJson, Validator};
 use turborepo_types::TaskDefinition;
@@ -55,9 +58,10 @@ pub struct EngineBuilder<'a, L: TurboJsonLoader> {
     /// prepended to every task's inputs instead of being included in the
     /// global hash.
     global_deps: Vec<String>,
-    task_args: Vec<String>,
-    /// Only keys requested by registered toolchains for I/O derivation.
-    environment: HashMap<String, String>,
+    pass_through_args: Vec<String>,
+    requested_tasks: Vec<String>,
+    /// Each toolchain receives only the startup environment keys it declared.
+    environments: HashMap<ToolchainId, TaskIOEnvironment>,
 }
 
 impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
@@ -81,8 +85,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             validator: Validator::new(),
             future_flags: FutureFlags::default(),
             global_deps: Vec::new(),
-            task_args: Vec::new(),
-            environment: HashMap::new(),
+            pass_through_args: Vec::new(),
+            requested_tasks: Vec::new(),
+            environments: HashMap::new(),
         }
     }
 
@@ -99,11 +104,13 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
     pub fn with_task_io_context(
         mut self,
-        task_args: Vec<String>,
-        environment: HashMap<String, String>,
+        pass_through_args: Vec<String>,
+        requested_tasks: Vec<String>,
+        environments: HashMap<ToolchainId, TaskIOEnvironment>,
     ) -> Self {
-        self.task_args = task_args;
-        self.environment = environment;
+        self.pass_through_args = pass_through_args;
+        self.requested_tasks = requested_tasks;
+        self.environments = environments;
         self
     }
 

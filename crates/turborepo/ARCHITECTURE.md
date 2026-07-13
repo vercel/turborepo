@@ -160,10 +160,13 @@ through the trait. Machinery that predates the abstraction and has no trait
 surface yet (package-manager resolution for dependency splitting, the JS
 lockfile closure phase) is documented as known debt in the module.
 
-Toolchain-derived I/O receives task arguments plus a narrow startup-environment
-projection declared by each toolchain; undeclared variables are not retained,
-and every declared pattern automatically participates in task hashing. Derived
-outputs distinguish exact/resolved paths from unavailable automatic resolution.
+Toolchain-derived I/O receives the same task-scoped arguments as execution plus
+a narrow, platform-aware startup-environment projection keyed by toolchain.
+Dependency tasks do not inherit arguments for a different requested task, each
+toolchain can observe only the variables it declares, Windows lookup remains
+case-insensitive, and every declared pattern automatically participates in task
+hashing. Derived outputs distinguish exact/resolved paths from unavailable
+automatic resolution.
 When outputs are unavailable, the engine disables implicit caching so a log-only
 hit cannot suppress execution, while explicit `outputs`, `cache: true`, and
 `cache: false` remain authoritative.

@@ -2525,9 +2525,9 @@ release: 1.96.0-nightly\n",
         let app = package_info("app", "crates/app/Cargo.toml");
         let lib_a = package_info("lib-a", "crates/lib-a/Cargo.toml");
         let workspace = package_info("fixture-ws", "Cargo.toml");
-        let environment = HashMap::new();
+        let environment = toolchain::TaskIOEnvironment::default();
         let context = toolchain::TaskIOContext {
-            task_args: &[],
+            task_args: None,
             environment: &environment,
         };
 
