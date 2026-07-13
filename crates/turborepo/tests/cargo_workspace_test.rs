@@ -208,6 +208,15 @@ fn run_cargo_build(dir: &Path, cargo_args: &[&str], env: &[(&str, &str)]) -> std
     run_turbo_with_env(dir, &args, env)
 }
 
+fn assert_command_success(output: &std::process::Output, context: &str) {
+    assert!(
+        output.status.success(),
+        "{context} failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 fn configure_build_without_outputs(dir: &Path) {
     fs::write(
         dir.join("turbo.json"),
@@ -270,17 +279,17 @@ fn assert_isolated_restoration_with_env(
     let second = cargo_binary(tempdir.path(), second_path);
 
     let output = run_cargo_build(tempdir.path(), first_args, first_env);
-    assert!(output.status.success(), "first build failed: {output:?}");
+    assert_command_success(&output, "first build");
     assert!(first.exists(), "first deliverable missing: {first:?}");
     let output = run_cargo_build(tempdir.path(), second_args, second_env);
-    assert!(output.status.success(), "second build failed: {output:?}");
+    assert_command_success(&output, "second build");
     assert!(second.exists(), "second deliverable missing: {second:?}");
 
     fs::remove_file(&first).unwrap();
     fs::remove_file(&second).unwrap();
     let output = run_cargo_build(tempdir.path(), second_args, second_env);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(output.status.success(), "restore failed: {output:?}");
+    assert_command_success(&output, "cache restore");
     assert!(
         stdout.contains("FULL TURBO"),
         "expected cache hit: {stdout}"
@@ -626,7 +635,7 @@ fn test_custom_profile_outputs_are_exact_and_restore() {
     fs::remove_file(&custom).unwrap();
     let output = run_cargo_build(tempdir.path(), &["--profile=ci"], &[]);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(output.status.success(), "restore failed: {output:?}");
+    assert_command_success(&output, "cache restore");
     assert!(
         stdout.contains("FULL TURBO"),
         "expected cache hit: {stdout}"
@@ -682,9 +691,10 @@ fn test_cargo_cli_target_overrides_environment_target() {
     let environment = [("CARGO_BUILD_TARGET", lower_target)];
 
     let output = run_cargo_build(tempdir.path(), &[&target_arg], &environment);
-    assert!(output.status.success(), "build failed: {output:?}");
+    assert_command_success(&output, "CLI target precedence build");
     fs::remove_file(&artifact).unwrap();
     let output = run_cargo_build(tempdir.path(), &[&target_arg], &environment);
+    assert_command_success(&output, "CLI target precedence restore");
     assert!(String::from_utf8_lossy(&output.stdout).contains("FULL TURBO"));
     assert!(artifact.exists(), "CLI target did not override environment");
 }
@@ -712,7 +722,8 @@ fn test_cargo_repository_config_target_directory_restores_exactly() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
     let default = cargo_binary(tempdir.path(), &["target", "debug"]);
-    assert!(run_cargo_build(tempdir.path(), &[], &[]).status.success());
+    let output = run_cargo_build(tempdir.path(), &[], &[]);
+    assert_command_success(&output, "default target-directory build");
 
     let cargo_config = tempdir.path().join(".cargo");
     fs::create_dir_all(&cargo_config).unwrap();
@@ -722,13 +733,14 @@ fn test_cargo_repository_config_target_directory_restores_exactly() {
     )
     .unwrap();
     let configured = cargo_binary(tempdir.path(), &["configured-target", "debug"]);
-    assert!(run_cargo_build(tempdir.path(), &[], &[]).status.success());
+    let output = run_cargo_build(tempdir.path(), &[], &[]);
+    assert_command_success(&output, "repository target-directory build");
     fs::remove_file(&default).unwrap();
     fs::remove_file(&configured).unwrap();
 
     let output = run_cargo_build(tempdir.path(), &[], &[]);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(output.status.success(), "restore failed: {output:?}");
+    assert_command_success(&output, "cache restore");
     assert!(
         stdout.contains("FULL TURBO"),
         "expected cache hit: {stdout}"
@@ -752,27 +764,23 @@ fn test_cargo_target_directory_precedence_restores_only_effective_output() {
     let environment = cargo_binary(tempdir.path(), &["env-target", "debug"]);
     let cli = cargo_binary(tempdir.path(), &["cli-target", "debug"]);
 
-    assert!(run_cargo_build(tempdir.path(), &[], &[]).status.success());
-    assert!(
-        run_cargo_build(tempdir.path(), &[], &[("CARGO_TARGET_DIR", "env-target")])
-            .status
-            .success()
+    let output = run_cargo_build(tempdir.path(), &[], &[]);
+    assert_command_success(&output, "metadata target-directory build");
+    let output = run_cargo_build(tempdir.path(), &[], &[("CARGO_TARGET_DIR", "env-target")]);
+    assert_command_success(&output, "environment target-directory build");
+    let output = run_cargo_build(
+        tempdir.path(),
+        &["--target-dir=cli-target"],
+        &[("CARGO_TARGET_DIR", "env-target")],
     );
-    assert!(
-        run_cargo_build(
-            tempdir.path(),
-            &["--target-dir=cli-target"],
-            &[("CARGO_TARGET_DIR", "env-target")],
-        )
-        .status
-        .success()
-    );
+    assert_command_success(&output, "CLI target-directory build");
     assert!(config.exists() && environment.exists() && cli.exists());
     fs::remove_file(&config).unwrap();
     fs::remove_file(&environment).unwrap();
     fs::remove_file(&cli).unwrap();
 
     let output = run_cargo_build(tempdir.path(), &[], &[("CARGO_TARGET_DIR", "env-target")]);
+    assert_command_success(&output, "environment target-directory restore");
     assert!(String::from_utf8_lossy(&output.stdout).contains("FULL TURBO"));
     assert!(environment.exists());
     assert!(!config.exists() && !cli.exists());
@@ -783,6 +791,7 @@ fn test_cargo_target_directory_precedence_restores_only_effective_output() {
         &["--target-dir=cli-target"],
         &[("CARGO_TARGET_DIR", "env-target")],
     );
+    assert_command_success(&output, "CLI target-directory restore");
     assert!(String::from_utf8_lossy(&output.stdout).contains("FULL TURBO"));
     assert!(cli.exists());
     assert!(!config.exists() && !environment.exists());
@@ -804,7 +813,7 @@ fn test_cargo_symlink_target_directory_escape_is_uncached() {
     for _ in 0..2 {
         let output = run_cargo_build(&repo, &[], &[("CARGO_TARGET_DIR", "escape/build")]);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(output.status.success(), "build failed: {output:?}");
+        assert_command_success(&output, "escaping target-directory build");
         assert!(stdout.contains("cache bypass"), "expected bypass: {stdout}");
         assert!(artifact.exists());
     }

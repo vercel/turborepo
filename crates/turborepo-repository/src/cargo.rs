@@ -2853,9 +2853,8 @@ dependencies = ["lib-a"]
         );
     }
 
-    #[cfg(unix)]
     #[test]
-    fn test_target_directory_containment_rejects_symlink_escapes() {
+    fn test_target_directory_containment_rejects_absolute_and_lexical_escapes() {
         let (_tmp, root) = tempdir_root();
         assert!(target_directory_within_repo(
             &root,
@@ -2871,6 +2870,28 @@ dependencies = ["lib-a"]
         )
         .unwrap();
         assert!(!target_directory_within_repo(&root, &outside_path));
+
+        #[cfg(windows)]
+        {
+            let other_drive = if root
+                .as_str()
+                .get(..2)
+                .is_some_and(|drive| drive.eq_ignore_ascii_case("C:"))
+            {
+                "D:"
+            } else {
+                "C:"
+            };
+            let other_root = AbsoluteSystemPathBuf::new(format!(r"{other_drive}\outside")).unwrap();
+            assert!(!target_directory_within_repo(&root, &other_root));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_target_directory_containment_rejects_symlink_escapes() {
+        let (_tmp, root) = tempdir_root();
+        let outside = tempfile::tempdir().unwrap();
         let escape = root.join_component("escape");
         std::os::unix::fs::symlink(outside.path(), escape.as_std_path()).unwrap();
         assert!(!target_directory_within_repo(
