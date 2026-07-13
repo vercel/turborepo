@@ -182,6 +182,30 @@ pub async fn prune(
     let mut workspace_paths = Vec::new();
     let mut workspace_names = Vec::new();
     let workspaces = prune.internal_dependencies();
+    let retained_workspace_names: HashSet<_> = workspaces
+        .iter()
+        .filter_map(|workspace| match workspace {
+            PackageName::Root => None,
+            PackageName::Other(name) => Some(name.as_str()),
+        })
+        .collect();
+    let excluded_dev_workspaces = if prune.production
+        && prune.package_graph.package_manager().lockfile_manager() == &PackageManager::Bun
+    {
+        prune
+            .package_graph
+            .packages()
+            .filter_map(|(workspace, _)| match workspace {
+                PackageName::Root => None,
+                PackageName::Other(name) if !retained_workspace_names.contains(name.as_str()) => {
+                    Some(name.clone())
+                }
+                PackageName::Other(_) => None,
+            })
+            .collect()
+    } else {
+        HashSet::new()
+    };
     // Only JavaScript packages participate in the JS lockfile subgraph:
     // other toolchains' external-dependency keys (e.g. Cargo's rustc and
     // crates.io identities) mean nothing to it and must not leak in.
@@ -226,7 +250,11 @@ pub async fn prune(
                 workspace_names.push(workspace);
                 continue;
             }
-            prune.copy_workspace(entry.package_json_path(), &entry.package_json)?;
+            prune.copy_workspace(
+                entry.package_json_path(),
+                &entry.package_json,
+                &excluded_dev_workspaces,
+            )?;
             let parent = entry
                 .package_json_path()
                 .parent()
@@ -357,7 +385,10 @@ pub async fn prune(
 
     let original_contents = prune.root.resolve(package_json()).read_to_string()?;
     let original_value: serde_json::Value = serde_json::from_str(&original_contents)?;
-    if !original_patches.is_empty() || original_value.get("workspaces").is_some() {
+    if !original_patches.is_empty()
+        || original_value.get("workspaces").is_some()
+        || !excluded_dev_workspaces.is_empty()
+    {
         let pruned_json = if original_patches.is_empty() {
             prune.package_graph.root_package_json().clone()
         } else {
@@ -370,6 +401,7 @@ pub async fn prune(
 
         let mut pruned_value = serde_json::to_value(&pruned_json)?;
         prune_package_json_workspaces(&mut pruned_value, &workspace_paths);
+        prune_package_json_dev_dependencies(&mut pruned_value, &excluded_dev_workspaces);
         // Merge into the original JSON value so package.json key order stays stable.
         let merged = merge_preserving_key_order(&original_value, &pruned_value);
         let mut pruned_json_contents = serde_json::to_string_pretty(&merged)?;
@@ -507,6 +539,43 @@ fn sync_prune_finalize_files(
             warn!("unable to synchronize finalized prune file {path:?}: {error}");
         }
     }
+}
+
+fn workspace_dependency_target<'a>(name: &'a str, version: &'a str) -> Option<&'a str> {
+    let specifier = version.strip_prefix("workspace:")?;
+    match specifier.rsplit_once('@') {
+        Some((target, "*" | "^" | "~")) if !target.is_empty() => Some(target),
+        _ => Some(name),
+    }
+}
+
+fn prune_package_json_dev_dependencies(
+    package_json: &mut serde_json::Value,
+    excluded_workspaces: &HashSet<String>,
+) -> bool {
+    let Some(dev_dependencies) = package_json
+        .get_mut("devDependencies")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return false;
+    };
+
+    let original_len = dev_dependencies.len();
+    dev_dependencies.retain(|name, version| {
+        let Some(version) = version.as_str() else {
+            return true;
+        };
+        workspace_dependency_target(name, version)
+            .is_none_or(|target| !excluded_workspaces.contains(target))
+    });
+    let changed = dev_dependencies.len() != original_len;
+    let remove_dev_dependencies = dev_dependencies.is_empty();
+    if remove_dev_dependencies {
+        if let Some(package_json) = package_json.as_object_mut() {
+            package_json.remove("devDependencies");
+        }
+    }
+    changed
 }
 
 fn prune_package_json_workspaces(package_json: &mut serde_json::Value, workspace_paths: &[String]) {
@@ -886,8 +955,22 @@ impl<'a> Prune<'a> {
         &self,
         package_json_path: &AnchoredSystemPath,
         workspace_package_json: &PackageJson,
+        excluded_dev_workspaces: &HashSet<String>,
     ) -> Result<(), Error> {
         let package_json_path = self.root.resolve(package_json_path);
+        let pruned_package_json = if excluded_dev_workspaces.is_empty() {
+            None
+        } else {
+            let mut value: serde_json::Value =
+                serde_json::from_str(&package_json_path.read_to_string()?)?;
+            if prune_package_json_dev_dependencies(&mut value, excluded_dev_workspaces) {
+                let mut contents = serde_json::to_string_pretty(&value)?;
+                contents.push('\n');
+                Some(contents)
+            } else {
+                None
+            }
+        };
         let original_dir = package_json_path
             .parent()
             .ok_or_else(|| Error::WorkspaceAtFilesystemRoot)?;
@@ -902,14 +985,22 @@ impl<'a> Prune<'a> {
             self.use_gitignore,
             Some(&self.root),
         )?;
+        if let Some(contents) = &pruned_package_json {
+            target_dir
+                .resolve(package_json())
+                .create_with_contents(contents)?;
+        }
 
         if self.docker {
             let docker_workspace_dir = self.docker_directory().resolve(&relative_workspace_dir);
             docker_workspace_dir.ensure_dir()?;
-            turborepo_fs::copy_file(
-                &package_json_path,
-                docker_workspace_dir.resolve(package_json()),
-            )?;
+            let docker_package_json = docker_workspace_dir.resolve(package_json());
+            if let Some(contents) = &pruned_package_json {
+                docker_package_json.ensure_dir()?;
+                docker_package_json.create_with_contents(contents)?;
+            } else {
+                turborepo_fs::copy_file(&package_json_path, docker_package_json)?;
+            }
             self.create_docker_bin_stubs(
                 workspace_package_json,
                 original_dir,
