@@ -131,7 +131,7 @@ pub enum Error {
     InvalidRustcOutput { reason: &'static str },
 }
 
-fn parse_rustc_identity(stdout: &[u8]) -> Result<turborepo_lockfiles::Package, Error> {
+fn parse_rustc_info(stdout: &[u8]) -> Result<(turborepo_lockfiles::Package, String), Error> {
     let stdout = std::str::from_utf8(stdout)?;
     let lines: Vec<&str> = stdout
         .lines()
@@ -150,7 +150,7 @@ fn parse_rustc_identity(stdout: &[u8]) -> Result<turborepo_lockfiles::Package, E
     let mut hosts = lines
         .iter()
         .filter_map(|line| line.strip_prefix("host:").map(str::trim));
-    hosts
+    let host = hosts
         .next()
         .filter(|host| !host.is_empty())
         .ok_or(Error::InvalidRustcOutput {
@@ -162,10 +162,18 @@ fn parse_rustc_identity(stdout: &[u8]) -> Result<turborepo_lockfiles::Package, E
         });
     }
 
-    Ok(turborepo_lockfiles::Package {
-        key: "rustc".to_string(),
-        version: lines.join("\n"),
-    })
+    Ok((
+        turborepo_lockfiles::Package {
+            key: "rustc".to_string(),
+            version: lines.join("\n"),
+        },
+        host.to_string(),
+    ))
+}
+
+#[cfg(test)]
+fn parse_rustc_identity(stdout: &[u8]) -> Result<turborepo_lockfiles::Package, Error> {
+    parse_rustc_info(stdout).map(|(identity, _)| identity)
 }
 
 /// The Rust compiler version and host triple, as a hashable external-dependency
@@ -178,6 +186,12 @@ fn parse_rustc_identity(stdout: &[u8]) -> Result<turborepo_lockfiles::Package, E
 pub fn rustc_identity(
     repo_root: &AbsoluteSystemPath,
 ) -> Result<turborepo_lockfiles::Package, Error> {
+    rustc_info(repo_root).map(|(identity, _)| identity)
+}
+
+fn rustc_info(
+    repo_root: &AbsoluteSystemPath,
+) -> Result<(turborepo_lockfiles::Package, String), Error> {
     let output = std::process::Command::new("rustc")
         .arg("-vV")
         .current_dir(repo_root.as_std_path())
@@ -189,7 +203,7 @@ pub fn rustc_identity(
         });
     }
 
-    parse_rustc_identity(&output.stdout)
+    parse_rustc_info(&output.stdout)
 }
 
 /// Per-crate external dependency closures from Cargo.lock, for the crates'
@@ -403,6 +417,7 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "RUSTC_WORKSPACE_WRAPPER",
     "RUSTC_BOOTSTRAP",
     "RUSTUP_HOME",
+    "RUSTUP_TOOLCHAIN",
     "RUSTFLAGS",
     "CARGO_ENCODED_RUSTFLAGS",
     "RUSTDOC",
@@ -492,6 +507,8 @@ const TASK_IO_ENV_VARS: &[&str] = &[
     "CARGO_TARGET_DIR",
     "RUSTC",
     "CARGO_BUILD_RUSTC",
+    "RUSTUP_HOME",
+    "RUSTUP_TOOLCHAIN",
 ];
 
 /// Rewrite the workspace root Cargo.toml for a pruned repository containing
@@ -620,62 +637,120 @@ fn crate_source_globs(prefix: &str, crate_path: &str) -> [String; 2] {
 #[derive(Debug, Clone)]
 struct CargoWorkspaceDetails {
     target_directory: AbsoluteSystemPathBuf,
+    host_target: String,
     repository_config_alters_output_layout: bool,
     repository_config_untracked: bool,
     external_config_present: bool,
     manifest_alters_profile_dirs: bool,
 }
 
-/// Output globs for an entrypoint crate's `build` task: the artifacts Cargo
-/// places in `target/<profile>/` — uplifted binaries plus cdylib/staticlib
-/// libraries. These are the workspace's deliverables — the only artifacts
-/// worth caching at the task level. Cargo's internal `target/` state (deps,
-/// fingerprints) is deliberately not cached: it is Cargo's own incremental
-/// cache, and tarballing it fights Cargo instead of leaning on it.
-///
-/// The profile segment is a wildcard, so `--release` and custom profiles
-/// (`--profile=my-profile`) are cached without configuration — pass-through
-/// args participate in the task hash, so each profile gets its own cache
-/// entry. Every platform's file name is emitted for each deliverable
-/// (`.so`, `.dylib`, `.dll`, ...); globs that match nothing contribute
-/// nothing. The compiler host triple in [`rustc_identity`] segments task
-/// hashes by host platform.
-///
-/// Builds using `CARGO_TARGET_DIR` or `--target <triple>` write elsewhere
-/// (`CARGO_TARGET_DIR` and `CARGO_BUILD_TARGET` are hashed, but the
-/// artifact locations differ); declare explicit `outputs` in turbo.json for
-/// those layouts.
-pub fn deliverable_output_globs(prefix: &str, deliverables: &[Deliverable]) -> Vec<String> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CargoTargetPlatform {
+    Unix,
+    Apple,
+    WindowsMsvc,
+    WindowsGnu,
+}
+
+fn target_platform(target: &str) -> Option<CargoTargetPlatform> {
+    if target.is_empty()
+        || !target
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        return None;
+    }
+    let parts: Vec<&str> = target.split('-').collect();
+    if parts.contains(&"windows") {
+        return if parts.contains(&"msvc") {
+            Some(CargoTargetPlatform::WindowsMsvc)
+        } else if parts.iter().any(|part| matches!(*part, "gnu" | "gnullvm")) {
+            Some(CargoTargetPlatform::WindowsGnu)
+        } else {
+            None
+        };
+    }
+    if parts.contains(&"apple") && parts.contains(&"darwin") {
+        return Some(CargoTargetPlatform::Apple);
+    }
+    parts
+        .iter()
+        .any(|part| {
+            matches!(
+                *part,
+                "linux"
+                    | "android"
+                    | "freebsd"
+                    | "netbsd"
+                    | "openbsd"
+                    | "dragonfly"
+                    | "solaris"
+                    | "illumos"
+            )
+        })
+        .then_some(CargoTargetPlatform::Unix)
+}
+
+fn deliverable_basename(deliverable: &Deliverable, platform: CargoTargetPlatform) -> String {
+    let name = &deliverable.name;
+    match (deliverable.kind, platform) {
+        (
+            DeliverableKind::Bin,
+            CargoTargetPlatform::WindowsMsvc | CargoTargetPlatform::WindowsGnu,
+        ) => format!("{name}.exe"),
+        (DeliverableKind::Bin, _) => name.clone(),
+        (DeliverableKind::Cdylib, CargoTargetPlatform::Apple) => format!("lib{name}.dylib"),
+        (
+            DeliverableKind::Cdylib,
+            CargoTargetPlatform::WindowsMsvc | CargoTargetPlatform::WindowsGnu,
+        ) => format!("{name}.dll"),
+        (DeliverableKind::Cdylib, CargoTargetPlatform::Unix) => format!("lib{name}.so"),
+        (DeliverableKind::Staticlib, CargoTargetPlatform::WindowsMsvc) => format!("{name}.lib"),
+        (DeliverableKind::Staticlib, _) => format!("lib{name}.a"),
+    }
+}
+
+fn deliverable_output_paths(
+    prefix: &str,
+    profile: &str,
+    platform: CargoTargetPlatform,
+    deliverables: &[Deliverable],
+) -> Vec<String> {
+    let directory = join_prefix(prefix, &format!("target/{profile}"));
     deliverables
         .iter()
-        .flat_map(|deliverable| {
-            let name = &deliverable.name;
-            let basenames = match deliverable.kind {
-                DeliverableKind::Bin => vec![name.clone(), format!("{name}.exe")],
-                DeliverableKind::Cdylib => vec![
-                    format!("lib{name}.so"),
-                    format!("lib{name}.dylib"),
-                    format!("{name}.dll"),
-                ],
-                DeliverableKind::Staticlib => {
-                    vec![format!("lib{name}.a"), format!("{name}.lib")]
-                }
-            };
-            basenames
-                .into_iter()
-                .map(move |basename| join_prefix(prefix, &format!("target/*/{basename}")))
-        })
+        .map(|deliverable| join_prefix(&directory, &deliverable_basename(deliverable, platform)))
         .collect()
 }
 
-fn cargo_build_args_supported(args: &[String]) -> bool {
+fn set_once(slot: &mut Option<String>, value: String) -> Option<()> {
+    if slot.is_some() || value.is_empty() {
+        return None;
+    }
+    *slot = Some(value);
+    Some(())
+}
+
+fn cargo_profile_directory(args: &[String]) -> Option<String> {
+    let mut release = false;
+    let mut profile = None;
     let mut index = 0;
     while index < args.len() {
         let arg = &args[index];
+        let separate_value = |index: &mut usize| {
+            *index += 1;
+            args.get(*index)
+                .cloned()
+                .filter(|value| !value.is_empty() && !value.starts_with('-'))
+        };
         match arg.as_str() {
-            "-r"
-            | "--release"
-            | "-q"
+            "-r" | "--release" if !release => release = true,
+            "-r" | "--release" => return None,
+            "--profile" => set_once(&mut profile, separate_value(&mut index)?)?,
+            "--features" | "-F" | "--jobs" | "-j" | "--color" | "--message-format" => {
+                separate_value(&mut index)?;
+            }
+            "-q"
             | "-v"
             | "--quiet"
             | "--verbose"
@@ -688,17 +763,9 @@ fn cargo_build_args_supported(args: &[String]) -> bool {
             | "--locked"
             | "--offline"
             | "--frozen" => {}
-            "--profile" | "--features" | "-F" | "--jobs" | "-j" | "--color"
-            | "--message-format" => {
-                index += 1;
-                if args
-                    .get(index)
-                    .is_none_or(|value| value.is_empty() || value.starts_with('-'))
-                {
-                    return false;
-                }
+            _ if arg.starts_with("--profile=") => {
+                set_once(&mut profile, arg["--profile=".len()..].to_string())?
             }
-            _ if arg.starts_with("--profile=") && arg.len() > "--profile=".len() => {}
             _ if [
                 "--features=",
                 "--jobs=",
@@ -715,11 +782,28 @@ fn cargo_build_args_supported(args: &[String]) -> bool {
                 && (arg.starts_with("-F")
                     || arg.starts_with("-j")
                     || (arg.starts_with('-') && arg[1..].bytes().all(|byte| byte == b'v'))) => {}
-            _ => return false,
+            _ => return None,
         }
         index += 1;
     }
-    true
+    if release && profile.is_some() {
+        return None;
+    }
+    if release {
+        return Some("release".to_string());
+    }
+    match profile.as_deref() {
+        None | Some("dev" | "test") => Some("debug".to_string()),
+        Some("release" | "bench") => Some("release".to_string()),
+        Some(profile)
+            if profile
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')) =>
+        {
+            Some(profile.to_string())
+        }
+        Some(_) => None,
+    }
 }
 
 fn target_directory_within_repo(
@@ -743,12 +827,12 @@ fn target_directory_within_repo(
         .is_ok_and(|ancestor| ancestor.starts_with(real_repo_root))
 }
 
-fn cargo_output_layout_supported(
+fn cargo_output_profile(
     repo_root: &AbsoluteSystemPath,
     workspace: &CargoWorkspaceDetails,
     package: &CargoPackageDetails,
     context: &toolchain::TaskIOContext<'_>,
-) -> bool {
+) -> Option<String> {
     let environment = context.environment;
     let profile_dir_name = environment.iter().any(|(name, _)| {
         let name = name.to_ascii_uppercase();
@@ -756,20 +840,26 @@ fn cargo_output_layout_supported(
     });
     let default_target_directory = repo_root.join_component(TARGET_DIR);
 
-    !package.manifest_alters_output_layout
-        && !workspace.repository_config_alters_output_layout
-        && !workspace.external_config_present
-        && !workspace.manifest_alters_profile_dirs
-        && environment.get("RUSTC").is_none()
-        && environment.get("CARGO_BUILD_RUSTC").is_none()
-        && environment.get("CARGO_BUILD_TARGET").is_none()
-        && environment.get("CARGO_TARGET_DIR").is_none()
-        && environment.get("CARGO_BUILD_TARGET_DIR").is_none()
-        && environment.get("CARGO_BUILD_ARTIFACT_DIR").is_none()
-        && !profile_dir_name
-        && workspace.target_directory == default_target_directory
-        && target_directory_within_repo(repo_root, &workspace.target_directory)
-        && context.task_args.is_none_or(cargo_build_args_supported)
+    if package.manifest_alters_output_layout
+        || workspace.repository_config_alters_output_layout
+        || workspace.external_config_present
+        || workspace.manifest_alters_profile_dirs
+        || environment.get("RUSTC").is_some()
+        || environment.get("CARGO_BUILD_RUSTC").is_some()
+        || environment.get("CARGO_BUILD_TARGET").is_some()
+        || environment.get("CARGO_TARGET_DIR").is_some()
+        || environment.get("CARGO_BUILD_TARGET_DIR").is_some()
+        || environment.get("CARGO_BUILD_ARTIFACT_DIR").is_some()
+        || profile_dir_name
+        || workspace.target_directory != default_target_directory
+        || !target_directory_within_repo(repo_root, &workspace.target_directory)
+    {
+        return None;
+    }
+
+    context
+        .task_args
+        .map_or_else(|| Some("debug".to_string()), cargo_profile_directory)
 }
 
 /// The Cargo toolchain. Registered in the
@@ -1215,18 +1305,21 @@ impl Toolchain for CargoToolchain {
                 if subcommand == "build" {
                     io.outputs = self
                         .workspace_details()
-                        .filter(|workspace| {
-                            cargo_output_layout_supported(
+                        .and_then(|workspace| {
+                            let profile = cargo_output_profile(
                                 &self.repo_root,
-                                workspace,
+                                &workspace,
                                 &details,
                                 context,
-                            )
-                        })
-                        .map(|_| {
-                            toolchain::DerivedOutputs::Resolved(deliverable_output_globs(
-                                path_to_root,
-                                &details.deliverables,
+                            )?;
+                            let platform = target_platform(&workspace.host_target)?;
+                            Some(toolchain::DerivedOutputs::Resolved(
+                                deliverable_output_paths(
+                                    path_to_root,
+                                    &profile,
+                                    platform,
+                                    &details.deliverables,
+                                ),
                             ))
                         })
                         .unwrap_or(toolchain::DerivedOutputs::Unavailable);
@@ -1291,10 +1384,12 @@ impl Toolchain for CargoToolchain {
             // invalidates crates that actually depend on it, and a toolchain
             // change invalidates everything.
             let all_names: Vec<String> = crates.iter().map(|c| c.name.clone()).collect();
-            let (rustc, mut closures) = turborepo_rayon_compat::block_in_place(|| {
+            let (rustc, host_target, mut closures) = turborepo_rayon_compat::block_in_place(|| {
                 validate_lockfile(&self.repo_root)?;
+                let (rustc, host_target) = rustc_info(&self.repo_root)?;
                 Ok::<_, Error>((
-                    rustc_identity(&self.repo_root)?,
+                    rustc,
+                    host_target,
                     external_closures(&self.repo_root, &all_names)?,
                 ))
             })
@@ -1308,6 +1403,7 @@ impl Toolchain for CargoToolchain {
                     .unwrap_or_else(|poisoned| poisoned.into_inner()) =
                     Some(CargoWorkspaceDetails {
                         target_directory,
+                        host_target,
                         repository_config_alters_output_layout: config
                             .repository_alters_output_layout,
                         repository_config_untracked: config.repository_config_untracked,
@@ -2311,6 +2407,7 @@ dependencies = ["lib-a"]
     fn output_test_workspace(root: &AbsoluteSystemPath) -> CargoWorkspaceDetails {
         CargoWorkspaceDetails {
             target_directory: root.join_component(TARGET_DIR),
+            host_target: "x86_64-unknown-linux-gnu".to_string(),
             repository_config_alters_output_layout: false,
             repository_config_untracked: false,
             external_config_present: false,
@@ -2331,18 +2428,173 @@ dependencies = ["lib-a"]
     }
 
     #[test]
-    fn test_cargo_output_support_fails_closed_for_layout_controls() {
+    fn test_rustup_selection_environment_is_hashed_and_projected() {
+        for variable in ["RUSTUP_HOME", "RUSTUP_TOOLCHAIN"] {
+            assert!(HASHED_ENV_VARS.contains(&variable));
+            assert!(TASK_IO_ENV_VARS.contains(&variable));
+        }
+        assert!(!HASHED_ENV_VARS.contains(&"RUSTUP_DIST_SERVER"));
+        assert!(!TASK_IO_ENV_VARS.contains(&"RUSTUP_UPDATE_ROOT"));
+    }
+
+    #[test]
+    fn test_cargo_profile_directory_resolves_precedence_and_builtin_mappings() {
+        for (args, expected) in [
+            (vec![], Some("debug")),
+            (vec!["--release"], Some("release")),
+            (vec!["-r"], Some("release")),
+            (vec!["--profile", "dev"], Some("debug")),
+            (vec!["--profile=test"], Some("debug")),
+            (vec!["--profile=release"], Some("release")),
+            (vec!["--profile", "bench"], Some("release")),
+            (vec!["--profile=ci"], Some("ci")),
+        ] {
+            let args = args.into_iter().map(str::to_string).collect::<Vec<_>>();
+            assert_eq!(cargo_profile_directory(&args).as_deref(), expected);
+        }
+        for args in [
+            vec!["--release", "--profile=ci"],
+            vec!["--profile=ci", "--profile=dev"],
+            vec!["--release", "--release"],
+            vec!["--profile=../release"],
+        ] {
+            let args = args.into_iter().map(str::to_string).collect::<Vec<_>>();
+            assert_eq!(cargo_profile_directory(&args), None);
+        }
+    }
+
+    #[test]
+    fn test_cargo_profile_directory_accepts_only_known_neutral_flags() {
+        let neutral = [
+            "--all-features",
+            "--features=one,two",
+            "-vv",
+            "--jobs=2",
+            "--message-format=json",
+            "--timings=html",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+        assert_eq!(cargo_profile_directory(&neutral).as_deref(), Some("debug"));
+        assert_eq!(
+            cargo_profile_directory(&["--future-layout-control".to_string()]),
+            None
+        );
+    }
+
+    #[test]
+    fn test_cargo_deliverable_basenames_are_platform_exact() {
+        let deliverable = |kind| Deliverable {
+            name: "app".to_string(),
+            kind,
+        };
+        for (kind, platform, expected) in [
+            (DeliverableKind::Bin, CargoTargetPlatform::Unix, "app"),
+            (DeliverableKind::Bin, CargoTargetPlatform::Apple, "app"),
+            (
+                DeliverableKind::Bin,
+                CargoTargetPlatform::WindowsMsvc,
+                "app.exe",
+            ),
+            (
+                DeliverableKind::Bin,
+                CargoTargetPlatform::WindowsGnu,
+                "app.exe",
+            ),
+            (
+                DeliverableKind::Cdylib,
+                CargoTargetPlatform::Unix,
+                "libapp.so",
+            ),
+            (
+                DeliverableKind::Cdylib,
+                CargoTargetPlatform::Apple,
+                "libapp.dylib",
+            ),
+            (
+                DeliverableKind::Cdylib,
+                CargoTargetPlatform::WindowsMsvc,
+                "app.dll",
+            ),
+            (
+                DeliverableKind::Cdylib,
+                CargoTargetPlatform::WindowsGnu,
+                "app.dll",
+            ),
+            (
+                DeliverableKind::Staticlib,
+                CargoTargetPlatform::Unix,
+                "libapp.a",
+            ),
+            (
+                DeliverableKind::Staticlib,
+                CargoTargetPlatform::Apple,
+                "libapp.a",
+            ),
+            (
+                DeliverableKind::Staticlib,
+                CargoTargetPlatform::WindowsMsvc,
+                "app.lib",
+            ),
+            (
+                DeliverableKind::Staticlib,
+                CargoTargetPlatform::WindowsGnu,
+                "libapp.a",
+            ),
+        ] {
+            assert_eq!(deliverable_basename(&deliverable(kind), platform), expected);
+        }
+        assert_eq!(
+            target_platform("x86_64-unknown-linux-gnu"),
+            Some(CargoTargetPlatform::Unix)
+        );
+        assert_eq!(
+            target_platform("aarch64-apple-darwin"),
+            Some(CargoTargetPlatform::Apple)
+        );
+        assert_eq!(
+            target_platform("x86_64-pc-windows-msvc"),
+            Some(CargoTargetPlatform::WindowsMsvc)
+        );
+        assert_eq!(
+            target_platform("x86_64-pc-windows-gnu"),
+            Some(CargoTargetPlatform::WindowsGnu)
+        );
+        assert_eq!(target_platform("custom-target.json"), None);
+        assert_eq!(target_platform("thumbv7em-none-eabihf"), None);
+    }
+
+    #[test]
+    fn test_cargo_output_paths_are_exact_and_have_no_wildcards() {
+        let outputs = deliverable_output_paths(
+            "../..",
+            "release",
+            CargoTargetPlatform::Unix,
+            &[Deliverable {
+                name: "app".to_string(),
+                kind: DeliverableKind::Bin,
+            }],
+        );
+        assert_eq!(outputs, ["../../target/release/app"]);
+        assert!(outputs.iter().all(|output| !output.contains('*')));
+    }
+
+    #[test]
+    fn test_cargo_output_profile_fails_closed_for_layout_controls() {
         let (_tmp, root) = tempdir_root();
         let workspace = output_test_workspace(&root);
         let package = output_test_package();
         let empty_environment = toolchain::TaskIOEnvironment::default();
+        let supported_args = ["--release".to_string()];
         let supported = toolchain::TaskIOContext {
-            task_args: Some(&["--release".to_string()]),
+            task_args: Some(&supported_args),
             environment: &empty_environment,
         };
-        assert!(cargo_output_layout_supported(
-            &root, &workspace, &package, &supported
-        ));
+        assert_eq!(
+            cargo_output_profile(&root, &workspace, &package, &supported).as_deref(),
+            Some("release")
+        );
 
         for name in [
             "CARGO_BUILD_TARGET",
@@ -2361,9 +2613,10 @@ dependencies = ["lib-a"]
                 task_args: None,
                 environment: &environment,
             };
-            assert!(!cargo_output_layout_supported(
-                &root, &workspace, &package, &context
-            ));
+            assert_eq!(
+                cargo_output_profile(&root, &workspace, &package, &context),
+                None
+            );
         }
 
         for args in [
@@ -2376,9 +2629,10 @@ dependencies = ["lib-a"]
                 task_args: Some(&args),
                 environment: &empty_environment,
             };
-            assert!(!cargo_output_layout_supported(
-                &root, &workspace, &package, &context
-            ));
+            assert_eq!(
+                cargo_output_profile(&root, &workspace, &package, &context),
+                None
+            );
         }
     }
 
@@ -3168,19 +3422,37 @@ release: 1.96.0-nightly\n",
         );
         assert_eq!(io.package_default_inputs, Some(true));
         assert!(io.env.contains(&"RUSTC_WRAPPER".to_string()));
+        assert!(io.env.contains(&"RUSTUP_HOME".to_string()));
+        assert!(io.env.contains(&"RUSTUP_TOOLCHAIN".to_string()));
         assert!(io.env.contains(&"CARGO_ENCODED_RUSTFLAGS".to_string()));
         assert!(io.env.contains(&"CARGO_PROFILE_*".to_string()));
         assert!(io.env.contains(&"CARGO_TARGET_*".to_string()));
         assert!(io.env.contains(&"CC_*".to_string()));
         assert!(io.env.contains(&"TARGET_CFLAGS".to_string()));
         let toolchain::DerivedOutputs::Resolved(outputs) = &io.outputs else {
-            panic!("Cargo's existing wildcard outputs must remain resolved");
+            panic!("Cargo host outputs must remain resolved");
         };
-        assert!(
-            outputs.contains(&"../../target/*/app".to_string()),
-            "bin deliverable keeps its wildcard profile, got {outputs:?}"
+        let workspace_details = toolchain.workspace_details().unwrap();
+        let platform = target_platform(&workspace_details.host_target).unwrap();
+        let basename = deliverable_basename(
+            &Deliverable {
+                name: "app".to_string(),
+                kind: DeliverableKind::Bin,
+            },
+            platform,
         );
-        assert!(outputs.contains(&"../../target/*/app.exe".to_string()));
+        assert_eq!(outputs, &[format!("../../target/debug/{basename}")]);
+        assert!(outputs.iter().all(|output| !output.contains('*')));
+
+        let unsupported_target = ["--target=thumbv7em-none-eabihf".to_string()];
+        let unsupported_context = toolchain::TaskIOContext {
+            task_args: Some(&unsupported_target),
+            environment: &environment,
+        };
+        let unsupported = toolchain
+            .derived_task_io(&app, "build", "../..", &deps, true, &unsupported_context)
+            .expect("entrypoint build derives IO");
+        assert_eq!(unsupported.outputs, toolchain::DerivedOutputs::Unavailable);
 
         // Explicit inputs without $TURBO_DEFAULT$: workspace files still
         // apply, but no closure globs and no default-hashing override.

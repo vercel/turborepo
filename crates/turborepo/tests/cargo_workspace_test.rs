@@ -25,6 +25,7 @@ const AMBIENT_CARGO_LAYOUT_ENV: &[&str] = &[
     "HOME",
     "USERPROFILE",
     "RUSTUP_HOME",
+    "RUSTUP_TOOLCHAIN",
 ];
 
 fn ambient_cargo_layout_env_keys() -> Vec<std::ffi::OsString> {
@@ -75,6 +76,21 @@ fn isolated_cargo_environment(dir: &Path) -> (std::path::PathBuf, std::path::Pat
     let cargo_home = home.join(".cargo");
     fs::create_dir_all(&cargo_home).unwrap();
     (home, cargo_home)
+}
+
+fn active_rustup_toolchain() -> Option<String> {
+    let output = std::process::Command::new("rustup")
+        .args(["show", "active-toolchain"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    String::from_utf8(output.stdout)
+        .ok()?
+        .split_whitespace()
+        .next()
+        .map(str::to_string)
 }
 
 fn rustup_home() -> Option<std::path::PathBuf> {
@@ -216,6 +232,40 @@ fn cargo_build_definition(
         .clone()
 }
 
+fn assert_isolated_restoration(
+    first_args: &[&str],
+    first_path: &[&str],
+    second_args: &[&str],
+    second_path: &[&str],
+) {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    let first = cargo_binary(tempdir.path(), first_path);
+    let second = cargo_binary(tempdir.path(), second_path);
+
+    let output = run_cargo_build(tempdir.path(), first_args, &[]);
+    assert!(output.status.success(), "first build failed: {output:?}");
+    assert!(first.exists(), "first deliverable missing: {first:?}");
+    let output = run_cargo_build(tempdir.path(), second_args, &[]);
+    assert!(output.status.success(), "second build failed: {output:?}");
+    assert!(second.exists(), "second deliverable missing: {second:?}");
+
+    fs::remove_file(&first).unwrap();
+    fs::remove_file(&second).unwrap();
+    let output = run_cargo_build(tempdir.path(), second_args, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "restore failed: {output:?}");
+    assert!(
+        stdout.contains("FULL TURBO"),
+        "expected cache hit: {stdout}"
+    );
+    assert!(second.exists(), "effective deliverable was not restored");
+    assert!(
+        !first.exists(),
+        "cache restored a deliverable from another Cargo profile"
+    );
+}
+
 /// The fixture's turbo.json opts in via
 /// `futureFlags.experimentalCargoWorkspaces`; no environment variable is
 /// involved anywhere.
@@ -263,10 +313,15 @@ fn test_cargo_packages_in_task_graph() {
         .as_array()
         .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
         .unwrap_or_default();
-    assert!(
-        outputs.iter().any(|o| o.ends_with("target/*/app")),
-        "bin deliverable must be an output, got {outputs:?}"
-    );
+    let output_name = if cfg!(windows) { "app.exe" } else { "app" };
+    let cargo_outputs: Vec<_> = outputs
+        .iter()
+        .filter(|output| output.contains("/target/"))
+        .copied()
+        .collect();
+    let expected_output = format!("../../target/debug/{output_name}");
+    assert_eq!(cargo_outputs, [expected_output.as_str()]);
+    assert!(cargo_outputs.iter().all(|output| !output.contains('*')));
 }
 
 #[test]
@@ -295,6 +350,57 @@ fn test_cargo_semantic_environment_changes_task_hash() {
         network_only, baseline,
         "Cargo network settings must not invalidate build outputs"
     );
+}
+
+#[test]
+fn test_rustup_selection_reaches_strict_and_loose_execution() {
+    let toolchain = active_rustup_toolchain().expect("test toolchain is managed by rustup");
+    let rustup_home = rustup_home().expect("rustup home is available");
+    let rustup_home = rustup_home.to_string_lossy().into_owned();
+    let toolchain_literal = serde_json::to_string(&toolchain).unwrap();
+    let home_literal = serde_json::to_string(&rustup_home).unwrap();
+
+    for env_mode in ["strict", "loose"] {
+        let tempdir = cargo_tempdir();
+        setup_cargo_monorepo(tempdir.path());
+        let manifest = tempdir.path().join("crates/app/Cargo.toml");
+        let contents = fs::read_to_string(&manifest).unwrap();
+        fs::write(
+            manifest,
+            contents.replacen("[package]", "[package]\nbuild = \"build.rs\"", 1),
+        )
+        .unwrap();
+        fs::write(
+            tempdir.path().join("crates/app/build.rs"),
+            format!(
+                "fn main() {{\n    assert_eq!(std::env::var(\"RUSTUP_TOOLCHAIN\").unwrap(), \
+                 {toolchain_literal});\n    assert_eq!(std::env::var(\"RUSTUP_HOME\").unwrap(), \
+                 {home_literal});\n}}\n"
+            ),
+        )
+        .unwrap();
+        let environment = [
+            ("RUSTUP_TOOLCHAIN", toolchain.as_str()),
+            ("RUSTUP_HOME", rustup_home.as_str()),
+        ];
+        let task = cargo_build_definition(tempdir.path(), &[], &environment);
+        let declared = task["resolvedTaskDefinition"]["env"]
+            .as_array()
+            .expect("declared task environment");
+        for variable in ["RUSTUP_HOME", "RUSTUP_TOOLCHAIN"] {
+            assert!(declared.iter().any(|value| value == variable));
+        }
+
+        let output = run_turbo_with_env(
+            tempdir.path(),
+            &["build", "--filter=app", "--env-mode", env_mode],
+            &environment,
+        );
+        assert!(
+            output.status.success(),
+            "{env_mode} build failed: {output:?}"
+        );
+    }
 }
 
 #[test]
@@ -455,35 +561,67 @@ fn test_cargo_build_executes_caches_and_restores() {
 }
 
 #[test]
-fn test_custom_profile_uses_wildcard_outputs_and_restores() {
+fn test_cargo_debug_and_release_caches_are_isolated_both_directions() {
+    assert_isolated_restoration(
+        &[],
+        &["target", "debug"],
+        &["--release"],
+        &["target", "release"],
+    );
+    assert_isolated_restoration(
+        &["--release"],
+        &["target", "release"],
+        &[],
+        &["target", "debug"],
+    );
+}
+
+#[test]
+fn test_custom_profile_outputs_are_exact_and_restore() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
     let manifest = tempdir.path().join("Cargo.toml");
     let contents = fs::read_to_string(&manifest).unwrap();
     fs::write(
-        manifest,
+        &manifest,
         format!("{contents}\n[profile.ci]\ninherits = \"dev\"\n"),
     )
     .unwrap();
-    let args = ["--profile=ci"];
+    let debug = cargo_binary(tempdir.path(), &["target", "debug"]);
+    let custom = cargo_binary(tempdir.path(), &["target", "ci"]);
 
-    let first = run_cargo_build(tempdir.path(), &args, &[]);
-    assert!(first.status.success(), "build failed: {first:?}");
-    assert!(String::from_utf8_lossy(&first.stdout).contains("cache miss"));
-    let artifact = cargo_binary(tempdir.path(), &["target", "ci"]);
-    assert!(artifact.exists());
-
-    fs::remove_file(&artifact).unwrap();
-    let second = run_cargo_build(tempdir.path(), &args, &[]);
-    let stdout = String::from_utf8_lossy(&second.stdout);
-    assert!(second.status.success(), "restore failed: {second:?}");
+    assert!(run_cargo_build(tempdir.path(), &[], &[]).status.success());
+    assert!(
+        run_cargo_build(tempdir.path(), &["--profile=ci"], &[])
+            .status
+            .success()
+    );
+    fs::remove_file(&debug).unwrap();
+    fs::remove_file(&custom).unwrap();
+    let output = run_cargo_build(tempdir.path(), &["--profile=ci"], &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "restore failed: {output:?}");
     assert!(
         stdout.contains("FULL TURBO"),
         "expected cache hit: {stdout}"
     );
-    assert!(
-        artifact.exists(),
-        "custom-profile artifact must be restored"
+    assert!(custom.exists());
+    assert!(!debug.exists());
+}
+
+#[test]
+fn test_cargo_test_and_bench_profile_directories_restore_exactly() {
+    assert_isolated_restoration(
+        &["--release"],
+        &["target", "release"],
+        &["--profile=test"],
+        &["target", "debug"],
+    );
+    assert_isolated_restoration(
+        &[],
+        &["target", "debug"],
+        &["--profile=bench"],
+        &["target", "release"],
     );
 }
 

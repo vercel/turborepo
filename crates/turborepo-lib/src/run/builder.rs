@@ -1213,10 +1213,12 @@ fn has_userinfo(url: &Url) -> bool {
 mod task_io_context_tests {
     use std::{collections::HashMap, sync::Arc};
 
+    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_env::EnvironmentVariableMap;
     use turborepo_hash::TaskHashable;
-    use turborepo_repository::toolchain::{
-        DiscoverPackagesFuture, Toolchain, ToolchainId, ToolchainRegistry,
+    use turborepo_repository::{
+        cargo::CargoToolchain,
+        toolchain::{DiscoverPackagesFuture, Toolchain, ToolchainId, ToolchainRegistry},
     };
     use turborepo_types::EnvMode;
 
@@ -1270,6 +1272,28 @@ mod task_io_context_tests {
         assert_eq!(beta_environment.get("BETA_KEY"), Some("beta"));
         assert_eq!(beta_environment.get("ALPHA_TARGET"), None);
         assert_eq!(beta_environment.get("UNDECLARED_SECRET"), None);
+    }
+
+    #[test]
+    fn cargo_projection_keeps_only_rustup_selection_environment() {
+        let root = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(root.path()).unwrap();
+        let mut toolchains = ToolchainRegistry::new();
+        toolchains.register(CargoToolchain::new(root));
+        let environment = EnvironmentVariableMap::from(HashMap::from([
+            ("RUSTUP_HOME".to_string(), "/rustup".to_string()),
+            ("RUSTUP_TOOLCHAIN".to_string(), "stable-host".to_string()),
+            (
+                "RUSTUP_DIST_SERVER".to_string(),
+                "https://example.invalid".to_string(),
+            ),
+        ]));
+
+        let projected = project_task_io_environment(&toolchains, &environment).unwrap();
+        let cargo = projected.get(&ToolchainId::RUST).unwrap();
+        assert_eq!(cargo.get("RUSTUP_HOME"), Some("/rustup"));
+        assert_eq!(cargo.get("RUSTUP_TOOLCHAIN"), Some("stable-host"));
+        assert_eq!(cargo.get("RUSTUP_DIST_SERVER"), None);
     }
 
     fn projected_task_hash(layout: &str, secret: &str) -> String {
