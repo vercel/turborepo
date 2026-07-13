@@ -324,6 +324,7 @@ pub struct CargoPackageDetails {
     /// The crate's deliverable targets (empty for libraries and the
     /// workspace package).
     pub deliverables: Vec<Deliverable>,
+    pub manifest_alters_output_layout: bool,
     /// The crate's directory, repo-root-relative in unix form (empty for
     /// the synthetic workspace package).
     pub dir: String,
@@ -401,14 +402,17 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "RUSTC_WRAPPER",
     "RUSTC_WORKSPACE_WRAPPER",
     "RUSTC_BOOTSTRAP",
+    "RUSTUP_HOME",
     "RUSTFLAGS",
     "CARGO_ENCODED_RUSTFLAGS",
     "RUSTDOC",
     "RUSTDOCFLAGS",
     "CARGO_ENCODED_RUSTDOCFLAGS",
     // Environment equivalents of Cargo's [build] configuration.
+    "CARGO_HOME",
     "CARGO_TARGET_DIR",
     "CARGO_BUILD_TARGET_DIR",
+    "CARGO_BUILD_ARTIFACT_DIR",
     "CARGO_BUILD_BUILD_DIR",
     "CARGO_BUILD_TARGET",
     "CARGO_BUILD_RUSTC",
@@ -421,6 +425,7 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "CARGO_BUILD_INCREMENTAL",
     // Cargo normalizes profile names and target triples into these families.
     "CARGO_PROFILE_*",
+    "CARGO_PROFILE_*_DIR_NAME",
     "CARGO_TARGET_*",
     // Native toolchain variables recognized by cc-rs. `VAR_*` covers both
     // raw and underscore-normalized target suffixes.
@@ -476,6 +481,17 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "WASI_SDK_PATH",
     "WASI_SYSROOT",
     "WASM_MUSL_SYSROOT",
+];
+
+const TASK_IO_ENV_VARS: &[&str] = &[
+    "CARGO_BUILD_ARTIFACT_DIR",
+    "CARGO_BUILD_TARGET",
+    "CARGO_BUILD_TARGET_DIR",
+    "CARGO_HOME",
+    "CARGO_PROFILE_*_DIR_NAME",
+    "CARGO_TARGET_DIR",
+    "RUSTC",
+    "CARGO_BUILD_RUSTC",
 ];
 
 /// Rewrite the workspace root Cargo.toml for a pruned repository containing
@@ -601,6 +617,15 @@ fn crate_source_globs(prefix: &str, crate_path: &str) -> [String; 2] {
     [format!("{base}/**"), format!("!{base}/.turbo/**")]
 }
 
+#[derive(Debug, Clone)]
+struct CargoWorkspaceDetails {
+    target_directory: AbsoluteSystemPathBuf,
+    repository_config_alters_output_layout: bool,
+    repository_config_escapes: bool,
+    external_config_present: bool,
+    manifest_alters_profile_dirs: bool,
+}
+
 /// Output globs for an entrypoint crate's `build` task: the artifacts Cargo
 /// places in `target/<profile>/` — uplifted binaries plus cdylib/staticlib
 /// libraries. These are the workspace's deliverables — the only artifacts
@@ -643,6 +668,110 @@ pub fn deliverable_output_globs(prefix: &str, deliverables: &[Deliverable]) -> V
         .collect()
 }
 
+fn cargo_build_args_supported(args: &[String]) -> bool {
+    let mut index = 0;
+    while index < args.len() {
+        let arg = &args[index];
+        match arg.as_str() {
+            "-r"
+            | "--release"
+            | "-q"
+            | "-v"
+            | "--quiet"
+            | "--verbose"
+            | "--future-incompat-report"
+            | "--keep-going"
+            | "--all-features"
+            | "--no-default-features"
+            | "--timings"
+            | "--ignore-rust-version"
+            | "--locked"
+            | "--offline"
+            | "--frozen" => {}
+            "--profile" | "--features" | "-F" | "--jobs" | "-j" | "--color"
+            | "--message-format" => {
+                index += 1;
+                if args
+                    .get(index)
+                    .is_none_or(|value| value.is_empty() || value.starts_with('-'))
+                {
+                    return false;
+                }
+            }
+            _ if arg.starts_with("--profile=") && arg.len() > "--profile=".len() => {}
+            _ if [
+                "--features=",
+                "--jobs=",
+                "--color=",
+                "--message-format=",
+                "--timings=",
+            ]
+            .iter()
+            .any(|prefix| {
+                arg.strip_prefix(prefix)
+                    .is_some_and(|value| !value.is_empty())
+            }) => {}
+            _ if arg.len() > 2
+                && (arg.starts_with("-F")
+                    || arg.starts_with("-j")
+                    || (arg.starts_with('-') && arg[1..].bytes().all(|byte| byte == b'v'))) => {}
+            _ => return false,
+        }
+        index += 1;
+    }
+    true
+}
+
+fn target_directory_within_repo(
+    repo_root: &AbsoluteSystemPath,
+    target_directory: &AbsoluteSystemPath,
+) -> bool {
+    if !repo_root.contains(target_directory) {
+        return false;
+    }
+    let Ok(real_repo_root) = dunce::canonicalize(repo_root.as_std_path()) else {
+        return false;
+    };
+    let mut existing_ancestor = target_directory.as_std_path();
+    while !existing_ancestor.exists() {
+        let Some(parent) = existing_ancestor.parent() else {
+            return false;
+        };
+        existing_ancestor = parent;
+    }
+    dunce::canonicalize(existing_ancestor)
+        .is_ok_and(|ancestor| ancestor.starts_with(real_repo_root))
+}
+
+fn cargo_output_layout_supported(
+    repo_root: &AbsoluteSystemPath,
+    workspace: &CargoWorkspaceDetails,
+    package: &CargoPackageDetails,
+    context: &toolchain::TaskIOContext<'_>,
+) -> bool {
+    let environment = context.environment;
+    let profile_dir_name = environment.iter().any(|(name, _)| {
+        let name = name.to_ascii_uppercase();
+        name.starts_with("CARGO_PROFILE_") && name.ends_with("_DIR_NAME")
+    });
+    let default_target_directory = repo_root.join_component(TARGET_DIR);
+
+    !package.manifest_alters_output_layout
+        && !workspace.repository_config_alters_output_layout
+        && !workspace.external_config_present
+        && !workspace.manifest_alters_profile_dirs
+        && environment.get("RUSTC").is_none()
+        && environment.get("CARGO_BUILD_RUSTC").is_none()
+        && environment.get("CARGO_BUILD_TARGET").is_none()
+        && environment.get("CARGO_TARGET_DIR").is_none()
+        && environment.get("CARGO_BUILD_TARGET_DIR").is_none()
+        && environment.get("CARGO_BUILD_ARTIFACT_DIR").is_none()
+        && !profile_dir_name
+        && workspace.target_directory == default_target_directory
+        && target_directory_within_repo(repo_root, &workspace.target_directory)
+        && context.task_args.is_none_or(cargo_build_args_supported)
+}
+
 /// The Cargo toolchain. Registered in the
 /// [`crate::toolchain::ToolchainRegistry`] when
 /// `futureFlags.experimentalCargoWorkspaces` is enabled and the repository
@@ -652,6 +781,7 @@ pub struct CargoToolchain {
     /// Per-package details recorded during discovery, consumed by command
     /// resolution. Keyed by package name.
     details: std::sync::Mutex<HashMap<String, CargoPackageDetails>>,
+    workspace_details: std::sync::Mutex<Option<CargoWorkspaceDetails>>,
     /// The cargo binary, resolved lazily so runs without Cargo tasks never
     /// pay for a PATH scan.
     cargo_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
@@ -668,6 +798,7 @@ impl CargoToolchain {
         Arc::new(Self {
             repo_root,
             details: std::sync::Mutex::new(HashMap::new()),
+            workspace_details: std::sync::Mutex::new(None),
             cargo_binary: std::sync::OnceLock::new(),
         })
     }
@@ -686,11 +817,22 @@ impl CargoToolchain {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .insert(package, details);
     }
+
+    fn workspace_details(&self) -> Option<CargoWorkspaceDetails> {
+        self.workspace_details
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
 }
 
 impl Toolchain for CargoToolchain {
     fn id(&self) -> ToolchainId {
         ToolchainId::RUST
+    }
+
+    fn task_io_env_vars(&self) -> &[&str] {
+        TASK_IO_ENV_VARS
     }
 
     fn task_command(
@@ -1010,7 +1152,7 @@ impl Toolchain for CargoToolchain {
         path_to_root: &str,
         dependencies: &[&crate::package_graph::PackageInfo],
         wants_automatic_inputs: bool,
-        _context: &toolchain::TaskIOContext<'_>,
+        context: &toolchain::TaskIOContext<'_>,
     ) -> Option<toolchain::DerivedTaskIO> {
         let name = package.package_name()?;
         let details = self.package_details(&name)?;
@@ -1026,6 +1168,14 @@ impl Toolchain for CargoToolchain {
             env: HASHED_ENV_VARS.iter().map(|var| var.to_string()).collect(),
             ..Default::default()
         };
+        if self
+            .workspace_details()
+            .is_some_and(|workspace| workspace.repository_config_escapes)
+        {
+            io.input_globs.retain(|glob| {
+                !glob.ends_with(".cargo/config.toml") && !glob.ends_with(".cargo/config")
+            });
+        }
 
         // Source globs for the crates whose code this task compiles,
         // filtered to real crates (the synthetic workspace package has no
@@ -1061,10 +1211,23 @@ impl Toolchain for CargoToolchain {
                     io.input_globs.extend(dependency_globs());
                 }
                 if subcommand == "build" {
-                    io.outputs = toolchain::DerivedOutputs::Resolved(deliverable_output_globs(
-                        path_to_root,
-                        &details.deliverables,
-                    ));
+                    io.outputs = self
+                        .workspace_details()
+                        .filter(|workspace| {
+                            cargo_output_layout_supported(
+                                &self.repo_root,
+                                workspace,
+                                &details,
+                                context,
+                            )
+                        })
+                        .map(|_| {
+                            toolchain::DerivedOutputs::Resolved(deliverable_output_globs(
+                                path_to_root,
+                                &details.deliverables,
+                            ))
+                        })
+                        .unwrap_or(toolchain::DerivedOutputs::Unavailable);
                 }
             }
             // The workspace package's directory is the repo root, so
@@ -1092,6 +1255,7 @@ impl Toolchain for CargoToolchain {
             let workspace =
                 turborepo_rayon_compat::block_in_place(|| discover_crates(&self.repo_root))
                     .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+            let target_directory = workspace.target_directory.clone();
             let crates = workspace.crates;
 
             if crates.is_empty() {
@@ -1133,6 +1297,22 @@ impl Toolchain for CargoToolchain {
                 ))
             })
             .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+            if let Some(target_directory) = target_directory {
+                let startup_environment: HashMap<String, String> = std::env::vars().collect();
+                let config = cargo_config_influence(&self.repo_root, &startup_environment);
+                *self
+                    .workspace_details
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+                    Some(CargoWorkspaceDetails {
+                        target_directory,
+                        repository_config_alters_output_layout: config
+                            .repository_alters_output_layout,
+                        repository_config_escapes: config.repository_config_escapes,
+                        external_config_present: config.external_present,
+                        manifest_alters_profile_dirs: manifest_alters_profile_dirs(&self.repo_root),
+                    });
+            }
             let workspace_externals: HashSet<turborepo_lockfiles::Package> = closures
                 .values()
                 .flatten()
@@ -1166,6 +1346,7 @@ impl Toolchain for CargoToolchain {
                     CargoPackageDetails {
                         kind,
                         deliverables: cargo_crate.deliverables,
+                        manifest_alters_output_layout: cargo_crate.manifest_alters_output_layout,
                         dir,
                     },
                 );
@@ -1197,6 +1378,7 @@ impl Toolchain for CargoToolchain {
                     CargoPackageDetails {
                         kind: CargoPackageKind::Workspace,
                         deliverables: Vec::new(),
+                        manifest_alters_output_layout: false,
                         dir: String::new(),
                     },
                 );
@@ -1291,6 +1473,7 @@ pub struct CargoCrate {
     /// The crate's deliverable targets. Non-empty exactly when the crate is
     /// an entrypoint (has `bin`/`cdylib`/`staticlib` targets).
     pub deliverables: Vec<Deliverable>,
+    pub manifest_alters_output_layout: bool,
 }
 
 impl CargoCrate {
@@ -1317,6 +1500,138 @@ pub struct DiscoveredWorkspace {
     /// filtered must still run full validation rather than be mistaken for a
     /// memberless virtual workspace.
     pub has_packages: bool,
+    pub target_directory: Option<AbsoluteSystemPathBuf>,
+}
+
+fn manifest_alters_profile_dirs(repo_root: &AbsoluteSystemPath) -> bool {
+    let Ok(contents) = repo_root.join_component(CARGO_TOML).read_to_string() else {
+        return true;
+    };
+    let Ok(manifest) = contents.parse::<toml_edit::DocumentMut>() else {
+        return true;
+    };
+    manifest
+        .get("profile")
+        .and_then(toml_edit::Item::as_table_like)
+        .is_some_and(|profiles| {
+            profiles
+                .iter()
+                .any(|(_, profile)| profile.get("dir-name").is_some())
+        })
+}
+
+#[derive(Debug, Default)]
+struct CargoConfigInfluence {
+    repository_alters_output_layout: bool,
+    repository_config_escapes: bool,
+    external_present: bool,
+}
+
+fn config_alters_output_layout(
+    repo_root: &AbsoluteSystemPath,
+    path: &std::path::Path,
+) -> Option<(bool, bool)> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return None,
+        Err(_) => return Some((true, false)),
+    }
+    let contained = dunce::canonicalize(repo_root.as_std_path())
+        .ok()
+        .zip(dunce::canonicalize(path).ok())
+        .is_some_and(|(root, config)| config.starts_with(root));
+    if !contained {
+        return Some((true, true));
+    }
+    let contents = match std::fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(_) => return Some((true, false)),
+    };
+    let config = match contents.parse::<toml_edit::DocumentMut>() {
+        Ok(config) => config,
+        Err(_) => return Some((true, false)),
+    };
+    let build = config.get("build");
+    let profile_dir_name = config
+        .get("profile")
+        .and_then(toml_edit::Item::as_table_like)
+        .is_some_and(|profiles| {
+            profiles
+                .iter()
+                .any(|(_, profile)| profile.get("dir-name").is_some())
+        });
+    Some((
+        build.is_some_and(|build| {
+            ["target", "target-dir", "rustc", "artifact-dir"]
+                .iter()
+                .any(|key| build.get(key).is_some())
+        }) || profile_dir_name
+            || config.get("include").is_some(),
+        false,
+    ))
+}
+
+fn cargo_home_candidates(
+    repo_root: &AbsoluteSystemPath,
+    environment: &HashMap<String, String>,
+    windows: bool,
+) -> Vec<std::path::PathBuf> {
+    if let Some(cargo_home) = environment.get("CARGO_HOME") {
+        let cargo_home = std::path::Path::new(cargo_home);
+        return vec![if cargo_home.is_absolute() {
+            cargo_home.to_path_buf()
+        } else {
+            repo_root.as_std_path().join(cargo_home)
+        }];
+    }
+
+    let mut candidates = Vec::new();
+    if windows && let Some(user_profile) = environment.get("USERPROFILE") {
+        candidates.push(std::path::Path::new(user_profile).join(".cargo"));
+    }
+    if let Some(home) = environment.get("HOME") {
+        let home = std::path::Path::new(home).join(".cargo");
+        if !candidates.contains(&home) {
+            candidates.push(home);
+        }
+    }
+    candidates
+}
+
+fn cargo_config_influence(
+    repo_root: &AbsoluteSystemPath,
+    environment: &HashMap<String, String>,
+) -> CargoConfigInfluence {
+    let repository_cargo = repo_root.as_std_path().join(".cargo");
+    let mut influence = CargoConfigInfluence::default();
+    for name in ["config.toml", "config"] {
+        if let Some((alters_output_layout, escapes)) =
+            config_alters_output_layout(repo_root, &repository_cargo.join(name))
+        {
+            influence.repository_alters_output_layout |= alters_output_layout;
+            influence.repository_config_escapes |= escapes;
+        }
+    }
+
+    let ancestor_cargo_homes = repo_root
+        .as_std_path()
+        .ancestors()
+        .skip(1)
+        .map(|ancestor| ancestor.join(".cargo"));
+    let cargo_homes = cargo_home_candidates(repo_root, environment, cfg!(windows));
+    for cargo_home in ancestor_cargo_homes.chain(cargo_homes) {
+        if cargo_home == repository_cargo {
+            continue;
+        }
+        for name in ["config.toml", "config"] {
+            match std::fs::symlink_metadata(cargo_home.join(name)) {
+                Ok(_) => influence.external_present = true,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(_) => influence.external_present = true,
+            }
+        }
+    }
+    influence
 }
 
 /// Discover all Rust crates in the Cargo workspace rooted at `repo_root` by
@@ -1338,6 +1653,7 @@ pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWorks
             name: None,
             crates: Vec::new(),
             has_packages: false,
+            target_directory: None,
         });
     }
 
@@ -1362,6 +1678,7 @@ pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWorks
 
     let has_packages = !metadata.packages.is_empty();
     let name = workspace_name(&metadata)?;
+    let target_directory = metadata_path(&metadata.target_directory);
     let crates = connect_crates(parse_members(repo_root, &root_manifest_path, metadata));
 
     if let Some(name) = &name
@@ -1381,6 +1698,7 @@ pub fn discover_crates(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWorks
         name,
         crates,
         has_packages,
+        target_directory,
     })
 }
 
@@ -1422,6 +1740,7 @@ struct ParsedCrate {
     manifest_path: AbsoluteSystemPathBuf,
     dependencies: Vec<ResolvedDep>,
     deliverables: Vec<Deliverable>,
+    manifest_alters_output_layout: bool,
 }
 
 /// A path dependency resolved to the directory Cargo reports for it.
@@ -1442,6 +1761,32 @@ fn metadata_path(path: &str) -> Option<AbsoluteSystemPathBuf> {
             .to_owned(),
     )
     .ok()
+}
+
+fn manifest_alters_output_layout(manifest_path: &AbsoluteSystemPath) -> bool {
+    let Ok(contents) = manifest_path.read_to_string() else {
+        return true;
+    };
+    let Ok(manifest) = contents.parse::<toml_edit::DocumentMut>() else {
+        return true;
+    };
+    let enables_per_package_target = manifest
+        .get("cargo-features")
+        .and_then(toml_edit::Item::as_array)
+        .is_some_and(|features| {
+            features
+                .iter()
+                .any(|feature| feature.as_str() == Some("per-package-target"))
+        });
+    let package_selects_target = manifest.get("package").is_some_and(|package| {
+        package.get("default-target").is_some() || package.get("forced-target").is_some()
+    });
+    let target_renames_output = ["bin", "example", "test", "bench"]
+        .iter()
+        .filter_map(|kind| manifest.get(kind)?.as_array_of_tables())
+        .flatten()
+        .any(|target| target.contains_key("filename"));
+    enables_per_package_target || package_selects_target || target_renames_output
 }
 
 fn parse_members(
@@ -1518,11 +1863,13 @@ fn parse_members(
             })
             .collect();
 
+        let manifest_alters_output_layout = manifest_alters_output_layout(&manifest_path);
         parsed.push(ParsedCrate {
             name: package.name,
             manifest_path,
             dependencies,
             deliverables,
+            manifest_alters_output_layout,
         });
     }
     parsed
@@ -1589,6 +1936,7 @@ fn connect_crates(parsed: Vec<ParsedCrate>) -> Vec<CargoCrate> {
             name: parsed_crate.name,
             manifest_path: parsed_crate.manifest_path,
             deliverables: parsed_crate.deliverables,
+            manifest_alters_output_layout: parsed_crate.manifest_alters_output_layout,
         })
         .collect()
 }
@@ -1621,6 +1969,7 @@ fn reaches(adjacency: &HashMap<&str, BTreeSet<&str>>, start: &str, target: &str)
 #[derive(Debug, Deserialize)]
 struct Metadata {
     packages: Vec<MetadataPackage>,
+    target_directory: String,
     /// The `[workspace.metadata]` table, serialized as JSON. Carries the
     /// user-declared workspace name.
     #[serde(default)]
@@ -1913,6 +2262,140 @@ dependencies = ["lib-a"]
                 && error.to_string().contains("root Cargo.toml"),
             "unexpected validation result: {error}"
         );
+    }
+
+    fn output_test_workspace(root: &AbsoluteSystemPath) -> CargoWorkspaceDetails {
+        CargoWorkspaceDetails {
+            target_directory: root.join_component(TARGET_DIR),
+            repository_config_alters_output_layout: false,
+            repository_config_escapes: false,
+            external_config_present: false,
+            manifest_alters_profile_dirs: false,
+        }
+    }
+
+    fn output_test_package() -> CargoPackageDetails {
+        CargoPackageDetails {
+            kind: CargoPackageKind::Entrypoint,
+            deliverables: vec![Deliverable {
+                name: "app".to_string(),
+                kind: DeliverableKind::Bin,
+            }],
+            manifest_alters_output_layout: false,
+            dir: "crates/app".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_cargo_output_support_fails_closed_for_layout_controls() {
+        let (_tmp, root) = tempdir_root();
+        let workspace = output_test_workspace(&root);
+        let package = output_test_package();
+        let empty_environment = toolchain::TaskIOEnvironment::default();
+        let supported = toolchain::TaskIOContext {
+            task_args: Some(&["--release".to_string()]),
+            environment: &empty_environment,
+        };
+        assert!(cargo_output_layout_supported(
+            &root, &workspace, &package, &supported
+        ));
+
+        for name in [
+            "CARGO_BUILD_TARGET",
+            "CARGO_TARGET_DIR",
+            "CARGO_BUILD_TARGET_DIR",
+            "CARGO_BUILD_ARTIFACT_DIR",
+            "RUSTC",
+            "CARGO_BUILD_RUSTC",
+            "CARGO_PROFILE_CI_DIR_NAME",
+        ] {
+            let environment = toolchain::TaskIOEnvironment::new(HashMap::from([(
+                name.to_string(),
+                "configured".to_string(),
+            )]));
+            let context = toolchain::TaskIOContext {
+                task_args: None,
+                environment: &environment,
+            };
+            assert!(!cargo_output_layout_supported(
+                &root, &workspace, &package, &context
+            ));
+        }
+
+        for args in [
+            vec!["--target=x86_64-unknown-linux-gnu".to_string()],
+            vec!["--target-dir=other".to_string()],
+            vec!["--config=build.target-dir='other'".to_string()],
+            vec!["--future-layout-control".to_string()],
+        ] {
+            let context = toolchain::TaskIOContext {
+                task_args: Some(&args),
+                environment: &empty_environment,
+            };
+            assert!(!cargo_output_layout_supported(
+                &root, &workspace, &package, &context
+            ));
+        }
+    }
+
+    #[test]
+    fn test_manifest_layout_controls_are_detected() {
+        let (_tmp, root) = tempdir_root();
+        let manifest = root.join_component(CARGO_TOML);
+        for contents in [
+            "cargo-features = [\"different-binary-name\"]\n\n[[bin]]\nname = \"app\"\nfilename = \
+             \"renamed\"\n",
+            "cargo-features = [\"per-package-target\"]\n\n[package]\nname = \"app\"\nversion = \
+             \"0.1.0\"\n",
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\ndefault-target = \"host\"\n",
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nforced-target = \"host\"\n",
+        ] {
+            write(&root, &[CARGO_TOML], contents);
+            assert!(manifest_alters_output_layout(&manifest));
+        }
+        write(
+            &root,
+            &[CARGO_TOML],
+            "[workspace]\nmembers = []\n\n[profile.ci]\ninherits = \"dev\"\ndir-name = \
+             \"ci-output\"\n",
+        );
+        assert!(manifest_alters_profile_dirs(&root));
+    }
+
+    #[test]
+    fn test_repository_and_external_config_influence_is_detected() {
+        let (_tmp, root) = tempdir_root();
+        let repo = root.join_component("repo");
+        std::fs::create_dir_all(repo.as_std_path()).unwrap();
+        write(
+            &repo,
+            &[".cargo", "config.toml"],
+            "[build]\ntarget-dir = \"configured-target\"\n",
+        );
+        assert!(cargo_config_influence(&repo, &HashMap::new()).repository_alters_output_layout);
+        write(&root, &[".cargo", "config.toml"], "[net]\nretry = 2\n");
+        assert!(cargo_config_influence(&repo, &HashMap::new()).external_present);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_escaping_repository_config_is_detected() {
+        let (_tmp, root) = tempdir_root();
+        let repo = root.join_component("repo");
+        std::fs::create_dir_all(repo.join_component(".cargo").as_std_path()).unwrap();
+        let outside = root.join_component("outside.toml");
+        outside
+            .create_with_contents("[build]\ntarget = \"host\"\n")
+            .unwrap();
+        std::os::unix::fs::symlink(
+            outside.as_std_path(),
+            repo.join_components(&[".cargo", "config.toml"])
+                .as_std_path(),
+        )
+        .unwrap();
+        let influence = cargo_config_influence(&repo, &HashMap::new());
+        assert!(influence.repository_alters_output_layout);
+        assert!(influence.repository_config_escapes);
     }
 
     #[test]

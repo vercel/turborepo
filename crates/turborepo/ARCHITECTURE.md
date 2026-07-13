@@ -262,8 +262,14 @@ whether anything changed; Cargo decides how and in what order to build.**
   spellings are emitted; unmatched globs contribute nothing). The profile
   segment is a wildcard, so `--release` and custom profiles cache without
   configuration — pass-through args participate in the task hash, giving
-  each profile its own cache entry. Cargo's internal `target/` state is
-  deliberately never cached — it is Cargo's own incremental cache, and
+  each profile its own cache entry. Automatic outputs fail closed when task
+  arguments or Cargo environment select a target/target directory, when the
+  compiler is overridden, or when manifests/configuration can alter targets,
+  profile directories, artifact names/locations, or include unhashable external
+  configuration. Escaping config symlinks are not hashed. These cases disable
+  implicit caching while explicit `outputs` and explicit cache settings remain
+  authoritative. Cargo's internal `target/` state is deliberately never cached
+  — it is Cargo's own incremental cache, and
   tarballing it fights Cargo instead of leaning on it (it is also
   multi-gigabyte). For fine-grained compile caching, `RUSTC_WRAPPER`
   (sccache) is the sound layer, and it participates in task hashes so
