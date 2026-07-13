@@ -367,7 +367,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .get(&info.toolchain)
                     .unwrap_or(&empty_environment),
             };
-            if let Some(derived) = toolchain.derived_task_io(
+            if let Some(mut derived) = toolchain.derived_task_io(
                 info,
                 task_id.as_inner().task(),
                 path_to_root.as_str(),
@@ -375,6 +375,13 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 wants_automatic_inputs,
                 &context,
             ) {
+                if task_io_env_exclusion_conflict(
+                    &task_def.env,
+                    &self.global_env,
+                    context.environment,
+                ) {
+                    derived.outputs = turborepo_repository::toolchain::DerivedOutputs::Unavailable;
+                }
                 apply_derived_task_io(
                     &mut task_def,
                     derived,
@@ -651,6 +658,31 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 /// Levels 1–2 arrive merged as `scoped_command` (most specific already
 /// won); level 4 as `unscoped_command`. `None` means levels 3/5 are in
 /// charge: the toolchain resolves the command as it always has.
+fn task_io_env_exclusion_conflict(
+    task_env: &[String],
+    global_env: &[String],
+    environment: &turborepo_repository::toolchain::TaskIOEnvironment,
+) -> bool {
+    let exclusions: Vec<&str> = task_env
+        .iter()
+        .chain(global_env)
+        .filter(|pattern| pattern.starts_with('!'))
+        .map(String::as_str)
+        .collect();
+    if exclusions.is_empty() {
+        return false;
+    }
+    let projected = turborepo_env::EnvironmentVariableMap::from(
+        environment
+            .iter()
+            .map(|(name, value)| (name.to_string(), value.to_string()))
+            .collect::<HashMap<_, _>>(),
+    );
+    projected
+        .wildcard_map_from_wildcards_unresolved(&exclusions)
+        .map_or(true, |matches| !matches.exclusions.is_empty())
+}
+
 fn apply_derived_task_io(
     task_def: &mut TaskDefinition,
     derived: turborepo_repository::toolchain::DerivedTaskIO,

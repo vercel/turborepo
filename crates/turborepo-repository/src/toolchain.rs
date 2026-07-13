@@ -483,6 +483,12 @@ impl TaskIOEnvironment {
         }
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.values
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_str()))
+    }
+
     #[cfg(test)]
     fn case_insensitive(values: std::collections::HashMap<String, String>) -> Self {
         Self {

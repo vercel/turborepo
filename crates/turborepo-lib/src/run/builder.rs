@@ -1123,6 +1123,7 @@ impl RunBuilder {
         .with_workspaces(filtered_pkgs.cloned().collect())
         .with_future_flags(self.opts.future_flags)
         .with_global_deps(global_deps_for_task_inputs)
+        .with_global_env(root_turbo_json.global_env.clone())
         .with_task_io_context(
             self.opts.run_opts.pass_through_args.clone(),
             self.opts.run_opts.tasks.clone(),

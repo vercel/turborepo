@@ -165,10 +165,12 @@ a narrow, platform-aware startup-environment projection keyed by toolchain.
 Dependency tasks do not inherit arguments for a different requested task, each
 toolchain can observe only the variables it declares, Windows lookup remains
 case-insensitive, and every declared pattern automatically participates in task
-hashing. Derived outputs distinguish exact/resolved paths from unavailable
-automatic resolution.
-When outputs are unavailable, the engine disables implicit caching so a log-only
-hit cannot suppress execution, while explicit `outputs`, `cache: true`, and
+hashing. If a user env exclusion matches a projected toolchain I/O variable,
+automatic outputs become unavailable rather than deriving cacheable paths from
+an unhashed value. Derived outputs distinguish exact/resolved paths from
+unavailable automatic resolution. When outputs are unavailable, the engine
+disables implicit caching so a log-only hit cannot suppress execution, while
+explicit `outputs`, `cache: true`, and
 `cache: false` remain authoritative.
 
 #### Experimental Cargo Support (`crates/turborepo-repository/src/cargo.rs`)

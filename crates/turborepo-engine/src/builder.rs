@@ -58,6 +58,7 @@ pub struct EngineBuilder<'a, L: TurboJsonLoader> {
     /// prepended to every task's inputs instead of being included in the
     /// global hash.
     global_deps: Vec<String>,
+    global_env: Vec<String>,
     pass_through_args: Vec<String>,
     requested_tasks: Vec<String>,
     /// Each toolchain receives only the startup environment keys it declared.
@@ -85,6 +86,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             validator: Validator::new(),
             future_flags: FutureFlags::default(),
             global_deps: Vec::new(),
+            global_env: Vec::new(),
             pass_through_args: Vec::new(),
             requested_tasks: Vec::new(),
             environments: HashMap::new(),
@@ -99,6 +101,11 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
     pub fn with_global_deps(mut self, global_deps: Vec<String>) -> Self {
         self.global_deps = global_deps;
+        self
+    }
+
+    pub fn with_global_env(mut self, global_env: Vec<String>) -> Self {
+        self.global_env = global_env;
         self
     }
 
