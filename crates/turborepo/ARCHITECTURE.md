@@ -243,20 +243,47 @@ whether anything changed; Cargo decides how and in what order to build.**
   or incomplete lockfiles are hard errors. Turborepo never creates or refreshes
   the source lockfile; users do that explicitly with Cargo and commit the
   result.
-- **Caching**: task caches store logs plus, for entrypoint builds, the
-  deliverables: bins (`target/*/<bin>`) and cdylib/staticlib artifacts
-  (`target/*/lib<name>.{so,dylib,a}`, `<name>.{dll,lib}` — all platform
-  spellings are emitted; unmatched globs contribute nothing). The profile
-  segment is a wildcard, so `--release` and custom profiles cache without
-  configuration — pass-through args participate in the task hash, giving
-  each profile its own cache entry. Cargo's internal `target/` state is
-  deliberately never cached — it is Cargo's own incremental cache, and
-  tarballing it fights Cargo instead of leaning on it (it is also
-  multi-gigabyte). For fine-grained compile caching, `RUSTC_WRAPPER`
-  (sccache) is the sound layer, and it participates in task hashes so
-  toggling it invalidates caches. Entrypoint `run` and `dev` tasks default to
-  `cache: false`, because a cache hit must not suppress the requested process;
-  an explicit turbo.json `cache` setting overrides the toolchain default.
+- **Caching**: task caches store logs plus, for entrypoint builds, only each
+  exact effective deliverable path. Engine construction passes task arguments
+  and only the startup environment keys declared by registered toolchains
+  through a toolchain-neutral I/O context; it does not retain the full process
+  environment. Cargo combines those with metadata's effective
+  `target_directory`, rustc's host triple, and rustc's supported-target list to
+  resolve the profile (`dev`/`test` to `debug`, `release`/`bench` to `release`,
+  or a custom profile), an explicit target segment, and the single
+  platform-correct basename for each bin/cdylib/staticlib. Toolchain-declared
+  I/O environment keys are automatically added to task hashing by the engine.
+  `CARGO_HOME`, `CARGO_TARGET_DIR`, config `target-dir`,
+  `--target-dir`, `CARGO_BUILD_TARGET`, and `--target` are hashed and therefore
+  produce isolated paths; no profile, target, or platform wildcard is emitted.
+  Repository `.cargo/config*` content is hashed; a config symlink resolving
+  outside the canonical repository is not hashed or trusted and fails closed.
+  Any ancestor or Cargo-home config file cannot be hashed by repository inputs
+  and makes automatic output resolution unavailable, regardless of which
+  settings it currently contains. `RUSTC`, `CARGO_BUILD_RUSTC`, and repository
+  `build.rustc` also fail closed
+  rather than applying the bare-rustc host probe to another compiler. Target
+  directories must remain inside the canonical repository through their
+  nearest existing ancestor, so symlink escapes fail closed. Manifest-defined
+  target `filename`, per-package `default-target`/`forced-target`, and profile
+  `dir-name` overrides likewise disable automatic outputs because metadata does
+  not expose their exact effective paths. Repository config `build.artifact-dir`,
+  profile `dir-name`, config includes, `CARGO_BUILD_ARTIFACT_DIR`, and
+  `CARGO_PROFILE_*_DIR_NAME` are also bounded fail-closed controls. Argument
+  parsing explicitly recognizes output-layout flags and a
+  fixed set of common layout-neutral `cargo build` flags; unknown options fail
+  closed so future Cargo output controls cannot silently inherit caching.
+  Cargo's internal target state (`deps`, fingerprints, incremental objects)
+  remains uncached. Unsupported target formats and invocation/config cases
+  whose layout cannot be resolved conservatively produce a distinct
+  "automatic outputs unavailable" result. The engine disables automatic
+  caching in that case when the user configured neither outputs nor cache
+  behavior, preventing a log-only hit from suppressing a required Cargo build;
+  explicit task I/O and
+  cache intent remain authoritative. For fine-grained compile caching,
+  `RUSTC_WRAPPER` (sccache) remains the sound layer. Entrypoint `run` and `dev`
+  tasks default to `cache: false`, because a hit must not suppress the requested
+  process; an explicit turbo.json `cache` setting overrides that default.
 
 - **Watch mode** (`Toolchain::watch_spec`, consumed by
   `turborepo-lib/src/package_changes_watcher.rs`): each toolchain declares

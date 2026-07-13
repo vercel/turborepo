@@ -299,6 +299,8 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             }
         }
         let had_explicit_inputs = processed_task_definition.inputs.is_some();
+        let had_explicit_outputs = processed_task_definition.outputs.is_some();
+        let had_explicit_cache = processed_task_definition.cache.is_some();
         let mut task_def =
             TaskDefinition::from_processed(processed_task_definition, &path_to_root)?;
         task_def.command = command_override;
@@ -356,13 +358,23 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     _ => None,
                 })
                 .collect();
+            let context = turborepo_repository::toolchain::TaskIOContext {
+                task_args: &self.task_args,
+                environment: &self.environment,
+            };
             if let Some(derived) = toolchain.derived_task_io(
                 info,
                 task_id.as_inner().task(),
                 path_to_root.as_str(),
                 &dependencies,
                 wants_automatic_inputs,
+                &context,
             ) {
+                for var in toolchain.task_io_env_vars() {
+                    if !task_def.env.iter().any(|existing| existing == var) {
+                        task_def.env.push((*var).to_string());
+                    }
+                }
                 task_def.inputs.globs.extend(derived.input_globs);
                 if let Some(default) = derived.package_default_inputs {
                     task_def.inputs.default = default;
@@ -373,7 +385,17 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     }
                 }
                 task_def.env.sort();
-                task_def.outputs.inclusions.extend(derived.output_globs);
+                match derived.outputs {
+                    turborepo_repository::toolchain::DerivedOutputs::Resolved(outputs) => {
+                        task_def.outputs.inclusions.extend(outputs);
+                    }
+                    turborepo_repository::toolchain::DerivedOutputs::Unavailable
+                        if !had_explicit_outputs && !had_explicit_cache =>
+                    {
+                        task_def.cache = false;
+                    }
+                    _ => {}
+                }
             }
         }
 

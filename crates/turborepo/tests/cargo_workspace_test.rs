@@ -12,7 +12,130 @@ mod common;
 
 use std::{fs, path::Path};
 
-use common::{run_turbo, run_turbo_with_env, setup};
+use common::setup;
+
+const AMBIENT_CARGO_LAYOUT_ENV: &[&str] = &[
+    "CARGO_HOME",
+    "CARGO_TARGET_DIR",
+    "CARGO_BUILD_TARGET_DIR",
+    "CARGO_BUILD_TARGET",
+    "CARGO_BUILD_ARTIFACT_DIR",
+    "RUSTC",
+    "CARGO_BUILD_RUSTC",
+    "HOME",
+    "USERPROFILE",
+    "RUSTUP_HOME",
+];
+
+fn ambient_cargo_layout_env_keys() -> Vec<std::ffi::OsString> {
+    let mut keys: Vec<_> = AMBIENT_CARGO_LAYOUT_ENV
+        .iter()
+        .map(std::ffi::OsString::from)
+        .collect();
+    keys.extend(std::env::vars_os().filter_map(|(name, _)| {
+        let name_string = name.to_string_lossy();
+        (name_string.starts_with("CARGO_PROFILE_") && name_string.ends_with("_DIR_NAME"))
+            .then_some(name)
+    }));
+    keys
+}
+
+fn cargo_ancestors_are_clean(dir: &Path) -> bool {
+    dir.ancestors().skip(1).all(|ancestor| {
+        ["config.toml", "config"]
+            .iter()
+            .all(|name| !ancestor.join(".cargo").join(name).exists())
+    })
+}
+
+fn cargo_tempdir() -> tempfile::TempDir {
+    let current = std::env::current_dir().expect("current directory is available");
+    let drive_root = current
+        .ancestors()
+        .last()
+        .expect("current directory has a filesystem root");
+    if let Ok(tempdir) = tempfile::Builder::new()
+        .prefix("turbo-cargo-")
+        .tempdir_in(drive_root)
+        && cargo_ancestors_are_clean(tempdir.path())
+    {
+        return tempdir;
+    }
+
+    let tempdir = tempfile::tempdir().expect("fallback Cargo fixture root is available");
+    assert!(
+        cargo_ancestors_are_clean(tempdir.path()),
+        "cannot create a Cargo fixture without inherited ancestor config"
+    );
+    tempdir
+}
+
+fn isolated_cargo_environment(dir: &Path) -> (std::path::PathBuf, std::path::PathBuf) {
+    let home = dir.join(".test-home");
+    let cargo_home = home.join(".cargo");
+    fs::create_dir_all(&cargo_home).unwrap();
+    (home, cargo_home)
+}
+
+fn rustup_home() -> Option<std::path::PathBuf> {
+    std::env::var_os("RUSTUP_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".rustup"))
+        })
+        .or_else(|| {
+            std::env::var_os("USERPROFILE").map(|home| std::path::Path::new(&home).join(".rustup"))
+        })
+}
+
+fn cargo_command(dir: &Path) -> std::process::Command {
+    let (home, cargo_home) = isolated_cargo_environment(dir);
+    let mut command = std::process::Command::new("cargo");
+    for name in ambient_cargo_layout_env_keys() {
+        command.env_remove(name);
+    }
+    command
+        .env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .env("CARGO_HOME", cargo_home)
+        .current_dir(dir);
+    if let Some(rustup_home) = rustup_home() {
+        command.env("RUSTUP_HOME", rustup_home);
+    }
+    command
+}
+
+fn run_turbo(dir: &Path, args: &[&str]) -> std::process::Output {
+    run_turbo_with_env(dir, args, &[])
+}
+
+fn run_turbo_with_env(
+    dir: &Path,
+    args: &[&str],
+    environment: &[(&str, &str)],
+) -> std::process::Output {
+    let (home, cargo_home) = isolated_cargo_environment(dir);
+    let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
+    let mut command = common::turbo_command(dir);
+    for name in ambient_cargo_layout_env_keys() {
+        command.env_remove(name);
+    }
+    command
+        .env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .env("CARGO_HOME", &cargo_home)
+        .env("TURBO_CONFIG_DIR_PATH", config_dir.path());
+    if let Some(rustup_home) = rustup_home() {
+        command.env("RUSTUP_HOME", rustup_home);
+    }
+    for (name, value) in environment {
+        command.env(name, value);
+    }
+    command
+        .args(args)
+        .output()
+        .expect("failed to execute turbo")
+}
 
 fn cargo_build_hash(dir: &Path, env: &[(&str, &str)]) -> String {
     let output = run_turbo_with_env(dir, &["build", "--filter=app", "--dry-run=json"], env);
@@ -31,12 +154,106 @@ fn setup_cargo_monorepo(dir: &Path) {
     setup::setup_integration_test(dir, "cargo_monorepo", "npm@10.5.0", false).unwrap();
 }
 
+fn cargo_binary(dir: &Path, segments: &[&str]) -> std::path::PathBuf {
+    let mut path = dir.to_path_buf();
+    path.extend(segments);
+    path.push(if cfg!(windows) { "app.exe" } else { "app" });
+    path
+}
+
+fn rustc_host_target() -> String {
+    let output = std::process::Command::new("rustc")
+        .arg("-vV")
+        .output()
+        .expect("rustc runs");
+    assert!(output.status.success());
+    String::from_utf8(output.stdout)
+        .expect("rustc output is UTF-8")
+        .lines()
+        .find_map(|line| line.strip_prefix("host: "))
+        .expect("rustc reports host target")
+        .to_string()
+}
+
+fn alternate_host_target(host: &str) -> &'static str {
+    if host == "x86_64-unknown-linux-gnu" {
+        "aarch64-unknown-linux-gnu"
+    } else {
+        "x86_64-unknown-linux-gnu"
+    }
+}
+
+fn run_cargo_build(dir: &Path, cargo_args: &[&str], env: &[(&str, &str)]) -> std::process::Output {
+    let mut args = vec!["build", "--filter=app", "--log-order", "grouped"];
+    if !cargo_args.is_empty() {
+        args.push("--");
+        args.extend_from_slice(cargo_args);
+    }
+    run_turbo_with_env(dir, &args, env)
+}
+
+fn cargo_build_definition(
+    dir: &Path,
+    cargo_args: &[&str],
+    env: &[(&str, &str)],
+) -> serde_json::Value {
+    let mut args = vec!["build", "--filter=app", "--dry-run=json"];
+    if !cargo_args.is_empty() {
+        args.push("--");
+        args.extend_from_slice(cargo_args);
+    }
+    let output = run_turbo_with_env(dir, &args, env);
+    assert!(output.status.success(), "dry-run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("dry-run JSON");
+    json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "app#build"))
+        .expect("app#build in graph")
+        .clone()
+}
+
+fn assert_isolated_restoration(
+    first_args: &[&str],
+    first_path: &[&str],
+    second_args: &[&str],
+    second_path: &[&str],
+    first_env: &[(&str, &str)],
+    second_env: &[(&str, &str)],
+) {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    let first = cargo_binary(tempdir.path(), first_path);
+    let second = cargo_binary(tempdir.path(), second_path);
+
+    let output = run_cargo_build(tempdir.path(), first_args, first_env);
+    assert!(output.status.success(), "first build failed: {output:?}");
+    assert!(first.exists(), "first deliverable missing: {first:?}");
+    let output = run_cargo_build(tempdir.path(), second_args, second_env);
+    assert!(output.status.success(), "second build failed: {output:?}");
+    assert!(second.exists(), "second deliverable missing: {second:?}");
+
+    fs::remove_file(&first).unwrap();
+    fs::remove_file(&second).unwrap();
+    let output = run_cargo_build(tempdir.path(), second_args, second_env);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "restore failed: {output:?}");
+    assert!(
+        stdout.contains("FULL TURBO"),
+        "expected cache hit: {stdout}"
+    );
+    assert!(second.exists(), "effective deliverable was not restored");
+    assert!(
+        !first.exists(),
+        "cache restored a deliverable from another Cargo layout"
+    );
+}
+
 /// The fixture's turbo.json opts in via
 /// `futureFlags.experimentalCargoWorkspaces`; no environment variable is
 /// involved anywhere.
 #[test]
 fn test_cargo_packages_in_task_graph() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
 
     let output = run_turbo(tempdir.path(), &["build", "--dry-run=json"]);
@@ -78,15 +295,23 @@ fn test_cargo_packages_in_task_graph() {
         .as_array()
         .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
         .unwrap_or_default();
+    let expected_output = if cfg!(windows) {
+        "../../target/debug/app.exe"
+    } else {
+        "../../target/debug/app"
+    };
+    assert!(outputs.contains(&expected_output));
     assert!(
-        outputs.iter().any(|o| o.ends_with("target/*/app")),
-        "bin deliverable must be an output, got {outputs:?}"
+        outputs
+            .iter()
+            .filter(|output| output.contains("target/"))
+            .all(|output| !output.contains('*'))
     );
 }
 
 #[test]
 fn test_cargo_semantic_environment_changes_task_hash() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
 
     let baseline = cargo_build_hash(tempdir.path(), &[]);
@@ -114,7 +339,7 @@ fn test_cargo_semantic_environment_changes_task_hash() {
 
 #[test]
 fn test_cargo_workspace_requires_lockfile() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
     let lockfile = tempdir.path().join("Cargo.lock");
     fs::remove_file(&lockfile).unwrap();
@@ -135,7 +360,7 @@ fn test_cargo_workspace_requires_lockfile() {
 
 #[test]
 fn test_cargo_workspace_rejects_stale_lockfile() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
     let lockfile = tempdir.path().join("Cargo.lock");
     let original_lockfile = fs::read_to_string(&lockfile).unwrap();
@@ -167,7 +392,7 @@ fn test_cargo_workspace_rejects_stale_lockfile() {
 
 #[test]
 fn test_cargo_workspace_rejects_excluded_path_dependency() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
 
     let root_manifest = tempdir.path().join("Cargo.toml");
@@ -195,9 +420,8 @@ fn test_cargo_workspace_rejects_excluded_path_dependency() {
     )
     .unwrap();
     fs::write(local.join("src/lib.rs"), "pub fn local() {}\n").unwrap();
-    let status = std::process::Command::new("cargo")
+    let status = cargo_command(tempdir.path())
         .arg("generate-lockfile")
-        .current_dir(tempdir.path())
         .status()
         .expect("cargo generate-lockfile runs");
     assert!(status.success());
@@ -226,7 +450,7 @@ fn test_cargo_workspace_rejects_excluded_path_dependency() {
 
 #[test]
 fn test_cargo_build_executes_caches_and_restores() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
 
     // Cold: executes cargo.
@@ -271,8 +495,577 @@ fn test_cargo_build_executes_caches_and_restores() {
 }
 
 #[test]
+fn test_cargo_debug_and_release_caches_are_isolated_both_directions() {
+    assert_isolated_restoration(
+        &[],
+        &["target", "debug"],
+        &["--release"],
+        &["target", "release"],
+        &[],
+        &[],
+    );
+    assert_isolated_restoration(
+        &["--release"],
+        &["target", "release"],
+        &[],
+        &["target", "debug"],
+        &[],
+        &[],
+    );
+}
+
+#[test]
+fn test_cargo_custom_profile_cache_is_exact() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    let manifest = tempdir.path().join("Cargo.toml");
+    let contents = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        format!("{contents}\n[profile.ci]\ninherits = \"dev\"\n"),
+    )
+    .unwrap();
+    let debug = cargo_binary(tempdir.path(), &["target", "debug"]);
+    let custom = cargo_binary(tempdir.path(), &["target", "ci"]);
+
+    assert!(run_cargo_build(tempdir.path(), &[], &[]).status.success());
+    assert!(
+        run_cargo_build(tempdir.path(), &["--profile=ci"], &[])
+            .status
+            .success()
+    );
+    fs::remove_file(&debug).unwrap();
+    fs::remove_file(&custom).unwrap();
+    let output = run_cargo_build(tempdir.path(), &["--profile=ci"], &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "restore failed: {output:?}");
+    assert!(
+        stdout.contains("FULL TURBO"),
+        "expected cache hit: {stdout}"
+    );
+    assert!(custom.exists());
+    assert!(!debug.exists());
+}
+
+#[test]
+fn test_cargo_test_and_bench_profile_directories_restore_exactly() {
+    assert_isolated_restoration(
+        &["--release"],
+        &["target", "release"],
+        &["--profile=test"],
+        &["target", "debug"],
+        &[],
+        &[],
+    );
+    assert_isolated_restoration(
+        &[],
+        &["target", "debug"],
+        &["--profile=bench"],
+        &["target", "release"],
+        &[],
+        &[],
+    );
+}
+
+#[test]
+fn test_cargo_explicit_host_target_cache_is_exact() {
+    let host = rustc_host_target();
+    let target_arg = format!("--target={host}");
+    assert_isolated_restoration(
+        &[],
+        &["target", "debug"],
+        &[&target_arg],
+        &["target", &host, "debug"],
+        &[],
+        &[],
+    );
+}
+
+#[test]
+fn test_cargo_build_target_environment_cache_is_exact() {
+    let host = rustc_host_target();
+    assert_isolated_restoration(
+        &[],
+        &["target", "debug"],
+        &[],
+        &["target", &host, "debug"],
+        &[],
+        &[("CARGO_BUILD_TARGET", &host)],
+    );
+}
+
+#[test]
+fn test_cargo_target_precedence_restores_effective_host_output() {
+    let host = rustc_host_target();
+    let lower_target = alternate_host_target(&host);
+
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    let cargo_config = tempdir.path().join(".cargo");
+    fs::create_dir_all(&cargo_config).unwrap();
+    fs::write(
+        cargo_config.join("config.toml"),
+        format!("[build]\ntarget = \"{lower_target}\"\n"),
+    )
+    .unwrap();
+    let artifact = cargo_binary(tempdir.path(), &["target", &host, "debug"]);
+    let environment = [("CARGO_BUILD_TARGET", host.as_str())];
+    assert!(
+        run_cargo_build(tempdir.path(), &[], &environment)
+            .status
+            .success()
+    );
+    fs::remove_file(&artifact).unwrap();
+    let output = run_cargo_build(tempdir.path(), &[], &environment);
+    assert!(String::from_utf8_lossy(&output.stdout).contains("FULL TURBO"));
+    assert!(
+        artifact.exists(),
+        "environment target did not override config"
+    );
+
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    let target_arg = format!("--target={host}");
+    let artifact = cargo_binary(tempdir.path(), &["target", &host, "debug"]);
+    let environment = [("CARGO_BUILD_TARGET", lower_target)];
+    assert!(
+        run_cargo_build(tempdir.path(), &[&target_arg], &environment)
+            .status
+            .success()
+    );
+    fs::remove_file(&artifact).unwrap();
+    let output = run_cargo_build(tempdir.path(), &[&target_arg], &environment);
+    assert!(String::from_utf8_lossy(&output.stdout).contains("FULL TURBO"));
+    assert!(artifact.exists(), "CLI target did not override environment");
+}
+
+#[test]
+fn test_cargo_repository_config_target_is_uncached_and_target_qualified() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": { "build": { "dependsOn": ["^build"] } }
+}"#,
+    )
+    .unwrap();
+    let host = rustc_host_target();
+    let cargo_config = tempdir.path().join(".cargo");
+    fs::create_dir_all(&cargo_config).unwrap();
+    fs::write(
+        cargo_config.join("config.toml"),
+        format!("[build]\ntarget = \"{host}\"\n"),
+    )
+    .unwrap();
+    let artifact = cargo_binary(tempdir.path(), &["target", &host, "debug"]);
+
+    for _ in 0..2 {
+        let output = run_cargo_build(tempdir.path(), &[], &[]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "build failed: {output:?}");
+        assert!(stdout.contains("cache bypass"), "expected bypass: {stdout}");
+        assert!(artifact.exists(), "target-qualified artifact missing");
+    }
+}
+
+#[test]
+fn test_cargo_per_package_target_manifest_is_uncached() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("rust-toolchain.toml"),
+        "[toolchain]\nchannel = \"nightly-2026-04-10\"\n",
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": { "build": { "dependsOn": ["^build"] } }
+}"#,
+    )
+    .unwrap();
+    let host = rustc_host_target();
+    let manifest = tempdir.path().join("crates/app/Cargo.toml");
+    let contents = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        format!(
+            "cargo-features = [\"per-package-target\"]\n{}",
+            contents.replacen(
+                "[package]",
+                &format!("[package]\ndefault-target = \"{host}\""),
+                1,
+            )
+        ),
+    )
+    .unwrap();
+
+    for _ in 0..2 {
+        let output = run_cargo_build(tempdir.path(), &[], &[]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "build failed: {output:?}");
+        assert!(stdout.contains("cache bypass"), "expected bypass: {stdout}");
+    }
+}
+
+#[test]
+fn test_cargo_repository_config_and_layout_env_controls_fail_closed() {
+    for config in [
+        "[build]\nartifact-dir = \"copied-artifacts\"\n",
+        "[profile.ci]\ninherits = \"dev\"\ndir-name = \"profile-output\"\n",
+    ] {
+        let tempdir = cargo_tempdir();
+        setup_cargo_monorepo(tempdir.path());
+        fs::write(
+            tempdir.path().join("turbo.json"),
+            r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": { "build": { "dependsOn": ["^build"] } }
+}"#,
+        )
+        .unwrap();
+        let cargo_config = tempdir.path().join(".cargo");
+        fs::create_dir_all(&cargo_config).unwrap();
+        fs::write(cargo_config.join("config.toml"), config).unwrap();
+        let task = cargo_build_definition(tempdir.path(), &[], &[]);
+        assert_eq!(task["resolvedTaskDefinition"]["cache"], false);
+    }
+
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": { "build": { "dependsOn": ["^build"] } }
+}"#,
+    )
+    .unwrap();
+    for (name, value) in [
+        ("CARGO_BUILD_ARTIFACT_DIR", "copied-artifacts"),
+        ("CARGO_PROFILE_CI_DIR_NAME", "profile-output"),
+    ] {
+        let task = cargo_build_definition(tempdir.path(), &[], &[(name, value)]);
+        assert_eq!(task["resolvedTaskDefinition"]["cache"], false);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn test_cargo_repository_config_symlink_escape_is_uncached() {
+    let fixture = cargo_tempdir();
+    let repo = fixture.path().join("repo");
+    fs::create_dir_all(&repo).unwrap();
+    setup_cargo_monorepo(&repo);
+    fs::write(
+        repo.join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": { "build": { "dependsOn": ["^build"] } }
+}"#,
+    )
+    .unwrap();
+    let host = rustc_host_target();
+    let outside_config = fixture.path().join("outside-config.toml");
+    fs::write(&outside_config, format!("[build]\ntarget = \"{host}\"\n")).unwrap();
+    fs::create_dir_all(repo.join(".cargo")).unwrap();
+    std::os::unix::fs::symlink(&outside_config, repo.join(".cargo/config.toml")).unwrap();
+    let artifact = cargo_binary(&repo, &["target", &host, "debug"]);
+
+    for _ in 0..2 {
+        let output = run_cargo_build(&repo, &[], &[]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "build failed: {output:?}");
+        assert!(stdout.contains("cache bypass"), "expected bypass: {stdout}");
+        assert!(artifact.exists());
+    }
+}
+
+#[test]
+fn test_cargo_target_dir_argument_cache_is_exact() {
+    assert_isolated_restoration(
+        &[],
+        &["target", "debug"],
+        &["--target-dir=argument-target"],
+        &["argument-target", "debug"],
+        &[],
+        &[],
+    );
+}
+
+#[test]
+fn test_cargo_target_directory_environment_cache_is_exact() {
+    assert_isolated_restoration(
+        &[],
+        &["target", "debug"],
+        &[],
+        &["cargo-target", "debug"],
+        &[],
+        &[("CARGO_TARGET_DIR", "cargo-target")],
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_cargo_symlink_target_directory_escape_is_uncached() {
+    let fixture = cargo_tempdir();
+    let repo = fixture.path().join("repo");
+    fs::create_dir_all(&repo).unwrap();
+    setup_cargo_monorepo(&repo);
+    fs::write(
+        repo.join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": { "build": { "dependsOn": ["^build"] } }
+}"#,
+    )
+    .unwrap();
+    let outside = fixture.path().join("contained-outside-repo");
+    fs::create_dir_all(&outside).unwrap();
+    std::os::unix::fs::symlink(&outside, repo.join("escape")).unwrap();
+    let artifact = cargo_binary(&outside, &["build", "debug"]);
+
+    for _ in 0..2 {
+        let output = run_cargo_build(&repo, &[], &[("CARGO_TARGET_DIR", "escape/build")]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "build failed: {output:?}");
+        assert!(stdout.contains("cache bypass"), "expected bypass: {stdout}");
+        assert!(artifact.exists());
+    }
+}
+
+#[test]
+fn test_cargo_config_target_directory_cache_is_exact() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    let default = cargo_binary(tempdir.path(), &["target", "debug"]);
+    assert!(run_cargo_build(tempdir.path(), &[], &[]).status.success());
+
+    let cargo_config = tempdir.path().join(".cargo");
+    fs::create_dir_all(&cargo_config).unwrap();
+    fs::write(
+        cargo_config.join("config.toml"),
+        "[build]\ntarget-dir = \"configured-target\"\n",
+    )
+    .unwrap();
+    let configured = cargo_binary(tempdir.path(), &["configured-target", "debug"]);
+    assert!(run_cargo_build(tempdir.path(), &[], &[]).status.success());
+    fs::remove_file(&default).unwrap();
+    fs::remove_file(&configured).unwrap();
+
+    let output = run_cargo_build(tempdir.path(), &[], &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "restore failed: {output:?}");
+    assert!(
+        stdout.contains("FULL TURBO"),
+        "expected cache hit: {stdout}"
+    );
+    assert!(configured.exists());
+    assert!(!default.exists());
+}
+
+#[test]
+fn test_cargo_target_dir_precedence_restores_only_effective_output() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    let cargo_config = tempdir.path().join(".cargo");
+    fs::create_dir_all(&cargo_config).unwrap();
+    fs::write(
+        cargo_config.join("config.toml"),
+        "[build]\ntarget-dir = \"config-target\"\n",
+    )
+    .unwrap();
+    let config = cargo_binary(tempdir.path(), &["config-target", "debug"]);
+    let environment = cargo_binary(tempdir.path(), &["env-target", "debug"]);
+    let cli = cargo_binary(tempdir.path(), &["cli-target", "debug"]);
+
+    assert!(run_cargo_build(tempdir.path(), &[], &[]).status.success());
+    assert!(
+        run_cargo_build(tempdir.path(), &[], &[("CARGO_TARGET_DIR", "env-target")],)
+            .status
+            .success()
+    );
+    assert!(
+        run_cargo_build(
+            tempdir.path(),
+            &["--target-dir=cli-target"],
+            &[("CARGO_TARGET_DIR", "env-target")],
+        )
+        .status
+        .success()
+    );
+    assert!(config.exists() && environment.exists() && cli.exists());
+    fs::remove_file(&config).unwrap();
+    fs::remove_file(&environment).unwrap();
+    fs::remove_file(&cli).unwrap();
+
+    let output = run_cargo_build(tempdir.path(), &[], &[("CARGO_TARGET_DIR", "env-target")]);
+    assert!(String::from_utf8_lossy(&output.stdout).contains("FULL TURBO"));
+    assert!(environment.exists());
+    assert!(!config.exists() && !cli.exists());
+    fs::remove_file(&environment).unwrap();
+
+    let output = run_cargo_build(
+        tempdir.path(),
+        &["--target-dir=cli-target"],
+        &[("CARGO_TARGET_DIR", "env-target")],
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("FULL TURBO"));
+    assert!(cli.exists());
+    assert!(!config.exists() && !environment.exists());
+}
+
+#[test]
+fn test_cargo_external_cargo_home_config_is_uncached_in_strict_mode() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": { "build": { "dependsOn": ["^build"] } }
+}"#,
+    )
+    .unwrap();
+    let cargo_home = tempdir.path().join("external-cargo-home");
+    fs::create_dir_all(&cargo_home).unwrap();
+    let target_dir = tempdir.path().join("cargo-home-target");
+    let target_dir_toml = target_dir.to_string_lossy().replace('\\', "\\\\");
+    fs::write(
+        cargo_home.join("config.toml"),
+        format!("[build]\ntarget-dir = \"{target_dir_toml}\"\n"),
+    )
+    .unwrap();
+    let cargo_home = cargo_home.to_string_lossy();
+
+    for _ in 0..2 {
+        let output = run_cargo_build(tempdir.path(), &[], &[("CARGO_HOME", cargo_home.as_ref())]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "build failed: {output:?}");
+        assert!(stdout.contains("cache bypass"), "expected bypass: {stdout}");
+        assert!(cargo_binary(&target_dir, &["debug"]).exists());
+    }
+}
+
+#[test]
+fn test_cargo_compiler_overrides_disable_automatic_caching() {
+    for name in ["RUSTC", "CARGO_BUILD_RUSTC"] {
+        let tempdir = cargo_tempdir();
+        setup_cargo_monorepo(tempdir.path());
+        fs::write(
+            tempdir.path().join("turbo.json"),
+            r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": { "build": { "dependsOn": ["^build"] } }
+}"#,
+        )
+        .unwrap();
+        for _ in 0..2 {
+            let output = run_cargo_build(tempdir.path(), &[], &[(name, "rustc")]);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            assert!(output.status.success(), "{name} build failed: {output:?}");
+            assert!(stdout.contains("cache bypass"), "{name} cached: {stdout}");
+        }
+    }
+}
+
+#[test]
+fn test_cargo_unresolved_layout_is_uncached_without_explicit_outputs() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": { "build": { "dependsOn": ["^build"] } }
+}"#,
+    )
+    .unwrap();
+    let cargo_args = ["--config", "build.target-dir='other-target'"];
+
+    for _ in 0..2 {
+        let output = run_cargo_build(tempdir.path(), &cargo_args, &[]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "build failed: {output:?}");
+        assert!(
+            stdout.contains("cache bypass"),
+            "unresolved automatic outputs must not cache logs: {stdout}"
+        );
+    }
+}
+
+#[test]
+fn test_cargo_unresolved_layout_preserves_explicit_cache_intent() {
+    for cache in [true, false] {
+        let tempdir = cargo_tempdir();
+        setup_cargo_monorepo(tempdir.path());
+        fs::write(
+            tempdir.path().join("turbo.json"),
+            format!(
+                r#"{{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {{ "experimentalCargoWorkspaces": true }},
+  "tasks": {{ "app#build": {{ "cache": {cache} }} }}
+}}"#
+            ),
+        )
+        .unwrap();
+        let task = cargo_build_definition(
+            tempdir.path(),
+            &["--config", "build.target-dir='other-target'"],
+            &[],
+        );
+        assert_eq!(task["resolvedTaskDefinition"]["cache"], cache);
+    }
+}
+
+#[test]
+fn test_cargo_unresolved_layout_preserves_explicit_outputs() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    let output_name = if cfg!(windows) { "app.exe" } else { "app" };
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        format!(
+            r#"{{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {{ "experimentalCargoWorkspaces": true }},
+  "tasks": {{ "app#build": {{ "outputs": ["../../other-target/debug/{output_name}"] }} }}
+}}"#
+        ),
+    )
+    .unwrap();
+    let cargo_args = ["--config", "build.target-dir='other-target'"];
+    let output = run_cargo_build(tempdir.path(), &cargo_args, &[]);
+    assert!(output.status.success(), "build failed: {output:?}");
+    let artifact = cargo_binary(tempdir.path(), &["other-target", "debug"]);
+    assert!(artifact.exists(), "explicit output was not produced");
+    fs::remove_file(&artifact).unwrap();
+    let output = run_cargo_build(tempdir.path(), &cargo_args, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "cache hit failed: {output:?}");
+    assert!(
+        stdout.contains("FULL TURBO"),
+        "expected cache hit: {stdout}"
+    );
+    assert!(artifact.exists(), "explicit output was not restored");
+}
+
+#[test]
 fn test_cargo_command_override_uses_only_configured_io() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
     fs::write(
         tempdir.path().join("turbo.json"),
@@ -328,13 +1121,11 @@ fn test_cargo_command_override_uses_only_configured_io() {
     fs::write(&bin, "stale cargo deliverable").unwrap();
 
     let run = || {
-        let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_turbo"));
-        command
-            .args(["run", "build", "--filter=app", "--log-order", "grouped"])
-            .env("OVERRIDE_ENV", "configured")
-            .current_dir(tempdir.path())
-            .output()
-            .expect("turbo runs")
+        run_turbo_with_env(
+            tempdir.path(),
+            &["run", "build", "--filter=app", "--log-order", "grouped"],
+            &[("OVERRIDE_ENV", "configured")],
+        )
     };
     let output = run();
     assert!(output.status.success(), "override failed: {output:?}");
@@ -356,7 +1147,7 @@ fn test_cargo_command_override_uses_only_configured_io() {
 
 #[test]
 fn test_cargo_run_and_dev_default_to_uncached() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
 
     let output = run_turbo(
@@ -405,7 +1196,7 @@ fn test_cargo_run_and_dev_default_to_uncached() {
 
 #[test]
 fn test_explicit_cache_overrides_cargo_run_default() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
     fs::write(
         tempdir.path().join("turbo.json"),
@@ -433,7 +1224,7 @@ fn test_explicit_cache_overrides_cargo_run_default() {
 
 #[test]
 fn test_command_override_uses_generic_cache_default_across_toolchains() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
     fs::write(
         tempdir.path().join("turbo.json"),
@@ -499,7 +1290,7 @@ fn test_command_override_uses_generic_cache_default_across_toolchains() {
 
 #[test]
 fn test_dependency_crate_change_invalidates_entrypoint() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
 
     let output = run_turbo(tempdir.path(), &["build", "--filter=app"]);
@@ -531,13 +1322,12 @@ fn test_dependency_crate_change_invalidates_entrypoint() {
 /// pruned output with `cargo build --locked`.
 #[test]
 fn test_prune_produces_buildable_cargo_workspace() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
 
     // Prune requires a lockfile; generate it the way a real repo has one.
-    let status = std::process::Command::new("cargo")
+    let status = cargo_command(tempdir.path())
         .arg("generate-lockfile")
-        .current_dir(tempdir.path())
         .status()
         .expect("cargo generate-lockfile runs");
     assert!(status.success());
@@ -565,9 +1355,8 @@ fn test_prune_produces_buildable_cargo_workspace() {
 
     // The decisive assertion: the pruned workspace builds with the pruned
     // lockfile, strictly.
-    let build = std::process::Command::new("cargo")
+    let build = cargo_command(&out)
         .args(["build", "--locked", "-p", "app"])
-        .current_dir(&out)
         .output()
         .expect("cargo build runs");
     assert!(
@@ -575,7 +1364,7 @@ fn test_prune_produces_buildable_cargo_workspace() {
         "pruned workspace must build --locked: {}",
         String::from_utf8_lossy(&build.stderr)
     );
-    let run = std::process::Command::new(out.join("target/debug/app"))
+    let run = std::process::Command::new(cargo_binary(&out, &["target", "debug"]))
         .output()
         .expect("pruned binary runs");
     assert!(
@@ -588,11 +1377,10 @@ fn test_prune_produces_buildable_cargo_workspace() {
 /// dependencies (manifests + lockfile), the full layer carries sources.
 #[test]
 fn test_prune_docker_layout_for_cargo() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
-    let status = std::process::Command::new("cargo")
+    let status = cargo_command(tempdir.path())
         .arg("generate-lockfile")
-        .current_dir(tempdir.path())
         .status()
         .expect("cargo generate-lockfile runs");
     assert!(status.success());
@@ -620,9 +1408,8 @@ fn test_prune_docker_layout_for_cargo() {
     let json_lock = fs::read(out.join("json/Cargo.lock")).unwrap();
     assert_eq!(full_lock, json_lock, "docker lockfiles must stay in sync");
 
-    let build = std::process::Command::new("cargo")
+    let build = cargo_command(&out.join("full"))
         .args(["build", "--locked", "-p", "app"])
-        .current_dir(out.join("full"))
         .output()
         .expect("cargo build runs");
     assert!(
@@ -636,7 +1423,7 @@ fn test_prune_docker_layout_for_cargo() {
 /// Cargo workspace files.
 #[test]
 fn test_prune_js_target_unaffected_by_cargo() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
 
     let output = run_turbo(tempdir.path(), &["prune", "js-pkg"]);
@@ -650,7 +1437,7 @@ fn test_prune_js_target_unaffected_by_cargo() {
 
 #[test]
 fn test_prune_js_docker_target_skips_cargo_finalization() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
 
     let output = run_turbo(tempdir.path(), &["prune", "js-pkg", "--docker"]);
@@ -673,7 +1460,7 @@ fn test_prune_js_docker_target_skips_cargo_finalization() {
 /// a pruneable target.
 #[test]
 fn test_prune_cargo_workspace_package_rejected() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
 
     let output = run_turbo(tempdir.path(), &["prune", "acme"]);
@@ -687,7 +1474,7 @@ fn test_prune_cargo_workspace_package_rejected() {
 
 #[test]
 fn test_filter_hint_when_cargo_disabled() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
 
     // Remove the opt-in: crates vanish from the graph, and filtering for
@@ -715,7 +1502,7 @@ fn test_filter_hint_when_cargo_disabled() {
 /// via the `rust` map key, and defines tasks even for library crates.
 #[test]
 fn test_command_override_on_cargo_packages() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
 
     fs::write(

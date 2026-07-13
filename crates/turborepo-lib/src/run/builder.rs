@@ -791,6 +791,7 @@ impl RunBuilder {
             &root_turbo_json,
             engine_pkgs,
             &turbo_json_loader,
+            &env_at_execution_start,
         )?;
 
         let task_access = {
@@ -815,6 +816,7 @@ impl RunBuilder {
                 &root_turbo_json,
                 engine_pkgs,
                 &turbo_json_loader,
+                &env_at_execution_start,
             )?;
         }
 
@@ -1072,6 +1074,7 @@ impl RunBuilder {
         root_turbo_json: &TurboJson,
         filtered_pkgs: impl Iterator<Item = &'a PackageName>,
         turbo_json_loader: &impl turborepo_engine::TurboJsonLoader,
+        environment: &EnvironmentVariableMap,
     ) -> Result<Engine, Error> {
         let tasks = self.opts.run_opts.tasks.iter().map(|task| {
             // TODO: Pull span info from command
@@ -1084,6 +1087,13 @@ impl RunBuilder {
         } else {
             Vec::new()
         };
+        let mut task_io_environment = EnvironmentVariableMap::default();
+        for toolchain in pkg_dep_graph.toolchains().iter() {
+            let selected = environment
+                .from_wildcards(toolchain.task_io_env_vars())
+                .map_err(Error::Env)?;
+            task_io_environment.union(&selected);
+        }
         let mut builder = EngineBuilder::new(
             &self.repo_root,
             pkg_dep_graph,
@@ -1095,6 +1105,10 @@ impl RunBuilder {
         .with_workspaces(filtered_pkgs.cloned().collect())
         .with_future_flags(self.opts.future_flags)
         .with_global_deps(global_deps_for_task_inputs)
+        .with_task_io_context(
+            self.opts.run_opts.pass_through_args.clone(),
+            task_io_environment.into_inner(),
+        )
         .with_tasks(tasks);
 
         if self.add_all_tasks {

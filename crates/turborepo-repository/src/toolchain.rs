@@ -274,6 +274,14 @@ pub trait Toolchain: Send + Sync {
         TaskDefaults::default()
     }
 
+    /// Startup environment variables this toolchain needs to derive task I/O.
+    /// The engine retains only these declared keys rather than the full process
+    /// environment. The engine automatically adds every declared key to the
+    /// task's hashed environment when derived I/O applies.
+    fn task_io_env_vars(&self) -> &'static [&'static str] {
+        &[]
+    }
+
     /// Hash wiring this toolchain derives for `task` in `package`, beyond
     /// what turbo.json declares: extra input globs and env vars that
     /// participate in the task hash, output globs to cache, and whether the
@@ -297,6 +305,7 @@ pub trait Toolchain: Send + Sync {
         path_to_root: &str,
         dependencies: &[&crate::package_graph::PackageInfo],
         wants_automatic_inputs: bool,
+        context: &TaskIOContext<'_>,
     ) -> Option<DerivedTaskIO> {
         let _ = (
             package,
@@ -304,6 +313,7 @@ pub trait Toolchain: Send + Sync {
             path_to_root,
             dependencies,
             wants_automatic_inputs,
+            context,
         );
         None
     }
@@ -447,6 +457,25 @@ impl WatchSpec {
     }
 }
 
+/// Run-scoped inputs that can affect toolchain-derived task I/O.
+#[derive(Debug, Clone, Copy)]
+pub struct TaskIOContext<'a> {
+    pub task_args: &'a [String],
+    pub environment: &'a std::collections::HashMap<String, String>,
+}
+
+/// Whether a toolchain can resolve a task's automatic outputs exactly.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum DerivedOutputs {
+    /// The task has no toolchain-derived outputs.
+    #[default]
+    None,
+    /// Exact output paths, relative to the package directory.
+    Resolved(Vec<String>),
+    /// The task produces outputs, but their paths cannot be resolved safely.
+    Unavailable,
+}
+
 /// Hash wiring derived by a toolchain for one task. See
 /// [`Toolchain::derived_task_io`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -458,8 +487,7 @@ pub struct DerivedTaskIO {
     pub package_default_inputs: Option<bool>,
     /// Env vars that participate in the task hash.
     pub env: Vec<String>,
-    /// Output globs to cache, relative to the package directory.
-    pub output_globs: Vec<String>,
+    pub outputs: DerivedOutputs,
 }
 
 /// The set of toolchains contributing packages to the repository.
@@ -709,6 +737,7 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
         _path_to_root: &str,
         _dependencies: &[&crate::package_graph::PackageInfo],
         _wants_automatic_inputs: bool,
+        _context: &TaskIOContext<'_>,
     ) -> Option<DerivedTaskIO> {
         // Deliberately nothing: for JavaScript, turbo.json is the whole
         // story — inputs default to the package's files, outputs are
