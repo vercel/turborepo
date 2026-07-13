@@ -191,6 +191,14 @@ fn rustc_host_target() -> String {
         .to_string()
 }
 
+fn alternate_host_target(host: &str) -> &'static str {
+    if host == "x86_64-unknown-linux-gnu" {
+        "aarch64-unknown-linux-gnu"
+    } else {
+        "x86_64-unknown-linux-gnu"
+    }
+}
+
 fn run_cargo_build(dir: &Path, cargo_args: &[&str], env: &[(&str, &str)]) -> std::process::Output {
     let mut args = vec!["build", "--filter=app", "--log-order", "grouped"];
     if !cargo_args.is_empty() {
@@ -238,21 +246,39 @@ fn assert_isolated_restoration(
     second_args: &[&str],
     second_path: &[&str],
 ) {
+    assert_isolated_restoration_with_env(
+        first_args,
+        first_path,
+        second_args,
+        second_path,
+        &[],
+        &[],
+    );
+}
+
+fn assert_isolated_restoration_with_env(
+    first_args: &[&str],
+    first_path: &[&str],
+    second_args: &[&str],
+    second_path: &[&str],
+    first_env: &[(&str, &str)],
+    second_env: &[(&str, &str)],
+) {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
     let first = cargo_binary(tempdir.path(), first_path);
     let second = cargo_binary(tempdir.path(), second_path);
 
-    let output = run_cargo_build(tempdir.path(), first_args, &[]);
+    let output = run_cargo_build(tempdir.path(), first_args, first_env);
     assert!(output.status.success(), "first build failed: {output:?}");
     assert!(first.exists(), "first deliverable missing: {first:?}");
-    let output = run_cargo_build(tempdir.path(), second_args, &[]);
+    let output = run_cargo_build(tempdir.path(), second_args, second_env);
     assert!(output.status.success(), "second build failed: {output:?}");
     assert!(second.exists(), "second deliverable missing: {second:?}");
 
     fs::remove_file(&first).unwrap();
     fs::remove_file(&second).unwrap();
-    let output = run_cargo_build(tempdir.path(), second_args, &[]);
+    let output = run_cargo_build(tempdir.path(), second_args, second_env);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(output.status.success(), "restore failed: {output:?}");
     assert!(
@@ -262,7 +288,7 @@ fn assert_isolated_restoration(
     assert!(second.exists(), "effective deliverable was not restored");
     assert!(
         !first.exists(),
-        "cache restored a deliverable from another Cargo profile"
+        "cache restored a deliverable from another Cargo layout"
     );
 }
 
@@ -626,6 +652,165 @@ fn test_cargo_test_and_bench_profile_directories_restore_exactly() {
 }
 
 #[test]
+fn test_cargo_explicit_and_environment_host_targets_restore_exactly() {
+    let host = rustc_host_target();
+    let target_arg = format!("--target={host}");
+    assert_isolated_restoration(
+        &[],
+        &["target", "debug"],
+        &[&target_arg],
+        &["target", &host, "debug"],
+    );
+    assert_isolated_restoration_with_env(
+        &[],
+        &["target", "debug"],
+        &[],
+        &["target", &host, "debug"],
+        &[],
+        &[("CARGO_BUILD_TARGET", &host)],
+    );
+}
+
+#[test]
+fn test_cargo_cli_target_overrides_environment_target() {
+    let host = rustc_host_target();
+    let lower_target = alternate_host_target(&host);
+    let target_arg = format!("--target={host}");
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    let artifact = cargo_binary(tempdir.path(), &["target", &host, "debug"]);
+    let environment = [("CARGO_BUILD_TARGET", lower_target)];
+
+    let output = run_cargo_build(tempdir.path(), &[&target_arg], &environment);
+    assert!(output.status.success(), "build failed: {output:?}");
+    fs::remove_file(&artifact).unwrap();
+    let output = run_cargo_build(tempdir.path(), &[&target_arg], &environment);
+    assert!(String::from_utf8_lossy(&output.stdout).contains("FULL TURBO"));
+    assert!(artifact.exists(), "CLI target did not override environment");
+}
+
+#[test]
+fn test_cargo_argument_and_environment_target_directories_restore_exactly() {
+    assert_isolated_restoration(
+        &[],
+        &["target", "debug"],
+        &["--target-dir=argument-target"],
+        &["argument-target", "debug"],
+    );
+    assert_isolated_restoration_with_env(
+        &[],
+        &["target", "debug"],
+        &[],
+        &["environment-target", "debug"],
+        &[],
+        &[("CARGO_TARGET_DIR", "environment-target")],
+    );
+}
+
+#[test]
+fn test_cargo_repository_config_target_directory_restores_exactly() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    let default = cargo_binary(tempdir.path(), &["target", "debug"]);
+    assert!(run_cargo_build(tempdir.path(), &[], &[]).status.success());
+
+    let cargo_config = tempdir.path().join(".cargo");
+    fs::create_dir_all(&cargo_config).unwrap();
+    fs::write(
+        cargo_config.join("config.toml"),
+        "[build]\ntarget-dir = \"configured-target\"\n",
+    )
+    .unwrap();
+    let configured = cargo_binary(tempdir.path(), &["configured-target", "debug"]);
+    assert!(run_cargo_build(tempdir.path(), &[], &[]).status.success());
+    fs::remove_file(&default).unwrap();
+    fs::remove_file(&configured).unwrap();
+
+    let output = run_cargo_build(tempdir.path(), &[], &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "restore failed: {output:?}");
+    assert!(
+        stdout.contains("FULL TURBO"),
+        "expected cache hit: {stdout}"
+    );
+    assert!(configured.exists());
+    assert!(!default.exists());
+}
+
+#[test]
+fn test_cargo_target_directory_precedence_restores_only_effective_output() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    let cargo_config = tempdir.path().join(".cargo");
+    fs::create_dir_all(&cargo_config).unwrap();
+    fs::write(
+        cargo_config.join("config.toml"),
+        "[build]\ntarget-dir = \"config-target\"\n",
+    )
+    .unwrap();
+    let config = cargo_binary(tempdir.path(), &["config-target", "debug"]);
+    let environment = cargo_binary(tempdir.path(), &["env-target", "debug"]);
+    let cli = cargo_binary(tempdir.path(), &["cli-target", "debug"]);
+
+    assert!(run_cargo_build(tempdir.path(), &[], &[]).status.success());
+    assert!(
+        run_cargo_build(tempdir.path(), &[], &[("CARGO_TARGET_DIR", "env-target")])
+            .status
+            .success()
+    );
+    assert!(
+        run_cargo_build(
+            tempdir.path(),
+            &["--target-dir=cli-target"],
+            &[("CARGO_TARGET_DIR", "env-target")],
+        )
+        .status
+        .success()
+    );
+    assert!(config.exists() && environment.exists() && cli.exists());
+    fs::remove_file(&config).unwrap();
+    fs::remove_file(&environment).unwrap();
+    fs::remove_file(&cli).unwrap();
+
+    let output = run_cargo_build(tempdir.path(), &[], &[("CARGO_TARGET_DIR", "env-target")]);
+    assert!(String::from_utf8_lossy(&output.stdout).contains("FULL TURBO"));
+    assert!(environment.exists());
+    assert!(!config.exists() && !cli.exists());
+    fs::remove_file(&environment).unwrap();
+
+    let output = run_cargo_build(
+        tempdir.path(),
+        &["--target-dir=cli-target"],
+        &[("CARGO_TARGET_DIR", "env-target")],
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("FULL TURBO"));
+    assert!(cli.exists());
+    assert!(!config.exists() && !environment.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_cargo_symlink_target_directory_escape_is_uncached() {
+    let fixture = cargo_tempdir();
+    let repo = fixture.path().join("repo");
+    fs::create_dir_all(&repo).unwrap();
+    setup_cargo_monorepo(&repo);
+    configure_build_without_outputs(&repo);
+    let outside = fixture.path().join("outside-target");
+    fs::create_dir_all(&outside).unwrap();
+    std::os::unix::fs::symlink(&outside, repo.join("escape")).unwrap();
+    let artifact = cargo_binary(&outside, &["build", "debug"]);
+
+    for _ in 0..2 {
+        let output = run_cargo_build(&repo, &[], &[("CARGO_TARGET_DIR", "escape/build")]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "build failed: {output:?}");
+        assert!(stdout.contains("cache bypass"), "expected bypass: {stdout}");
+        assert!(artifact.exists());
+    }
+}
+
+#[test]
 fn test_external_cargo_home_config_is_uncached_in_strict_mode() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
@@ -699,7 +884,6 @@ fn test_repository_config_layout_controls_are_uncached() {
     let host = rustc_host_target();
     for config in [
         format!("[build]\ntarget = \"{host}\"\n"),
-        "[build]\ntarget-dir = \"configured-target\"\n".to_string(),
         "[build]\nartifact-dir = \"artifact-copy\"\n".to_string(),
         "[profile.ci]\ninherits = \"dev\"\ndir-name = \"profile-output\"\n".to_string(),
     ] {
@@ -767,12 +951,9 @@ fn test_manifest_layout_controls_are_uncached() {
 
 #[test]
 fn test_compiler_and_layout_environment_controls_are_uncached() {
-    let host = rustc_host_target();
     for (name, value) in [
         ("RUSTC", "rustc"),
         ("CARGO_BUILD_RUSTC", "rustc"),
-        ("CARGO_BUILD_TARGET", host.as_str()),
-        ("CARGO_TARGET_DIR", "other-target"),
         ("CARGO_BUILD_TARGET_DIR", "other-target"),
         ("CARGO_BUILD_ARTIFACT_DIR", "artifact-copy"),
         ("CARGO_PROFILE_CI_DIR_NAME", "profile-output"),
@@ -877,7 +1058,7 @@ fn test_config_beneath_symlinked_cargo_directory_is_untracked() {
 }
 
 #[test]
-fn test_unresolved_layout_preserves_explicit_intent() {
+fn test_unavailable_outputs_preserve_explicit_intent() {
     for cache in [true, false] {
         let tempdir = cargo_tempdir();
         setup_cargo_monorepo(tempdir.path());
@@ -892,11 +1073,11 @@ fn test_unresolved_layout_preserves_explicit_intent() {
             ),
         )
         .unwrap();
-        let cargo_args = ["--target-dir=other-target"];
-        let task = cargo_build_definition(tempdir.path(), &cargo_args, &[]);
+        let environment = [("RUSTC", "rustc")];
+        let task = cargo_build_definition(tempdir.path(), &[], &environment);
         assert_eq!(task["resolvedTaskDefinition"]["cache"], cache);
         for run in 0..2 {
-            let output = run_cargo_build(tempdir.path(), &cargo_args, &[]);
+            let output = run_cargo_build(tempdir.path(), &[], &environment);
             assert!(output.status.success(), "build failed: {output:?}");
             let stdout = String::from_utf8_lossy(&output.stdout);
             if cache && run == 1 {

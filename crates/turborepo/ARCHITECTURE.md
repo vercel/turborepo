@@ -249,23 +249,27 @@ whether anything changed; Cargo decides how and in what order to build.**
   `rust-toolchain` overrides apply) and added to every Cargo package's set.
   This prevents compiler releases, operating systems, architectures, or host
   ABIs from sharing native artifact cache entries. Explicit targets selected
-  through hashed task arguments, `CARGO_BUILD_TARGET`, or repository Cargo
-  configuration remain distinct. Failure to resolve the compiler identity is
+  through hashed task arguments or `CARGO_BUILD_TARGET` remain distinct;
+  repository `build.target` stays conservatively unavailable. Failure to
+  resolve the compiler identity is
   a hard error. Every non-empty Cargo workspace must have a current
   `Cargo.lock`: discovery runs full `cargo metadata --locked --all-features`
   before hashing, then computes per-crate closures. Missing, stale, unparsable,
   or incomplete lockfiles are hard errors. Turborepo never creates or refreshes
   the source lockfile; users do that explicitly with Cargo and commit the
   result.
-- **Caching**: task caches store logs plus, for entrypoint builds, the exact
-  host deliverables under the default `target/` directory. The `rustc -vV`
-  host triple selects one platform-correct basename per bin/cdylib/staticlib,
-  while task arguments resolve the effective profile directory (`debug`,
-  `release`, a custom profile, with built-in `test`/`bench` mappings). No
-  profile or platform wildcards are cached. Explicit targets and every
-  target-directory override remain unavailable and fail closed. Automatic
-  outputs also fail closed when the compiler is overridden or when
-  manifests/configuration can alter targets,
+- **Caching**: task caches store logs plus, for entrypoint builds, exact
+  deliverables under the effective target directory. The `rustc -vV` host and
+  `rustc --print target-list` validate target triples; CLI `--target` wins over
+  `CARGO_BUILD_TARGET`, and the effective target adds its Cargo path segment and
+  platform-correct bin/cdylib/staticlib basename. CLI `--target-dir` wins over
+  `CARGO_TARGET_DIR`, which wins over Cargo metadata (including repository
+  `target-dir`). Target directories are accepted only when their canonical or
+  nearest existing path remains in the repository. No profile or platform
+  wildcards are cached. Automatic outputs fail closed for repository
+  `build.target`, unknown/custom targets, path escapes,
+  `CARGO_BUILD_TARGET_DIR`, compiler overrides, or when
+  manifests/configuration can alter
   profile directories, artifact names/locations, or include unhashable external
   configuration. External, included, and Cargo configuration beneath any
   symlinked path component is untracked; those config paths are not emitted as
