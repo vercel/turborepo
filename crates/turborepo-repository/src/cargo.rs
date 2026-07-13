@@ -3432,7 +3432,16 @@ release: 1.96.0-nightly\n",
         let toolchain::DerivedOutputs::Resolved(outputs) = &io.outputs else {
             panic!("Cargo host outputs must remain resolved");
         };
-        assert_eq!(outputs, &["../../target/debug/app"]);
+        let workspace_details = toolchain.workspace_details().unwrap();
+        let platform = target_platform(&workspace_details.host_target).unwrap();
+        let basename = deliverable_basename(
+            &Deliverable {
+                name: "app".to_string(),
+                kind: DeliverableKind::Bin,
+            },
+            platform,
+        );
+        assert_eq!(outputs, &[format!("../../target/debug/{basename}")]);
         assert!(outputs.iter().all(|output| !output.contains('*')));
 
         let unsupported_target = ["--target=thumbv7em-none-eabihf".to_string()];
