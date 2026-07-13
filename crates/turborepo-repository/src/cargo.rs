@@ -621,7 +621,7 @@ fn crate_source_globs(prefix: &str, crate_path: &str) -> [String; 2] {
 struct CargoWorkspaceDetails {
     target_directory: AbsoluteSystemPathBuf,
     repository_config_alters_output_layout: bool,
-    repository_config_escapes: bool,
+    repository_config_untracked: bool,
     external_config_present: bool,
     manifest_alters_profile_dirs: bool,
 }
@@ -1168,13 +1168,15 @@ impl Toolchain for CargoToolchain {
             env: HASHED_ENV_VARS.iter().map(|var| var.to_string()).collect(),
             ..Default::default()
         };
-        if self
-            .workspace_details()
-            .is_some_and(|workspace| workspace.repository_config_escapes)
+        if let Some(workspace) = self.workspace_details()
+            && (workspace.repository_config_untracked || workspace.external_config_present)
         {
-            io.input_globs.retain(|glob| {
-                !glob.ends_with(".cargo/config.toml") && !glob.ends_with(".cargo/config")
-            });
+            io.input_safety = toolchain::DerivedInputSafety::Untracked;
+            if workspace.repository_config_untracked {
+                io.input_globs.retain(|glob| {
+                    !glob.ends_with(".cargo/config.toml") && !glob.ends_with(".cargo/config")
+                });
+            }
         }
 
         // Source globs for the crates whose code this task compiles,
@@ -1298,7 +1300,7 @@ impl Toolchain for CargoToolchain {
             })
             .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
             if let Some(target_directory) = target_directory {
-                let startup_environment: HashMap<String, String> = std::env::vars().collect();
+                let startup_environment = CargoHomeEnvironment::current();
                 let config = cargo_config_influence(&self.repo_root, &startup_environment);
                 *self
                     .workspace_details
@@ -1308,7 +1310,7 @@ impl Toolchain for CargoToolchain {
                         target_directory,
                         repository_config_alters_output_layout: config
                             .repository_alters_output_layout,
-                        repository_config_escapes: config.repository_config_escapes,
+                        repository_config_untracked: config.repository_config_untracked,
                         external_config_present: config.external_present,
                         manifest_alters_profile_dirs: manifest_alters_profile_dirs(&self.repo_root),
                     });
@@ -1523,7 +1525,7 @@ fn manifest_alters_profile_dirs(repo_root: &AbsoluteSystemPath) -> bool {
 #[derive(Debug, Default)]
 struct CargoConfigInfluence {
     repository_alters_output_layout: bool,
-    repository_config_escapes: bool,
+    repository_config_untracked: bool,
     external_present: bool,
 }
 
@@ -1531,11 +1533,12 @@ fn config_alters_output_layout(
     repo_root: &AbsoluteSystemPath,
     path: &std::path::Path,
 ) -> Option<(bool, bool)> {
-    match std::fs::symlink_metadata(path) {
-        Ok(_) => {}
+    let metadata = match std::fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return None,
-        Err(_) => return Some((true, false)),
-    }
+        Err(_) => return Some((true, true)),
+    };
+    let is_symlink = metadata.file_type().is_symlink();
     let contained = dunce::canonicalize(repo_root.as_std_path())
         .ok()
         .zip(dunce::canonicalize(path).ok())
@@ -1545,11 +1548,11 @@ fn config_alters_output_layout(
     }
     let contents = match std::fs::read_to_string(path) {
         Ok(contents) => contents,
-        Err(_) => return Some((true, false)),
+        Err(_) => return Some((true, is_symlink)),
     };
     let config = match contents.parse::<toml_edit::DocumentMut>() {
         Ok(config) => config,
-        Err(_) => return Some((true, false)),
+        Err(_) => return Some((true, is_symlink)),
     };
     let build = config.get("build");
     let profile_dir_name = config
@@ -1560,23 +1563,43 @@ fn config_alters_output_layout(
                 .iter()
                 .any(|(_, profile)| profile.get("dir-name").is_some())
         });
+    let includes = config.get("include").is_some();
     Some((
         build.is_some_and(|build| {
             ["target", "target-dir", "rustc", "artifact-dir"]
                 .iter()
                 .any(|key| build.get(key).is_some())
         }) || profile_dir_name
-            || config.get("include").is_some(),
-        false,
+            || includes,
+        is_symlink || includes,
     ))
+}
+
+#[derive(Debug, Default)]
+struct CargoHomeEnvironment {
+    cargo_home: Option<std::ffi::OsString>,
+    user_profile: Option<std::ffi::OsString>,
+    home: Option<std::ffi::OsString>,
+}
+
+impl CargoHomeEnvironment {
+    fn current() -> Self {
+        // `var_os` preserves non-UTF-8 values and follows Windows' case-insensitive
+        // lookup.
+        Self {
+            cargo_home: std::env::var_os("CARGO_HOME"),
+            user_profile: std::env::var_os("USERPROFILE"),
+            home: std::env::var_os("HOME"),
+        }
+    }
 }
 
 fn cargo_home_candidates(
     repo_root: &AbsoluteSystemPath,
-    environment: &HashMap<String, String>,
+    environment: &CargoHomeEnvironment,
     windows: bool,
 ) -> Vec<std::path::PathBuf> {
-    if let Some(cargo_home) = environment.get("CARGO_HOME") {
+    if let Some(cargo_home) = environment.cargo_home.as_deref() {
         let cargo_home = std::path::Path::new(cargo_home);
         return vec![if cargo_home.is_absolute() {
             cargo_home.to_path_buf()
@@ -1586,10 +1609,10 @@ fn cargo_home_candidates(
     }
 
     let mut candidates = Vec::new();
-    if windows && let Some(user_profile) = environment.get("USERPROFILE") {
+    if windows && let Some(user_profile) = environment.user_profile.as_deref() {
         candidates.push(std::path::Path::new(user_profile).join(".cargo"));
     }
-    if let Some(home) = environment.get("HOME") {
+    if let Some(home) = environment.home.as_deref() {
         let home = std::path::Path::new(home).join(".cargo");
         if !candidates.contains(&home) {
             candidates.push(home);
@@ -1600,16 +1623,16 @@ fn cargo_home_candidates(
 
 fn cargo_config_influence(
     repo_root: &AbsoluteSystemPath,
-    environment: &HashMap<String, String>,
+    environment: &CargoHomeEnvironment,
 ) -> CargoConfigInfluence {
     let repository_cargo = repo_root.as_std_path().join(".cargo");
     let mut influence = CargoConfigInfluence::default();
     for name in ["config.toml", "config"] {
-        if let Some((alters_output_layout, escapes)) =
+        if let Some((alters_output_layout, untracked)) =
             config_alters_output_layout(repo_root, &repository_cargo.join(name))
         {
             influence.repository_alters_output_layout |= alters_output_layout;
-            influence.repository_config_escapes |= escapes;
+            influence.repository_config_untracked |= untracked;
         }
     }
 
@@ -2268,7 +2291,7 @@ dependencies = ["lib-a"]
         CargoWorkspaceDetails {
             target_directory: root.join_component(TARGET_DIR),
             repository_config_alters_output_layout: false,
-            repository_config_escapes: false,
+            repository_config_untracked: false,
             external_config_present: false,
             manifest_alters_profile_dirs: false,
         }
@@ -2372,9 +2395,21 @@ dependencies = ["lib-a"]
             &[".cargo", "config.toml"],
             "[build]\ntarget-dir = \"configured-target\"\n",
         );
-        assert!(cargo_config_influence(&repo, &HashMap::new()).repository_alters_output_layout);
+        assert!(
+            cargo_config_influence(&repo, &CargoHomeEnvironment::default())
+                .repository_alters_output_layout
+        );
+        write(
+            &repo,
+            &[".cargo", "config.toml"],
+            "include = \"other-config.toml\"\n",
+        );
+        assert!(
+            cargo_config_influence(&repo, &CargoHomeEnvironment::default())
+                .repository_config_untracked
+        );
         write(&root, &[".cargo", "config.toml"], "[net]\nretry = 2\n");
-        assert!(cargo_config_influence(&repo, &HashMap::new()).external_present);
+        assert!(cargo_config_influence(&repo, &CargoHomeEnvironment::default()).external_present);
     }
 
     #[cfg(unix)]
@@ -2393,9 +2428,46 @@ dependencies = ["lib-a"]
                 .as_std_path(),
         )
         .unwrap();
-        let influence = cargo_config_influence(&repo, &HashMap::new());
+        let influence = cargo_config_influence(&repo, &CargoHomeEnvironment::default());
         assert!(influence.repository_alters_output_layout);
-        assert!(influence.repository_config_escapes);
+        assert!(influence.repository_config_untracked);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_internal_repository_config_symlink_is_untracked() {
+        let (_tmp, root) = tempdir_root();
+        let repo = root.join_component("repo");
+        std::fs::create_dir_all(repo.join_component(".cargo").as_std_path()).unwrap();
+        let target = repo.join_component("cargo-config.toml");
+        target.create_with_contents("[net]\nretry = 2\n").unwrap();
+        std::os::unix::fs::symlink(
+            target.as_std_path(),
+            repo.join_components(&[".cargo", "config.toml"])
+                .as_std_path(),
+        )
+        .unwrap();
+
+        let influence = cargo_config_influence(&repo, &CargoHomeEnvironment::default());
+        assert!(!influence.repository_alters_output_layout);
+        assert!(influence.repository_config_untracked);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_non_utf8_cargo_home_path_is_preserved() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let (_tmp, root) = tempdir_root();
+        let relative = std::ffi::OsString::from_vec(b"cargo-\xff".to_vec());
+        let environment = CargoHomeEnvironment {
+            cargo_home: Some(relative.clone()),
+            ..Default::default()
+        };
+        assert_eq!(
+            cargo_home_candidates(&root, &environment, false),
+            [root.as_std_path().join(relative)]
+        );
     }
 
     #[test]

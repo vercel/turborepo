@@ -455,6 +455,39 @@ fn test_cargo_build_executes_caches_and_restores() {
 }
 
 #[test]
+fn test_custom_profile_uses_wildcard_outputs_and_restores() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    let manifest = tempdir.path().join("Cargo.toml");
+    let contents = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        manifest,
+        format!("{contents}\n[profile.ci]\ninherits = \"dev\"\n"),
+    )
+    .unwrap();
+    let args = ["--profile=ci"];
+
+    let first = run_cargo_build(tempdir.path(), &args, &[]);
+    assert!(first.status.success(), "build failed: {first:?}");
+    assert!(String::from_utf8_lossy(&first.stdout).contains("cache miss"));
+    let artifact = cargo_binary(tempdir.path(), &["target", "ci"]);
+    assert!(artifact.exists());
+
+    fs::remove_file(&artifact).unwrap();
+    let second = run_cargo_build(tempdir.path(), &args, &[]);
+    let stdout = String::from_utf8_lossy(&second.stdout);
+    assert!(second.status.success(), "restore failed: {second:?}");
+    assert!(
+        stdout.contains("FULL TURBO"),
+        "expected cache hit: {stdout}"
+    );
+    assert!(
+        artifact.exists(),
+        "custom-profile artifact must be restored"
+    );
+}
+
+#[test]
 fn test_external_cargo_home_config_is_uncached_in_strict_mode() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
@@ -475,6 +508,51 @@ fn test_external_cargo_home_config_is_uncached_in_strict_mode() {
             String::from_utf8_lossy(&output.stdout).contains("cache bypass"),
             "external Cargo config must disable implicit caching"
         );
+    }
+}
+
+#[test]
+fn test_untracked_config_respects_only_explicit_cache_authority() {
+    for (task_config, expected_cache) in [
+        (r#""cache": true"#, true),
+        (r#""cache": false"#, false),
+        (r#""outputs": ["../../target/*/app"]"#, false),
+    ] {
+        let tempdir = cargo_tempdir();
+        setup_cargo_monorepo(tempdir.path());
+        fs::write(
+            tempdir.path().join("turbo.json"),
+            format!(
+                r#"{{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {{ "experimentalCargoWorkspaces": true }},
+  "tasks": {{ "app#build": {{ {task_config} }} }}
+}}"#
+            ),
+        )
+        .unwrap();
+        let cargo_home = tempdir.path().join("external-cargo-home");
+        fs::create_dir_all(&cargo_home).unwrap();
+        fs::write(cargo_home.join("config.toml"), "[net]\nretry = 2\n").unwrap();
+        let cargo_home = cargo_home.to_string_lossy();
+
+        let task =
+            cargo_build_definition(tempdir.path(), &[], &[("CARGO_HOME", cargo_home.as_ref())]);
+        assert_eq!(task["resolvedTaskDefinition"]["cache"], expected_cache);
+        for run in 0..2 {
+            let output =
+                run_cargo_build(tempdir.path(), &[], &[("CARGO_HOME", cargo_home.as_ref())]);
+            assert!(output.status.success(), "build failed: {output:?}");
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if expected_cache && run == 1 {
+                assert!(
+                    stdout.contains("FULL TURBO"),
+                    "expected cache hit: {stdout}"
+                );
+            } else if !expected_cache {
+                assert!(stdout.contains("cache bypass"), "expected bypass: {stdout}");
+            }
+        }
     }
 }
 
@@ -571,19 +649,63 @@ fn test_compiler_and_layout_environment_controls_are_uncached() {
 
 #[cfg(unix)]
 #[test]
-fn test_escaping_repository_config_is_uncached() {
+fn test_escaping_repository_config_is_untracked() {
     let fixture = cargo_tempdir();
     let repo = fixture.path().join("repo");
     fs::create_dir_all(&repo).unwrap();
     setup_cargo_monorepo(&repo);
     configure_build_without_outputs(&repo);
-    let host = rustc_host_target();
     let outside_config = fixture.path().join("outside-config.toml");
-    fs::write(&outside_config, format!("[build]\ntarget = \"{host}\"\n")).unwrap();
+    fs::write(&outside_config, "[net]\nretry = 2\n").unwrap();
     fs::create_dir_all(repo.join(".cargo")).unwrap();
-    std::os::unix::fs::symlink(outside_config, repo.join(".cargo/config.toml")).unwrap();
-    let task = cargo_build_definition(&repo, &[], &[]);
-    assert_eq!(task["resolvedTaskDefinition"]["cache"], false);
+    std::os::unix::fs::symlink(&outside_config, repo.join(".cargo/config.toml")).unwrap();
+
+    let before = cargo_build_definition(&repo, &[], &[]);
+    assert_eq!(before["resolvedTaskDefinition"]["cache"], false);
+    let inputs = before["resolvedTaskDefinition"]["inputs"]
+        .as_array()
+        .expect("resolved inputs");
+    assert!(
+        inputs.iter().all(|input| !input
+            .as_str()
+            .is_some_and(|input| input.contains(".cargo/config"))),
+        "symlinked config must not be emitted as a trusted input: {inputs:?}"
+    );
+
+    fs::write(&outside_config, "[net]\nretry = 3\n").unwrap();
+    let after = cargo_build_definition(&repo, &[], &[]);
+    assert_eq!(after["resolvedTaskDefinition"]["cache"], false);
+    assert_eq!(before["hash"], after["hash"]);
+}
+
+#[cfg(unix)]
+#[test]
+fn test_internal_repository_config_symlink_is_untracked() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    configure_build_without_outputs(tempdir.path());
+    let config_dir = tempdir.path().join("config");
+    fs::create_dir_all(&config_dir).unwrap();
+    let target = config_dir.join("cargo.toml");
+    fs::write(&target, "[net]\nretry = 2\n").unwrap();
+    fs::create_dir_all(tempdir.path().join(".cargo")).unwrap();
+    std::os::unix::fs::symlink(&target, tempdir.path().join(".cargo/config.toml")).unwrap();
+
+    let before = cargo_build_definition(tempdir.path(), &[], &[]);
+    assert_eq!(before["resolvedTaskDefinition"]["cache"], false);
+    let inputs = before["resolvedTaskDefinition"]["inputs"]
+        .as_array()
+        .expect("resolved inputs");
+    assert!(
+        inputs.iter().all(|input| !input
+            .as_str()
+            .is_some_and(|input| input.contains(".cargo/config"))),
+        "symlinked config must not be emitted as a trusted input: {inputs:?}"
+    );
+
+    fs::write(target, "[net]\nretry = 3\n").unwrap();
+    let after = cargo_build_definition(tempdir.path(), &[], &[]);
+    assert_eq!(before["hash"], after["hash"]);
 }
 
 #[test]
@@ -602,8 +724,22 @@ fn test_unresolved_layout_preserves_explicit_intent() {
             ),
         )
         .unwrap();
-        let task = cargo_build_definition(tempdir.path(), &["--target-dir=other-target"], &[]);
+        let cargo_args = ["--target-dir=other-target"];
+        let task = cargo_build_definition(tempdir.path(), &cargo_args, &[]);
         assert_eq!(task["resolvedTaskDefinition"]["cache"], cache);
+        for run in 0..2 {
+            let output = run_cargo_build(tempdir.path(), &cargo_args, &[]);
+            assert!(output.status.success(), "build failed: {output:?}");
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if cache && run == 1 {
+                assert!(
+                    stdout.contains("FULL TURBO"),
+                    "expected cache hit: {stdout}"
+                );
+            } else if !cache {
+                assert!(stdout.contains("cache bypass"), "expected bypass: {stdout}");
+            }
+        }
     }
 
     let tempdir = cargo_tempdir();

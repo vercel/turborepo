@@ -716,6 +716,11 @@ fn apply_derived_task_io(
         }
         turborepo_repository::toolchain::DerivedOutputs::Unavailable => {}
     }
+    if derived.input_safety == turborepo_repository::toolchain::DerivedInputSafety::Untracked
+        && !had_explicit_cache
+    {
+        task_def.cache = false;
+    }
 }
 
 fn resolve_command_override(
@@ -951,7 +956,7 @@ mod command_override_tests {
 
 #[cfg(test)]
 mod derived_io_tests {
-    use turborepo_repository::toolchain::{DerivedOutputs, DerivedTaskIO};
+    use turborepo_repository::toolchain::{DerivedInputSafety, DerivedOutputs, DerivedTaskIO};
     use turborepo_types::TaskDefinition;
 
     use super::apply_derived_task_io;
@@ -982,6 +987,36 @@ mod derived_io_tests {
                 ..Default::default()
             };
             apply_derived_task_io(&mut explicit_cache, unavailable(), &[], false, true);
+            assert_eq!(explicit_cache.cache, cache);
+        }
+    }
+
+    #[test]
+    fn untracked_inputs_require_explicit_cache_authority() {
+        let untracked = || DerivedTaskIO {
+            input_safety: DerivedInputSafety::Untracked,
+            outputs: DerivedOutputs::Resolved(vec!["automatic/**".to_string()]),
+            ..Default::default()
+        };
+
+        for had_explicit_outputs in [false, true] {
+            let mut implicit_cache = TaskDefinition::default();
+            apply_derived_task_io(
+                &mut implicit_cache,
+                untracked(),
+                &[],
+                had_explicit_outputs,
+                false,
+            );
+            assert!(!implicit_cache.cache);
+        }
+
+        for cache in [true, false] {
+            let mut explicit_cache = TaskDefinition {
+                cache,
+                ..Default::default()
+            };
+            apply_derived_task_io(&mut explicit_cache, untracked(), &[], true, true);
             assert_eq!(explicit_cache.cache, cache);
         }
     }

@@ -266,9 +266,12 @@ whether anything changed; Cargo decides how and in what order to build.**
   arguments or Cargo environment select a target/target directory, when the
   compiler is overridden, or when manifests/configuration can alter targets,
   profile directories, artifact names/locations, or include unhashable external
-  configuration. Escaping config symlinks are not hashed. These cases disable
-  implicit caching while explicit `outputs` and explicit cache settings remain
-  authoritative. Cargo's internal `target/` state is deliberately never cached
+  configuration. External, included, and symlinked Cargo configuration is
+  untracked; symlink paths are not emitted as trusted inputs. Unresolved outputs
+  disable implicit caching unless outputs or cache behavior are configured.
+  Untracked inputs disable caching unless `cache` itself is explicitly configured;
+  explicit outputs alone cannot make an incomplete input hash safe. Cargo's
+  internal `target/` state is deliberately never cached
   — it is Cargo's own incremental cache, and
   tarballing it fights Cargo instead of leaning on it (it is also
   multi-gigabyte). For fine-grained compile caching, `RUSTC_WRAPPER`
