@@ -160,6 +160,14 @@ through the trait. Machinery that predates the abstraction and has no trait
 surface yet (package-manager resolution for dependency splitting, the JS
 lockfile closure phase) is documented as known debt in the module.
 
+Toolchain-derived I/O receives task arguments plus a narrow startup-environment
+projection declared by each toolchain; undeclared variables are not retained,
+and every declared pattern automatically participates in task hashing. Derived
+outputs distinguish exact/resolved paths from unavailable automatic resolution.
+When outputs are unavailable, the engine disables implicit caching so a log-only
+hit cannot suppress execution, while explicit `outputs`, `cache: true`, and
+`cache: false` remain authoritative.
+
 #### Experimental Cargo Support (`crates/turborepo-repository/src/cargo.rs`)
 
 Behind `futureFlags.experimentalCargoWorkspaces` in the root turbo.json,

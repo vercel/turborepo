@@ -49,6 +49,18 @@ use crate::{
     turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
 };
 
+fn project_task_io_environment(
+    toolchains: &turborepo_repository::toolchain::ToolchainRegistry,
+    environment: &EnvironmentVariableMap,
+) -> Result<HashMap<String, String>, turborepo_env::Error> {
+    let mut projected = EnvironmentVariableMap::default();
+    for toolchain in toolchains.iter() {
+        let selected = environment.from_wildcards(toolchain.task_io_env_vars())?;
+        projected.union(&selected);
+    }
+    Ok(projected.into_inner())
+}
+
 pub struct RunBuilder {
     processes: ProcessManager,
     opts: Opts,
@@ -791,6 +803,7 @@ impl RunBuilder {
             &root_turbo_json,
             engine_pkgs,
             &turbo_json_loader,
+            &env_at_execution_start,
         )?;
 
         let task_access = {
@@ -815,6 +828,7 @@ impl RunBuilder {
                 &root_turbo_json,
                 engine_pkgs,
                 &turbo_json_loader,
+                &env_at_execution_start,
             )?;
         }
 
@@ -1072,6 +1086,7 @@ impl RunBuilder {
         root_turbo_json: &TurboJson,
         filtered_pkgs: impl Iterator<Item = &'a PackageName>,
         turbo_json_loader: &impl turborepo_engine::TurboJsonLoader,
+        environment: &EnvironmentVariableMap,
     ) -> Result<Engine, Error> {
         let tasks = self.opts.run_opts.tasks.iter().map(|task| {
             // TODO: Pull span info from command
@@ -1084,6 +1099,9 @@ impl RunBuilder {
         } else {
             Vec::new()
         };
+        let task_io_environment =
+            project_task_io_environment(pkg_dep_graph.toolchains(), environment)
+                .map_err(Error::Env)?;
         let mut builder = EngineBuilder::new(
             &self.repo_root,
             pkg_dep_graph,
@@ -1095,6 +1113,10 @@ impl RunBuilder {
         .with_workspaces(filtered_pkgs.cloned().collect())
         .with_future_flags(self.opts.future_flags)
         .with_global_deps(global_deps_for_task_inputs)
+        .with_task_io_context(
+            self.opts.run_opts.pass_through_args.clone(),
+            task_io_environment,
+        )
         .with_tasks(tasks);
 
         if self.add_all_tasks {
@@ -1173,6 +1195,57 @@ fn origins_match(url1: &str, url2: &str) -> bool {
 
 fn has_userinfo(url: &Url) -> bool {
     !url.username().is_empty() || url.password().is_some()
+}
+
+#[cfg(test)]
+mod task_io_context_tests {
+    use std::{collections::HashMap, sync::Arc};
+
+    use turborepo_env::EnvironmentVariableMap;
+    use turborepo_repository::toolchain::{
+        DiscoverPackagesFuture, Toolchain, ToolchainId, ToolchainRegistry,
+    };
+
+    use super::project_task_io_environment;
+
+    struct Stub;
+
+    impl Toolchain for Stub {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::new("stub")
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+
+        fn task_io_env_vars(&self) -> &'static [&'static str] {
+            &["LAYOUT_*", "EXACT_LAYOUT"]
+        }
+    }
+
+    #[test]
+    fn projection_includes_declared_environment_only() {
+        let mut toolchains = ToolchainRegistry::new();
+        toolchains.register(Arc::new(Stub));
+        let environment = EnvironmentVariableMap::from(HashMap::from([
+            ("LAYOUT_TARGET".to_string(), "target".to_string()),
+            ("EXACT_LAYOUT".to_string(), "exact".to_string()),
+            ("UNDECLARED_SECRET".to_string(), "secret".to_string()),
+        ]));
+
+        let projected = project_task_io_environment(&toolchains, &environment).unwrap();
+        assert_eq!(projected.len(), 2);
+        assert_eq!(
+            projected.get("LAYOUT_TARGET").map(String::as_str),
+            Some("target")
+        );
+        assert_eq!(
+            projected.get("EXACT_LAYOUT").map(String::as_str),
+            Some("exact")
+        );
+        assert!(!projected.contains_key("UNDECLARED_SECRET"));
+    }
 }
 
 #[cfg(test)]
