@@ -125,6 +125,16 @@ pub struct BerryManifest {
     catalogs: Option<Map<String, Map<String, String>>>,
 }
 
+fn builtin_dependency_extension_is_needed(
+    descriptor: &Descriptor,
+    package_names: &HashSet<String>,
+) -> bool {
+    // https://github.com/yarnpkg/berry/blob/master/packages/yarnpkg-extensions/sources/index.ts
+    descriptor.ident.to_string() == "@babel/types"
+        && descriptor.range == "npm:^7.8.3"
+        && package_names.contains("@babel/parser")
+}
+
 impl BerryLockfile {
     pub fn load(contents: &[u8], manifest: Option<BerryManifest>) -> Result<Self, super::Error> {
         let data = LockfileData::from_bytes(contents)?;
@@ -386,11 +396,13 @@ impl BerryLockfile {
         // dependency.
         {
             let mut dependency_names = HashSet::new();
+            let mut package_names = HashSet::new();
             let mut peer_descriptors = HashSet::new();
             for key in packages {
                 if let Ok(package_locator) = Locator::try_from(key.as_str())
                     && let Some(package) = self.locator_package.get(&package_locator)
                 {
+                    package_names.insert(package_locator.ident.to_string());
                     for (name, _) in package.dependencies.iter().flatten() {
                         dependency_names.insert(name.as_str());
                     }
@@ -432,7 +444,8 @@ impl BerryLockfile {
                 let needed = peer_descriptors.contains(descriptor)
                     || ident
                         .strip_prefix("@types/")
-                        .is_some_and(|name| dependency_names.contains(name));
+                        .is_some_and(|name| dependency_names.contains(name))
+                    || builtin_dependency_extension_is_needed(descriptor, &package_names);
 
                 if needed {
                     resolutions.insert(descriptor.clone(), locator.clone());
@@ -867,6 +880,76 @@ mod test {
         assert!(
             encoded.contains("buffer@npm:buffer@6.0.3"),
             "pruned lockfile should contain the npm alias entry"
+        );
+    }
+
+    #[test]
+    fn test_prune_preserves_babel_parser_package_extension() {
+        let yaml = r#"__metadata:
+  version: 8
+  cacheKey: 10c0
+
+"app@workspace:packages/app":
+  version: 0.0.0-use.local
+  resolution: "app@workspace:packages/app"
+  dependencies:
+    "@babel/template": "npm:^7.28.6"
+  languageName: unknown
+  linkType: soft
+
+"@babel/parser@npm:^7.28.6":
+  version: 7.29.0
+  resolution: "@babel/parser@npm:7.29.0"
+  languageName: node
+  linkType: hard
+
+"@babel/template@npm:^7.28.6":
+  version: 7.29.0
+  resolution: "@babel/template@npm:7.29.0"
+  dependencies:
+    "@babel/parser": "npm:^7.28.6"
+    "@babel/types": "npm:^7.28.6"
+  languageName: node
+  linkType: hard
+
+"@babel/types@npm:^7.28.6, @babel/types@npm:^7.8.3":
+  version: 7.29.0
+  resolution: "@babel/types@npm:7.29.0"
+  languageName: node
+  linkType: hard
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+"#;
+
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+        let with_parser = lockfile
+            .subgraph(
+                &["packages/app".to_string()],
+                &[
+                    "@babel/parser@npm:7.29.0".to_string(),
+                    "@babel/template@npm:7.29.0".to_string(),
+                    "@babel/types@npm:7.29.0".to_string(),
+                ],
+            )
+            .unwrap();
+        let without_parser = lockfile
+            .subgraph(&[], &["@babel/types@npm:7.29.0".to_string()])
+            .unwrap();
+
+        assert!(
+            String::from_utf8(with_parser.encode().unwrap())
+                .unwrap()
+                .contains("@babel/types@npm:^7.8.3")
+        );
+        assert!(
+            !String::from_utf8(without_parser.encode().unwrap())
+                .unwrap()
+                .contains("@babel/types@npm:^7.8.3")
         );
     }
 
