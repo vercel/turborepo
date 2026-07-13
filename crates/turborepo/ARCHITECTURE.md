@@ -225,8 +225,9 @@ whether anything changed; Cargo decides how and in what order to build.**
   their own sources plus their transitive dependency crates' sources
   (flattened, so invalidation doesn't depend on `dependsOn` wiring), the
   workspace files (root `Cargo.toml`, `.cargo/config*`, `rust-toolchain*`),
-  and standard Cargo/cc-rs environment inputs: compiler and rustdoc selection
-  and flags, Cargo build/profile/target configuration, native compiler and
+  and standard Cargo/cc-rs environment inputs: rustup home/toolchain selection,
+  compiler and rustdoc selection and flags, Cargo build/profile/target
+  configuration, native compiler and
   archiver settings (including target-qualified forms), and platform SDK
   selection. Arbitrary variables consumed by project-specific build scripts
   remain explicit task `env` configuration. The workspace package hashes all

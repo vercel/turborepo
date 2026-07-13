@@ -25,6 +25,7 @@ const AMBIENT_CARGO_LAYOUT_ENV: &[&str] = &[
     "HOME",
     "USERPROFILE",
     "RUSTUP_HOME",
+    "RUSTUP_TOOLCHAIN",
 ];
 
 fn ambient_cargo_layout_env_keys() -> Vec<std::ffi::OsString> {
@@ -75,6 +76,21 @@ fn isolated_cargo_environment(dir: &Path) -> (std::path::PathBuf, std::path::Pat
     let cargo_home = home.join(".cargo");
     fs::create_dir_all(&cargo_home).unwrap();
     (home, cargo_home)
+}
+
+fn active_rustup_toolchain() -> Option<String> {
+    let output = std::process::Command::new("rustup")
+        .args(["show", "active-toolchain"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    String::from_utf8(output.stdout)
+        .ok()?
+        .split_whitespace()
+        .next()
+        .map(str::to_string)
 }
 
 fn rustup_home() -> Option<std::path::PathBuf> {
@@ -334,6 +350,57 @@ fn test_cargo_semantic_environment_changes_task_hash() {
         network_only, baseline,
         "Cargo network settings must not invalidate build outputs"
     );
+}
+
+#[test]
+fn test_rustup_selection_reaches_strict_and_loose_execution() {
+    let toolchain = active_rustup_toolchain().expect("test toolchain is managed by rustup");
+    let rustup_home = rustup_home().expect("rustup home is available");
+    let rustup_home = rustup_home.to_string_lossy().into_owned();
+    let toolchain_literal = serde_json::to_string(&toolchain).unwrap();
+    let home_literal = serde_json::to_string(&rustup_home).unwrap();
+
+    for env_mode in ["strict", "loose"] {
+        let tempdir = cargo_tempdir();
+        setup_cargo_monorepo(tempdir.path());
+        let manifest = tempdir.path().join("crates/app/Cargo.toml");
+        let contents = fs::read_to_string(&manifest).unwrap();
+        fs::write(
+            manifest,
+            contents.replacen("[package]", "[package]\nbuild = \"build.rs\"", 1),
+        )
+        .unwrap();
+        fs::write(
+            tempdir.path().join("crates/app/build.rs"),
+            format!(
+                "fn main() {{\n    assert_eq!(std::env::var(\"RUSTUP_TOOLCHAIN\").unwrap(), \
+                 {toolchain_literal});\n    assert_eq!(std::env::var(\"RUSTUP_HOME\").unwrap(), \
+                 {home_literal});\n}}\n"
+            ),
+        )
+        .unwrap();
+        let environment = [
+            ("RUSTUP_TOOLCHAIN", toolchain.as_str()),
+            ("RUSTUP_HOME", rustup_home.as_str()),
+        ];
+        let task = cargo_build_definition(tempdir.path(), &[], &environment);
+        let declared = task["resolvedTaskDefinition"]["env"]
+            .as_array()
+            .expect("declared task environment");
+        for variable in ["RUSTUP_HOME", "RUSTUP_TOOLCHAIN"] {
+            assert!(declared.iter().any(|value| value == variable));
+        }
+
+        let output = run_turbo_with_env(
+            tempdir.path(),
+            &["build", "--filter=app", "--env-mode", env_mode],
+            &environment,
+        );
+        assert!(
+            output.status.success(),
+            "{env_mode} build failed: {output:?}"
+        );
+    }
 }
 
 #[test]

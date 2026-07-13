@@ -417,6 +417,7 @@ pub const HASHED_ENV_VARS: &[&str] = &[
     "RUSTC_WORKSPACE_WRAPPER",
     "RUSTC_BOOTSTRAP",
     "RUSTUP_HOME",
+    "RUSTUP_TOOLCHAIN",
     "RUSTFLAGS",
     "CARGO_ENCODED_RUSTFLAGS",
     "RUSTDOC",
@@ -506,6 +507,8 @@ const TASK_IO_ENV_VARS: &[&str] = &[
     "CARGO_TARGET_DIR",
     "RUSTC",
     "CARGO_BUILD_RUSTC",
+    "RUSTUP_HOME",
+    "RUSTUP_TOOLCHAIN",
 ];
 
 /// Rewrite the workspace root Cargo.toml for a pruned repository containing
@@ -2425,6 +2428,16 @@ dependencies = ["lib-a"]
     }
 
     #[test]
+    fn test_rustup_selection_environment_is_hashed_and_projected() {
+        for variable in ["RUSTUP_HOME", "RUSTUP_TOOLCHAIN"] {
+            assert!(HASHED_ENV_VARS.contains(&variable));
+            assert!(TASK_IO_ENV_VARS.contains(&variable));
+        }
+        assert!(!HASHED_ENV_VARS.contains(&"RUSTUP_DIST_SERVER"));
+        assert!(!TASK_IO_ENV_VARS.contains(&"RUSTUP_UPDATE_ROOT"));
+    }
+
+    #[test]
     fn test_cargo_profile_directory_resolves_precedence_and_builtin_mappings() {
         for (args, expected) in [
             (vec![], Some("debug")),
@@ -2532,6 +2545,22 @@ dependencies = ["lib-a"]
         ] {
             assert_eq!(deliverable_basename(&deliverable(kind), platform), expected);
         }
+        assert_eq!(
+            target_platform("x86_64-unknown-linux-gnu"),
+            Some(CargoTargetPlatform::Unix)
+        );
+        assert_eq!(
+            target_platform("aarch64-apple-darwin"),
+            Some(CargoTargetPlatform::Apple)
+        );
+        assert_eq!(
+            target_platform("x86_64-pc-windows-msvc"),
+            Some(CargoTargetPlatform::WindowsMsvc)
+        );
+        assert_eq!(
+            target_platform("x86_64-pc-windows-gnu"),
+            Some(CargoTargetPlatform::WindowsGnu)
+        );
         assert_eq!(target_platform("custom-target.json"), None);
         assert_eq!(target_platform("thumbv7em-none-eabihf"), None);
     }
@@ -3393,6 +3422,8 @@ release: 1.96.0-nightly\n",
         );
         assert_eq!(io.package_default_inputs, Some(true));
         assert!(io.env.contains(&"RUSTC_WRAPPER".to_string()));
+        assert!(io.env.contains(&"RUSTUP_HOME".to_string()));
+        assert!(io.env.contains(&"RUSTUP_TOOLCHAIN".to_string()));
         assert!(io.env.contains(&"CARGO_ENCODED_RUSTFLAGS".to_string()));
         assert!(io.env.contains(&"CARGO_PROFILE_*".to_string()));
         assert!(io.env.contains(&"CARGO_TARGET_*".to_string()));
@@ -3403,6 +3434,16 @@ release: 1.96.0-nightly\n",
         };
         assert_eq!(outputs, &["../../target/debug/app"]);
         assert!(outputs.iter().all(|output| !output.contains('*')));
+
+        let unsupported_target = ["--target=thumbv7em-none-eabihf".to_string()];
+        let unsupported_context = toolchain::TaskIOContext {
+            task_args: Some(&unsupported_target),
+            environment: &environment,
+        };
+        let unsupported = toolchain
+            .derived_task_io(&app, "build", "../..", &deps, true, &unsupported_context)
+            .expect("entrypoint build derives IO");
+        assert_eq!(unsupported.outputs, toolchain::DerivedOutputs::Unavailable);
 
         // Explicit inputs without $TURBO_DEFAULT$: workspace files still
         // apply, but no closure globs and no default-hashing override.
