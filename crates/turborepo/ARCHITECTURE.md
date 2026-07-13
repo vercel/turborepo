@@ -256,15 +256,15 @@ whether anything changed; Cargo decides how and in what order to build.**
   or incomplete lockfiles are hard errors. Turborepo never creates or refreshes
   the source lockfile; users do that explicitly with Cargo and commit the
   result.
-- **Caching**: task caches store logs plus, for entrypoint builds, the
-  deliverables: bins (`target/*/<bin>`) and cdylib/staticlib artifacts
-  (`target/*/lib<name>.{so,dylib,a}`, `<name>.{dll,lib}` — all platform
-  spellings are emitted; unmatched globs contribute nothing). The profile
-  segment is a wildcard, so `--release` and custom profiles cache without
-  configuration — pass-through args participate in the task hash, giving
-  each profile its own cache entry. Automatic outputs fail closed when task
-  arguments or Cargo environment select a target/target directory, when the
-  compiler is overridden, or when manifests/configuration can alter targets,
+- **Caching**: task caches store logs plus, for entrypoint builds, the exact
+  host deliverables under the default `target/` directory. The `rustc -vV`
+  host triple selects one platform-correct basename per bin/cdylib/staticlib,
+  while task arguments resolve the effective profile directory (`debug`,
+  `release`, a custom profile, with built-in `test`/`bench` mappings). No
+  profile or platform wildcards are cached. Explicit targets and every
+  target-directory override remain unavailable and fail closed. Automatic
+  outputs also fail closed when the compiler is overridden or when
+  manifests/configuration can alter targets,
   profile directories, artifact names/locations, or include unhashable external
   configuration. External, included, and Cargo configuration beneath any
   symlinked path component is untracked; those config paths are not emitted as
