@@ -1529,16 +1529,37 @@ struct CargoConfigInfluence {
     external_present: bool,
 }
 
+fn path_contains_symlink(repo_root: &AbsoluteSystemPath, path: &std::path::Path) -> bool {
+    let Ok(relative) = path.strip_prefix(repo_root.as_std_path()) else {
+        return true;
+    };
+    let mut current = repo_root.as_std_path().to_path_buf();
+    if std::fs::symlink_metadata(&current)
+        .map_or(true, |metadata| metadata.file_type().is_symlink())
+    {
+        return true;
+    }
+    for component in relative.components() {
+        current.push(component);
+        if std::fs::symlink_metadata(&current)
+            .map_or(true, |metadata| metadata.file_type().is_symlink())
+        {
+            return true;
+        }
+    }
+    false
+}
+
 fn config_alters_output_layout(
     repo_root: &AbsoluteSystemPath,
     path: &std::path::Path,
 ) -> Option<(bool, bool)> {
-    let metadata = match std::fs::symlink_metadata(path) {
-        Ok(metadata) => metadata,
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => {}
         Err(error) if error.kind() == io::ErrorKind::NotFound => return None,
         Err(_) => return Some((true, true)),
-    };
-    let is_symlink = metadata.file_type().is_symlink();
+    }
+    let has_symlink = path_contains_symlink(repo_root, path);
     let contained = dunce::canonicalize(repo_root.as_std_path())
         .ok()
         .zip(dunce::canonicalize(path).ok())
@@ -1548,11 +1569,11 @@ fn config_alters_output_layout(
     }
     let contents = match std::fs::read_to_string(path) {
         Ok(contents) => contents,
-        Err(_) => return Some((true, is_symlink)),
+        Err(_) => return Some((true, has_symlink)),
     };
     let config = match contents.parse::<toml_edit::DocumentMut>() {
         Ok(config) => config,
-        Err(_) => return Some((true, is_symlink)),
+        Err(_) => return Some((true, has_symlink)),
     };
     let build = config.get("build");
     let profile_dir_name = config
@@ -1571,7 +1592,7 @@ fn config_alters_output_layout(
                 .any(|key| build.get(key).is_some())
         }) || profile_dir_name
             || includes,
-        is_symlink || includes,
+        has_symlink || includes,
     ))
 }
 
@@ -2445,6 +2466,29 @@ dependencies = ["lib-a"]
             target.as_std_path(),
             repo.join_components(&[".cargo", "config.toml"])
                 .as_std_path(),
+        )
+        .unwrap();
+
+        let influence = cargo_config_influence(&repo, &CargoHomeEnvironment::default());
+        assert!(!influence.repository_alters_output_layout);
+        assert!(influence.repository_config_untracked);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_config_beneath_symlinked_cargo_directory_is_untracked() {
+        let (_tmp, root) = tempdir_root();
+        let repo = root.join_component("repo");
+        std::fs::create_dir_all(repo.as_std_path()).unwrap();
+        let cargo_target = repo.join_component("cargo-config");
+        std::fs::create_dir_all(cargo_target.as_std_path()).unwrap();
+        cargo_target
+            .join_component("config.toml")
+            .create_with_contents("[net]\nretry = 2\n")
+            .unwrap();
+        std::os::unix::fs::symlink(
+            cargo_target.as_std_path(),
+            repo.join_component(".cargo").as_std_path(),
         )
         .unwrap();
 

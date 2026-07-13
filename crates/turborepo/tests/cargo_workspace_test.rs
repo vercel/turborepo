@@ -708,6 +708,36 @@ fn test_internal_repository_config_symlink_is_untracked() {
     assert_eq!(before["hash"], after["hash"]);
 }
 
+#[cfg(unix)]
+#[test]
+fn test_config_beneath_symlinked_cargo_directory_is_untracked() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    configure_build_without_outputs(tempdir.path());
+    let cargo_target = tempdir.path().join("cargo-config");
+    fs::create_dir_all(&cargo_target).unwrap();
+    let config = cargo_target.join("config.toml");
+    fs::write(&config, "[net]\nretry = 2\n").unwrap();
+    std::os::unix::fs::symlink(&cargo_target, tempdir.path().join(".cargo")).unwrap();
+
+    let before = cargo_build_definition(tempdir.path(), &[], &[]);
+    assert_eq!(before["resolvedTaskDefinition"]["cache"], false);
+    let inputs = before["resolvedTaskDefinition"]["inputs"]
+        .as_array()
+        .expect("resolved inputs");
+    assert!(
+        inputs.iter().all(|input| !input
+            .as_str()
+            .is_some_and(|input| input.contains(".cargo/config"))),
+        "config beneath a symlink must not be emitted as a trusted input: {inputs:?}"
+    );
+
+    fs::write(config, "[net]\nretry = 3\n").unwrap();
+    let after = cargo_build_definition(tempdir.path(), &[], &[]);
+    assert_eq!(after["resolvedTaskDefinition"]["cache"], false);
+    assert_eq!(before["hash"], after["hash"]);
+}
+
 #[test]
 fn test_unresolved_layout_preserves_explicit_intent() {
     for cache in [true, false] {
