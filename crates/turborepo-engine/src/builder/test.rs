@@ -16,8 +16,8 @@ use turborepo_repository::{
     package_json::PackageJson,
     package_manager::PackageManager,
     toolchain::{
-        DerivedOutputs, DerivedTaskIO, DiscoverPackagesFuture, DiscoveredPackage, TaskIOContext,
-        Toolchain, ToolchainId,
+        DerivedInputSafety, DerivedOutputs, DerivedTaskIO, DiscoverPackagesFuture,
+        DiscoveredPackage, TaskIOContext, Toolchain, ToolchainId,
     },
 };
 use turborepo_task_id::{TaskId, TaskName};
@@ -133,6 +133,7 @@ type StubIOEngineResult = (
 struct StubIOToolchain {
     repo_root: AbsoluteSystemPathBuf,
     outputs: DerivedOutputs,
+    input_safety: DerivedInputSafety,
     environment: Vec<&'static str>,
     seen: Arc<Mutex<HashMap<String, SeenTaskIO>>>,
 }
@@ -206,6 +207,7 @@ impl Toolchain for StubIOToolchain {
         );
         Some(DerivedTaskIO {
             outputs: self.outputs.clone(),
+            input_safety: self.input_safety.clone(),
             ..Default::default()
         })
     }

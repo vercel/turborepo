@@ -953,12 +953,33 @@ fn stub_io_engine(
     requested_tasks: Vec<String>,
     global_env: Vec<String>,
 ) -> StubIOEngineResult {
+    stub_io_engine_with_safety(
+        task_definition,
+        outputs,
+        DerivedInputSafety::Tracked,
+        task,
+        pass_through_args,
+        requested_tasks,
+        global_env,
+    )
+}
+
+fn stub_io_engine_with_safety(
+    task_definition: serde_json::Value,
+    outputs: turborepo_repository::toolchain::DerivedOutputs,
+    input_safety: DerivedInputSafety,
+    task: &str,
+    pass_through_args: Vec<String>,
+    requested_tasks: Vec<String>,
+    global_env: Vec<String>,
+) -> StubIOEngineResult {
     let repo_root_dir = TempDir::with_prefix("stub-io").unwrap();
     let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
     let seen = Arc::new(Mutex::new(HashMap::new()));
     let toolchain = Arc::new(StubIOToolchain {
         repo_root: repo_root.clone(),
         outputs,
+        input_safety,
         environment: vec!["STUB_LAYOUT"],
         seen: seen.clone(),
     });
@@ -1048,6 +1069,40 @@ fn test_unavailable_outputs_respect_merged_task_configuration() {
         assert_eq!(task.cache, expected_cache);
         assert_eq!(task.outputs.inclusions, expected_outputs);
         assert!(task.env.contains(&"STUB_LAYOUT".to_string()));
+    }
+}
+
+#[test]
+fn test_untracked_inputs_respect_only_explicit_cache_configuration() {
+    for (definition, expected_cache, expected_outputs) in [
+        (json!({ "build": {} }), false, Vec::<String>::new()),
+        (json!({ "build": { "cache": true } }), true, Vec::new()),
+        (json!({ "build": { "cache": false } }), false, Vec::new()),
+        (
+            json!({ "build": { "outputs": ["configured/**"] } }),
+            false,
+            vec!["configured/**".to_string()],
+        ),
+        (
+            json!({ "build": { "cache": true, "outputs": ["configured/**"] } }),
+            true,
+            vec!["configured/**".to_string()],
+        ),
+    ] {
+        let (engine, _) = stub_io_engine_with_safety(
+            definition,
+            DerivedOutputs::Resolved(Vec::new()),
+            DerivedInputSafety::Untracked,
+            "build",
+            Vec::new(),
+            vec!["build".to_string()],
+            Vec::new(),
+        );
+        let task = engine
+            .task_definition(&TaskId::new("app", "build"))
+            .unwrap();
+        assert_eq!(task.cache, expected_cache);
+        assert_eq!(task.outputs.inclusions, expected_outputs);
     }
 }
 

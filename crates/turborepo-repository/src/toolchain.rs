@@ -527,6 +527,15 @@ impl Default for DerivedOutputs {
     }
 }
 
+/// Whether all toolchain-derived inputs can participate in task hashing.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum DerivedInputSafety {
+    #[default]
+    Tracked,
+    /// The task can read inputs that Turborepo cannot hash automatically.
+    Untracked,
+}
+
 /// Hash wiring derived by a toolchain for one task. See
 /// [`Toolchain::derived_task_io`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -538,6 +547,7 @@ pub struct DerivedTaskIO {
     pub package_default_inputs: Option<bool>,
     /// Env vars that participate in the task hash.
     pub env: Vec<String>,
+    pub input_safety: DerivedInputSafety,
     pub outputs: DerivedOutputs,
 }
 
