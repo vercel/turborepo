@@ -1010,6 +1010,7 @@ impl Toolchain for CargoToolchain {
         path_to_root: &str,
         dependencies: &[&crate::package_graph::PackageInfo],
         wants_automatic_inputs: bool,
+        _context: &toolchain::TaskIOContext<'_>,
     ) -> Option<toolchain::DerivedTaskIO> {
         let name = package.package_name()?;
         let details = self.package_details(&name)?;
@@ -1060,7 +1061,10 @@ impl Toolchain for CargoToolchain {
                     io.input_globs.extend(dependency_globs());
                 }
                 if subcommand == "build" {
-                    io.output_globs = deliverable_output_globs(path_to_root, &details.deliverables);
+                    io.outputs = toolchain::DerivedOutputs::Resolved(deliverable_output_globs(
+                        path_to_root,
+                        &details.deliverables,
+                    ));
                 }
             }
             // The workspace package's directory is the repo root, so
@@ -2521,6 +2525,11 @@ release: 1.96.0-nightly\n",
         let app = package_info("app", "crates/app/Cargo.toml");
         let lib_a = package_info("lib-a", "crates/lib-a/Cargo.toml");
         let workspace = package_info("fixture-ws", "Cargo.toml");
+        let environment = toolchain::TaskIOEnvironment::default();
+        let context = toolchain::TaskIOContext {
+            task_args: None,
+            environment: &environment,
+        };
 
         // defines_task mirrors the verb tables.
         assert!(toolchain.defines_task(&app, "build"));
@@ -2533,7 +2542,7 @@ release: 1.96.0-nightly\n",
         // hashing), deliverables as outputs.
         let deps = [&lib_a];
         let io = toolchain
-            .derived_task_io(&app, "build", "../..", &deps, true)
+            .derived_task_io(&app, "build", "../..", &deps, true, &context)
             .expect("entrypoint build derives IO");
         assert!(
             !io.input_globs
@@ -2565,20 +2574,19 @@ release: 1.96.0-nightly\n",
         assert!(io.env.contains(&"CARGO_TARGET_*".to_string()));
         assert!(io.env.contains(&"CC_*".to_string()));
         assert!(io.env.contains(&"TARGET_CFLAGS".to_string()));
+        let toolchain::DerivedOutputs::Resolved(outputs) = &io.outputs else {
+            panic!("Cargo's existing wildcard outputs must remain resolved");
+        };
         assert!(
-            io.output_globs.contains(&"../../target/*/app".to_string()),
-            "bin deliverable is cached with a wildcard profile, got {:?}",
-            io.output_globs
+            outputs.contains(&"../../target/*/app".to_string()),
+            "bin deliverable keeps its wildcard profile, got {outputs:?}"
         );
-        assert!(
-            io.output_globs
-                .contains(&"../../target/*/app.exe".to_string())
-        );
+        assert!(outputs.contains(&"../../target/*/app.exe".to_string()));
 
         // Explicit inputs without $TURBO_DEFAULT$: workspace files still
         // apply, but no closure globs and no default-hashing override.
         let io = toolchain
-            .derived_task_io(&app, "build", "../..", &deps, false)
+            .derived_task_io(&app, "build", "../..", &deps, false, &context)
             .expect("entrypoint build derives IO");
         assert!(io.input_globs.contains(&"../../Cargo.toml".to_string()));
         assert!(!io.input_globs.iter().any(|glob| glob.contains("lib-a")));
@@ -2586,26 +2594,26 @@ release: 1.96.0-nightly\n",
 
         // Non-build entrypoint verbs cache no deliverables.
         let io = toolchain
-            .derived_task_io(&app, "dev", "../..", &deps, true)
+            .derived_task_io(&app, "dev", "../..", &deps, true, &context)
             .expect("entrypoint dev derives IO");
-        assert!(io.output_globs.is_empty());
+        assert_eq!(io.outputs, toolchain::DerivedOutputs::Resolved(Vec::new()));
 
         // The workspace package hashes crate directories instead of the
         // repo root's default file set.
         let deps = [&app, &lib_a];
         let io = toolchain
-            .derived_task_io(&workspace, "test", "", &deps, true)
+            .derived_task_io(&workspace, "test", "", &deps, true, &context)
             .expect("workspace test derives IO");
         assert_eq!(io.package_default_inputs, Some(false));
         assert!(io.input_globs.contains(&"crates/app/**".to_string()));
         assert!(io.input_globs.contains(&"crates/lib-a/**".to_string()));
         assert!(io.input_globs.contains(&"Cargo.toml".to_string()));
-        assert!(io.output_globs.is_empty());
+        assert_eq!(io.outputs, toolchain::DerivedOutputs::Resolved(Vec::new()));
 
         // Libraries derive nothing.
         assert!(
             toolchain
-                .derived_task_io(&lib_a, "build", "../..", &[], true)
+                .derived_task_io(&lib_a, "build", "../..", &[], true, &context)
                 .is_none()
         );
     }

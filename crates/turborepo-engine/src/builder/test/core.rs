@@ -944,3 +944,179 @@ fn test_path_to_root() {
         "../.."
     );
 }
+
+fn stub_io_engine(
+    task_definition: serde_json::Value,
+    outputs: turborepo_repository::toolchain::DerivedOutputs,
+    task: &str,
+    pass_through_args: Vec<String>,
+    requested_tasks: Vec<String>,
+    global_env: Vec<String>,
+) -> StubIOEngineResult {
+    let repo_root_dir = TempDir::with_prefix("stub-io").unwrap();
+    let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+    let seen = Arc::new(Mutex::new(HashMap::new()));
+    let toolchain = Arc::new(StubIOToolchain {
+        repo_root: repo_root.clone(),
+        outputs,
+        environment: vec!["STUB_LAYOUT"],
+        seen: seen.clone(),
+    });
+    let package_graph = stub_io_package_graph(&repo_root, toolchain);
+    let loader = TestTurboJsonLoader::new(
+        vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "globalEnv": global_env.clone(),
+                "tasks": task_definition
+            })),
+        )]
+        .into_iter()
+        .collect(),
+    );
+    let environments = HashMap::from([(
+        ToolchainId::new("stub-io"),
+        turborepo_repository::toolchain::TaskIOEnvironment::new(HashMap::from([(
+            "STUB_LAYOUT".to_string(),
+            "layout-value".to_string(),
+        )])),
+    )]);
+    let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+        .with_tasks(Some(Spanned::new(TaskName::from(task).into_owned())))
+        .with_workspaces(vec![PackageName::from("app")])
+        .with_global_env(global_env)
+        .with_task_io_context(pass_through_args, requested_tasks, environments)
+        .build()
+        .unwrap();
+    (engine, seen)
+}
+
+#[test]
+fn test_task_io_args_align_with_execution_for_dependencies() {
+    let (_engine, seen) = stub_io_engine(
+        json!({
+            "test": { "dependsOn": ["^build"] },
+            "build": {}
+        }),
+        DerivedOutputs::Resolved(Vec::new()),
+        "test",
+        vec!["--requested".to_string()],
+        vec!["test".to_string()],
+        Vec::new(),
+    );
+    let seen = seen.lock().unwrap();
+    assert_eq!(
+        seen.get("app#test"),
+        Some(&SeenTaskIO {
+            args: Some(vec!["--requested".to_string()]),
+            layout_env: Some("layout-value".to_string()),
+        })
+    );
+    assert_eq!(
+        seen.get("lib#build"),
+        Some(&SeenTaskIO {
+            args: None,
+            layout_env: Some("layout-value".to_string()),
+        })
+    );
+}
+
+#[test]
+fn test_unavailable_outputs_respect_merged_task_configuration() {
+    for (definition, expected_cache, expected_outputs) in [
+        (json!({ "build": {} }), false, Vec::<String>::new()),
+        (json!({ "build": { "cache": true } }), true, Vec::new()),
+        (json!({ "build": { "cache": false } }), false, Vec::new()),
+        (
+            json!({ "build": { "outputs": ["configured/**"] } }),
+            true,
+            vec!["configured/**".to_string()],
+        ),
+        (json!({ "build": { "outputs": [] } }), true, Vec::new()),
+    ] {
+        let (engine, _) = stub_io_engine(
+            definition,
+            DerivedOutputs::Unavailable,
+            "build",
+            Vec::new(),
+            vec!["build".to_string()],
+            Vec::new(),
+        );
+        let task = engine
+            .task_definition(&TaskId::new("app", "build"))
+            .unwrap();
+        assert_eq!(task.cache, expected_cache);
+        assert_eq!(task.outputs.inclusions, expected_outputs);
+        assert!(task.env.contains(&"STUB_LAYOUT".to_string()));
+    }
+}
+
+#[test]
+fn test_layout_env_exclusions_disable_implicit_outputs_in_all_env_modes() {
+    for env_mode in ["strict", "loose"] {
+        for exclusion in ["!STUB_LAYOUT", "!STUB_*"] {
+            let (engine, seen) = stub_io_engine(
+                json!({
+                    "build": {
+                        "env": [exclusion],
+                        "envMode": env_mode
+                    }
+                }),
+                DerivedOutputs::Resolved(vec!["automatic-output".to_string()]),
+                "build",
+                Vec::new(),
+                vec!["build".to_string()],
+                Vec::new(),
+            );
+            let task = engine
+                .task_definition(&TaskId::new("app", "build"))
+                .unwrap();
+            assert!(!task.cache, "{env_mode} {exclusion} must fail closed");
+            assert!(task.outputs.inclusions.is_empty());
+            assert!(task.env.contains(&exclusion.to_string()));
+            assert!(task.env.contains(&"STUB_LAYOUT".to_string()));
+            assert_eq!(
+                seen.lock().unwrap().get("app#build").unwrap().layout_env,
+                Some("layout-value".to_string())
+            );
+        }
+    }
+
+    let (engine, _) = stub_io_engine(
+        json!({ "build": { "envMode": "loose" } }),
+        DerivedOutputs::Resolved(vec!["automatic-output".to_string()]),
+        "build",
+        Vec::new(),
+        vec!["build".to_string()],
+        vec!["!STUB_*".to_string()],
+    );
+    let task = engine
+        .task_definition(&TaskId::new("app", "build"))
+        .unwrap();
+    assert!(!task.cache, "global env exclusions must also fail closed");
+    assert!(task.outputs.inclusions.is_empty());
+}
+
+#[test]
+fn test_nonconflicting_env_exclusions_keep_resolved_outputs() {
+    for env_mode in ["strict", "loose"] {
+        let (engine, _) = stub_io_engine(
+            json!({
+                "build": {
+                    "env": ["!UNRELATED_*"],
+                    "envMode": env_mode
+                }
+            }),
+            DerivedOutputs::Resolved(vec!["automatic-output".to_string()]),
+            "build",
+            Vec::new(),
+            vec!["build".to_string()],
+            Vec::new(),
+        );
+        let task = engine
+            .task_definition(&TaskId::new("app", "build"))
+            .unwrap();
+        assert!(task.cache);
+        assert_eq!(task.outputs.inclusions, ["automatic-output"]);
+    }
+}
