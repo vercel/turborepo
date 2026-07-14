@@ -5,21 +5,21 @@ pub fn rgb_color(c: style::RgbColor) -> Color {
     Color::Rgb(c.r, c.g, c.b)
 }
 
-fn resolve_color(color: &style::StyleColor, palette: &[style::RgbColor; 256]) -> Option<Color> {
+fn resolve_color(color: &style::StyleColor) -> Option<Color> {
     match color {
         style::StyleColor::None => None,
         style::StyleColor::Rgb(c) => Some(rgb_color(*c)),
-        style::StyleColor::Palette(idx) => Some(rgb_color(palette[idx.0 as usize])),
+        style::StyleColor::Palette(idx) => Some(Color::Indexed(idx.0)),
     }
 }
 
-pub fn style(s: &style::Style, palette: &[style::RgbColor; 256]) -> Style {
+pub fn style(s: &style::Style) -> Style {
     let mut result = Style::default();
 
-    if let Some(fg) = resolve_color(&s.fg_color, palette) {
+    if let Some(fg) = resolve_color(&s.fg_color) {
         result = result.fg(fg);
     }
-    if let Some(bg) = resolve_color(&s.bg_color, palette) {
+    if let Some(bg) = resolve_color(&s.bg_color) {
         result = result.bg(bg);
     }
 
