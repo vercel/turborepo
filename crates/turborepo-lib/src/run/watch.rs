@@ -653,7 +653,13 @@ impl WatchClient {
         }
 
         for stopper in &stoppers {
-            stopper.shutdown_cache().await;
+            stopper
+                .shutdown_cache(
+                    self.handler.shutdown_reason(),
+                    force_shutdown_timeout,
+                    Some(self.handler.subscribe_signals()),
+                )
+                .await;
         }
 
         if let Some(sender) = &self.ui_sender {
