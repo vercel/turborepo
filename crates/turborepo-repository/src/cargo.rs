@@ -2319,6 +2319,7 @@ mod test {
         let details = |deliverables| CargoPackageDetails {
             kind: CargoPackageKind::Entrypoint,
             deliverables,
+            manifest_alters_output_layout: false,
             dir: "crate".to_string(),
         };
         let deliverable = |name: &str, kind| Deliverable {
