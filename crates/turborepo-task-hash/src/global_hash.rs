@@ -67,7 +67,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     root_internal_dependencies_hash: Option<&'a str>,
     root_package: &'a PackageInfo,
     root_path: &AbsoluteSystemPath,
-    package_manager: &PackageManager,
+    package_manager: Option<&PackageManager>,
     lockfile: Option<&L>,
     global_file_dependencies: &'a [String],
     env_at_execution_start: &'a EnvironmentVariableMap,
@@ -132,7 +132,11 @@ pub struct GlobalFileHashInputs<'a> {
 pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
     root_package: &'a PackageInfo,
     root_path: &AbsoluteSystemPath,
-    package_manager: &PackageManager,
+    // Absent for a pure Cargo workspace: there is no JavaScript package
+    // manager, root manifest, or lockfile to fold into the global hash. The
+    // Cargo lockfile and manifest are hashed per-task through the toolchain's
+    // derived inputs instead.
+    package_manager: Option<&PackageManager>,
     lockfile: Option<&L>,
     global_file_dependencies: &'a [String],
     env_at_execution_start: &'a EnvironmentVariableMap,
@@ -152,7 +156,12 @@ pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
     let mut global_deps =
         collect_global_deps(package_manager, root_path, global_file_dependencies)?;
 
-    if lockfile.is_none() {
+    // The root package.json and the JavaScript lockfile are global inputs
+    // only when there is a JavaScript project. A pure Cargo workspace has
+    // neither.
+    if let Some(package_manager) = package_manager
+        && lockfile.is_none()
+    {
         global_deps.insert(root_path.join_component("package.json"));
         let lockfile_path = package_manager.lockfile_path(root_path);
         if lockfile_path.exists() {
@@ -188,24 +197,31 @@ pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
 
 #[allow(clippy::result_large_err)]
 fn collect_global_deps(
-    package_manager: &PackageManager,
+    package_manager: Option<&PackageManager>,
     root_path: &AbsoluteSystemPath,
     global_file_dependencies: &[String],
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, Error> {
     if global_file_dependencies.is_empty() {
         return Ok(HashSet::new());
     }
-    let workspace_exclusions = match package_manager.get_workspace_globs(root_path) {
-        Ok(globs) => globs.raw_exclusions,
-        // If we hit a missing workspaces error, we could be in single package mode
-        // so we should just use the default globs
-        Err(package_manager::Error::Workspace(_)) => {
-            package_manager.get_default_exclusions().collect()
-        }
-        Err(err) => {
-            debug!("no workspace globs found");
-            return Err(err.into());
-        }
+    // Workspace globs exclude nested packages' files from root-level global
+    // dependency globs. A pure Cargo workspace has no JavaScript package
+    // manager to enumerate them, so the user's globalDependencies globs apply
+    // as written.
+    let workspace_exclusions = match package_manager {
+        Some(package_manager) => match package_manager.get_workspace_globs(root_path) {
+            Ok(globs) => globs.raw_exclusions,
+            // If we hit a missing workspaces error, we could be in single package mode
+            // so we should just use the default globs
+            Err(package_manager::Error::Workspace(_)) => {
+                package_manager.get_default_exclusions().collect()
+            }
+            Err(err) => {
+                debug!("no workspace globs found");
+                return Err(err.into());
+            }
+        },
+        None => Vec::new(),
     };
     let (raw_inclusions, raw_exclusions): (Vec<_>, Vec<_>) = global_file_dependencies
         .iter()
@@ -413,7 +429,7 @@ mod tests {
             None,
             &package_info,
             &root,
-            &PackageManager::Pnpm,
+            Some(&PackageManager::Pnpm),
             lockfile,
             &file_deps,
             &env_var_map,
@@ -459,8 +475,12 @@ mod tests {
             .unwrap();
 
         let global_file_dependencies = vec!["**".to_string()];
-        let results =
-            collect_global_deps(&PackageManager::Berry, &root, &global_file_dependencies).unwrap();
+        let results = collect_global_deps(
+            Some(&PackageManager::Berry),
+            &root,
+            &global_file_dependencies,
+        )
+        .unwrap();
 
         // should not yield the root folder itself, src, or empty-folder
         assert_eq!(results.len(), 3, "{:?}", results);

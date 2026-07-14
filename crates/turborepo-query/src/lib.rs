@@ -379,7 +379,7 @@ impl PackagePredicate {
     fn check_has(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
         match (field, &value.0) {
             (PackageFields::Name, Value::String(name)) => pkg.get_name().as_str() == name,
-            (PackageFields::TaskName, Value::String(name)) => pkg.get_tasks().contains_key(name),
+            (PackageFields::TaskName, Value::String(name)) => pkg.get_task_names().contains(name),
             _ => false,
         }
     }
@@ -679,7 +679,7 @@ impl RepositoryQuery {
             .collect::<Result<Vec<_>, Error>>()?
             .into_iter()
             .filter(|ct| {
-                let has_script = ct.task.script.is_some();
+                let executes = ct.task.executes();
                 let task_ok = tasks.as_ref().is_none_or(|names| {
                     if names.is_empty() {
                         true
@@ -691,7 +691,7 @@ impl RepositoryQuery {
                     }
                 });
                 let package_ok = filter.as_ref().is_none_or(|f| f.check(&ct.task.package));
-                has_script && task_ok && package_ok
+                executes && task_ok && package_ok
             })
             .collect();
 

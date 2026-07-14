@@ -526,6 +526,14 @@ impl Run {
                     .or_insert_with(Vec::new)
                     .push(name.to_string())
             }
+            if let Some(toolchain) = self.pkg_dep_graph.toolchains().get(&info.toolchain) {
+                for task_name in toolchain.registered_tasks(info) {
+                    tasks
+                        .entry(task_name)
+                        .or_insert_with(Vec::new)
+                        .push(name.to_string());
+                }
+            }
         }
 
         Ok(tasks)

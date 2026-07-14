@@ -130,8 +130,8 @@ mod test {
         .unwrap();
         struct MockPackageInfo(PackageInfo);
         impl PackageInfoProvider for MockPackageInfo {
-            fn package_manager(&self) -> &PackageManager {
-                &PackageManager::Npm
+            fn package_manager(&self) -> Option<&PackageManager> {
+                Some(&PackageManager::Npm)
             }
 
             fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {

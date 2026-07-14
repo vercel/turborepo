@@ -252,6 +252,21 @@ pub trait Toolchain: Send + Sync {
         false
     }
 
+    /// Task names this toolchain makes available without an explicit
+    /// turbo.json definition. These act as lowest-precedence empty task
+    /// definitions; normal task configuration still overrides them.
+    fn registered_tasks(&self, package: &crate::package_graph::PackageInfo) -> Vec<String> {
+        let _ = package;
+        Vec::new()
+    }
+
+    /// Whether [`Toolchain::registered_tasks`] contains `task`.
+    fn registers_task(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
+        self.registered_tasks(package)
+            .iter()
+            .any(|registered| registered == task)
+    }
+
     /// Whether this toolchain defines an executable command for `task` in
     /// `package`. Tasks without one are phantom/transit tasks (they exist
     /// solely for dependency ordering via `dependsOn: ["^task"]`): they do
@@ -272,6 +287,14 @@ pub trait Toolchain: Send + Sync {
     ) -> TaskDefaults {
         let _ = (package, task);
         TaskDefaults::default()
+    }
+
+    /// Startup environment patterns this toolchain needs to derive task I/O.
+    /// The run retains only matching keys, and the engine automatically adds
+    /// every declared pattern to the task's hashed environment when derived I/O
+    /// applies.
+    fn task_io_env_vars(&self) -> &[&str] {
+        &[]
     }
 
     /// Hash wiring this toolchain derives for `task` in `package`, beyond
@@ -297,6 +320,7 @@ pub trait Toolchain: Send + Sync {
         path_to_root: &str,
         dependencies: &[&crate::package_graph::PackageInfo],
         wants_automatic_inputs: bool,
+        context: &TaskIOContext<'_>,
     ) -> Option<DerivedTaskIO> {
         let _ = (
             package,
@@ -304,6 +328,7 @@ pub trait Toolchain: Send + Sync {
             path_to_root,
             dependencies,
             wants_automatic_inputs,
+            context,
         );
         None
     }
@@ -447,6 +472,85 @@ impl WatchSpec {
     }
 }
 
+/// Platform-aware environment projection for one toolchain's I/O derivation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskIOEnvironment {
+    values: std::collections::HashMap<String, String>,
+    case_insensitive: bool,
+}
+
+impl TaskIOEnvironment {
+    pub fn new(values: std::collections::HashMap<String, String>) -> Self {
+        Self {
+            values,
+            case_insensitive: cfg!(windows),
+        }
+    }
+
+    pub fn get(&self, name: &str) -> Option<&str> {
+        if self.case_insensitive {
+            self.values
+                .iter()
+                .find(|(key, _)| key.eq_ignore_ascii_case(name))
+                .map(|(_, value)| value.as_str())
+        } else {
+            self.values.get(name).map(String::as_str)
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.values
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_str()))
+    }
+
+    #[cfg(test)]
+    fn case_insensitive(values: std::collections::HashMap<String, String>) -> Self {
+        Self {
+            values,
+            case_insensitive: true,
+        }
+    }
+}
+
+impl Default for TaskIOEnvironment {
+    fn default() -> Self {
+        Self::new(Default::default())
+    }
+}
+
+/// Run-scoped inputs that can affect toolchain-derived task I/O.
+#[derive(Debug, Clone, Copy)]
+pub struct TaskIOContext<'a> {
+    pub task_args: Option<&'a [String]>,
+    pub environment: &'a TaskIOEnvironment,
+}
+
+/// Whether a toolchain can resolve a task's automatic outputs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DerivedOutputs {
+    /// Output paths relative to the package directory. An empty list means the
+    /// task has no toolchain-derived outputs.
+    Resolved(Vec<String>),
+    /// The task produces outputs, but their paths cannot be resolved safely.
+    Unavailable,
+}
+
+impl Default for DerivedOutputs {
+    fn default() -> Self {
+        Self::Resolved(Vec::new())
+    }
+}
+
+/// Whether all toolchain-derived inputs can participate in task hashing.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum DerivedInputSafety {
+    #[default]
+    Tracked,
+    /// The task can read inputs that Turborepo cannot hash automatically.
+    Untracked,
+}
+
 /// Hash wiring derived by a toolchain for one task. See
 /// [`Toolchain::derived_task_io`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -458,8 +562,8 @@ pub struct DerivedTaskIO {
     pub package_default_inputs: Option<bool>,
     /// Env vars that participate in the task hash.
     pub env: Vec<String>,
-    /// Output globs to cache, relative to the package directory.
-    pub output_globs: Vec<String>,
+    pub input_safety: DerivedInputSafety,
+    pub outputs: DerivedOutputs,
 }
 
 /// The set of toolchains contributing packages to the repository.
@@ -709,6 +813,7 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
         _path_to_root: &str,
         _dependencies: &[&crate::package_graph::PackageInfo],
         _wants_automatic_inputs: bool,
+        _context: &TaskIOContext<'_>,
     ) -> Option<DerivedTaskIO> {
         // Deliberately nothing: for JavaScript, turbo.json is the whole
         // story — inputs default to the package's files, outputs are
@@ -890,6 +995,18 @@ mod tests {
         );
         assert_eq!(cmd.cwd, repo_root.resolve(package.package_path()));
         assert_eq!(cmd.serial_group, None);
+    }
+
+    #[test]
+    fn task_io_environment_supports_windows_casing() {
+        let environment = TaskIOEnvironment::case_insensitive(std::collections::HashMap::from([(
+            "Cargo_Build_Target".to_string(),
+            "x86_64-pc-windows-msvc".to_string(),
+        )]));
+        assert_eq!(
+            environment.get("CARGO_BUILD_TARGET"),
+            Some("x86_64-pc-windows-msvc")
+        );
     }
 
     #[cfg(windows)]

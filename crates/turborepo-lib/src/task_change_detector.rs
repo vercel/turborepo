@@ -129,7 +129,7 @@ fn is_global_change(
     global_deps: &[String],
     pkg_dep_graph: &PackageGraph,
 ) -> bool {
-    let lockfile_name = pkg_dep_graph.package_manager().lockfile_name();
+    let lockfile_name = pkg_dep_graph.package_manager().map(|pm| pm.lockfile_name());
     let global_globs: Vec<_> = global_deps
         .iter()
         .filter_map(|g| match wax::Glob::new(g) {
@@ -153,7 +153,7 @@ fn is_global_change(
             return true;
         }
 
-        if file_str == lockfile_name {
+        if Some(file_str) == lockfile_name {
             return true;
         }
 
