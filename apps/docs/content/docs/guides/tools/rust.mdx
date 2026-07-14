@@ -28,13 +28,14 @@ Turborepo can discover the crates in a Cargo workspace as packages, add their de
 
 ## Prerequisites
 
-Native Rust support currently extends an existing Turborepo repository. The repository root must contain:
+Native Rust support works in standalone Cargo workspaces and repositories that also contain JavaScript packages. The repository root must contain:
 
-- A root `package.json` with a valid `packageManager` field and the workspace configuration required by that package manager
 - A root `Cargo.toml` containing a virtual Cargo workspace
-- A unique `[workspace.metadata] name`, used for a synthetic Turborepo package that represents the Cargo workspace
+- A valid, unique `[workspace.metadata] name`, used for a synthetic Turborepo package that represents the Cargo workspace
 - A committed, current root `Cargo.lock`
-- `cargo` and `rustc` available on `PATH`
+- `turbo`, `cargo`, and `rustc` available on `PATH`
+
+A Cargo-only repository does not need a `package.json`, JavaScript package manager, or JavaScript lockfile. If a `package.json` exists, it must be valid, and the repository must include the workspace configuration required by its package manager.
 
 The root `Cargo.toml` cannot also define a `[package]`. Move a root crate into a subdirectory and include it in `[workspace].members`.
 
@@ -195,35 +196,9 @@ Untracked inputs are stricter. External, included, or symlinked Cargo configurat
 - In watch mode, a no-op save in a crate may rerun a fast cache check because content-hash deduplication is still based on JavaScript workspace globs.
 - Build-script-specific environment and files outside crate directories are not inferred. Declare them with `env` and additive `inputs` as needed.
 
-## Minimal mixed JavaScript and Rust repository
+## Minimal Cargo-only repository
 
-This example keeps JavaScript packages in the package-manager workspace and Rust crates in the Cargo workspace. Cargo crates do not need to be added to `pnpm-workspace.yaml`.
-
-```json title="./package.json"
-{
-  "name": "acme",
-  "private": true,
-  "packageManager": "pnpm@10.28.0",
-  "devDependencies": {
-    "turbo": "latest"
-  }
-}
-```
-
-```yaml title="./pnpm-workspace.yaml"
-packages:
-  - "apps/*"
-```
-
-```json title="./apps/web/package.json"
-{
-  "name": "web",
-  "private": true,
-  "scripts": {
-    "build": "node -e \"console.log('web build')\""
-  }
-}
-```
+A Cargo-only repository needs no JavaScript manifests or workspace configuration:
 
 ```toml title="./Cargo.toml"
 [workspace]
@@ -266,12 +241,13 @@ fn main() {
 }
 ```
 
-Install the JavaScript dependencies and commit the generated Cargo lockfile:
+Generate and commit the Cargo lockfile before running Turborepo:
 
 ```bash title="Terminal"
-pnpm install
 cargo generate-lockfile
-pnpm exec turbo run build
-pnpm exec turbo run build --filter=rust-api -- --release
-pnpm exec turbo run test --filter=acme-rust
+turbo run build
+turbo run build --filter=rust-api -- --release
+turbo run test --filter=acme-rust
 ```
+
+In a mixed repository, configure JavaScript packages with their package manager as usual. Cargo crates do not need to be included in the JavaScript workspace configuration.
