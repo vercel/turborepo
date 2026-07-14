@@ -494,7 +494,24 @@ impl RunBuilder {
             })
         };
         let package_json_path = self.repo_root.join_component("package.json");
-        let root_package_json = PackageJson::load(&package_json_path)?;
+        // A pure Cargo workspace (experimentalCargoWorkspaces, no root
+        // package.json) has no JavaScript root manifest. A *missing* file is
+        // only tolerated in that mode; a malformed one always fails, and a
+        // missing one without Cargo support keeps the original hard error.
+        let root_package_json = match PackageJson::load(&package_json_path) {
+            Ok(package_json) => Some(package_json),
+            Err(package_json::Error::Io(io))
+                if io.kind() == ErrorKind::NotFound
+                    && cargo_enabled(&self.opts.future_flags)
+                    && self
+                        .repo_root
+                        .join_component(turborepo_repository::cargo::CARGO_TOML)
+                        .exists() =>
+            {
+                None
+            }
+            Err(e) => return Err(e.into()),
+        };
         let run_telemetry = GenericEventBuilder::new().with_parent(&telemetry);
         let repo_telemetry =
             RepoEventBuilder::new(&self.repo_root.to_string()).with_parent(&telemetry);
@@ -531,22 +548,23 @@ impl RunBuilder {
         }
 
         let mut pkg_dep_graph = {
-            let mut builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
-                .with_single_package_mode(self.opts.run_opts.single_package)
-                .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager)
-                // Transitive closures compute on a background thread while
-                // microfrontends config, turbo.json preloading, and other
-                // package-list consumers run. Joined by the
-                // `ensure_transitive_closures` call before package filtering,
-                // the earliest possible consumer (`--affected` with a changed
-                // lockfile compares closures).
-                .defer_transitive_closures(true)
-                // External dependency hashes are computed on the same
-                // background thread, straight from the sorted closures, so
-                // task hashing and run summaries read them as fields.
-                .with_closure_hasher(std::sync::Arc::new(
-                    turborepo_task_hash::hash_sorted_closures,
-                ));
+            let mut builder =
+                PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
+                    .with_single_package_mode(self.opts.run_opts.single_package)
+                    .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager)
+                    // Transitive closures compute on a background thread while
+                    // microfrontends config, turbo.json preloading, and other
+                    // package-list consumers run. Joined by the
+                    // `ensure_transitive_closures` call before package filtering,
+                    // the earliest possible consumer (`--affected` with a changed
+                    // lockfile compares closures).
+                    .defer_transitive_closures(true)
+                    // External dependency hashes are computed on the same
+                    // background thread, straight from the sorted closures, so
+                    // task hashing and run summaries read them as fields.
+                    .with_closure_hasher(std::sync::Arc::new(
+                        turborepo_task_hash::hash_sorted_closures,
+                    ));
             if cargo_enabled(&self.opts.future_flags) {
                 builder = builder.with_toolchain(turborepo_repository::cargo::CargoToolchain::new(
                     self.repo_root.to_owned(),
@@ -577,7 +595,9 @@ impl RunBuilder {
             }
         };
 
-        repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().name().to_string());
+        if let Some(package_manager) = pkg_dep_graph.package_manager() {
+            repo_telemetry.track_package_manager(package_manager.name().to_string());
+        }
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
 
@@ -681,13 +701,18 @@ impl RunBuilder {
 
         let turbo_json_loader = {
             let _span = tracing::info_span!("turbo_json_loader_setup").entered();
-            if TaskAccess::check_enabled(&self.repo_root) {
+            if let (Some(root_package_json), true) = (
+                root_package_json.as_ref(),
+                TaskAccess::check_enabled(&self.repo_root),
+            ) {
                 UnifiedTurboJsonLoader::task_access(
                     reader,
                     root_turbo_json_path.clone(),
                     root_package_json.clone(),
                 )
-            } else if is_single_package {
+            } else if let (Some(root_package_json), true) =
+                (root_package_json.as_ref(), is_single_package)
+            {
                 UnifiedTurboJsonLoader::single_package(
                     reader,
                     root_turbo_json_path.clone(),

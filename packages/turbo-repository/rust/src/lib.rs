@@ -216,7 +216,10 @@ impl Workspace {
         workspace_root: &AbsoluteSystemPath,
         from_commit: &str,
     ) -> LockfileContents {
-        let lockfile_name = self.graph.package_manager().lockfile_name();
+        let Some(package_manager) = self.graph.package_manager() else {
+            return LockfileContents::Unchanged;
+        };
+        let lockfile_name = package_manager.lockfile_name();
         let Ok(lockfile_path) = AnchoredSystemPath::new(&lockfile_name) else {
             return LockfileContents::Unchanged;
         };
@@ -278,8 +281,10 @@ impl Workspace {
         let lockfile_contents = if let Some(base) = base {
             self.get_lockfile_contents(&changed_files, workspace_root, base)
         } else if matches!(
-            AnchoredSystemPath::new(self.graph.package_manager().lockfile_name()),
-            Ok(path) if changed_files.contains(path)
+            self.graph
+                .package_manager()
+                .map(|pm| AnchoredSystemPath::new(pm.lockfile_name())),
+            Some(Ok(path)) if changed_files.contains(path)
         ) {
             LockfileContents::UnknownChange
         } else {

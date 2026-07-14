@@ -132,9 +132,9 @@ package level (all tasks in changed packages run).
 
 Represents the workspace structure and package dependencies:
 
-- Identify package manager being used
+- Identifies the JavaScript package manager, when present
 - Discovers packages in workspace
-- Performs lockfile analysis
+- Performs ecosystem-specific lockfile analysis
 - Builds dependency relationships between workspace packages
 - Validates that all non-root packages have a `name` field
   (`PackageGraph::validate()`)
@@ -176,9 +176,12 @@ explicit `outputs`, `cache: true`, and
 #### Experimental Cargo Support (`crates/turborepo-repository/src/cargo.rs`)
 
 Behind `futureFlags.experimentalCargoWorkspaces` in the root turbo.json,
-`turbo run` also discovers Rust crates from a Cargo workspace at the repo
-root and adds them to the package graph. `CargoToolchain` is the second
-`Toolchain` implementation.
+`turbo run` discovers Rust crates from a Cargo workspace at the repository
+root and adds them to the package graph. Cargo workspaces can stand alone or
+coexist with JavaScript workspaces; a root `package.json` and JavaScript package
+manager are only required when JavaScript packages participate. Cargo-only
+repositories may omit `package.json`; when one exists, it must still be valid.
+`CargoToolchain` is the second `Toolchain` implementation.
 
 Turborepo does not replace Cargo. Cargo is itself a build system with its
 own dependency graph, scheduler, and incremental cache (`target/`), so the

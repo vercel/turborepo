@@ -269,16 +269,22 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         &self,
         lockfile_content: &[u8],
     ) -> Result<Vec<ExternalDependencyChange>, ChangeMapError> {
-        let yarnrc = if matches!(self.pkg_graph.package_manager(), PackageManager::Berry) {
+        let yarnrc = if matches!(
+            self.pkg_graph.package_manager(),
+            Some(PackageManager::Berry)
+        ) {
             Some(yarnrc::YarnRc::from_file(self.pkg_graph.repo_root())?)
         } else {
             None
         };
-        let previous_lockfile = self.pkg_graph.package_manager().parse_lockfile(
-            self.pkg_graph.root_package_json(),
-            lockfile_content,
-            yarnrc,
-        )?;
+        let Some(package_manager) = self.pkg_graph.package_manager() else {
+            return Ok(Vec::new());
+        };
+        let Some(root_package_json) = self.pkg_graph.root_package_json() else {
+            return Ok(Vec::new());
+        };
+        let previous_lockfile =
+            package_manager.parse_lockfile(root_package_json, lockfile_content, yarnrc)?;
 
         let additional_packages = self
             .pkg_graph

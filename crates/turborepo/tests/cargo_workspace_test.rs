@@ -170,6 +170,19 @@ fn setup_cargo_monorepo(dir: &Path) {
     setup::setup_integration_test(dir, "cargo_monorepo", "npm@10.5.0", false).unwrap();
 }
 
+/// A pure Cargo workspace: no root package.json and no JavaScript package
+/// manager. `setup_integration_test` can't be used because it writes a
+/// `packageManager` field into a package.json that does not exist here, so
+/// the fixture is copied and committed directly.
+fn setup_cargo_pure_workspace(dir: &Path) {
+    setup::copy_fixture("cargo_pure_workspace", dir).unwrap();
+    setup::setup_git(dir).unwrap();
+    assert!(
+        !dir.join("package.json").exists(),
+        "the pure Cargo fixture must have no package.json"
+    );
+}
+
 fn cargo_binary(dir: &Path, segments: &[&str]) -> std::path::PathBuf {
     let mut path = dir.to_path_buf();
     path.extend(segments);
@@ -1607,5 +1620,118 @@ fn test_command_override_on_cargo_packages() {
     assert!(
         combined.contains("replaced-cargo-test"),
         "override should replace the verb table: {combined}"
+    );
+}
+
+/// A pure Cargo workspace with no root package.json builds a task graph:
+/// every crate becomes a package and gets its Cargo-derived command, with no
+/// JavaScript project involved.
+#[test]
+fn test_pure_cargo_workspace_dry_run_has_no_package_json() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_pure_workspace(tempdir.path());
+
+    let output = run_turbo(tempdir.path(), &["build", "--dry-run=json"]);
+    assert!(
+        output.status.success(),
+        "pure Cargo dry-run failed: {output:?}"
+    );
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry-run emits JSON");
+    let tasks = json["tasks"].as_array().expect("tasks array");
+    let task =
+        |id: &str| -> Option<&serde_json::Value> { tasks.iter().find(|t| t["taskId"] == id) };
+
+    // The bin crate is an entrypoint: it executes a real cargo command.
+    let app_build = task("app#build").expect("app#build in graph");
+    assert_eq!(app_build["command"], "cargo build --package=app --locked");
+    // Its dependency crate participates in the graph but is a no-op.
+    let lib_build = task("lib-a#build").expect("lib-a#build in graph");
+    assert_eq!(lib_build["command"], "<NONEXISTENT>");
+
+    // The entrypoint's hash still covers its dependency crate's sources even
+    // though there is no JavaScript global hash contribution.
+    let inputs: Vec<&str> = app_build["resolvedTaskDefinition"]["inputs"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
+        .unwrap_or_default();
+    assert!(
+        inputs.iter().any(|i| i.contains("crates/lib-a")),
+        "dependency crate sources must be inputs, got {inputs:?}"
+    );
+
+    // The fixture never had a package.json and turbo must not synthesize one.
+    assert!(
+        !tempdir.path().join("package.json").exists(),
+        "turbo must not create a package.json for a pure Cargo workspace"
+    );
+    assert!(
+        !tempdir.path().join("package-lock.json").exists(),
+        "turbo must not synthesize an npm lockfile"
+    );
+}
+
+#[test]
+fn test_pure_cargo_workspace_rejects_malformed_package_json() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_pure_workspace(tempdir.path());
+    fs::write(tempdir.path().join("package.json"), "{").unwrap();
+
+    let output = run_turbo(tempdir.path(), &["build", "--dry-run=json"]);
+    assert!(
+        !output.status.success(),
+        "malformed package.json must not be treated as absent"
+    );
+}
+
+/// A filtered `turbo run` in a pure Cargo workspace executes cargo, caches
+/// the result, and restores it — all without a package.json.
+#[test]
+fn test_pure_cargo_workspace_filtered_execution() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_cargo_pure_workspace(tempdir.path());
+
+    // Cold: executes cargo and produces the binary.
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=app", "--log-order", "grouped"],
+    );
+    assert!(output.status.success(), "cold build failed: {output:?}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("cache miss"), "expected miss: {stdout}");
+    let bin = tempdir
+        .path()
+        .join("target")
+        .join("debug")
+        .join(if cfg!(windows) { "app.exe" } else { "app" });
+    assert!(bin.exists(), "cargo build must produce the binary");
+
+    // Warm: fully cached.
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=app", "--log-order", "grouped"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("FULL TURBO"),
+        "second run should be fully cached: {stdout}"
+    );
+
+    // Deleting the deliverable and re-running restores it from cache.
+    fs::remove_file(&bin).unwrap();
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=app", "--log-order", "grouped"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("FULL TURBO"),
+        "restore run should be fully cached: {stdout}"
+    );
+    assert!(bin.exists(), "deliverable must be restored from cache");
+
+    assert!(
+        !tempdir.path().join("package.json").exists(),
+        "turbo must not create a package.json during execution"
     );
 }
