@@ -1628,7 +1628,7 @@ fn test_command_override_on_cargo_packages() {
 /// JavaScript project involved.
 #[test]
 fn test_pure_cargo_workspace_dry_run_has_no_package_json() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_pure_workspace(tempdir.path());
 
     let output = run_turbo(tempdir.path(), &["build", "--dry-run=json"]);
@@ -1673,7 +1673,7 @@ fn test_pure_cargo_workspace_dry_run_has_no_package_json() {
 
 #[test]
 fn test_pure_cargo_workspace_rejects_malformed_package_json() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_pure_workspace(tempdir.path());
     fs::write(tempdir.path().join("package.json"), "{").unwrap();
 
@@ -1688,7 +1688,7 @@ fn test_pure_cargo_workspace_rejects_malformed_package_json() {
 /// the result, and restores it — all without a package.json.
 #[test]
 fn test_pure_cargo_workspace_filtered_execution() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = cargo_tempdir();
     setup_cargo_pure_workspace(tempdir.path());
 
     // Cold: executes cargo and produces the binary.
@@ -1733,5 +1733,212 @@ fn test_pure_cargo_workspace_filtered_execution() {
     assert!(
         !tempdir.path().join("package.json").exists(),
         "turbo must not create a package.json during execution"
+    );
+}
+
+#[test]
+fn test_cargo_tasks_are_registered_without_task_configuration() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": {}
+}"#,
+    )
+    .unwrap();
+
+    for (task, expected_command) in [
+        ("build", "cargo build --package=app --locked"),
+        ("run", "cargo run --package=app --locked"),
+        ("dev", "cargo run --package=app --locked"),
+    ] {
+        let output = run_turbo(
+            tempdir.path(),
+            &["run", task, "--filter=app", "--dry-run=json"],
+        );
+        assert!(output.status.success(), "{task} failed: {output:?}");
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let task_id = format!("app#{task}");
+        let definition = json["tasks"]
+            .as_array()
+            .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == task_id))
+            .unwrap_or_else(|| panic!("app#{task} in graph"));
+        assert_eq!(definition["command"], expected_command);
+    }
+
+    for (task, subcommand) in [
+        ("test", "test"),
+        ("check", "check"),
+        ("clippy", "clippy"),
+        ("lint", "clippy"),
+        ("bench", "bench"),
+        ("doc", "doc"),
+        ("docs", "doc"),
+    ] {
+        let output = run_turbo(
+            tempdir.path(),
+            &["run", task, "--filter=acme", "--dry-run=json"],
+        );
+        assert!(output.status.success(), "{task} failed: {output:?}");
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let task_id = format!("acme#{task}");
+        let definition = json["tasks"]
+            .as_array()
+            .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == task_id))
+            .unwrap_or_else(|| panic!("acme#{task} in graph"));
+        assert_eq!(
+            definition["command"],
+            format!("cargo {subcommand} --workspace --locked")
+        );
+    }
+}
+
+#[test]
+fn test_implicit_cargo_tasks_are_package_aware_and_configurable() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": { "build": { "cache": false } }
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=app", "--dry-run=json"],
+    );
+    assert!(
+        output.status.success(),
+        "configured build failed: {output:?}"
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let build = json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "app#build"))
+        .expect("app#build in graph");
+    assert_eq!(build["command"], "cargo build --package=app --locked");
+    assert_eq!(build["resolvedTaskDefinition"]["cache"], false);
+
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": {}
+}"#,
+    )
+    .unwrap();
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=js-pkg", "--dry-run=json"],
+    );
+    assert!(
+        output.status.success(),
+        "filtered JS build failed: {output:?}"
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(json["tasks"].as_array().is_some_and(Vec::is_empty));
+
+    let output = run_turbo(tempdir.path(), &["run", "biuld", "--filter=app"]);
+    assert!(!output.status.success(), "unknown task must fail");
+}
+
+#[test]
+fn test_query_discovers_and_excludes_implicit_cargo_tasks() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": {}
+}"#,
+    )
+    .unwrap();
+
+    let query = |package: &str| {
+        let query =
+            format!("query {{ package(name: \"{package}\") {{ tasks {{ items {{ name }} }} }} }}");
+        let output = run_turbo(tempdir.path(), &["query", &query]);
+        assert!(output.status.success(), "query failed: {output:?}");
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        json["data"]["package"]["tasks"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|task| task["name"].as_str())
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    };
+
+    let app_tasks = query("app");
+    assert!(app_tasks.iter().any(|task| task == "build"));
+    assert!(app_tasks.iter().any(|task| task == "run"));
+    assert!(app_tasks.iter().any(|task| task == "dev"));
+    assert!(!app_tasks.iter().any(|task| task == "lint"));
+
+    let workspace_tasks = query("acme");
+    assert!(workspace_tasks.iter().any(|task| task == "clippy"));
+    assert!(workspace_tasks.iter().any(|task| task == "lint"));
+    assert!(workspace_tasks.iter().any(|task| task == "docs"));
+
+    fs::write(
+        tempdir.path().join("crates/app/turbo.json"),
+        r#"{
+  "extends": ["//"],
+  "tasks": { "build": { "extends": false } }
+}"#,
+    )
+    .unwrap();
+    assert!(!query("app").iter().any(|task| task == "build"));
+}
+
+#[test]
+fn test_affected_tasks_include_implicit_cargo_commands() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": {}
+}"#,
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("crates/app/src/main.rs"),
+        "fn main() { println!(\"changed\"); }\n",
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "query { affectedTasks(tasks: [\"build\", \"lint\"]) { items { name package { name } \
+             } } }",
+        ],
+    );
+    assert!(output.status.success(), "query failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tasks = json["data"]["affectedTasks"]["items"].as_array().unwrap();
+    assert!(
+        tasks
+            .iter()
+            .any(|task| task["name"] == "build" && task["package"]["name"] == "app")
+    );
+    assert!(
+        tasks
+            .iter()
+            .any(|task| task["name"] == "lint" && task["package"]["name"] == "acme")
     );
 }

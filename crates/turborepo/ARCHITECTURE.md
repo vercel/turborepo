@@ -223,6 +223,16 @@ whether anything changed; Cargo decides how and in what order to build.**
   time without the "waiting for file lock" noise. Run summaries derive display
   commands from the same verb tables via `Toolchain::task_display_command`, so
   display cannot drift from execution.
+- **Task registration** (`Toolchain::registered_tasks`): entrypoints implicitly
+  register `build`; crates with exactly one binary also register `run` and its
+  `dev` alias. The workspace package registers `test`, `check`, `clippy`/`lint`,
+  `bench`, and `doc`/`docs`; libraries register nothing. These act as empty task
+  definitions at the lowest precedence, so normal `tasks` entries configure or
+  override them and package configuration can exclude them with
+  `extends: false`. Registration is package-aware, so the defaults do not make
+  same-named JavaScript scripts runnable without their usual turbo.json
+  definition. The names come from the same verb tables as command resolution
+  and participate in task suggestions and add-all/query graph construction.
 - **Hashing** (`Toolchain::derived_task_io`, consumed by
   `turborepo-engine/src/builder/definitions.rs`): entrypoint tasks hash
   their own sources plus their transitive dependency crates' sources

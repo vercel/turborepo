@@ -43,7 +43,13 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             let task_id = task_name
                 .task_id()
                 .unwrap_or_else(|| TaskId::new(package.as_str(), task_name.task()));
-            if Self::has_task_definition_in_run(loader, package, task_name, &task_id)? {
+            if Self::has_task_definition_or_registered(
+                loader,
+                package_graph,
+                package,
+                task_name,
+                &task_id,
+            )? {
                 return Ok(true);
             }
         }
@@ -65,6 +71,35 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             &mut HashSet::new(),
         )?;
         Ok(result.has_definition())
+    }
+
+    pub(super) fn has_task_definition_or_registered(
+        loader: &L,
+        package_graph: &PackageGraph,
+        workspace: &PackageName,
+        task_name: &TaskName<'static>,
+        task_id: &TaskId,
+    ) -> Result<bool, BuilderError> {
+        let result = Self::has_task_definition_in_run_inner(
+            loader,
+            workspace,
+            task_name,
+            task_id,
+            &mut HashSet::new(),
+        )?;
+        if result.has_definition() || result.is_excluded() {
+            return Ok(result.has_definition());
+        }
+
+        Ok(package_graph
+            .package_info(&PackageName::from(task_id.package()))
+            .and_then(|package| {
+                package_graph
+                    .toolchains()
+                    .get(&package.toolchain)
+                    .map(|toolchain| (package, toolchain))
+            })
+            .is_some_and(|(package, toolchain)| toolchain.registers_task(package, task_id.task())))
     }
 
     fn has_task_definition_in_run_inner(
@@ -217,6 +252,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let defines_task = package_info
             .zip(toolchain)
             .is_some_and(|(info, toolchain)| toolchain.defines_task(info, task_id.task()));
+        let registered_task = package_info
+            .zip(toolchain)
+            .is_some_and(|(info, toolchain)| toolchain.registers_task(info, task_id.task()));
 
         // Most tasks resolve to an identical definition: the same turbo.json
         // chain and task name, differing only by the package's depth (for
@@ -257,6 +295,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             task_name,
             self.is_single,
             self.should_validate_engine,
+            registered_task,
         )?;
 
         // Resolve the task's `command` override across all five precedence
@@ -407,12 +446,25 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
     ) -> Result<Vec<ProcessedTaskDefinition>, BuilderError> {
         let package_name = PackageName::from(task_id.package());
         let turbo_json_chain = self.turbo_json_chain(turbo_json_loader, &package_name)?;
+        let registered_task = self
+            .package_graph
+            .package_info(&package_name)
+            .and_then(|package| {
+                self.package_graph
+                    .toolchains()
+                    .get(&package.toolchain)
+                    .map(|toolchain| (package, toolchain))
+            })
+            .is_some_and(|(package, toolchain)| {
+                toolchain.registers_task(package, task_id.as_inner().task())
+            });
         Ok(Self::resolve_task_definitions_from_chain(
             turbo_json_chain,
             task_id,
             task_name,
             self.is_single,
             self.should_validate_engine,
+            registered_task,
         )?
         .into_iter()
         .map(|(definition, _)| definition)
@@ -433,6 +485,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         task_name: &TaskName,
         is_single: bool,
         should_validate_engine: bool,
+        registered_task: bool,
     ) -> Result<Vec<(ProcessedTaskDefinition, bool)>, BuilderError> {
         let root_used_scoped_key = |turbo_json: &TurboJson| {
             turbo_json
@@ -489,7 +542,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         }
 
         if is_single {
-            return match task_definitions.is_empty() {
+            return match task_definitions.is_empty() && !registered_task {
                 true => {
                     let (span, text) = task_id.span_and_text("turbo.json");
                     Err(BuilderError::MissingRootTaskInTurboJson(Box::new(
@@ -510,7 +563,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             }
         }
 
-        if task_definitions.is_empty() && should_validate_engine {
+        if task_definitions.is_empty() && should_validate_engine && !registered_task {
             let (span, text) = task_id.span_and_text("turbo.json");
             return Err(BuilderError::MissingPackageTask(Box::new(
                 MissingPackageTaskError {
