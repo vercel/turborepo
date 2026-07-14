@@ -10,7 +10,7 @@ use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{
     HasConfigBeyondExtends, ProcessedCommand, ProcessedTaskDefinition, RawTaskDefinition, TurboJson,
 };
-use turborepo_types::{TaskCommandOverride, TaskDefinition};
+use turborepo_types::{TaskArgs, TaskCommandOverride, TaskDefinition};
 
 use super::EngineBuilder;
 use crate::{
@@ -288,6 +288,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 .into_iter()
                 .map(|(definition, _)| definition),
         );
+        let had_explicit_cache = processed_task_definition.cache.is_some();
         // Toolchain defaults describe the command the toolchain synthesizes.
         // An override owns its behavior, including the generic cache default.
         if should_apply_toolchain_defaults(command_override.as_ref())
@@ -299,6 +300,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             }
         }
         let had_explicit_inputs = processed_task_definition.inputs.is_some();
+        let had_explicit_outputs = processed_task_definition.outputs.is_some();
         let mut task_def =
             TaskDefinition::from_processed(processed_task_definition, &path_to_root)?;
         task_def.command = command_override;
@@ -356,24 +358,37 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     _ => None,
                 })
                 .collect();
-            if let Some(derived) = toolchain.derived_task_io(
+            let task_args = TaskArgs::new(&self.pass_through_args, &self.requested_tasks);
+            let empty_environment = turborepo_repository::toolchain::TaskIOEnvironment::default();
+            let context = turborepo_repository::toolchain::TaskIOContext {
+                task_args: task_args.args_for_task(task_id.as_inner()),
+                environment: self
+                    .environments
+                    .get(&info.toolchain)
+                    .unwrap_or(&empty_environment),
+            };
+            if let Some(mut derived) = toolchain.derived_task_io(
                 info,
                 task_id.as_inner().task(),
                 path_to_root.as_str(),
                 &dependencies,
                 wants_automatic_inputs,
+                &context,
             ) {
-                task_def.inputs.globs.extend(derived.input_globs);
-                if let Some(default) = derived.package_default_inputs {
-                    task_def.inputs.default = default;
+                if task_io_env_exclusion_conflict(
+                    &task_def.env,
+                    &self.global_env,
+                    context.environment,
+                ) {
+                    derived.outputs = turborepo_repository::toolchain::DerivedOutputs::Unavailable;
                 }
-                for var in derived.env {
-                    if !task_def.env.contains(&var) {
-                        task_def.env.push(var);
-                    }
-                }
-                task_def.env.sort();
-                task_def.outputs.inclusions.extend(derived.output_globs);
+                apply_derived_task_io(
+                    &mut task_def,
+                    derived,
+                    toolchain.task_io_env_vars(),
+                    had_explicit_outputs,
+                    had_explicit_cache,
+                );
             }
         }
 
@@ -643,6 +658,71 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 /// Levels 1–2 arrive merged as `scoped_command` (most specific already
 /// won); level 4 as `unscoped_command`. `None` means levels 3/5 are in
 /// charge: the toolchain resolves the command as it always has.
+fn task_io_env_exclusion_conflict(
+    task_env: &[String],
+    global_env: &[String],
+    environment: &turborepo_repository::toolchain::TaskIOEnvironment,
+) -> bool {
+    let exclusions: Vec<&str> = task_env
+        .iter()
+        .chain(global_env)
+        .filter(|pattern| pattern.starts_with('!'))
+        .map(String::as_str)
+        .collect();
+    if exclusions.is_empty() {
+        return false;
+    }
+    let projected = turborepo_env::EnvironmentVariableMap::from(
+        environment
+            .iter()
+            .map(|(name, value)| (name.to_string(), value.to_string()))
+            .collect::<HashMap<_, _>>(),
+    );
+    projected
+        .wildcard_map_from_wildcards_unresolved(&exclusions)
+        .map_or(true, |matches| !matches.exclusions.is_empty())
+}
+
+fn apply_derived_task_io(
+    task_def: &mut TaskDefinition,
+    derived: turborepo_repository::toolchain::DerivedTaskIO,
+    task_io_env_vars: &[&str],
+    had_explicit_outputs: bool,
+    had_explicit_cache: bool,
+) {
+    for var in task_io_env_vars {
+        if !task_def.env.iter().any(|existing| existing == var) {
+            task_def.env.push((*var).to_string());
+        }
+    }
+    task_def.inputs.globs.extend(derived.input_globs);
+    if let Some(default) = derived.package_default_inputs {
+        task_def.inputs.default = default;
+    }
+    for var in derived.env {
+        if !task_def.env.contains(&var) {
+            task_def.env.push(var);
+        }
+    }
+    task_def.env.sort();
+    match derived.outputs {
+        turborepo_repository::toolchain::DerivedOutputs::Resolved(outputs) => {
+            task_def.outputs.inclusions.extend(outputs);
+        }
+        turborepo_repository::toolchain::DerivedOutputs::Unavailable
+            if !had_explicit_outputs && !had_explicit_cache =>
+        {
+            task_def.cache = false;
+        }
+        turborepo_repository::toolchain::DerivedOutputs::Unavailable => {}
+    }
+    if derived.input_safety == turborepo_repository::toolchain::DerivedInputSafety::Untracked
+        && !had_explicit_cache
+    {
+        task_def.cache = false;
+    }
+}
+
 fn resolve_command_override(
     scoped_command: Option<ProcessedCommand>,
     unscoped_command: Option<ProcessedCommand>,
@@ -871,5 +951,93 @@ mod command_override_tests {
         assert!(!inherits_toolchain_task_io(Some(
             &TaskCommandOverride::Argv(vec!["node".to_string(), "build.js".to_string(),])
         )));
+    }
+}
+
+#[cfg(test)]
+mod derived_io_tests {
+    use turborepo_repository::toolchain::{DerivedInputSafety, DerivedOutputs, DerivedTaskIO};
+    use turborepo_types::TaskDefinition;
+
+    use super::apply_derived_task_io;
+
+    #[test]
+    fn unavailable_outputs_disable_only_implicit_caching() {
+        let unavailable = || DerivedTaskIO {
+            outputs: DerivedOutputs::Unavailable,
+            ..Default::default()
+        };
+
+        let mut implicit = TaskDefinition::default();
+        apply_derived_task_io(&mut implicit, unavailable(), &[], false, false);
+        assert!(!implicit.cache);
+
+        let mut explicit_outputs = TaskDefinition::default();
+        explicit_outputs
+            .outputs
+            .inclusions
+            .push("configured/**".to_string());
+        apply_derived_task_io(&mut explicit_outputs, unavailable(), &[], true, false);
+        assert!(explicit_outputs.cache);
+        assert_eq!(explicit_outputs.outputs.inclusions, ["configured/**"]);
+
+        for cache in [true, false] {
+            let mut explicit_cache = TaskDefinition {
+                cache,
+                ..Default::default()
+            };
+            apply_derived_task_io(&mut explicit_cache, unavailable(), &[], false, true);
+            assert_eq!(explicit_cache.cache, cache);
+        }
+    }
+
+    #[test]
+    fn untracked_inputs_require_explicit_cache_authority() {
+        let untracked = || DerivedTaskIO {
+            input_safety: DerivedInputSafety::Untracked,
+            outputs: DerivedOutputs::Resolved(vec!["automatic/**".to_string()]),
+            ..Default::default()
+        };
+
+        for had_explicit_outputs in [false, true] {
+            let mut implicit_cache = TaskDefinition::default();
+            apply_derived_task_io(
+                &mut implicit_cache,
+                untracked(),
+                &[],
+                had_explicit_outputs,
+                false,
+            );
+            assert!(!implicit_cache.cache);
+        }
+
+        for cache in [true, false] {
+            let mut explicit_cache = TaskDefinition {
+                cache,
+                ..Default::default()
+            };
+            apply_derived_task_io(&mut explicit_cache, untracked(), &[], true, true);
+            assert_eq!(explicit_cache.cache, cache);
+        }
+    }
+
+    #[test]
+    fn resolved_outputs_and_declared_environment_are_applied() {
+        let mut task = TaskDefinition::default();
+        apply_derived_task_io(
+            &mut task,
+            DerivedTaskIO {
+                env: vec!["DERIVED_ENV".to_string()],
+                outputs: DerivedOutputs::Resolved(vec!["dist/file".to_string()]),
+                ..Default::default()
+            },
+            &["LAYOUT_*"],
+            false,
+            false,
+        );
+
+        assert_eq!(task.outputs.inclusions, ["dist/file"]);
+        assert_eq!(task.env, ["DERIVED_ENV", "LAYOUT_*"]);
+        assert!(task.cache);
     }
 }

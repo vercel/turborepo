@@ -49,6 +49,28 @@ use crate::{
     turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
 };
 
+fn project_task_io_environment(
+    toolchains: &turborepo_repository::toolchain::ToolchainRegistry,
+    environment: &EnvironmentVariableMap,
+) -> Result<
+    HashMap<
+        turborepo_repository::toolchain::ToolchainId,
+        turborepo_repository::toolchain::TaskIOEnvironment,
+    >,
+    turborepo_env::Error,
+> {
+    toolchains
+        .iter()
+        .map(|toolchain| {
+            let selected = environment.from_wildcards(toolchain.task_io_env_vars())?;
+            Ok((
+                toolchain.id(),
+                turborepo_repository::toolchain::TaskIOEnvironment::new(selected.into_inner()),
+            ))
+        })
+        .collect()
+}
+
 pub struct RunBuilder {
     processes: ProcessManager,
     opts: Opts,
@@ -816,6 +838,7 @@ impl RunBuilder {
             &root_turbo_json,
             engine_pkgs,
             &turbo_json_loader,
+            &env_at_execution_start,
         )?;
 
         let task_access = {
@@ -840,6 +863,7 @@ impl RunBuilder {
                 &root_turbo_json,
                 engine_pkgs,
                 &turbo_json_loader,
+                &env_at_execution_start,
             )?;
         }
 
@@ -1097,6 +1121,7 @@ impl RunBuilder {
         root_turbo_json: &TurboJson,
         filtered_pkgs: impl Iterator<Item = &'a PackageName>,
         turbo_json_loader: &impl turborepo_engine::TurboJsonLoader,
+        environment: &EnvironmentVariableMap,
     ) -> Result<Engine, Error> {
         let tasks = self.opts.run_opts.tasks.iter().map(|task| {
             // TODO: Pull span info from command
@@ -1109,6 +1134,9 @@ impl RunBuilder {
         } else {
             Vec::new()
         };
+        let task_io_environment =
+            project_task_io_environment(pkg_dep_graph.toolchains(), environment)
+                .map_err(Error::Env)?;
         let mut builder = EngineBuilder::new(
             &self.repo_root,
             pkg_dep_graph,
@@ -1120,6 +1148,12 @@ impl RunBuilder {
         .with_workspaces(filtered_pkgs.cloned().collect())
         .with_future_flags(self.opts.future_flags)
         .with_global_deps(global_deps_for_task_inputs)
+        .with_global_env(root_turbo_json.global_env.clone())
+        .with_task_io_context(
+            self.opts.run_opts.pass_through_args.clone(),
+            self.opts.run_opts.tasks.clone(),
+            task_io_environment,
+        )
         .with_tasks(tasks);
 
         if self.add_all_tasks {
@@ -1198,6 +1232,139 @@ fn origins_match(url1: &str, url2: &str) -> bool {
 
 fn has_userinfo(url: &Url) -> bool {
     !url.username().is_empty() || url.password().is_some()
+}
+
+#[cfg(test)]
+mod task_io_context_tests {
+    use std::{collections::HashMap, sync::Arc};
+
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_env::EnvironmentVariableMap;
+    use turborepo_hash::TaskHashable;
+    use turborepo_repository::{
+        cargo::CargoToolchain,
+        toolchain::{DiscoverPackagesFuture, Toolchain, ToolchainId, ToolchainRegistry},
+    };
+    use turborepo_types::EnvMode;
+
+    use super::project_task_io_environment;
+
+    struct Stub {
+        id: ToolchainId,
+        environment: Vec<&'static str>,
+    }
+
+    impl Toolchain for Stub {
+        fn id(&self) -> ToolchainId {
+            self.id.clone()
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+
+        fn task_io_env_vars(&self) -> &[&str] {
+            &self.environment
+        }
+    }
+
+    #[test]
+    fn projection_is_isolated_per_toolchain() {
+        let alpha = ToolchainId::new("alpha");
+        let beta = ToolchainId::new("beta");
+        let mut toolchains = ToolchainRegistry::new();
+        toolchains.register(Arc::new(Stub {
+            id: alpha.clone(),
+            environment: vec!["ALPHA_*"],
+        }));
+        toolchains.register(Arc::new(Stub {
+            id: beta.clone(),
+            environment: vec!["BETA_KEY"],
+        }));
+        let environment = EnvironmentVariableMap::from(HashMap::from([
+            ("ALPHA_TARGET".to_string(), "alpha".to_string()),
+            ("BETA_KEY".to_string(), "beta".to_string()),
+            ("UNDECLARED_SECRET".to_string(), "secret".to_string()),
+        ]));
+
+        let projected = project_task_io_environment(&toolchains, &environment).unwrap();
+        assert_eq!(projected.len(), 2);
+        let alpha_environment = projected.get(&alpha).unwrap();
+        assert_eq!(alpha_environment.get("ALPHA_TARGET"), Some("alpha"));
+        assert_eq!(alpha_environment.get("BETA_KEY"), None);
+        assert_eq!(alpha_environment.get("UNDECLARED_SECRET"), None);
+        let beta_environment = projected.get(&beta).unwrap();
+        assert_eq!(beta_environment.get("BETA_KEY"), Some("beta"));
+        assert_eq!(beta_environment.get("ALPHA_TARGET"), None);
+        assert_eq!(beta_environment.get("UNDECLARED_SECRET"), None);
+    }
+
+    #[test]
+    fn cargo_projection_keeps_only_rustup_selection_environment() {
+        let root = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(root.path()).unwrap();
+        let mut toolchains = ToolchainRegistry::new();
+        toolchains.register(CargoToolchain::new(root));
+        let environment = EnvironmentVariableMap::from(HashMap::from([
+            ("RUSTUP_HOME".to_string(), "/rustup".to_string()),
+            ("RUSTUP_TOOLCHAIN".to_string(), "stable-host".to_string()),
+            (
+                "RUSTUP_DIST_SERVER".to_string(),
+                "https://example.invalid".to_string(),
+            ),
+        ]));
+
+        let projected = project_task_io_environment(&toolchains, &environment).unwrap();
+        let cargo = projected.get(&ToolchainId::RUST).unwrap();
+        assert_eq!(cargo.get("RUSTUP_HOME"), Some("/rustup"));
+        assert_eq!(cargo.get("RUSTUP_TOOLCHAIN"), Some("stable-host"));
+        assert_eq!(cargo.get("RUSTUP_DIST_SERVER"), None);
+    }
+
+    fn projected_task_hash(layout: &str, secret: &str) -> String {
+        let alpha = ToolchainId::new("alpha");
+        let mut toolchains = ToolchainRegistry::new();
+        toolchains.register(Arc::new(Stub {
+            id: alpha.clone(),
+            environment: vec!["ALPHA_*"],
+        }));
+        let environment = EnvironmentVariableMap::from(HashMap::from([
+            ("ALPHA_TARGET".to_string(), layout.to_string()),
+            ("UNDECLARED_SECRET".to_string(), secret.to_string()),
+        ]));
+        let projected = project_task_io_environment(&toolchains, &environment).unwrap();
+        let layout = projected
+            .get(&alpha)
+            .and_then(|environment| environment.get("ALPHA_TARGET"))
+            .unwrap();
+        let declared = vec!["ALPHA_*".to_string()];
+
+        TaskHashable {
+            global_hash: "global",
+            task_dependency_hashes: Vec::new(),
+            hash_of_files: "files",
+            external_deps_hash: None,
+            package_dir: None,
+            task: "build",
+            outputs: Default::default(),
+            pass_through_args: &[],
+            env: &declared,
+            resolved_env_vars: vec![format!("ALPHA_TARGET={layout}")],
+            pass_through_env: &[],
+            env_mode: EnvMode::Strict,
+            command_override: &[],
+            command_opt_out: false,
+        }
+        .calculate_task_hash()
+        .unwrap()
+    }
+
+    #[test]
+    fn projected_declared_environment_changes_task_hash_only() {
+        let baseline = projected_task_hash("one", "secret-one");
+        assert_ne!(baseline, projected_task_hash("two", "secret-one"));
+        assert_eq!(baseline, projected_task_hash("one", "secret-two"));
+    }
 }
 
 #[cfg(test)]

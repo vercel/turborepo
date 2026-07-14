@@ -160,6 +160,19 @@ through the trait. Machinery that predates the abstraction and has no trait
 surface yet (package-manager resolution for dependency splitting, the JS
 lockfile closure phase) is documented as known debt in the module.
 
+Toolchain-derived I/O receives the same task-scoped arguments as execution plus
+a narrow, platform-aware startup-environment projection keyed by toolchain.
+Dependency tasks do not inherit arguments for a different requested task, each
+toolchain can observe only the variables it declares, Windows lookup remains
+case-insensitive, and every declared pattern automatically participates in task
+hashing. If a user env exclusion matches a projected toolchain I/O variable,
+automatic outputs become unavailable rather than deriving cacheable paths from
+an unhashed value. Derived outputs distinguish exact/resolved paths from
+unavailable automatic resolution. When outputs are unavailable, the engine
+disables implicit caching so a log-only hit cannot suppress execution, while
+explicit `outputs`, `cache: true`, and
+`cache: false` remain authoritative.
+
 #### Experimental Cargo Support (`crates/turborepo-repository/src/cargo.rs`)
 
 Behind `futureFlags.experimentalCargoWorkspaces` in the root turbo.json,
@@ -215,8 +228,9 @@ whether anything changed; Cargo decides how and in what order to build.**
   their own sources plus their transitive dependency crates' sources
   (flattened, so invalidation doesn't depend on `dependsOn` wiring), the
   workspace files (root `Cargo.toml`, `.cargo/config*`, `rust-toolchain*`),
-  and standard Cargo/cc-rs environment inputs: compiler and rustdoc selection
-  and flags, Cargo build/profile/target configuration, native compiler and
+  and standard Cargo/cc-rs environment inputs: rustup home/toolchain selection,
+  compiler and rustdoc selection and flags, Cargo build/profile/target
+  configuration, native compiler and
   archiver settings (including target-qualified forms), and platform SDK
   selection. Arbitrary variables consumed by project-specific build scripts
   remain explicit task `env` configuration. The workspace package hashes all
@@ -238,22 +252,36 @@ whether anything changed; Cargo decides how and in what order to build.**
   `rust-toolchain` overrides apply) and added to every Cargo package's set.
   This prevents compiler releases, operating systems, architectures, or host
   ABIs from sharing native artifact cache entries. Explicit targets selected
-  through hashed task arguments, `CARGO_BUILD_TARGET`, or repository Cargo
-  configuration remain distinct. Failure to resolve the compiler identity is
+  through hashed task arguments or `CARGO_BUILD_TARGET` remain distinct;
+  repository `build.target` stays conservatively unavailable. Failure to
+  resolve the compiler identity is
   a hard error. Every non-empty Cargo workspace must have a current
   `Cargo.lock`: discovery runs full `cargo metadata --locked --all-features`
   before hashing, then computes per-crate closures. Missing, stale, unparsable,
   or incomplete lockfiles are hard errors. Turborepo never creates or refreshes
   the source lockfile; users do that explicitly with Cargo and commit the
   result.
-- **Caching**: task caches store logs plus, for entrypoint builds, the
-  deliverables: bins (`target/*/<bin>`) and cdylib/staticlib artifacts
-  (`target/*/lib<name>.{so,dylib,a}`, `<name>.{dll,lib}` — all platform
-  spellings are emitted; unmatched globs contribute nothing). The profile
-  segment is a wildcard, so `--release` and custom profiles cache without
-  configuration — pass-through args participate in the task hash, giving
-  each profile its own cache entry. Cargo's internal `target/` state is
-  deliberately never cached — it is Cargo's own incremental cache, and
+- **Caching**: task caches store logs plus, for entrypoint builds, exact
+  deliverables under the effective target directory. The `rustc -vV` host and
+  `rustc --print target-list` validate target triples; CLI `--target` wins over
+  `CARGO_BUILD_TARGET`, and the effective target adds its Cargo path segment and
+  platform-correct bin/cdylib/staticlib basename. CLI `--target-dir` wins over
+  `CARGO_TARGET_DIR`, which wins over Cargo metadata (including repository
+  `target-dir`). Target directories are accepted only when their canonical or
+  nearest existing path remains in the repository. No profile or platform
+  wildcards are cached. Automatic outputs fail closed for repository
+  `build.target`, unknown/custom targets, path escapes,
+  `CARGO_BUILD_TARGET_DIR`, compiler overrides, or when
+  manifests/configuration can alter
+  profile directories, artifact names/locations, or include unhashable external
+  configuration. External, included, and Cargo configuration beneath any
+  symlinked path component is untracked; those config paths are not emitted as
+  trusted inputs. Unresolved outputs
+  disable implicit caching unless outputs or cache behavior are configured.
+  Untracked inputs disable caching unless `cache` itself is explicitly configured;
+  explicit outputs alone cannot make an incomplete input hash safe. Cargo's
+  internal `target/` state is deliberately never cached
+  — it is Cargo's own incremental cache, and
   tarballing it fights Cargo instead of leaning on it (it is also
   multi-gigabyte). For fine-grained compile caching, `RUSTC_WRAPPER`
   (sccache) is the sound layer, and it participates in task hashes so
