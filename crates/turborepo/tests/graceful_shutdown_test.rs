@@ -193,6 +193,7 @@ mod unix {
             .env_remove("CI")
             .env_remove("GITHUB_ACTIONS")
             .current_dir(test_dir)
+            .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         ChildGuard::new(cmd.spawn().expect("failed to spawn turbo"))
@@ -217,6 +218,7 @@ mod unix {
             .env_remove("CI")
             .env_remove("GITHUB_ACTIONS")
             .current_dir(test_dir)
+            .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .process_group(0);
@@ -338,14 +340,29 @@ mod unix {
     }
 
     fn process_exists(pid: i32) -> bool {
-        Command::new("kill")
+        let exists = Command::new("kill")
             .arg("-0")
             .arg(pid.to_string())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status()
             .map(|status| status.success())
-            .unwrap_or(false)
+            .unwrap_or(false);
+
+        if !exists {
+            return false;
+        }
+
+        #[cfg(target_os = "linux")]
+        if fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|stat| {
+            stat.rsplit_once(") ")
+                .is_some_and(|(_, fields)| fields.starts_with('Z'))
+        }) {
+            // Container init processes do not always reap killed descendants promptly.
+            return false;
+        }
+
+        true
     }
 
     fn wait_for_process_gone(pid: i32, timeout: Duration) {
@@ -477,6 +494,86 @@ while true; do sleep 0.2 || true; done
         assert!(
             combined.contains("graceful cleanup done"),
             "expected cleanup completion log after signal\n{combined}"
+        );
+    }
+
+    #[test]
+    fn run_forwards_sigint_to_with_tasks() {
+        let (_tempdir, test_dir) = setup_shutdown_example(
+            "dev-sigint.sh",
+            r#"#!/usr/bin/env bash
+set -u
+trap ': > dev.sigint; exit 0' INT
+: > dev.ready
+while true; do sleep 0.2 || true; done
+"#,
+        );
+
+        let app_dir = test_dir.join("apps/app-a");
+        fs::write(
+            app_dir.join("sidecar-sigint.sh"),
+            r#"#!/usr/bin/env bash
+set -u
+trap ': > sidecar.sigint; exit 0' INT
+: > sidecar.ready
+while true; do sleep 0.2 || true; done
+"#,
+        )
+        .expect("failed to write sidecar script");
+
+        let package_json_path = app_dir.join("package.json");
+        let mut package_json: Value = serde_json::from_str(
+            &fs::read_to_string(&package_json_path).expect("failed to read app package.json"),
+        )
+        .expect("failed to parse app package.json");
+        package_json["scripts"]["sidecar"] = Value::String("bash ./sidecar-sigint.sh".to_string());
+        fs::write(
+            &package_json_path,
+            serde_json::to_string_pretty(&package_json).expect("failed to serialize app package"),
+        )
+        .expect("failed to update app package.json");
+
+        let turbo_json_path = test_dir.join("turbo.json");
+        let mut turbo_json: Value = serde_json::from_str(
+            &fs::read_to_string(&turbo_json_path).expect("failed to read turbo.json"),
+        )
+        .expect("failed to parse turbo.json");
+        turbo_json["tasks"]["dev"]["with"] = json!(["sidecar"]);
+        turbo_json["tasks"]["sidecar"] = json!({
+            "cache": false,
+            "persistent": true,
+        });
+        fs::write(
+            &turbo_json_path,
+            serde_json::to_string_pretty(&turbo_json).expect("failed to serialize turbo.json"),
+        )
+        .expect("failed to update turbo.json");
+
+        let dev_ready_file = app_dir.join("dev.ready");
+        let sidecar_ready_file = app_dir.join("sidecar.ready");
+        let dev_sigint_file = app_dir.join("dev.sigint");
+        let sidecar_sigint_file = app_dir.join("sidecar.sigint");
+
+        let mut child = spawn_noninteractive_turbo(&test_dir);
+        wait_for_path(&dev_ready_file, START_TIMEOUT);
+        wait_for_path(&sidecar_ready_file, START_TIMEOUT);
+
+        send_signal(child.child_mut().id() as i32, Signal::SIGINT);
+        let output = child.into_output(EXIT_TIMEOUT);
+        let combined = normalize_output(&format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+
+        assert!(
+            output.status.success(),
+            "shutdown with a `with` task should exit 0\n{combined}"
+        );
+        assert!(dev_sigint_file.exists(), "dev task did not receive SIGINT");
+        assert!(
+            sidecar_sigint_file.exists(),
+            "`with` task did not receive SIGINT"
         );
     }
 
