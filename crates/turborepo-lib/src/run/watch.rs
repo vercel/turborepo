@@ -24,7 +24,7 @@ use turborepo_repository::package_graph::PackageName;
 use turborepo_run_cache::{OutputWatcher, OutputWatcherError};
 use turborepo_scm::SCM;
 use turborepo_scope::target_selector::InvalidSelectorError;
-use turborepo_signals::{listeners::get_signal, ShutdownReason, SignalHandler};
+use turborepo_signals::{listeners::get_signal, ShutdownReason, SignalHandler, SubscriberGuard};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{sender::UISender, LogSinks};
 
@@ -152,6 +152,7 @@ pub struct WatchClient {
     base: CommandBase,
     telemetry: CommandEventBuilder,
     handler: SignalHandler,
+    shutdown_guard: Option<SubscriberGuard>,
     ui_sender: Option<UISender>,
     ui_handle: Option<JoinHandle<()>>,
     experimental_write_cache: bool,
@@ -398,6 +399,7 @@ impl WatchClient {
             output_watcher,
             package_change_events,
             handler,
+            shutdown_guard: None,
             telemetry,
             experimental_write_cache,
             background_stoppers: Vec::new(),
@@ -558,19 +560,15 @@ impl WatchClient {
             }
         };
 
-        select! {
+        let shutdown_guard = select! {
             biased;
-            _ = signal_subscriber.listen() => {
-                tracing::info!("shutting down");
-                Err(Error::SignalInterrupt)
-            }
-            result = event_fut => {
-                result
-            }
-            run_result = run_fut => {
-                run_result
-            }
-        }
+            guard = signal_subscriber.listen() => guard.ok(),
+            result = event_fut => return result,
+            run_result = run_fut => return run_result,
+        };
+        self.shutdown_guard = shutdown_guard;
+        tracing::info!("shutting down");
+        Err(Error::SignalInterrupt)
     }
 
     #[instrument(skip(changed_packages))]
@@ -665,6 +663,7 @@ impl WatchClient {
         if let Some(handle) = self.ui_handle.take() {
             handle.await.ok();
         }
+        self.shutdown_guard.take();
     }
 
     async fn stop_impacted_tasks(
