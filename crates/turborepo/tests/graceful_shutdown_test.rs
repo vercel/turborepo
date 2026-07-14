@@ -77,6 +77,21 @@ mod unix {
             writer.flush().expect("failed to flush Ctrl+C to pty");
         }
 
+        fn wait_for_output(&self, expected: &str, timeout: Duration) {
+            let start = Instant::now();
+            loop {
+                let found =
+                    String::from_utf8_lossy(&self.output.lock().unwrap()).contains(expected);
+                if found {
+                    return;
+                }
+                if start.elapsed() > timeout {
+                    panic!("timed out waiting for output: {expected}");
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
+
         fn finish(mut self, timeout: Duration) -> String {
             let start = Instant::now();
             loop {
@@ -226,6 +241,14 @@ mod unix {
     }
 
     fn spawn_interactive_turbo(test_dir: &Path) -> PtyTurbo {
+        spawn_interactive_turbo_command(test_dir, false)
+    }
+
+    fn spawn_interactive_turbo_via_node_wrapper(test_dir: &Path) -> PtyTurbo {
+        spawn_interactive_turbo_command(test_dir, true)
+    }
+
+    fn spawn_interactive_turbo_command(test_dir: &Path, via_node_wrapper: bool) -> PtyTurbo {
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize {
@@ -259,7 +282,14 @@ mod unix {
             .take_writer()
             .expect("failed to take pty writer");
 
-        let mut command = CommandBuilder::new(turbo_bin());
+        let mut command = if via_node_wrapper {
+            let mut command = CommandBuilder::new("node");
+            command.arg(turbo_node_wrapper());
+            command.env("TURBO_BINARY_PATH", turbo_bin());
+            command
+        } else {
+            CommandBuilder::new(turbo_bin())
+        };
         command.arg("run");
         command.arg("dev");
         command.arg("--filter=app-a");
@@ -498,12 +528,12 @@ while true; do sleep 0.2 || true; done
     }
 
     #[test]
-    fn run_forwards_sigint_to_with_tasks() {
+    fn second_ctrl_c_force_kills_with_task_through_node_wrapper() {
         let (_tempdir, test_dir) = setup_shutdown_example(
             "dev-sigint.sh",
             r#"#!/usr/bin/env bash
 set -u
-trap ': > dev.sigint; exit 0' INT
+trap 'exit 0' INT
 : > dev.ready
 while true; do sleep 0.2 || true; done
 "#,
@@ -514,7 +544,10 @@ while true; do sleep 0.2 || true; done
             app_dir.join("sidecar-sigint.sh"),
             r#"#!/usr/bin/env bash
 set -u
-trap ': > sidecar.sigint; exit 0' INT
+trap '' INT TERM
+sh -c 'trap "" INT TERM; while true; do sleep 0.2 || true; done' &
+child=$!
+printf '%s\n' "$child" > sidecar-child.pid
 : > sidecar.ready
 while true; do sleep 0.2 || true; done
 "#,
@@ -551,29 +584,24 @@ while true; do sleep 0.2 || true; done
 
         let dev_ready_file = app_dir.join("dev.ready");
         let sidecar_ready_file = app_dir.join("sidecar.ready");
-        let dev_sigint_file = app_dir.join("dev.sigint");
-        let sidecar_sigint_file = app_dir.join("sidecar.sigint");
+        let sidecar_child_pid_file = app_dir.join("sidecar-child.pid");
 
-        let mut child = spawn_noninteractive_turbo(&test_dir);
+        let mut child = spawn_interactive_turbo_via_node_wrapper(&test_dir);
         wait_for_path(&dev_ready_file, START_TIMEOUT);
         wait_for_path(&sidecar_ready_file, START_TIMEOUT);
+        let sidecar_child_pid = wait_for_pid_file(&sidecar_child_pid_file, START_TIMEOUT);
 
-        send_signal(child.child_mut().id() as i32, Signal::SIGINT);
-        let output = child.into_output(EXIT_TIMEOUT);
-        let combined = normalize_output(&format!(
-            "{}{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ));
+        child.send_ctrl_c();
+        child.wait_for_output("Shutting down Turborepo tasks", Duration::from_secs(5));
+        child.send_ctrl_c();
+
+        let transcript = child.finish(Duration::from_secs(5));
+        wait_for_process_gone(sidecar_child_pid, Duration::from_secs(5));
 
         assert!(
-            output.status.success(),
-            "shutdown with a `with` task should exit 0\n{combined}"
-        );
-        assert!(dev_sigint_file.exists(), "dev task did not receive SIGINT");
-        assert!(
-            sidecar_sigint_file.exists(),
-            "`with` task did not receive SIGINT"
+            transcript.contains("Force killed Turborepo tasks:")
+                && transcript.contains("app-a#sidecar"),
+            "expected second Ctrl+C to force kill the `with` task\n{transcript}"
         );
     }
 

@@ -619,7 +619,7 @@ impl WatchClient {
                 stopper
                     .shutdown(
                         force_shutdown_timeout,
-                        Some(self.handler.subscribe_in_process_signals()),
+                        Some(self.handler.subscribe_signals()),
                     )
                     .await;
             } else {
@@ -633,7 +633,7 @@ impl WatchClient {
                 stopper
                     .shutdown(
                         force_shutdown_timeout,
-                        Some(self.handler.subscribe_in_process_signals()),
+                        Some(self.handler.subscribe_signals()),
                     )
                     .await;
             } else {

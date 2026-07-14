@@ -30,9 +30,10 @@ Graceful shutdown happens while the Turbo process is still alive, so it should
 be handled internally by the run and process manager. Parent-death cleanup only
 applies when Turbo disappears before Rust cleanup code can run.
 
-- `crates/turborepo-lib/src/commands/run.rs` creates a shared
-  `SignalHandler` and does not return until all shutdown subscribers finish
-  their cleanup work.
+- `crates/turborepo-lib/src/commands/run.rs` creates one shared, process-lifetime
+  `SignalHandler`. It continuously brokers OS and in-process signals, retains
+  their count for force-shutdown escalation, and does not return until all
+  shutdown subscribers finish their cleanup work.
 - The handler distinguishes signal-driven shutdown (`ShutdownReason::Signal`)
   from close-driven shutdown (`ShutdownReason::Close`). Normal command
   completion uses the close path to drain subscribers without printing
