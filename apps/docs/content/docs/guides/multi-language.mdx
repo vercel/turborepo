@@ -83,6 +83,15 @@ Then, add a `package.json` to the directory:
 
 Now, when you use `turbo build`, the `"build"` script in `./cli/package.json` will be included into the tasks that `turbo` runs.
 
+<Callout type="info" title="Experimental Cargo workspaces">
+  Cargo workspaces can instead opt into native discovery with
+  `futureFlags.experimentalCargoWorkspaces`. Cargo tasks are then available
+  without wrapper `package.json` scripts or empty `tasks` entries: entrypoints
+  get `build`, single-binary crates also get `run`/`dev`, and the workspace gets
+  `test`, `check`, `clippy`/`lint`, `bench`, and `doc`/`docs`. Normal task
+  definitions still configure or override these defaults.
+</Callout>
+
 ## Caching build artifacts
 
 Ensure that the outputs for your builds are being cached with [the outputs key](/docs/reference/configuration#outputs) in `turbo.json`. In the case of a Rust CLI being compiled with cargo, a release build would be created in the `target/release` directory and we can cache it using:

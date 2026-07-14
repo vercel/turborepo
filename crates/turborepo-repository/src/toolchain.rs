@@ -252,6 +252,21 @@ pub trait Toolchain: Send + Sync {
         false
     }
 
+    /// Task names this toolchain makes available without an explicit
+    /// turbo.json definition. These act as lowest-precedence empty task
+    /// definitions; normal task configuration still overrides them.
+    fn registered_tasks(&self, package: &crate::package_graph::PackageInfo) -> Vec<String> {
+        let _ = package;
+        Vec::new()
+    }
+
+    /// Whether [`Toolchain::registered_tasks`] contains `task`.
+    fn registers_task(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
+        self.registered_tasks(package)
+            .iter()
+            .any(|registered| registered == task)
+    }
+
     /// Whether this toolchain defines an executable command for `task` in
     /// `package`. Tasks without one are phantom/transit tasks (they exist
     /// solely for dependency ordering via `dependsOn: ["^task"]`): they do

@@ -200,8 +200,21 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
             // Collect tasks from each workspace and its extends chain
             for workspace in self.workspaces.iter() {
-                let workspace_tasks =
-                    TaskInheritanceResolver::new(turbo_json_loader).resolve(workspace)?;
+                let implicit_tasks = if let Some(package) =
+                    self.package_graph.package_info(workspace)
+                    && let Some(toolchain) = self.package_graph.toolchains().get(&package.toolchain)
+                {
+                    toolchain
+                        .registered_tasks(package)
+                        .into_iter()
+                        .map(TaskName::from)
+                        .collect()
+                } else {
+                    HashSet::new()
+                };
+                let workspace_tasks = TaskInheritanceResolver::new(turbo_json_loader)
+                    .with_implicit_tasks(implicit_tasks)
+                    .resolve(workspace)?;
                 tasks_set.extend(workspace_tasks);
             }
 
@@ -226,7 +239,13 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 .task_id()
                 .unwrap_or_else(|| TaskId::new(workspace.as_ref(), task.task()));
 
-            if Self::has_task_definition_in_run(turbo_json_loader, workspace, task, &task_id)? {
+            if Self::has_task_definition_or_registered(
+                turbo_json_loader,
+                self.package_graph,
+                workspace,
+                task,
+                &task_id,
+            )? {
                 missing_tasks.remove(task.as_inner());
 
                 // Even if a task definition was found, we _only_ want to add it as an entry
@@ -347,8 +366,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     let task_name: TaskName<'static> =
                         TaskName::from(task_id.task().to_string()).into_owned();
                     let task_id_owned = task_id.as_inner().clone().into_owned();
-                    Self::has_task_definition_in_run(
+                    Self::has_task_definition_or_registered(
                         turbo_json_loader,
+                        self.package_graph,
                         &PackageName::Root,
                         &task_name,
                         &task_id_owned,

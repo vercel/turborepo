@@ -356,15 +356,26 @@ pub struct CargoPackageDetails {
     pub dir: String,
 }
 
+const ENTRYPOINT_SUBCOMMANDS: &[(&str, &str)] =
+    &[("build", "build"), ("run", "run"), ("dev", "run")];
+
+const WORKSPACE_SUBCOMMANDS: &[(&str, &str)] = &[
+    ("test", "test"),
+    ("check", "check"),
+    ("lint", "clippy"),
+    ("clippy", "clippy"),
+    ("doc", "doc"),
+    ("docs", "doc"),
+    ("bench", "bench"),
+];
+
 /// Map a Turborepo task name to the Cargo subcommand that implements it for
 /// an entrypoint crate. Entrypoints only build and run — verification verbs
 /// happen at workspace scope.
 pub fn entrypoint_subcommand(task: &str) -> Option<&'static str> {
-    match task {
-        "build" => Some("build"),
-        "run" | "dev" => Some("run"),
-        _ => None,
-    }
+    ENTRYPOINT_SUBCOMMANDS
+        .iter()
+        .find_map(|(name, subcommand)| (*name == task).then_some(*subcommand))
 }
 
 /// Map a Turborepo task name to the Cargo subcommand that implements it at
@@ -374,14 +385,27 @@ pub fn entrypoint_subcommand(task: &str) -> Option<&'static str> {
 /// (`cargo build --package=<crate>`), and a workspace-wide build would
 /// duplicate that work in a second cargo process.
 pub fn workspace_subcommand(task: &str) -> Option<&'static str> {
-    match task {
-        "test" => Some("test"),
-        "check" => Some("check"),
-        "lint" | "clippy" => Some("clippy"),
-        "doc" | "docs" => Some("doc"),
-        "bench" => Some("bench"),
-        _ => None,
-    }
+    WORKSPACE_SUBCOMMANDS
+        .iter()
+        .find_map(|(name, subcommand)| (*name == task).then_some(*subcommand))
+}
+
+fn registered_tasks(details: &CargoPackageDetails) -> impl Iterator<Item = &'static str> {
+    let runnable = details
+        .deliverables
+        .iter()
+        .filter(|deliverable| deliverable.kind == DeliverableKind::Bin)
+        .count()
+        == 1;
+    let tasks = match details.kind {
+        CargoPackageKind::Entrypoint => ENTRYPOINT_SUBCOMMANDS,
+        CargoPackageKind::Workspace => WORKSPACE_SUBCOMMANDS,
+        CargoPackageKind::Library => &[],
+    };
+    tasks
+        .iter()
+        .filter(move |(task, _)| runnable || !matches!(*task, "run" | "dev"))
+        .map(|(task, _)| *task)
 }
 
 /// The Cargo subcommand a task resolves to for a package, given its
@@ -1116,6 +1140,21 @@ impl Toolchain for CargoToolchain {
             .then_some(false);
 
         toolchain::TaskDefaults { cache }
+    }
+
+    fn registered_tasks(&self, package: &crate::package_graph::PackageInfo) -> Vec<String> {
+        package
+            .package_name()
+            .and_then(|name| self.package_details(&name))
+            .map(|details| registered_tasks(&details).map(str::to_string).collect())
+            .unwrap_or_default()
+    }
+
+    fn registers_task(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
+        package
+            .package_name()
+            .and_then(|name| self.package_details(&name))
+            .is_some_and(|details| registered_tasks(&details).any(|registered| registered == task))
     }
 
     /// Route rustc invocations through the embedded sccache, with the
@@ -2274,6 +2313,36 @@ mod test {
     use turbopath::{AbsoluteSystemPathBuf, IntoUnix};
 
     use super::*;
+
+    #[test]
+    fn only_unambiguous_binaries_register_run_tasks() {
+        let details = |deliverables| CargoPackageDetails {
+            kind: CargoPackageKind::Entrypoint,
+            deliverables,
+            dir: "crate".to_string(),
+        };
+        let deliverable = |name: &str, kind| Deliverable {
+            name: name.to_string(),
+            kind,
+        };
+
+        for entrypoint in [
+            details(vec![deliverable("ffi", DeliverableKind::Cdylib)]),
+            details(vec![
+                deliverable("one", DeliverableKind::Bin),
+                deliverable("two", DeliverableKind::Bin),
+            ]),
+        ] {
+            let tasks: Vec<_> = registered_tasks(&entrypoint).collect();
+            assert_eq!(tasks, ["build"]);
+        }
+
+        let binary = details(vec![deliverable("app", DeliverableKind::Bin)]);
+        assert_eq!(
+            registered_tasks(&binary).collect::<Vec<_>>(),
+            ["build", "run", "dev"]
+        );
+    }
 
     fn tempdir_root() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp = tempfile::tempdir().unwrap();

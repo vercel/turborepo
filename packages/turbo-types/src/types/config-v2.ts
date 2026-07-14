@@ -314,6 +314,12 @@ export interface FutureFlags {
    * crates remain graph nodes, but their tasks are no-ops because Cargo
    * builds them through dependency closures.
    *
+   * Entrypoints implicitly register `build`; crates with one binary also
+   * register `run` and `dev`. The workspace package registers `test`,
+   * `check`, `clippy`/`lint`, `bench`, and `doc`/`docs`. Normal task
+   * definitions configure or override these defaults, and package
+   * configuration can exclude them with `extends: false`.
+   *
    * Task caching uses Cargo-derived inputs and caches entrypoint build
    * deliverables. This feature is experimental.
    *

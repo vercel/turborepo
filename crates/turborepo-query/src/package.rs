@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashMap, HashSet},
+    fmt,
+    sync::Arc,
+};
 
 use async_graphql::Object;
 use itertools::Itertools;
@@ -47,6 +51,20 @@ impl Package {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    pub fn get_task_names(&self) -> BTreeSet<String> {
+        let packages = HashSet::from([self.name.clone()]);
+        self.get_tasks()
+            .into_keys()
+            .chain(
+                self.run
+                    .engine()
+                    .task_ids_for_packages(&packages)
+                    .into_iter()
+                    .map(|task| task.task().to_string()),
+            )
+            .collect()
     }
 
     pub fn direct_dependents_count(&self) -> usize {
@@ -225,13 +243,13 @@ impl Package {
     }
 
     async fn tasks(&self) -> Array<RepositoryTask> {
-        self.get_tasks()
+        let scripts = self.get_tasks();
+        self.get_task_names()
             .into_iter()
-            .sorted_by(|a, b| a.0.cmp(&b.0))
-            .map(|(name, script)| RepositoryTask {
+            .map(|name| RepositoryTask {
+                script: scripts.get(&name).cloned(),
                 name,
                 package: self.clone(),
-                script: Some(script),
             })
             .collect()
     }
