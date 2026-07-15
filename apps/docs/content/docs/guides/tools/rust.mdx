@@ -59,7 +59,7 @@ Turborepo validates the lockfile with Cargo and never creates or updates it. A m
 
 ## Enable Cargo workspaces
 
-Set the future flag in the root `turbo.json` and register the task names you plan to run:
+Set the future flag in the root `turbo.json`:
 
 ```json title="./turbo.json"
 {
@@ -67,24 +67,13 @@ Set the future flag in the root `turbo.json` and register the task names you pla
   "futureFlags": {
     "experimentalCargoWorkspaces": true
   },
-  "tasks": {
-    "build": {
-      "dependsOn": ["^build"]
-    },
-    "run": {},
-    "dev": {
-      "persistent": true
-    },
-    "test": {},
-    "check": {},
-    "lint": {},
-    "bench": {},
-    "doc": {}
-  }
+  "tasks": {}
 }
 ```
 
-Native `run` and `dev` tasks default to `cache: false`; an explicit `cache` setting overrides that default. Use `persistent: true` for `dev` only when the selected binary is a long-running process.
+Cargo task names are available without definitions in `turbo.json`. These implicit definitions have the lowest precedence, so authored task definitions can configure or override them. A package-level task definition containing only `extends: false` excludes an implicit task from that package. Aliases such as `run` and `dev` are independent tasks and must be configured or excluded separately.
+
+Native `run` and `dev` tasks default to `cache: false`; an explicit `cache` setting overrides that default. Configure `persistent: true` for `dev` only when the selected binary is a long-running process.
 
 ## Supported workspace shape
 
@@ -102,25 +91,25 @@ Turborepo discovers members only from the root Cargo workspace; nested Cargo wor
 
 Cargo packages have one of three shapes in Turborepo:
 
-- **Entrypoint crates** have a `bin`, `cdylib`, or `staticlib` target. All have `build` tasks. `run` and `dev` require Cargo to resolve one runnable binary.
+- **Entrypoint crates** have a `bin`, `cdylib`, or `staticlib` target. All implicitly register `build`. Crates with exactly one binary also implicitly register `run` and `dev`.
 - **Library crates** remain Package Graph nodes so filtering and affected calculations follow Rust dependency relationships. Their native tasks are no-ops because Cargo builds libraries as part of an entrypoint's dependency closure.
 - **The synthetic workspace package** uses `[workspace.metadata] name`, depends on every member crate, and runs workspace-wide verification tasks.
 
 ## Native tasks
 
-Turborepo synthesizes these mappings; Rust crates do not need `package.json` scripts.
+Turborepo implicitly registers these task mappings; Rust crates do not need `package.json` scripts or authored task definitions.
 
 | Package | Turbo task | Cargo command |
 | --- | --- | --- |
 | Entrypoint crate | `build` | `cargo build --package=<crate> --locked` |
-| Entrypoint crate with a resolvable binary | `run`, `dev` | `cargo run --package=<crate> --locked` |
+| Entrypoint crate with exactly one binary | `run`, `dev` | `cargo run --package=<crate> --locked` |
 | Workspace package | `test` | `cargo test --workspace --locked` |
 | Workspace package | `check` | `cargo check --workspace --locked` |
 | Workspace package | `lint`, `clippy` | `cargo clippy --workspace --locked` |
 | Workspace package | `bench` | `cargo bench --workspace --locked` |
 | Workspace package | `doc`, `docs` | `cargo doc --workspace --locked` |
 
-`run` and `dev` do not pass `--bin` to Cargo. They work when a crate has one binary or declares [`package.default-run`](https://doc.rust-lang.org/cargo/reference/manifest.html#the-default-run-field). A `cdylib`/`staticlib`-only crate can build but cannot run. A crate with multiple binaries needs `default-run`; native task arguments are forwarded after Cargo's `--` separator and therefore cannot select a binary with `--bin`.
+`run` and `dev` do not pass `--bin` to Cargo. Turborepo implicitly registers them only for crates with exactly one binary. A crate with multiple binaries can use [`package.default-run`](https://doc.rust-lang.org/cargo/reference/manifest.html#the-default-run-field), but must also define the `run` or `dev` task in `turbo.json`. Native task arguments are forwarded after Cargo's `--` separator and therefore cannot select a binary with `--bin`. A `cdylib`/`staticlib`-only crate can build but cannot run.
 
 Run entrypoint tasks by filtering to a crate:
 
@@ -164,7 +153,7 @@ turbo run test --filter=acme-rust -- --nocapture
 
 Crates and the synthetic workspace package are regular Package Graph nodes. Select crates by package name or crate directory. Select the synthetic workspace package by its `[workspace.metadata] name`; it does not support the root directory (`.`) as a filter. `--affected` propagates changes through local Rust dependency edges, so a library change can affect an entrypoint that depends on it and the synthetic workspace package.
 
-[`turbo query`](/docs/reference/query) exposes Cargo packages and their package dependency relationships. Its package `tasks` field currently comes from authored package scripts, so it does **not** list these synthesized Cargo task mappings. Use `turbo run <task> --dry-run=json` to inspect the resolved Cargo task graph and commands.
+[`turbo query`](/docs/reference/query) exposes Cargo packages, their package dependency relationships, and their implicit and authored tasks. An implicit Cargo task has no package script, so its `script` field is `null`. Use `turbo run <task> --dry-run=json` to inspect the resolved Cargo task graph, configuration, and commands.
 
 ## Caching behavior
 
@@ -188,9 +177,8 @@ Untracked inputs are stricter. External, included, or symlinked Cargo configurat
 
 - Only the root virtual Cargo workspace is discovered. Root crates are rejected, nested workspaces are not independently discovered, and resolved external or non-member local path dependencies fail closed.
 - Native entrypoint detection is limited to `bin`, `cdylib`, and `staticlib`; library tasks are graph-only no-ops.
-- `cdylib`/`staticlib`-only entrypoints are build-only. Multi-bin crates require `package.default-run` for native `run` and `dev`; pass-through arguments cannot supply Cargo's `--bin` option.
+- `cdylib`/`staticlib`-only entrypoints are build-only. Multi-bin crates require both `package.default-run` and an authored task definition for native `run` and `dev`; pass-through arguments cannot supply Cargo's `--bin` option.
 - Verification tasks always run for the whole Cargo workspace through the synthetic package, not per crate.
-- Synthesized Cargo tasks do not currently appear in `turbo query` package task lists.
 - Automatic artifact caching is deliberately disabled for unresolved output layouts and untracked inputs. Explicit outputs can authorize an unresolved output layout, but untracked inputs require an explicit `cache` setting. Cargo's full `target/` directory is never a task output.
 - The synthetic workspace package has no directory and cannot be passed to `turbo prune`; prune an entrypoint crate instead.
 - In watch mode, a no-op save in a crate may rerun a fast cache check because content-hash deduplication is still based on JavaScript workspace globs.
@@ -232,12 +220,7 @@ fn main() {
   "futureFlags": {
     "experimentalCargoWorkspaces": true
   },
-  "tasks": {
-    "build": {
-      "dependsOn": ["^build"]
-    },
-    "test": {}
-  }
+  "tasks": {}
 }
 ```
 
