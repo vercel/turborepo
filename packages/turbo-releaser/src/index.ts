@@ -2,17 +2,9 @@
 
 import { Command } from "commander";
 import { packAndPublish } from "./packager";
-import type { Platform } from "./types";
+import { supportedPlatforms } from "./config";
 import { getVersionInfo } from "./version";
-
-const supportedPlatforms: Array<Platform> = [
-  { os: "darwin", arch: "x64" },
-  { os: "darwin", arch: "arm64" },
-  { os: "linux", arch: "x64" },
-  { os: "linux", arch: "arm64" },
-  { os: "windows", arch: "x64" },
-  { os: "windows", arch: "arm64" }
-];
+import { publishRelease } from "./publish";
 
 const turboReleaser = new Command();
 
@@ -21,6 +13,17 @@ turboReleaser
   .requiredOption("--version-path <path>", "Path to the version.txt file")
   .option("--skip-publish", "Skip publishing to NPM")
   .action(releaseTurbo);
+
+turboReleaser
+  .command("publish")
+  .requiredOption("--repo-root <path>", "Path to the repository root")
+  .requiredOption(
+    "--artifacts-dir <path>",
+    "Directory containing dist-<os>-<arch> directories"
+  )
+  .requiredOption("--version-path <path>", "Path to the version.txt file")
+  .option("--skip-publish", "Pack without publishing to npm")
+  .action(publishRelease);
 
 async function releaseTurbo(options: {
   skipPublish: boolean;

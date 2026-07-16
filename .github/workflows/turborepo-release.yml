@@ -550,13 +550,20 @@ jobs:
       - name: Ensure npm version
         run: npm install -g npm@11.5.1
 
+      - name: Build release tool
+        run: turbo run build --filter=@turbo/releaser
+
       - name: Perform Release
         run: |
-          SKIP_FLAG=""
+          RELEASE_ARGS=()
           if [ "${{ inputs.dry_run }}" = "true" ]; then
-            SKIP_FLAG="--skip-publish"
+            RELEASE_ARGS+=("--skip-publish")
           fi
-          cd cli && make publish-turbo SKIP_PUBLISH=$SKIP_FLAG
+          packages/turbo-releaser/dist/index.js publish \
+            --repo-root . \
+            --artifacts-dir cli \
+            --version-path version.txt \
+            "${RELEASE_ARGS[@]}"
 
       # Upload published artifacts in case they are needed for debugging later
       - name: Upload Artifacts

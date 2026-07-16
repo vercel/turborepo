@@ -10,6 +10,7 @@ interface PackAndPublishOptions {
   packagePrefix?: string;
   binaryName?: string;
   srcDirPrefix?: string;
+  srcDir?: string;
   description?: string;
 }
 
@@ -21,6 +22,7 @@ export async function packAndPublish({
   packagePrefix,
   binaryName,
   srcDirPrefix,
+  srcDir,
   description
 }: PackAndPublishOptions) {
   console.log("Starting packAndPublish process...");
@@ -35,6 +37,7 @@ export async function packAndPublish({
       packagePrefix,
       binaryName,
       srcDirPrefix,
+      srcDir,
       description
     });
     artifacts.push(artifact);
@@ -48,7 +51,7 @@ export async function packAndPublish({
       encoding: "utf8"
     }).trim();
     console.log(`npm version: ${npmVersion}`);
-    operations.publishArtifacts(artifacts, npmTag);
+    await operations.publishArtifacts(artifacts, npmTag);
   } else {
     console.log("Skipping publish step.");
   }
