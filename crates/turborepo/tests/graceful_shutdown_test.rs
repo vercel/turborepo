@@ -77,6 +77,21 @@ mod unix {
             writer.flush().expect("failed to flush Ctrl+C to pty");
         }
 
+        fn wait_for_output(&self, expected: &str, timeout: Duration) {
+            let start = Instant::now();
+            loop {
+                let found =
+                    String::from_utf8_lossy(&self.output.lock().unwrap()).contains(expected);
+                if found {
+                    return;
+                }
+                if start.elapsed() > timeout {
+                    panic!("timed out waiting for output: {expected}");
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
+
         fn finish(mut self, timeout: Duration) -> String {
             let start = Instant::now();
             loop {
@@ -193,6 +208,7 @@ mod unix {
             .env_remove("CI")
             .env_remove("GITHUB_ACTIONS")
             .current_dir(test_dir)
+            .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         ChildGuard::new(cmd.spawn().expect("failed to spawn turbo"))
@@ -217,6 +233,7 @@ mod unix {
             .env_remove("CI")
             .env_remove("GITHUB_ACTIONS")
             .current_dir(test_dir)
+            .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .process_group(0);
@@ -224,6 +241,14 @@ mod unix {
     }
 
     fn spawn_interactive_turbo(test_dir: &Path) -> PtyTurbo {
+        spawn_interactive_turbo_command(test_dir, false)
+    }
+
+    fn spawn_interactive_turbo_via_node_wrapper(test_dir: &Path) -> PtyTurbo {
+        spawn_interactive_turbo_command(test_dir, true)
+    }
+
+    fn spawn_interactive_turbo_command(test_dir: &Path, via_node_wrapper: bool) -> PtyTurbo {
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize {
@@ -257,7 +282,14 @@ mod unix {
             .take_writer()
             .expect("failed to take pty writer");
 
-        let mut command = CommandBuilder::new(turbo_bin());
+        let mut command = if via_node_wrapper {
+            let mut command = CommandBuilder::new("node");
+            command.arg(turbo_node_wrapper());
+            command.env("TURBO_BINARY_PATH", turbo_bin());
+            command
+        } else {
+            CommandBuilder::new(turbo_bin())
+        };
         command.arg("run");
         command.arg("dev");
         command.arg("--filter=app-a");
@@ -338,14 +370,29 @@ mod unix {
     }
 
     fn process_exists(pid: i32) -> bool {
-        Command::new("kill")
+        let exists = Command::new("kill")
             .arg("-0")
             .arg(pid.to_string())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status()
             .map(|status| status.success())
-            .unwrap_or(false)
+            .unwrap_or(false);
+
+        if !exists {
+            return false;
+        }
+
+        #[cfg(target_os = "linux")]
+        if fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|stat| {
+            stat.rsplit_once(") ")
+                .is_some_and(|(_, fields)| fields.starts_with('Z'))
+        }) {
+            // Container init processes do not always reap killed descendants promptly.
+            return false;
+        }
+
+        true
     }
 
     fn wait_for_process_gone(pid: i32, timeout: Duration) {
@@ -477,6 +524,84 @@ while true; do sleep 0.2 || true; done
         assert!(
             combined.contains("graceful cleanup done"),
             "expected cleanup completion log after signal\n{combined}"
+        );
+    }
+
+    #[test]
+    fn second_ctrl_c_force_kills_with_task_through_node_wrapper() {
+        let (_tempdir, test_dir) = setup_shutdown_example(
+            "dev-sigint.sh",
+            r#"#!/usr/bin/env bash
+set -u
+trap 'exit 0' INT
+: > dev.ready
+while true; do sleep 0.2 || true; done
+"#,
+        );
+
+        let app_dir = test_dir.join("apps/app-a");
+        fs::write(
+            app_dir.join("sidecar-sigint.sh"),
+            r#"#!/usr/bin/env bash
+set -u
+trap '' INT TERM
+sh -c 'trap "" INT TERM; while true; do sleep 0.2 || true; done' &
+child=$!
+printf '%s\n' "$child" > sidecar-child.pid
+: > sidecar.ready
+while true; do sleep 0.2 || true; done
+"#,
+        )
+        .expect("failed to write sidecar script");
+
+        let package_json_path = app_dir.join("package.json");
+        let mut package_json: Value = serde_json::from_str(
+            &fs::read_to_string(&package_json_path).expect("failed to read app package.json"),
+        )
+        .expect("failed to parse app package.json");
+        package_json["scripts"]["sidecar"] = Value::String("bash ./sidecar-sigint.sh".to_string());
+        fs::write(
+            &package_json_path,
+            serde_json::to_string_pretty(&package_json).expect("failed to serialize app package"),
+        )
+        .expect("failed to update app package.json");
+
+        let turbo_json_path = test_dir.join("turbo.json");
+        let mut turbo_json: Value = serde_json::from_str(
+            &fs::read_to_string(&turbo_json_path).expect("failed to read turbo.json"),
+        )
+        .expect("failed to parse turbo.json");
+        turbo_json["tasks"]["dev"]["with"] = json!(["sidecar"]);
+        turbo_json["tasks"]["sidecar"] = json!({
+            "cache": false,
+            "persistent": true,
+        });
+        fs::write(
+            &turbo_json_path,
+            serde_json::to_string_pretty(&turbo_json).expect("failed to serialize turbo.json"),
+        )
+        .expect("failed to update turbo.json");
+
+        let dev_ready_file = app_dir.join("dev.ready");
+        let sidecar_ready_file = app_dir.join("sidecar.ready");
+        let sidecar_child_pid_file = app_dir.join("sidecar-child.pid");
+
+        let mut child = spawn_interactive_turbo_via_node_wrapper(&test_dir);
+        wait_for_path(&dev_ready_file, START_TIMEOUT);
+        wait_for_path(&sidecar_ready_file, START_TIMEOUT);
+        let sidecar_child_pid = wait_for_pid_file(&sidecar_child_pid_file, START_TIMEOUT);
+
+        child.send_ctrl_c();
+        child.wait_for_output("Shutting down Turborepo tasks", Duration::from_secs(5));
+        child.send_ctrl_c();
+
+        let transcript = child.finish(Duration::from_secs(5));
+        wait_for_process_gone(sidecar_child_pid, Duration::from_secs(5));
+
+        assert!(
+            transcript.contains("Force killed Turborepo tasks:")
+                && transcript.contains("app-a#sidecar"),
+            "expected second Ctrl+C to force kill the `with` task\n{transcript}"
         );
     }
 

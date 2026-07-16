@@ -17,7 +17,10 @@ use itertools::Itertools;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_graph_utils as graph;
-use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME};
+use turborepo_repository::{
+    package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME},
+    toolchain::{TaskIOEnvironment, ToolchainId},
+};
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{FutureFlags, TurboJson, Validator};
 use turborepo_types::TaskDefinition;
@@ -55,6 +58,11 @@ pub struct EngineBuilder<'a, L: TurboJsonLoader> {
     /// prepended to every task's inputs instead of being included in the
     /// global hash.
     global_deps: Vec<String>,
+    global_env: Vec<String>,
+    pass_through_args: Vec<String>,
+    requested_tasks: Vec<String>,
+    /// Each toolchain receives only the startup environment keys it declared.
+    environments: HashMap<ToolchainId, TaskIOEnvironment>,
 }
 
 impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
@@ -78,6 +86,10 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             validator: Validator::new(),
             future_flags: FutureFlags::default(),
             global_deps: Vec::new(),
+            global_env: Vec::new(),
+            pass_through_args: Vec::new(),
+            requested_tasks: Vec::new(),
+            environments: HashMap::new(),
         }
     }
 
@@ -89,6 +101,23 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
     pub fn with_global_deps(mut self, global_deps: Vec<String>) -> Self {
         self.global_deps = global_deps;
+        self
+    }
+
+    pub fn with_global_env(mut self, global_env: Vec<String>) -> Self {
+        self.global_env = global_env;
+        self
+    }
+
+    pub fn with_task_io_context(
+        mut self,
+        pass_through_args: Vec<String>,
+        requested_tasks: Vec<String>,
+        environments: HashMap<ToolchainId, TaskIOEnvironment>,
+    ) -> Self {
+        self.pass_through_args = pass_through_args;
+        self.requested_tasks = requested_tasks;
+        self.environments = environments;
         self
     }
 
@@ -171,8 +200,21 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
             // Collect tasks from each workspace and its extends chain
             for workspace in self.workspaces.iter() {
-                let workspace_tasks =
-                    TaskInheritanceResolver::new(turbo_json_loader).resolve(workspace)?;
+                let implicit_tasks = if let Some(package) =
+                    self.package_graph.package_info(workspace)
+                    && let Some(toolchain) = self.package_graph.toolchains().get(&package.toolchain)
+                {
+                    toolchain
+                        .registered_tasks(package)
+                        .into_iter()
+                        .map(TaskName::from)
+                        .collect()
+                } else {
+                    HashSet::new()
+                };
+                let workspace_tasks = TaskInheritanceResolver::new(turbo_json_loader)
+                    .with_implicit_tasks(implicit_tasks)
+                    .resolve(workspace)?;
                 tasks_set.extend(workspace_tasks);
             }
 
@@ -197,7 +239,13 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 .task_id()
                 .unwrap_or_else(|| TaskId::new(workspace.as_ref(), task.task()));
 
-            if Self::has_task_definition_in_run(turbo_json_loader, workspace, task, &task_id)? {
+            if Self::has_task_definition_or_registered(
+                turbo_json_loader,
+                self.package_graph,
+                workspace,
+                task,
+                &task_id,
+            )? {
                 missing_tasks.remove(task.as_inner());
 
                 // Even if a task definition was found, we _only_ want to add it as an entry
@@ -318,8 +366,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     let task_name: TaskName<'static> =
                         TaskName::from(task_id.task().to_string()).into_owned();
                     let task_id_owned = task_id.as_inner().clone().into_owned();
-                    Self::has_task_definition_in_run(
+                    Self::has_task_definition_or_registered(
                         turbo_json_loader,
+                        self.package_graph,
                         &PackageName::Root,
                         &task_name,
                         &task_id_owned,

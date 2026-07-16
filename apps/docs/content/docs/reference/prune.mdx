@@ -215,7 +215,7 @@ Respect `.gitignore` file(s) when copying files to the output directory.
 
 Default: `false`
 
-Exclude in-workspace packages listed only in `devDependencies` when selecting which packages to include in the pruned output. Only workspace packages reachable through `dependencies` (and non-optional peer workspace dependencies) are included.
+Exclude in-workspace packages listed only in `devDependencies` when selecting which packages to include in the pruned output. Only workspace packages reachable through `dependencies` (and non-optional peer workspace dependencies) are included. For Bun repositories, references to excluded workspaces are also removed from the pruned manifests and lockfile so the output can be installed with a frozen lockfile.
 
 ### Including `globalDependencies`
 

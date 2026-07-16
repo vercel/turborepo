@@ -19,7 +19,10 @@ struct ConfigOutput<'a> {
     upload_timeout: u64,
     enabled: bool,
     ui: UIMode,
-    package_manager: &'static str,
+    // Absent for a pure Cargo workspace, which has no JavaScript package
+    // manager.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    package_manager: Option<&'static str>,
     daemon: Option<bool>,
     env_mode: EnvMode,
     scm_base: Option<&'a str>,
@@ -36,7 +39,7 @@ pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli
         .build()
         .await?;
 
-    let package_manager = package_graph.package_manager().name();
+    let package_manager = package_graph.package_manager().map(|pm| pm.name());
 
     println!(
         "{}",

@@ -30,9 +30,10 @@ Graceful shutdown happens while the Turbo process is still alive, so it should
 be handled internally by the run and process manager. Parent-death cleanup only
 applies when Turbo disappears before Rust cleanup code can run.
 
-- `crates/turborepo-lib/src/commands/run.rs` creates a shared
-  `SignalHandler` and does not return until all shutdown subscribers finish
-  their cleanup work.
+- `crates/turborepo-lib/src/commands/run.rs` creates one shared, process-lifetime
+  `SignalHandler`. It continuously brokers OS and in-process signals, retains
+  their count for force-shutdown escalation, and does not return until all
+  shutdown subscribers finish their cleanup work.
 - The handler distinguishes signal-driven shutdown (`ShutdownReason::Signal`)
   from close-driven shutdown (`ShutdownReason::Close`). Normal command
   completion uses the close path to drain subscribers without printing
@@ -132,9 +133,9 @@ package level (all tasks in changed packages run).
 
 Represents the workspace structure and package dependencies:
 
-- Identify package manager being used
+- Identifies the JavaScript package manager, when present
 - Discovers packages in workspace
-- Performs lockfile analysis
+- Performs ecosystem-specific lockfile analysis
 - Builds dependency relationships between workspace packages
 - Validates that all non-root packages have a `name` field
   (`PackageGraph::validate()`)
@@ -160,12 +161,28 @@ through the trait. Machinery that predates the abstraction and has no trait
 surface yet (package-manager resolution for dependency splitting, the JS
 lockfile closure phase) is documented as known debt in the module.
 
+Toolchain-derived I/O receives the same task-scoped arguments as execution plus
+a narrow, platform-aware startup-environment projection keyed by toolchain.
+Dependency tasks do not inherit arguments for a different requested task, each
+toolchain can observe only the variables it declares, Windows lookup remains
+case-insensitive, and every declared pattern automatically participates in task
+hashing. If a user env exclusion matches a projected toolchain I/O variable,
+automatic outputs become unavailable rather than deriving cacheable paths from
+an unhashed value. Derived outputs distinguish exact/resolved paths from
+unavailable automatic resolution. When outputs are unavailable, the engine
+disables implicit caching so a log-only hit cannot suppress execution, while
+explicit `outputs`, `cache: true`, and
+`cache: false` remain authoritative.
+
 #### Experimental Cargo Support (`crates/turborepo-repository/src/cargo.rs`)
 
 Behind `futureFlags.experimentalCargoWorkspaces` in the root turbo.json,
-`turbo run` also discovers Rust crates from a Cargo workspace at the repo
-root and adds them to the package graph. `CargoToolchain` is the second
-`Toolchain` implementation.
+`turbo run` discovers Rust crates from a Cargo workspace at the repository
+root and adds them to the package graph. Cargo workspaces can stand alone or
+coexist with JavaScript workspaces; a root `package.json` and JavaScript package
+manager are only required when JavaScript packages participate. Cargo-only
+repositories may omit `package.json`; when one exists, it must still be valid.
+`CargoToolchain` is the second `Toolchain` implementation.
 
 Turborepo does not replace Cargo. Cargo is itself a build system with its
 own dependency graph, scheduler, and incremental cache (`target/`), so the
@@ -207,14 +224,28 @@ whether anything changed; Cargo decides how and in what order to build.**
   time without the "waiting for file lock" noise. Run summaries derive display
   commands from the same verb tables via `Toolchain::task_display_command`, so
   display cannot drift from execution.
+- **Task registration** (`Toolchain::registered_tasks`): entrypoints implicitly
+  register `build`; crates with exactly one binary also register `run` and its
+  `dev` alias. The workspace package registers `test`, `check`, `clippy`/`lint`,
+  `bench`, and `doc`/`docs`; libraries register nothing. These act as empty task
+  definitions at the lowest precedence, so normal `tasks` entries configure or
+  override them and package configuration can exclude them with
+  `extends: false`. Registration is package-aware, so the defaults do not make
+  same-named JavaScript scripts runnable without their usual turbo.json
+  definition. The names come from the same verb tables as command resolution
+  and participate in task suggestions and add-all/query graph construction.
 - **Hashing** (`Toolchain::derived_task_io`, consumed by
   `turborepo-engine/src/builder/definitions.rs`): entrypoint tasks hash
   their own sources plus their transitive dependency crates' sources
   (flattened, so invalidation doesn't depend on `dependsOn` wiring), the
   workspace files (root `Cargo.toml`, `.cargo/config*`, `rust-toolchain*`),
-  and cargo-relevant env vars (`RUSTFLAGS`, `RUSTC_WRAPPER`,
-  `CARGO_TARGET_DIR`, `CARGO_BUILD_TARGET`). The workspace package hashes
-  all crate directories instead of default-hashing the repo root.
+  and standard Cargo/cc-rs environment inputs: rustup home/toolchain selection,
+  compiler and rustdoc selection and flags, Cargo build/profile/target
+  configuration, native compiler and
+  archiver settings (including target-qualified forms), and platform SDK
+  selection. Arbitrary variables consumed by project-specific build scripts
+  remain explicit task `env` configuration. The workspace package hashes all
+  crate directories instead of default-hashing the repo root.
   `$TURBO_DEFAULT$` in a Cargo task's `inputs` means "everything turbo
   derives automatically", so extra inputs (e.g. a file embedded via
   `include_str!` from outside any crate directory) are additive.
@@ -223,28 +254,45 @@ whether anything changed; Cargo decides how and in what order to build.**
   external-dependency hash JS packages use
   (`PackageInfo.transitive_dependencies`). Each crate's closure is computed
   from `Cargo.lock` (identity = version + source + checksum, so git rev
-  bumps count), so a dependency bump only invalidates crates that actually
-  depend on it. The complete verbose compiler identity from `rustc -vV`,
+  bumps count). Source-qualified lockfile edges distinguish identical
+  name/version packages from different registries or git references, so each
+  closure follows Cargo's exact resolved package. A dependency bump therefore
+  only invalidates crates that actually depend on it. The complete verbose
+  compiler identity from `rustc -vV`,
   including its host triple, is resolved from the repo root (so
   `rust-toolchain` overrides apply) and added to every Cargo package's set.
   This prevents compiler releases, operating systems, architectures, or host
   ABIs from sharing native artifact cache entries. Explicit targets selected
-  through hashed task arguments, `CARGO_BUILD_TARGET`, or repository Cargo
-  configuration remain distinct. Failure to resolve the compiler identity is
+  through hashed task arguments or `CARGO_BUILD_TARGET` remain distinct;
+  repository `build.target` stays conservatively unavailable. Failure to
+  resolve the compiler identity is
   a hard error. Every non-empty Cargo workspace must have a current
   `Cargo.lock`: discovery runs full `cargo metadata --locked --all-features`
   before hashing, then computes per-crate closures. Missing, stale, unparsable,
   or incomplete lockfiles are hard errors. Turborepo never creates or refreshes
   the source lockfile; users do that explicitly with Cargo and commit the
   result.
-- **Caching**: task caches store logs plus, for entrypoint builds, the
-  deliverables: bins (`target/*/<bin>`) and cdylib/staticlib artifacts
-  (`target/*/lib<name>.{so,dylib,a}`, `<name>.{dll,lib}` — all platform
-  spellings are emitted; unmatched globs contribute nothing). The profile
-  segment is a wildcard, so `--release` and custom profiles cache without
-  configuration — pass-through args participate in the task hash, giving
-  each profile its own cache entry. Cargo's internal `target/` state is
-  deliberately never cached — it is Cargo's own incremental cache, and
+- **Caching**: task caches store logs plus, for entrypoint builds, exact
+  deliverables under the effective target directory. The `rustc -vV` host and
+  `rustc --print target-list` validate target triples; CLI `--target` wins over
+  `CARGO_BUILD_TARGET`, and the effective target adds its Cargo path segment and
+  platform-correct bin/cdylib/staticlib basename. CLI `--target-dir` wins over
+  `CARGO_TARGET_DIR`, which wins over Cargo metadata (including repository
+  `target-dir`). Target directories are accepted only when their canonical or
+  nearest existing path remains in the repository. No profile or platform
+  wildcards are cached. Automatic outputs fail closed for repository
+  `build.target`, unknown/custom targets, path escapes,
+  `CARGO_BUILD_TARGET_DIR`, compiler overrides, or when
+  manifests/configuration can alter
+  profile directories, artifact names/locations, or include unhashable external
+  configuration. External, included, and Cargo configuration beneath any
+  symlinked path component is untracked; those config paths are not emitted as
+  trusted inputs. Unresolved outputs
+  disable implicit caching unless outputs or cache behavior are configured.
+  Untracked inputs disable caching unless `cache` itself is explicitly configured;
+  explicit outputs alone cannot make an incomplete input hash safe. Cargo's
+  internal `target/` state is deliberately never cached
+  — it is Cargo's own incremental cache, and
   tarballing it fights Cargo instead of leaning on it (it is also
   multi-gigabyte). For fine-grained compile caching, `RUSTC_WRAPPER`
   (sccache) is the sound layer, and it participates in task hashes so
@@ -280,10 +328,16 @@ whether anything changed; Cargo decides how and in what order to build.**
   removed crates dropped — comments and formatting preserved). Toolchain
   and Cargo config files are carried over. Reachability pruning cannot see
   Cargo's feature unification, so `prune_finalize` runs `cargo metadata`
-  in the output (offline first, then networked) to let Cargo minimally
-  sync its own lockfile; failure downgrades to a warning. In docker
-  layout, the json layer carries the root manifest, each kept crate's
-  `Cargo.toml`, and the pruned lock; sources go to the full layer. A
+  once in the complete output (offline first, then networked) to let Cargo
+  minimally sync its own lockfile; failure downgrades to a warning.
+  Only toolchains that contributed a prune plan are finalized. Finalizers
+  report files they may have changed, and prune copies those finalized bytes
+  to alternate output layers without rerunning the toolchain. Reported sources
+  must be regular files rather than symlinks, and paths must remain within both
+  output roots lexically and after resolving symlinks; invalid paths and
+  synchronization failures are warnings. In docker layout,
+  the json layer carries the root manifest, each kept crate's `Cargo.toml`, and
+  finalized lock; sources go to the full layer. A
   package anchored at the repo root (the synthetic workspace package) is not
   a pruneable target.
 
@@ -366,6 +420,12 @@ The core task graph consists of:
   (`TaskHashable.commandOverride`/`commandOptOut`). Toolchains place the
   argv in their frame: cwd is the package directory, nothing is prepended,
   and Cargo keeps its serial group when the override still invokes cargo.
+  Because an argv override is otherwise arbitrary, it does not inherit the
+  native command's toolchain-derived inputs, outputs, default-input behavior,
+  or hash environment; its turbo.json `inputs`, `outputs`, and `env` are the
+  authoritative task-level I/O configuration. Toolchain task defaults and
+  execution-only compile-cache environment injection likewise apply only to
+  native toolchain-resolved commands.
 
 #### Engine Execution (`crates/turborepo-lib/src/engine/execute.rs`)
 
@@ -384,9 +444,11 @@ The core task graph consists of:
 
 - `retain_affected_tasks` keeps directly affected tasks, transitive dependents,
   and all transitive dependencies required for normal `--affected` execution
-- `create_engine_for_subgraph` is used by watch mode. It keeps changed package
-  tasks, transitive dependents, and only cacheable upstream dependencies that can
-  restore outputs without forcing non-cacheable tasks to rerun
+- `create_engine_for_subgraph` and `retain_watch_affected_tasks` are used by
+  package-level and task-input watch modes, respectively. They keep changed
+  tasks, transitive dependents, and only cacheable upstream dependencies that
+  can restore outputs without forcing non-cacheable tasks to rerun. Persistent
+  non-interruptible tasks are excluded because watch mode cannot restart them
 
 ### 4. Task Visitor (`crates/turborepo-lib/src/task_graph/visitor/`)
 

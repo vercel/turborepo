@@ -74,10 +74,10 @@ impl<'a> ScopeChangeDetector<'a> {
         from_ref: Option<&str>,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
     ) -> LockfileContents {
-        let lockfile_path = self
-            .pkg_graph
-            .package_manager()
-            .lockfile_path(self.turbo_root);
+        let Some(package_manager) = self.pkg_graph.package_manager() else {
+            return LockfileContents::Unchanged;
+        };
+        let lockfile_path = package_manager.lockfile_path(self.turbo_root);
 
         if !ChangeMapper::<DefaultPackageChangeMapper>::lockfile_changed(
             self.turbo_root,

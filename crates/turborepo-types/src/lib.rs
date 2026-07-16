@@ -956,16 +956,15 @@ pub struct TaskDefinition {
 }
 
 /// A task's resolved `command` override.
-///
-/// Replaces the process argv the toolchain would have constructed. The
-/// toolchain still owns the frame: working directory, serial grouping,
-/// hash wiring, and env composition.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskCommandOverride {
     /// Explicitly no command: the task is a no-op for this package.
     OptOut,
-    /// The argv to execute: program first, arguments after. Executed
-    /// directly — no shell.
+    /// Replaces the process argv the toolchain would have constructed: program
+    /// first, arguments after, executed directly with no shell. The toolchain
+    /// still owns the working directory and serial grouping, but its derived
+    /// inputs, outputs, and hash environment do not apply; turbo.json is
+    /// authoritative for the arbitrary command's task-level hash wiring.
     Argv(Vec<String>),
 }
 

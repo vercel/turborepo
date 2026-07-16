@@ -89,7 +89,12 @@ pub async fn run(
     let run_builder = RunBuilder::new(base, None)?;
     let (run, _analytics) = run_builder.build(&handler, telemetry).await?;
 
-    let package_manager_name = run.pkg_dep_graph().package_manager().name().to_string();
+    // A pure Cargo workspace has no JavaScript package manager to display.
+    let package_manager_name = run
+        .pkg_dep_graph()
+        .package_manager()
+        .map(|pm| pm.name().to_string())
+        .unwrap_or_default();
     let filtered_pkgs = run.filtered_pkgs().clone();
     let run: Arc<dyn QueryRun> = Arc::new(run);
 

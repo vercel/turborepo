@@ -29,7 +29,11 @@ use crate::{
 
 pub struct PackageGraphBuilder<'a, T> {
     repo_root: &'a AbsoluteSystemPath,
-    root_package_json: PackageJson,
+    /// The root `package.json`, when the repository has one. Absent for a
+    /// pure Cargo workspace (`futureFlags.experimentalCargoWorkspaces` with
+    /// no root `package.json`): there is no JavaScript project, so no
+    /// package manager, lockfile, or root manifest to resolve.
+    root_package_json: Option<PackageJson>,
     is_single_package: bool,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     lockfile: Option<Box<dyn Lockfile>>,
@@ -104,11 +108,24 @@ fn extract_file_path_from_error(
 
 impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
     pub fn new(repo_root: &'a AbsoluteSystemPath, root_package_json: PackageJson) -> Self {
+        Self::new_optional(repo_root, Some(root_package_json))
+    }
+
+    /// Build over a repository that may have no root `package.json`. When
+    /// `root_package_json` is `None`, the JavaScript toolchain contributes
+    /// nothing (no package manager, no lockfile); the graph is populated
+    /// entirely by the extra toolchains registered via
+    /// [`PackageGraphBuilder::with_toolchain`] (Cargo). When it is `Some`,
+    /// this behaves exactly like [`PackageGraphBuilder::new`].
+    pub fn new_optional(
+        repo_root: &'a AbsoluteSystemPath,
+        root_package_json: Option<PackageJson>,
+    ) -> Self {
         Self {
             package_discovery: LocalPackageDiscoveryBuilder::new(
                 repo_root.to_owned(),
                 None,
-                Some(root_package_json.clone()),
+                root_package_json.clone(),
             ),
             repo_root,
             root_package_json,
@@ -216,18 +233,24 @@ where
         let is_single_package = self.is_single_package;
 
         // If no pre-supplied lockfile, start reading it on a blocking thread
-        // concurrently with package discovery + JSON parsing.
+        // concurrently with package discovery + JSON parsing. A pure Cargo
+        // workspace has no root package.json and therefore no JavaScript
+        // package manager or lockfile to read.
         let known_pm = self
             .package_manager
             .take()
             .or_else(|| {
-                PackageManager::get_package_manager(self.repo_root, &self.root_package_json).ok()
+                self.root_package_json
+                    .as_ref()
+                    .and_then(|root_package_json| {
+                        PackageManager::get_package_manager(self.repo_root, root_package_json).ok()
+                    })
             })
             .map(|pm| pm.with_resolved_nub_lockfile(self.repo_root));
         let lockfile_future = if !is_single_package && self.lockfile.is_none() {
-            if let Some(pm) = known_pm {
+            if let (Some(pm), Some(root_package_json)) = (known_pm, self.root_package_json.clone())
+            {
                 let repo_root = self.repo_root.to_owned();
-                let root_package_json = self.root_package_json.clone();
                 Some(tokio::task::spawn_blocking(
                     move || -> Option<Box<dyn Lockfile>> {
                         pm.read_lockfile(&repo_root, &root_package_json).ok()
@@ -261,7 +284,9 @@ struct BuildState<'a, S, T> {
     root_node_index: NodeIndex,
     root_workspace_index: NodeIndex,
     node_lookup: HashMap<PackageNode, NodeIndex>,
-    root_package_json: PackageJson,
+    /// The root `package.json`, absent for a pure Cargo workspace. See
+    /// [`PackageGraphBuilder::root_package_json`].
+    root_package_json: Option<PackageJson>,
     lockfile: Option<Box<dyn Lockfile>>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     defer_closures: bool,
@@ -269,8 +294,10 @@ struct BuildState<'a, S, T> {
     state: std::marker::PhantomData<S>,
     /// The JavaScript toolchain, typed. Package-manager resolution for
     /// dependency splitting and lockfile handling reaches through this —
-    /// documented debt, see `crate::toolchain` module docs.
-    javascript: Arc<JavaScriptToolchain<T>>,
+    /// documented debt, see `crate::toolchain` module docs. Absent for a
+    /// pure Cargo workspace, where there is no JavaScript project to resolve
+    /// a package manager or lockfile from.
+    javascript: Option<Arc<JavaScriptToolchain<T>>>,
     /// Every toolchain contributing packages, JavaScript included. Package
     /// discovery goes through this and only this.
     toolchains: ToolchainRegistry,
@@ -301,10 +328,8 @@ where
 {
     fn new(
         builder: PackageGraphBuilder<'a, T>,
-    ) -> Result<
-        BuildState<'a, ResolvedPackageManager, CachingPackageDiscovery<T::Output>>,
-        crate::package_manager::Error,
-    > {
+    ) -> Result<BuildState<'a, ResolvedPackageManager, CachingPackageDiscovery<T::Output>>, Error>
+    {
         let PackageGraphBuilder {
             repo_root,
             root_package_json,
@@ -318,13 +343,20 @@ where
             package_manager: _,
             extra_toolchains,
         } = builder;
+        // Pure Cargo workspace: with no root package.json there is no
+        // JavaScript project, so the JavaScript toolchain is neither
+        // registered nor queried for a package manager. The graph is built
+        // entirely from the extra toolchains (Cargo).
+        let no_javascript = root_package_json.is_none();
         let mut workspaces = HashMap::new();
         let root_package_info = PackageInfo {
-            package_json: root_package_json,
-            package_json_path: AnchoredSystemPathBuf::from_raw("package.json").unwrap(),
+            // The root node always needs a descriptor; a pure Cargo workspace
+            // has none, so it gets an empty one. The graph's public
+            // `root_package_json()` still reports `None` (see below).
+            package_json: root_package_json.clone().unwrap_or_default(),
+            package_json_path: AnchoredSystemPathBuf::from_raw("package.json")?,
             ..Default::default()
         };
-        let root_package_json = root_package_info.package_json.clone();
         workspaces.insert(PackageName::Root, root_package_info);
 
         let mut workspace_graph = Graph::new();
@@ -343,15 +375,22 @@ where
 
         // The discovery strategy is shared (via the JavaScript toolchain)
         // between package discovery and package-manager resolution; the
-        // caching wrapper guarantees the underlying strategy runs once.
-        let javascript = Arc::new(JavaScriptToolchain::new(CachingPackageDiscovery::new(
-            package_discovery.build().map_err(Into::into)?,
-        )));
+        // caching wrapper guarantees the underlying strategy runs once. For a
+        // pure Cargo workspace there is no JavaScript project, so discovery is
+        // not built and the toolchain is left unregistered.
         let mut toolchains = ToolchainRegistry::new();
-        // JavaScript registers first: its packages claim names before any
-        // other toolchain's, so a cross-toolchain collision surfaces as the
-        // non-JS package failing to add.
-        toolchains.register(javascript.clone());
+        let javascript = if no_javascript {
+            None
+        } else {
+            let javascript = Arc::new(JavaScriptToolchain::new(CachingPackageDiscovery::new(
+                package_discovery.build().map_err(Into::into)?,
+            )));
+            // JavaScript registers first: its packages claim names before any
+            // other toolchain's, so a cross-toolchain collision surfaces as the
+            // non-JS package failing to add.
+            toolchains.register(javascript.clone());
+            Some(javascript)
+        };
         for toolchain in extra_toolchains {
             toolchains.register(toolchain);
         }
@@ -532,13 +571,20 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             ..
         } = self;
 
-        let package_manager = javascript
-            .package_manager()
-            .await?
-            .with_resolved_nub_lockfile(repo_root);
-        // Command resolution is synchronous; record the resolved package
-        // manager on the toolchain so it does not re-run discovery.
-        javascript.set_resolved_package_manager(package_manager.clone());
+        let package_manager = match &javascript {
+            Some(javascript) => {
+                let package_manager = javascript
+                    .package_manager()
+                    .await?
+                    .with_resolved_nub_lockfile(repo_root);
+                // Command resolution is synchronous; record the resolved
+                // package manager on the toolchain so it does not re-run
+                // discovery.
+                javascript.set_resolved_package_manager(package_manager.clone());
+                Some(package_manager)
+            }
+            None => None,
+        };
 
         debug_assert!(single, "expected single package graph");
         Ok(PackageGraph {
@@ -563,14 +609,18 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
     #[tracing::instrument(skip(self))]
     fn connect_internal_dependencies(
         &mut self,
-        package_manager: &PackageManager,
+        package_manager: Option<&PackageManager>,
     ) -> Result<(), Error> {
         let path_index = WorkspacePathIndex::new(&self.workspaces);
         // Compute once — for pnpm/Berry this reads a config file from disk.
         // Without hoisting, the par_iter below would redundantly read the
-        // same file N times (once per workspace).
-        let link_workspace_packages = package_manager.link_workspace_packages(self.repo_root);
-        let catalogs = package_manager.read_catalogs(self.repo_root);
+        // same file N times (once per workspace). A pure Cargo workspace has
+        // no package manager: crate edges use the `workspace:*` protocol,
+        // which the splitter always resolves internally regardless of
+        // workspace linking, and there are no pnpm catalogs.
+        let link_workspace_packages =
+            package_manager.is_some_and(|pm| pm.link_workspace_packages(self.repo_root));
+        let catalogs = package_manager.and_then(|pm| pm.read_catalogs(self.repo_root));
         // Resolve internal vs external dependencies in parallel. Each
         // Dependencies::new call is read-only on the workspaces map
         // so this is safe. Graph mutation stays sequential below.
@@ -626,14 +676,11 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
         Ok(())
     }
 
-    #[tracing::instrument(skip(self))]
-    async fn populate_lockfile(&mut self) -> Result<Box<dyn Lockfile>, Error> {
-        let package_manager = self
-            .javascript
-            .package_manager()
-            .await?
-            .with_resolved_nub_lockfile(self.repo_root);
-
+    #[tracing::instrument(skip(self, package_manager))]
+    async fn populate_lockfile(
+        &mut self,
+        package_manager: &PackageManager,
+    ) -> Result<Box<dyn Lockfile>, Error> {
         match self.lockfile.take() {
             Some(lockfile) => Ok(lockfile),
             None => {
@@ -655,15 +702,20 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
         mut self,
         lockfile_future: Option<tokio::task::JoinHandle<Option<Box<dyn Lockfile>>>>,
     ) -> Result<BuildState<'a, ResolvedLockfile, T>, Error> {
-        // Since we've already performed package discovery, this should just be a cache
-        // hit
-        let package_manager = self
-            .javascript
-            .package_manager()
-            .await?
-            .with_resolved_nub_lockfile(self.repo_root);
+        // Since we've already performed package discovery, this should just be
+        // a cache hit. A pure Cargo workspace has no JavaScript toolchain and
+        // therefore no package manager or lockfile.
+        let package_manager = match &self.javascript {
+            Some(javascript) => Some(
+                javascript
+                    .package_manager()
+                    .await?
+                    .with_resolved_nub_lockfile(self.repo_root),
+            ),
+            None => None,
+        };
         turborepo_rayon_compat::block_in_place(|| {
-            self.connect_internal_dependencies(&package_manager)
+            self.connect_internal_dependencies(package_manager.as_ref())
         })?;
 
         if let Some(handle) = lockfile_future
@@ -672,20 +724,25 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             self.lockfile = Some(lockfile);
         }
 
-        let lockfile = match self.populate_lockfile().await {
-            Ok(lockfile) => Some(lockfile),
-            Err(e) => {
-                let problematic_file_path =
-                    extract_file_path_from_error(&e, &package_manager, self.repo_root);
+        let lockfile = match package_manager.as_ref() {
+            // No JavaScript package manager (pure Cargo): no JS lockfile to
+            // parse. Cargo's own lockfile is handled by the Cargo toolchain.
+            None => None,
+            Some(package_manager) => match self.populate_lockfile(package_manager).await {
+                Ok(lockfile) => Some(lockfile),
+                Err(e) => {
+                    let problematic_file_path =
+                        extract_file_path_from_error(&e, package_manager, self.repo_root);
 
-                warn!(
-                    "An issue occurred while attempting to parse {}. Turborepo will still \
-                     function, but some features may not be available:\n {:?}",
-                    problematic_file_path,
-                    Report::new(e)
-                );
-                None
-            }
+                    warn!(
+                        "An issue occurred while attempting to parse {}. Turborepo will still \
+                         function, but some features may not be available:\n {:?}",
+                        problematic_file_path,
+                        Report::new(e)
+                    );
+                    None
+                }
+            },
         };
 
         let Self {
@@ -853,16 +910,23 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             }
             self.lockfile.take().map(Arc::from)
         };
-        let package_manager = self
-            .javascript
-            .package_manager()
-            .instrument(tracing::debug_span!("package discovery"))
-            .await?
-            .with_resolved_nub_lockfile(self.repo_root);
-        // Command resolution is synchronous; record the resolved package
-        // manager on the toolchain so it does not re-run discovery.
-        self.javascript
-            .set_resolved_package_manager(package_manager.clone());
+        // A pure Cargo workspace has no JavaScript toolchain, hence no package
+        // manager to resolve.
+        let package_manager = match &self.javascript {
+            Some(javascript) => {
+                let package_manager = javascript
+                    .package_manager()
+                    .instrument(tracing::debug_span!("package discovery"))
+                    .await?
+                    .with_resolved_nub_lockfile(self.repo_root);
+                // Command resolution is synchronous; record the resolved
+                // package manager on the toolchain so it does not re-run
+                // discovery.
+                javascript.set_resolved_package_manager(package_manager.clone());
+                Some(package_manager)
+            }
+            None => None,
+        };
         let Self {
             workspaces,
             workspace_graph,

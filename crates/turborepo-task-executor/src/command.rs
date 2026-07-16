@@ -123,6 +123,8 @@ pub enum CommandProviderError {
         #[source]
         source: PathError,
     },
+    #[error("Microfrontends require a package manager")]
+    MissingPackageManager,
     #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
     #[error("No toolchain '{toolchain}' registered for package {package_name}.")]
@@ -136,13 +138,13 @@ pub enum CommandProviderError {
 
 /// A trait for fetching package information required to execute commands
 pub trait PackageInfoProvider {
-    fn package_manager(&self) -> &PackageManager;
+    fn package_manager(&self) -> Option<&PackageManager>;
 
     fn package_info(&self, name: &PackageName) -> Option<&PackageInfo>;
 }
 
 impl PackageInfoProvider for PackageGraph {
-    fn package_manager(&self) -> &PackageManager {
+    fn package_manager(&self) -> Option<&PackageManager> {
         PackageGraph::package_manager(self)
     }
 
@@ -204,6 +206,10 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
     }
 }
 
+fn should_inject_toolchain_compile_cache(command_override: Option<&TaskCommandOverride>) -> bool {
+    command_override.is_none()
+}
+
 impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
     for ToolchainCommandProvider<'a, M>
 {
@@ -226,7 +232,8 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
         // directions: an opt-out is an explicit no-op (same outcome as a
         // missing script), and an argv replaces the toolchain's own
         // resolution while the toolchain keeps framing it.
-        let override_command = match self.command_overrides.get(task_id) {
+        let command_override = self.command_overrides.get(task_id);
+        let override_command = match command_override {
             Some(TaskCommandOverride::OptOut) => return Ok(None),
             Some(TaskCommandOverride::Argv(argv)) => Some(argv.as_slice()),
             None => None,
@@ -283,7 +290,9 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
         // environment (competing configuration suppresses it, ambient
         // settings are tolerated) and returns exactly what to inject; see
         // `Toolchain::compile_cache_env`.
-        if let Some(endpoint) = self.compile_cache {
+        if should_inject_toolchain_compile_cache(command_override)
+            && let Some(endpoint) = self.compile_cache
+        {
             let vars = toolchain.compile_cache_env(endpoint, environment);
             if vars.is_empty() {
                 debug!("no compile cache env to inject for {task_id}");
@@ -423,7 +432,10 @@ impl<'a, T: PackageInfoProvider + Send + Sync, M: MfeConfigProvider, E: From<Com
 
         let cmd = if has_custom_proxy {
             debug!("MicroFrontendProxyProvider::command - using custom proxy script");
-            let package_manager = self.package_graph.package_manager();
+            let package_manager = self
+                .package_graph
+                .package_manager()
+                .ok_or(CommandProviderError::MissingPackageManager)?;
             let mut proxy_args: Vec<&str> = vec![mfe_path.as_str(), "--names"];
             proxy_args.extend(local_apps);
             let mut args = vec!["run", "proxy"];
@@ -495,8 +507,8 @@ mod tests {
     }
 
     impl PackageInfoProvider for MockPackageInfoProvider {
-        fn package_manager(&self) -> &PackageManager {
-            &self.package_manager
+        fn package_manager(&self) -> Option<&PackageManager> {
+            Some(&self.package_manager)
         }
 
         fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {
@@ -536,6 +548,17 @@ mod tests {
         fn config_filename(&self, package_name: &str) -> Option<String> {
             (package_name == "web").then(|| "web/microfrontends.json".to_owned())
         }
+    }
+
+    #[test]
+    fn command_override_suppresses_toolchain_compile_cache() {
+        assert!(should_inject_toolchain_compile_cache(None));
+        assert!(!should_inject_toolchain_compile_cache(Some(
+            &TaskCommandOverride::Argv(vec!["node".to_string()])
+        )));
+        assert!(!should_inject_toolchain_compile_cache(Some(
+            &TaskCommandOverride::OptOut
+        )));
     }
 
     fn create_test_repo() -> (TempDir, AbsoluteSystemPathBuf, PathBuf) {

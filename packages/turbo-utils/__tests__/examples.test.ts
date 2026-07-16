@@ -7,6 +7,7 @@ import {
   afterEach
 } from "@jest/globals";
 import { Readable, PassThrough } from "node:stream";
+import { execFileSync } from "node:child_process";
 import {
   mkdirSync,
   rmSync,
@@ -24,11 +25,36 @@ import {
   isPathSafe,
   isLinkEntry,
   streamingExtract,
-  downloadAndExtractRepo
+  downloadAndExtractRepo,
+  downloadAndExtractExample
 } from "../src/examples";
+
+jest.mock("node:child_process", () => ({
+  ...jest.requireActual<typeof import("node:child_process")>(
+    "node:child_process"
+  ),
+  execFileSync: jest.fn()
+}));
+
+jest.mock("node:fs", () => ({
+  ...jest.requireActual<typeof import("node:fs")>("node:fs"),
+  rmSync: jest.fn()
+}));
+
+const actualFs = jest.requireActual<typeof import("node:fs")>("node:fs");
+const mockExecFileSync = jest.mocked(execFileSync);
+const mockRmSync = jest.mocked(rmSync);
 
 describe("examples", () => {
   const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    mockExecFileSync.mockReset();
+    mockRmSync.mockReset();
+    mockRmSync.mockImplementation((path, options) => {
+      actualFs.rmSync(path, options);
+    });
+  });
 
   afterEach(() => {
     global.fetch = originalFetch;
@@ -92,6 +118,84 @@ describe("examples", () => {
           process.env.https_proxy = originalEnv;
         }
       }
+    });
+  });
+
+  describe("downloadAndExtractExample", () => {
+    let root: string;
+
+    beforeEach(() => {
+      root = join(
+        tmpdir(),
+        `turbo-example-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      );
+      mkdirSync(root, { recursive: true });
+      global.fetch = jest.fn(() =>
+        Promise.resolve({ ok: false, status: 503 } as Response)
+      ) as typeof fetch;
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+      actualFs.rmSync(root, { recursive: true, force: true });
+    });
+
+    it("reports stderr from a failed Git command before falling back", async () => {
+      const gitError = Object.assign(new Error("Command failed"), {
+        stderr: Buffer.from("fatal: repository access denied")
+      });
+      mockExecFileSync.mockImplementation(() => {
+        throw gitError;
+      });
+      const consoleError = jest
+        .spyOn(console, "error")
+        .mockReturnValue(undefined);
+
+      await expect(downloadAndExtractExample(root, "basic")).rejects.toThrow(
+        "Failed to download: 503"
+      );
+
+      expect(
+        consoleError.mock.calls.some((args) =>
+          args.join(" ").includes("fatal: repository access denied")
+        )
+      ).toBe(true);
+      expect(global.fetch).toHaveBeenCalledWith(
+        "https://codeload.github.com/vercel/turborepo/tar.gz/main",
+        expect.any(Object)
+      );
+    });
+
+    it("falls back when the temporary directory cannot be removed", async () => {
+      mockExecFileSync.mockImplementation(() => {
+        throw new Error("Git failed");
+      });
+      const cleanupError = Object.assign(new Error("File is locked"), {
+        code: "EPERM"
+      });
+      mockRmSync.mockImplementation(() => {
+        throw cleanupError;
+      });
+      const consoleError = jest
+        .spyOn(console, "error")
+        .mockReturnValue(undefined);
+
+      await expect(downloadAndExtractExample(root, "basic")).rejects.toThrow(
+        "Failed to download: 503"
+      );
+
+      expect(mockRmSync).toHaveBeenCalledWith(join(root, ".turbo-clone-temp"), {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 100
+      });
+      expect(
+        consoleError.mock.calls.some((args) =>
+          args.join(" ").includes("File is locked")
+        )
+      ).toBe(true);
+      expect(global.fetch).toHaveBeenCalled();
     });
   });
 
