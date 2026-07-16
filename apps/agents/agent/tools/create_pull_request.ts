@@ -185,7 +185,7 @@ export default defineTool({
   description:
     "Create a GitHub pull request from selected sandbox files. Use only after editing files in the sandbox and choosing an agents/* branch name.",
   inputSchema,
-  needsApproval: always(),
+  approval: always(),
   async execute(input, ctx) {
     const sandbox = await ctx.getSandbox();
     const baseRef = await github<RefResponse>({

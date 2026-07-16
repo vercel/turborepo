@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex},
+};
 
 use insta::{assert_json_snapshot, assert_snapshot};
 use serde_json::json;
@@ -12,6 +15,10 @@ use turborepo_repository::{
     package_graph::{PackageGraph, PackageName},
     package_json::PackageJson,
     package_manager::PackageManager,
+    toolchain::{
+        DerivedInputSafety, DerivedOutputs, DerivedTaskIO, DiscoverPackagesFuture,
+        DiscoveredPackage, TaskIOContext, Toolchain, ToolchainId,
+    },
 };
 use turborepo_task_id::{TaskId, TaskName};
 use turborepo_turbo_json::{
@@ -19,7 +26,9 @@ use turborepo_turbo_json::{
 };
 use turborepo_types::{OutputLogsMode, TaskDefinition};
 
-use crate::{BuilderError, Built, CyclicExtends, EngineBuilder, TaskInheritanceResolver, TaskNode};
+use crate::{
+    BuilderError, Built, CyclicExtends, Engine, EngineBuilder, TaskInheritanceResolver, TaskNode,
+};
 
 /// Test implementation of TurboJsonLoader that returns pre-configured
 /// TurboJson structures without reading from disk.
@@ -108,6 +117,119 @@ impl PackageDiscovery for MockDiscovery {
     > {
         self.discover_packages().await
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SeenTaskIO {
+    args: Option<Vec<String>>,
+    layout_env: Option<String>,
+}
+
+type StubIOEngineResult = (
+    Engine<Built, TaskDefinition>,
+    Arc<Mutex<HashMap<String, SeenTaskIO>>>,
+);
+
+struct StubIOToolchain {
+    repo_root: AbsoluteSystemPathBuf,
+    outputs: DerivedOutputs,
+    input_safety: DerivedInputSafety,
+    environment: Vec<&'static str>,
+    seen: Arc<Mutex<HashMap<String, SeenTaskIO>>>,
+}
+
+impl Toolchain for StubIOToolchain {
+    fn id(&self) -> ToolchainId {
+        ToolchainId::new("stub-io")
+    }
+
+    fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+        Box::pin(async move {
+            let package = |name: &str, dependencies: &[(&str, &str)]| DiscoveredPackage {
+                descriptor: PackageJson {
+                    name: Some(Spanned::new(name.to_string())),
+                    dependencies: Some(
+                        dependencies
+                            .iter()
+                            .map(|(name, version)| (name.to_string(), version.to_string()))
+                            .collect(),
+                    ),
+                    ..Default::default()
+                },
+                manifest_path: self
+                    .repo_root
+                    .join_components(&["packages", name, "stub.json"]),
+                external_dependencies: Some(HashSet::new()),
+            };
+            Ok(vec![
+                package("app", &[("lib", "workspace:*")]),
+                package("lib", &[]),
+            ])
+        })
+    }
+
+    fn defines_task(
+        &self,
+        _package: &turborepo_repository::package_graph::PackageInfo,
+        task: &str,
+    ) -> bool {
+        matches!(task, "build" | "test")
+    }
+
+    fn derives_task_io(
+        &self,
+        package: &turborepo_repository::package_graph::PackageInfo,
+        task: &str,
+    ) -> bool {
+        self.defines_task(package, task)
+    }
+
+    fn task_io_env_vars(&self) -> &[&str] {
+        &self.environment
+    }
+
+    fn derived_task_io(
+        &self,
+        package: &turborepo_repository::package_graph::PackageInfo,
+        task: &str,
+        _path_to_root: &str,
+        _dependencies: &[&turborepo_repository::package_graph::PackageInfo],
+        _wants_automatic_inputs: bool,
+        context: &TaskIOContext<'_>,
+    ) -> Option<DerivedTaskIO> {
+        let package_name = package.package_name()?;
+        self.seen.lock().unwrap().insert(
+            format!("{package_name}#{task}"),
+            SeenTaskIO {
+                args: context.task_args.map(<[String]>::to_vec),
+                layout_env: context.environment.get("STUB_LAYOUT").map(str::to_string),
+            },
+        );
+        Some(DerivedTaskIO {
+            outputs: self.outputs.clone(),
+            input_safety: self.input_safety.clone(),
+            ..Default::default()
+        })
+    }
+}
+
+fn stub_io_package_graph(
+    repo_root: &turbopath::AbsoluteSystemPath,
+    toolchain: Arc<StubIOToolchain>,
+) -> PackageGraph {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(
+        PackageGraph::builder(repo_root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_lockfile(Some(Box::new(MockLockfile)))
+            .with_package_jsons(Some(HashMap::new()))
+            .with_toolchain(toolchain)
+            .build(),
+    )
+    .unwrap()
 }
 
 macro_rules! package_jsons {

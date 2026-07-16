@@ -125,6 +125,16 @@ pub struct BerryManifest {
     catalogs: Option<Map<String, Map<String, String>>>,
 }
 
+fn builtin_dependency_extension_is_needed(
+    descriptor: &Descriptor,
+    package_names: &HashSet<String>,
+) -> bool {
+    // https://github.com/yarnpkg/berry/blob/master/packages/yarnpkg-extensions/sources/index.ts
+    descriptor.ident.to_string() == "@babel/types"
+        && descriptor.range == "npm:^7.8.3"
+        && package_names.contains("@babel/parser")
+}
+
 impl BerryLockfile {
     pub fn load(contents: &[u8], manifest: Option<BerryManifest>) -> Result<Self, super::Error> {
         let data = LockfileData::from_bytes(contents)?;
@@ -378,41 +388,49 @@ impl BerryLockfile {
             }
         }
 
-        // Include extension descriptors only when the package they were
-        // injected into is present in the pruned graph. Extensions come from
-        // Yarn's built-in packageExtensions (plugin-compat), which inject
-        // invisible dependencies into certain packages. The lockfile stores
-        // resolution entries for these injected deps but doesn't record which
-        // package triggered them.
-        //
-        // We approximate the association by checking if any package in the
-        // pruned transitive closure depends on a package whose name matches
-        // the extension's ident (or, for @types/* extensions, the unscoped
-        // name). This works because packageExtensions typically add @types/X
-        // to packages that depend on X, or add package Y to packages that
-        // logically need Y.
+        // Package extension dependencies aren't recorded on the package they extend.
+        // Match their descriptors against reachable peer requirements so merged
+        // lockfile entries retain only the ranges Yarn will reconstruct. Yarn's
+        // @types extensions don't necessarily correspond to peer requirements,
+        // so retain those when their unscoped package is a reachable
+        // dependency.
         {
-            // Collect all dependency names from packages in the pruned closure
-            let mut dep_names_in_closure: HashSet<String> = HashSet::new();
+            let mut dependency_names = HashSet::new();
+            let mut package_names = HashSet::new();
+            let mut peer_descriptors = HashSet::new();
             for key in packages {
-                if let Ok(pkg_locator) = Locator::try_from(key.as_str())
-                    && let Some(pkg) = self.locator_package.get(&pkg_locator)
+                if let Ok(package_locator) = Locator::try_from(key.as_str())
+                    && let Some(package) = self.locator_package.get(&package_locator)
                 {
-                    for (name, _) in pkg.dependencies.iter().flatten() {
-                        dep_names_in_closure.insert(name.to_string());
+                    package_names.insert(package_locator.ident.to_string());
+                    for (name, _) in package.dependencies.iter().flatten() {
+                        dependency_names.insert(name.as_str());
+                    }
+                    for (name, range) in package.peer_dependencies.iter().flatten() {
+                        peer_descriptors.insert(self.resolve_dependency(
+                            &package_locator,
+                            name,
+                            range,
+                        )?);
                     }
                 }
             }
-            // Also include dep names from workspace packages
-            for (locator, package) in &self.locator_package {
+            for (package_locator, package) in &self.locator_package {
                 if workspace_packages
                     .iter()
-                    .map(|s| s.as_str())
+                    .map(|path| path.as_str())
                     .chain(iter::once("."))
-                    .any(|path| locator.is_workspace_path(path))
+                    .any(|path| package_locator.is_workspace_path(path))
                 {
                     for (name, _) in package.dependencies.iter().flatten() {
-                        dep_names_in_closure.insert(name.to_string());
+                        dependency_names.insert(name.as_str());
+                    }
+                    for (name, range) in package.peer_dependencies.iter().flatten() {
+                        peer_descriptors.insert(self.resolve_dependency(
+                            package_locator,
+                            name,
+                            range,
+                        )?);
                     }
                 }
             }
@@ -422,30 +440,27 @@ impl BerryLockfile {
                     .resolutions
                     .get(descriptor)
                     .ok_or_else(|| Error::MissingLocator(descriptor.to_owned()))?;
-
                 let ident = descriptor.ident.to_string();
-
-                // For @types/X extensions, check if X is a dep in the closure.
-                // For other extensions, check if the ident itself is a dep.
-                let search_name = ident.strip_prefix("@types/").unwrap_or(&ident);
-
-                let needed = dep_names_in_closure.contains(search_name)
-                    || dep_names_in_closure.contains(&ident);
+                let needed = peer_descriptors.contains(descriptor)
+                    || ident
+                        .strip_prefix("@types/")
+                        .is_some_and(|name| dependency_names.contains(name))
+                    || builtin_dependency_extension_is_needed(descriptor, &package_names);
 
                 if needed {
                     resolutions.insert(descriptor.clone(), locator.clone());
-                    // Include transitive deps of the extension locator
                     let mut queue = vec![locator.clone()];
-                    while let Some(loc) = queue.pop() {
-                        if let Some(pkg) = self.locator_package.get(&loc) {
-                            for (name, range) in pkg.dependencies.iter().flatten() {
-                                if let Ok(dep_desc) =
-                                    self.resolve_dependency(&loc, name, range.as_ref())
-                                    && let Some(dep_loc) = self.resolutions.get(&dep_desc)
-                                    && !resolutions.contains_key(&dep_desc)
+                    while let Some(locator) = queue.pop() {
+                        if let Some(package) = self.locator_package.get(&locator) {
+                            for (name, range) in package.dependencies.iter().flatten() {
+                                if let Ok(dependency) =
+                                    self.resolve_dependency(&locator, name, range)
+                                    && let Some(dependency_locator) =
+                                        self.resolutions.get(&dependency)
+                                    && !resolutions.contains_key(&dependency)
                                 {
-                                    resolutions.insert(dep_desc, dep_loc.clone());
-                                    queue.push(dep_loc.clone());
+                                    resolutions.insert(dependency, dependency_locator.clone());
+                                    queue.push(dependency_locator.clone());
                                 }
                             }
                         }
@@ -865,6 +880,76 @@ mod test {
         assert!(
             encoded.contains("buffer@npm:buffer@6.0.3"),
             "pruned lockfile should contain the npm alias entry"
+        );
+    }
+
+    #[test]
+    fn test_prune_preserves_babel_parser_package_extension() {
+        let yaml = r#"__metadata:
+  version: 8
+  cacheKey: 10c0
+
+"app@workspace:packages/app":
+  version: 0.0.0-use.local
+  resolution: "app@workspace:packages/app"
+  dependencies:
+    "@babel/template": "npm:^7.28.6"
+  languageName: unknown
+  linkType: soft
+
+"@babel/parser@npm:^7.28.6":
+  version: 7.29.0
+  resolution: "@babel/parser@npm:7.29.0"
+  languageName: node
+  linkType: hard
+
+"@babel/template@npm:^7.28.6":
+  version: 7.29.0
+  resolution: "@babel/template@npm:7.29.0"
+  dependencies:
+    "@babel/parser": "npm:^7.28.6"
+    "@babel/types": "npm:^7.28.6"
+  languageName: node
+  linkType: hard
+
+"@babel/types@npm:^7.28.6, @babel/types@npm:^7.8.3":
+  version: 7.29.0
+  resolution: "@babel/types@npm:7.29.0"
+  languageName: node
+  linkType: hard
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+"#;
+
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+        let with_parser = lockfile
+            .subgraph(
+                &["packages/app".to_string()],
+                &[
+                    "@babel/parser@npm:7.29.0".to_string(),
+                    "@babel/template@npm:7.29.0".to_string(),
+                    "@babel/types@npm:7.29.0".to_string(),
+                ],
+            )
+            .unwrap();
+        let without_parser = lockfile
+            .subgraph(&[], &["@babel/types@npm:7.29.0".to_string()])
+            .unwrap();
+
+        assert!(
+            String::from_utf8(with_parser.encode().unwrap())
+                .unwrap()
+                .contains("@babel/types@npm:^7.8.3")
+        );
+        assert!(
+            !String::from_utf8(without_parser.encode().unwrap())
+                .unwrap()
+                .contains("@babel/types@npm:^7.8.3")
         );
     }
 

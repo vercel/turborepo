@@ -123,6 +123,8 @@ pub enum CommandProviderError {
         #[source]
         source: PathError,
     },
+    #[error("Microfrontends require a package manager")]
+    MissingPackageManager,
     #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
     #[error("No toolchain '{toolchain}' registered for package {package_name}.")]
@@ -136,13 +138,13 @@ pub enum CommandProviderError {
 
 /// A trait for fetching package information required to execute commands
 pub trait PackageInfoProvider {
-    fn package_manager(&self) -> &PackageManager;
+    fn package_manager(&self) -> Option<&PackageManager>;
 
     fn package_info(&self, name: &PackageName) -> Option<&PackageInfo>;
 }
 
 impl PackageInfoProvider for PackageGraph {
-    fn package_manager(&self) -> &PackageManager {
+    fn package_manager(&self) -> Option<&PackageManager> {
         PackageGraph::package_manager(self)
     }
 
@@ -430,7 +432,10 @@ impl<'a, T: PackageInfoProvider + Send + Sync, M: MfeConfigProvider, E: From<Com
 
         let cmd = if has_custom_proxy {
             debug!("MicroFrontendProxyProvider::command - using custom proxy script");
-            let package_manager = self.package_graph.package_manager();
+            let package_manager = self
+                .package_graph
+                .package_manager()
+                .ok_or(CommandProviderError::MissingPackageManager)?;
             let mut proxy_args: Vec<&str> = vec![mfe_path.as_str(), "--names"];
             proxy_args.extend(local_apps);
             let mut args = vec!["run", "proxy"];
@@ -502,8 +507,8 @@ mod tests {
     }
 
     impl PackageInfoProvider for MockPackageInfoProvider {
-        fn package_manager(&self) -> &PackageManager {
-            &self.package_manager
+        fn package_manager(&self) -> Option<&PackageManager> {
+            Some(&self.package_manager)
         }
 
         fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {

@@ -4,6 +4,7 @@ use async_graphql::{Json, Object};
 use turborepo_engine::TaskNode;
 use turborepo_errors::Spanned;
 use turborepo_task_id::TaskId;
+use turborepo_types::TaskCommandOverride;
 
 use crate::{package::Package, Array, Error, QueryRun};
 
@@ -23,6 +24,34 @@ impl RepositoryTask {
             package,
             script,
         })
+    }
+
+    pub fn executes(&self) -> bool {
+        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
+        match self
+            .package
+            .run()
+            .engine()
+            .task_definition(&task_id)
+            .and_then(|definition| definition.command.as_ref())
+        {
+            Some(TaskCommandOverride::Argv(_)) => true,
+            Some(TaskCommandOverride::OptOut) => false,
+            None => self
+                .package
+                .run()
+                .pkg_dep_graph()
+                .package_info(self.package.get_name())
+                .and_then(|package| {
+                    self.package
+                        .run()
+                        .pkg_dep_graph()
+                        .toolchains()
+                        .get(&package.toolchain)
+                        .map(|toolchain| (package, toolchain))
+                })
+                .is_some_and(|(package, toolchain)| toolchain.defines_task(package, &self.name)),
+        }
     }
 
     fn collect_and_sort<'a>(
