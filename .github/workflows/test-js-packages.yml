@@ -139,7 +139,7 @@ jobs:
         # We manually set TURBO_API to an empty string to override Hetzner env
         # @turbo/repository has its own native build matrix in the Test workflow.
         run: |
-          TURBO_API= turbo run check-types test build package-checks --filter="!@turbo/repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+          TURBO_API= turbo run check-types test build package-checks --affected --filter="./packages/*" --filter="!@turbo/repository" --color --env-mode=strict
         env:
           NODE_VERSION: ${{ matrix.node-version }}
 
