@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { Command } from "commander";
 import { packAndPublish } from "./packager";
 import type { Platform } from "./types";
