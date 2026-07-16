@@ -615,13 +615,7 @@ impl NpmLockfile {
     fn npm_path_parent(key: &str) -> Option<&str> {
         key.rsplit_once("node_modules/")
             .map(|(first, _)| first)
-            .and_then(|parent| {
-                if parent.is_empty() {
-                    None
-                } else {
-                    Some(parent)
-                }
-            })
+            .filter(|&parent| !parent.is_empty())
     }
 }
 
