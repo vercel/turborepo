@@ -222,7 +222,7 @@ npx turbo-ignore --task=test
   continue-on-error: true
 
 - name: Build
-  if: steps.turbo-ignore.outcome == 'failure'  # changes detected
+  if: steps.turbo-ignore.outcome == 'failure' # changes detected
   run: pnpm build
 ```
 
