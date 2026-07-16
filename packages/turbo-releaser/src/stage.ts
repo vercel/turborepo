@@ -39,9 +39,6 @@ export async function prepareStage({
   console.log(await readFile(resolvedVersionPath, "utf8"));
   dependencies.run("git", ["status"], { cwd: root, stdio: "inherit" });
 
-  if (dependencies.capture("git", ["cherry"], root).trim()) {
-    throw new Error("Refusing to publish with unpushed commits");
-  }
   if (
     !dependencies
       .capture("git", ["diff", "--", relativeVersionPath], root)

@@ -225,7 +225,6 @@ The release workflow consists of 7 sequential and parallel stages:
 2. Setup Node.js environment
 3. Run `turboreleaser version` to calculate the new version
 4. Execute `turboreleaser prepare-stage`, which:
-   - Verifies no unpushed commits exist
    - Verifies `version.txt` was updated
    - Verifies the release tag and staging branch do not already exist
    - Updates all published packages with the new version
@@ -235,7 +234,7 @@ The release workflow consists of 7 sequential and parallel stages:
 
 **Output**: `stage-branch` (e.g., `staging-2.6.2`)
 
-**Safety Checks**: The releaser verifies no unpushed commits exist, `version.txt` was properly updated, and the target staging branch is not already present before proceeding. The commit helper creates the remote branch from local `HEAD`, uploads selected file changes through GitHub's `createCommitOnBranch` API, waits for GitHub commit verification, and then updates the local branch ref.
+**Safety Checks**: The workflow verifies that the selected SHA belongs to protected `main`. The releaser verifies that `version.txt` was updated and the target release tag and staging branch are not already present before proceeding. The commit helper creates the remote branch from local `HEAD`, uploads selected file changes through GitHub's `createCommitOnBranch` API, waits for GitHub commit verification, and then updates the local branch ref.
 
 If the API commit is created but verification does not complete, the helper leaves the remote branch in place and exits with the commit SHA in the logs. Use the logged SHA and branch name to inspect recovery state before retrying or clearing the staging branch.
 
