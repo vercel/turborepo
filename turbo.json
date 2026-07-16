@@ -107,11 +107,21 @@
       "persistent": true,
       "env": ["AI_GATEWAY_API_KEY"]
     },
-    // turborepo-lib embeds version.txt via include_str!; it lives outside
-    // every crate directory, so the automatic crate-closure hashing can't
-    // see it. $TURBO_DEFAULT$ keeps the automatic inputs and appends it.
+    // These entrypoints embed files outside every crate directory, so the
+    // automatic crate-closure hashing cannot see them. $TURBO_DEFAULT$ keeps
+    // the automatic inputs and appends the external files.
     "turbo#build": {
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/version.txt"]
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/version.txt",
+        "$TURBO_ROOT$/packages/turbo-types/src/json/frameworks.json"
+      ]
+    },
+    "turborepo-lsp#build": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/turbo-types/src/json/frameworks.json"
+      ]
     },
     "package-checks": {
       "dependsOn": ["package:types"]
