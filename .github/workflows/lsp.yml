@@ -51,9 +51,9 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          - host: macos-latest
+          - host: macos-15-xlarge
             target: "x86_64-apple-darwin"
-          - host: macos-latest
+          - host: macos-15-xlarge
             target: "aarch64-apple-darwin"
           - host: ubuntu-latest
             prepare: "sudo apt-get update && sudo apt-get install -y curl musl-tools"
