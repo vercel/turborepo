@@ -123,7 +123,7 @@ jobs:
           # Uses the GitHub API instead of a full clone to avoid fetching entire repo history.
           LAST_VERSION_COMMIT=$(gh api "repos/${{ github.repository }}/commits?path=version.txt&per_page=1" --jq '.[0].sha')
           CHANGES=$(gh api "repos/${{ github.repository }}/compare/${LAST_VERSION_COMMIT}...${{ github.sha }}" \
-            --jq '[.files[].filename | select(startswith("crates/") or startswith("packages/") or startswith("cli/"))] | length')
+            --jq '[.files[].filename | select(startswith("crates/") or startswith("packages/"))] | length')
 
           if [ "$CHANGES" = "0" ]; then
             echo "Skipping: No relevant changes since last release (${LAST_VERSION_COMMIT:0:12})"
@@ -171,6 +171,9 @@ jobs:
         with:
           enable-corepack: false
 
+      - name: Build release tool
+        run: pnpm --filter @turbo/releaser build
+
       - name: Get base SHA
         id: base-sha
         run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
@@ -216,7 +219,11 @@ jobs:
           echo ""
 
           # Calculate what version we're about to release so we know which staging branch to delete
-          ./scripts/version.js "$INCREMENT" "$TAG_OVERRIDE"
+          VERSION_ARGS=(--version-path version.txt --increment "$INCREMENT")
+          if [ -n "$TAG_OVERRIDE" ]; then
+            VERSION_ARGS+=(--tag-override "$TAG_OVERRIDE")
+          fi
+          packages/turbo-releaser/dist/index.js version "${VERSION_ARGS[@]}"
           VERSION=$(head -n 1 version.txt)
 
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
@@ -249,7 +256,11 @@ jobs:
             exit 1
           fi
 
-          ./scripts/version.js "$INCREMENT" "$TAG_OVERRIDE"
+          VERSION_ARGS=(--version-path version.txt --increment "$INCREMENT")
+          if [ -n "$TAG_OVERRIDE" ]; then
+            VERSION_ARGS+=(--tag-override "$TAG_OVERRIDE")
+          fi
+          packages/turbo-releaser/dist/index.js version "${VERSION_ARGS[@]}"
           VERSION=$(head -n 1 version.txt)
 
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
@@ -274,15 +285,18 @@ jobs:
           cat version.txt
 
       - name: Prepare stage branch
-        run: |
-          cd cli && make prepare-stage-release
+        run: packages/turbo-releaser/dist/index.js prepare-stage --repo-root . --version-path version.txt
 
       - name: Commit stage branch
         id: stage
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd cli && make commit-stage-release
+          VERSION=$(head -n 1 version.txt)
+          node scripts/create-github-api-commit.mjs \
+            --branch "staging-${VERSION}" \
+            --message "publish ${VERSION} to registry" \
+            --all-tracked
           echo "stage-branch=$(git branch --show-current)" >> $GITHUB_OUTPUT
 
   # TODO: Re-enable Rust unit tests once flakiness is resolved.
@@ -540,12 +554,13 @@ jobs:
 
       - name: Move Rust artifacts into place
         run: |
-          mv rust-artifacts/turbo-aarch64-apple-darwin cli/dist-darwin-arm64
-          mv rust-artifacts/turbo-aarch64-unknown-linux-musl cli/dist-linux-arm64
-          cp -r rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-arm64
-          mv rust-artifacts/turbo-x86_64-unknown-linux-musl cli/dist-linux-x64
-          mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-x64
-          mv rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-x64
+          mkdir release-artifacts
+          mv rust-artifacts/turbo-aarch64-apple-darwin release-artifacts/dist-darwin-arm64
+          mv rust-artifacts/turbo-aarch64-unknown-linux-musl release-artifacts/dist-linux-arm64
+          cp -r rust-artifacts/turbo-x86_64-pc-windows-msvc release-artifacts/dist-windows-arm64
+          mv rust-artifacts/turbo-x86_64-unknown-linux-musl release-artifacts/dist-linux-x64
+          mv rust-artifacts/turbo-x86_64-apple-darwin release-artifacts/dist-darwin-x64
+          mv rust-artifacts/turbo-x86_64-pc-windows-msvc release-artifacts/dist-windows-x64
 
       - name: Ensure npm version
         run: npm install -g npm@11.5.1
@@ -561,7 +576,7 @@ jobs:
           fi
           packages/turbo-releaser/dist/index.js publish \
             --repo-root . \
-            --artifacts-dir cli \
+            --artifacts-dir release-artifacts \
             --version-path version.txt \
             "${RELEASE_ARGS[@]}"
 
@@ -570,7 +585,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: turbo-combined
-          path: cli/dist
+          path: release-artifacts/dist
 
   create-release-tag:
     name: "Create Release Tag"
@@ -587,12 +602,20 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
+      - uses: ./.github/actions/setup-node
+        with:
+          enable-corepack: false
+          extra-flags: "--no-frozen-lockfile"
+
+      - name: Build release tool
+        run: pnpm --filter @turbo/releaser build
+
       - name: Create and push release tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh auth setup-git
-          cd cli && make create-release-tag
+          packages/turbo-releaser/dist/index.js tag --repo-root . --version-path version.txt
 
       - name: Create GitHub Release
         env:
@@ -751,6 +774,9 @@ jobs:
           enable-corepack: false
           extra-flags: "--no-frozen-lockfile"
 
+      - name: Build release tool
+        run: pnpm --filter @turbo/releaser build
+
       - name: Commit lockfile if updated by install
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -773,7 +799,9 @@ jobs:
           if [ "$TAG" = "latest" ]; then
             VERSION="${{ needs.stage.outputs.version }}"
             echo "Stable release detected (${VERSION}). Bumping to next prepatch canary..."
-            ./scripts/version.js prepatch
+            packages/turbo-releaser/dist/index.js version \
+              --version-path version.txt \
+              --increment prepatch
             cat version.txt
             echo "updated=true" >> $GITHUB_OUTPUT
             echo "version=${VERSION}" >> $GITHUB_OUTPUT

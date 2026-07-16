@@ -27,7 +27,7 @@ describe("publishRelease", () => {
 
     await publishRelease({
       repoRoot: root,
-      artifactsDir: "cli",
+      artifactsDir: "release-artifacts",
       versionPath: "version.txt",
       skipPublish: true,
       dependencies: {
@@ -56,7 +56,7 @@ describe("publishRelease", () => {
     assert.equal(pack.mock.callCount(), 1);
     assert.equal(
       pack.mock.calls[0].arguments[0].srcDir,
-      path.join(root, "cli")
+      path.join(root, "release-artifacts")
     );
     assert.deepEqual(
       pack.mock.calls[0].arguments[0].platforms,
@@ -83,7 +83,7 @@ describe("publishRelease", () => {
 
     await publishRelease({
       repoRoot: root,
-      artifactsDir: "cli",
+      artifactsDir: "release-artifacts",
       versionPath: "version.txt",
       skipPublish: false,
       dependencies: {
@@ -110,7 +110,7 @@ describe("publishRelease", () => {
     await assert.rejects(
       publishRelease({
         repoRoot: root,
-        artifactsDir: "cli",
+        artifactsDir: "release-artifacts",
         versionPath: "version.txt",
         skipPublish: false,
         dependencies: {
