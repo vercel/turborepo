@@ -169,7 +169,7 @@ Turborepo resolves exact outputs for these layouts:
 
 Target-specific builds include the target triple in the artifact path. A target directory must stay within the repository after resolving existing path components.
 
-When Turborepo cannot prove the exact output layout, it disables implicit task caching rather than creating a log-only cache hit that could skip compilation. Examples include unknown output-affecting flags, repository `build.target`, unsupported or custom target triples, escaping target directories, compiler overrides, artifact/build directory overrides, custom profile directory names, and output-altering unstable manifest features. Explicit `outputs` or an explicit `cache` setting represent user authority and override this output-unavailability fallback. Only opt in when your configuration fully describes the outputs.
+When Turborepo cannot prove the exact output layout, it disables implicit task caching rather than creating a log-only cache hit that could skip compilation. Examples include unknown output-affecting flags, repository `build.target`, unsupported or custom target triples, escaping target directories, compiler overrides, artifact directory overrides, custom profile directory names, and output-altering unstable manifest features. Explicit `outputs` or an explicit `cache` setting represent user authority and override this output-unavailability fallback. Only opt in when your configuration fully describes the outputs.
 
 Untracked inputs are stricter. External, included, or symlinked Cargo configuration can affect a build without participating safely in its hash, so Turborepo disables caching unless `cache` itself is explicitly configured. Explicit `outputs` alone do not make untracked inputs safe.
 
