@@ -74,9 +74,9 @@ export function resolveTurboConfigPath(dirPath: string): {
   configExists: boolean;
   error?: string;
 } {
-  const existing = TURBO_CONFIG_NAMES.map((name) => path.join(dirPath, name)).filter((configPath) =>
-    fs.existsSync(configPath)
-  );
+  const existing = TURBO_CONFIG_NAMES.map((name) =>
+    path.join(dirPath, name)
+  ).filter((configPath) => fs.existsSync(configPath));
 
   if (existing.length > 1) {
     const errorMessage = `Found multiple turbo config files in the same directory: ${dirPath}\nOnly one of turbo.json, turbo.jsonc, or turbo.toml is allowed.`;
