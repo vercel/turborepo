@@ -171,7 +171,7 @@ pub async fn prune(
     if let Some(workspace_config_path) = prune
         .package_graph
         .package_manager()
-        .workspace_configuration_path()
+        .and_then(|pm| pm.workspace_configuration_path())
     {
         prune.copy_file(
             &AnchoredSystemPathBuf::from_raw(workspace_config_path)?,
@@ -190,8 +190,12 @@ pub async fn prune(
         })
         .collect();
     let excluded_dev_workspaces = if prune.production
-        && prune.package_graph.package_manager().lockfile_manager() == &PackageManager::Bun
-    {
+        && prune
+            .package_graph
+            .package_manager()
+            .is_some_and(|package_manager| {
+                package_manager.lockfile_manager() == &PackageManager::Bun
+            }) {
         prune
             .package_graph
             .packages()
@@ -219,7 +223,14 @@ pub async fn prune(
         })
         .cloned()
         .collect();
-    let lockfile_keys = prune.lockfile_keys(&js_workspaces)?;
+    // The JS lockfile subgraph only exists when there is a JavaScript package
+    // manager. A pure Cargo workspace has none; its lockfile is pruned by the
+    // Cargo toolchain's prune plan below.
+    let lockfile_keys = if prune.package_graph.package_manager().is_some() {
+        prune.lockfile_keys(&js_workspaces)?
+    } else {
+        Vec::new()
+    };
     let mut kept_by_toolchain: HashMap<ToolchainId, Vec<String>> = HashMap::new();
     let mut planned_toolchains = HashSet::new();
     for workspace in workspaces {
@@ -307,39 +318,9 @@ pub async fn prune(
     trace!("new workspaces: {}", workspace_paths.join(", "));
     trace!("lockfile keys: {}", lockfile_keys.join(", "));
 
-    let lockfile = prune
-        .package_graph
-        .lockfile()
-        .ok_or(Error::MissingLockfile)?
-        .subgraph(&workspace_paths, &lockfile_keys)?;
-
-    let lockfile_name = prune.package_graph.package_manager().lockfile_name();
-
-    if prune.uses_per_workspace_lockfiles {
-        // Per-workspace lockfiles are already in the pruned output from
-        // recursive_copy in copy_workspace. Copy the original root lockfile
-        // as-is (it only contains root-level dependencies).
-        let original_root_lockfile = prune.root.join_component(lockfile_name);
-        let out_lockfile = prune.out_directory.join_component(lockfile_name);
-        turborepo_fs::copy_file(&original_root_lockfile, &out_lockfile)?;
-        if prune.docker {
-            turborepo_fs::copy_file(
-                &original_root_lockfile,
-                prune.docker_directory().join_component(lockfile_name),
-            )?;
-        }
-    } else {
-        let lockfile_contents = lockfile.encode()?;
-        let lockfile_path = prune.out_directory.join_component(lockfile_name);
-        lockfile_path.create_with_contents(&lockfile_contents)?;
-        if prune.docker {
-            prune
-                .docker_directory()
-                .join_component(lockfile_name)
-                .create_with_contents(&lockfile_contents)?;
-        }
-    }
-
+    // Files carried into every pruned repository regardless of toolchain.
+    // These do not depend on the JavaScript lockfile subgraph, so they run
+    // for a pure Cargo workspace too.
     for (relative_path, required_for_install) in ADDITIONAL_FILES.as_slice() {
         let path = relative_path.to_anchored_system_path_buf();
         prune.copy_file(&path, *required_for_install)?;
@@ -353,108 +334,151 @@ pub async fn prune(
     prune.copy_turbo_json(&workspace_names)?;
     prune.copy_global_dependencies()?;
 
-    let original_lockfile = prune
-        .package_graph
-        .lockfile()
-        .ok_or(Error::MissingLockfile)?;
-    let package_manager = prune.package_graph.package_manager();
-    let original_patches = collect_patch_paths(
-        original_lockfile,
+    // The JavaScript lockfile subgraph, root package.json rewrite, and pnpm
+    // workspace patch pruning apply only when the repository has a JavaScript
+    // package manager and root manifest. A pure Cargo workspace has neither;
+    // its Cargo.lock and Cargo.toml were already rewritten by the Cargo
+    // toolchain's prune plan above.
+    if let (Some(package_manager), Some(root_package_json)) = (
+        prune.package_graph.package_manager(),
         prune.package_graph.root_package_json(),
-        &prune.root,
-        package_manager,
-    )?;
-    let pruned_patches = if original_patches.is_empty() {
-        Vec::new()
-    } else {
-        collect_patch_paths(
-            lockfile.as_ref(),
-            prune.package_graph.root_package_json(),
+    ) {
+        let lockfile = prune
+            .package_graph
+            .lockfile()
+            .ok_or(Error::MissingLockfile)?
+            .subgraph(&workspace_paths, &lockfile_keys)?;
+
+        let lockfile_name = package_manager.lockfile_name();
+
+        if prune.uses_per_workspace_lockfiles {
+            // Per-workspace lockfiles are already in the pruned output from
+            // recursive_copy in copy_workspace. Copy the original root lockfile
+            // as-is (it only contains root-level dependencies).
+            let original_root_lockfile = prune.root.join_component(lockfile_name);
+            let out_lockfile = prune.out_directory.join_component(lockfile_name);
+            turborepo_fs::copy_file(&original_root_lockfile, &out_lockfile)?;
+            if prune.docker {
+                turborepo_fs::copy_file(
+                    &original_root_lockfile,
+                    prune.docker_directory().join_component(lockfile_name),
+                )?;
+            }
+        } else {
+            let lockfile_contents = lockfile.encode()?;
+            let lockfile_path = prune.out_directory.join_component(lockfile_name);
+            lockfile_path.create_with_contents(&lockfile_contents)?;
+            if prune.docker {
+                prune
+                    .docker_directory()
+                    .join_component(lockfile_name)
+                    .create_with_contents(&lockfile_contents)?;
+            }
+        }
+
+        let original_lockfile = prune
+            .package_graph
+            .lockfile()
+            .ok_or(Error::MissingLockfile)?;
+        let original_patches = collect_patch_paths(
+            original_lockfile,
+            root_package_json,
             &prune.root,
             package_manager,
-        )?
-    };
-
-    if !original_patches.is_empty() {
-        trace!(
-            "original patches: {:?}, pruned patches: {:?}",
-            original_patches,
-            pruned_patches
-        );
-    }
-
-    let original_contents = prune.root.resolve(package_json()).read_to_string()?;
-    let original_value: serde_json::Value = serde_json::from_str(&original_contents)?;
-    if !original_patches.is_empty()
-        || original_value.get("workspaces").is_some()
-        || !excluded_dev_workspaces.is_empty()
-    {
-        let pruned_json = if original_patches.is_empty() {
-            prune.package_graph.root_package_json().clone()
+        )?;
+        let pruned_patches = if original_patches.is_empty() {
+            Vec::new()
         } else {
-            package_manager.prune_patched_packages(
-                prune.package_graph.root_package_json(),
-                &pruned_patches,
+            collect_patch_paths(
+                lockfile.as_ref(),
+                root_package_json,
                 &prune.root,
-            )
+                package_manager,
+            )?
         };
 
-        let mut pruned_value = serde_json::to_value(&pruned_json)?;
-        prune_package_json_workspaces(&mut pruned_value, &workspace_paths);
-        prune_package_json_dev_dependencies(&mut pruned_value, &excluded_dev_workspaces);
-        // Merge into the original JSON value so package.json key order stays stable.
-        let merged = merge_preserving_key_order(&original_value, &pruned_value);
-        let mut pruned_json_contents = serde_json::to_string_pretty(&merged)?;
-        // Add trailing newline to match Go behavior
-        pruned_json_contents.push('\n');
-
-        let original = prune.root.resolve(package_json());
-        let permissions = original.symlink_metadata()?.permissions();
-        let new_package_json_path = prune.full_directory.resolve(package_json());
-        new_package_json_path.create_with_contents(&pruned_json_contents)?;
-        #[cfg(unix)]
-        new_package_json_path.set_mode(permissions.mode())?;
-        #[cfg(windows)]
-        if permissions.readonly() {
-            new_package_json_path.set_readonly()?
+        if !original_patches.is_empty() {
+            trace!(
+                "original patches: {:?}, pruned patches: {:?}",
+                original_patches,
+                pruned_patches
+            );
         }
-        if prune.docker {
-            turborepo_fs::copy_file(
-                new_package_json_path,
-                prune.docker_directory().resolve(package_json()),
-            )?;
-        }
-    } else {
-        prune.copy_file(package_json(), Some(CopyDestination::Docker))?;
-    }
 
-    if !original_patches.is_empty() {
-        for patch in &pruned_patches {
-            prune.copy_patch_file(patch)?;
-        }
-    }
+        let original_contents = prune.root.resolve(package_json()).read_to_string()?;
+        let original_value: serde_json::Value = serde_json::from_str(&original_contents)?;
+        if !original_patches.is_empty()
+            || original_value.get("workspaces").is_some()
+            || !excluded_dev_workspaces.is_empty()
+        {
+            let pruned_json = if original_patches.is_empty() {
+                root_package_json.clone()
+            } else {
+                package_manager.prune_patched_packages(
+                    root_package_json,
+                    &pruned_patches,
+                    &prune.root,
+                )
+            };
 
-    // Prune pnpm-workspace.yaml's patchedDependencies so it only
-    // references patches that are actually in the pruned output.
-    if package_manager.is_pnpm_family() {
-        let ws_config = turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH;
-        let ws_path = AnchoredSystemPathBuf::from_raw(ws_config)?;
-        let out_ws = prune.out_directory.resolve(&ws_path);
-        turborepo_repository::package_manager::pnpm::prune_workspace_patches(
-            &out_ws,
-            &pruned_patches,
-        )?;
-        let full_ws = prune.full_directory.resolve(&ws_path);
-        turborepo_repository::package_manager::pnpm::prune_workspace_patches(
-            &full_ws,
-            &pruned_patches,
-        )?;
-        if prune.docker {
-            let docker_ws = prune.docker_directory().resolve(&ws_path);
+            let mut pruned_value = serde_json::to_value(&pruned_json)?;
+            prune_package_json_workspaces(&mut pruned_value, &workspace_paths);
+            prune_package_json_dev_dependencies(&mut pruned_value, &excluded_dev_workspaces);
+            // Merge into the original JSON value so package.json key order stays stable.
+            let merged = merge_preserving_key_order(&original_value, &pruned_value);
+            let mut pruned_json_contents = serde_json::to_string_pretty(&merged)?;
+            // Add trailing newline to match Go behavior
+            pruned_json_contents.push('\n');
+
+            let original = prune.root.resolve(package_json());
+            let permissions = original.symlink_metadata()?.permissions();
+            let new_package_json_path = prune.full_directory.resolve(package_json());
+            new_package_json_path.create_with_contents(&pruned_json_contents)?;
+            #[cfg(unix)]
+            new_package_json_path.set_mode(permissions.mode())?;
+            #[cfg(windows)]
+            if permissions.readonly() {
+                new_package_json_path.set_readonly()?
+            }
+            if prune.docker {
+                turborepo_fs::copy_file(
+                    new_package_json_path,
+                    prune.docker_directory().resolve(package_json()),
+                )?;
+            }
+        } else {
+            prune.copy_file(package_json(), Some(CopyDestination::Docker))?;
+        }
+
+        if !original_patches.is_empty() {
+            for patch in &pruned_patches {
+                prune.copy_patch_file(patch)?;
+            }
+        }
+
+        // Prune pnpm-workspace.yaml's patchedDependencies so it only
+        // references patches that are actually in the pruned output.
+        if package_manager.is_pnpm_family() {
+            let ws_config =
+                turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH;
+            let ws_path = AnchoredSystemPathBuf::from_raw(ws_config)?;
+            let out_ws = prune.out_directory.resolve(&ws_path);
             turborepo_repository::package_manager::pnpm::prune_workspace_patches(
-                &docker_ws,
+                &out_ws,
                 &pruned_patches,
             )?;
+            let full_ws = prune.full_directory.resolve(&ws_path);
+            turborepo_repository::package_manager::pnpm::prune_workspace_patches(
+                &full_ws,
+                &pruned_patches,
+            )?;
+            if prune.docker {
+                let docker_ws = prune.docker_directory().resolve(&ws_path);
+                turborepo_repository::package_manager::pnpm::prune_workspace_patches(
+                    &docker_ws,
+                    &pruned_patches,
+                )?;
+            }
         }
     }
 
@@ -776,11 +800,16 @@ impl<'a> Prune<'a> {
             );
         }
 
-        if package_graph.lockfile().is_none() {
+        // A JavaScript project must have a lockfile to subgraph. A pure Cargo
+        // workspace has no JavaScript package manager and no JS lockfile; its
+        // Cargo.lock is pruned by the Cargo toolchain's prune plan.
+        if package_graph.package_manager().is_some() && package_graph.lockfile().is_none() {
             return Err(Error::MissingLockfile);
         }
 
-        let uses_per_workspace_lockfiles = package_graph.package_manager().is_pnpm_family()
+        let uses_per_workspace_lockfiles = package_graph
+            .package_manager()
+            .is_some_and(|pm| pm.is_pnpm_family())
             && NpmRc::from_file(&base.repo_root)
                 .unwrap_or_default()
                 .shared_workspace_lockfile
@@ -1007,8 +1036,14 @@ impl<'a> Prune<'a> {
                 &docker_workspace_dir,
             )?;
 
-            if self.uses_per_workspace_lockfiles {
-                let lockfile_name = self.package_graph.package_manager().lockfile_name();
+            // Per-workspace lockfiles are a pnpm feature, so a package manager
+            // is always present here.
+            if let Some(package_manager) = self
+                .package_graph
+                .package_manager()
+                .filter(|_| self.uses_per_workspace_lockfiles)
+            {
+                let lockfile_name = package_manager.lockfile_name();
                 let ws_lockfile = original_dir.join_component(lockfile_name);
                 if ws_lockfile.try_exists()? {
                     turborepo_fs::copy_file(

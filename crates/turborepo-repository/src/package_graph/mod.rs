@@ -50,8 +50,8 @@ pub struct PackageGraph {
     #[allow(dead_code)]
     node_lookup: HashMap<PackageNode, petgraph::graph::NodeIndex>,
     packages: HashMap<PackageName, PackageInfo>,
-    root_package_json: PackageJson,
-    package_manager: PackageManager,
+    root_package_json: Option<PackageJson>,
+    package_manager: Option<PackageManager>,
     lockfile: Option<Arc<dyn Lockfile>>,
     repo_root: AbsoluteSystemPathBuf,
     /// Receiver for background transitive-closure computation when the graph
@@ -201,6 +201,15 @@ impl PackageGraph {
         root_package_json: PackageJson,
     ) -> PackageGraphBuilder<'_, LocalPackageDiscoveryBuilder> {
         PackageGraphBuilder::new(repo_root, root_package_json)
+    }
+
+    /// Build over a repository that may have no root `package.json` (a pure
+    /// Cargo workspace). See [`PackageGraphBuilder::new_optional`].
+    pub fn builder_optional(
+        repo_root: &AbsoluteSystemPath,
+        root_package_json: Option<PackageJson>,
+    ) -> PackageGraphBuilder<'_, LocalPackageDiscoveryBuilder> {
+        PackageGraphBuilder::new_optional(repo_root, root_package_json)
     }
 
     /// Validates that every non-root package has a `name` field in its
@@ -365,8 +374,8 @@ impl PackageGraph {
         self.packages.is_empty()
     }
 
-    pub fn package_manager(&self) -> &PackageManager {
-        &self.package_manager
+    pub fn package_manager(&self) -> Option<&PackageManager> {
+        self.package_manager.as_ref()
     }
 
     /// The toolchains that contributed packages to this graph.
@@ -400,7 +409,7 @@ impl PackageGraph {
                 mut closures,
                 mut hashes,
             })) => {
-                for (_, info) in self.packages.iter_mut() {
+                for info in self.packages.values_mut() {
                     // Mirror of the filter in the inline path
                     // (`populate_transitive_dependencies`): a non-JS package
                     // sharing a directory with a JS package must not steal
@@ -500,8 +509,8 @@ impl PackageGraph {
         petgraph::algo::page_rank::page_rank(&self.graph, 0.85, 1)
     }
 
-    pub fn root_package_json(&self) -> &PackageJson {
-        &self.root_package_json
+    pub fn root_package_json(&self) -> Option<&PackageJson> {
+        self.root_package_json.as_ref()
     }
 
     /// Gets all the nodes that directly depend on this one, that is to say
@@ -2053,6 +2062,51 @@ version = "0.1.0"
                 workspace_pkg.transitive_dependencies
             );
         }
+    }
+
+    /// A pure Cargo workspace has no root package.json and no JavaScript
+    /// package manager: the graph is built entirely from the Cargo toolchain,
+    /// and both `package_manager()` and `root_package_json()` report `None`.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_pure_cargo_workspace_has_no_javascript() {
+        let (_tmp, root) = canonical_tempdir();
+        write_cargo_workspace_fixture(&root);
+
+        let pkg_graph = PackageGraph::builder_optional(&root, None)
+            .with_toolchain(crate::cargo::CargoToolchain::new(root.clone()))
+            .build()
+            .await
+            .unwrap();
+
+        assert!(pkg_graph.validate().is_ok());
+
+        // No JavaScript project: no package manager, no root manifest.
+        assert!(
+            pkg_graph.package_manager().is_none(),
+            "a pure Cargo workspace has no JavaScript package manager"
+        );
+        assert!(
+            pkg_graph.root_package_json().is_none(),
+            "a pure Cargo workspace has no root package.json"
+        );
+
+        // The Cargo crates and synthetic workspace package populate the graph.
+        let app = pkg_graph.package_info(&PackageName::from("app")).unwrap();
+        assert_eq!(app.toolchain, crate::toolchain::ToolchainId::RUST);
+        let lib_a = pkg_graph.package_info(&PackageName::from("lib-a")).unwrap();
+        assert_eq!(lib_a.toolchain, crate::toolchain::ToolchainId::RUST);
+        let workspace_pkg = pkg_graph.package_info(&PackageName::from("acme")).unwrap();
+        assert_eq!(workspace_pkg.toolchain, crate::toolchain::ToolchainId::RUST);
+
+        // Crate path dependencies still become graph edges without a package
+        // manager: the `workspace:*` protocol resolves internally regardless.
+        let app_deps = pkg_graph
+            .immediate_dependencies(&PackageNode::Workspace(PackageName::from("app")))
+            .unwrap();
+        assert!(
+            app_deps.contains(&PackageNode::Workspace(PackageName::from("lib-a"))),
+            "app should depend on lib-a, got {app_deps:?}"
+        );
     }
 
     /// A crate and a JS package sharing a name is a hard error, like any

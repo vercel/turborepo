@@ -18,15 +18,19 @@ pub fn get_signal() -> Result<impl Stream<Item = Option<Signal>>, Error> {
         None
     };
 
-    Ok(stream::once(async move {
-        if let Some(wrapper_ctrl_c) = wrapper_ctrl_c {
-            wrapper_ctrl_c.await.ok().flatten()
-        } else if let Some(mut ctrl_c) = ctrl_c {
-            ctrl_c.recv().await.map(|_| Signal::CtrlC)
-        } else {
-            None
-        }
-    }))
+    Ok(stream::unfold(
+        (wrapper_ctrl_c, ctrl_c),
+        |(mut wrapper_ctrl_c, mut ctrl_c)| async move {
+            let signal = if let Some(receiver) = wrapper_ctrl_c.as_mut() {
+                receiver.recv().await.flatten()
+            } else if let Some(ctrl_c) = ctrl_c.as_mut() {
+                ctrl_c.recv().await.map(|_| Signal::CtrlC)
+            } else {
+                None
+            };
+            Some((signal, (wrapper_ctrl_c, ctrl_c)))
+        },
+    ))
 }
 
 #[cfg(windows)]
@@ -37,26 +41,28 @@ fn wrapper_ctrl_c_fd_from_env(value: Option<std::ffi::OsString>) -> Option<i32> 
 #[cfg(windows)]
 fn wrapper_ctrl_c_receiver(
     fd: i32,
-) -> Result<tokio::sync::oneshot::Receiver<Option<Signal>>, std::io::Error> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
+) -> Result<tokio::sync::mpsc::UnboundedReceiver<Option<Signal>>, std::io::Error> {
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     std::thread::Builder::new()
         .name("turbo-windows-ctrl-c-pipe".to_string())
         .spawn(move || {
-            tx.send(read_wrapper_ctrl_c(fd)).ok();
+            let mut byte = [0];
+            loop {
+                match unsafe { libc::read(fd, byte.as_mut_ptr().cast(), 1) } {
+                    1 if byte[0] == 0x03 => {
+                        if tx.send(Some(Signal::CtrlC)).is_err() {
+                            return;
+                        }
+                    }
+                    1 => {}
+                    _ => {
+                        tx.send(None).ok();
+                        return;
+                    }
+                }
+            }
         })?;
     Ok(rx)
-}
-
-#[cfg(windows)]
-fn read_wrapper_ctrl_c(fd: i32) -> Option<Signal> {
-    let mut byte = [0];
-    loop {
-        match unsafe { libc::read(fd, byte.as_mut_ptr().cast(), 1) } {
-            1 if byte[0] == 0x03 => return Some(Signal::CtrlC),
-            1 => {}
-            _ => return None,
-        }
-    }
 }
 
 #[cfg(windows)]
@@ -78,21 +84,25 @@ mod tests {
 /// Currently listens for SIGINT and SIGTERM
 pub fn get_signal() -> Result<impl Stream<Item = Option<Signal>>, Error> {
     use tokio::signal::unix;
-    let mut sigint = unix::signal(unix::SignalKind::interrupt())?;
-    let mut sigterm = unix::signal(unix::SignalKind::terminate())?;
-    let mut sighup = unix::signal(unix::SignalKind::hangup())?;
+    let sigint = unix::signal(unix::SignalKind::interrupt())?;
+    let sigterm = unix::signal(unix::SignalKind::terminate())?;
+    let sighup = unix::signal(unix::SignalKind::hangup())?;
 
-    Ok(stream::once(async move {
-        tokio::select! {
-            res = sigint.recv() => {
-                res.map(|_| Signal::Interrupt)
-            }
-            res = sighup.recv() => {
-                res.map(|_| Signal::Interrupt)
-            }
-            res = sigterm.recv() => {
-                res.map(|_| Signal::Terminate)
-            }
-        }
-    }))
+    Ok(stream::unfold(
+        (sigint, sigterm, sighup),
+        |(mut sigint, mut sigterm, mut sighup)| async move {
+            let signal = tokio::select! {
+                res = sigint.recv() => {
+                    res.map(|_| Signal::Interrupt)
+                }
+                res = sighup.recv() => {
+                    res.map(|_| Signal::Interrupt)
+                }
+                res = sigterm.recv() => {
+                    res.map(|_| Signal::Terminate)
+                }
+            };
+            Some((signal, (sigint, sigterm, sighup)))
+        },
+    ))
 }

@@ -30,9 +30,10 @@ Graceful shutdown happens while the Turbo process is still alive, so it should
 be handled internally by the run and process manager. Parent-death cleanup only
 applies when Turbo disappears before Rust cleanup code can run.
 
-- `crates/turborepo-lib/src/commands/run.rs` creates a shared
-  `SignalHandler` and does not return until all shutdown subscribers finish
-  their cleanup work.
+- `crates/turborepo-lib/src/commands/run.rs` creates one shared, process-lifetime
+  `SignalHandler`. It continuously brokers OS and in-process signals, retains
+  their count for force-shutdown escalation, and does not return until all
+  shutdown subscribers finish their cleanup work.
 - The handler distinguishes signal-driven shutdown (`ShutdownReason::Signal`)
   from close-driven shutdown (`ShutdownReason::Close`). Normal command
   completion uses the close path to drain subscribers without printing
@@ -132,9 +133,9 @@ package level (all tasks in changed packages run).
 
 Represents the workspace structure and package dependencies:
 
-- Identify package manager being used
+- Identifies the JavaScript package manager, when present
 - Discovers packages in workspace
-- Performs lockfile analysis
+- Performs ecosystem-specific lockfile analysis
 - Builds dependency relationships between workspace packages
 - Validates that all non-root packages have a `name` field
   (`PackageGraph::validate()`)
@@ -176,9 +177,12 @@ explicit `outputs`, `cache: true`, and
 #### Experimental Cargo Support (`crates/turborepo-repository/src/cargo.rs`)
 
 Behind `futureFlags.experimentalCargoWorkspaces` in the root turbo.json,
-`turbo run` also discovers Rust crates from a Cargo workspace at the repo
-root and adds them to the package graph. `CargoToolchain` is the second
-`Toolchain` implementation.
+`turbo run` discovers Rust crates from a Cargo workspace at the repository
+root and adds them to the package graph. Cargo workspaces can stand alone or
+coexist with JavaScript workspaces; a root `package.json` and JavaScript package
+manager are only required when JavaScript packages participate. Cargo-only
+repositories may omit `package.json`; when one exists, it must still be valid.
+`CargoToolchain` is the second `Toolchain` implementation.
 
 Turborepo does not replace Cargo. Cargo is itself a build system with its
 own dependency graph, scheduler, and incremental cache (`target/`), so the
@@ -220,6 +224,16 @@ whether anything changed; Cargo decides how and in what order to build.**
   time without the "waiting for file lock" noise. Run summaries derive display
   commands from the same verb tables via `Toolchain::task_display_command`, so
   display cannot drift from execution.
+- **Task registration** (`Toolchain::registered_tasks`): entrypoints implicitly
+  register `build`; crates with exactly one binary also register `run` and its
+  `dev` alias. The workspace package registers `test`, `check`, `clippy`/`lint`,
+  `bench`, and `doc`/`docs`; libraries register nothing. These act as empty task
+  definitions at the lowest precedence, so normal `tasks` entries configure or
+  override them and package configuration can exclude them with
+  `extends: false`. Registration is package-aware, so the defaults do not make
+  same-named JavaScript scripts runnable without their usual turbo.json
+  definition. The names come from the same verb tables as command resolution
+  and participate in task suggestions and add-all/query graph construction.
 - **Hashing** (`Toolchain::derived_task_io`, consumed by
   `turborepo-engine/src/builder/definitions.rs`): entrypoint tasks hash
   their own sources plus their transitive dependency crates' sources
