@@ -109,6 +109,36 @@ Turborepo implicitly registers these task mappings; Rust crates do not need `pac
 | Workspace package | `bench` | `cargo bench --workspace --locked` |
 | Workspace package | `doc`, `docs` | `cargo doc --workspace --locked` |
 
+To define a Cargo-backed task that is not built in, or replace a built-in mapping, enable `experimentalTaskCommand` and set the task's `command`. The command is an argument array that runs directly without a shell. For example, the synthetic workspace package can add a `format` task and make `lint` reject warnings:
+
+```json title="./turbo.json"
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "experimentalTaskCommand": true
+  },
+  "tasks": {
+    "acme-rust#format": {
+      "command": ["cargo", "fmt", "--all", "--", "--check"]
+    },
+    "acme-rust#lint": {
+      "command": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--locked",
+        "--",
+        "-D",
+        "warnings"
+      ]
+    }
+  }
+}
+```
+
+Use the synthetic package name from `[workspace.metadata] name` in package-scoped task keys such as `acme-rust#format`. You can then run the custom task with `turbo run format --filter=acme-rust`.
+
 `run` and `dev` do not pass `--bin` to Cargo. Turborepo implicitly registers them only for crates with exactly one binary. A crate with multiple binaries can use [`package.default-run`](https://doc.rust-lang.org/cargo/reference/manifest.html#the-default-run-field), but must also define the `run` or `dev` task in `turbo.json`. Native task arguments are forwarded after Cargo's `--` separator and therefore cannot select a binary with `--bin`. A `cdylib`/`staticlib`-only crate can build but cannot run.
 
 Run entrypoint tasks by filtering to a crate:
