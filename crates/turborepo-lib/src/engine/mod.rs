@@ -360,7 +360,7 @@ mod test {
             // JS package without any scripts.
             ("c", "build"),
             // The synthetic Cargo workspace package.
-            ("acme", "test"),
+            ("acme", "test:workspace"),
             // A binary crate.
             ("my-crate", "build"),
         ] {
@@ -385,7 +385,10 @@ mod test {
         tasks.sort();
         // "c#build" is absent: no script defines it. Both Cargo tasks are
         // present without any package.json involvement.
-        assert_eq!(tasks, vec!["a#build", "acme#test", "my-crate#build"]);
+        assert_eq!(
+            tasks,
+            vec!["a#build", "acme#test:workspace", "my-crate#build"]
+        );
     }
 
     #[tokio::test]

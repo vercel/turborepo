@@ -309,16 +309,21 @@ export interface FutureFlags {
    * When enabled, Rust crates are discovered via `cargo metadata` and
    * participate in the package graph: they resolve in `--filter`
    * expressions, propagate `--affected`, and appear in `turbo query`.
-   * Entrypoint `build`, `run`, and `dev` tasks execute per crate, while
-   * verification tasks execute on the synthetic workspace package. Library
-   * crates remain graph nodes, but their tasks are no-ops because Cargo
-   * builds them through dependency closures.
+   * Entrypoint `build`, `run`, and `dev` tasks execute per crate. The
+   * `test`, `check`, `clippy`/`lint`, `bench`, and `doc`/`docs` tasks execute
+   * per crate for both entrypoints and libraries, making them selectable
+   * with `--filter`. The synthetic workspace package exposes explicit
+   * `test:workspace`, `check:workspace`, and corresponding aggregate tasks.
    *
    * Entrypoints implicitly register `build`; crates with one binary also
-   * register `run` and `dev`. The workspace package registers `test`,
-   * `check`, `clippy`/`lint`, `bench`, and `doc`/`docs`. Normal task
-   * definitions configure or override these defaults, and package
+   * register `run` and `dev`. All crates implicitly register the verification
+   * tasks, and the workspace package registers their `:workspace` forms.
+   * Normal task definitions configure or override these defaults, and package
    * configuration can exclude them with `extends: false`.
+   *
+   * Existing experimental users should rename aggregate workspace tasks such
+   * as `<workspace>#test` to `<workspace>#test:workspace`; unfiltered
+   * `turbo run test` now executes the per-crate tasks.
    *
    * Task caching uses Cargo-derived inputs and caches entrypoint build
    * deliverables. This feature is experimental.

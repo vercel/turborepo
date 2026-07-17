@@ -1416,6 +1416,7 @@ fn test_prune_produces_buildable_cargo_workspace() {
     let out = tempdir.path().join("out");
     assert!(out.join("crates/app/src/main.rs").exists());
     assert!(out.join("crates/lib-a/src/lib.rs").exists());
+    assert!(out.join("crates/lib-a-test-util/src/lib.rs").exists());
     assert!(out.join("Cargo.toml").exists());
     assert!(out.join("Cargo.lock").exists());
     // The JS package is not in app's closure and must not be copied.
@@ -1424,7 +1425,7 @@ fn test_prune_produces_buildable_cargo_workspace() {
     // Members are the explicit kept set.
     let manifest = fs::read_to_string(out.join("Cargo.toml")).unwrap();
     assert!(
-        manifest.contains(r#"members = ["crates/app", "crates/lib-a"]"#),
+        manifest.contains(r#"members = ["crates/app", "crates/lib-a", "crates/lib-a-test-util"]"#),
         "explicit members expected, got: {manifest}"
     );
 
@@ -1737,6 +1738,37 @@ fn test_pure_cargo_workspace_filtered_execution() {
 }
 
 #[test]
+fn test_cargo_library_test_can_be_filtered() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "test",
+            "--filter=lib-a",
+            "--force",
+            "--log-order=grouped",
+        ],
+    );
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.status.success(), "filtered test failed: {combined}");
+    assert!(
+        combined.contains("lib-a:test"),
+        "expected the library test task to execute: {combined}"
+    );
+    assert!(
+        !combined.contains("No tasks were executed"),
+        "filtered library tests must not be a no-op: {combined}"
+    );
+}
+
+#[test]
 fn test_cargo_tasks_are_registered_without_task_configuration() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
@@ -1777,6 +1809,32 @@ fn test_cargo_tasks_are_registered_without_task_configuration() {
         ("bench", "bench"),
         ("doc", "doc"),
         ("docs", "doc"),
+    ] {
+        let output = run_turbo(
+            tempdir.path(),
+            &["run", task, "--filter=lib-a", "--dry-run=json"],
+        );
+        assert!(output.status.success(), "{task} failed: {output:?}");
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let task_id = format!("lib-a#{task}");
+        let definition = json["tasks"]
+            .as_array()
+            .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == task_id))
+            .unwrap_or_else(|| panic!("lib-a#{task} in graph"));
+        assert_eq!(
+            definition["command"],
+            format!("cargo {subcommand} --package=lib-a --locked")
+        );
+    }
+
+    for (task, subcommand) in [
+        ("test:workspace", "test"),
+        ("check:workspace", "check"),
+        ("clippy:workspace", "clippy"),
+        ("lint:workspace", "clippy"),
+        ("bench:workspace", "bench"),
+        ("doc:workspace", "doc"),
+        ("docs:workspace", "doc"),
     ] {
         let output = run_turbo(
             tempdir.path(),
@@ -1883,12 +1941,21 @@ fn test_query_discovers_and_excludes_implicit_cargo_tasks() {
     assert!(app_tasks.iter().any(|task| task == "build"));
     assert!(app_tasks.iter().any(|task| task == "run"));
     assert!(app_tasks.iter().any(|task| task == "dev"));
-    assert!(!app_tasks.iter().any(|task| task == "lint"));
+    assert!(app_tasks.iter().any(|task| task == "lint"));
+
+    let library_tasks = query("lib-a");
+    assert!(library_tasks.iter().any(|task| task == "test"));
+    assert!(library_tasks.iter().any(|task| task == "lint"));
+    assert!(library_tasks.iter().any(|task| task == "docs"));
 
     let workspace_tasks = query("acme");
-    assert!(workspace_tasks.iter().any(|task| task == "clippy"));
-    assert!(workspace_tasks.iter().any(|task| task == "lint"));
-    assert!(workspace_tasks.iter().any(|task| task == "docs"));
+    assert!(
+        workspace_tasks
+            .iter()
+            .any(|task| task == "clippy:workspace")
+    );
+    assert!(workspace_tasks.iter().any(|task| task == "lint:workspace"));
+    assert!(workspace_tasks.iter().any(|task| task == "docs:workspace"));
 
     fs::write(
         tempdir.path().join("crates/app/turbo.json"),
@@ -1899,6 +1966,34 @@ fn test_query_discovers_and_excludes_implicit_cargo_tasks() {
     )
     .unwrap();
     assert!(!query("app").iter().any(|task| task == "build"));
+}
+
+#[test]
+fn test_affected_includes_cargo_dev_dependency_cycles() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("crates/lib-a-test-util/src/lib.rs"),
+        "pub fn expected_greeting() -> &'static str { lib_a::greeting() }\n",
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "query { affectedTasks(tasks: [\"test\"]) { items { name package { name } } } }",
+        ],
+    );
+    assert!(output.status.success(), "query failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tasks = json["data"]["affectedTasks"]["items"].as_array().unwrap();
+    assert!(
+        tasks
+            .iter()
+            .any(|task| task["name"] == "test" && task["package"]["name"] == "lib-a"),
+        "lib-a#test must be affected by its cycle-closing dev dependency: {tasks:?}"
+    );
 }
 
 #[test]
@@ -1939,6 +2034,6 @@ fn test_affected_tasks_include_implicit_cargo_commands() {
     assert!(
         tasks
             .iter()
-            .any(|task| task["name"] == "lint" && task["package"]["name"] == "acme")
+            .any(|task| task["name"] == "lint" && task["package"]["name"] == "app")
     );
 }

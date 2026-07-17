@@ -234,13 +234,13 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       # The nextest invocation (and its excludes) lives in turbo.json as
-      # the turborepo-crates#test command; dogfooding the task command
-      # override keeps CI and local runs identical.
+      # the turborepo-crates#test:workspace command; dogfooding the task
+      # command override keeps CI and local runs identical.
       - name: Run tests
         timeout-minutes: 20
         env:
           FORCE_ARG: ${{ matrix.os.name == 'ubuntu' && github.event_name == 'push' && steps.cargo-target-restore.outputs.cache-matched-key == '' && '--force' || '' }}
-        run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream $FORCE_ARG -- --partition hash:${{ matrix.shard }}/2
+        run: turbo run test:workspace --filter=turborepo-crates --env-mode=loose --log-order=stream $FORCE_ARG -- --partition hash:${{ matrix.shard }}/2
         shell: bash
 
       - name: Save Cargo target
