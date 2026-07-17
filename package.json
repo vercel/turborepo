@@ -16,7 +16,7 @@
     "turbo": "pnpm run build:turbo && ./target/debug/turbo",
     "turbo-prebuilt": "pnpm -- turbo",
     "prepare": "husky install",
-    "test": "turbo run test test:workspace --filter=!./crates/** --filter=!./packages/turbo-repository/rust",
+    "test": "turbo run test",
     "rustdoc": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going || true",
     "rustdoc:open": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --open",
     "check": "ultracite check",

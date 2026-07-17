@@ -1738,6 +1738,210 @@ fn test_pure_cargo_workspace_filtered_execution() {
 }
 
 #[test]
+fn test_unfiltered_cargo_verification_runs_once_at_workspace_scope() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+
+    let output = run_turbo(tempdir.path(), &["run", "test", "--dry-run=json"]);
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tasks = json["tasks"].as_array().unwrap();
+    let rust_tests: Vec<_> = tasks
+        .iter()
+        .filter(|task| {
+            task["taskId"]
+                .as_str()
+                .is_some_and(|task_id| task_id.ends_with("#test"))
+                && task["command"]
+                    .as_str()
+                    .is_some_and(|command| command.starts_with("cargo test"))
+        })
+        .collect();
+    assert_eq!(
+        rust_tests.len(),
+        1,
+        "expected one Cargo test: {rust_tests:?}"
+    );
+    assert_eq!(rust_tests[0]["taskId"], "acme#test");
+    assert_eq!(rust_tests[0]["command"], "cargo test --workspace --locked");
+}
+
+#[test]
+fn test_cargo_verification_honors_exclude_only_filters() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "test", "--filter=!lib-a", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|task| task["taskId"].as_str())
+        .collect();
+    assert!(
+        task_ids.contains(&"app#test"),
+        "expected crate tests: {task_ids:?}"
+    );
+    assert!(!task_ids.contains(&"lib-a#test"));
+    assert!(!task_ids.contains(&"acme#test"));
+}
+
+#[test]
+fn test_cargo_verification_works_with_task_level_filters() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "filterUsingTasks": true
+  },
+  "tasks": {}
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "test", "--filter=...lib-a", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|task| task["taskId"].as_str())
+        .collect();
+    assert!(
+        task_ids.contains(&"lib-a#test"),
+        "base task must remain selectable: {task_ids:?}"
+    );
+    assert!(!task_ids.contains(&"acme#test"));
+}
+
+#[test]
+fn test_cargo_verification_works_with_task_input_filters() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(tempdir.path().join("shared.txt"), "before\n").unwrap();
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "filterUsingTasks": true
+  },
+  "tasks": {
+    "test": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/shared.txt"]
+    }
+  }
+}"#,
+    )
+    .unwrap();
+    for args in [
+        ["add", "shared.txt", "turbo.json"].as_slice(),
+        ["commit", "-m", "Configure task inputs", "--quiet"].as_slice(),
+    ] {
+        let status = std::process::Command::new("git")
+            .args(args)
+            .current_dir(tempdir.path())
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?} failed");
+    }
+    fs::write(tempdir.path().join("shared.txt"), "after\n").unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "test", "--filter=[HEAD]", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|task| task["taskId"].as_str())
+        .collect();
+    assert!(
+        task_ids.contains(&"lib-a#test"),
+        "task-input filtering must retain Cargo tasks: {task_ids:?}"
+    );
+    assert!(!task_ids.contains(&"acme#test"));
+}
+
+#[test]
+fn test_package_tasks_do_not_change_unqualified_cargo_scope() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "filterUsingTasks": true
+  },
+  "tasks": {}
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "test",
+            "app#build",
+            "--filter=acme",
+            "--dry-run=json",
+        ],
+    );
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|task| task["taskId"].as_str())
+        .collect();
+    assert!(task_ids.contains(&"acme#test"));
+    assert!(task_ids.contains(&"app#build"));
+    assert!(!task_ids.contains(&"app#test"));
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "test",
+            "lib-a#test",
+            "--filter=acme",
+            "--dry-run=json",
+        ],
+    );
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|task| task["taskId"].as_str())
+        .collect();
+    assert!(task_ids.contains(&"acme#test"));
+    assert!(task_ids.contains(&"lib-a#test"));
+}
+
+#[test]
 fn test_cargo_library_test_can_be_filtered() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
@@ -1828,13 +2032,13 @@ fn test_cargo_tasks_are_registered_without_task_configuration() {
     }
 
     for (task, subcommand) in [
-        ("test:workspace", "test"),
-        ("check:workspace", "check"),
-        ("clippy:workspace", "clippy"),
-        ("lint:workspace", "clippy"),
-        ("bench:workspace", "bench"),
-        ("doc:workspace", "doc"),
-        ("docs:workspace", "doc"),
+        ("test", "test"),
+        ("check", "check"),
+        ("clippy", "clippy"),
+        ("lint", "clippy"),
+        ("bench", "bench"),
+        ("doc", "doc"),
+        ("docs", "doc"),
     ] {
         let output = run_turbo(
             tempdir.path(),
@@ -1949,13 +2153,9 @@ fn test_query_discovers_and_excludes_implicit_cargo_tasks() {
     assert!(library_tasks.iter().any(|task| task == "docs"));
 
     let workspace_tasks = query("acme");
-    assert!(
-        workspace_tasks
-            .iter()
-            .any(|task| task == "clippy:workspace")
-    );
-    assert!(workspace_tasks.iter().any(|task| task == "lint:workspace"));
-    assert!(workspace_tasks.iter().any(|task| task == "docs:workspace"));
+    assert!(workspace_tasks.iter().any(|task| task == "clippy"));
+    assert!(workspace_tasks.iter().any(|task| task == "lint"));
+    assert!(workspace_tasks.iter().any(|task| task == "docs"));
 
     fs::write(
         tempdir.path().join("crates/app/turbo.json"),

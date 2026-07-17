@@ -210,27 +210,31 @@ whether anything changed; Cargo decides how and in what order to build.**
   Cargo builds them implicitly as part of an entrypoint's closure. A synthetic
   *workspace* package — named by the user via `[workspace.metadata] name` in
   the root Cargo.toml, a hard requirement — depends on every crate and hosts
-  explicitly named aggregate verbs.
-- **Execution** (`Toolchain::task_command`, adapted into the provider chain
-  by `ToolchainCommandProvider` in `turborepo-task-executor`): entrypoint
-  `build`/`run`/`dev` and every crate's verification tasks run `cargo <verb>
-  --package=<crate> --locked` — one cargo process that builds the selected
-  crate's whole dependency closure with Cargo's own parallelism. Aggregate
-  tasks run on the workspace package: `<name>#test:workspace` → `cargo test
-  --workspace --locked`, `<name>#lint:workspace` → `cargo clippy --workspace
-  --locked`, etc. Distinct names prevent an unfiltered verification run from
-  executing both per-crate and workspace commands. `--locked` preserves the
-  dependency resolution validated before task hashing. Cargo commands (except
-  `cargo run`) share a mutually-exclusive serial group: concurrent cargo
-  processes serialize on the build-directory lock anyway, so the executor runs
-  one at a time without the "waiting for file lock" noise. Run summaries derive
-  display commands from the same verb tables via
+  workspace-scoped verification verbs.
+- **Execution and entrypoint selection** (`Toolchain::task_command` and
+  `Toolchain::select_task_entrypoints`): entrypoint `build`/`run`/`dev` and a
+  filtered crate's verification tasks run `cargo <verb> --package=<crate>
+  --locked`. Unfiltered verification uses the synthetic workspace package:
+  `<name>#test` runs `cargo test --workspace --locked`, `<name>#lint` runs
+  `cargo clippy --workspace --locked`, etc. Filtered runs use their selected
+  crates; selecting only the workspace package uses its workspace command.
+  `RunBuilder` combines filter mode with the resolved package scope to derive
+  task-specific exclusions. `EngineBuilder` applies package-level exclusions
+  before traversal; task-level filtering defers selection until after matching
+  task inputs. Exclude-only filters therefore remain exclusions rather than
+  being swallowed by a workspace command. Package-qualified task arguments remain
+  authoritative. `--locked` preserves
+  the dependency resolution validated before task hashing. Cargo commands
+  (except `cargo run`) share a mutually-exclusive serial group: concurrent
+  cargo processes serialize on the build-directory lock anyway, so the
+  executor runs one at a time without the "waiting for file lock" noise. Run
+  summaries derive display commands from the same verb tables via
   `Toolchain::task_display_command`, so display cannot drift from execution.
 - **Task registration** (`Toolchain::registered_tasks`): entrypoints implicitly
   register `build`; crates with exactly one binary also register `run` and its
-  `dev` alias. Every crate registers `test`, `check`, `clippy`/`lint`, `bench`,
-  and `doc`/`docs`; the workspace package registers their `:workspace` forms.
-  These act as empty task definitions at the lowest precedence, so normal
+  `dev` alias. Every crate and the workspace package register `test`, `check`,
+  `clippy`/`lint`, `bench`, and `doc`/`docs`. These act as empty task definitions
+  at the lowest precedence, so normal
   `tasks` entries configure or override them and package configuration can
   exclude them with `extends: false`. Registration is package-aware, so the
   defaults do not make

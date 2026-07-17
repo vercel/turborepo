@@ -310,20 +310,16 @@ export interface FutureFlags {
    * participate in the package graph: they resolve in `--filter`
    * expressions, propagate `--affected`, and appear in `turbo query`.
    * Entrypoint `build`, `run`, and `dev` tasks execute per crate. The
-   * `test`, `check`, `clippy`/`lint`, `bench`, and `doc`/`docs` tasks execute
-   * per crate for both entrypoints and libraries, making them selectable
-   * with `--filter`. The synthetic workspace package exposes explicit
-   * `test:workspace`, `check:workspace`, and corresponding aggregate tasks.
+   * `test`, `check`, `clippy`/`lint`, `bench`, and `doc`/`docs` tasks are
+   * selectable per crate with `--filter`. An unfiltered run executes one
+   * workspace-wide Cargo command; filtered runs use the selected crates, or
+   * the workspace command when the workspace package is selected directly.
    *
    * Entrypoints implicitly register `build`; crates with one binary also
-   * register `run` and `dev`. All crates implicitly register the verification
-   * tasks, and the workspace package registers their `:workspace` forms.
-   * Normal task definitions configure or override these defaults, and package
-   * configuration can exclude them with `extends: false`.
-   *
-   * Existing experimental users should rename aggregate workspace tasks such
-   * as `<workspace>#test` to `<workspace>#test:workspace`; unfiltered
-   * `turbo run test` now executes the per-crate tasks.
+   * register `run` and `dev`. All crates and the workspace package implicitly
+   * register the verification tasks. Normal task definitions configure or
+   * override these defaults, and package configuration can exclude them with
+   * `extends: false`.
    *
    * Task caching uses Cargo-derived inputs and caches entrypoint build
    * deliverables. This feature is experimental.

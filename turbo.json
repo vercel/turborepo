@@ -38,18 +38,13 @@
       // actually need to build before running tests.
       "dependsOn": ["^build"]
     },
-    // `pnpm test` requests both JS package tests and the Rust workspace
-    // aggregate. Keep the synthetic package's unscoped transit task from
-    // inheriting test's ^build dependency and building every Rust crate first.
-    "turborepo-crates#test": {
-      "dependsOn": []
-    },
     // The Rust workspace tests run through nextest with per-test process
     // isolation. Some tests read root-level config and integration fixtures
     // outside the Cargo workspace, so declare them explicitly.
     // Excludes mirror the CI invocations: turborepo-lsp, schema-gen, and
     // napi need extra build environments.
-    "turborepo-crates#test:workspace": {
+    "turborepo-crates#test": {
+      "dependsOn": [],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/version.txt",

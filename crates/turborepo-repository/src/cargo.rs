@@ -16,13 +16,13 @@
 //!   `--filter` and `--affected` propagate through them): being buildable is
 //!   not the same as being an entrypoint.
 //!
-//! Verification verbs execute per crate (`lib-a#test` → `cargo test
-//! --package=lib-a`). A synthetic package anchored at the root `Cargo.toml`
-//! and depending on every crate represents the workspace itself; it hosts
-//! explicitly named aggregate verbs (`<name>#test:workspace` → `cargo test
-//! --workspace`, ...; see [`workspace_subcommand`]). Its name is declared
-//! by the user in the root manifest — using Turborepo with Rust requires
-//! naming the workspace:
+//! Verification verbs execute per crate when a crate is filtered (`lib-a#test`
+//! → `cargo test --package=lib-a`). A synthetic package anchored at the root
+//! `Cargo.toml` and depending on every crate represents the workspace itself;
+//! it runs the same verbs at workspace scope for unfiltered runs (`<name>#test`
+//! → `cargo test --workspace`; see [`workspace_subcommand`]). Its name is
+//! declared by the user in the root manifest — using Turborepo with Rust
+//! requires naming the workspace:
 //!
 //! ```toml
 //! [workspace.metadata]
@@ -338,8 +338,8 @@ pub enum CargoPackageKind {
     /// Build, run, and verification tasks execute
     /// `cargo <verb> --package=<crate>`.
     Entrypoint,
-    /// The synthetic user-named workspace package hosting explicitly named
-    /// aggregate verification tasks (`cargo test --workspace`, ...).
+    /// The synthetic user-named workspace package hosting workspace-scoped
+    /// verification tasks (`cargo test --workspace`, ...).
     Workspace,
 }
 
@@ -375,16 +375,6 @@ const VERIFICATION_SUBCOMMANDS: &[(&str, &str)] = &[
 const ENTRYPOINT_SUBCOMMANDS: &[(&str, &str)] =
     &[("build", "build"), ("run", "run"), ("dev", "run")];
 
-const WORKSPACE_SUBCOMMANDS: &[(&str, &str)] = &[
-    ("test:workspace", "test"),
-    ("check:workspace", "check"),
-    ("lint:workspace", "clippy"),
-    ("clippy:workspace", "clippy"),
-    ("doc:workspace", "doc"),
-    ("docs:workspace", "doc"),
-    ("bench:workspace", "bench"),
-];
-
 fn subcommand(task: &str, tasks: &'static [(&'static str, &'static str)]) -> Option<&'static str> {
     tasks
         .iter()
@@ -403,10 +393,10 @@ pub fn library_subcommand(task: &str) -> Option<&'static str> {
     subcommand(task, VERIFICATION_SUBCOMMANDS)
 }
 
-/// Map an explicitly named aggregate task to the Cargo subcommand that
-/// implements it at workspace scope (the synthetic user-named package).
+/// Map a verification task to the Cargo subcommand that implements it at
+/// workspace scope (the synthetic user-named package).
 pub fn workspace_subcommand(task: &str) -> Option<&'static str> {
-    subcommand(task, WORKSPACE_SUBCOMMANDS)
+    subcommand(task, VERIFICATION_SUBCOMMANDS)
 }
 
 fn registered_tasks(details: &CargoPackageDetails) -> Vec<&'static str> {
@@ -418,8 +408,7 @@ fn registered_tasks(details: &CargoPackageDetails) -> Vec<&'static str> {
         == 1;
     let mut tasks: Vec<_> = match details.kind {
         CargoPackageKind::Entrypoint => ENTRYPOINT_SUBCOMMANDS,
-        CargoPackageKind::Workspace => WORKSPACE_SUBCOMMANDS,
-        CargoPackageKind::Library => VERIFICATION_SUBCOMMANDS,
+        CargoPackageKind::Workspace | CargoPackageKind::Library => VERIFICATION_SUBCOMMANDS,
     }
     .iter()
     .map(|(task, _)| *task)
@@ -1289,6 +1278,39 @@ impl Toolchain for CargoToolchain {
             .collect();
         affected.sort();
         affected
+    }
+
+    fn select_task_entrypoints(
+        &self,
+        task: &str,
+        candidates: &[String],
+        prefer_workspace: bool,
+    ) -> Option<Vec<String>> {
+        library_subcommand(task)?;
+        let details = self
+            .details
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if prefer_workspace
+            && let Some(workspace) = candidates.iter().find(|candidate| {
+                details
+                    .get(candidate.as_str())
+                    .is_some_and(|details| details.kind == CargoPackageKind::Workspace)
+            })
+        {
+            return Some(vec![workspace.clone()]);
+        }
+        Some(
+            candidates
+                .iter()
+                .filter(|candidate| {
+                    details
+                        .get(candidate.as_str())
+                        .is_some_and(|details| details.kind != CargoPackageKind::Workspace)
+                })
+                .cloned()
+                .collect(),
+        )
     }
 
     fn watch_spec(&self) -> toolchain::WatchSpec {
@@ -3747,9 +3769,9 @@ release: 1.96.0-nightly\n",
             .expect("entrypoint check resolves");
         assert_eq!(cmd.args, os_args(&["check", "--package=app", "--locked"]));
 
-        // The workspace package hosts explicitly named aggregate verbs.
+        // The workspace package runs verification verbs at workspace scope.
         let cmd = toolchain
-            .task_command(&root, &workspace, "lint:workspace", None, None)
+            .task_command(&root, &workspace, "lint", None, None)
             .unwrap()
             .expect("workspace lint resolves to clippy");
         assert_eq!(cmd.args, os_args(&["clippy", "--workspace", "--locked"]));
@@ -3761,7 +3783,7 @@ release: 1.96.0-nightly\n",
             .task_command(
                 &root,
                 &workspace,
-                "test:workspace",
+                "test",
                 Some(&["--nocapture".to_string()]),
                 None,
             )
@@ -3786,7 +3808,7 @@ release: 1.96.0-nightly\n",
         );
         assert_eq!(
             toolchain
-                .task_display_command(&workspace, "test:workspace")
+                .task_display_command(&workspace, "test")
                 .as_deref(),
             Some("cargo test --workspace --locked")
         );
@@ -3799,11 +3821,42 @@ release: 1.96.0-nightly\n",
         assert_eq!(toolchain.task_defaults(&app, "run").cache, Some(false));
         assert_eq!(toolchain.task_defaults(&app, "dev").cache, Some(false));
         assert_eq!(toolchain.task_defaults(&app, "build").cache, None);
-        assert_eq!(
-            toolchain.task_defaults(&workspace, "test:workspace").cache,
-            None
-        );
+        assert_eq!(toolchain.task_defaults(&workspace, "test").cache, None);
         assert_eq!(toolchain.task_defaults(&lib_a, "test").cache, None);
+
+        assert_eq!(
+            toolchain.select_task_entrypoints(
+                "test",
+                &[
+                    "app".to_string(),
+                    "lib-a".to_string(),
+                    "fixture-ws".to_string()
+                ],
+                true,
+            ),
+            Some(vec!["fixture-ws".to_string()])
+        );
+        assert_eq!(
+            toolchain.select_task_entrypoints(
+                "test",
+                &[
+                    "app".to_string(),
+                    "lib-a".to_string(),
+                    "fixture-ws".to_string()
+                ],
+                false,
+            ),
+            Some(vec!["app".to_string(), "lib-a".to_string()])
+        );
+        assert_eq!(
+            toolchain.select_task_entrypoints(
+                "test",
+                &["app".to_string(), "lib-a".to_string()],
+                false,
+            ),
+            Some(vec!["app".to_string(), "lib-a".to_string()])
+        );
+        assert_eq!(toolchain.select_task_entrypoints("build", &[], false), None);
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -3873,8 +3926,7 @@ release: 1.96.0-nightly\n",
         assert!(toolchain.defines_task(&app, "test"));
         assert!(toolchain.defines_task(&lib_a, "test"));
         assert!(!toolchain.defines_task(&lib_a, "build"));
-        assert!(toolchain.defines_task(&workspace, "test:workspace"));
-        assert!(!toolchain.defines_task(&workspace, "test"));
+        assert!(toolchain.defines_task(&workspace, "test"));
 
         // Entrypoint build with automatic inputs: workspace files + the
         // dependency crate closure as inputs (own sources via default
@@ -3959,7 +4011,7 @@ release: 1.96.0-nightly\n",
         // repo root's default file set.
         let deps = [&app, &lib_a];
         let io = toolchain
-            .derived_task_io(&workspace, "test:workspace", "", &deps, true, &context)
+            .derived_task_io(&workspace, "test", "", &deps, true, &context)
             .expect("workspace test derives IO");
         assert_eq!(io.package_default_inputs, Some(false));
         assert!(io.input_globs.contains(&"crates/app/**".to_string()));
