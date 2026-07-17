@@ -14,7 +14,7 @@ import * as logger from "./logger";
 import { getTurboRoot, clearTurboRootCache } from "./get-turbo-root";
 import type { PackageJson, PNPMWorkspaceConfig } from "./types";
 
-const ROOT_GLOB = "{turbo.json,turbo.jsonc}";
+const ROOT_GLOB = "{turbo.json,turbo.jsonc,turbo.toml}";
 const ROOT_WORKSPACE_GLOB = "package.json";
 
 function isInsideRoot(root: string, filePath: string): boolean {
@@ -61,33 +61,30 @@ function filterPathsInsideRoot(
   });
 }
 
+const TURBO_CONFIG_NAMES = ["turbo.json", "turbo.jsonc", "turbo.toml"] as const;
+
 /**
  * Given a directory path, determines which turbo config file to use.
- * Returns error information if both turbo.json and turbo.jsonc exist in the same directory.
- * Returns the path to the config file to use, or null if neither exists.
+ * Returns error information if more than one of turbo.json, turbo.jsonc, or
+ * turbo.toml exist in the same directory.
+ * Returns the path to the config file to use, or null if none exist.
  */
 export function resolveTurboConfigPath(dirPath: string): {
   configPath: string | null;
   configExists: boolean;
   error?: string;
 } {
-  const turboJsonPath = path.join(dirPath, "turbo.json");
-  const turboJsoncPath = path.join(dirPath, "turbo.jsonc");
+  const existing = TURBO_CONFIG_NAMES.map((name) => path.join(dirPath, name)).filter((configPath) =>
+    fs.existsSync(configPath)
+  );
 
-  const turboJsonExists = fs.existsSync(turboJsonPath);
-  const turboJsoncExists = fs.existsSync(turboJsoncPath);
-
-  if (turboJsonExists && turboJsoncExists) {
-    const errorMessage = `Found both turbo.json and turbo.jsonc in the same directory: ${dirPath}\nPlease use either turbo.json or turbo.jsonc, but not both.`;
+  if (existing.length > 1) {
+    const errorMessage = `Found multiple turbo config files in the same directory: ${dirPath}\nOnly one of turbo.json, turbo.jsonc, or turbo.toml is allowed.`;
     return { configPath: null, configExists: false, error: errorMessage };
   }
 
-  if (turboJsonExists) {
-    return { configPath: turboJsonPath, configExists: true };
-  }
-
-  if (turboJsoncExists) {
-    return { configPath: turboJsoncPath, configExists: true };
+  if (existing.length === 1) {
+    return { configPath: existing[0], configExists: true };
   }
 
   return { configPath: null, configExists: false };
@@ -174,7 +171,7 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
       }).map((configPath) => path.resolve(turboRoot, configPath))
     );
 
-    // Check for both turbo.json and turbo.jsonc in the same directory
+    // Check for multiple turbo config files in the same directory
     const configPathsByDir: Record<string, Array<string>> = {};
 
     // Group config paths by directory
@@ -189,15 +186,24 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
 
     // Process each directory
     for (const [dir, dirConfigPaths] of Object.entries(configPathsByDir)) {
-      // If both turbo.json and turbo.jsonc exist in the same directory, throw an error
+      // If more than one turbo config exists in the same directory, throw an error
       if (dirConfigPaths.length > 1) {
-        const errorMessage = `Found both turbo.json and turbo.jsonc in the same directory: ${dir}\nPlease use either turbo.json or turbo.jsonc, but not both.`;
+        const errorMessage = `Found multiple turbo config files in the same directory: ${dir}\nOnly one of turbo.json, turbo.jsonc, or turbo.toml is allowed.`;
         logger.error(errorMessage);
         throw new Error(errorMessage);
       }
 
       const configPath = dirConfigPaths[0];
       try {
+        // Codemods only rewrite JSON/JSONC today. Skip TOML configs rather than
+        // failing the whole scan — the Rust runtime fully supports turbo.toml.
+        if (configPath.endsWith(".toml")) {
+          logger.warn(
+            `Skipping ${configPath}: @turbo/utils does not yet parse turbo.toml. Use the turbo CLI for TOML configs.`
+          );
+          continue;
+        }
+
         const raw = fs.readFileSync(configPath, "utf8");
 
         const turboJsonContent: SchemaV1 = JSON5.parse(raw);

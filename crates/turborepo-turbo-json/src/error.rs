@@ -79,17 +79,17 @@ pub enum Error {
     // File existence and location errors
     // ============================================================
     #[error(
-        "Could not find turbo.json or turbo.jsonc.\nFollow directions at https://turborepo.dev/docs \
-         to create one."
+        "Could not find turbo.json, turbo.jsonc, or turbo.toml.\nFollow directions at \
+         https://turborepo.dev/docs to create one."
     )]
     NoTurboJSON,
 
     #[error(
-        "Found both turbo.json and turbo.jsonc in the same directory: {directory}\nRemove either \
-         turbo.json or turbo.jsonc so there is only one."
+        "Found multiple turbo config files in the same directory: {directory}\nOnly one of \
+         turbo.json, turbo.jsonc, or turbo.toml is allowed."
     )]
     MultipleTurboConfigs {
-        /// The directory containing both config files
+        /// The directory containing multiple config files
         directory: String,
     },
 
@@ -102,6 +102,13 @@ pub enum Error {
 
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
+
+    #[error("Failed to parse turbo.toml: {message}")]
+    #[diagnostic(code(turbo_toml_parse_error))]
+    TomlParse {
+        /// Description of the TOML parse failure
+        message: String,
+    },
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
@@ -445,7 +452,10 @@ mod tests {
         let err = Error::MultipleTurboConfigs {
             directory: "/path/to/dir".to_string(),
         };
-        assert!(err.to_string().contains("turbo.json and turbo.jsonc"));
+        assert!(
+            err.to_string()
+                .contains("turbo.json, turbo.jsonc, or turbo.toml")
+        );
         assert!(err.to_string().contains("/path/to/dir"));
     }
 

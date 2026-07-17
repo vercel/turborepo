@@ -159,7 +159,7 @@ export function transformer({
   }
   if (!turboConfigPath) {
     return runner.abortTransform({
-      reason: `No turbo.json or turbo.jsonc found at ${root}. Is the path correct?`
+      reason: `No turbo.json, turbo.jsonc, or turbo.toml found at ${root}. Is the path correct?`
     });
   }
 

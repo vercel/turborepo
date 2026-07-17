@@ -45,7 +45,7 @@ fn test_both_json_and_jsonc_in_root_is_error() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("Remove either turbo.json or turbo.jsonc so there is only one"),
+        stderr.contains("Only one of turbo.json, turbo.jsonc, or turbo.toml is allowed"),
         "expected duplicate config error, got: {stderr}"
     );
 }
@@ -128,7 +128,65 @@ fn test_both_json_and_jsonc_in_package_is_error() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("Remove either turbo.json or turbo.jsonc so there is only one"),
+        stderr.contains("Only one of turbo.json, turbo.jsonc, or turbo.toml is allowed"),
+        "expected duplicate config error, got: {stderr}"
+    );
+}
+
+// Test 6: Only turbo.toml in root works
+#[test]
+fn test_turbo_toml_only_in_root() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+
+    // Equivalent TOML for the basic_monorepo fixture turbo.json
+    let turbo_toml = r#"
+"$schema" = "https://turborepo.dev/schema.json"
+globalDependencies = ["foo.txt"]
+globalEnv = ["SOME_ENV_VAR"]
+
+[tasks.build]
+env = ["NODE_ENV"]
+outputs = []
+
+[tasks."my-app#build"]
+inputs = ["$TURBO_DEFAULT$", ".env.local"]
+outputs = ["banana.txt", "apple.json"]
+
+[tasks.something]
+
+[tasks."//#something"]
+
+[tasks.maybefails]
+"#;
+    fs::remove_file(tempdir.path().join("turbo.json")).unwrap();
+    fs::write(tempdir.path().join("turbo.toml"), turbo_toml).unwrap();
+    git_commit(tempdir.path(), "rename to turbo.toml");
+
+    let output = run_turbo(tempdir.path(), &["build", "--output-logs=none"]);
+    assert!(
+        output.status.success(),
+        "turbo.toml root config should work: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("2 successful, 2 total"));
+}
+
+// Test 7: Error when both turbo.json and turbo.toml exist in root
+#[test]
+fn test_both_json_and_toml_in_root_is_error() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+
+    fs::write(tempdir.path().join("turbo.toml"), "").unwrap();
+    git_commit(tempdir.path(), "add turbo.toml");
+
+    let output = run_turbo(tempdir.path(), &["build"]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Only one of turbo.json, turbo.jsonc, or turbo.toml is allowed"),
         "expected duplicate config error, got: {stderr}"
     );
 }

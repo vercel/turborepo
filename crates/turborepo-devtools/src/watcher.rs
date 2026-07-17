@@ -33,6 +33,7 @@ const RELEVANT_FILES: &[&str] = &[
     "package.json",
     "turbo.json",
     "turbo.jsonc",
+    "turbo.toml",
     "pnpm-workspace.yaml",
     "pnpm-workspace.yml",
     "package-lock.json",
@@ -190,6 +191,7 @@ mod tests {
         assert!(is_relevant_file(Path::new("/some/path/package.json")));
         assert!(is_relevant_file(Path::new("turbo.json")));
         assert!(is_relevant_file(Path::new("turbo.jsonc")));
+        assert!(is_relevant_file(Path::new("turbo.toml")));
         assert!(is_relevant_file(Path::new("pnpm-workspace.yaml")));
         assert!(!is_relevant_file(Path::new("index.ts")));
         assert!(!is_relevant_file(Path::new("README.md")));

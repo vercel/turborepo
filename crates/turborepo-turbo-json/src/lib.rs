@@ -36,10 +36,11 @@ pub mod validator;
 pub use error::{Error, InvalidEnvPrefixError, ParseError, UnnecessaryPackageTaskSyntaxError};
 pub use future_flags::FutureFlags;
 pub use loader::{
-    CONFIG_FILE, CONFIG_FILE_JSONC, LoaderError, NoOpUpdater, TASK_ACCESS_CONFIG_PATH,
-    TurboJsonLoader, TurboJsonPath, TurboJsonReader, TurboJsonUpdater, load_from_path,
+    CONFIG_FILE, CONFIG_FILE_JSONC, CONFIG_FILE_NAMES, CONFIG_FILE_TOML, LoaderError, NoOpUpdater,
+    TASK_ACCESS_CONFIG_PATH, TurboJsonLoader, TurboJsonPath, TurboJsonReader, TurboJsonUpdater,
+    load_from_path,
 };
-pub use parser::{BiomeParseError, parse_turbo_json};
+pub use parser::{BiomeParseError, is_toml_config_path, parse_config_from_path, parse_turbo_json};
 pub use processed::{
     ProcessedCommand, ProcessedDependsOn, ProcessedEnv, ProcessedGlob,
     ProcessedIncrementalPartition, ProcessedInputs, ProcessedOutputs, ProcessedPassThroughEnv,
@@ -198,7 +199,9 @@ impl TurboJson {
             .as_ref()
             .map(|p| {
                 let path_str = p.as_ref();
-                path_str == "turbo.json" || path_str == "turbo.jsonc"
+                path_str == CONFIG_FILE
+                    || path_str == CONFIG_FILE_JSONC
+                    || path_str == CONFIG_FILE_TOML
             })
             .unwrap_or(false)
     }
@@ -813,6 +816,18 @@ mod tests {
         assert!(
             turbo_json.is_root_config(),
             "turbo.jsonc should be detected as root config"
+        );
+    }
+
+    #[test]
+    fn test_is_root_config_with_toml_extension() {
+        let turbo_json = TurboJson {
+            path: Some("turbo.toml".into()),
+            ..Default::default()
+        };
+        assert!(
+            turbo_json.is_root_config(),
+            "turbo.toml should be detected as root config"
         );
     }
 

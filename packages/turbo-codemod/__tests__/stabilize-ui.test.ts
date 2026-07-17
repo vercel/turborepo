@@ -141,7 +141,7 @@ describe("stabilize-ui", () => {
 
     expect(result.fatalError).toBeDefined();
     expect(result.fatalError?.message).toContain(
-      "Found both turbo.json and turbo.jsonc"
+      "Found multiple turbo config files"
     );
   });
 });

@@ -1153,9 +1153,12 @@ impl RawTurboJson {
         );
 
         Ok(Some(if is_root {
-            RawRootTurboJson::parse(&contents, &root_relative_path)?.try_into()?
+            RawRootTurboJson::parse_from_path(&contents, &root_relative_path)?.try_into()?
         } else {
-            RawTurboJson::from(RawPackageTurboJson::parse(&contents, &root_relative_path)?)
+            RawTurboJson::from(RawPackageTurboJson::parse_from_path(
+                &contents,
+                &root_relative_path,
+            )?)
         }))
     }
 

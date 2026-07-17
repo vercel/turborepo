@@ -481,7 +481,7 @@ describe("update-versioned-schema-json", () => {
 
     expect(result.fatalError).toBeDefined();
     expect(result.fatalError?.message).toContain(
-      "Found both turbo.json and turbo.jsonc"
+      "Found multiple turbo config files"
     );
   });
 
@@ -497,7 +497,7 @@ describe("update-versioned-schema-json", () => {
 
     expect(result.fatalError).toBeDefined();
     expect(result.fatalError?.message).toContain(
-      "No turbo.json or turbo.jsonc found"
+      "No turbo.json, turbo.jsonc, or turbo.toml found"
     );
   });
 

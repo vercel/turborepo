@@ -26,7 +26,7 @@ use turborepo_repository::{
 use turborepo_scm::GitHashes;
 
 use crate::{
-    config::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC},
+    config::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC, CONFIG_FILE_TOML},
     turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
 };
 
@@ -195,9 +195,11 @@ fn classify_changed_files(
 ) -> FileChangeAction {
     let turbo_json_path = repo_root.join_component(CONFIG_FILE);
     let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
+    let turbo_toml_path = repo_root.join_component(CONFIG_FILE_TOML);
 
     let standard_config_changed = trie.get(turbo_json_path.as_str()).is_some()
-        || trie.get(turbo_jsonc_path.as_str()).is_some();
+        || trie.get(turbo_jsonc_path.as_str()).is_some()
+        || trie.get(turbo_toml_path.as_str()).is_some();
 
     let custom_config_changed = custom_turbo_json_path
         .map(|path| trie.get(path.as_str()).is_some())
@@ -388,12 +390,11 @@ impl Subscriber {
             match resolve_turbo_config_path(&self.repo_root) {
                 Ok(path) => path,
                 Err(_) => {
-                    // TODO: If both turbo.json and turbo.jsonc exist, log warning and default to
+                    // TODO: If multiple turbo config files exist, log warning and default to
                     // turbo.json to preserve existing behavior for file
                     // watching prior to refactoring.
                     tracing::warn!(
-                        "Found both turbo.json and turbo.jsonc in {}. Using turbo.json for \
-                         watching.",
+                        "Found multiple turbo config files in {}. Using turbo.json for watching.",
                         self.repo_root
                     );
                     self.repo_root.join_component(CONFIG_FILE)
