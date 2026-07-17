@@ -278,7 +278,7 @@ export function getWorkspaceConfigs(
         const workspacePath = path.dirname(configPath);
         const isWorkspaceRoot = workspacePath === turboRoot;
 
-        // Try and get turbo.json or turbo.jsonc
+        // Try and get turbo.json, turbo.jsonc, or turbo.toml
         const {
           configPath: turboConfigPath,
           configExists,
@@ -315,7 +315,7 @@ export function getWorkspaceConfigs(
             }
           }
         } catch (e) {
-          // It is fine for there to not be a turbo.json or turbo.jsonc.
+          // It is fine for there to not be a turbo config file.
         }
 
         configs.push({
