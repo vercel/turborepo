@@ -69,7 +69,15 @@
     // docs lint task runs fumadocs-mdx to generate types before oxlint
     "docs#lint": {},
     "//#quality": {
-      "dependsOn": ["//#lint", "//#format", "//#check:toml", "docs#lint"]
+      "dependsOn": [
+        "//#lint",
+        "//#format",
+        "//#check:toml",
+        "docs#lint",
+        "docs#check-types",
+        "docs#check-links",
+        "docs#check-openapi"
+      ]
     },
     "//#lint": {
       "inputs": ["!pnpm-lock.yaml"]
