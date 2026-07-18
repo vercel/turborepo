@@ -49,6 +49,7 @@ pub struct EngineBuilder<'a, L: TurboJsonLoader> {
     workspaces: Vec<PackageName>,
     tasks: Vec<Spanned<TaskName<'static>>>,
     root_enabled_tasks: HashSet<TaskName<'static>>,
+    entrypoint_exclusions: HashSet<TaskId<'static>>,
     tasks_only: bool,
     add_all_tasks: bool,
     should_validate_engine: bool,
@@ -80,6 +81,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             workspaces: Vec::new(),
             tasks: Vec::new(),
             root_enabled_tasks: HashSet::new(),
+            entrypoint_exclusions: HashSet::new(),
             tasks_only: false,
             add_all_tasks: false,
             should_validate_engine: true,
@@ -148,6 +150,11 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         self
     }
 
+    pub fn with_entrypoint_exclusions(mut self, exclusions: HashSet<TaskId<'static>>) -> Self {
+        self.entrypoint_exclusions = exclusions;
+        self
+    }
+
     /// If set, we will include all tasks in the graph, even if they are not
     /// specified
     pub fn add_all_tasks(mut self) -> Self {
@@ -169,11 +176,14 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 self.workspaces
                     .iter()
                     .cartesian_product(self.tasks.iter())
-                    .map(|(package, task_name)| {
-                        task_name
+                    .filter_map(|(package, task_name)| {
+                        let task_id = task_name
                             .task_id()
                             .unwrap_or(TaskId::new(package.as_ref(), task_name.task()))
-                            .into_owned()
+                            .into_owned();
+                        (task_name.package().is_some()
+                            || !self.entrypoint_exclusions.contains(&task_id))
+                        .then_some(task_id)
                     })
                     .collect(),
             )
@@ -238,6 +248,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             let task_id = task
                 .task_id()
                 .unwrap_or_else(|| TaskId::new(workspace.as_ref(), task.task()));
+            if task.package().is_none() && self.entrypoint_exclusions.contains(&task_id) {
+                continue;
+            }
 
             if Self::has_task_definition_or_registered(
                 turbo_json_loader,
@@ -455,6 +468,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     // We don't need to add an edge from the root node if we're in this branch
                     if let PackageNode::Workspace(dependency_workspace) = dependency_workspace {
                         let from_task_id = TaskId::from_graph(dependency_workspace, from);
+                        if self.entrypoint_exclusions.contains(&from_task_id) {
+                            return;
+                        }
                         if let Some(allowed_tasks) = &allowed_tasks
                             && !allowed_tasks.contains(&from_task_id)
                         {
@@ -480,6 +496,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .task_id()
                     .unwrap_or_else(|| TaskId::new(to_task_id.package(), sibling.task()))
                     .into_owned();
+                if self.entrypoint_exclusions.contains(&sibling_task_id) {
+                    continue;
+                }
                 traversal_queue.push_back(span.to(sibling_task_id));
             }
 
@@ -488,6 +507,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .task_id()
                     .unwrap_or_else(|| TaskId::new(to_task_id.package(), dep.task()))
                     .into_owned();
+                if self.entrypoint_exclusions.contains(&from_task_id) {
+                    continue;
+                }
                 if let Some(allowed_tasks) = &allowed_tasks
                     && !allowed_tasks.contains(&from_task_id)
                 {

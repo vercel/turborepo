@@ -342,6 +342,26 @@ pub trait Toolchain: Send + Sync {
         false
     }
 
+    /// Packages whose task inputs can depend on `package` beyond the ordinary
+    /// acyclic package graph. Change detection marks these packages affected
+    /// before applying the graph's normal dependent expansion.
+    fn additional_affected_packages(&self, package: &str) -> Vec<String> {
+        let _ = package;
+        Vec::new()
+    }
+
+    /// Select package entrypoints for an unqualified task from the packages in
+    /// scope. `None` leaves the normal package × task expansion unchanged.
+    fn select_task_entrypoints(
+        &self,
+        task: &str,
+        candidates: &[String],
+        prefer_workspace: bool,
+    ) -> Option<Vec<String>> {
+        let _ = (task, candidates, prefer_workspace);
+        None
+    }
+
     /// How filesystem events relate to this toolchain in watch mode:
     /// workspace-definition files whose change requires rediscovery, and
     /// build-byproduct directories whose events must be ignored.

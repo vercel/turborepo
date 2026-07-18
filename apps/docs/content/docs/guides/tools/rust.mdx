@@ -63,25 +63,36 @@ name = "acme-rust"
 
 In the example above, members are defined as `crates/*`. Cargo then uses every `crates/*/Cargo.toml` as a package in the workspace. Each package is added to Turborepo's understanding of your repository.
 
-Cargo packages come in two types:
+Cargo packages come in three types:
 
-- **Entrypoint crates** have a `bin`, `cdylib`, or `staticlib` target. They can be used as targets for [`--filter`](/docs/reference/run#--filter-string) and [`affected`](/docs/reference/run#--affected) calculations.
-- **Library crates** remain Package Graph nodes so filtering and affectedness calculations follow Rust dependency relationships. Their native tasks are no-ops because Cargo builds libraries as part of an entrypoint's dependency closure.
-- **The root workspace package** uses `[workspace.metadata] name`, depends on every member crate, and runs workspace-wide verification tasks.
+- **Entrypoint crates** have a `bin`, `cdylib`, or `staticlib` target. They expose build, run, and verification tasks.
+- **Library crates** remain Package Graph nodes so filtering and affectedness calculations follow Rust dependency relationships. They expose filtered build and verification tasks. Unfiltered builds prefer entrypoints because Cargo builds their library dependency closures implicitly.
+- **The root workspace package** uses `[workspace.metadata] name`, depends on every member crate, and runs verification tasks across the whole Cargo workspace.
+
+All three package types can be used as targets for [`--filter`](/docs/reference/run#--filter-string) and [`affected`](/docs/reference/run#--affected) calculations.
 
 ## Built-in tasks
 
 Turborepo implicitly registers these task mappings, since they are common to all Cargo workspaces.
 
-| Package                                  | Turbo task       | Cargo command                            |
-| ---------------------------------------- | ---------------- | ---------------------------------------- |
-| Entrypoint crate                         | `build`          | `cargo build --package=<crate> --locked` |
-| Entrypoint crate with exactly one binary | `run`, `dev`     | `cargo run --package=<crate> --locked`   |
-| Workspace package                        | `test`           | `cargo test --workspace --locked`        |
-| Workspace package                        | `check`          | `cargo check --workspace --locked`       |
-| Workspace package                        | `lint`, `clippy` | `cargo clippy --workspace --locked`      |
-| Workspace package                        | `bench`          | `cargo bench --workspace --locked`       |
-| Workspace package                        | `doc`, `docs`    | `cargo doc --workspace --locked`         |
+| Package                                  | Turbo task       | Cargo command                              |
+| ---------------------------------------- | ---------------- | ------------------------------------------ |
+| Any crate                                | `build`          | `cargo build --package=<crate> --locked`   |
+| Entrypoint crate with exactly one binary | `run`, `dev`     | `cargo run --package=<crate> --locked`     |
+| Any crate                                | `test`           | `cargo test --package=<crate> --locked`    |
+| Any crate                                | `check`          | `cargo check --package=<crate> --locked`   |
+| Any crate                                | `lint`, `clippy` | `cargo clippy --package=<crate> --locked`  |
+| Any crate                                | `bench`          | `cargo bench --package=<crate> --locked`   |
+| Any crate                                | `doc`, `docs`    | `cargo doc --package=<crate> --locked`     |
+| Workspace package                        | `test`           | `cargo test --workspace --locked`          |
+| Workspace package                        | `check`          | `cargo check --workspace --locked`         |
+| Workspace package                        | `lint`, `clippy` | `cargo clippy --workspace --locked`        |
+| Workspace package                        | `bench`          | `cargo bench --workspace --locked`         |
+| Workspace package                        | `doc`, `docs`    | `cargo doc --workspace --locked`           |
+
+Without a filter, Turborepo uses one workspace-wide command instead of creating one verification task per crate. Filtered runs use crate-scoped commands; filtering directly to the workspace package uses its workspace-wide command.
+
+A filtered `build` runs for any selected crate, including a library. Unfiltered builds prefer entrypoint crates to avoid redundant Cargo processes; a workspace containing only libraries builds those libraries directly.
 
 ### Pass Cargo flags
 
@@ -98,12 +109,13 @@ turbo run build --filter=rust-api -- --target-dir=target-ci
 
 ```bash title="Terminal"
 turbo run run --filter=rust-api -- --port 8080
+turbo run test --filter=rust-library -- --nocapture
 turbo run test --filter=acme-rust -- --nocapture
 ```
 
 ## Custom tasks
 
-To define a Cargo-backed task that is not built in, or replace a built-in mapping, enable `experimentalTaskCommand` and set the task's `command`. The command is an argument array that runs directly without a shell. For example, the synthetic workspace package can add a `format` task and make `lint` reject warnings:
+To define a Cargo-backed task that is not built in, or replace a built-in mapping, enable `experimentalTaskCommand` and set the task's `command`. The command is an argument array that runs directly without a shell. For example, the synthetic workspace package can add a `format` task and make its workspace-wide `lint` task reject warnings:
 
 ```json title="./turbo.json"
 {
@@ -139,14 +151,20 @@ You can use the Cargo workspace or packages as entrypoints for [filters](/docs/r
 # Execute builds for all toolchains
 turbo run build
 
-# Build all crates
-turbo run build --filter=my-cargo-workspace
-
-# Build a package
+# Build one entrypoint crate
 turbo run build --filter=my-cargo-binary
 
-# Build affected packages
-turbo run build --affected
+# Build every Rust crate in the workspace dependency closure
+turbo run build --filter=my-cargo-workspace...
+
+# Test one library crate
+turbo run test --filter=my-rust-library
+
+# Test the entire Cargo workspace once
+turbo run test --filter=my-cargo-workspace
+
+# Test affected crates
+turbo run test --affected
 ```
 
 Additionally, [`turbo query`](/docs/reference/query) can be used to understand your repository's graphs and more.
@@ -155,7 +173,8 @@ Additionally, [`turbo query`](/docs/reference/query) can be used to understand y
 
 With zero configuration, Turborepo creates task hashes using:
 
-- The entrypoint and its transitive local crate source files
+- The selected crate and a conservative transitive closure of declared local dependency source files, including cycle-closing dev-dependencies
+- Every member crate when verification runs through the workspace package
 - Root Cargo files
 - Relevant Cargo and compiler environment
 - The resolved external dependency closure from `Cargo.lock`
@@ -168,7 +187,7 @@ Project-specific hashing inputs must be accounted for manually. This includes:
 
 ### Output caching
 
-Automatic output caching stores only the exact final `bin`, `cdylib`, and `staticlib` deliverables. It does not cache Cargo's incremental `target/` state or use profile or target wildcards.
+Automatic output caching stores only the exact final `bin`, `cdylib`, and `staticlib` deliverables. It does not cache Cargo's incremental `target/` state or use profile or target wildcards. Library builds default to `cache: false` because their Cargo-internal artifacts are not stable Turborepo outputs. Enabling library build caching requires an explicit `cache: true`; configure `outputs` as needed to describe restorable artifacts. `outputs` alone does not override the uncached default.
 
 Turborepo resolves exact outputs for these layouts:
 
@@ -186,7 +205,6 @@ Untracked inputs are more strict. External, included, or symlinked Cargo configu
 
 - Only the root virtual Cargo workspace is discovered. Root crates are rejected, nested workspaces are not independently discovered, and resolved external or non-member local path dependencies fail closed.
 - `cdylib`/`staticlib`-only entrypoints are build-only. Multi-bin crates require both `package.default-run` and an authored task definition for native `run` and `dev`; pass-through arguments cannot supply Cargo's `--bin` option.
-- Verification tasks always run for the whole Cargo workspace through the synthetic package, not per crate.
 - Automatic artifact caching is deliberately disabled for unresolved output layouts and untracked inputs. Explicit outputs can authorize an unresolved output layout, but untracked inputs require an explicit `cache` setting. Cargo's full `target/` directory is never a task output.
 - The synthetic workspace package has no directory and cannot be passed to `turbo prune`; prune an entrypoint crate instead.
 - In watch mode, a no-op save in a crate may rerun a fast cache check because content-hash deduplication is still based on JavaScript workspace globs.

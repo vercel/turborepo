@@ -44,6 +44,7 @@
     // Excludes mirror the CI invocations: turborepo-lsp, schema-gen, and
     // napi need extra build environments.
     "turborepo-crates#test": {
+      "dependsOn": [],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/version.txt",

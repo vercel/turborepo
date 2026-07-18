@@ -205,39 +205,51 @@ whether anything changed; Cargo decides how and in what order to build.**
   safely.
 - **Package shapes**: crates are classified via `CargoPackageKind`.
   *Entrypoints* (crates with `bin`/`cdylib`/`staticlib` targets) are the
-  workspace's deliverables. *Libraries* exist in the package graph — so
-  `--filter` and `--affected` propagate through them — but their tasks are
-  no-ops: Cargo builds them implicitly as part of an entrypoint's closure. A
-  synthetic *workspace* package — named by the user via
-  `[workspace.metadata] name` in the root Cargo.toml, a hard requirement —
-  depends on every crate and hosts workspace-scoped verbs.
-- **Execution** (`Toolchain::task_command`, adapted into the provider chain
-  by `ToolchainCommandProvider` in `turborepo-task-executor`): entrypoint
-  `build`/`run`/`dev` tasks run `cargo <verb> --package=<crate> --locked` — one
-  cargo process that builds the crate's whole dependency closure with Cargo's
-  own parallelism. Verification verbs run once at workspace scope:
-  `<name>#test` → `cargo test --workspace --locked`, `<name>#lint` → `cargo
-  clippy --workspace --locked`, etc. `--locked` preserves the dependency
-  resolution validated before task hashing. Cargo commands (except `cargo
-  run`) share a mutually-exclusive serial group: concurrent cargo processes
-  serialize on the build-directory lock anyway, so the executor runs one at a
-  time without the "waiting for file lock" noise. Run summaries derive display
-  commands from the same verb tables via `Toolchain::task_display_command`, so
-  display cannot drift from execution.
-- **Task registration** (`Toolchain::registered_tasks`): entrypoints implicitly
-  register `build`; crates with exactly one binary also register `run` and its
-  `dev` alias. The workspace package registers `test`, `check`, `clippy`/`lint`,
-  `bench`, and `doc`/`docs`; libraries register nothing. These act as empty task
-  definitions at the lowest precedence, so normal `tasks` entries configure or
-  override them and package configuration can exclude them with
-  `extends: false`. Registration is package-aware, so the defaults do not make
+  workspace's deliverables. *Libraries* exist in the package graph and expose
+  filtered build and verification tasks. Unfiltered builds prefer entrypoints
+  because Cargo builds their library dependency closures implicitly. A synthetic
+  *workspace* package — named by the user via `[workspace.metadata] name` in
+  the root Cargo.toml, a hard requirement — depends on every crate and hosts
+  workspace-scoped verification verbs.
+- **Execution and entrypoint selection** (`Toolchain::task_command` and
+  `Toolchain::select_task_entrypoints`): crate-scoped build and verification
+  tasks run `cargo <verb> --package=<crate> --locked`; entrypoints also expose
+  `run`/`dev`. Unfiltered builds prefer entrypoints, falling back to libraries
+  when the workspace has no entrypoints. Unfiltered verification uses the synthetic workspace package:
+  `<name>#test` runs `cargo test --workspace --locked`, `<name>#lint` runs
+  `cargo clippy --workspace --locked`, etc. Filtered runs use their selected
+  crates; selecting only the workspace package uses its workspace command.
+  `RunBuilder` combines filter mode with the resolved package scope to derive
+  task-specific exclusions. `EngineBuilder` applies package-level exclusions
+  before traversal; task-level filtering defers selection until after matching
+  task inputs. Exclude-only filters therefore remain exclusions rather than
+  being swallowed by a workspace command. Package-qualified task arguments remain
+  authoritative. `--locked` preserves
+  the dependency resolution validated before task hashing. Cargo commands
+  (except `cargo run`) share a mutually-exclusive serial group: concurrent
+  cargo processes serialize on the build-directory lock anyway, so the
+  executor runs one at a time without the "waiting for file lock" noise. Run
+  summaries derive display commands from the same verb tables via
+  `Toolchain::task_display_command`, so display cannot drift from execution.
+- **Task registration** (`Toolchain::registered_tasks`): every crate implicitly
+  registers `build`; entrypoints with exactly one binary also register `run`
+  and its `dev` alias. Every crate and the workspace package register `test`, `check`,
+  `clippy`/`lint`, `bench`, and `doc`/`docs`. These act as empty task definitions
+  at the lowest precedence, so normal
+  `tasks` entries configure or override them and package configuration can
+  exclude them with `extends: false`. Registration is package-aware, so the
+  defaults do not make
   same-named JavaScript scripts runnable without their usual turbo.json
   definition. The names come from the same verb tables as command resolution
   and participate in task suggestions and add-all/query graph construction.
-- **Hashing** (`Toolchain::derived_task_io`, consumed by
-  `turborepo-engine/src/builder/definitions.rs`): entrypoint tasks hash
-  their own sources plus their transitive dependency crates' sources
-  (flattened, so invalidation doesn't depend on `dependsOn` wiring), the
+- **Hashing and affectedness** (`Toolchain::derived_task_io` and
+  `Toolchain::additional_affected_packages`): crate-scoped tasks hash their own
+  sources plus a conservative transitive closure of declared local Cargo
+  dependencies (flattened, so invalidation doesn't depend on `dependsOn`
+  wiring). The closure may include optional or target-specific dependencies not
+  compiled by a particular invocation. It is retained separately from the
+  package graph so cycle-closing dev-dependency edges still invalidate and mark
+  their consumers affected. Tasks also hash the
   workspace files (root `Cargo.toml`, `.cargo/config*`, `rust-toolchain*`),
   and standard Cargo/cc-rs environment inputs: rustup home/toolchain selection,
   compiler and rustdoc selection and flags, Cargo build/profile/target
@@ -296,9 +308,10 @@ whether anything changed; Cargo decides how and in what order to build.**
   tarballing it fights Cargo instead of leaning on it (it is also
   multi-gigabyte). For fine-grained compile caching, `RUSTC_WRAPPER`
   (sccache) is the sound layer, and it participates in task hashes so
-  toggling it invalidates caches. Entrypoint `run` and `dev` tasks default to
-  `cache: false`, because a cache hit must not suppress the requested process;
-  an explicit turbo.json `cache` setting overrides the toolchain default.
+  toggling it invalidates caches. Entrypoint `run`/`dev` tasks and library
+  `build` tasks default to `cache: false`: a cache hit must not suppress a
+  requested process, and library artifacts have no stable final path to restore.
+  An explicit turbo.json `cache` setting overrides the toolchain default.
 
 - **Watch mode** (`Toolchain::watch_spec`, consumed by
   `turborepo-lib/src/package_changes_watcher.rs`): each toolchain declares

@@ -58,6 +58,11 @@ pub fn resolve_affected_tasks(
     )
 }
 
+pub(crate) struct TaskFilterConstraints<'a> {
+    pub affected: Option<&'a HashSet<TaskId<'static>>>,
+    pub always_include: &'a HashSet<TaskId<'static>>,
+}
+
 /// Filters an engine down to only the tasks matching the given selectors.
 ///
 /// Each include selector contributes a set of tasks (unioned together).
@@ -68,6 +73,30 @@ pub fn filter_engine_to_tasks(
     engine: Engine,
     selectors: &[TargetSelector],
     affected_constraint: Option<&HashSet<TaskId<'static>>>,
+    pkg_dep_graph: &PackageGraph,
+    scm: &SCM,
+    repo_root: &AbsoluteSystemPath,
+    global_deps: &[String],
+) -> Result<Engine, crate::run::error::Error> {
+    let always_include = HashSet::new();
+    filter_engine_to_tasks_with_inclusions(
+        engine,
+        selectors,
+        TaskFilterConstraints {
+            affected: affected_constraint,
+            always_include: &always_include,
+        },
+        pkg_dep_graph,
+        scm,
+        repo_root,
+        global_deps,
+    )
+}
+
+pub(crate) fn filter_engine_to_tasks_with_inclusions(
+    engine: Engine,
+    selectors: &[TargetSelector],
+    constraints: TaskFilterConstraints<'_>,
     pkg_dep_graph: &PackageGraph,
     scm: &SCM,
     repo_root: &AbsoluteSystemPath,
@@ -94,7 +123,7 @@ pub fn filter_engine_to_tasks(
         included_tasks = engine.task_ids().cloned().collect();
     }
 
-    if let Some(affected) = affected_constraint {
+    if let Some(affected) = constraints.affected {
         included_tasks.retain(|t| affected.contains(t));
     }
 
@@ -109,6 +138,8 @@ pub fn filter_engine_to_tasks(
         )?;
         included_tasks.retain(|t| !to_exclude.contains(t));
     }
+
+    included_tasks.extend(constraints.always_include.iter().cloned());
 
     if included_tasks.is_empty() {
         return Ok(engine.retain_filtered_tasks(&included_tasks));
