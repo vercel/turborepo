@@ -317,13 +317,13 @@ This is the most complex stage with multiple sub-steps:
 
 ##### 5b. Build JavaScript Packages
 
-Execute `make -C cli build` which runs `turbo build copy-schema` with filters for all JavaScript/TypeScript packages. This builds all TypeScript packages and copies the JSON schema to the appropriate locations.
+The `@turbo/releaser` tool runs `turbo run build copy-schema` with filters for all released JavaScript/TypeScript packages. This builds all TypeScript packages and copies the JSON schema to the appropriate locations.
 
-See: `cli/Makefile` (build target)
+See: `packages/turbo-releaser/src/publish.ts`
 
 ##### 5c. Pack and Publish Native Packages
 
-Execute `turbo release-native` which invokes the `@turbo/releaser` tool.
+The workflow invokes the `@turbo/releaser` tool directly.
 
 **The `@turbo/releaser` tool** (`packages/turbo-releaser/`):
 
@@ -350,19 +350,19 @@ See: `packages/turbo-releaser/` for native package generation logic
 
 ##### 5d. Pack and Publish JavaScript Packages
 
-Execute `make -C cli publish-turbo` which:
+The `@turbo/releaser` tool:
 
 1. **Packs all packages** to tarballs using `pnpm pack`
 2. **Publishes in fixed order** to npm with the appropriate dist-tag (if not `--skip-publish`)
 
-See: `cli/Makefile` (publish-turbo target)
+See: `packages/turbo-releaser/src/publish.ts`
 
 **Why fixed order?**
 
 - Prevents race conditions where dependent packages are published before their dependencies
-- Ensures `turbo` is published last so the platform specific binaries that it depends on are available.
+- Ensures packages are published consistently in the configured order.
 
-**Dry Run**: If the workflow was triggered with `dry_run: true` or the Makefile is called with `--skip-publish`, the publish commands are skipped, allowing you to test the entire pipeline without publishing.
+**Dry Run**: If the workflow was triggered with `dry_run: true` or the releaser is called with `--skip-publish`, the publish commands are skipped, allowing you to test the entire pipeline without publishing.
 
 #### Stage 6: Alias Versioned Docs
 
@@ -508,11 +508,8 @@ See: `packages/turbo-releaser/` for the Windows wrapper generation
 | `make -C cli commit-stage-release`                 | `cli/Makefile`             | Commit staging changes through GitHub API         |
 | `node scripts/create-github-api-commit.mjs`        | `scripts/`                 | Create a GitHub-verified API commit on a branch   |
 | `cargo build --profile release-turborepo -p turbo` | `Cargo.toml`               | Build Rust binary for release                     |
-| `turbo release-native`                             | `cli/turbo.json`           | Pack and publish native packages                  |
-| `make -C cli build`                                | `cli/Makefile`             | Build all JavaScript packages                     |
-| `make -C cli publish-turbo`                        | `cli/Makefile`             | Pack and publish all packages                     |
+| `turboreleaser publish`                            | `packages/turbo-releaser/` | Build, pack, and publish all npm packages         |
 | `pnpm version <version> --allow-same-version`      | package.json               | Update package version                            |
-| `turboreleaser --version-path ../version.txt`      | `packages/turbo-releaser/` | Pack native packages                              |
 
 #### Environment Variables
 

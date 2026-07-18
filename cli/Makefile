@@ -3,18 +3,6 @@ TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 
 CLI_DIR = $(shell pwd)
 
-# This only builds JS packages
-build:
-	cd $(CLI_DIR)/../ && turbo build copy-schema \
-		--filter=create-turbo \
-		--filter=@turbo/codemod \
-		--filter=turbo-ignore \
-		--filter=@turbo/workspaces \
-		--filter=@turbo/gen \
-		--filter=eslint-plugin-turbo \
-		--filter=eslint-config-turbo \
-		--filter=@turbo/types
-
 .PHONY: prepare-stage-release
 prepare-stage-release:
 	echo "Version: $(TURBO_VERSION)"
@@ -106,74 +94,3 @@ create-release-tag:
 		git push origin "v$(TURBO_VERSION)" && \
 		echo "Release tag v$(TURBO_VERSION) created and pushed."; \
 	fi
-
-.PHONY: publish-turbo
-publish-turbo: build
-	echo "Version: $(TURBO_VERSION)"
-	echo "Tag: $(TURBO_TAG)"
-
-	# Include the patch in the log.
-	git format-patch HEAD~1 --stdout | cat
-
-	# Publishes the native npm modules.
-	turbo release-native --env-mode=loose -- $(SKIP_PUBLISH)
-
-	# Split packing from the publish step so that npm locates the correct .npmrc file.
-	cd $(CLI_DIR)/../packages/turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
-	cd $(CLI_DIR)/../packages/create-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
-	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm pack --pack-destination=$(CLI_DIR)/../
-	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm pack --pack-destination=$(CLI_DIR)/../
-	cd $(CLI_DIR)/../packages/turbo-workspaces && pnpm pack --pack-destination=$(CLI_DIR)/../
-	cd $(CLI_DIR)/../packages/turbo-gen && pnpm pack --pack-destination=$(CLI_DIR)/../
-	cd $(CLI_DIR)/../packages/eslint-plugin-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
-	cd $(CLI_DIR)/../packages/eslint-config-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
-	cd $(CLI_DIR)/../packages/turbo-types && pnpm pack --pack-destination=$(CLI_DIR)/../
-
-ifneq ($(SKIP_PUBLISH),--skip-publish)
-	# Fail if turbo package version already exists on npm (prevents race condition)
-	@if npm view "turbo@$(TURBO_VERSION)" version >/dev/null 2>&1; then \
-		echo "Error: turbo@$(TURBO_VERSION) already exists on npm. A previous release may still be merging." && \
-		exit 1; \
-	fi
-
-	# Publish the remaining JS packages in order to avoid race conditions.
-	npm --version
-	publish_with_retries() { \
-		package="$$1"; \
-		tarball="$$2"; \
-		attempt=1; \
-		max_attempts=3; \
-		while true; do \
-			log_file="$$(mktemp)"; \
-			echo "Publishing $$package@$(TURBO_VERSION) (attempt $$attempt/$$max_attempts)"; \
-			npm publish -ddd --tag $(TURBO_TAG) "$$tarball" >"$$log_file" 2>&1; \
-			publish_status=$$?; \
-			if [ "$$publish_status" -eq 0 ]; then \
-				cat "$$log_file"; \
-				rm -f "$$log_file"; \
-				break; \
-			fi; \
-			cat "$$log_file"; \
-			if grep -Eq "TLOG_CREATE_ENTRY_ERROR|error creating tlog entry" "$$log_file" && [ "$$attempt" -lt "$$max_attempts" ]; then \
-				sleep_seconds=$$((attempt * 10)); \
-				rm -f "$$log_file"; \
-				echo "Retrying $$package after npm provenance tlog failure in $$sleep_seconds seconds..."; \
-				sleep "$$sleep_seconds"; \
-				attempt=$$((attempt + 1)); \
-			else \
-				rm -f "$$log_file"; \
-				exit "$$publish_status"; \
-			fi; \
-		done; \
-	}; \
-	publish_with_retries "turbo" "$(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz"; \
-	publish_with_retries "create-turbo" "$(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz"; \
-	publish_with_retries "@turbo/codemod" "$(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz"; \
-	publish_with_retries "turbo-ignore" "$(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz"; \
-	publish_with_retries "@turbo/workspaces" "$(CLI_DIR)/../turbo-workspaces-$(TURBO_VERSION).tgz"; \
-	publish_with_retries "@turbo/gen" "$(CLI_DIR)/../turbo-gen-$(TURBO_VERSION).tgz"; \
-	publish_with_retries "eslint-plugin-turbo" "$(CLI_DIR)/../eslint-plugin-turbo-$(TURBO_VERSION).tgz"; \
-	publish_with_retries "eslint-config-turbo" "$(CLI_DIR)/../eslint-config-turbo-$(TURBO_VERSION).tgz"; \
-	publish_with_retries "@turbo/types" "$(CLI_DIR)/../turbo-types-$(TURBO_VERSION).tgz"
-endif
-
