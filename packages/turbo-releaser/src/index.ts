@@ -5,6 +5,9 @@ import { packAndPublish } from "./packager";
 import { supportedPlatforms } from "./config";
 import { getVersionInfo } from "./version";
 import { publishRelease } from "./publish";
+import { updateVersion } from "./version-command";
+import { prepareStage } from "./stage";
+import { createReleaseTag } from "./tag";
 
 const turboReleaser = new Command();
 
@@ -24,6 +27,29 @@ turboReleaser
   .requiredOption("--version-path <path>", "Path to the version.txt file")
   .option("--skip-publish", "Pack without publishing to npm")
   .action(publishRelease);
+
+turboReleaser
+  .command("version")
+  .requiredOption("--version-path <path>", "Path to the version.txt file")
+  .requiredOption("--increment <type>", "SemVer release type")
+  .option("--tag-override <tag>", "Override the npm dist-tag")
+  .action(async (options) => {
+    await updateVersion(options);
+  });
+
+turboReleaser
+  .command("prepare-stage")
+  .requiredOption("--repo-root <path>", "Path to the repository root")
+  .requiredOption("--version-path <path>", "Path to the version.txt file")
+  .action(async (options) => {
+    await prepareStage(options);
+  });
+
+turboReleaser
+  .command("tag")
+  .requiredOption("--repo-root <path>", "Path to the repository root")
+  .requiredOption("--version-path <path>", "Path to the version.txt file")
+  .action(createReleaseTag);
 
 async function releaseTurbo(options: {
   skipPublish: boolean;

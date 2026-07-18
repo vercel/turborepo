@@ -197,12 +197,6 @@ importers:
         specifier: npm:typescript@7.0.1-rc
         version: typescript@7.0.1-rc
 
-  cli:
-    dependencies:
-      '@turbo/releaser':
-        specifier: workspace:*
-        version: link:../packages/turbo-releaser
-
   docs/link-checker:
     dependencies:
       github-slugger:
@@ -625,6 +619,9 @@ importers:
       commander:
         specifier: 11.0.0
         version: 11.0.0
+      semver:
+        specifier: 7.5.2
+        version: 7.5.2
       tar:
         specifier: 7.5.16
         version: 7.5.16
@@ -635,6 +632,9 @@ importers:
       '@types/node':
         specifier: 20.11.30
         version: 20.11.30
+      '@types/semver':
+        specifier: 7.3.12
+        version: 7.3.12
       tsdown:
         specifier: 0.12.0
         version: 0.12.0(@typescript/native-preview@7.0.0-dev.20260523.1)(@typescript/typescript6@6.0.1)(oxc-resolver@11.19.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1))
