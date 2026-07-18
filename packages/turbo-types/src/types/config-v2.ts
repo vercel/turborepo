@@ -309,20 +309,23 @@ export interface FutureFlags {
    * When enabled, Rust crates are discovered via `cargo metadata` and
    * participate in the package graph: they resolve in `--filter`
    * expressions, propagate `--affected`, and appear in `turbo query`.
-   * Entrypoint `build`, `run`, and `dev` tasks execute per crate. The
-   * `test`, `check`, `clippy`/`lint`, `bench`, and `doc`/`docs` tasks are
-   * selectable per crate with `--filter`. An unfiltered run executes one
-   * workspace-wide Cargo command; filtered runs use the selected crates, or
-   * the workspace command when the workspace package is selected directly.
+   * Filtered builds execute each selected crate. Unfiltered builds prefer
+   * entrypoints, falling back to libraries when no entrypoints exist.
+   * Entrypoints also expose `run` and `dev`. The `test`, `check`, `clippy`/`lint`, `bench`, and
+   * `doc`/`docs` tasks are selectable per crate with `--filter`. An
+   * unfiltered run executes one workspace-wide Cargo verification command;
+   * filtered runs use the selected crates, or the workspace command when the
+   * workspace package is selected directly.
    *
-   * Entrypoints implicitly register `build`; crates with one binary also
-   * register `run` and `dev`. All crates and the workspace package implicitly
-   * register the verification tasks. Normal task definitions configure or
-   * override these defaults, and package configuration can exclude them with
-   * `extends: false`.
+   * All crates implicitly register `build` and the verification tasks;
+   * entrypoints with one binary also register `run` and `dev`. The workspace
+   * package registers the verification tasks. Normal task definitions
+   * configure or override these defaults, and package configuration can
+   * exclude them with `extends: false`.
    *
    * Task caching uses Cargo-derived inputs and caches entrypoint build
-   * deliverables. This feature is experimental.
+   * deliverables. Library builds default to uncached. This feature is
+   * experimental.
    *
    * @defaultValue `false`
    */

@@ -448,6 +448,20 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         self.prune_to_reachable(&reachable, true)
     }
 
+    /// Removes the given tasks and their incident dependency edges.
+    pub fn remove_tasks(self, excluded_tasks: &HashSet<TaskId>) -> Self {
+        let retained: HashSet<_> = self
+            .task_graph
+            .node_indices()
+            .filter(|&index| match self.task_graph.node_weight(index) {
+                Some(TaskNode::Task(task)) => !excluded_tasks.contains(task),
+                Some(TaskNode::Root) => true,
+                None => false,
+            })
+            .collect();
+        self.prune_to_reachable(&retained, false)
+    }
+
     /// Prunes the engine to only the given tasks and their transitive
     /// dependencies (upstream tasks needed for execution).
     ///

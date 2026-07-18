@@ -334,10 +334,9 @@ fn test_cargo_packages_in_task_graph() {
     // The bin crate is an entrypoint: it executes a real cargo command.
     let app_build = task("app#build").expect("app#build in graph");
     assert_eq!(app_build["command"], "cargo build --package=app --locked");
-    // Its dependency crate participates in the graph (for --filter/--affected
-    // propagation) but is a no-op — cargo builds it implicitly.
-    let lib_build = task("lib-a#build").expect("lib-a#build in graph");
-    assert_eq!(lib_build["command"], "<NONEXISTENT>");
+    // Unfiltered builds select entrypoint crates; Cargo builds their library
+    // dependency closures without a redundant package-scoped process.
+    assert!(task("lib-a#build").is_none());
     // JS packages coexist in the same graph.
     let js_build = task("js-pkg#build").expect("js-pkg#build in graph");
     assert!(
@@ -370,6 +369,88 @@ fn test_cargo_packages_in_task_graph() {
     let expected_output = format!("../../target/debug/{output_name}");
     assert_eq!(cargo_outputs, [expected_output.as_str()]);
     assert!(cargo_outputs.iter().all(|output| !output.contains('*')));
+}
+
+#[test]
+fn test_cargo_library_build_can_be_filtered() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=lib-a", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task = json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "lib-a#build"))
+        .expect("lib-a#build in graph");
+    assert_eq!(task["command"], "cargo build --package=lib-a --locked");
+    assert_eq!(task["resolvedTaskDefinition"]["cache"], false);
+
+    let output = run_turbo(tempdir.path(), &["run", "lib-a#build", "--dry-run=json"]);
+    assert!(output.status.success(), "package task failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(json["tasks"].as_array().is_some_and(|tasks| {
+        tasks.iter().any(|task| {
+            task["taskId"] == "lib-a#build"
+                && task["command"] == "cargo build --package=lib-a --locked"
+        })
+    }));
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--filter=lib-a",
+            "--force",
+            "--log-order=grouped",
+        ],
+    );
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.status.success(), "filtered build failed: {combined}");
+    assert!(
+        combined.contains("lib-a:build"),
+        "expected the library build task to execute: {combined}"
+    );
+    assert!(!combined.contains("No tasks were executed"));
+}
+
+#[test]
+fn test_unfiltered_cargo_build_falls_back_to_libraries() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::remove_dir_all(tempdir.path().join("crates/app")).unwrap();
+    let status = cargo_command(tempdir.path())
+        .arg("generate-lockfile")
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    let output = run_turbo(tempdir.path(), &["run", "build", "--dry-run=json"]);
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tasks = json["tasks"].as_array().unwrap();
+    let command = |task_id: &str| {
+        tasks
+            .iter()
+            .find(|task| task["taskId"] == task_id)
+            .and_then(|task| task["command"].as_str())
+    };
+    assert_eq!(
+        command("lib-a#build"),
+        Some("cargo build --package=lib-a --locked")
+    );
+    assert_eq!(
+        command("lib-a-test-util#build"),
+        Some("cargo build --package=lib-a-test-util --locked")
+    );
 }
 
 #[test]
@@ -1624,9 +1705,8 @@ fn test_command_override_on_cargo_packages() {
     );
 }
 
-/// A pure Cargo workspace with no root package.json builds a task graph:
-/// every crate becomes a package and gets its Cargo-derived command, with no
-/// JavaScript project involved.
+/// A pure Cargo workspace with no root package.json builds a task graph, with
+/// no JavaScript project involved.
 #[test]
 fn test_pure_cargo_workspace_dry_run_has_no_package_json() {
     let tempdir = cargo_tempdir();
@@ -1646,9 +1726,9 @@ fn test_pure_cargo_workspace_dry_run_has_no_package_json() {
     // The bin crate is an entrypoint: it executes a real cargo command.
     let app_build = task("app#build").expect("app#build in graph");
     assert_eq!(app_build["command"], "cargo build --package=app --locked");
-    // Its dependency crate participates in the graph but is a no-op.
-    let lib_build = task("lib-a#build").expect("lib-a#build in graph");
-    assert_eq!(lib_build["command"], "<NONEXISTENT>");
+    // The unfiltered build delegates the dependency closure to the entrypoint's
+    // Cargo process instead of scheduling a redundant library build.
+    assert!(task("lib-a#build").is_none());
 
     // The entrypoint's hash still covers its dependency crate's sources even
     // though there is no JavaScript global hash contribution.
@@ -2005,6 +2085,21 @@ fn test_cargo_tasks_are_registered_without_task_configuration() {
         assert_eq!(definition["command"], expected_command);
     }
 
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=lib-a", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "library build failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let definition = json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == "lib-a#build"))
+        .expect("lib-a#build in graph");
+    assert_eq!(
+        definition["command"],
+        "cargo build --package=lib-a --locked"
+    );
+
     for (task, subcommand) in [
         ("test", "test"),
         ("check", "check"),
@@ -2148,6 +2243,7 @@ fn test_query_discovers_and_excludes_implicit_cargo_tasks() {
     assert!(app_tasks.iter().any(|task| task == "lint"));
 
     let library_tasks = query("lib-a");
+    assert!(library_tasks.iter().any(|task| task == "build"));
     assert!(library_tasks.iter().any(|task| task == "test"));
     assert!(library_tasks.iter().any(|task| task == "lint"));
     assert!(library_tasks.iter().any(|task| task == "docs"));

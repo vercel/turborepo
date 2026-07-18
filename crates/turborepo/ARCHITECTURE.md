@@ -206,15 +206,16 @@ whether anything changed; Cargo decides how and in what order to build.**
 - **Package shapes**: crates are classified via `CargoPackageKind`.
   *Entrypoints* (crates with `bin`/`cdylib`/`staticlib` targets) are the
   workspace's deliverables. *Libraries* exist in the package graph and expose
-  crate-scoped verification tasks, while independent `build` remains a no-op:
-  Cargo builds them implicitly as part of an entrypoint's closure. A synthetic
+  filtered build and verification tasks. Unfiltered builds prefer entrypoints
+  because Cargo builds their library dependency closures implicitly. A synthetic
   *workspace* package — named by the user via `[workspace.metadata] name` in
   the root Cargo.toml, a hard requirement — depends on every crate and hosts
   workspace-scoped verification verbs.
 - **Execution and entrypoint selection** (`Toolchain::task_command` and
-  `Toolchain::select_task_entrypoints`): entrypoint `build`/`run`/`dev` and a
-  filtered crate's verification tasks run `cargo <verb> --package=<crate>
-  --locked`. Unfiltered verification uses the synthetic workspace package:
+  `Toolchain::select_task_entrypoints`): crate-scoped build and verification
+  tasks run `cargo <verb> --package=<crate> --locked`; entrypoints also expose
+  `run`/`dev`. Unfiltered builds prefer entrypoints, falling back to libraries
+  when the workspace has no entrypoints. Unfiltered verification uses the synthetic workspace package:
   `<name>#test` runs `cargo test --workspace --locked`, `<name>#lint` runs
   `cargo clippy --workspace --locked`, etc. Filtered runs use their selected
   crates; selecting only the workspace package uses its workspace command.
@@ -230,9 +231,9 @@ whether anything changed; Cargo decides how and in what order to build.**
   executor runs one at a time without the "waiting for file lock" noise. Run
   summaries derive display commands from the same verb tables via
   `Toolchain::task_display_command`, so display cannot drift from execution.
-- **Task registration** (`Toolchain::registered_tasks`): entrypoints implicitly
-  register `build`; crates with exactly one binary also register `run` and its
-  `dev` alias. Every crate and the workspace package register `test`, `check`,
+- **Task registration** (`Toolchain::registered_tasks`): every crate implicitly
+  registers `build`; entrypoints with exactly one binary also register `run`
+  and its `dev` alias. Every crate and the workspace package register `test`, `check`,
   `clippy`/`lint`, `bench`, and `doc`/`docs`. These act as empty task definitions
   at the lowest precedence, so normal
   `tasks` entries configure or override them and package configuration can
@@ -307,9 +308,10 @@ whether anything changed; Cargo decides how and in what order to build.**
   tarballing it fights Cargo instead of leaning on it (it is also
   multi-gigabyte). For fine-grained compile caching, `RUSTC_WRAPPER`
   (sccache) is the sound layer, and it participates in task hashes so
-  toggling it invalidates caches. Entrypoint `run` and `dev` tasks default to
-  `cache: false`, because a cache hit must not suppress the requested process;
-  an explicit turbo.json `cache` setting overrides the toolchain default.
+  toggling it invalidates caches. Entrypoint `run`/`dev` tasks and library
+  `build` tasks default to `cache: false`: a cache hit must not suppress a
+  requested process, and library artifacts have no stable final path to restore.
+  An explicit turbo.json `cache` setting overrides the toolchain default.
 
 - **Watch mode** (`Toolchain::watch_spec`, consumed by
   `turborepo-lib/src/package_changes_watcher.rs`): each toolchain declares

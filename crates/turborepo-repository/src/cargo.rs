@@ -330,9 +330,9 @@ fn validate_resolved_local_packages(
 /// How a Cargo-toolchain package participates in task execution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CargoPackageKind {
-    /// An internal library crate. Verification tasks execute
-    /// `cargo <verb> --package=<crate>`; `build` remains a no-op because Cargo
-    /// builds libraries implicitly as part of an entrypoint's closure.
+    /// An internal library crate. Filtered build and verification tasks execute
+    /// `cargo <verb> --package=<crate>`; unfiltered builds prefer entrypoints
+    /// because Cargo builds their library dependency closures implicitly.
     Library,
     /// A crate with `bin`/`cdylib`/`staticlib` targets: a deliverable.
     /// Build, run, and verification tasks execute
@@ -375,6 +375,8 @@ const VERIFICATION_SUBCOMMANDS: &[(&str, &str)] = &[
 const ENTRYPOINT_SUBCOMMANDS: &[(&str, &str)] =
     &[("build", "build"), ("run", "run"), ("dev", "run")];
 
+const LIBRARY_SUBCOMMANDS: &[(&str, &str)] = &[("build", "build")];
+
 fn subcommand(task: &str, tasks: &'static [(&'static str, &'static str)]) -> Option<&'static str> {
     tasks
         .iter()
@@ -390,7 +392,7 @@ pub fn entrypoint_subcommand(task: &str) -> Option<&'static str> {
 /// Map a Turborepo task name to the Cargo subcommand that implements it for a
 /// library crate.
 pub fn library_subcommand(task: &str) -> Option<&'static str> {
-    subcommand(task, VERIFICATION_SUBCOMMANDS)
+    subcommand(task, LIBRARY_SUBCOMMANDS).or_else(|| subcommand(task, VERIFICATION_SUBCOMMANDS))
 }
 
 /// Map a verification task to the Cargo subcommand that implements it at
@@ -408,12 +410,13 @@ fn registered_tasks(details: &CargoPackageDetails) -> Vec<&'static str> {
         == 1;
     let mut tasks: Vec<_> = match details.kind {
         CargoPackageKind::Entrypoint => ENTRYPOINT_SUBCOMMANDS,
-        CargoPackageKind::Workspace | CargoPackageKind::Library => VERIFICATION_SUBCOMMANDS,
+        CargoPackageKind::Library => LIBRARY_SUBCOMMANDS,
+        CargoPackageKind::Workspace => VERIFICATION_SUBCOMMANDS,
     }
     .iter()
     .map(|(task, _)| *task)
     .collect();
-    if details.kind == CargoPackageKind::Entrypoint {
+    if details.kind != CargoPackageKind::Workspace {
         tasks.extend(VERIFICATION_SUBCOMMANDS.iter().map(|(task, _)| *task));
     }
     tasks.retain(|task| runnable || !matches!(*task, "run" | "dev"));
@@ -1146,9 +1149,12 @@ impl Toolchain for CargoToolchain {
         let cache = package
             .package_name()
             .and_then(|name| self.package_details(&name))
-            .and_then(|details| task_subcommand(details.kind, task))
-            .is_some_and(|subcommand| subcommand == "run")
-            .then_some(false);
+            .and_then(|details| {
+                let subcommand = task_subcommand(details.kind, task)?;
+                (subcommand == "run"
+                    || (details.kind == CargoPackageKind::Library && subcommand == "build"))
+                    .then_some(false)
+            });
 
         toolchain::TaskDefaults { cache }
     }
@@ -1286,11 +1292,37 @@ impl Toolchain for CargoToolchain {
         candidates: &[String],
         prefer_workspace: bool,
     ) -> Option<Vec<String>> {
-        library_subcommand(task)?;
+        let subcommand = library_subcommand(task)?;
         let details = self
             .details
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if subcommand == "build" {
+            let crates: Vec<_> = candidates
+                .iter()
+                .filter(|candidate| {
+                    details
+                        .get(candidate.as_str())
+                        .is_some_and(|details| details.kind != CargoPackageKind::Workspace)
+                })
+                .cloned()
+                .collect();
+            if prefer_workspace {
+                let entrypoints: Vec<_> = crates
+                    .iter()
+                    .filter(|candidate| {
+                        details
+                            .get(candidate.as_str())
+                            .is_some_and(|details| details.kind == CargoPackageKind::Entrypoint)
+                    })
+                    .cloned()
+                    .collect();
+                if !entrypoints.is_empty() {
+                    return Some(entrypoints);
+                }
+            }
+            return Some(crates);
+        }
         if prefer_workspace
             && let Some(workspace) = candidates.iter().find(|candidate| {
                 details
@@ -1510,35 +1542,41 @@ impl Toolchain for CargoToolchain {
                     io.input_globs.extend(dependency_globs());
                 }
                 if subcommand == "build" {
-                    io.outputs = self
-                        .workspace_details()
-                        .and_then(|workspace| {
-                            let layout = cargo_output_layout(
-                                &self.repo_root,
-                                &workspace,
-                                &details,
-                                context,
-                            )?;
-                            let effective_target =
-                                layout.target.as_deref().unwrap_or(&workspace.host_target);
-                            let platform = target_platform(effective_target)?;
-                            let package_directory = self.repo_root.resolve(package.package_path());
-                            let target_directory = AnchoredSystemPathBuf::relative_path_between(
-                                &package_directory,
-                                &layout.target_directory,
-                            )
-                            .to_unix();
-                            Some(toolchain::DerivedOutputs::Resolved(
-                                deliverable_output_paths(
-                                    target_directory.as_str(),
-                                    layout.target.as_deref(),
-                                    &layout.profile,
-                                    platform,
-                                    &details.deliverables,
-                                ),
-                            ))
-                        })
-                        .unwrap_or(toolchain::DerivedOutputs::Unavailable);
+                    if details.kind == CargoPackageKind::Library {
+                        io.outputs = toolchain::DerivedOutputs::Unavailable;
+                    } else {
+                        io.outputs = self
+                            .workspace_details()
+                            .and_then(|workspace| {
+                                let layout = cargo_output_layout(
+                                    &self.repo_root,
+                                    &workspace,
+                                    &details,
+                                    context,
+                                )?;
+                                let effective_target =
+                                    layout.target.as_deref().unwrap_or(&workspace.host_target);
+                                let platform = target_platform(effective_target)?;
+                                let package_directory =
+                                    self.repo_root.resolve(package.package_path());
+                                let target_directory =
+                                    AnchoredSystemPathBuf::relative_path_between(
+                                        &package_directory,
+                                        &layout.target_directory,
+                                    )
+                                    .to_unix();
+                                Some(toolchain::DerivedOutputs::Resolved(
+                                    deliverable_output_paths(
+                                        target_directory.as_str(),
+                                        layout.target.as_deref(),
+                                        &layout.profile,
+                                        platform,
+                                        &details.deliverables,
+                                    ),
+                                ))
+                            })
+                            .unwrap_or(toolchain::DerivedOutputs::Unavailable);
+                    }
                 }
             }
             // The workspace package's directory is the repo root, so
@@ -2474,7 +2512,13 @@ mod test {
         );
 
         let library = details(CargoPackageKind::Library, Vec::new());
-        assert_eq!(registered_tasks(&library), verification);
+        assert_eq!(
+            registered_tasks(&library),
+            ["build"]
+                .into_iter()
+                .chain(verification)
+                .collect::<Vec<_>>()
+        );
     }
 
     fn tempdir_root() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
@@ -3750,14 +3794,12 @@ release: 1.96.0-nightly\n",
             os_args(&["build", "--package=app", "--locked", "--release"])
         );
 
-        // Libraries do not build independently, but verification verbs are
-        // scoped to both libraries and entrypoints.
-        assert!(
-            toolchain
-                .task_command(&root, &lib_a, "build", None, None)
-                .unwrap()
-                .is_none()
-        );
+        // A filtered library build resolves directly to that package.
+        let cmd = toolchain
+            .task_command(&root, &lib_a, "build", None, None)
+            .unwrap()
+            .expect("library build resolves");
+        assert_eq!(cmd.args, os_args(&["build", "--package=lib-a", "--locked"]));
         let cmd = toolchain
             .task_command(&root, &lib_a, "test", None, None)
             .unwrap()
@@ -3816,13 +3858,17 @@ release: 1.96.0-nightly\n",
             toolchain.task_display_command(&lib_a, "test").as_deref(),
             Some("cargo test --package=lib-a --locked")
         );
-        assert_eq!(toolchain.task_display_command(&lib_a, "build"), None);
+        assert_eq!(
+            toolchain.task_display_command(&lib_a, "build").as_deref(),
+            Some("cargo build --package=lib-a --locked")
+        );
 
         assert_eq!(toolchain.task_defaults(&app, "run").cache, Some(false));
         assert_eq!(toolchain.task_defaults(&app, "dev").cache, Some(false));
         assert_eq!(toolchain.task_defaults(&app, "build").cache, None);
         assert_eq!(toolchain.task_defaults(&workspace, "test").cache, None);
         assert_eq!(toolchain.task_defaults(&lib_a, "test").cache, None);
+        assert_eq!(toolchain.task_defaults(&lib_a, "build").cache, Some(false));
 
         assert_eq!(
             toolchain.select_task_entrypoints(
@@ -3856,7 +3902,38 @@ release: 1.96.0-nightly\n",
             ),
             Some(vec!["app".to_string(), "lib-a".to_string()])
         );
-        assert_eq!(toolchain.select_task_entrypoints("build", &[], false), None);
+        assert_eq!(
+            toolchain.select_task_entrypoints(
+                "build",
+                &[
+                    "app".to_string(),
+                    "lib-a".to_string(),
+                    "fixture-ws".to_string()
+                ],
+                true,
+            ),
+            Some(vec!["app".to_string()])
+        );
+        assert_eq!(
+            toolchain.select_task_entrypoints(
+                "build",
+                &[
+                    "app".to_string(),
+                    "lib-a".to_string(),
+                    "fixture-ws".to_string()
+                ],
+                false,
+            ),
+            Some(vec!["app".to_string(), "lib-a".to_string()])
+        );
+        assert_eq!(
+            toolchain.select_task_entrypoints(
+                "build",
+                &["lib-a".to_string(), "fixture-ws".to_string()],
+                true,
+            ),
+            Some(vec!["lib-a".to_string()])
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -3925,7 +4002,7 @@ release: 1.96.0-nightly\n",
         assert!(toolchain.defines_task(&app, "build"));
         assert!(toolchain.defines_task(&app, "test"));
         assert!(toolchain.defines_task(&lib_a, "test"));
-        assert!(!toolchain.defines_task(&lib_a, "build"));
+        assert!(toolchain.defines_task(&lib_a, "build"));
         assert!(toolchain.defines_task(&workspace, "test"));
 
         // Entrypoint build with automatic inputs: workspace files + the
@@ -4033,11 +4110,12 @@ release: 1.96.0-nightly\n",
         );
         assert_eq!(io.outputs, toolchain::DerivedOutputs::Resolved(Vec::new()));
 
-        // Libraries still do not expose independent build tasks.
-        assert!(
-            toolchain
-                .derived_task_io(&lib_a, "build", "../..", &[], true, &context)
-                .is_none()
-        );
+        // Library build artifacts are Cargo-internal and cannot be restored as
+        // stable Turborepo outputs, so implicit caching fails closed.
+        let io = toolchain
+            .derived_task_io(&lib_a, "build", "../..", &[], true, &context)
+            .expect("library build derives IO");
+        assert_eq!(io.package_default_inputs, Some(true));
+        assert_eq!(io.outputs, toolchain::DerivedOutputs::Unavailable);
     }
 }

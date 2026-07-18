@@ -468,6 +468,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     // We don't need to add an edge from the root node if we're in this branch
                     if let PackageNode::Workspace(dependency_workspace) = dependency_workspace {
                         let from_task_id = TaskId::from_graph(dependency_workspace, from);
+                        if self.entrypoint_exclusions.contains(&from_task_id) {
+                            return;
+                        }
                         if let Some(allowed_tasks) = &allowed_tasks
                             && !allowed_tasks.contains(&from_task_id)
                         {
@@ -493,6 +496,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .task_id()
                     .unwrap_or_else(|| TaskId::new(to_task_id.package(), sibling.task()))
                     .into_owned();
+                if self.entrypoint_exclusions.contains(&sibling_task_id) {
+                    continue;
+                }
                 traversal_queue.push_back(span.to(sibling_task_id));
             }
 
@@ -501,6 +507,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .task_id()
                     .unwrap_or_else(|| TaskId::new(to_task_id.package(), dep.task()))
                     .into_owned();
+                if self.entrypoint_exclusions.contains(&from_task_id) {
+                    continue;
+                }
                 if let Some(allowed_tasks) = &allowed_tasks
                     && !allowed_tasks.contains(&from_task_id)
                 {

@@ -801,12 +801,25 @@ impl RunBuilder {
                 &root_turbo_json,
             )?
         };
-        let scoped_entrypoint_exclusions = self.task_entrypoint_exclusions(
+        let mut scoped_entrypoint_exclusions = self.task_entrypoint_exclusions(
             &pkg_dep_graph,
             unqualified_entrypoint_packages.iter(),
-            filtered_pkgs.keys(),
+            pkg_dep_graph.packages().map(|(name, _)| name),
             &filter_mode,
         );
+        let explicitly_requested_tasks: HashSet<_> = self
+            .opts
+            .run_opts
+            .tasks
+            .iter()
+            .filter_map(|task| {
+                TaskName::from(task.as_str())
+                    .task_id()
+                    .map(TaskId::into_owned)
+            })
+            .collect();
+        scoped_entrypoint_exclusions
+            .retain(|task_id| !explicitly_requested_tasks.contains(task_id));
 
         // When filterUsingTasks is active, --affected is handled by the
         // same task-level filter rather than a separate codepath.
@@ -1270,12 +1283,7 @@ impl RunBuilder {
         if exclusions.is_empty() {
             return engine;
         }
-        let retained: HashSet<_> = engine
-            .task_ids()
-            .filter(|task_id| !exclusions.contains(*task_id))
-            .cloned()
-            .collect();
-        engine.retain_filtered_tasks(&retained)
+        engine.remove_tasks(&exclusions)
     }
 
     #[tracing::instrument(skip_all)]
