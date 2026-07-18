@@ -266,7 +266,8 @@ jobs:
           test -f out/turborepo-lsp-win32-x64.exe
 
       - name: Compile extension
-        run: pnpm --filter turbo-vsc run test-compile
+        working-directory: packages/turbo-vsc
+        run: pnpm run check-types
 
       - name: Package VSIX
         working-directory: packages/turbo-vsc
