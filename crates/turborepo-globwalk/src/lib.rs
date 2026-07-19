@@ -59,17 +59,35 @@ fn join_unix_like_paths(a: &str, b: &str) -> String {
     [a.trim_end_matches('/'), "/", b.trim_start_matches('/')].concat()
 }
 
-fn glob_literals() -> Option<&'static Regex> {
-    static RE: OnceLock<Option<Regex>> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").ok())
-        .as_ref()
+/// Characters that `wax` treats as glob metacharacters but that we escape when
+/// they appear literally in a path. Kept in sync with the character class in
+/// the former `glob_literals` regex (`[\?\*\$:<>\(\)\[\]{},]`).
+#[inline]
+fn is_glob_literal(c: char) -> bool {
+    matches!(
+        c,
+        '?' | '*' | '$' | ':' | '<' | '>' | '(' | ')' | '[' | ']' | '{' | '}' | ','
+    )
 }
 
 fn escape_glob_literals(literal_glob: &str) -> Cow<'_, str> {
-    let Some(glob_literals) = glob_literals() else {
+    // Fast path: paths rarely contain glob metacharacters (a base path is the
+    // common input), so scan first and return a borrow without allocating or
+    // touching the regex engine when there is nothing to escape.
+    if !literal_glob.contains(is_glob_literal) {
         return Cow::Borrowed(literal_glob);
-    };
-    glob_literals.replace_all(literal_glob, "\\$literal")
+    }
+
+    // Each metacharacter is prefixed with a single backslash, mirroring the
+    // previous `replace_all(_, "\\$literal")` behavior exactly.
+    let mut escaped = String::with_capacity(literal_glob.len() + 8);
+    for c in literal_glob.chars() {
+        if is_glob_literal(c) {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+    }
+    Cow::Owned(escaped)
 }
 
 #[tracing::instrument(skip(include, exclude))]
@@ -159,6 +177,20 @@ pub fn fix_glob_pattern(pattern: &str) -> Cow<'_, str> {
             converted
         }
     };
+
+    // Fast path: every normalization below only rewrites patterns containing a
+    // `**` token — all three regexes require the literal substring `**` to
+    // match. When the pattern has none, running the regex engine is guaranteed
+    // to be a no-op, so skip straight to the return logic. `str::contains` uses
+    // a fast substring search, avoiding three regex scans for the common case
+    // (e.g. `package.json`, `dist`, `src/*.ts`).
+    if !p0.contains("**") {
+        return match p0 {
+            Cow::Borrowed(s) if std::ptr::eq(s, pattern) => Cow::Borrowed(pattern),
+            Cow::Borrowed(s) => Cow::Owned(s.to_string()),
+            Cow::Owned(s) => Cow::Owned(s),
+        };
+    }
 
     // Chain regex replacements, taking advantage of Cow<str>:
     // - If no match, replace() returns Cow::Borrowed pointing to the input
@@ -267,7 +299,7 @@ fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
 fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String) {
     // If the glob has a glob literal in it e.g. *
     // then skip trying to read it as a file path.
-    if glob_literals().is_some_and(|glob_literals| glob_literals.is_match(&*glob)) {
+    if glob.contains(is_glob_literal) {
         return;
     }
 
@@ -2191,6 +2223,88 @@ mod test {
             escape_glob_literals("?*$:<>()[]{},"),
             r"\?\*\$\:\<\>\(\)\[\]\{\}\,"
         );
+    }
+
+    /// Reference implementation of `escape_glob_literals` using the original
+    /// regex, kept here so we can prove the hand-rolled scanner is
+    /// byte-for-byte equivalent over a large corpus.
+    fn ref_escape_glob_literals(literal_glob: &str) -> String {
+        use regex::Regex;
+        let re = Regex::new(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").unwrap();
+        re.replace_all(literal_glob, "\\$literal").into_owned()
+    }
+
+    /// Reference implementation of `fix_glob_pattern` that always runs the
+    /// regex chain (i.e. without the `**` fast path), so we can prove the
+    /// fast path never changes the result.
+    fn ref_fix_glob_pattern(pattern: &str) -> String {
+        let p1 = crate::double_doublestar()
+            .map(|re| re.replace(pattern, "**").into_owned())
+            .unwrap_or_else(|| pattern.to_string());
+        let p2 = crate::leading_doublestar()
+            .map(|re| re.replace(&p1, "**/*$suffix").into_owned())
+            .unwrap_or(p1);
+        crate::trailing_doublestar()
+            .map(|re| re.replace(&p2, "$prefix*/**").into_owned())
+            .unwrap_or(p2)
+    }
+
+    /// A corpus that exercises both the fast path (no `**`) and the regex path,
+    /// plus every escapable metacharacter.
+    fn glob_corpus() -> Vec<String> {
+        let bases = [
+            "",
+            "package.json",
+            "src/lib.rs",
+            "dist",
+            "dist/",
+            "src/*.ts",
+            "packages/*/package.json",
+            "**",
+            "**/**",
+            "**/**/**",
+            "**/*.ts",
+            "src/**/*.ts",
+            "**token/foo",
+            "**token**",
+            "a/**/**/b",
+            "foo**bar",
+            "?*$:<>()[]{},",
+            "a(b)c",
+            "list,of,things",
+            "weird[name]/**",
+            "no-metacharacters-here/deeply/nested/path/file.txt",
+            "/absolute/base/path/to/a/monorepo/package",
+        ];
+        let mut corpus: Vec<String> = bases.iter().map(|s| s.to_string()).collect();
+        // A few longer synthetic paths to stress the scanners.
+        for depth in [4usize, 16, 64] {
+            corpus.push(vec!["segment"; depth].join("/"));
+            corpus.push(format!("{}/**/*.rs", vec!["dir"; depth].join("/")));
+        }
+        corpus
+    }
+
+    #[test]
+    fn escape_glob_literals_matches_regex_reference() {
+        for input in glob_corpus() {
+            assert_eq!(
+                escape_glob_literals(&input).as_ref(),
+                ref_escape_glob_literals(&input),
+                "escape mismatch for input {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn fix_glob_pattern_fast_path_matches_regex_reference() {
+        for input in glob_corpus() {
+            assert_eq!(
+                fix_glob_pattern(&input).as_ref(),
+                ref_fix_glob_pattern(&input),
+                "fix_glob_pattern mismatch for input {input:?}"
+            );
+        }
     }
 
     #[test_case("**/*.ts", false ; "simple glob no cleaning")]
