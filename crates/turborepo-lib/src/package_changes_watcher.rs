@@ -456,6 +456,51 @@ impl Subscriber {
         true
     }
 
+    /// Re-evaluate every known package by hash and emit `Package` events only
+    /// for those whose tracked files actually changed.
+    ///
+    /// Used as the fallback when the file-event stream lags
+    /// (`ChangedFiles::All`). Because package hashes come from git, gitignored
+    /// files never affect them, so a burst of writes into a gitignored
+    /// directory produces no events and no rebuild (see #13402). Packages that
+    /// are new since the last hash baseline have no prior hash and are treated
+    /// as changed.
+    async fn emit_changed_packages_by_hash(
+        &self,
+        repo_state: &RepoState,
+        package_file_hashes: &mut HashMap<AnchoredSystemPathBuf, Arc<GitHashes>>,
+    ) {
+        // Only propagate root-package changes when the config defines root
+        // tasks; otherwise the event just creates output noise. In
+        // single-package mode the root IS the only package, so its changes must
+        // always propagate. Mirrors the non-lagged `PackagesChanged` path.
+        let has_root_tasks = repo_state
+            .root_turbo_json
+            .as_ref()
+            .is_some_and(|turbo| turbo.has_root_tasks());
+        // On a lag we no longer know which files changed, so downstream falls
+        // back to package-level (rather than input-level) task selection.
+        let changed_files = Arc::new(HashSet::new());
+
+        for (name, info) in repo_state.pkg_dep_graph.packages() {
+            if !self.single_package && *name == PackageName::Root && !has_root_tasks {
+                continue;
+            }
+            let pkg = WorkspacePackage {
+                name: name.clone(),
+                path: info.package_path().to_owned(),
+            };
+            if !self.is_same_hash(&pkg, package_file_hashes).await {
+                let _ = self
+                    .package_change_events_tx
+                    .send(PackageChangeEvent::Package {
+                        name: pkg.name.clone(),
+                        changed_files: changed_files.clone(),
+                    });
+            }
+        }
+    }
+
     /// Send a Rediscover event and reinitialize repo state. Returns the new
     /// state tuple on success, or `None` if the caller should break.
     async fn rediscover_and_reinit(&self) -> Option<(RepoState, Gitignore)> {
@@ -600,7 +645,27 @@ impl Subscriber {
                 };
 
                 let ChangedFiles::Some(trie) = changed_files else {
-                    rediscover!(self, repo_state, root_gitignore, change_mapper);
+                    // The file-event stream lagged: we dropped an unknown set of
+                    // events and can no longer tell which files changed. Rather
+                    // than force a full rebuild of every task -- which a burst of
+                    // writes into a gitignored directory (e.g. a bundler cache)
+                    // would trigger even though nothing tracked by git changed
+                    // (see #13402) -- refresh repo state and fall back to
+                    // git-backed hashing. Hashing ignores gitignored files by
+                    // construction, so only packages whose tracked files really
+                    // changed are re-run.
+                    let Some((new_state, new_gitignore)) = self.initialize_repo_state().await
+                    else {
+                        break;
+                    };
+                    repo_state = new_state;
+                    root_gitignore = new_gitignore;
+                    change_mapper = match repo_state.get_change_mapper() {
+                        Some(m) => m,
+                        None => break,
+                    };
+                    self.emit_changed_packages_by_hash(&repo_state, &mut package_file_hashes)
+                        .await;
                     continue;
                 };
 
@@ -703,7 +768,10 @@ mod test {
     use radix_trie::Trie;
     use tokio::sync::{broadcast, watch};
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-    use turborepo_filewatch::{hash_watcher::HashWatcher, NotifyError, OptionalWatch};
+    use turborepo_filewatch::{
+        hash_watcher::{HashSpec, HashWatcher, InputGlobs},
+        NotifyError, OptionalWatch,
+    };
     use turborepo_repository::{
         change_mapper::{ChangeMapper, GlobalDepsPackageChangeMapper, PackageChanges},
         package_graph::{PackageGraph, PackageGraphBuilder},
@@ -1806,6 +1874,151 @@ mod test {
             matches!(event, Some(PackageChangeEvent::Rediscover)),
             "expected Rediscover from turbo.json sentinel, got {:?}",
             event
+        );
+    }
+
+    /// Holds the real watchers that must stay alive for the change watcher to
+    /// keep receiving hashes.
+    struct RealHashWatcherHandle {
+        watcher: PackageChangesWatcher,
+        file_events_tx: broadcast::Sender<Result<notify::Event, NotifyError>>,
+        _fs_watcher: Arc<turborepo_filewatch::FileSystemWatcher>,
+        _package_watcher: turborepo_filewatch::package_watcher::PackageWatcher,
+        _hash_watcher: Arc<HashWatcher>,
+    }
+
+    /// Wire a real, git-backed `HashWatcher` into a `PackageChangesWatcher`
+    /// while still feeding the change watcher *synthetic* file events, so a
+    /// test can deterministically force a broadcast lag. The hash watcher
+    /// is pre-warmed for the given packages so their baseline hashes are
+    /// cached before the change watcher captures them (otherwise a package
+    /// with no baseline is treated as changed on the first evaluation).
+    async fn create_test_watcher_with_real_hashing(
+        repo_root: &AbsoluteSystemPathBuf,
+        warm_packages: &[&str],
+    ) -> RealHashWatcherHandle {
+        use turborepo_filewatch::{
+            cookies::CookieWriter, package_watcher::PackageWatcher, FileSystemWatcher,
+        };
+
+        let fs_watcher =
+            Arc::new(FileSystemWatcher::new_with_default_cookie_dir(repo_root).unwrap());
+        let recv = fs_watcher.watch();
+        let cookie_writer = CookieWriter::new(
+            fs_watcher.cookie_dir(),
+            Duration::from_millis(100),
+            recv.clone(),
+        );
+        let scm = SCM::new(repo_root);
+        let package_watcher =
+            PackageWatcher::new(repo_root.clone(), recv, cookie_writer, false).unwrap();
+        let hash_watcher = Arc::new(HashWatcher::new(
+            repo_root.clone(),
+            package_watcher.watch_discovery(),
+            fs_watcher.watch(),
+            scm,
+        ));
+
+        // Pre-warm so hashes are cached (HashState::Hashes) before the change
+        // watcher captures baselines. Without this the baseline query can race
+        // package discovery and return an error, leaving no baseline.
+        for pkg in warm_packages {
+            let pkg_path = repo_root.join_components(&["packages", pkg]);
+            let spec = HashSpec {
+                package_path: repo_root.anchor(&pkg_path).unwrap(),
+                inputs: InputGlobs::Default,
+            };
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+            while tokio::time::Instant::now() < deadline {
+                if hash_watcher.get_file_hashes(spec.clone()).await.is_ok() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        }
+
+        // Synthetic file-event channel for the change watcher so the test can
+        // control (and overflow) it.
+        let (file_events_tx, file_events_rx) = broadcast::channel(128);
+        let (opt_tx, opt_watch) = OptionalWatch::new();
+        opt_tx.send(Some(file_events_rx)).unwrap();
+
+        let watcher = PackageChangesWatcher::new(
+            repo_root.clone(),
+            opt_watch,
+            hash_watcher.clone(),
+            None,
+            false,
+            false,
+            Vec::new(),
+        );
+
+        RealHashWatcherHandle {
+            watcher,
+            file_events_tx,
+            _fs_watcher: fs_watcher,
+            _package_watcher: package_watcher,
+            _hash_watcher: hash_watcher,
+        }
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/13402.
+    //
+    // A burst of writes into a gitignored directory (e.g. a bundler writing
+    // thousands of cache files) overflows the file-event broadcast channel.
+    // The resulting `Lagged` used to be treated as "everything changed",
+    // triggering a full `Rediscover` and re-running every task even though
+    // nothing tracked by git changed. Now a lag falls back to git-backed
+    // hashing, which ignores gitignored files, so no rebuild is triggered.
+    #[tokio::test]
+    async fn lagged_gitignored_burst_does_not_rebuild() {
+        let (_tmp, repo_root) = setup_git_repo();
+
+        // Ignore the bundler-style cache directory and populate it with real
+        // files, mirroring the reproduction. Because it is gitignored, these
+        // files do not contribute to any package's hash.
+        repo_root
+            .join_component(".gitignore")
+            .create_with_contents("node_modules/\n.turbo/\n.cache/\n".as_bytes())
+            .unwrap();
+        let cache_dir = repo_root.join_components(&["packages", "a", ".cache", "chunks"]);
+        cache_dir.create_dir_all().unwrap();
+        for i in 0..500 {
+            cache_dir
+                .join_component(format!("chunk-{i}.js").as_str())
+                .create_with_contents(b"// build artifact")
+                .unwrap();
+        }
+
+        let handle = create_test_watcher_with_real_hashing(&repo_root, &["a", "b"]).await;
+        let file_tx = &handle.file_events_tx;
+        let mut rx = handle.watcher.package_change_events_rx.resubscribe();
+
+        // Consume the initial Rediscover; baselines are now captured.
+        let initial = recv_event(&mut rx, Duration::from_secs(5)).await;
+        assert!(
+            matches!(initial, Some(PackageChangeEvent::Rediscover)),
+            "expected initial Rediscover, got {initial:?}"
+        );
+
+        // Let the subscriber enter its polling loop.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Force a broadcast lag: flood the synthetic channel (capacity 128) with
+        // gitignored cache writes. Sent synchronously so the subscriber's event
+        // task cannot drain them before it lags.
+        for i in 0..500 {
+            let p = cache_dir.join_component(format!("chunk-{i}.js").as_str());
+            let _ = file_tx.send(Ok(make_notify_event_from(&[&p])));
+        }
+
+        // The lag must NOT trigger any rebuild: git-backed hashing ignores the
+        // gitignored writes, so no package hash changed. Previously this
+        // produced a Rediscover (full rebuild).
+        let event = recv_event(&mut rx, Duration::from_secs(2)).await;
+        assert!(
+            event.is_none(),
+            "expected no rebuild after a gitignored file burst, got {event:?}"
         );
     }
 }
