@@ -234,6 +234,9 @@ pub struct PackageResolution {
     repo: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     commit: Option<String>,
+    // Catch-all for unknown fields (e.g. `variants` in pnpm 10 devEngines runtime)
+    #[serde(flatten)]
+    extra: Map<String, serde_yaml_ng::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -823,13 +826,15 @@ impl crate::Lockfile for PnpmLockfile {
             .unwrap_or(false);
 
         for (importer_key, importer) in &importers {
-            if importer_key != "." {
-                for dependency in importer.dependencies.all_dependency_names() {
-                    let Some((_, version)) = importer.dependencies.find_resolution(dependency)
-                    else {
-                        continue;
-                    };
+            for dependency in importer.dependencies.all_dependency_names() {
+                let Some((_, version)) = importer.dependencies.find_resolution(dependency) else {
+                    continue;
+                };
 
+                // The root importer (importer_key == ".") is not fully evaluated by the
+                // closure walk since `devEngines` isn't modeled as a normal dependency.
+                // However, synthetic runtime entries must be retained if present.
+                if importer_key != "." || version.starts_with("runtime:") {
                     let key = self.format_key(dependency, version);
                     self.retain_package(&key, &mut pruned_packages, &mut pruned_snapshots)?;
                 }

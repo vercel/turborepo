@@ -770,7 +770,7 @@ fn parse_resolution(events: &mut Events) -> FResult<PackageResolution> {
             "directory" => set_once(&mut directory, events.string()?)?,
             "repo" => set_once(&mut repo, events.string()?)?,
             "commit" => set_once(&mut commit, events.string()?)?,
-            _ => events.skip_node()?,
+            _ => return Err(Unsupported::here()),
         }
     }
     Ok(PackageResolution {
@@ -780,6 +780,7 @@ fn parse_resolution(events: &mut Events) -> FResult<PackageResolution> {
         directory,
         repo,
         commit,
+        extra: Map::new(),
     })
 }
 
@@ -1466,7 +1467,7 @@ importers:
     someFutureImporterField: hello
 packages:
   a@1.0.0:
-    resolution: {integrity: sha512-a, futureResolutionField: x}
+    resolution: {integrity: sha512-a}
     futureCustomField:
       deeply:
         nested: true

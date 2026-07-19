@@ -1,0 +1,11 @@
+--- crates/turborepo-lockfiles/src/pnpm/data.rs
++++ crates/turborepo-lockfiles/src/pnpm/data.rs
+@@ -236,6 +236,8 @@
+     repo: Option<String>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+     commit: Option<String>,
++    #[serde(flatten)]
++    extra: Map<String, serde_yaml_ng::Value>,
+ }
+ 
+ #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
