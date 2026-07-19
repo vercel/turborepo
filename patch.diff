@@ -1,0 +1,27 @@
+--- crates/turborepo-wax/src/walk/mod.rs
++++ crates/turborepo-wax/src/walk/mod.rs
+@@ -96,8 +96,8 @@
+ 
+ impl<T, R> Isomeric for (T, FileResidue<R>)
+ where
+-    T: Entry,
+-    R: Entry,
++    T: Entry + AsRef<TreeEntry>,
++    R: Entry + AsRef<TreeEntry>,
+ {
+-    type Substituent<'a>
+-        = &'a dyn Entry
++    type Substituent<'a>
++        = &'a TreeEntry
+     where
+         Self: 'a;
+ 
+     fn substituent(separation: &Separation<Self>) -> Self::Substituent<'_> {
+         match separation {
+-            Separation::Filtrate(filtrate) => filtrate.get(),
+-            Separation::Residue(residue) => residue.get().get(),
++            Separation::Filtrate(filtrate) => filtrate.get().as_ref(),
++            Separation::Residue(residue) => residue.get().get().as_ref(),
+         }
+     }
+ }
