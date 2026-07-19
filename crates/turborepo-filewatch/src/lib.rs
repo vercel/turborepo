@@ -126,7 +126,7 @@ impl FileSystemWatcher {
         }
 
         let (file_events_receiver_tx, file_events_receiver_lazy) = OptionalWatch::new();
-        let (send_file_events, mut recv_file_events) = mpsc::channel(1024);
+        let (send_file_events, mut recv_file_events) = mpsc::unbounded_channel();
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
 
         tokio::task::spawn({
@@ -166,7 +166,7 @@ impl FileSystemWatcher {
                 }
                 debug!("filewatching ready");
 
-                let (sender, receiver) = broadcast::channel(1024);
+                let (sender, receiver) = broadcast::channel(524288);
 
                 if file_events_receiver_tx.send(Some(receiver)).is_err() {
                     // if this fails, it means that nobody is listening (and
@@ -225,7 +225,7 @@ fn setup_cookie_dir(cookie_dir: &AbsoluteSystemPath) -> Result<(), WatchError> {
 async fn watch_events(
     _watcher: Backend,
     _watch_root: AbsoluteSystemPathBuf,
-    mut recv_file_events: mpsc::Receiver<EventResult>,
+    mut recv_file_events: mpsc::UnboundedReceiver<EventResult>,
     exit_signal: tokio::sync::oneshot::Receiver<()>,
     broadcast_sender: broadcast::Sender<Result<Event, NotifyError>>,
 ) {
@@ -246,7 +246,7 @@ async fn watch_events(
     #[cfg(feature = "manual_recursive_watch")] mut watcher: Backend,
     #[cfg(not(feature = "manual_recursive_watch"))] _watcher: Backend,
     watch_root: AbsoluteSystemPathBuf,
-    mut recv_file_events: mpsc::Receiver<EventResult>,
+    mut recv_file_events: mpsc::UnboundedReceiver<EventResult>,
     exit_signal: tokio::sync::oneshot::Receiver<()>,
     broadcast_sender: broadcast::Sender<Result<Event, NotifyError>>,
 ) {
@@ -427,10 +427,10 @@ fn manually_add_recursive_watches(
 
 fn run_watcher(
     root: &AbsoluteSystemPath,
-    sender: mpsc::Sender<EventResult>,
+    sender: mpsc::UnboundedSender<EventResult>,
 ) -> Result<Backend, WatchError> {
     let mut watcher = make_watcher(move |res| {
-        let _ = sender.blocking_send(res);
+        let _ = sender.send(res);
     })?;
 
     watch_recursively(root, &mut watcher)?;
@@ -455,7 +455,7 @@ fn make_watcher<F: EventHandler>(event_handler: F) -> Result<Backend, notify::Er
 /// than receiving events from existing state, which some backends can do.
 async fn wait_for_cookie(
     cookie_dir: &AbsoluteSystemPath,
-    recv: &mut mpsc::Receiver<EventResult>,
+    recv: &mut mpsc::UnboundedReceiver<EventResult>,
 ) -> Result<(), WatchError> {
     // TODO: should this be passed in? Currently the caller guarantees that the
     // directory is empty, but it could be the responsibility of the
