@@ -6,9 +6,6 @@
  */
 @import "fumadocs-openapi/css/preset.css";
 
-/* Generate utilities used by @vercel/geistdocs components. */
-@source "../../node_modules/@vercel/geistdocs/dist/**/*.js";
-
 @custom-variant dark (&:is(.dark *));
 
 /*
@@ -113,6 +110,17 @@
    to overlap instead of triggering the TabsList's `overflow-x-auto` scroll. */
 [role="tablist"] > [role="tab"] {
   flex-shrink: 0;
+}
+
+/* Keep page spacing aligned when the sidebar collapses with its container. */
+@container (max-width: 960px) {
+  #nd-page {
+    @apply px-6;
+  }
+
+  #nd-page > .text-fd-muted-foreground:first-child {
+    @apply hidden;
+  }
 }
 
 /* Prevent TOC from being clipped on tablet displays */
