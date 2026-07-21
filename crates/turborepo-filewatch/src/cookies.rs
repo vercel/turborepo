@@ -387,46 +387,6 @@ impl<T> CookiedOptionalWatch<T, ()> {
 }
 
 impl<T, U: CookieReady + Clone> CookiedOptionalWatch<T, U> {
-    /// Create a new sibling cookie watcher that inherits the same fs source as
-    /// this one.
-    pub fn new_sibling<T2>(&self) -> (watch::Sender<Option<T2>>, CookiedOptionalWatch<T2, U>) {
-        let (tx, rx) = watch::channel(None);
-        (
-            tx,
-            CookiedOptionalWatch {
-                value: rx,
-                cookie_index: self.cookie_index.clone(),
-                cookie_writer: self.cookie_writer.clone(),
-                parent: self.parent.clone(),
-            },
-        )
-    }
-
-    /// Create a new child cookie watcher that inherits the same fs source as
-    /// this one, but also has its own cookie source. This allows you to
-    /// synchronize two independent cookie streams.
-    pub fn new_child<T2>(
-        &self,
-    ) -> (
-        watch::Sender<Option<T2>>,
-        CookieRegister,
-        CookiedOptionalWatch<T2, Self>,
-    ) {
-        let (tx, rx) = watch::channel(None);
-        let (cookie_tx, cookie_rx) = watch::channel(0);
-
-        (
-            tx,
-            CookieRegister(cookie_tx, self.cookie_writer.root().to_owned()),
-            CookiedOptionalWatch {
-                value: rx,
-                cookie_index: cookie_rx,
-                cookie_writer: self.cookie_writer.clone(),
-                parent: self.clone(),
-            },
-        )
-    }
-
     #[tracing::instrument(skip(self))]
     pub async fn get(&mut self) -> Result<SomeRef<'_, T>, CookieError> {
         let next_id = self
@@ -437,27 +397,6 @@ impl<T, U: CookieReady + Clone> CookiedOptionalWatch<T, U> {
         self.ready(next_id).await;
         tracing::debug!("got cookie, waiting for data");
         Ok(self.get_inner().await?)
-    }
-
-    #[tracing::instrument(skip(self))]
-    pub async fn get_change(&mut self) -> Result<SomeRef<'_, T>, watch::error::RecvError> {
-        self.value.changed().await?;
-        self.get_inner().await
-    }
-
-    /// Please do not use this data from a user-facing query. It should only
-    /// really be used for internal state management. Equivalent to
-    /// `OptionalWatch::get`
-    ///
-    /// For an example as to why we need this, sometimes file event processing
-    /// needs to access data but issuing a cookie request would deadlock.
-    ///
-    /// `_reason` is purely for documentation purposes and is not used.
-    pub async fn get_raw(
-        &mut self,
-        _reason: &str,
-    ) -> Result<SomeRef<'_, T>, watch::error::RecvError> {
-        self.get_inner().await
     }
 
     /// Get the current value, if it is available.
@@ -472,21 +411,6 @@ impl<T, U: CookieReady + Clone> CookiedOptionalWatch<T, U> {
         let next_id = self.cookie_writer.cookie_request(()).await.ok()?.serial;
         self.cookie_index.wait_for(|v| v >= &next_id).await.ok()?;
         self.get_inner().now_or_never()
-    }
-
-    /// Please do not use this data from a user-facing query. It should only
-    /// really be used for internal state management. Equivalent to
-    /// `OptionalWatch::get`
-    ///
-    /// For an example as to why we need this, sometimes file event processing
-    /// needs to access data but issuing a cookie request would deadlock.
-    ///
-    /// `_reason` is purely for documentation purposes and is not used.
-    pub async fn get_immediate_raw(
-        &mut self,
-        reason: &str,
-    ) -> Option<Result<SomeRef<'_, T>, watch::error::RecvError>> {
-        self.get_raw(reason).now_or_never()
     }
 
     async fn get_inner(&mut self) -> Result<SomeRef<'_, T>, watch::error::RecvError> {

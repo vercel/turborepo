@@ -202,16 +202,8 @@ impl Parser {
         self.refresh_selection()
     }
 
-    pub fn set_selection_start(&mut self, row: u16, col: u16) {
-        self.selection_start = Some((row, col));
-    }
-
     pub fn selection_start(&self) -> Option<(u16, u16)> {
         self.selection_start
-    }
-
-    pub fn clear_selection_start(&mut self) {
-        self.selection_start = None;
     }
 
     pub fn reset(&mut self) {
@@ -220,10 +212,6 @@ impl Parser {
         self.selection_range = None;
         self.selection_start_ref = None;
         self.selection_end_ref = None;
-    }
-
-    pub fn max_scrollback(&self) -> usize {
-        self.max_scrollback
     }
 }
 

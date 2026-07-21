@@ -1,0 +1,54 @@
+# Production binaries shipped from this workspace.
+# See https://github.com/astral-sh/hawk
+#
+# Run (requires Hawk's pinned Rust 1.97.1; this repo normally uses nightly):
+#   rustup toolchain install 1.97.1
+#   # Temporarily allow #![feature] on that toolchain, and drop nightly-only -Z
+#   # flags from .cargo/config.toml, then:
+#   cargo +1.97.1 hawk check \
+#     --manifest-path Cargo.toml \
+#     --exclude-crate turborepo_napi \
+#     --exclude-crate libghostty_vt_sys \
+#     --exclude-crate libghostty_vt
+
+[[production]]
+package = "turbo"
+bin = "turbo"
+reason = "shipped Turborepo CLI binary"
+
+[[production]]
+package = "turborepo-lsp"
+bin = "turborepo-lsp"
+reason = "shipped Turborepo language server binary"
+
+# Cannot use Hawk's default --all-features: native-tls and rustls-tls conflict.
+[[feature-profile]]
+name = "rustls"
+features = ["rustls-tls"]
+
+# Restrict doctests: full-workspace `--doc` fails on bindgen-generated
+# comments in libghostty-vt-sys (despite `doctest = false` on that lib).
+# Include a package that declares `rustls-tls` so the feature profile applies.
+[[doctest]]
+package = "turborepo-api-client"
+
+[[doctest]]
+package = "turbopath"
+
+[[doctest]]
+package = "wax"
+
+[[doctest]]
+package = "turborepo-ci"
+
+# Generated prost output lives under the Cargo target dir.
+[[exclude]]
+crate = "turborepo_daemon"
+file = "turbodprotocol.rs"
+reason = "prost-generated daemon protocol bindings"
+
+# Vendored/raw FFI surface; not a product API we intentionally trim.
+[[exclude]]
+crate = "libghostty_vt_sys"
+module = "bindings"
+reason = "bindgen-generated libghostty-vt FFI bindings"
