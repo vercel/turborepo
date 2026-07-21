@@ -24,7 +24,19 @@
 #![allow(clippy::mutable_key_type)]
 #![allow(clippy::result_large_err)]
 
-use std::{fmt::Debug, future::IntoFuture, path::Path, sync::Arc, time::Duration};
+#[cfg(not(feature = "manual_recursive_watch"))]
+use std::sync::atomic::AtomicBool;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    future::IntoFuture,
+    path::{Path, PathBuf},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Duration,
+};
 
 // windows -> no recursive watch, watch ancestors
 // linux -> recursive watch, watch ancestors
@@ -37,19 +49,11 @@ use notify::event::EventKind;
 use notify::{Config, RecommendedWatcher};
 use notify::{Event, EventHandler, RecursiveMode, Watcher};
 use thiserror::Error;
-use tokio::sync::{broadcast, mpsc, watch::error::RecvError};
+use tokio::sync::{broadcast, mpsc, watch};
 use tracing::{debug, error, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation};
 #[cfg(feature = "manual_recursive_watch")]
-use {
-    notify::{
-        ErrorKind,
-        event::{CreateKind, EventAttributes},
-    },
-    std::io,
-    tracing::trace,
-    walkdir::WalkDir,
-};
+use {notify::event::CreateKind, tracing::trace, walkdir::WalkDir};
 
 pub mod cookies;
 mod debouncer;
@@ -59,9 +63,11 @@ pub mod globwatcher;
 pub mod hash_watcher;
 mod optional_watch;
 pub mod package_watcher;
+mod repository_ignore;
 mod scm_resource;
 
 pub use optional_watch::OptionalWatch;
+pub use repository_ignore::RepositoryIgnore;
 
 #[cfg(not(target_os = "macos"))]
 type Backend = RecommendedWatcher;
@@ -69,6 +75,398 @@ type Backend = RecommendedWatcher;
 type Backend = FsEventWatcher;
 
 type EventResult = Result<Event, notify::Error>;
+
+const EVENT_CHANNEL_CAPACITY: usize = 1024;
+
+type EventFilter = dyn Fn(&mut Event) + Send + Sync;
+
+#[derive(Default)]
+struct PhysicalInterestState {
+    paths: HashSet<PathBuf>,
+    controls: Vec<mpsc::UnboundedSender<WatcherControl>>,
+}
+
+/// Mutable, explicit physical watch roots for paths that ordinary git-aware
+/// recursion would omit. A root may be nonexistent; Linux watches its nearest
+/// existing ancestor and extends the watch when the path is created.
+#[derive(Clone, Default)]
+pub struct WatchInterest(Arc<Mutex<PhysicalInterestState>>);
+
+impl WatchInterest {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn replace(&self, paths: impl IntoIterator<Item = PathBuf>) {
+        let paths = paths.into_iter().collect();
+        let mut state = self
+            .0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if state.paths == paths {
+            return;
+        }
+        state.paths = paths;
+        state
+            .controls
+            .retain(|control| control.send(WatcherControl::Refresh(None)).is_ok());
+    }
+
+    pub fn extend(&self, paths: impl IntoIterator<Item = PathBuf>) {
+        let mut state = self
+            .0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let previous_len = state.paths.len();
+        state.paths.extend(paths);
+        if state.paths.len() == previous_len {
+            return;
+        }
+        state
+            .controls
+            .retain(|control| control.send(WatcherControl::Refresh(None)).is_ok());
+    }
+
+    /// Waits until every attached Linux driver has applied the current roots.
+    /// This is a no-op for detached interests and non-Linux backends.
+    pub async fn flush(&self) {
+        let controls = self
+            .0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .controls
+            .clone();
+        for control in controls {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            if control.send(WatcherControl::Refresh(Some(tx))).is_ok() {
+                let _ = rx.await;
+            }
+        }
+    }
+
+    fn bind(&self, control: mpsc::UnboundedSender<WatcherControl>) {
+        #[cfg(not(feature = "manual_recursive_watch"))]
+        let _ = control;
+        #[cfg(feature = "manual_recursive_watch")]
+        {
+            let mut state = self
+                .0
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state.controls.push(control.clone());
+            let _ = control.send(WatcherControl::Refresh(None));
+        }
+    }
+
+    #[cfg(feature = "manual_recursive_watch")]
+    fn paths(&self) -> Vec<PathBuf> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .paths
+            .iter()
+            .cloned()
+            .collect()
+    }
+}
+
+#[derive(Debug)]
+enum WatcherControl {
+    Refresh(Option<tokio::sync::oneshot::Sender<()>>),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SourceState {
+    Starting,
+    Ready,
+    Closed,
+}
+
+#[derive(Debug, Error)]
+pub enum SubscribeError {
+    #[error("file watching closed before the subscription was ready")]
+    Closed,
+}
+
+/// Declares which filesystem paths are relevant to a watcher consumer.
+#[derive(Clone)]
+pub struct WatchScope {
+    filter: Arc<EventFilter>,
+    physical: Option<WatchInterest>,
+}
+
+impl WatchScope {
+    pub fn all() -> Self {
+        Self {
+            filter: Arc::new(|_| {}),
+            physical: None,
+        }
+    }
+
+    pub fn predicate(predicate: impl Fn(&Path) -> bool + Send + Sync + 'static) -> Self {
+        Self {
+            filter: Arc::new(move |event| event.paths.retain(|path| predicate(path))),
+            physical: None,
+        }
+    }
+
+    pub fn event_filter(filter: impl Fn(&mut Event) + Send + Sync + 'static) -> Self {
+        Self {
+            filter: Arc::new(filter),
+            physical: None,
+        }
+    }
+
+    /// Adds explicit physical coverage without changing event filtering.
+    pub fn with_physical_interest(mut self, interest: WatchInterest) -> Self {
+        self.physical = Some(interest);
+        self
+    }
+
+    fn filter(&self, event: &mut Event) {
+        (self.filter)(event);
+    }
+}
+
+#[derive(Clone)]
+struct SubscriptionEntry {
+    scope: WatchScope,
+    sender: broadcast::Sender<Result<Event, NotifyError>>,
+}
+
+struct SubscriptionRegistry {
+    next_id: AtomicU64,
+    state: Mutex<SubscriptionRegistryState>,
+    control: mpsc::UnboundedSender<WatcherControl>,
+}
+
+#[derive(Default)]
+struct SubscriptionRegistryState {
+    closed: bool,
+    entries: HashMap<u64, SubscriptionEntry>,
+}
+
+impl SubscriptionRegistry {
+    fn new(control: mpsc::UnboundedSender<WatcherControl>) -> Self {
+        Self {
+            next_id: AtomicU64::new(0),
+            state: Mutex::new(SubscriptionRegistryState::default()),
+            control,
+        }
+    }
+
+    fn close(&self) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.closed = true;
+        state.entries.clear();
+    }
+
+    #[cfg(feature = "manual_recursive_watch")]
+    fn physical_paths(&self) -> Vec<PathBuf> {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .entries
+            .values()
+            .filter_map(|entry| entry.scope.physical.as_ref())
+            .flat_map(WatchInterest::paths)
+            .collect()
+    }
+}
+
+/// A demand-driven source of filesystem events. Each subscription receives only
+/// paths matching its declared scope, so irrelevant bursts do not consume its
+/// bounded channel capacity.
+#[derive(Clone)]
+pub struct WatchSource {
+    ready: watch::Receiver<SourceState>,
+    registry: Arc<SubscriptionRegistry>,
+    repository_ignore: Option<RepositoryIgnore>,
+}
+
+impl WatchSource {
+    #[doc(hidden)]
+    pub fn channel() -> (WatchEventSender, Self) {
+        let (control, _control_rx) = mpsc::unbounded_channel();
+        let registry = Arc::new(SubscriptionRegistry::new(control));
+        let (ready_tx, ready) = watch::channel(SourceState::Starting);
+        let source = Self {
+            ready,
+            registry: registry.clone(),
+            repository_ignore: None,
+        };
+        let _ = ready_tx.send(SourceState::Ready);
+        (
+            WatchEventSender {
+                ready: ready_tx,
+                registry,
+                repository_ignore: None,
+            },
+            source,
+        )
+    }
+
+    #[doc(hidden)]
+    pub fn channel_for_root(root: &Path) -> (WatchEventSender, Self) {
+        let (mut sender, mut source) = Self::channel();
+        let repository_ignore = RepositoryIgnore::new(root);
+        sender.repository_ignore = Some(repository_ignore.clone());
+        source.repository_ignore = Some(repository_ignore);
+        (sender, source)
+    }
+
+    pub fn repository_ignore(&self) -> Option<RepositoryIgnore> {
+        self.repository_ignore.clone()
+    }
+
+    pub async fn ready(&self) -> Result<(), SubscribeError> {
+        let mut ready = self.ready.clone();
+        let state = ready
+            .wait_for(|state| *state != SourceState::Starting)
+            .await
+            .map_err(|_| SubscribeError::Closed)?;
+        if *state == SourceState::Closed {
+            return Err(SubscribeError::Closed);
+        }
+        Ok(())
+    }
+
+    pub async fn subscribe(&self, scope: WatchScope) -> Result<WatchSubscription, SubscribeError> {
+        let id = self.registry.next_id.fetch_add(1, Ordering::Relaxed);
+        let (sender, receiver) = broadcast::channel(EVENT_CHANNEL_CAPACITY);
+        {
+            let mut state = self
+                .registry
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if state.closed {
+                return Err(SubscribeError::Closed);
+            }
+            state.entries.insert(
+                id,
+                SubscriptionEntry {
+                    scope: scope.clone(),
+                    sender,
+                },
+            );
+        }
+
+        // Registration must precede readiness: on Linux the initial physical
+        // walk and readiness cookie can depend on this coverage.
+        if let Some(interest) = &scope.physical {
+            interest.bind(self.registry.control.clone());
+        } else {
+            let _ = self.registry.control.send(WatcherControl::Refresh(None));
+        }
+
+        if let Err(error) = self.ready().await {
+            self.registry
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .entries
+                .remove(&id);
+            return Err(error);
+        }
+
+        Ok(WatchSubscription {
+            id,
+            receiver,
+            registry: self.registry.clone(),
+        })
+    }
+}
+
+pub struct WatchEventSender {
+    ready: watch::Sender<SourceState>,
+    registry: Arc<SubscriptionRegistry>,
+    repository_ignore: Option<RepositoryIgnore>,
+}
+
+impl WatchEventSender {
+    pub fn receiver_count(&self) -> usize {
+        self.registry
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .entries
+            .len()
+    }
+
+    pub fn send(
+        &self,
+        event: Result<Event, NotifyError>,
+    ) -> Result<(), broadcast::error::SendError<Result<Event, NotifyError>>> {
+        let git_control_changed =
+            if let (Some(repository_ignore), Ok(event)) = (&self.repository_ignore, &event) {
+                let invalidates = event
+                    .paths
+                    .iter()
+                    .any(|path| repository_ignore.invalidates_consumers(path));
+                let refresh = event
+                    .paths
+                    .iter()
+                    .any(|path| repository_ignore.should_refresh(path));
+                if refresh {
+                    repository_ignore.refresh();
+                }
+                invalidates
+            } else {
+                false
+            };
+        if git_control_changed {
+            route_event(
+                &self.registry,
+                Err(NotifyError::invalidation(
+                    "Git index or exclude state changed",
+                )),
+            );
+            return Ok(());
+        }
+        match &event {
+            Ok(event) => route_event(&self.registry, Ok(event)),
+            Err(error) => route_event(&self.registry, Err(error.clone())),
+        }
+        Ok(())
+    }
+}
+
+impl Drop for WatchEventSender {
+    fn drop(&mut self) {
+        self.registry.close();
+        let _ = self.ready.send(SourceState::Closed);
+    }
+}
+
+pub struct WatchSubscription {
+    id: u64,
+    receiver: broadcast::Receiver<Result<Event, NotifyError>>,
+    registry: Arc<SubscriptionRegistry>,
+}
+
+impl WatchSubscription {
+    pub async fn recv(
+        &mut self,
+    ) -> Result<Result<Event, NotifyError>, broadcast::error::RecvError> {
+        self.receiver.recv().await
+    }
+}
+
+impl Drop for WatchSubscription {
+    fn drop(&mut self) {
+        self.registry
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .entries
+            .remove(&self.id);
+        let _ = self.registry.control.send(WatcherControl::Refresh(None));
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum WatchError {
@@ -78,6 +476,8 @@ pub enum WatchError {
     Stopped(#[from] std::sync::mpsc::RecvError),
     #[error("enumerating recursive watch: {0}")]
     WalkDir(#[from] walkdir::Error),
+    #[error("enumerating git-aware recursive watch: {0}")]
+    Ignore(#[from] ignore::Error),
     #[error("filewatching failed to start: {0}")]
     Setup(String),
 }
@@ -86,23 +486,49 @@ pub enum WatchError {
 // Clone. We provide a wrapper that uses an Arc to implement Clone so that we
 // can send errors on a broadcast channel.
 #[derive(Clone, Debug, Error)]
-#[error("{0}")]
-pub struct NotifyError(Arc<notify::Error>);
+#[error("{error}")]
+pub struct NotifyError {
+    error: Arc<notify::Error>,
+    invalidation: bool,
+}
+
+impl NotifyError {
+    fn invalidation(message: &str) -> Self {
+        Self {
+            error: Arc::new(notify::Error::generic(message)),
+            invalidation: true,
+        }
+    }
+
+    fn fatal(message: String) -> Self {
+        Self {
+            error: Arc::new(notify::Error::generic(&message)),
+            invalidation: false,
+        }
+    }
+
+    pub fn is_invalidation(&self) -> bool {
+        self.invalidation
+    }
+}
 
 impl From<notify::Error> for NotifyError {
     fn from(value: notify::Error) -> Self {
-        Self(Arc::new(value))
+        Self {
+            error: Arc::new(value),
+            invalidation: false,
+        }
     }
 }
 
 pub struct FileSystemWatcher {
-    receiver: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
     // _exit_ch exists to trigger a close on the receiver when an instance
     // of this struct is dropped. The task that is receiving events will exit,
     // dropping the other sender for the broadcast channel, causing all receivers
     // to be notified of a close.
     _exit_ch: tokio::sync::oneshot::Sender<()>,
     cookie_dir: AbsoluteSystemPathBuf,
+    source: WatchSource,
 }
 
 impl FileSystemWatcher {
@@ -125,79 +551,148 @@ impl FileSystemWatcher {
             )));
         }
 
-        let (file_events_receiver_tx, file_events_receiver_lazy) = OptionalWatch::new();
-        let (send_file_events, mut recv_file_events) = mpsc::channel(1024);
+        let (send_file_events, mut recv_file_events) = mpsc::unbounded_channel();
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
+        let (ready_tx, ready_rx) = watch::channel(SourceState::Starting);
+        let (watch_control_tx, watch_control_rx) = mpsc::unbounded_channel();
+        let registry = Arc::new(SubscriptionRegistry::new(watch_control_tx));
+        let repository_ignore = RepositoryIgnore::new(root.as_std_path());
+        let source_repository_ignore = repository_ignore.clone();
+        #[cfg(not(feature = "manual_recursive_watch"))]
+        let backend_ready = Arc::new(AtomicBool::new(false));
+        #[cfg(not(feature = "manual_recursive_watch"))]
+        let ordered_driver_delivery = Arc::new(AtomicBool::new(false));
 
         tokio::task::spawn({
             let cookie_dir = cookie_dir.clone();
             let watch_root = root.to_owned();
+            let registry = registry.clone();
+            let repository_ignore = repository_ignore.clone();
+            #[cfg(not(feature = "manual_recursive_watch"))]
+            let backend_ready = backend_ready.clone();
+            #[cfg(not(feature = "manual_recursive_watch"))]
+            let ordered_driver_delivery = ordered_driver_delivery.clone();
             async move {
                 // this task never yields, so run it in the blocking threadpool
                 let watch_root_task = watch_root.clone();
                 let cookie_dir_task = cookie_dir.clone();
+                let task_repository_ignore = repository_ignore.clone();
+                #[cfg(not(feature = "manual_recursive_watch"))]
+                let task_backend_ready = backend_ready.clone();
+                #[cfg(not(feature = "manual_recursive_watch"))]
+                let task_ordered_driver_delivery = ordered_driver_delivery.clone();
+                #[cfg(not(feature = "manual_recursive_watch"))]
+                let task_registry = registry.clone();
                 let task = tokio::task::spawn_blocking(move || {
                     setup_cookie_dir(&cookie_dir_task)?;
-                    run_watcher(&watch_root_task, send_file_events)
+                    run_watcher(
+                        &watch_root_task,
+                        &cookie_dir_task,
+                        send_file_events,
+                        &task_repository_ignore,
+                        #[cfg(not(feature = "manual_recursive_watch"))]
+                        task_backend_ready,
+                        #[cfg(not(feature = "manual_recursive_watch"))]
+                        task_ordered_driver_delivery,
+                        #[cfg(not(feature = "manual_recursive_watch"))]
+                        task_registry,
+                    )
                 });
 
-                let Ok(Ok(watcher)) = task.await else {
+                let Ok(Ok((mut watcher, watched))) = task.await else {
                     // if the watcher fails, just return. we don't set the event sender, and other
                     // services will never start
                     error!(
                         "file watcher failed to start. watch mode and other daemon-dependent \
                          features will not work"
                     );
+                    registry.close();
+                    let _ = ready_tx.send(SourceState::Closed);
                     return;
                 };
 
                 // Ensure we are ready to receive new events, not events for existing state
                 debug!("waiting for initial filesystem cookie");
-                if let Err(e) = wait_for_cookie(&cookie_dir, &mut recv_file_events).await {
-                    // if we can't get a cookie here, we should not make the file
-                    // watching available to downstream services
-                    error!(
-                        "failed to wait for initial filesystem cookie: {}. This means the file \
-                         system event backend (e.g. FSEvents on macOS) is not delivering events. \
-                         watch mode will not work. Try running `turbo daemon clean` and retrying.",
-                        e
-                    );
-                    return;
-                }
+                let mut watch_control_rx = watch_control_rx;
+                let initial_watched = match wait_for_cookie(
+                    &cookie_dir,
+                    &watch_root,
+                    &mut watcher,
+                    &mut recv_file_events,
+                    &registry,
+                    &mut watch_control_rx,
+                    watched,
+                )
+                .await
+                {
+                    Ok(watched) => watched,
+                    Err(e) => {
+                        // if we can't get a cookie here, we should not make the file
+                        // watching available to downstream services
+                        error!(
+                            "failed to wait for initial filesystem cookie: {}. This means the \
+                             file system event backend (e.g. FSEvents on macOS) is not delivering \
+                             events. watch mode will not work. Try running `turbo daemon clean` \
+                             and retrying.",
+                            e
+                        );
+                        registry.close();
+                        let _ = ready_tx.send(SourceState::Closed);
+                        return;
+                    }
+                };
                 debug!("filewatching ready");
 
-                let (sender, receiver) = broadcast::channel(1024);
+                // Keep the bounded channel as the startup handoff (and as the
+                // Linux mutation queue), but route directly after the cookie
+                // has established readiness on non-mutating backends.
+                #[cfg(not(feature = "manual_recursive_watch"))]
+                backend_ready.store(true, Ordering::Release);
 
-                if file_events_receiver_tx.send(Some(receiver)).is_err() {
-                    // if this fails, it means that nobody is listening (and
-                    // nobody ever will) likely because the
-                    // watcher has been dropped. We can just exit early.
-                    tracing::debug!("no downstream listeners, exiting");
-                    return;
+                if ready_tx.send(SourceState::Ready).is_err() {
+                    tracing::debug!("no scoped downstream listeners");
                 }
 
-                watch_events(watcher, watch_root, recv_file_events, exit_signal, sender).await;
+                watch_events(
+                    watcher,
+                    watch_root,
+                    cookie_dir,
+                    recv_file_events,
+                    exit_signal,
+                    registry.clone(),
+                    watch_control_rx,
+                    initial_watched,
+                    repository_ignore,
+                )
+                .await;
+                registry.close();
+                let _ = ready_tx.send(SourceState::Closed);
             }
         });
 
         Ok(Self {
-            receiver: file_events_receiver_lazy,
             _exit_ch: exit_ch,
             cookie_dir,
+            source: WatchSource {
+                ready: ready_rx,
+                registry,
+                repository_ignore: Some(source_repository_ignore),
+            },
         })
     }
 
     /// A convenience method around the sender watcher that waits for file
     /// watching to be ready and then returns a handle to the file stream.
-    pub async fn subscribe(
-        &self,
-    ) -> Result<broadcast::Receiver<Result<Event, NotifyError>>, RecvError> {
-        let mut receiver = self.receiver.clone();
-        receiver.get().await.map(|r| r.resubscribe())
+    pub async fn subscribe(&self) -> Result<WatchSubscription, SubscribeError> {
+        self.source.subscribe(WatchScope::all()).await
     }
 
-    pub fn watch(&self) -> OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>> {
-        self.receiver.clone()
+    pub fn watch(&self) -> WatchSource {
+        self.source()
+    }
+
+    pub fn source(&self) -> WatchSource {
+        self.source.clone()
     }
 
     pub fn cookie_dir(&self) -> &AbsoluteSystemPath {
@@ -222,41 +717,156 @@ fn setup_cookie_dir(cookie_dir: &AbsoluteSystemPath) -> Result<(), WatchError> {
 }
 
 #[cfg(not(any(feature = "watch_ancestors", feature = "manual_recursive_watch")))]
+#[allow(clippy::too_many_arguments)]
 async fn watch_events(
-    _watcher: Backend,
-    _watch_root: AbsoluteSystemPathBuf,
-    mut recv_file_events: mpsc::Receiver<EventResult>,
+    mut watcher: Backend,
+    watch_root: AbsoluteSystemPathBuf,
+    _cookie_dir: AbsoluteSystemPathBuf,
+    mut recv_file_events: mpsc::UnboundedReceiver<EventResult>,
     exit_signal: tokio::sync::oneshot::Receiver<()>,
-    broadcast_sender: broadcast::Sender<Result<Event, NotifyError>>,
+    registry: Arc<SubscriptionRegistry>,
+    _watch_control_rx: mpsc::UnboundedReceiver<WatcherControl>,
+    mut watched: HashSet<PathBuf>,
+    repository_ignore: RepositoryIgnore,
 ) {
     let mut exit_signal = exit_signal;
     'outer: loop {
         tokio::select! {
             _ = &mut exit_signal => break 'outer,
             Some(event) = recv_file_events.recv().into_future() => {
-                // we don't care if we fail to send, it just means no one is currently watching
-                let _ = broadcast_sender.send(event.map_err(NotifyError::from));
+                if let Err(error) = route_non_mutating_backend_event(
+                    &watch_root,
+                    &registry,
+                    &repository_ignore,
+                    &mut watcher,
+                    &mut watched,
+                    event,
+                ) {
+                    route_fatal_driver_error(
+                        &registry,
+                        "failed to refresh Git control watches",
+                        &error,
+                    );
+                    break 'outer;
+                }
             }
         }
     }
 }
 
 #[cfg(any(feature = "watch_ancestors", feature = "manual_recursive_watch"))]
+#[allow(clippy::too_many_arguments)]
 async fn watch_events(
     #[cfg(feature = "manual_recursive_watch")] mut watcher: Backend,
-    #[cfg(not(feature = "manual_recursive_watch"))] _watcher: Backend,
+    #[cfg(not(feature = "manual_recursive_watch"))] mut watcher: Backend,
     watch_root: AbsoluteSystemPathBuf,
-    mut recv_file_events: mpsc::Receiver<EventResult>,
+    #[cfg(feature = "manual_recursive_watch")] cookie_dir: AbsoluteSystemPathBuf,
+    #[cfg(not(feature = "manual_recursive_watch"))] _cookie_dir: AbsoluteSystemPathBuf,
+    mut recv_file_events: mpsc::UnboundedReceiver<EventResult>,
     exit_signal: tokio::sync::oneshot::Receiver<()>,
-    broadcast_sender: broadcast::Sender<Result<Event, NotifyError>>,
+    registry: Arc<SubscriptionRegistry>,
+    #[cfg(feature = "manual_recursive_watch")] mut watch_control_rx: mpsc::UnboundedReceiver<
+        WatcherControl,
+    >,
+    #[cfg(not(feature = "manual_recursive_watch"))] _watch_control_rx: mpsc::UnboundedReceiver<
+        WatcherControl,
+    >,
+    #[cfg(feature = "manual_recursive_watch")] mut watched: HashSet<PathBuf>,
+    #[cfg(not(feature = "manual_recursive_watch"))] mut watched: HashSet<PathBuf>,
+    repository_ignore: RepositoryIgnore,
 ) {
     let mut exit_signal = exit_signal;
+    #[cfg(feature = "manual_recursive_watch")]
+    let mut explicit_watched =
+        match explicit_watch_paths(watch_root.as_std_path(), &registry.physical_paths()) {
+            Ok(watched) => watched,
+            Err(error) => {
+                warn!("failed to initialize explicit filesystem watches: {error}");
+                route_fatal_driver_error(
+                    &registry,
+                    "failed to initialize explicit filesystem watches",
+                    &error,
+                );
+                return;
+            }
+        };
     'outer: loop {
         tokio::select! {
             _ = &mut exit_signal => break 'outer,
+            _control = async {
+                #[cfg(feature = "manual_recursive_watch")]
+                {
+                    watch_control_rx.recv().await
+                }
+                #[cfg(not(feature = "manual_recursive_watch"))]
+                std::future::pending::<Option<WatcherControl>>().await
+            } => {
+                #[cfg(feature = "manual_recursive_watch")]
+                if let Some(WatcherControl::Refresh(ack)) = _control {
+                    let mut acknowledgements = ack.into_iter().collect::<Vec<_>>();
+                    while let Ok(WatcherControl::Refresh(ack)) = watch_control_rx.try_recv() {
+                        acknowledgements.extend(ack);
+                    }
+                    let explicit = registry.physical_paths();
+                    if let Err(error) = refresh_explicit_watches(
+                        watch_root.as_std_path(),
+                        cookie_dir.as_std_path(),
+                        &explicit,
+                        &mut watcher,
+                        &mut watched,
+                        &mut explicit_watched,
+                        &repository_ignore,
+                    ) {
+                        warn!("failed to refresh explicit filesystem watches: {error}");
+                        route_fatal_driver_error(
+                            &registry,
+                            "failed to refresh explicit filesystem watches",
+                            &error,
+                        );
+                        break 'outer;
+                    }
+                    for acknowledgement in acknowledgements {
+                        let _ = acknowledgement.send(());
+                    }
+                }
+            }
             Some(event) = recv_file_events.recv().into_future() => {
+                #[cfg(not(feature = "manual_recursive_watch"))]
+                {
+                    if let Err(error) = route_non_mutating_backend_event(
+                        &watch_root,
+                        &registry,
+                        &repository_ignore,
+                        &mut watcher,
+                        &mut watched,
+                        event,
+                    ) {
+                        route_fatal_driver_error(
+                            &registry,
+                            "failed to refresh Git control watches",
+                            &error,
+                        );
+                        break 'outer;
+                    }
+                    continue;
+                }
+                #[cfg(feature = "manual_recursive_watch")]
                 match event {
+                    #[allow(unused_mut)]
                     Ok(mut event) => {
+                        let repository_state_changed = event
+                            .paths
+                            .iter()
+                            .any(|path| repository_ignore.should_refresh(path));
+                        let previous_controls = repository_state_changed
+                            .then(|| repository_ignore.control_paths());
+                        let git_control_changed = event
+                            .paths
+                            .iter()
+                            .any(|path| repository_ignore.invalidates_consumers(path));
+                        if repository_state_changed {
+                            repository_ignore.refresh();
+                        }
                         // Note that we need to filter relevant events
                         // before doing manual recursive watching so that
                         // we don't try to add watches to siblings of the
@@ -266,34 +876,246 @@ async fn watch_events(
 
                         #[cfg(feature = "manual_recursive_watch")]
                         {
+                            if matches!(event.kind, EventKind::Remove(_)) {
+                                for removed in &event.paths {
+                                    watched.retain(|path| !path.starts_with(removed));
+                                    explicit_watched.retain(|path| !path.starts_with(removed));
+                                }
+                            }
+                            if repository_state_changed
+                                && let Err(error) = add_control_watches(
+                                    watch_root.as_std_path(),
+                                    &repository_ignore.control_paths(),
+                                    &mut watcher,
+                                    &mut watched,
+                                )
+                            {
+                                route_fatal_driver_error(
+                                    &registry,
+                                    "failed to refresh Git control watches",
+                                    &error,
+                                );
+                                break 'outer;
+                            }
+                            if let Some(previous_controls) = previous_controls.as_deref()
+                                && let Err(error) = reconcile_control_watches(
+                                    watch_root.as_std_path(),
+                                    previous_controls,
+                                    &repository_ignore.control_paths(),
+                                    &mut watcher,
+                                    &mut watched,
+                                    |path| {
+                                        repository_ignore.is_relevant(path, true)
+                                            || explicit_watched.contains(path)
+                                            || cookie_dir.as_std_path().starts_with(path)
+                                            || path.starts_with(cookie_dir.as_std_path())
+                                    },
+                                )
+                            {
+                                route_fatal_driver_error(
+                                    &registry,
+                                    "failed to reconcile Git control watches",
+                                    &error,
+                                );
+                                break 'outer;
+                            }
+                            if repository_state_changed
+                                && let Err(error) = reconcile_ordinary_watches(
+                                watch_root.as_std_path(),
+                                cookie_dir.as_std_path(),
+                                &registry.physical_paths(),
+                                &mut watcher,
+                                &mut watched,
+                                &repository_ignore,
+                            ) {
+                                warn!("failed to reconcile git-aware filesystem watches: {error}");
+                                route_fatal_driver_error(
+                                    &registry,
+                                    "failed to reconcile git-aware filesystem watches",
+                                    &error,
+                                );
+                                break 'outer;
+                            }
                             if event.kind == EventKind::Create(CreateKind::Folder) {
                                 for new_path in &event.paths {
-                                    if let Err(err) = manually_add_recursive_watches(new_path, &mut watcher, Some(&broadcast_sender)) {
-                                        match err {
-                                            WatchError::WalkDir(err) => {
-                                                // Likely the path no longer exists
-                                                debug!("encountered error watching filesystem {}", err);
-                                                continue;
-                                            },
-                                            _ => {
-                                                warn!("encountered error watching filesystem {}", err);
-                                                break 'outer;
+                                    let explicit = registry.physical_paths();
+                                    if explicit.iter().any(|interest| {
+                                        interest.starts_with(new_path) || new_path.starts_with(interest)
+                                    }) {
+                                        if let Err(error) = refresh_explicit_watches(
+                                            watch_root.as_std_path(),
+                                            cookie_dir.as_std_path(),
+                                            &explicit,
+                                            &mut watcher,
+                                            &mut watched,
+                                            &mut explicit_watched,
+                                            &repository_ignore,
+                                        ) {
+                                            warn!("failed to refresh materialized explicit filesystem watches: {error}");
+                                            route_fatal_driver_error(
+                                                &registry,
+                                                "failed to refresh materialized explicit filesystem watches",
+                                                &error,
+                                            );
+                                            break 'outer;
+                                        }
+                                        route_materialized_interests(
+                                            &registry,
+                                            &explicit,
+                                            new_path,
+                                        );
+                                    } else {
+                                        let result = add_ordinary_watches(
+                                            watch_root.as_std_path(),
+                                            new_path,
+                                            &mut watcher,
+                                            &mut watched,
+                                            Some(&registry),
+                                            &repository_ignore,
+                                        );
+                                        if let Err(err) = result {
+                                            match err {
+                                                WatchError::WalkDir(err) => {
+                                                    // Likely the path no longer exists
+                                                    debug!("encountered error watching filesystem {}", err);
+                                                    continue;
+                                                },
+                                                _ => {
+                                                    warn!("encountered error watching filesystem {}", err);
+                                                    route_fatal_driver_error(
+                                                        &registry,
+                                                        "failed to extend recursive filesystem watches",
+                                                        &err,
+                                                    );
+                                                    break 'outer;
+                                                }
                                             }
-
                                         }
                                     }
                                 }
                             }
                         }
-                        // we don't care if we fail to send, it just means no one is currently watching
-                        let _ = broadcast_sender.send(Ok(event));
+                        if git_control_changed {
+                            route_event(
+                                &registry,
+                                Err(NotifyError::invalidation(
+                                    "Git index or exclude state changed",
+                                )),
+                            );
+                        } else {
+                            route_event(&registry, Ok(&event));
+                        }
                     },
                     Err(error) => {
-                        // we don't care if we fail to send, it just means no one is currently watching
-                        let _ = broadcast_sender.send(Err(NotifyError::from(error)));
+                        let error = NotifyError::from(error);
+                        route_event(&registry, Err(error.clone()));
                     }
                 }
             }
+        }
+    }
+}
+
+#[cfg(not(feature = "manual_recursive_watch"))]
+fn route_non_mutating_backend_event(
+    watch_root: &AbsoluteSystemPath,
+    registry: &SubscriptionRegistry,
+    repository_ignore: &RepositoryIgnore,
+    watcher: &mut Backend,
+    watched: &mut HashSet<PathBuf>,
+    event: EventResult,
+) -> Result<(), WatchError> {
+    match event {
+        #[allow(unused_mut)]
+        Ok(mut event) => {
+            let repository_state_changed = event
+                .paths
+                .iter()
+                .any(|path| repository_ignore.should_refresh(path));
+            let git_control_changed = event
+                .paths
+                .iter()
+                .any(|path| repository_ignore.invalidates_consumers(path));
+            if repository_state_changed {
+                let previous_controls = repository_ignore.control_paths();
+                repository_ignore.refresh();
+                reconcile_control_watches(
+                    watch_root.as_std_path(),
+                    &previous_controls,
+                    &repository_ignore.control_paths(),
+                    watcher,
+                    watched,
+                    |path| non_mutating_ordinary_owner(watch_root.as_std_path(), path),
+                )?;
+            }
+
+            #[cfg(feature = "watch_ancestors")]
+            filter_relevant(watch_root, &mut event);
+            #[cfg(not(feature = "watch_ancestors"))]
+            let _ = watch_root;
+
+            if git_control_changed {
+                route_event(
+                    registry,
+                    Err(NotifyError::invalidation(
+                        "Git index or exclude state changed",
+                    )),
+                );
+            } else {
+                route_event(registry, Ok(&event));
+            }
+        }
+        Err(error) => route_event(registry, Err(NotifyError::from(error))),
+    }
+    Ok(())
+}
+
+fn route_fatal_driver_error(registry: &SubscriptionRegistry, context: &str, error: &WatchError) {
+    route_event(
+        registry,
+        Err(NotifyError::fatal(format!("{context}: {error}"))),
+    );
+}
+
+fn route_event(registry: &SubscriptionRegistry, event: Result<&Event, NotifyError>) {
+    let event = match event {
+        Ok(event) if event.need_rescan() => Err(NotifyError::invalidation(
+            "file watching backend requires a full rescan",
+        )),
+        event => event,
+    };
+    let entries: Vec<_> = registry
+        .state
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .entries
+        .iter()
+        .map(|(id, entry)| (*id, entry.clone()))
+        .collect();
+    let mut closed = Vec::new();
+    for (id, entry) in entries {
+        let scoped_event = match &event {
+            Ok(event) => {
+                let mut event = (*event).clone();
+                entry.scope.filter(&mut event);
+                if event.paths.is_empty() {
+                    continue;
+                }
+                Ok(event)
+            }
+            Err(error) => Err((*error).clone()),
+        };
+        if entry.sender.send(scoped_event).is_err() {
+            closed.push(id);
+        }
+    }
+    if !closed.is_empty() {
+        let mut entries = registry
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        for id in closed {
+            entries.entries.remove(&id);
         }
     }
 }
@@ -358,31 +1180,47 @@ fn watch_parents(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(),
 }
 
 #[cfg(not(feature = "manual_recursive_watch"))]
-fn watch_recursively(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(), WatchError> {
+fn watch_recursively(
+    root: &AbsoluteSystemPath,
+    watcher: &mut Backend,
+    _watched: &mut HashSet<PathBuf>,
+    _repository_ignore: &RepositoryIgnore,
+) -> Result<(), WatchError> {
     watcher.watch(root.as_std_path(), RecursiveMode::Recursive)?;
     Ok(())
 }
 
-#[cfg(feature = "manual_recursive_watch")]
 fn is_not_found(err: &notify::Error) -> bool {
-    if let ErrorKind::Io(ref io_err) = err.kind {
-        io_err.kind() == io::ErrorKind::NotFound
+    if let notify::ErrorKind::Io(ref io_err) = err.kind {
+        io_err.kind() == std::io::ErrorKind::NotFound
     } else {
         false
     }
 }
 
 #[cfg(feature = "manual_recursive_watch")]
-fn watch_recursively(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(), WatchError> {
-    // Don't synthesize initial events
-    manually_add_recursive_watches(root.as_std_path(), watcher, None)
+fn watch_recursively(
+    root: &AbsoluteSystemPath,
+    watcher: &mut Backend,
+    watched: &mut HashSet<PathBuf>,
+    repository_ignore: &RepositoryIgnore,
+) -> Result<(), WatchError> {
+    add_ordinary_watches(
+        root.as_std_path(),
+        root.as_std_path(),
+        watcher,
+        watched,
+        None,
+        repository_ignore,
+    )
 }
 
 #[cfg(feature = "manual_recursive_watch")]
-fn manually_add_recursive_watches(
+fn add_unignored_recursive_watches(
     root: &Path,
     watcher: &mut Backend,
-    sender: Option<&broadcast::Sender<Result<Event, NotifyError>>>,
+    watched: &mut HashSet<PathBuf>,
+    _registry: Option<&SubscriptionRegistry>,
 ) -> Result<(), WatchError> {
     // Note that WalkDir yields the root as well as doing the walk.
     // filter_entry prunes entire subtrees so we never descend into
@@ -398,6 +1236,9 @@ fn manually_add_recursive_watches(
     {
         let dir = dir?;
         if dir.file_type().is_dir() {
+            if !watched.insert(dir.path().to_owned()) {
+                continue;
+            }
             trace!("manually watching {}", dir.path().display());
             match watcher.watch(dir.path(), RecursiveMode::NonRecursive) {
                 Ok(()) => {}
@@ -407,37 +1248,471 @@ fn manually_add_recursive_watches(
                 Err(e) => return Err(e.into()),
             }
         }
-        if let Some(sender) = sender.as_ref() {
-            let create_kind = if dir.file_type().is_dir() {
-                CreateKind::Folder
-            } else {
-                CreateKind::File
-            };
+    }
+    Ok(())
+}
+
+#[cfg(feature = "manual_recursive_watch")]
+fn add_ordinary_watches(
+    repo_root: &Path,
+    subtree: &Path,
+    watcher: &mut Backend,
+    watched: &mut HashSet<PathBuf>,
+    registry: Option<&SubscriptionRegistry>,
+    repository_ignore: &RepositoryIgnore,
+) -> Result<(), WatchError> {
+    let mut paths: Vec<_> = ordinary_watch_paths(repo_root, subtree, repository_ignore)?
+        .into_iter()
+        .collect();
+    paths.sort_by_key(|path| path.components().count());
+    for path in paths {
+        if !watched.insert(path.clone()) {
+            continue;
+        }
+        watcher.watch(&path, RecursiveMode::NonRecursive)?;
+        if let Some(registry) = registry {
             let event = Event {
-                paths: vec![dir.path().to_owned()],
-                kind: EventKind::Create(create_kind),
-                attrs: EventAttributes::default(),
+                paths: vec![path],
+                kind: EventKind::Create(CreateKind::Folder),
+                attrs: Default::default(),
             };
-            // It's ok if we fail to send, it means we're shutting down
-            let _ = sender.send(Ok(event));
+            route_event(registry, Ok(&event));
         }
     }
     Ok(())
 }
 
+#[cfg(feature = "manual_recursive_watch")]
+fn ordinary_watch_paths(
+    repo_root: &Path,
+    subtree: &Path,
+    repository_ignore: &RepositoryIgnore,
+) -> Result<HashSet<PathBuf>, WatchError> {
+    let subtree = subtree.to_owned();
+    let mut paths = HashSet::new();
+    for entry in WalkDir::new(repo_root).into_iter().filter_entry(|entry| {
+        let path = entry.path();
+        (subtree.starts_with(path) || path.starts_with(&subtree))
+            && !matches!(entry.file_name().to_str(), Some(".git" | "node_modules"))
+            && (path == repo_root || repository_ignore.is_relevant(path, true))
+    }) {
+        let entry = entry?;
+        if entry.file_type().is_dir() {
+            paths.insert(entry.into_path());
+        }
+    }
+    Ok(paths)
+}
+
+#[cfg(feature = "manual_recursive_watch")]
+fn reconcile_ordinary_watches(
+    repo_root: &Path,
+    cookie_dir: &Path,
+    explicit: &[PathBuf],
+    watcher: &mut Backend,
+    watched: &mut HashSet<PathBuf>,
+    repository_ignore: &RepositoryIgnore,
+) -> Result<(), WatchError> {
+    let desired = ordinary_watch_paths(repo_root, repo_root, repository_ignore)?;
+    for path in &desired {
+        if watched.insert(path.clone()) {
+            watcher.watch(path, RecursiveMode::NonRecursive)?;
+        }
+    }
+
+    let stale: Vec<_> = watched
+        .iter()
+        .filter(|path| {
+            !desired.contains(*path)
+                && !cookie_dir.starts_with(path)
+                && !path.starts_with(cookie_dir)
+                && !explicit
+                    .iter()
+                    .any(|interest| interest.starts_with(path) || path.starts_with(interest))
+                && !repository_ignore
+                    .control_paths()
+                    .iter()
+                    .any(|control| control.starts_with(path) || path.starts_with(control))
+        })
+        .cloned()
+        .collect();
+    for path in stale {
+        match watcher.unwatch(&path) {
+            Ok(()) => {
+                watched.remove(&path);
+            }
+            Err(error) if is_not_found(&error) => {
+                watched.remove(&path);
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "manual_recursive_watch")]
+fn add_explicit_watches(
+    repo_root: &Path,
+    interests: &[PathBuf],
+    watcher: &mut Backend,
+    watched: &mut HashSet<PathBuf>,
+) -> Result<(), WatchError> {
+    for path in explicit_watch_paths(repo_root, interests)? {
+        if watched.insert(path.clone()) {
+            watcher.watch(&path, RecursiveMode::NonRecursive)?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "manual_recursive_watch")]
+fn explicit_watch_paths(
+    repo_root: &Path,
+    interests: &[PathBuf],
+) -> Result<HashSet<PathBuf>, WatchError> {
+    let mut paths = HashSet::new();
+    for interest in interests.iter().filter(|path| path.starts_with(repo_root)) {
+        let mut guard = interest.parent().unwrap_or(repo_root);
+        while !guard.is_dir() {
+            let Some(parent) = guard.parent() else {
+                break;
+            };
+            guard = parent;
+        }
+        if guard.starts_with(repo_root) {
+            paths.insert(guard.to_owned());
+        }
+
+        let target_is_dir = interest.is_dir();
+        let mut existing = if target_is_dir {
+            interest.as_path()
+        } else {
+            interest.parent().unwrap_or(repo_root)
+        };
+        while !existing.is_dir() {
+            let Some(parent) = existing.parent() else {
+                break;
+            };
+            existing = parent;
+        }
+        if existing.starts_with(repo_root) {
+            if target_is_dir && existing == interest {
+                for entry in WalkDir::new(existing)
+                    .follow_links(false)
+                    .into_iter()
+                    .filter_entry(|entry| {
+                        !matches!(entry.file_name().to_str(), Some(".git" | "node_modules"))
+                    })
+                {
+                    let entry = entry?;
+                    if entry.file_type().is_dir() {
+                        paths.insert(entry.into_path());
+                    }
+                }
+            } else {
+                paths.insert(existing.to_owned());
+            }
+        }
+    }
+    Ok(paths)
+}
+
+#[cfg(feature = "manual_recursive_watch")]
+fn refresh_explicit_watches(
+    repo_root: &Path,
+    cookie_dir: &Path,
+    interests: &[PathBuf],
+    watcher: &mut Backend,
+    watched: &mut HashSet<PathBuf>,
+    explicit_watched: &mut HashSet<PathBuf>,
+    repository_ignore: &RepositoryIgnore,
+) -> Result<(), WatchError> {
+    let desired = explicit_watch_paths(repo_root, interests)?;
+    for path in desired.difference(explicit_watched) {
+        if watched.insert(path.clone()) {
+            watcher.watch(path, RecursiveMode::NonRecursive)?;
+        }
+    }
+
+    let stale: Vec<_> = explicit_watched.difference(&desired).cloned().collect();
+    let controls = repository_ignore.control_paths();
+    for path in stale {
+        if !repository_ignore.is_relevant(&path, true)
+            && !cookie_dir.starts_with(&path)
+            && !path.starts_with(cookie_dir)
+            && !controls
+                .iter()
+                .any(|control| control.starts_with(&path) || path.starts_with(control))
+        {
+            match watcher.unwatch(&path) {
+                Ok(()) => {
+                    watched.remove(&path);
+                }
+                Err(error) if is_not_found(&error) => {
+                    watched.remove(&path);
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
+    *explicit_watched = desired;
+    Ok(())
+}
+
+#[cfg(feature = "manual_recursive_watch")]
+fn route_materialized_interests(
+    registry: &SubscriptionRegistry,
+    interests: &[PathBuf],
+    created: &Path,
+) {
+    let paths: Vec<_> = interests
+        .iter()
+        .filter(|interest| interest.starts_with(created) || created.starts_with(interest))
+        .filter(|interest| interest.exists())
+        .flat_map(|interest| {
+            if interest.is_dir() {
+                WalkDir::new(interest)
+                    .follow_links(false)
+                    .into_iter()
+                    .filter_map(Result::ok)
+                    .map(|entry| entry.into_path())
+                    .collect()
+            } else {
+                vec![interest.clone()]
+            }
+        })
+        .collect();
+    if paths.is_empty() {
+        return;
+    }
+    let event = Event {
+        paths,
+        kind: EventKind::Create(CreateKind::Any),
+        attrs: Default::default(),
+    };
+    route_event(registry, Ok(&event));
+}
+
 fn run_watcher(
     root: &AbsoluteSystemPath,
-    sender: mpsc::Sender<EventResult>,
-) -> Result<Backend, WatchError> {
-    let mut watcher = make_watcher(move |res| {
-        let _ = sender.blocking_send(res);
+    cookie_dir: &AbsoluteSystemPath,
+    sender: mpsc::UnboundedSender<EventResult>,
+    repository_ignore: &RepositoryIgnore,
+    #[cfg(not(feature = "manual_recursive_watch"))] backend_ready: Arc<AtomicBool>,
+    #[cfg(not(feature = "manual_recursive_watch"))] ordered_driver_delivery: Arc<AtomicBool>,
+    #[cfg(not(feature = "manual_recursive_watch"))] registry: Arc<SubscriptionRegistry>,
+) -> Result<(Backend, HashSet<PathBuf>), WatchError> {
+    #[cfg(feature = "manual_recursive_watch")]
+    let mut watcher = make_watcher(move |event| {
+        let _ = sender.send(event);
     })?;
+    #[cfg(not(feature = "manual_recursive_watch"))]
+    let mut watcher = {
+        let watch_root = root.to_owned();
+        let readiness_cookie = cookie_dir.join_component(".turbo-cookie");
+        let repository_ignore = repository_ignore.clone();
+        make_watcher(move |event| {
+            dispatch_non_mutating_backend_event(
+                &backend_ready,
+                &ordered_driver_delivery,
+                &sender,
+                &readiness_cookie,
+                &watch_root,
+                &registry,
+                &repository_ignore,
+                event,
+            );
+        })?
+    };
 
-    watch_recursively(root, &mut watcher)?;
+    let mut watched = HashSet::new();
+    watch_recursively(root, &mut watcher, &mut watched, repository_ignore)?;
+
+    add_control_watches(
+        root.as_std_path(),
+        &repository_ignore.control_paths(),
+        &mut watcher,
+        &mut watched,
+    )?;
+
+    #[cfg(feature = "manual_recursive_watch")]
+    add_unignored_recursive_watches(cookie_dir.as_std_path(), &mut watcher, &mut watched, None)?;
 
     #[cfg(feature = "watch_ancestors")]
     watch_parents(root, &mut watcher)?;
-    Ok(watcher)
+    Ok((watcher, watched))
+}
+
+#[cfg(not(feature = "manual_recursive_watch"))]
+#[allow(clippy::too_many_arguments)]
+fn dispatch_non_mutating_backend_event(
+    backend_ready: &AtomicBool,
+    ordered_driver_delivery: &AtomicBool,
+    startup_sender: &mpsc::UnboundedSender<EventResult>,
+    readiness_cookie: &AbsoluteSystemPath,
+    watch_root: &AbsoluteSystemPath,
+    registry: &SubscriptionRegistry,
+    repository_ignore: &RepositoryIgnore,
+    event: EventResult,
+) {
+    if backend_ready.load(Ordering::Acquire) && !ordered_driver_delivery.load(Ordering::Acquire) {
+        let requires_driver = event.as_ref().is_ok_and(|event| {
+            event
+                .paths
+                .iter()
+                .any(|path| repository_ignore.should_refresh(path))
+        });
+        if requires_driver {
+            // Refreshing RepositoryIgnore can spawn Git and walk the worktree.
+            // Backend callback threads only classify control events and hand
+            // them to the async driver; ordinary bursts remain direct.
+            ordered_driver_delivery.store(true, Ordering::Release);
+            let _ = startup_sender.send(event);
+        } else {
+            route_direct_non_mutating_event(watch_root, registry, event);
+        }
+    } else {
+        let establishes_readiness = event.as_ref().is_ok_and(|event| {
+            event
+                .paths
+                .iter()
+                .any(|path| path == readiness_cookie.as_std_path())
+        });
+        if startup_sender.send(event).is_ok() && establishes_readiness {
+            // Event handlers are invoked in backend order. Publishing only
+            // after the cookie is queued keeps pre-ready events on the startup
+            // channel while allowing the next callback to route directly.
+            backend_ready.store(true, Ordering::Release);
+        }
+    }
+}
+
+#[cfg(not(feature = "manual_recursive_watch"))]
+fn route_direct_non_mutating_event(
+    watch_root: &AbsoluteSystemPath,
+    registry: &SubscriptionRegistry,
+    event: EventResult,
+) {
+    match event {
+        #[allow(unused_mut)]
+        Ok(mut event) => {
+            #[cfg(feature = "watch_ancestors")]
+            filter_relevant(watch_root, &mut event);
+            #[cfg(not(feature = "watch_ancestors"))]
+            let _ = watch_root;
+            route_event(registry, Ok(&event));
+        }
+        Err(error) => route_event(registry, Err(NotifyError::from(error))),
+    }
+}
+
+fn add_control_watches(
+    repo_root: &Path,
+    controls: &[PathBuf],
+    watcher: &mut Backend,
+    watched: &mut HashSet<PathBuf>,
+) -> Result<(), WatchError> {
+    for parent in control_watch_parents(repo_root, controls) {
+        if parent.is_dir() && watched.insert(parent.to_owned()) {
+            watcher.watch(&parent, RecursiveMode::NonRecursive)?;
+        }
+    }
+    Ok(())
+}
+
+fn reconcile_control_watches(
+    repo_root: &Path,
+    previous_controls: &[PathBuf],
+    current_controls: &[PathBuf],
+    watcher: &mut Backend,
+    watched: &mut HashSet<PathBuf>,
+    is_owned_elsewhere: impl Fn(&Path) -> bool,
+) -> Result<(), WatchError> {
+    let (additions, removals) = control_watch_changes(
+        repo_root,
+        previous_controls,
+        current_controls,
+        watched,
+        is_owned_elsewhere,
+    );
+
+    for parent in additions {
+        watcher.watch(&parent, RecursiveMode::NonRecursive)?;
+        watched.insert(parent);
+    }
+    for stale in removals {
+        match watcher.unwatch(&stale) {
+            Ok(()) => {
+                watched.remove(&stale);
+            }
+            Err(error) if is_not_found(&error) => {
+                watched.remove(&stale);
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(())
+}
+
+fn control_watch_changes(
+    repo_root: &Path,
+    previous_controls: &[PathBuf],
+    current_controls: &[PathBuf],
+    watched: &HashSet<PathBuf>,
+    is_owned_elsewhere: impl Fn(&Path) -> bool,
+) -> (HashSet<PathBuf>, HashSet<PathBuf>) {
+    let previous = control_watch_parents(repo_root, previous_controls);
+    let current = control_watch_parents(repo_root, current_controls);
+    let additions = current
+        .iter()
+        .filter(|parent| parent.is_dir() && !watched.contains(*parent))
+        .cloned()
+        .collect();
+    let removals = previous
+        .difference(&current)
+        .filter(|stale| watched.contains(*stale) && !is_owned_elsewhere(stale))
+        .cloned()
+        .collect();
+    (additions, removals)
+}
+
+fn control_watch_parents(repo_root: &Path, controls: &[PathBuf]) -> HashSet<PathBuf> {
+    #[cfg(not(target_os = "macos"))]
+    let _ = repo_root;
+    controls
+        .iter()
+        .filter_map(|control| {
+            let parent = control.parent()?;
+            #[cfg(target_os = "macos")]
+            {
+                use std::os::unix::fs::MetadataExt;
+
+                let root_device = std::fs::metadata(repo_root).map(|metadata| metadata.dev());
+                let parent_device = std::fs::metadata(parent).map(|metadata| metadata.dev());
+                if matches!((root_device, parent_device), (Ok(root), Ok(parent)) if root != parent)
+                {
+                    debug!(
+                        path = %control.display(),
+                        "skipping cross-device Git control watch"
+                    );
+                    return None;
+                }
+            }
+            Some(parent.to_owned())
+        })
+        .collect()
+}
+
+#[cfg(not(feature = "manual_recursive_watch"))]
+fn non_mutating_ordinary_owner(repo_root: &Path, path: &Path) -> bool {
+    if path == repo_root {
+        return true;
+    }
+    #[cfg(feature = "watch_ancestors")]
+    if repo_root.starts_with(path) {
+        return true;
+    }
+    false
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -455,8 +1730,13 @@ fn make_watcher<F: EventHandler>(event_handler: F) -> Result<Backend, notify::Er
 /// than receiving events from existing state, which some backends can do.
 async fn wait_for_cookie(
     cookie_dir: &AbsoluteSystemPath,
-    recv: &mut mpsc::Receiver<EventResult>,
-) -> Result<(), WatchError> {
+    _watch_root: &AbsoluteSystemPath,
+    _watcher: &mut Backend,
+    recv: &mut mpsc::UnboundedReceiver<EventResult>,
+    _registry: &SubscriptionRegistry,
+    watch_control_rx: &mut mpsc::UnboundedReceiver<WatcherControl>,
+    #[allow(unused_mut)] mut watched: HashSet<PathBuf>,
+) -> Result<HashSet<PathBuf>, WatchError> {
     // TODO: should this be passed in? Currently the caller guarantees that the
     // directory is empty, but it could be the responsibility of the
     // filewatcher...
@@ -464,16 +1744,38 @@ async fn wait_for_cookie(
     cookie_path
         .create_with_contents("cookie")
         .map_err(|e| WatchError::Setup(format!("failed to write cookie to {cookie_path}: {e}")))?;
+    let deadline = tokio::time::Instant::now() + Duration::from_millis(2000);
     loop {
-        let event = tokio::time::timeout(Duration::from_millis(2000), recv.recv())
-            .await
-            .map_err(|e| WatchError::Setup(format!("waiting for cookie timed out: {e}")))?
-            .ok_or_else(|| {
-                WatchError::Setup(
-                    "filewatching closed before cookie file  was observed".to_string(),
-                )
-            })?
-            .map_err(|err| WatchError::Setup(format!("initial watch encountered errors: {err}")))?;
+        let event = tokio::select! {
+            biased;
+            control = watch_control_rx.recv() => {
+                if let Some(WatcherControl::Refresh(ack)) = control {
+                    let mut acknowledgements = ack.into_iter().collect::<Vec<_>>();
+                    while let Ok(WatcherControl::Refresh(ack)) = watch_control_rx.try_recv() {
+                        acknowledgements.extend(ack);
+                    }
+                    #[cfg(feature = "manual_recursive_watch")]
+                    add_explicit_watches(
+                        _watch_root.as_std_path(),
+                        &_registry.physical_paths(),
+                        _watcher,
+                        &mut watched,
+                    )?;
+                    for acknowledgement in acknowledgements {
+                        let _ = acknowledgement.send(());
+                    }
+                }
+                continue;
+            }
+            event = tokio::time::timeout_at(deadline, recv.recv()) => {
+                event
+                    .map_err(|e| WatchError::Setup(format!("waiting for cookie timed out: {e}")))?
+                    .ok_or_else(|| WatchError::Setup(
+                        "filewatching closed before cookie file was observed".to_string(),
+                    ))?
+                    .map_err(|err| WatchError::Setup(format!("initial watch encountered errors: {err}")))?
+            }
+        };
         if event.paths.iter().any(|path| {
             let path: &Path = path;
             path == (&cookie_path as &AbsoluteSystemPath)
@@ -483,27 +1785,291 @@ async fn wait_for_cookie(
             if let Err(e) = cookie_path.remove() {
                 warn!("failed to remove cookie file {e}");
             }
-            return Ok(());
+            return Ok(watched);
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::{assert_matches, sync::atomic::AtomicUsize, time::Duration};
+    use std::{
+        assert_matches,
+        path::Path,
+        sync::{Arc, atomic::AtomicUsize},
+        time::Duration,
+    };
 
     #[cfg(not(target_os = "windows"))]
     use notify::event::RenameMode;
     use notify::{Event, EventKind, event::ModifyKind};
-    use tokio::sync::broadcast;
+    use tokio::sync::{broadcast, mpsc};
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
-    use crate::{FileSystemWatcher, NotifyError};
+    use crate::FileSystemWatcher;
 
     fn temp_dir() -> (AbsoluteSystemPathBuf, tempfile::TempDir) {
         let tmp = tempfile::tempdir().unwrap();
         let path = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
         (path, tmp)
+    }
+
+    #[test]
+    fn control_watch_changes_add_new_and_preserve_other_owners() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("repo");
+        let added = temp.path().join("added");
+        let removed = temp.path().join("removed");
+        let ordinary = root.clone();
+        let explicit = temp.path().join("explicit");
+        for directory in [&root, &added, &removed, &explicit] {
+            std::fs::create_dir_all(directory).unwrap();
+        }
+        let previous = [
+            removed.join("control"),
+            ordinary.join("control"),
+            explicit.join("control"),
+        ];
+        let current = [added.join("control")];
+        let watched = [removed.clone(), ordinary.clone(), explicit.clone()]
+            .into_iter()
+            .collect();
+
+        let (additions, removals) =
+            super::control_watch_changes(&root, &previous, &current, &watched, |path| {
+                path == ordinary || path == explicit
+            });
+
+        assert_eq!(additions, [added].into_iter().collect());
+        assert_eq!(removals, [removed].into_iter().collect());
+    }
+
+    #[tokio::test]
+    async fn scoped_subscription_drops_irrelevant_burst_before_channel() {
+        let (control, _control_rx) = mpsc::unbounded_channel();
+        let registry = Arc::new(super::SubscriptionRegistry::new(control));
+        let (_ready_tx, ready) = tokio::sync::watch::channel(super::SourceState::Ready);
+        let source = super::WatchSource {
+            ready,
+            registry: registry.clone(),
+            repository_ignore: None,
+        };
+        let mut subscription = source
+            .subscribe(super::WatchScope::predicate(|path| {
+                !path
+                    .components()
+                    .any(|component| component.as_os_str() == ".cache")
+            }))
+            .await
+            .unwrap();
+
+        for index in 0..30_000 {
+            let event = Event {
+                paths: vec![Path::new("repo/.cache").join(format!("output-{index}"))],
+                kind: EventKind::Create(notify::event::CreateKind::File),
+                attrs: Default::default(),
+            };
+            super::route_event(&registry, Ok(&event));
+        }
+
+        let source_path = Path::new("repo/src/index.ts").to_path_buf();
+        let event = Event {
+            paths: vec![source_path.clone()],
+            kind: EventKind::Create(notify::event::CreateKind::File),
+            attrs: Default::default(),
+        };
+        super::route_event(&registry, Ok(&event));
+
+        let received = subscription.recv().await.unwrap().unwrap();
+        assert_eq!(received.paths, vec![source_path]);
+    }
+
+    #[cfg(not(feature = "manual_recursive_watch"))]
+    #[tokio::test]
+    async fn post_ready_backend_events_route_without_bounded_channel() {
+        let (repo_root, _tmp) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+        let (control, _control_rx) = mpsc::unbounded_channel();
+        let registry = Arc::new(super::SubscriptionRegistry::new(control));
+        let (_ready_tx, ready) = tokio::sync::watch::channel(super::SourceState::Ready);
+        let source = super::WatchSource {
+            ready,
+            registry: registry.clone(),
+            repository_ignore: None,
+        };
+        let expected = repo_root.join_components(&["src", "index.ts"]);
+        let mut subscription = source
+            .subscribe(super::WatchScope::predicate({
+                let expected = expected.clone();
+                move |path| path == expected.as_std_path()
+            }))
+            .await
+            .unwrap();
+        let (startup_sender, mut startup_receiver) = mpsc::unbounded_channel();
+        let backend_ready = std::sync::atomic::AtomicBool::new(true);
+        let ordered_driver_delivery = std::sync::atomic::AtomicBool::new(false);
+        let repository_ignore = super::RepositoryIgnore::new(repo_root.as_std_path());
+
+        for index in 0..30_000 {
+            super::dispatch_non_mutating_backend_event(
+                &backend_ready,
+                &ordered_driver_delivery,
+                &startup_sender,
+                &repo_root.join_components(&[".turbo", "cookies", ".turbo-cookie"]),
+                &repo_root,
+                &registry,
+                &repository_ignore,
+                Ok(
+                    Event::new(EventKind::Create(notify::event::CreateKind::File)).add_path(
+                        repo_root
+                            .join_components(&[".cache", &format!("output-{index}")])
+                            .as_std_path()
+                            .to_owned(),
+                    ),
+                ),
+            );
+        }
+        super::dispatch_non_mutating_backend_event(
+            &backend_ready,
+            &ordered_driver_delivery,
+            &startup_sender,
+            &repo_root.join_components(&[".turbo", "cookies", ".turbo-cookie"]),
+            &repo_root,
+            &registry,
+            &repository_ignore,
+            Ok(
+                Event::new(EventKind::Create(notify::event::CreateKind::File))
+                    .add_path(expected.as_std_path().to_owned()),
+            ),
+        );
+
+        assert!(startup_receiver.try_recv().is_err());
+        let event = subscription.recv().await.unwrap().unwrap();
+        assert_eq!(event.paths, vec![expected.as_std_path().to_owned()]);
+    }
+
+    #[cfg(not(feature = "manual_recursive_watch"))]
+    #[test]
+    fn post_ready_ignore_events_are_deferred_to_driver() {
+        let (repo_root, _tmp) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+        let (control, _control_rx) = mpsc::unbounded_channel();
+        let registry = Arc::new(super::SubscriptionRegistry::new(control));
+        let (startup_sender, mut startup_receiver) = mpsc::unbounded_channel();
+        let backend_ready = std::sync::atomic::AtomicBool::new(true);
+        let ordered_driver_delivery = std::sync::atomic::AtomicBool::new(false);
+        let repository_ignore = super::RepositoryIgnore::new(repo_root.as_std_path());
+        let gitignore = repo_root.join_component(".gitignore");
+
+        super::dispatch_non_mutating_backend_event(
+            &backend_ready,
+            &ordered_driver_delivery,
+            &startup_sender,
+            &repo_root.join_components(&[".turbo", "cookies", ".turbo-cookie"]),
+            &repo_root,
+            &registry,
+            &repository_ignore,
+            Ok(Event::new(EventKind::Modify(ModifyKind::Any))
+                .add_path(gitignore.as_std_path().to_owned())),
+        );
+
+        let queued = startup_receiver.try_recv().unwrap().unwrap();
+        assert_eq!(queued.paths, vec![gitignore.as_std_path().to_owned()]);
+
+        let source = repo_root.join_components(&["src", "index.ts"]);
+        super::dispatch_non_mutating_backend_event(
+            &backend_ready,
+            &ordered_driver_delivery,
+            &startup_sender,
+            &repo_root.join_components(&[".turbo", "cookies", ".turbo-cookie"]),
+            &repo_root,
+            &registry,
+            &repository_ignore,
+            Ok(Event::new(EventKind::Modify(ModifyKind::Any))
+                .add_path(source.as_std_path().to_owned())),
+        );
+        let queued = startup_receiver.try_recv().unwrap().unwrap();
+        assert_eq!(queued.paths, vec![source.as_std_path().to_owned()]);
+    }
+
+    #[cfg(feature = "manual_recursive_watch")]
+    #[tokio::test]
+    async fn fatal_driver_failure_reaches_subscriber_before_close() {
+        let (control, _control_rx) = mpsc::unbounded_channel();
+        let registry = Arc::new(super::SubscriptionRegistry::new(control));
+        let (_ready_tx, ready) = tokio::sync::watch::channel(super::SourceState::Ready);
+        let source = super::WatchSource {
+            ready,
+            registry: registry.clone(),
+            repository_ignore: None,
+        };
+        let mut subscription = source.subscribe(super::WatchScope::all()).await.unwrap();
+
+        super::route_fatal_driver_error(
+            &registry,
+            "failed to reconcile filesystem watches",
+            &super::WatchError::Setup("injected failure".to_string()),
+        );
+        registry.close();
+
+        let error = subscription.recv().await.unwrap().unwrap_err();
+        assert!(!error.is_invalidation());
+        assert!(error.to_string().contains("injected failure"));
+    }
+
+    #[tokio::test]
+    async fn rescan_events_bypass_subscription_scopes() {
+        let (sender, source) = super::WatchSource::channel();
+        let mut first = source
+            .subscribe(super::WatchScope::predicate(|path| path.ends_with("first")))
+            .await
+            .unwrap();
+        let mut second = source
+            .subscribe(super::WatchScope::predicate(|path| {
+                path.ends_with("second")
+            }))
+            .await
+            .unwrap();
+        sender
+            .send(Ok(Event::new(EventKind::Other)
+                .set_flag(notify::event::Flag::Rescan)
+                .add_path(Path::new("outside-both-scopes").to_path_buf())))
+            .unwrap();
+
+        assert!(first.recv().await.unwrap().is_err());
+        assert!(second.recv().await.unwrap().is_err());
+    }
+
+    #[tokio::test]
+    async fn dropping_scoped_subscription_unregisters_it() {
+        let (control, _control_rx) = mpsc::unbounded_channel();
+        let registry = Arc::new(super::SubscriptionRegistry::new(control));
+        let (_ready_tx, ready) = tokio::sync::watch::channel(super::SourceState::Ready);
+        let source = super::WatchSource {
+            ready,
+            registry: registry.clone(),
+            repository_ignore: None,
+        };
+        let subscription = source.subscribe(super::WatchScope::all()).await.unwrap();
+        assert_eq!(
+            registry
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .entries
+                .len(),
+            1
+        );
+
+        drop(subscription);
+
+        assert!(
+            registry
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .entries
+                .is_empty()
+        );
     }
 
     macro_rules! expect_filesystem_event {
@@ -527,10 +2093,7 @@ mod test {
 
     static WATCH_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-    async fn expect_watching(
-        recv: &mut broadcast::Receiver<Result<Event, NotifyError>>,
-        dirs: &[&AbsoluteSystemPath],
-    ) {
+    async fn expect_watching(recv: &mut super::WatchSubscription, dirs: &[&AbsoluteSystemPath]) {
         for dir in dirs {
             let count = WATCH_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let filename = dir.join_component(format!("test-{count}").as_str());
@@ -931,7 +2494,7 @@ mod test {
     // Verify that node_modules and .git are excluded from inotify watch
     // registration on Linux to avoid exhausting the OS watch limit in large
     // monorepos. No .gitignore is needed — these are hardcoded exclusions.
-    #[cfg(feature = "manual_recursive_watch")]
+    #[cfg(all(feature = "manual_recursive_watch", not(target_os = "macos")))]
     #[tokio::test]
     async fn test_file_watching_hardcoded_exclusions() {
         let (repo_root, _tmp_repo_root) = temp_dir();
@@ -994,6 +2557,183 @@ mod test {
         }
     }
 
+    #[cfg(all(feature = "manual_recursive_watch", not(target_os = "macos")))]
+    async fn assert_unseen_before_sentinel(
+        recv: &mut super::WatchSubscription,
+        unseen: &AbsoluteSystemPath,
+        sentinel: &AbsoluteSystemPath,
+    ) {
+        loop {
+            let event = tokio::time::timeout(Duration::from_secs(3), recv.recv())
+                .await
+                .expect("timed out waiting for sentinel")
+                .expect("watch source closed")
+                .expect("filewatching error");
+            assert!(
+                event.paths.iter().all(|path| !path.starts_with(unseen)),
+                "received event from physically pruned tree: {:?}",
+                event.paths
+            );
+            if event.paths.iter().any(|path| path == sentinel) {
+                return;
+            }
+        }
+    }
+
+    #[cfg(all(feature = "manual_recursive_watch", not(target_os = "macos")))]
+    #[tokio::test]
+    async fn ignored_startup_tree_is_not_watched() {
+        let (repo_root, _tmp) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+        repo_root
+            .join_component(".gitignore")
+            .create_with_contents("ignored/\n")
+            .unwrap();
+        let ignored = repo_root.join_components(&["ignored", "nested"]);
+        ignored.create_dir_all().unwrap();
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let mut recv = watcher.subscribe().await.unwrap();
+        let unseen = ignored.join_component("file");
+        unseen.create_with_contents("ignored").unwrap();
+        let sentinel = repo_root.join_component("sentinel");
+        sentinel.create_with_contents("seen").unwrap();
+        assert_unseen_before_sentinel(&mut recv, &unseen, &sentinel).await;
+    }
+
+    #[cfg(all(feature = "manual_recursive_watch", not(target_os = "macos")))]
+    #[tokio::test]
+    async fn explicit_ignored_interest_is_watched() {
+        let (repo_root, _tmp) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+        repo_root
+            .join_component(".gitignore")
+            .create_with_contents("ignored/\n")
+            .unwrap();
+        let ignored = repo_root.join_component("ignored");
+        ignored.create_dir_all().unwrap();
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let interest = super::WatchInterest::new();
+        interest.replace([ignored.as_std_path().to_owned()]);
+        let mut recv = watcher
+            .source()
+            .subscribe(super::WatchScope::all().with_physical_interest(interest.clone()))
+            .await
+            .unwrap();
+        interest.flush().await;
+
+        let file = ignored.join_component("output");
+        file.create_with_contents("watched").unwrap();
+        expect_filesystem_event!(recv, file, EventKind::Create(_));
+    }
+
+    #[cfg(all(feature = "manual_recursive_watch", not(target_os = "macos")))]
+    #[tokio::test]
+    async fn nonexistent_explicit_interest_is_watched_after_creation() {
+        let (repo_root, _tmp) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+        repo_root
+            .join_component(".gitignore")
+            .create_with_contents("ignored/\n")
+            .unwrap();
+        let future_dir = repo_root.join_components(&["ignored", "generated", "deep"]);
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let interest = super::WatchInterest::new();
+        interest.replace([future_dir.as_std_path().to_owned()]);
+        let mut recv = watcher
+            .source()
+            .subscribe(super::WatchScope::all().with_physical_interest(interest.clone()))
+            .await
+            .unwrap();
+        interest.flush().await;
+
+        future_dir.create_dir_all().unwrap();
+        let file = future_dir.join_component("input");
+        file.create_with_contents("watched").unwrap();
+        expect_filesystem_event!(recv, file, EventKind::Create(_));
+    }
+
+    #[cfg(all(feature = "manual_recursive_watch", not(target_os = "macos")))]
+    #[tokio::test]
+    async fn existing_ignored_interest_is_watched_after_recreation() {
+        let (repo_root, _tmp) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+        repo_root
+            .join_component(".gitignore")
+            .create_with_contents("ignored/\n")
+            .unwrap();
+        let ignored = repo_root.join_component("ignored");
+        ignored.create_dir_all().unwrap();
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let interest = super::WatchInterest::new();
+        interest.replace([ignored.as_std_path().to_owned()]);
+        let mut recv = watcher
+            .source()
+            .subscribe(super::WatchScope::all().with_physical_interest(interest.clone()))
+            .await
+            .unwrap();
+        interest.flush().await;
+
+        ignored.remove_dir_all().unwrap();
+        expect_filesystem_event!(recv, ignored, EventKind::Remove(_));
+        ignored.create_dir_all().unwrap();
+        let file = ignored.join_component("recreated-output");
+        file.create_with_contents("watched").unwrap();
+        expect_filesystem_event!(recv, file, EventKind::Create(_));
+    }
+
+    #[cfg(all(feature = "manual_recursive_watch", not(target_os = "macos")))]
+    #[tokio::test]
+    async fn newly_created_uninterested_ignored_dir_is_not_recursed() {
+        let (repo_root, _tmp) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+        repo_root
+            .join_component(".gitignore")
+            .create_with_contents("ignored/\n")
+            .unwrap();
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let mut recv = watcher.subscribe().await.unwrap();
+
+        let ignored = repo_root.join_components(&["ignored", "nested"]);
+        ignored.create_dir_all().unwrap();
+        let unseen = ignored.join_component("file");
+        unseen.create_with_contents("ignored").unwrap();
+        let sentinel = repo_root.join_component("sentinel");
+        sentinel.create_with_contents("seen").unwrap();
+        assert_unseen_before_sentinel(&mut recv, &unseen, &sentinel).await;
+    }
+
+    #[cfg(all(feature = "manual_recursive_watch", not(target_os = "macos")))]
+    #[tokio::test]
+    async fn gitignore_changes_reconcile_physical_watches() {
+        let (repo_root, _tmp) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+        let gitignore = repo_root.join_component(".gitignore");
+        gitignore.create_with_contents("ignored/\n").unwrap();
+        let ignored = repo_root.join_component("ignored");
+        ignored.create_dir_all().unwrap();
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let mut recv = watcher.subscribe().await.unwrap();
+
+        gitignore.create_with_contents("").unwrap();
+        expect_filesystem_event!(recv, gitignore, EventKind::Modify(_));
+        let newly_visible = ignored.join_component("visible");
+        newly_visible.create_with_contents("visible").unwrap();
+        expect_filesystem_event!(recv, newly_visible, EventKind::Create(_));
+
+        gitignore.create_with_contents("ignored/\n").unwrap();
+        expect_filesystem_event!(recv, gitignore, EventKind::Modify(_));
+        let newly_hidden = ignored.join_component("hidden");
+        newly_hidden.create_with_contents("hidden").unwrap();
+        let sentinel = repo_root.join_component("sentinel-after-reignore");
+        sentinel.create_with_contents("seen").unwrap();
+        assert_unseen_before_sentinel(&mut recv, &newly_hidden, &sentinel).await;
+    }
+
     #[tokio::test]
     async fn test_close() {
         let (repo_root, _tmp_repo_root) = temp_dir();
@@ -1017,5 +2757,33 @@ mod test {
         })
         .await
         .unwrap();
+    }
+
+    #[tokio::test]
+    async fn scoped_subscription_closes_with_watcher() {
+        let (repo_root, _tmp_repo_root) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let source = watcher.source();
+        let mut subscription = source.subscribe(super::WatchScope::all()).await.unwrap();
+        drop(watcher);
+
+        tokio::time::timeout(Duration::from_millis(100), async {
+            loop {
+                if matches!(
+                    subscription.recv().await,
+                    Err(broadcast::error::RecvError::Closed)
+                ) {
+                    break;
+                }
+            }
+        })
+        .await
+        .unwrap();
+        assert!(matches!(
+            source.subscribe(super::WatchScope::all()).await,
+            Err(super::SubscribeError::Closed)
+        ));
     }
 }

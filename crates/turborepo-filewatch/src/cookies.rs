@@ -41,13 +41,13 @@ use futures::FutureExt;
 use notify::EventKind;
 use thiserror::Error;
 use tokio::{
-    sync::{broadcast, mpsc, oneshot, watch},
+    sync::{mpsc, oneshot, watch},
     time::error::Elapsed,
 };
 use tracing::trace;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation};
 
-use crate::{NotifyError, OptionalWatch, optional_watch::SomeRef};
+use crate::{OptionalWatch, WatchSource, optional_watch::SomeRef};
 
 #[derive(Debug, Error)]
 pub enum CookieError {
@@ -132,6 +132,10 @@ impl<T> CookieWatcher<T> {
         }
     }
 
+    pub(crate) fn root(&self) -> &AbsoluteSystemPath {
+        &self.cookie_root
+    }
+
     /// Check if this request can be handled immediately. If so, return it. If
     /// not, queue it
     pub(crate) fn check_request(&mut self, cookied_request: CookiedRequest<T>) -> Option<T> {
@@ -189,23 +193,24 @@ impl CookieWriter {
     pub fn new_with_default_cookie_dir(
         repo_root: &AbsoluteSystemPath,
         timeout: Duration,
-        recv: OptionalWatch<broadcast::Receiver<Result<notify::Event, NotifyError>>>,
+        source: impl Into<WatchSource>,
     ) -> Self {
         let cookie_root = repo_root.join_components(&[".turbo", "cookies"]);
-        Self::new(&cookie_root, timeout, recv)
+        Self::new(&cookie_root, timeout, source)
     }
 
     pub fn new(
         cookie_root: &AbsoluteSystemPath,
         timeout: Duration,
-        mut recv: OptionalWatch<broadcast::Receiver<Result<notify::Event, NotifyError>>>,
+        source: impl Into<WatchSource>,
     ) -> Self {
+        let source = source.into();
         let (cookie_request_sender_tx, cookie_request_sender_lazy) = OptionalWatch::new();
         let (exit_ch, exit_signal) = mpsc::channel(16);
         tokio::spawn({
             let root = cookie_root.to_owned();
             async move {
-                if recv.get().await.is_err() {
+                if source.ready().await.is_err() {
                     // here we need to wait for confirmation that the watching end is ready
                     // before we start sending requests. this has the side effect of not
                     // enabling the cookie writing mechanism until the watcher is ready
@@ -524,7 +529,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::{CookieWatcher, CookiedRequest};
-    use crate::{NotifyError, OptionalWatch, cookies::CookieWriter};
+    use crate::{NotifyError, WatchSource, cookies::CookieWriter};
 
     struct TestQuery {
         resp: oneshot::Sender<()>,
@@ -588,9 +593,9 @@ mod test {
             .unwrap();
 
         let (send_file_events, file_events) = broadcast::channel(16);
-        let recv = OptionalWatch::once(file_events.resubscribe());
+        let (_source_tx, source) = WatchSource::channel();
         let (reqs_tx, reqs_rx) = mpsc::channel(16);
-        let cookie_writer = CookieWriter::new(&path, Duration::from_secs(2), recv);
+        let cookie_writer = CookieWriter::new(&path, Duration::from_secs(2), source);
         let (exit_tx, exit_rx) = oneshot::channel();
 
         let service = TestService {
@@ -652,9 +657,9 @@ mod test {
             .unwrap();
 
         let (send_file_events, file_events) = broadcast::channel(16);
-        let recv = OptionalWatch::once(file_events.resubscribe());
+        let (_source_tx, source) = WatchSource::channel();
         let (reqs_tx, reqs_rx) = mpsc::channel(16);
-        let cookie_writer = CookieWriter::new(&path, Duration::from_secs(2), recv);
+        let cookie_writer = CookieWriter::new(&path, Duration::from_secs(2), source);
         let (exit_tx, exit_rx) = oneshot::channel();
 
         let service = TestService {
