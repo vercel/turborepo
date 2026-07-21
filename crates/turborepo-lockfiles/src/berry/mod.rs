@@ -733,27 +733,6 @@ impl BerryManifest {
     }
 }
 
-pub fn berry_subgraph(
-    contents: &[u8],
-    workspace_packages: &[String],
-    packages: &[String],
-    resolutions: Option<HashMap<String, String>>,
-) -> Result<Vec<u8>, crate::Error> {
-    let manifest = resolutions.map(BerryManifest::with_resolutions);
-    let data = LockfileData::from_bytes(contents)?;
-    let lockfile = BerryLockfile::new(data, manifest)?;
-    let pruned_lockfile = lockfile.subgraph(workspace_packages, packages)?;
-    let new_contents = pruned_lockfile.encode()?;
-    Ok(new_contents)
-}
-
-pub fn berry_global_change(prev_contents: &[u8], curr_contents: &[u8]) -> Result<bool, Error> {
-    let prev_data = LockfileData::from_bytes(prev_contents)?;
-    let curr_data = LockfileData::from_bytes(curr_contents)?;
-    Ok(prev_data.metadata.cache_key != curr_data.metadata.cache_key
-        || prev_data.metadata.version != curr_data.metadata.version)
-}
-
 #[cfg(test)]
 mod test {
     use super::*;

@@ -177,19 +177,6 @@ fn parse_rustc_identity(stdout: &[u8]) -> Result<turborepo_lockfiles::Package, E
     parse_rustc_info(stdout).map(|(identity, _)| identity)
 }
 
-/// The Rust compiler version and host triple, as a hashable external-dependency
-/// identity.
-///
-/// Run from `repo_root` so rustup's shim resolves `rust-toolchain`
-/// overrides the same way a task's `cargo` invocation will. Participating
-/// in the external-dependency hash means compiling with a different
-/// toolchain or on a different host never restores incompatible artifacts.
-pub fn rustc_identity(
-    repo_root: &AbsoluteSystemPath,
-) -> Result<turborepo_lockfiles::Package, Error> {
-    rustc_info(repo_root).map(|(identity, _)| identity)
-}
-
 fn rustc_info(
     repo_root: &AbsoluteSystemPath,
 ) -> Result<(turborepo_lockfiles::Package, String), Error> {
@@ -660,7 +647,7 @@ fn join_prefix(prefix: &str, rel: &str) -> String {
 /// each crate task's external-dependency hash, scoped to that crate's
 /// transitive closure (see [`external_closures`]), so a dependency bump only
 /// invalidates the crates that actually depend on it. The compiler identity
-/// participates the same way (see [`rustc_identity`]).
+/// participates the same way (see [`rustc_info`]).
 pub fn hash_input_globs(prefix: &str) -> Vec<String> {
     [
         "Cargo.toml",
