@@ -379,33 +379,6 @@ impl<T: Watcher> WatchConfig<T> {
             .map_err(ConfigError::WatchError)
     }
 
-    /// Register a single path to be included by the watcher.
-    pub async fn include_path(&self, path: &Path) -> Result<(), ConfigError> {
-        trace!("watching {:?}", path);
-        // Windows doesn't create an event when a watched directory itself is deleted
-        // we watch the parent directory instead.
-        // More information at https://github.com/notify-rs/notify/issues/403
-        #[cfg(windows)]
-        let watched_path = path.parent().ok_or_else(|| {
-            ConfigError::WatchError(vec![notify::Error::generic(
-                "cannot watch filesystem root on Windows",
-            )])
-        })?;
-        #[cfg(not(windows))]
-        let watched_path = path;
-
-        let mut watcher = match self.watcher.lock() {
-            Ok(watcher) => watcher,
-            Err(poisoned) => {
-                warn!("watcher lock poisoned while registering path");
-                poisoned.into_inner()
-            }
-        };
-        watcher
-            .watch(watched_path, notify::RecursiveMode::NonRecursive)
-            .map_err(|e| ConfigError::WatchError(vec![e]))
-    }
-
     /// Register a glob to be excluded by the watcher.
     #[tracing::instrument(skip(self))]
     pub async fn exclude(&self, relative_to: &Path, glob: &str) {

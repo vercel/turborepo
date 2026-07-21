@@ -961,18 +961,6 @@ impl TaskError {
     }
 }
 
-impl TaskErrorCause {
-    pub fn from_spawn(err: std::io::Error) -> Self {
-        TaskErrorCause::Spawn {
-            msg: err.to_string(),
-        }
-    }
-
-    pub fn from_execution(command: String, exit_code: i32) -> Self {
-        TaskErrorCause::Exit { command, exit_code }
-    }
-}
-
 #[cfg(test)]
 mod task_error_tests {
     use super::*;

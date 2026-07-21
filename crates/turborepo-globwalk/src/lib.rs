@@ -324,8 +324,6 @@ pub struct Settings {
     /// directories are traversed into (their targets are read). Cycles are
     /// detected and handled gracefully by the underlying walkdir layer.
     follow_links: bool,
-    /// Skip symlink cycle errors and continue walking other entries.
-    ignore_link_cycles: bool,
 }
 
 impl Settings {
@@ -336,11 +334,6 @@ impl Settings {
 
     pub fn follow_links(mut self) -> Self {
         self.follow_links = true;
-        self
-    }
-
-    pub fn ignore_link_cycles(mut self) -> Self {
-        self.ignore_link_cycles = true;
         self
     }
 }
@@ -912,10 +905,10 @@ fn walk_glob(
 
             None
         })
-        .filter_map(|entry| visit_file(walk_type, entry, settings))
+        .filter_map(|entry| visit_file(walk_type, entry))
         .collect::<Vec<_>>()
     } else {
-        iter.filter_map(|entry| visit_file(walk_type, entry, settings))
+        iter.filter_map(|entry| visit_file(walk_type, entry))
             .collect::<Vec<_>>()
     }
 }
@@ -923,7 +916,6 @@ fn walk_glob(
 fn visit_file(
     walk_type: WalkType,
     entry: Result<wax::walk::GlobEntry, wax::walk::WalkError>,
-    settings: Settings,
 ) -> Option<Result<AbsoluteSystemPathBuf, WalkError>> {
     match entry {
         Ok(entry)
@@ -935,10 +927,6 @@ fn visit_file(
         }
         Ok(entry) => Some(AbsoluteSystemPathBuf::try_from(entry.path()).map_err(|e| e.into())),
         Err(e) => {
-            if settings.ignore_link_cycles && e.is_link_cycle() {
-                return None;
-            }
-
             let io_err = std::io::Error::from(e);
             match io_err.kind() {
                 // Ignore missing file and permission errors

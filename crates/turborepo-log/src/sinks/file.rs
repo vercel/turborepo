@@ -34,9 +34,6 @@ pub struct FileSink<W: Write + Send + 'static> {
     max_bytes: Option<u64>,
 }
 
-/// Convenience alias for the common case of writing to a file.
-pub type FileLogSink = FileSink<std::fs::File>;
-
 impl<W: Write + Send + 'static> FileSink<W> {
     /// Create a new file sink writing to the given destination.
     #[must_use]

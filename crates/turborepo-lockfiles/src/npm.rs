@@ -629,27 +629,6 @@ impl NpmPackage {
     }
 }
 
-pub fn npm_subgraph(
-    contents: &[u8],
-    workspace_packages: &[String],
-    packages: &[String],
-) -> Result<Vec<u8>, Error> {
-    let lockfile = NpmLockfile::load(contents)?;
-    let pruned_lockfile = lockfile.subgraph(workspace_packages, packages)?;
-    let new_contents = pruned_lockfile.encode()?;
-
-    Ok(new_contents)
-}
-
-pub fn npm_global_change(prev_contents: &[u8], curr_contents: &[u8]) -> Result<bool, Error> {
-    let prev_lockfile = NpmLockfile::load(prev_contents)?;
-    let curr_lockfile = NpmLockfile::load(curr_contents)?;
-
-    Ok(
-        prev_lockfile.lockfile_version != curr_lockfile.lockfile_version
-            || prev_lockfile.other.get("requires") != curr_lockfile.other.get("requires"),
-    )
-}
 #[cfg(test)]
 mod test {
     use super::*;

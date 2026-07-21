@@ -480,33 +480,8 @@ impl PackageGraph {
             .map(|edge| *edge.weight())
     }
 
-    /// Like [`Self::immediate_dependencies`], but includes the dependency kind
-    /// for each outgoing edge.
-    pub fn immediate_dependencies_with_kinds(
-        &self,
-        package: &PackageNode,
-    ) -> Option<HashMap<&PackageNode, DependencyKind>> {
-        let index = self.node_lookup.get(package)?;
-        Some(
-            self.graph
-                .edges(*index)
-                .map(|edge| {
-                    let target = self
-                        .graph
-                        .node_weight(edge.target())
-                        .expect("node index from neighbors should be present");
-                    (target, *edge.weight())
-                })
-                .collect(),
-        )
-    }
-
     pub fn packages(&self) -> impl Iterator<Item = (&PackageName, &PackageInfo)> {
         self.packages.iter()
-    }
-
-    pub fn get_page_rank(&self) -> Vec<f64> {
-        petgraph::algo::page_rank::page_rank(&self.graph, 0.85, 1)
     }
 
     pub fn root_package_json(&self) -> Option<&PackageJson> {

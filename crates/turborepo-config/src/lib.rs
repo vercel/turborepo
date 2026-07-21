@@ -229,15 +229,6 @@ impl Error {
             Error::TurboJsonError(turborepo_turbo_json::Error::NoTurboJSON)
         )
     }
-
-    /// Returns true if this error indicates that multiple turbo config files
-    /// were found.
-    pub fn is_multiple_turbo_configs(&self) -> bool {
-        matches!(
-            self,
-            Error::TurboJsonError(turborepo_turbo_json::Error::MultipleTurboConfigs { .. })
-        )
-    }
 }
 
 // Conversion from LoaderError to config::Error
