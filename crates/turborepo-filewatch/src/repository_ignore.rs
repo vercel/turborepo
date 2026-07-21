@@ -21,6 +21,7 @@ pub struct RepositoryIgnore {
     match_root: Arc<PathBuf>,
     snapshot: Arc<RwLock<Snapshot>>,
     control_paths: Arc<RwLock<HashSet<PathBuf>>>,
+    index_path: Arc<RwLock<Option<PathBuf>>>,
 }
 
 #[derive(Default)]
@@ -53,6 +54,7 @@ impl RepositoryIgnore {
             match_root,
             snapshot: Arc::new(RwLock::new(snapshot)),
             control_paths: Arc::new(RwLock::new(control_paths)),
+            index_path: Arc::new(RwLock::new(context.index)),
         }
     }
 
@@ -61,7 +63,7 @@ impl RepositoryIgnore {
     }
 
     /// Re-read repository ignore rules and tracked index state.
-    pub fn refresh(&self) {
+    pub fn refresh(&self) -> bool {
         // Re-discovering the context makes an explicit refresh observe changes
         // to core.excludesFile as well as changes to the exclude file itself.
         let context = GitContext::discover(&self.match_root);
@@ -72,9 +74,22 @@ impl RepositoryIgnore {
             context.control_paths(&self.match_root);
         let replacement = Snapshot::load(&self.match_root, &context);
         *self
+            .index_path
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = context.index;
+        let mut snapshot = self
             .snapshot
             .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = replacement;
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let tracked_relevance_changed = snapshot
+            .tracked
+            .symmetric_difference(&replacement.tracked)
+            .any(|path| {
+                snapshot.path_is_ignored(&self.match_root, path, false)
+                    || replacement.path_is_ignored(&self.match_root, path, false)
+            });
+        *snapshot = replacement;
+        tracked_relevance_changed
     }
 
     pub fn is_gitignore(path: &Path) -> bool {
@@ -108,7 +123,13 @@ impl RepositoryIgnore {
     /// so it must invalidate every consumer.
     pub fn invalidates_consumers(&self, path: &Path) -> bool {
         if self.is_control_path(path) {
-            return true;
+            let path = normalize_event_path(&self.root, &self.match_root, path);
+            return self
+                .index_path
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .as_ref()
+                != Some(&path);
         }
         if !Self::is_gitignore(path) {
             return false;
@@ -361,6 +382,22 @@ impl Snapshot {
         }
         false
     }
+
+    fn path_is_ignored(&self, turbo_root: &Path, relative: &Path, is_dir: bool) -> bool {
+        if self.is_ignored(turbo_root, turbo_root, true) {
+            return true;
+        }
+        let mut candidate = turbo_root.to_path_buf();
+        let components = relative.components().collect::<Vec<_>>();
+        for (index, component) in components.iter().enumerate() {
+            candidate.push(component.as_os_str());
+            let candidate_is_dir = index + 1 != components.len() || is_dir;
+            if self.is_ignored(&candidate, turbo_root, candidate_is_dir) {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 fn build_matcher(base: &Path, path: &Path) -> Option<Arc<Gitignore>> {
@@ -591,6 +628,26 @@ mod tests {
         let controls = model.control_paths();
         assert!(!controls.contains(&fs::canonicalize(&global).unwrap()));
         assert!(controls.contains(&fs::canonicalize(&replacement_global).unwrap()));
+    }
+
+    #[test]
+    fn index_refresh_invalidates_only_when_ignore_relevance_changes() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        git(root, &["init", "-q"]);
+        fs::write(root.join(".gitignore"), "ignored.txt\n").unwrap();
+        fs::write(root.join("visible.txt"), "visible").unwrap();
+        fs::write(root.join("ignored.txt"), "ignored").unwrap();
+
+        let model = RepositoryIgnore::new(root);
+        git(root, &["add", "visible.txt"]);
+        assert!(!model.refresh(), "tracking an unignored path is irrelevant");
+
+        git(root, &["add", "-f", "ignored.txt"]);
+        assert!(
+            model.refresh(),
+            "tracking an ignored path changes relevance"
+        );
     }
 
     #[test]

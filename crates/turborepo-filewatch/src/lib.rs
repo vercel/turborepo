@@ -411,10 +411,7 @@ impl WatchEventSender {
                     .paths
                     .iter()
                     .any(|path| repository_ignore.should_refresh(path));
-                if refresh {
-                    repository_ignore.refresh();
-                }
-                invalidates
+                invalidates || (refresh && repository_ignore.refresh())
             } else {
                 false
             };
@@ -860,12 +857,12 @@ async fn watch_events(
                             .any(|path| repository_ignore.should_refresh(path));
                         let previous_controls = repository_state_changed
                             .then(|| repository_ignore.control_paths());
-                        let git_control_changed = event
+                        let mut git_control_changed = event
                             .paths
                             .iter()
                             .any(|path| repository_ignore.invalidates_consumers(path));
                         if repository_state_changed {
-                            repository_ignore.refresh();
+                            git_control_changed |= repository_ignore.refresh();
                         }
                         // Note that we need to filter relevant events
                         // before doing manual recursive watching so that
@@ -1032,13 +1029,13 @@ fn route_non_mutating_backend_event(
                 .paths
                 .iter()
                 .any(|path| repository_ignore.should_refresh(path));
-            let git_control_changed = event
+            let mut git_control_changed = event
                 .paths
                 .iter()
                 .any(|path| repository_ignore.invalidates_consumers(path));
             if repository_state_changed {
                 let previous_controls = repository_ignore.control_paths();
-                repository_ignore.refresh();
+                git_control_changed |= repository_ignore.refresh();
                 reconcile_control_watches(
                     watch_root.as_std_path(),
                     &previous_controls,
@@ -1683,6 +1680,9 @@ fn control_watch_parents(repo_root: &Path, controls: &[PathBuf]) -> HashSet<Path
         .iter()
         .filter_map(|control| {
             let parent = control.parent()?;
+            if !cfg!(feature = "manual_recursive_watch") && parent.starts_with(repo_root) {
+                return None;
+            }
             #[cfg(target_os = "macos")]
             {
                 use std::os::unix::fs::MetadataExt;
