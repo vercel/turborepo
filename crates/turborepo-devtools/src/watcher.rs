@@ -5,12 +5,11 @@
 
 use std::{path::Path, time::Duration};
 
-use notify::Event;
 use thiserror::Error;
 use tokio::sync::{broadcast, oneshot};
 use tracing::{debug, trace, warn};
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_filewatch::{FileSystemWatcher, NotifyError, OptionalWatch};
+use turborepo_filewatch::{FileSystemWatcher, WatchScope, WatchSource};
 
 /// Errors that can occur during file watching
 #[derive(Debug, Error)]
@@ -65,7 +64,7 @@ impl DevtoolsWatcher {
         // Spawn watcher task
         tokio::spawn(watch_loop(
             repo_root,
-            file_watcher.watch(),
+            file_watcher.source(),
             event_tx,
             exit_rx,
         ));
@@ -104,13 +103,12 @@ fn is_relevant_file(path: &Path) -> bool {
 /// Main watch loop that processes file events
 async fn watch_loop(
     _repo_root: AbsoluteSystemPathBuf,
-    mut file_events_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
+    file_events: WatchSource,
     event_tx: broadcast::Sender<WatchEvent>,
     exit_rx: oneshot::Receiver<()>,
 ) {
-    // Get the receiver and immediately resubscribe to drop the SomeRef
-    // (which is not Send) before entering the select loop
-    let Ok(mut file_events) = file_events_lazy.get().await.map(|r| r.resubscribe()) else {
+    let scope = WatchScope::predicate(|path| !is_in_ignored_dir(path) && is_relevant_file(path));
+    let Ok(mut file_events) = file_events.subscribe(scope).await else {
         warn!("File watching not available");
         return;
     };
@@ -143,28 +141,16 @@ async fn watch_loop(
             result = file_events.recv() => {
                 match result {
                     Ok(Ok(event)) => {
-                        // Check if any of the changed files are relevant
-                        let has_relevant_change = event.paths.iter().any(|path| {
-                            // Skip ignored directories
-                            if is_in_ignored_dir(path) {
-                                return false;
-                            }
-
-                            // Check if it's a relevant file
-                            if is_relevant_file(path) {
-                                trace!("Relevant file changed: {:?}", path);
-                                return true;
-                            }
-
-                            false
-                        });
+                        let has_relevant_change = !event.paths.is_empty();
 
                         if has_relevant_change {
+                            trace!(paths = ?event.paths, "Relevant files changed");
                             pending_rebuild = true;
                         }
                     }
                     Ok(Err(e)) => {
                         warn!("File watch error: {:?}", e);
+                        pending_rebuild = true;
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
                         warn!("File watcher lagged by {} events, triggering rebuild", n);

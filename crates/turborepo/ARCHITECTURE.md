@@ -463,6 +463,52 @@ The core task graph consists of:
   can restore outputs without forcing non-cacheable tasks to rerun. Persistent
   non-interruptible tasks are excluded because watch mode cannot restart them
 
+#### Watch Event Routing (`crates/turborepo-filewatch`, `crates/turborepo-lib/src/package_changes_watcher.rs`)
+
+- `FileSystemWatcher` owns the platform watcher and exposes a demand-driven
+  `WatchSource`. Scoped consumers subscribe with a `WatchScope`; path filtering
+  occurs before that consumer's bounded event channel, so irrelevant events
+  cannot make it lag. Package changes, package discovery, input hashing,
+  output-glob tracking, cookies, devtools, and daemon root monitoring all use
+  independent scopes; there is no repository-wide raw event broadcast.
+- Package-change detection declares a source-input scope that drops `.git`,
+  paths excluded by repository and nested Git ignore rules, and toolchain
+  build-byproduct prefixes. Tracked files and their ancestor directories remain
+  relevant even when an ignore pattern matches. It always
+  admits `.gitignore`, `turbo.json`, `turbo.jsonc`, an in-repository custom
+  Turbo config, and toolchain workspace-definition files.
+- The shared repository model reloads all inherited and nested `.gitignore`
+  matchers before routing an event containing any `.gitignore`; it also applies
+  `.git/info/exclude` and `core.excludesFile`, but deliberately does not
+  interpret ripgrep `.ignore` files. On macOS, a global excludes file on a
+  different device is conservatively not applied because one FSEvents stream
+  cannot monitor both devices. The package scope
+  refreshes the merged toolchain `WatchSpec` whenever the package graph is
+  initialized or rediscovered. Turbo config and toolchain definition changes
+  trigger full rediscovery after routing.
+- Git index and `.git/info/exclude` control paths are watched separately so
+  tracked-file and exclude state stays current without exposing `.git` events
+  to normal consumers. Backend rescan signals bypass path scopes and invoke
+  each consumer's conservative recovery.
+- Output and hash watchers retain their independent event requirements: ignored
+  outputs and explicitly configured inputs may still be relevant to those
+  consumers. Git-ignore filtering is therefore consumer-specific rather than a
+  global filesystem policy.
+- On Linux, ordinary inotify registration uses a Git-aware directory walk and
+  does not descend into ignored trees. Hash and output scopes publish explicit
+  physical interests for ignored paths; the driver watches their nearest
+  existing ancestor and extends coverage when future directories appear.
+  `.gitignore` changes reconcile installed ordinary watches, including removing
+  newly ignored coverage while preserving explicit interests and cookies.
+  Explicit leading-wildcard inputs may require broad package coverage; these
+  still hard-exclude `.git` and `node_modules`.
+- Backends that do not require runtime watch-tree mutation route events directly
+  from their callback into scoped subscriptions after the readiness cookie,
+  avoiding a shared bounded ingress queue for ignored bursts.
+- Subscriptions unregister on drop. The source can be created before the run or
+  task graph because consumers register interests as those interests become
+  known.
+
 ### 4. Task Visitor (`crates/turborepo-lib/src/task_graph/visitor/`)
 
 The task graph visitor handles task execution:

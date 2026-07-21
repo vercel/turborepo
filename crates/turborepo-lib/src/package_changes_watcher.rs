@@ -2,10 +2,9 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     ops::DerefMut,
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
-use ignore::gitignore::Gitignore;
 use notify::Event;
 use radix_trie::{Trie, TrieCommon};
 use tokio::sync::{broadcast, oneshot, Mutex};
@@ -13,7 +12,7 @@ use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf
 use turborepo_daemon::{PackageChangeEvent, PackageChangesWatcher as PackageChangesWatcherTrait};
 use turborepo_filewatch::{
     hash_watcher::{HashSpec, HashWatcher, InputGlobs},
-    NotifyError, OptionalWatch,
+    RepositoryIgnore, WatchScope, WatchSource,
 };
 use turborepo_repository::{
     change_mapper::{
@@ -62,7 +61,7 @@ impl PackageChangesWatcher {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         repo_root: AbsoluteSystemPathBuf,
-        file_events_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
+        file_events: WatchSource,
         hash_watcher: Arc<HashWatcher>,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
@@ -74,7 +73,7 @@ impl PackageChangesWatcher {
             broadcast::channel(CHANGE_EVENT_CHANNEL_CAPACITY);
         let subscriber = Subscriber::new(
             repo_root,
-            file_events_lazy,
+            file_events,
             package_change_events_tx,
             hash_watcher,
             custom_turbo_json_path,
@@ -120,9 +119,11 @@ impl Default for ChangedFiles {
 }
 
 struct Subscriber {
-    file_events_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
+    file_events: WatchSource,
     changed_files: Mutex<RefCell<ChangedFiles>>,
     repo_root: AbsoluteSystemPathBuf,
+    repository_ignore: RepositoryIgnore,
+    watch_spec: Arc<RwLock<WatchSpec>>,
     package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
     hash_watcher: Arc<HashWatcher>,
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
@@ -134,18 +135,18 @@ struct Subscriber {
     extra_toolchains: Vec<Arc<dyn Toolchain>>,
 }
 
-// This is a workaround because `ignore` doesn't match against a path's
-// ancestors, i.e. if we have `foo/bar/baz` and the .gitignore has `foo/`, it
-// won't match.
-fn ancestors_is_ignored(gitignore: &Gitignore, path: &AnchoredSystemPath) -> bool {
-    path.ancestors().enumerate().any(|(idx, p)| {
-        let is_dir = idx != 0;
-        gitignore.matched(p, is_dir).is_ignore()
-    })
-}
-
 fn is_in_git_folder(path: &AnchoredSystemPath) -> bool {
     path.components().any(|c| c.as_str() == ".git")
+}
+
+#[cfg(test)]
+fn ancestors_is_ignored(
+    gitignore: &ignore::gitignore::Gitignore,
+    path: &AnchoredSystemPath,
+) -> bool {
+    path.ancestors()
+        .enumerate()
+        .any(|(index, ancestor)| gitignore.matched(ancestor, index != 0).is_ignore())
 }
 
 struct RepoState {
@@ -188,7 +189,7 @@ enum FileChangeAction {
 fn classify_changed_files(
     trie: &Trie<String, ()>,
     repo_root: &AbsoluteSystemPathBuf,
-    root_gitignore: &Gitignore,
+    repository_ignore: &RepositoryIgnore,
     custom_turbo_json_path: Option<&AbsoluteSystemPathBuf>,
     change_mapper: &ChangeMapper<'_, GlobalDepsPackageChangeMapper<'_>>,
     watch_spec: &WatchSpec,
@@ -261,7 +262,11 @@ fn classify_changed_files(
             };
             repo_root.anchor(p).ok()
         })
-        .filter(|p| !(ancestors_is_ignored(root_gitignore, p) || is_in_git_folder(p)))
+        .filter(|p| {
+            repository_ignore
+                .is_relevant(repo_root.as_std_path().join(p.as_path()).as_path(), false)
+                && !is_in_git_folder(p)
+        })
         // Toolchain build byproducts (e.g. Cargo's target/) are written
         // continuously by the very tasks a change would re-trigger; letting
         // them through would create a feedback loop. Usually gitignored and
@@ -310,7 +315,7 @@ impl Subscriber {
     #[allow(clippy::too_many_arguments)]
     fn new(
         repo_root: AbsoluteSystemPathBuf,
-        file_events_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
+        file_events: WatchSource,
         package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
         hash_watcher: Arc<HashWatcher>,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
@@ -350,10 +355,20 @@ impl Subscriber {
             }
         });
 
+        let repository_ignore = file_events
+            .repository_ignore()
+            .unwrap_or_else(|| RepositoryIgnore::new(repo_root.as_std_path()));
+        let mut watch_spec = WatchSpec::default();
+        for toolchain in &extra_toolchains {
+            watch_spec.extend(toolchain.watch_spec());
+        }
+
         Subscriber {
             repo_root,
-            file_events_lazy,
+            file_events,
             changed_files: Default::default(),
+            repository_ignore,
+            watch_spec: Arc::new(RwLock::new(watch_spec)),
             package_change_events_tx,
             hash_watcher,
             custom_turbo_json_path: normalized_custom_path,
@@ -363,7 +378,7 @@ impl Subscriber {
         }
     }
 
-    async fn initialize_repo_state(&self) -> Option<(RepoState, Gitignore)> {
+    async fn initialize_repo_state(&self) -> Option<RepoState> {
         let Ok(root_package_json) =
             PackageJson::load(&self.repo_root.join_component("package.json"))
         else {
@@ -411,16 +426,16 @@ impl Subscriber {
         .ok()
         .cloned();
 
-        let gitignore_path = self.repo_root.join_component(".gitignore");
-        let (root_gitignore, _) = Gitignore::new(&gitignore_path);
+        *self
+            .watch_spec
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+            pkg_dep_graph.toolchains().watch_spec();
 
-        Some((
-            RepoState {
-                root_turbo_json,
-                pkg_dep_graph,
-            },
-            root_gitignore,
-        ))
+        Some(RepoState {
+            root_turbo_json,
+            pkg_dep_graph,
+        })
     }
 
     async fn is_same_hash(
@@ -458,18 +473,73 @@ impl Subscriber {
 
     /// Send a Rediscover event and reinitialize repo state. Returns the new
     /// state tuple on success, or `None` if the caller should break.
-    async fn rediscover_and_reinit(&self) -> Option<(RepoState, Gitignore)> {
+    async fn rediscover_and_reinit(&self) -> Option<RepoState> {
         let _ = self
             .package_change_events_tx
             .send(PackageChangeEvent::Rediscover);
         self.initialize_repo_state().await
     }
 
-    async fn watch(mut self, exit_rx: oneshot::Receiver<()>) {
+    async fn watch(self, exit_rx: oneshot::Receiver<()>) {
         let timeout_secs = startup_timeout_secs();
+        let repo_root = self.repo_root.clone();
+        let repository_ignore = self.repository_ignore.clone();
+        let watch_spec = self.watch_spec.clone();
+        let gitignore_path = repo_root.join_component(".gitignore");
+        let config_paths = [
+            repo_root.join_component(CONFIG_FILE),
+            repo_root.join_component(CONFIG_FILE_JSONC),
+        ];
+        let custom_config_path = self.custom_turbo_json_path.clone();
+        let scope = WatchScope::event_filter(move |event| {
+            event.paths.retain(|path| {
+                if path.to_str().is_none() {
+                    return true;
+                }
+                let Ok(absolute_path) = AbsoluteSystemPathBuf::try_from(path.as_path()) else {
+                    return false;
+                };
+                if absolute_path == gitignore_path
+                    || config_paths.contains(&absolute_path)
+                    || custom_config_path
+                        .as_ref()
+                        .is_some_and(|config_path| absolute_path == *config_path)
+                {
+                    return true;
+                }
+                let Ok(path) = repo_root.anchor(&absolute_path) else {
+                    return false;
+                };
+                let watch_spec = watch_spec
+                    .read()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let in_ignored_prefix = watch_spec.ignore_prefixes.iter().any(|prefix| {
+                    path.components()
+                        .next()
+                        .is_some_and(|component| component.as_str() == prefix)
+                });
+                if in_ignored_prefix {
+                    return false;
+                }
+                let is_definition = watch_spec
+                    .definition_paths
+                    .iter()
+                    .any(|definition| path.to_unix().as_str() == definition)
+                    || watch_spec.definition_file_names.iter().any(|name| {
+                        path.as_path()
+                            .file_name()
+                            .is_some_and(|file_name| file_name == name.as_str())
+                    });
+                if is_definition {
+                    return true;
+                }
+                repository_ignore.is_relevant(absolute_path.as_std_path(), false)
+                    && !is_in_git_folder(&path)
+            });
+        });
         let file_events_result = tokio::time::timeout(
             std::time::Duration::from_secs(timeout_secs),
-            self.file_events_lazy.get(),
+            self.file_events.subscribe(scope),
         )
         .await;
         let Ok(mut file_events) = file_events_result
@@ -481,7 +551,7 @@ impl Subscriber {
                 );
             })
             .and_then(|r| {
-                r.map(|r| r.resubscribe()).map_err(|_| {
+                r.map_err(|_| {
                     tracing::debug!("file watching shut down, package watcher not available");
                 })
             })
@@ -495,24 +565,30 @@ impl Subscriber {
             loop {
                 match file_events.recv().await {
                     Ok(Ok(Event { paths, .. })) => {
-                        if let ChangedFiles::Some(trie) =
-                            self.changed_files.lock().await.borrow_mut().deref_mut()
-                        {
+                        let changed_files = self.changed_files.lock().await;
+                        let mut changed_files = changed_files.borrow_mut();
+                        let mut non_utf8 = false;
+                        if let ChangedFiles::Some(trie) = changed_files.deref_mut() {
                             for path in paths {
                                 if let Some(path) = path.to_str() {
                                     trie.insert(path.to_string(), ());
                                 } else {
-                                    tracing::debug!(
+                                    tracing::warn!(
                                         ?path,
-                                        "skipping non-UTF-8 path from file watcher"
+                                        "non-UTF-8 file event requires conservative rediscovery"
                                     );
+                                    non_utf8 = true;
+                                    break;
                                 }
                             }
+                        }
+                        if non_utf8 {
+                            *changed_files = ChangedFiles::All;
                         }
                     }
                     Ok(Err(err)) => {
                         tracing::error!("file event error: {:?}", err);
-                        break;
+                        *self.changed_files.lock().await.borrow_mut() = ChangedFiles::All;
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => {
                         tracing::warn!("file event lagged");
@@ -532,8 +608,7 @@ impl Subscriber {
         let changes_fut = async {
             let root_pkg = WorkspacePackage::root();
 
-            let Some((mut repo_state, mut root_gitignore)) = self.initialize_repo_state().await
-            else {
+            let Some(mut repo_state) = self.initialize_repo_state().await else {
                 return;
             };
             // Pre-populate hash baselines for all known packages. Without
@@ -569,13 +644,11 @@ impl Subscriber {
             // pattern. The borrow checker prevents extracting this into a method
             // because `change_mapper` borrows from `repo_state`.
             macro_rules! rediscover {
-                ($self:expr, $repo_state:ident, $root_gitignore:ident, $change_mapper:ident) => {{
-                    let Some((new_state, new_gitignore)) = $self.rediscover_and_reinit().await
-                    else {
+                ($self:expr, $repo_state:ident, $change_mapper:ident) => {{
+                    let Some(new_state) = $self.rediscover_and_reinit().await else {
                         break;
                     };
                     $repo_state = new_state;
-                    $root_gitignore = new_gitignore;
                     $change_mapper = match $repo_state.get_change_mapper() {
                         Some(m) => m,
                         None => break,
@@ -600,24 +673,15 @@ impl Subscriber {
                 };
 
                 let ChangedFiles::Some(trie) = changed_files else {
-                    rediscover!(self, repo_state, root_gitignore, change_mapper);
+                    rediscover!(self, repo_state, change_mapper);
                     continue;
                 };
-
-                // Handle .gitignore changes before classification so that
-                // co-occurring file changes in the same batch are still processed
-                // with the updated gitignore rules.
-                let gitignore_path = self.repo_root.join_component(".gitignore");
-                if trie.get(gitignore_path.as_str()).is_some() {
-                    let (new_root_gitignore, _) = Gitignore::new(&gitignore_path);
-                    root_gitignore = new_root_gitignore;
-                }
 
                 let watch_spec = repo_state.pkg_dep_graph.toolchains().watch_spec();
                 let action = classify_changed_files(
                     &trie,
                     &self.repo_root,
-                    &root_gitignore,
+                    &self.repository_ignore,
                     self.custom_turbo_json_path.as_ref(),
                     &change_mapper,
                     &watch_spec,
@@ -629,19 +693,19 @@ impl Subscriber {
                         tracing::info!(
                             "Detected change to turbo configuration file. Triggering rediscovery."
                         );
-                        rediscover!(self, repo_state, root_gitignore, change_mapper);
+                        rediscover!(self, repo_state, change_mapper);
                         continue;
                     }
                     FileChangeAction::MapperFailed => {
                         tracing::info!("Change mapper failed. Triggering rediscovery.");
-                        rediscover!(self, repo_state, root_gitignore, change_mapper);
+                        rediscover!(self, repo_state, change_mapper);
                         continue;
                     }
                     FileChangeAction::NoRelevantChanges => {
                         continue;
                     }
                     FileChangeAction::PackagesChanged(PackageChanges::All(_), _) => {
-                        rediscover!(self, repo_state, root_gitignore, change_mapper);
+                        rediscover!(self, repo_state, change_mapper);
                     }
                     FileChangeAction::PackagesChanged(
                         PackageChanges::Some(filtered_pkgs),
@@ -703,7 +767,9 @@ mod test {
     use radix_trie::Trie;
     use tokio::sync::{broadcast, watch};
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-    use turborepo_filewatch::{hash_watcher::HashWatcher, NotifyError, OptionalWatch};
+    use turborepo_filewatch::{
+        hash_watcher::HashWatcher, NotifyError, OptionalWatch, WatchEventSender, WatchSource,
+    };
     use turborepo_repository::{
         change_mapper::{ChangeMapper, GlobalDepsPackageChangeMapper, PackageChanges},
         package_graph::{PackageGraph, PackageGraphBuilder},
@@ -714,7 +780,7 @@ mod test {
 
     use super::{
         ancestors_is_ignored, classify_changed_files, is_in_git_folder, ChangedFiles,
-        FileChangeAction, PackageChangeEvent, PackageChangesWatcher, CONFIG_FILE,
+        FileChangeAction, PackageChangeEvent, PackageChangesWatcher, RepositoryIgnore, CONFIG_FILE,
     };
 
     fn anchored(s: &str) -> AnchoredSystemPathBuf {
@@ -810,7 +876,11 @@ mod test {
                 GlobalDepsPackageChangeMapper::new(&self.pkg_graph, std::iter::empty::<&str>())
                     .unwrap();
             let change_mapper = ChangeMapper::new(&self.pkg_graph, vec![], mapper);
-            let gitignore = gitignore_from_lines(self.repo_root.as_str(), gitignore_lines);
+            self.repo_root
+                .join_component(".gitignore")
+                .create_with_contents(gitignore_lines.join("\n"))
+                .unwrap();
+            let gitignore = RepositoryIgnore::new(self.repo_root.as_std_path());
             classify_changed_files(
                 trie,
                 &self.repo_root,
@@ -1246,7 +1316,7 @@ mod test {
         // .gitignore
         let gitignore = repo_root.join_component(".gitignore");
         gitignore
-            .create_with_contents("node_modules/\n.turbo/\n".as_bytes())
+            .create_with_contents("node_modules/\n.turbo/\n.cache/\n".as_bytes())
             .unwrap();
 
         // Package a
@@ -1296,11 +1366,11 @@ mod test {
     /// Holds onto channels that must stay alive for the test watcher to work.
     struct TestWatcherHandle {
         watcher: PackageChangesWatcher,
-        file_events_tx: broadcast::Sender<Result<notify::Event, NotifyError>>,
+        file_events_tx: WatchEventSender,
         // These must be kept alive to prevent the HashWatcher from busy-looping
         // on closed channels.
         _pkg_discovery_tx: watch::Sender<Option<Result<DiscoveryResponse, String>>>,
-        _hash_events_tx: broadcast::Sender<Result<notify::Event, NotifyError>>,
+        _hash_events_tx: WatchEventSender,
     }
 
     /// Create a PackageChangesWatcher backed by a synthetic file event channel.
@@ -1313,9 +1383,7 @@ mod test {
         single_package: bool,
         allow_no_package_manager: bool,
     ) -> TestWatcherHandle {
-        let (file_events_tx, file_events_rx) = broadcast::channel(128);
-        let (opt_tx, opt_watch) = OptionalWatch::new();
-        opt_tx.send(Some(file_events_rx)).unwrap();
+        let (file_events_tx, file_events) = WatchSource::channel_for_root(repo_root.as_std_path());
 
         // Keep the discovery sender alive so the HashWatcher doesn't busy-loop
         // on a closed watch channel. The hash watcher subscriber won't find any
@@ -1326,20 +1394,18 @@ mod test {
         let scm = SCM::new(repo_root);
 
         // Keep hash events sender alive too
-        let (hash_events_tx, hash_events_rx) = broadcast::channel(128);
-        let (hash_opt_tx, hash_opt_watch) = OptionalWatch::new();
-        hash_opt_tx.send(Some(hash_events_rx)).unwrap();
+        let (hash_events_tx, hash_events) = WatchSource::channel_for_root(repo_root.as_std_path());
 
         let hash_watcher = Arc::new(HashWatcher::new(
             repo_root.clone(),
             pkg_discovery_rx,
-            hash_opt_watch,
+            hash_events,
             scm,
         ));
 
         let watcher = PackageChangesWatcher::new(
             repo_root.clone(),
-            opt_watch,
+            file_events,
             hash_watcher,
             None,
             single_package,
@@ -1438,8 +1504,7 @@ mod test {
             GlobalDepsPackageChangeMapper::new(&pkg_graph, std::iter::empty::<&str>()).unwrap();
         let change_mapper = ChangeMapper::new(&pkg_graph, vec![], mapper);
 
-        let gitignore_path = repo_root.join_component(".gitignore");
-        let (gitignore, _) = ignore::gitignore::Gitignore::new(&gitignore_path);
+        let gitignore = RepositoryIgnore::new(repo_root.as_std_path());
 
         let changed_file = repo_root.join_components(&["packages", "a", "index.ts"]);
         let mut trie = Trie::new();
@@ -1806,6 +1871,34 @@ mod test {
             matches!(event, Some(PackageChangeEvent::Rediscover)),
             "expected Rediscover from turbo.json sentinel, got {:?}",
             event
+        );
+    }
+
+    #[tokio::test]
+    async fn ignored_burst_does_not_hide_following_source_change() {
+        let (_tmp, repo_root) = setup_git_repo();
+        let handle = create_test_watcher(&repo_root);
+        let mut rx = handle.watcher.package_change_events_rx.resubscribe();
+
+        let _ = recv_event(&mut rx, Duration::from_secs(2)).await;
+        for index in 0..30_000 {
+            let ignored_path =
+                repo_root.join_components(&["packages", "a", ".cache", &index.to_string()]);
+            handle
+                .file_events_tx
+                .send(Ok(make_notify_event_from(&[&ignored_path])))
+                .unwrap();
+        }
+        let source_path = repo_root.join_components(&["packages", "a", "index.ts"]);
+        handle
+            .file_events_tx
+            .send(Ok(make_notify_event_from(&[&source_path])))
+            .unwrap();
+
+        let event = recv_event(&mut rx, Duration::from_secs(5)).await;
+        assert!(
+            matches!(event, Some(PackageChangeEvent::Package { .. })),
+            "ignored burst should not cause rediscovery before source change, got {event:?}"
         );
     }
 }
