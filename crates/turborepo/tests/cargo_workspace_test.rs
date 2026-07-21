@@ -334,10 +334,9 @@ fn test_cargo_packages_in_task_graph() {
     // The bin crate is an entrypoint: it executes a real cargo command.
     let app_build = task("app#build").expect("app#build in graph");
     assert_eq!(app_build["command"], "cargo build --package=app --locked");
-    // Its dependency crate participates in the graph (for --filter/--affected
-    // propagation) but is a no-op — cargo builds it implicitly.
-    let lib_build = task("lib-a#build").expect("lib-a#build in graph");
-    assert_eq!(lib_build["command"], "<NONEXISTENT>");
+    // Unfiltered builds select entrypoint crates; Cargo builds their library
+    // dependency closures without a redundant package-scoped process.
+    assert!(task("lib-a#build").is_none());
     // JS packages coexist in the same graph.
     let js_build = task("js-pkg#build").expect("js-pkg#build in graph");
     assert!(
@@ -370,6 +369,88 @@ fn test_cargo_packages_in_task_graph() {
     let expected_output = format!("../../target/debug/{output_name}");
     assert_eq!(cargo_outputs, [expected_output.as_str()]);
     assert!(cargo_outputs.iter().all(|output| !output.contains('*')));
+}
+
+#[test]
+fn test_cargo_library_build_can_be_filtered() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=lib-a", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task = json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "lib-a#build"))
+        .expect("lib-a#build in graph");
+    assert_eq!(task["command"], "cargo build --package=lib-a --locked");
+    assert_eq!(task["resolvedTaskDefinition"]["cache"], false);
+
+    let output = run_turbo(tempdir.path(), &["run", "lib-a#build", "--dry-run=json"]);
+    assert!(output.status.success(), "package task failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(json["tasks"].as_array().is_some_and(|tasks| {
+        tasks.iter().any(|task| {
+            task["taskId"] == "lib-a#build"
+                && task["command"] == "cargo build --package=lib-a --locked"
+        })
+    }));
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--filter=lib-a",
+            "--force",
+            "--log-order=grouped",
+        ],
+    );
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.status.success(), "filtered build failed: {combined}");
+    assert!(
+        combined.contains("lib-a:build"),
+        "expected the library build task to execute: {combined}"
+    );
+    assert!(!combined.contains("No tasks were executed"));
+}
+
+#[test]
+fn test_unfiltered_cargo_build_falls_back_to_libraries() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::remove_dir_all(tempdir.path().join("crates/app")).unwrap();
+    let status = cargo_command(tempdir.path())
+        .arg("generate-lockfile")
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    let output = run_turbo(tempdir.path(), &["run", "build", "--dry-run=json"]);
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tasks = json["tasks"].as_array().unwrap();
+    let command = |task_id: &str| {
+        tasks
+            .iter()
+            .find(|task| task["taskId"] == task_id)
+            .and_then(|task| task["command"].as_str())
+    };
+    assert_eq!(
+        command("lib-a#build"),
+        Some("cargo build --package=lib-a --locked")
+    );
+    assert_eq!(
+        command("lib-a-test-util#build"),
+        Some("cargo build --package=lib-a-test-util --locked")
+    );
 }
 
 #[test]
@@ -1416,6 +1497,7 @@ fn test_prune_produces_buildable_cargo_workspace() {
     let out = tempdir.path().join("out");
     assert!(out.join("crates/app/src/main.rs").exists());
     assert!(out.join("crates/lib-a/src/lib.rs").exists());
+    assert!(out.join("crates/lib-a-test-util/src/lib.rs").exists());
     assert!(out.join("Cargo.toml").exists());
     assert!(out.join("Cargo.lock").exists());
     // The JS package is not in app's closure and must not be copied.
@@ -1424,7 +1506,7 @@ fn test_prune_produces_buildable_cargo_workspace() {
     // Members are the explicit kept set.
     let manifest = fs::read_to_string(out.join("Cargo.toml")).unwrap();
     assert!(
-        manifest.contains(r#"members = ["crates/app", "crates/lib-a"]"#),
+        manifest.contains(r#"members = ["crates/app", "crates/lib-a", "crates/lib-a-test-util"]"#),
         "explicit members expected, got: {manifest}"
     );
 
@@ -1623,9 +1705,8 @@ fn test_command_override_on_cargo_packages() {
     );
 }
 
-/// A pure Cargo workspace with no root package.json builds a task graph:
-/// every crate becomes a package and gets its Cargo-derived command, with no
-/// JavaScript project involved.
+/// A pure Cargo workspace with no root package.json builds a task graph, with
+/// no JavaScript project involved.
 #[test]
 fn test_pure_cargo_workspace_dry_run_has_no_package_json() {
     let tempdir = cargo_tempdir();
@@ -1645,9 +1726,9 @@ fn test_pure_cargo_workspace_dry_run_has_no_package_json() {
     // The bin crate is an entrypoint: it executes a real cargo command.
     let app_build = task("app#build").expect("app#build in graph");
     assert_eq!(app_build["command"], "cargo build --package=app --locked");
-    // Its dependency crate participates in the graph but is a no-op.
-    let lib_build = task("lib-a#build").expect("lib-a#build in graph");
-    assert_eq!(lib_build["command"], "<NONEXISTENT>");
+    // The unfiltered build delegates the dependency closure to the entrypoint's
+    // Cargo process instead of scheduling a redundant library build.
+    assert!(task("lib-a#build").is_none());
 
     // The entrypoint's hash still covers its dependency crate's sources even
     // though there is no JavaScript global hash contribution.
@@ -1737,6 +1818,241 @@ fn test_pure_cargo_workspace_filtered_execution() {
 }
 
 #[test]
+fn test_unfiltered_cargo_verification_runs_once_at_workspace_scope() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+
+    let output = run_turbo(tempdir.path(), &["run", "test", "--dry-run=json"]);
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tasks = json["tasks"].as_array().unwrap();
+    let rust_tests: Vec<_> = tasks
+        .iter()
+        .filter(|task| {
+            task["taskId"]
+                .as_str()
+                .is_some_and(|task_id| task_id.ends_with("#test"))
+                && task["command"]
+                    .as_str()
+                    .is_some_and(|command| command.starts_with("cargo test"))
+        })
+        .collect();
+    assert_eq!(
+        rust_tests.len(),
+        1,
+        "expected one Cargo test: {rust_tests:?}"
+    );
+    assert_eq!(rust_tests[0]["taskId"], "acme#test");
+    assert_eq!(rust_tests[0]["command"], "cargo test --workspace --locked");
+}
+
+#[test]
+fn test_cargo_verification_honors_exclude_only_filters() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "test", "--filter=!lib-a", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|task| task["taskId"].as_str())
+        .collect();
+    assert!(
+        task_ids.contains(&"app#test"),
+        "expected crate tests: {task_ids:?}"
+    );
+    assert!(!task_ids.contains(&"lib-a#test"));
+    assert!(!task_ids.contains(&"acme#test"));
+}
+
+#[test]
+fn test_cargo_verification_works_with_task_level_filters() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "filterUsingTasks": true
+  },
+  "tasks": {}
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "test", "--filter=...lib-a", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|task| task["taskId"].as_str())
+        .collect();
+    assert!(
+        task_ids.contains(&"lib-a#test"),
+        "base task must remain selectable: {task_ids:?}"
+    );
+    assert!(!task_ids.contains(&"acme#test"));
+}
+
+#[test]
+fn test_cargo_verification_works_with_task_input_filters() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(tempdir.path().join("shared.txt"), "before\n").unwrap();
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "filterUsingTasks": true
+  },
+  "tasks": {
+    "test": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/shared.txt"]
+    }
+  }
+}"#,
+    )
+    .unwrap();
+    for args in [
+        ["add", "shared.txt", "turbo.json"].as_slice(),
+        ["commit", "-m", "Configure task inputs", "--quiet"].as_slice(),
+    ] {
+        let status = std::process::Command::new("git")
+            .args(args)
+            .current_dir(tempdir.path())
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?} failed");
+    }
+    fs::write(tempdir.path().join("shared.txt"), "after\n").unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "test", "--filter=[HEAD]", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|task| task["taskId"].as_str())
+        .collect();
+    assert!(
+        task_ids.contains(&"lib-a#test"),
+        "task-input filtering must retain Cargo tasks: {task_ids:?}"
+    );
+    assert!(!task_ids.contains(&"acme#test"));
+}
+
+#[test]
+fn test_package_tasks_do_not_change_unqualified_cargo_scope() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "filterUsingTasks": true
+  },
+  "tasks": {}
+}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "test",
+            "app#build",
+            "--filter=acme",
+            "--dry-run=json",
+        ],
+    );
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|task| task["taskId"].as_str())
+        .collect();
+    assert!(task_ids.contains(&"acme#test"));
+    assert!(task_ids.contains(&"app#build"));
+    assert!(!task_ids.contains(&"app#test"));
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "test",
+            "lib-a#test",
+            "--filter=acme",
+            "--dry-run=json",
+        ],
+    );
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|task| task["taskId"].as_str())
+        .collect();
+    assert!(task_ids.contains(&"acme#test"));
+    assert!(task_ids.contains(&"lib-a#test"));
+}
+
+#[test]
+fn test_cargo_library_test_can_be_filtered() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "test",
+            "--filter=lib-a",
+            "--force",
+            "--log-order=grouped",
+        ],
+    );
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.status.success(), "filtered test failed: {combined}");
+    assert!(
+        combined.contains("lib-a:test"),
+        "expected the library test task to execute: {combined}"
+    );
+    assert!(
+        !combined.contains("No tasks were executed"),
+        "filtered library tests must not be a no-op: {combined}"
+    );
+}
+
+#[test]
 fn test_cargo_tasks_are_registered_without_task_configuration() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
@@ -1767,6 +2083,47 @@ fn test_cargo_tasks_are_registered_without_task_configuration() {
             .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == task_id))
             .unwrap_or_else(|| panic!("app#{task} in graph"));
         assert_eq!(definition["command"], expected_command);
+    }
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=lib-a", "--dry-run=json"],
+    );
+    assert!(output.status.success(), "library build failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let definition = json["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == "lib-a#build"))
+        .expect("lib-a#build in graph");
+    assert_eq!(
+        definition["command"],
+        "cargo build --package=lib-a --locked"
+    );
+
+    for (task, subcommand) in [
+        ("test", "test"),
+        ("check", "check"),
+        ("clippy", "clippy"),
+        ("lint", "clippy"),
+        ("bench", "bench"),
+        ("doc", "doc"),
+        ("docs", "doc"),
+    ] {
+        let output = run_turbo(
+            tempdir.path(),
+            &["run", task, "--filter=lib-a", "--dry-run=json"],
+        );
+        assert!(output.status.success(), "{task} failed: {output:?}");
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let task_id = format!("lib-a#{task}");
+        let definition = json["tasks"]
+            .as_array()
+            .and_then(|tasks| tasks.iter().find(|item| item["taskId"] == task_id))
+            .unwrap_or_else(|| panic!("lib-a#{task} in graph"));
+        assert_eq!(
+            definition["command"],
+            format!("cargo {subcommand} --package=lib-a --locked")
+        );
     }
 
     for (task, subcommand) in [
@@ -1883,7 +2240,13 @@ fn test_query_discovers_and_excludes_implicit_cargo_tasks() {
     assert!(app_tasks.iter().any(|task| task == "build"));
     assert!(app_tasks.iter().any(|task| task == "run"));
     assert!(app_tasks.iter().any(|task| task == "dev"));
-    assert!(!app_tasks.iter().any(|task| task == "lint"));
+    assert!(app_tasks.iter().any(|task| task == "lint"));
+
+    let library_tasks = query("lib-a");
+    assert!(library_tasks.iter().any(|task| task == "build"));
+    assert!(library_tasks.iter().any(|task| task == "test"));
+    assert!(library_tasks.iter().any(|task| task == "lint"));
+    assert!(library_tasks.iter().any(|task| task == "docs"));
 
     let workspace_tasks = query("acme");
     assert!(workspace_tasks.iter().any(|task| task == "clippy"));
@@ -1899,6 +2262,34 @@ fn test_query_discovers_and_excludes_implicit_cargo_tasks() {
     )
     .unwrap();
     assert!(!query("app").iter().any(|task| task == "build"));
+}
+
+#[test]
+fn test_affected_includes_cargo_dev_dependency_cycles() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    fs::write(
+        tempdir.path().join("crates/lib-a-test-util/src/lib.rs"),
+        "pub fn expected_greeting() -> &'static str { lib_a::greeting() }\n",
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "query { affectedTasks(tasks: [\"test\"]) { items { name package { name } } } }",
+        ],
+    );
+    assert!(output.status.success(), "query failed: {output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tasks = json["data"]["affectedTasks"]["items"].as_array().unwrap();
+    assert!(
+        tasks
+            .iter()
+            .any(|task| task["name"] == "test" && task["package"]["name"] == "lib-a"),
+        "lib-a#test must be affected by its cycle-closing dev dependency: {tasks:?}"
+    );
 }
 
 #[test]
@@ -1939,6 +2330,6 @@ fn test_affected_tasks_include_implicit_cargo_commands() {
     assert!(
         tasks
             .iter()
-            .any(|task| task["name"] == "lint" && task["package"]["name"] == "acme")
+            .any(|task| task["name"] == "lint" && task["package"]["name"] == "app")
     );
 }

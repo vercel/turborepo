@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import * as tar from "tar";
 import native from "./native";
 import type { Platform } from "./types";
+import { publishWithRetries } from "./npm";
 
 export interface PackOptions {
   platform: Platform;
@@ -115,7 +116,7 @@ async function packPlatform({
   return path.resolve(tarPath);
 }
 
-function publishArtifacts(artifacts: Array<string>, npmTag: string) {
+async function publishArtifacts(artifacts: Array<string>, npmTag: string) {
   validateNpmTag(npmTag);
 
   for (const artifact of artifacts) {
@@ -123,16 +124,12 @@ function publishArtifacts(artifacts: Array<string>, npmTag: string) {
       encoding: "utf8"
     }).trim();
     console.log(`npm version: ${npmVersion}`);
-    console.log(
-      `Executing: npm publish ${artifact} --tag ${npmTag} --access public`
-    );
-    execFileSync(
-      "npm",
-      ["publish", artifact, "--tag", npmTag, "--access", "public"],
-      {
-        stdio: "inherit"
-      }
-    );
+    await publishWithRetries({
+      packageName: artifact,
+      tarball: artifact,
+      npmTag,
+      accessPublic: true
+    });
   }
 }
 

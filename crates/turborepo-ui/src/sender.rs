@@ -85,11 +85,6 @@ pub struct TaskSender {
 }
 
 impl TaskSender {
-    /// Access the underlying UISender
-    pub fn as_app(&self) -> &UISender {
-        &self.handle
-    }
-
     /// Mark the task as started
     pub fn start(&self, output_logs: OutputLogs) {
         self.handle.start_task(self.name.clone(), output_logs);

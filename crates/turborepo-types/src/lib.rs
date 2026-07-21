@@ -201,17 +201,6 @@ impl UIMode {
     pub fn use_tui(&self) -> bool {
         matches!(self, Self::Tui)
     }
-
-    /// Returns true if the UI mode has a sender,
-    /// i.e. tui but not stream
-    pub fn has_sender(&self) -> bool {
-        matches!(self, Self::Tui)
-    }
-
-    /// Returns true if this UI mode should include timestamps in the prefix
-    pub fn should_include_timestamps(&self) -> bool {
-        matches!(self, Self::StreamWithTimestamps)
-    }
 }
 
 /// Log ordering mode for task output.

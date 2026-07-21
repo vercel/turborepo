@@ -894,7 +894,7 @@ impl Backend {
                                     message: format!(
                                         "The '^' means \"run the `{}` task in the package's \
                                          dependencies before this one\"",
-                                        &suffix.value,
+                                        suffix.value,
                                     ),
                                     range: convert_ranges(
                                         &rope,

@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "bin": {
-    "turboreleaser": "cli/index.cjs"
+    "turboreleaser": "dist/index.js"
   },
   "files": [
     "dist",
@@ -17,11 +17,13 @@
   },
   "dependencies": {
     "commander": "11.0.0",
-    "tar": "7.5.11"
+    "semver": "7.5.2",
+    "tar": "7.5.16"
   },
   "devDependencies": {
     "@turbo/tsconfig": "workspace:*",
     "@types/node": "20.11.30",
+    "@types/semver": "7.3.12",
     "tsdown": "0.12.0",
     "tsx": "4.21.0",
     "typescript": "npm:@typescript/typescript6@^6.0.1",

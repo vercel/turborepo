@@ -301,16 +301,6 @@ impl TurboJson {
         with_tasks.push(Spanned::new(UnescapedString::from(with.to_string())))
     }
 
-    /// Set the path for this TurboJson (intended for testing)
-    pub fn set_path(&mut self, path: Option<Arc<str>>) {
-        self.path = path;
-    }
-
-    /// Set the text for this TurboJson (intended for testing)
-    pub fn set_text(&mut self, text: Option<Arc<str>>) {
-        self.text = text;
-    }
-
     /// Create a TurboJson with a specific path (intended for testing)
     pub fn with_path(mut self, path: impl Into<Arc<str>>) -> Self {
         self.path = Some(path.into());

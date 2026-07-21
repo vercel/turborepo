@@ -16,11 +16,10 @@ use std::{
 
 use bun::BunDetector;
 use itertools::{Either, Itertools};
-use lazy_regex::{Lazy, lazy_regex};
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use node_semver::{SemverError, Version};
 use npm::NpmDetector;
-use regex::Regex;
+use regex::regex;
 use serde::Deserialize;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
@@ -248,10 +247,6 @@ impl From<std::convert::Infallible> for Error {
         unreachable!()
     }
 }
-
-static PACKAGE_MANAGER_PATTERN: Lazy<Regex> = lazy_regex!(
-    r"\A(?P<manager>aube|bun|npm|nub|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z"
-);
 
 impl PackageManager {
     /// Returns the package manager responsible for lockfile operations.
@@ -1040,14 +1035,17 @@ impl PackageManager {
     pub(crate) fn parse_package_manager_string(
         manager: &Spanned<String>,
     ) -> Result<(&str, &str), Error> {
-        if let Some(captures) = PACKAGE_MANAGER_PATTERN.captures(manager) {
+        let package_manager_pattern = regex!(
+            r"\A(?P<manager>aube|bun|npm|nub|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z"
+        );
+        if let Some(captures) = package_manager_pattern.captures(manager) {
             let manager = captures.name("manager").unwrap().as_str();
             let version = captures.name("version").unwrap().as_str();
             Ok((manager, version))
         } else {
             let (span, text) = manager.span_and_text("package.json");
             Err(Error::InvalidPackageManager {
-                pattern: PACKAGE_MANAGER_PATTERN.to_string(),
+                pattern: package_manager_pattern.to_string(),
                 span,
                 text,
             })

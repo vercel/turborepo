@@ -56,9 +56,7 @@ pub trait PackageChangesWatcher: Send + Sync {
 /// Arguments passed to a PackageChangesWatcher factory
 pub struct PackageChangesWatcherArgs {
     pub repo_root: AbsoluteSystemPathBuf,
-    pub file_events: turborepo_filewatch::OptionalWatch<
-        broadcast::Receiver<Result<notify::Event, turborepo_filewatch::NotifyError>>,
-    >,
+    pub file_events: turborepo_filewatch::WatchSource,
     pub hash_watcher: std::sync::Arc<turborepo_filewatch::hash_watcher::HashWatcher>,
     pub custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     pub allow_no_package_manager: bool,

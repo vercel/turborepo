@@ -30,7 +30,10 @@
       "cache": false
     },
     "check-links": {
-      "inputs": ["content/**/*.mdx", "../../link-checker/src/**"],
+      "inputs": [
+        "content/**/*.mdx",
+        "$TURBO_ROOT$/docs/link-checker/src/**"
+      ],
       "cache": false
     },
     "check-types": {

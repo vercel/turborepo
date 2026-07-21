@@ -1574,6 +1574,7 @@ impl turborepo_query_api::QueryRun for Run {
             &self.scm,
             &self.root_turbo_json,
         )
+        .map(|(packages, _, _)| packages)
         .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))
     }
 

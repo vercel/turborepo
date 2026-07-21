@@ -51,9 +51,9 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          - host: macos-latest
+          - host: macos-15-xlarge
             target: "x86_64-apple-darwin"
-          - host: macos-latest
+          - host: macos-15-xlarge
             target: "aarch64-apple-darwin"
           - host: ubuntu-latest
             prepare: "sudo apt-get update && sudo apt-get install -y curl musl-tools"
@@ -266,7 +266,8 @@ jobs:
           test -f out/turborepo-lsp-win32-x64.exe
 
       - name: Compile extension
-        run: pnpm --filter turbo-vsc run test-compile
+        working-directory: packages/turbo-vsc
+        run: pnpm run check-types
 
       - name: Package VSIX
         working-directory: packages/turbo-vsc

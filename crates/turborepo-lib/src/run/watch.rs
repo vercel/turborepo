@@ -273,21 +273,21 @@ impl WatchClient {
         let watcher = Arc::new(FileSystemWatcher::new_with_default_cookie_dir(
             &base.repo_root,
         )?);
-        let recv = watcher.watch();
+        let source = watcher.source();
         let cookie_writer = CookieWriter::new(
             watcher.cookie_dir(),
             Duration::from_millis(100),
-            recv.clone(),
+            source.clone(),
         );
         let glob_watcher = Arc::new(GlobWatcher::new(
             base.repo_root.clone(),
             cookie_writer.clone(),
-            recv.clone(),
+            source.clone(),
         ));
         let package_watcher = Arc::new(
             PackageWatcher::new(
                 base.repo_root.clone(),
-                recv.clone(),
+                source.clone(),
                 cookie_writer,
                 base.opts().repo_opts.allow_no_package_manager,
             )
@@ -297,7 +297,7 @@ impl WatchClient {
         let hash_watcher = Arc::new(HashWatcher::new(
             base.repo_root.clone(),
             package_watcher.watch_discovery(),
-            recv.clone(),
+            source,
             scm,
         ));
         // The watcher builds its own package graph; register the same
@@ -312,7 +312,7 @@ impl WatchClient {
         }
         let package_changes_watcher = PackageChangesWatcher::new(
             base.repo_root.clone(),
-            recv,
+            watcher.source(),
             hash_watcher.clone(),
             custom_turbo_json_path,
             base.opts().run_opts.single_package,

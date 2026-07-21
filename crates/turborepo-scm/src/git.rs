@@ -23,13 +23,6 @@ pub struct InvalidRange {
 }
 
 impl SCM {
-    pub fn get_current_branch(&self, path: &AbsoluteSystemPath) -> Result<String, Error> {
-        match self {
-            Self::Git(git) => git.get_current_branch(),
-            Self::Manual => Err(Error::GitRequired(path.to_owned())),
-        }
-    }
-
     pub fn get_current_sha(&self, path: &AbsoluteSystemPath) -> Result<String, Error> {
         match self {
             Self::Git(git) => git.get_current_sha(),

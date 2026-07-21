@@ -11,14 +11,13 @@ use std::{
     collections::HashSet,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::OnceLock,
 };
 
 use itertools::Itertools;
 use path_clean::PathClean;
 use path_slash::PathExt;
 use rayon::prelude::*;
-use regex::Regex;
+use regex::regex;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
 use wax::{
@@ -59,17 +58,8 @@ fn join_unix_like_paths(a: &str, b: &str) -> String {
     [a.trim_end_matches('/'), "/", b.trim_start_matches('/')].concat()
 }
 
-fn glob_literals() -> Option<&'static Regex> {
-    static RE: OnceLock<Option<Regex>> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").ok())
-        .as_ref()
-}
-
 fn escape_glob_literals(literal_glob: &str) -> Cow<'_, str> {
-    let Some(glob_literals) = glob_literals() else {
-        return Cow::Borrowed(literal_glob);
-    };
-    glob_literals.replace_all(literal_glob, "\\$literal")
+    regex!(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").replace_all(literal_glob, "\\$literal")
 }
 
 #[tracing::instrument(skip(include, exclude))]
@@ -121,24 +111,6 @@ fn preprocess_paths_and_globs<S: AsRef<str>>(
     Ok((base_path, include_paths, exclude_paths))
 }
 
-fn double_doublestar() -> Option<&'static Regex> {
-    static RE: OnceLock<Option<Regex>> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"\*\*(?:/\*\*)+").ok())
-        .as_ref()
-}
-
-fn leading_doublestar() -> Option<&'static Regex> {
-    static RE: OnceLock<Option<Regex>> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"\*\*(?P<suffix>[^*/]+)").ok())
-        .as_ref()
-}
-
-fn trailing_doublestar() -> Option<&'static Regex> {
-    static RE: OnceLock<Option<Regex>> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"(?P<prefix>[^*/]+)\*\*").ok())
-        .as_ref()
-}
-
 pub fn fix_glob_pattern(pattern: &str) -> Cow<'_, str> {
     // On Unix, Path::new(pattern).to_slash() is a no-op that returns Cow::Borrowed.
     // Skip the roundtrip entirely on Unix to avoid the overhead.
@@ -164,18 +136,9 @@ pub fn fix_glob_pattern(pattern: &str) -> Cow<'_, str> {
     // - If no match, replace() returns Cow::Borrowed pointing to the input
     // - If match, replace() returns Cow::Owned with the replacement
     // This avoids allocations when patterns don't need modification.
-    let p1 = match double_doublestar() {
-        Some(regex) => regex.replace(&p0, "**"),
-        None => Cow::Borrowed(p0.as_ref()),
-    };
-    let p2 = match leading_doublestar() {
-        Some(regex) => regex.replace(&p1, "**/*$suffix"),
-        None => Cow::Borrowed(p1.as_ref()),
-    };
-    let p3 = match trailing_doublestar() {
-        Some(regex) => regex.replace(&p2, "$prefix*/**"),
-        None => Cow::Borrowed(p2.as_ref()),
-    };
+    let p1 = regex!(r"\*\*(?:/\*\*)+").replace(&p0, "**");
+    let p2 = regex!(r"\*\*(?P<suffix>[^*/]+)").replace(&p1, "**/*$suffix");
+    let p3 = regex!(r"(?P<prefix>[^*/]+)\*\*").replace(&p2, "$prefix*/**");
 
     // Determine if we can return a borrowed reference to the original pattern.
     // On Unix, if no regex matched, all Cows in the chain are Borrowed and
@@ -267,7 +230,7 @@ fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
 fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String) {
     // If the glob has a glob literal in it e.g. *
     // then skip trying to read it as a file path.
-    if glob_literals().is_some_and(|glob_literals| glob_literals.is_match(&*glob)) {
+    if regex!(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").is_match(&*glob) {
         return;
     }
 
@@ -324,8 +287,6 @@ pub struct Settings {
     /// directories are traversed into (their targets are read). Cycles are
     /// detected and handled gracefully by the underlying walkdir layer.
     follow_links: bool,
-    /// Skip symlink cycle errors and continue walking other entries.
-    ignore_link_cycles: bool,
 }
 
 impl Settings {
@@ -336,11 +297,6 @@ impl Settings {
 
     pub fn follow_links(mut self) -> Self {
         self.follow_links = true;
-        self
-    }
-
-    pub fn ignore_link_cycles(mut self) -> Self {
-        self.ignore_link_cycles = true;
         self
     }
 }
@@ -912,10 +868,10 @@ fn walk_glob(
 
             None
         })
-        .filter_map(|entry| visit_file(walk_type, entry, settings))
+        .filter_map(|entry| visit_file(walk_type, entry))
         .collect::<Vec<_>>()
     } else {
-        iter.filter_map(|entry| visit_file(walk_type, entry, settings))
+        iter.filter_map(|entry| visit_file(walk_type, entry))
             .collect::<Vec<_>>()
     }
 }
@@ -923,7 +879,6 @@ fn walk_glob(
 fn visit_file(
     walk_type: WalkType,
     entry: Result<wax::walk::GlobEntry, wax::walk::WalkError>,
-    settings: Settings,
 ) -> Option<Result<AbsoluteSystemPathBuf, WalkError>> {
     match entry {
         Ok(entry)
@@ -935,10 +890,6 @@ fn visit_file(
         }
         Ok(entry) => Some(AbsoluteSystemPathBuf::try_from(entry.path()).map_err(|e| e.into())),
         Err(e) => {
-            if settings.ignore_link_cycles && e.is_link_cycle() {
-                return None;
-            }
-
             let io_err = std::io::Error::from(e);
             match io_err.kind() {
                 // Ignore missing file and permission errors
