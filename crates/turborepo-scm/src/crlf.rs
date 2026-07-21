@@ -299,7 +299,7 @@ impl BlobHasher {
     fn write_blob_header(&mut self, blob_len: u64) {
         self.0.update(b"blob ");
         self.0.update(blob_len.to_string().as_bytes());
-        self.0.update([b'\0']);
+        self.0.update(*b"\0");
     }
 
     fn update(&mut self, data: &[u8]) {

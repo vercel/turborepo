@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     path::Path,
     sync::{
-        Arc,
+        Arc, RwLock,
         atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
@@ -32,16 +32,15 @@ use turborepo_repository::{
 };
 
 use crate::{
-    NotifyError,
+    SubscribeError, WatchScope, WatchSource, WatchSubscription,
     cookies::{CookieRegister, CookieWriter, CookiedOptionalWatch},
     debouncer::Debouncer,
-    optional_watch::OptionalWatch,
 };
 
 #[derive(Debug, Error)]
 enum PackageWatcherProcessError {
     #[error("filewatching not available, so package watching is not available")]
-    Filewatching(watch::error::RecvError),
+    Filewatching(SubscribeError),
     #[error("filewatching closed, package watching no longer available")]
     FilewatchingClosed(broadcast::error::RecvError),
 }
@@ -87,14 +86,23 @@ impl PackageWatcher {
     /// to populate the state before we can watch.
     pub fn new(
         root: AbsoluteSystemPathBuf,
-        recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
+        source: impl Into<WatchSource>,
         cookie_writer: CookieWriter,
         allow_no_package_manager: bool,
     ) -> Result<Self, package_manager::Error> {
+        let source = source.into();
         let (exit_tx, exit_rx) = oneshot::channel();
-        let subscriber = Subscriber::new(root, cookie_writer, allow_no_package_manager)?;
+        let repository_ignore = source
+            .repository_ignore()
+            .unwrap_or_else(|| crate::RepositoryIgnore::new(root.as_std_path()));
+        let subscriber = Subscriber::new(
+            root,
+            cookie_writer,
+            allow_no_package_manager,
+            repository_ignore,
+        )?;
         let package_discovery_lazy = subscriber.package_discovery();
-        let handle = tokio::spawn(subscriber.watch(exit_rx, recv));
+        let handle = tokio::spawn(subscriber.watch(exit_rx, source));
         Ok(Self {
             _exit_tx: exit_tx,
             _handle: handle,
@@ -141,6 +149,8 @@ struct Subscriber {
     repo_root: AbsoluteSystemPathBuf,
     // This is the list of paths that will trigger rediscovering everything.
     invalidation_paths: Vec<AbsoluteSystemPathBuf>,
+    watch_scope: WatchScope,
+    workspace_globs: Arc<RwLock<Option<WorkspaceGlobs>>>,
 
     package_discovery_tx: watch::Sender<Option<DiscoveryData>>,
     package_discovery_lazy: CookiedOptionalWatch<DiscoveryData, ()>,
@@ -198,16 +208,57 @@ impl Subscriber {
         repo_root: AbsoluteSystemPathBuf,
         writer: CookieWriter,
         allow_no_package_manager: bool,
+        repository_ignore: crate::RepositoryIgnore,
     ) -> Result<Self, package_manager::Error> {
+        let cookie_root = writer.root().to_owned();
         let (package_discovery_tx, cookie_tx, package_discovery_lazy) =
             CookiedOptionalWatch::new(writer);
         let invalidation_paths = INVALIDATION_PATHS
             .iter()
             .map(|p| repo_root.join_component(p))
-            .collect();
+            .collect::<Vec<_>>();
+        let workspace_globs = Arc::new(RwLock::new(None::<WorkspaceGlobs>));
+        let watch_scope = {
+            let repo_root = repo_root.clone();
+            let invalidation_paths = invalidation_paths.clone();
+            let workspace_globs = workspace_globs.clone();
+            WatchScope::predicate(move |path| {
+                if invalidation_paths
+                    .iter()
+                    .any(|invalidation_path| path == invalidation_path.as_std_path())
+                    || path.starts_with(cookie_root.as_std_path())
+                {
+                    return true;
+                }
+
+                let Ok(path) = AbsoluteSystemPath::from_std_path(path) else {
+                    return false;
+                };
+                let workspace_path = if path.file_name() == Some("package.json") {
+                    let Some(parent) = path.parent() else {
+                        return false;
+                    };
+                    parent
+                } else {
+                    path
+                };
+                let workspace_globs = workspace_globs
+                    .read()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let Some(globs) = workspace_globs.as_ref() else {
+                    return path.file_name() == Some("package.json")
+                        && repository_ignore.is_relevant(path.as_std_path(), false);
+                };
+                globs
+                    .target_is_workspace(&repo_root, workspace_path)
+                    .unwrap_or(false)
+            })
+        };
         Ok(Self {
             repo_root,
             invalidation_paths,
+            watch_scope,
+            workspace_globs,
             package_discovery_tx,
             package_discovery_lazy,
             cookie_tx,
@@ -244,13 +295,10 @@ impl Subscriber {
         (version, debouncer)
     }
 
-    async fn watch_process(
-        mut self,
-        mut recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
-    ) -> PackageWatcherProcessError {
+    async fn watch_process(mut self, source: WatchSource) -> PackageWatcherProcessError {
         tracing::debug!("starting package watcher");
-        let mut recv = match recv.get().await {
-            Ok(r) => r.resubscribe(),
+        let mut recv: WatchSubscription = match source.subscribe(self.watch_scope.clone()).await {
+            Ok(subscription) => subscription,
             Err(e) => return PackageWatcherProcessError::Filewatching(e),
         };
 
@@ -298,18 +346,15 @@ impl Subscriber {
             // we may have a higher version number, at which point we would
             // ignore this update, as we know it is stale.
             if package_result.version == *version {
+                self.update_workspace_globs(&package_result.state);
                 self.write_state(&package_result.state);
                 *state = State::Ready(Box::new(package_result.state));
             }
         }
     }
 
-    async fn watch(
-        self,
-        exit_rx: oneshot::Receiver<()>,
-        recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
-    ) {
-        let process = tokio::spawn(self.watch_process(recv));
+    async fn watch(self, exit_rx: oneshot::Receiver<()>, source: WatchSource) {
+        let process = tokio::spawn(self.watch_process(source));
         tokio::select! {
             biased;
             _ = exit_rx => {
@@ -327,6 +372,17 @@ impl Subscriber {
 
     fn package_discovery(&self) -> CookiedOptionalWatch<DiscoveryData, ()> {
         self.package_discovery_lazy.clone()
+    }
+
+    fn update_workspace_globs(&self, state: &PackageState) {
+        let globs = match state {
+            PackageState::ValidWorkspaces { filter, .. } => Some((**filter).clone()),
+            PackageState::NoPackageManager(_) | PackageState::InvalidGlobs(_) => None,
+        };
+        *self
+            .workspace_globs
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = globs;
     }
 
     fn path_invalidates_everything(&self, path: &Path) -> bool {

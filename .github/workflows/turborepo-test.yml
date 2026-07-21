@@ -103,20 +103,11 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Generate schemas from Rust
-        run: |
-          cargo run -p turborepo-schema-gen -- schema -o packages/turbo-types/schemas/schema.json
-          cargo run -p turborepo-schema-gen -- typescript -o packages/turbo-types/src/types/config-v2.ts
-          pnpm exec oxfmt packages/turbo-types/schemas/schema.json packages/turbo-types/src/types/config-v2.ts
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
 
-      - name: Check for uncommitted changes
-        run: |
-          if ! git diff --exit-code; then
-            echo "::error::Generated schema files are out of sync with Rust types"
-            echo "::error::Please run 'pnpm generate-schema' in packages/turbo-types and commit the changes"
-            git diff
-            exit 1
-          fi
+      - name: Verify schemas from Rust
+        run: turbo run verify-schema --filter=@turbo/types --env-mode=strict
 
   rust_test:
     name: Rust testing on ${{ matrix.os.name }} (shard ${{ matrix.shard }}/2)

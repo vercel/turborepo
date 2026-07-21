@@ -219,6 +219,7 @@ pub struct PackageResolution {
     // tarball -> none
     // directory -> 'directory'
     // git repository -> 'git'
+    // runtime (pnpm devEngines download) -> 'variations'
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     type_field: Option<String>,
     // Tarball fields
@@ -234,6 +235,14 @@ pub struct PackageResolution {
     repo: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     commit: Option<String>,
+    // Catch-all for resolution shapes we don't model with dedicated fields.
+    // The `runtime:` protocol (pnpm `devEngines.runtime` with
+    // `onFail: "download"`) emits a `type: variations` resolution whose
+    // `variants` list nests full per-platform binary resolutions. Without an
+    // opaque passthrough here those fields would be silently dropped when the
+    // pruned lockfile is re-serialized.
+    #[serde(flatten)]
+    other: Map<String, serde_yaml_ng::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -830,6 +839,25 @@ impl crate::Lockfile for PnpmLockfile {
                         continue;
                     };
 
+                    let key = self.format_key(dependency, version);
+                    self.retain_package(&key, &mut pruned_packages, &mut pruned_snapshots)?;
+                }
+            }
+
+            // Dependencies resolved via the `runtime:` protocol (pnpm
+            // `devEngines.runtime` with `onFail: "download"`, e.g.
+            // `node@runtime:22.0.0`) are synthesized by pnpm and are not part
+            // of the package graph, so they never appear in the resolved
+            // closure passed to `subgraph`. The importer reference to them is
+            // preserved, so their `packages:`/`snapshots:` entries must be
+            // retained too or the pruned lockfile is left inconsistent and a
+            // frozen install fails. This applies to the root importer as well,
+            // whose regular deps are otherwise sourced from the closure.
+            for dependency in importer.dependencies.all_dependency_names() {
+                let Some((_, version)) = importer.dependencies.find_resolution(dependency) else {
+                    continue;
+                };
+                if version.starts_with("runtime:") {
                     let key = self.format_key(dependency, version);
                     self.retain_package(&key, &mut pruned_packages, &mut pruned_snapshots)?;
                 }
@@ -2975,5 +3003,169 @@ snapshots:
 
         // Root importer should still be present.
         assert!(pruned_lockfile.importers.contains_key("."));
+    }
+
+    // A lockfile using pnpm's `runtime:` protocol (devEngines.runtime with
+    // onFail: "download"). The root importer references `node@runtime:22.0.0`,
+    // which pnpm records with a `type: variations` resolution whose `variants`
+    // list nests full per-platform binary resolutions.
+    // Reproduces https://github.com/vercel/turborepo/issues/13403
+    const PNPM_RUNTIME_LOCKFILE: &str = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      node:
+        specifier: runtime:22.0.0
+        version: runtime:22.0.0
+
+  apps/web:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+
+packages:
+
+  is-number@6.0.0:
+    resolution: {integrity: sha512-abc}
+    engines: {node: '>=0.10.0'}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+    engines: {node: '>=4'}
+
+  node@runtime:22.0.0:
+    resolution:
+      type: variations
+      variants:
+        - resolution:
+            archive: tarball
+            bin:
+              node: bin/node
+            integrity: sha256-6pbTSc+qZ6qHzuqj5bUskWf3rDAv2NH/Fi0HhencB4U=
+            type: binary
+            url: https://nodejs.org/download/release/v22.0.0/node-v22.0.0-darwin-arm64.tar.gz
+          targets:
+            - cpu: arm64
+              os: darwin
+        - resolution:
+            archive: tarball
+            bin:
+              node: bin/node
+            integrity: sha256-HTVHImvn5ZrO7lx9Aan4/BjeZ+AVxaFdjPOFtuAtBis=
+            type: binary
+            url: https://nodejs.org/download/release/v22.0.0/node-v22.0.0-linux-arm64.tar.gz
+          targets:
+            - cpu: arm64
+              os: linux
+        - resolution:
+            archive: zip
+            bin:
+              node: node.exe
+            integrity: sha256-N2Ehz0a9PAJcXmetrhkK/14l0zoLWPvA2GUtczULOPA=
+            prefix: node-v22.0.0-win-arm64
+            type: binary
+            url: https://nodejs.org/download/release/v22.0.0/node-v22.0.0-win-arm64.zip
+          targets:
+            - cpu: arm64
+              os: win32
+    version: 22.0.0
+    hasBin: true
+
+snapshots:
+
+  is-number@6.0.0: {}
+
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+
+  node@runtime:22.0.0: {}
+"#;
+
+    #[test]
+    fn test_runtime_resolution_variants_round_trip() {
+        // The `type: variations` resolution with its nested `variants` list
+        // must survive a parse -> serialize round-trip. Without an opaque
+        // passthrough the `variants` array is silently dropped.
+        let lockfile = PnpmLockfile::from_bytes(PNPM_RUNTIME_LOCKFILE.as_bytes()).unwrap();
+        let encoded = lockfile.encode().unwrap();
+        let contents = String::from_utf8(encoded.clone()).unwrap();
+
+        assert!(
+            contents.contains("type: variations"),
+            "resolution type should be preserved"
+        );
+        assert!(
+            contents.contains("variants:"),
+            "the variants list must not be dropped"
+        );
+        assert!(
+            contents.contains("node-v22.0.0-linux-arm64.tar.gz"),
+            "nested variant resolutions must be preserved"
+        );
+
+        // Re-parsing yields an identical lockfile (full structural fidelity).
+        let reparsed = PnpmLockfile::from_bytes(&encoded).unwrap();
+        assert_eq!(lockfile, reparsed);
+    }
+
+    #[test]
+    fn test_subgraph_preserves_runtime_package_and_snapshot() {
+        // `turbo prune` must keep the `node@runtime:22.0.0` package and
+        // snapshot entries. pnpm synthesizes them from devEngines.runtime, so
+        // they are not part of turbo's package graph and never appear in the
+        // resolved closure passed to `subgraph`; only the importer reference
+        // is preserved. Dropping the entries leaves the pruned lockfile
+        // inconsistent and breaks `pnpm install --frozen-lockfile`.
+        let lockfile = PnpmLockfile::from_bytes(PNPM_RUNTIME_LOCKFILE.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/web".to_string()];
+        let resolved_packages = vec!["is-number@6.0.0".to_string(), "is-odd@3.0.1".to_string()];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_contents = String::from_utf8(pruned_bytes.clone()).unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should have packages");
+        let snapshots = pruned_lockfile
+            .snapshots
+            .as_ref()
+            .expect("should have snapshots");
+
+        assert!(
+            packages.contains_key("node@runtime:22.0.0"),
+            "pruned lockfile must retain node@runtime:22.0.0 in packages"
+        );
+        assert!(
+            snapshots.contains_key("node@runtime:22.0.0"),
+            "pruned lockfile must retain node@runtime:22.0.0 in snapshots"
+        );
+
+        // The importer reference and the retained package must stay in sync.
+        assert!(
+            pruned_contents.contains("runtime:22.0.0"),
+            "importer runtime reference should be preserved"
+        );
+        assert!(
+            pruned_contents.contains("variants:"),
+            "the retained runtime package must keep its variants list"
+        );
+
+        // Regular closure packages are still pruned normally.
+        assert!(packages.contains_key("is-odd@3.0.1"));
+        assert!(packages.contains_key("is-number@6.0.0"));
     }
 }

@@ -12,3 +12,13 @@ dependencies = [
 [[package]]
 name = "lib-a"
 version = "0.1.0"
+dependencies = [
+ "lib-a-test-util",
+]
+
+[[package]]
+name = "lib-a-test-util"
+version = "0.1.0"
+dependencies = [
+ "lib-a",
+]

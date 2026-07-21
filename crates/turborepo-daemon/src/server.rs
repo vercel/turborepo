@@ -31,7 +31,7 @@ use turborepo_filewatch::{
     globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
     hash_watcher::{Error as HashWatcherError, HashSpec, HashWatcher, InputGlobs},
     package_watcher::{PackageWatchError, PackageWatcher},
-    FileSystemWatcher, WatchError,
+    FileSystemWatcher, WatchError, WatchScope,
 };
 use turborepo_repository::package_manager;
 use turborepo_scm::SCM;
@@ -148,22 +148,22 @@ impl<W: PackageChangesWatcher + 'static> FileWatching<W> {
         F: Fn(PackageChangesWatcherArgs) -> W + Send + Sync + 'static,
     {
         let watcher = Arc::new(FileSystemWatcher::new_with_default_cookie_dir(&repo_root)?);
-        let recv = watcher.watch();
+        let source = watcher.source();
 
         let cookie_writer = CookieWriter::new(
             watcher.cookie_dir(),
             Duration::from_millis(100),
-            recv.clone(),
+            source.clone(),
         );
         let glob_watcher = Arc::new(GlobWatcher::new(
             repo_root.clone(),
             cookie_writer.clone(),
-            recv.clone(),
+            source.clone(),
         ));
         let package_watcher = Arc::new(
             PackageWatcher::new(
                 repo_root.clone(),
-                recv.clone(),
+                source.clone(),
                 cookie_writer,
                 allow_no_package_manager,
             )
@@ -173,7 +173,7 @@ impl<W: PackageChangesWatcher + 'static> FileWatching<W> {
         let hash_watcher = Arc::new(HashWatcher::new(
             repo_root.clone(),
             package_watcher.watch_discovery(),
-            recv.clone(),
+            source,
             scm,
         ));
 
@@ -193,10 +193,9 @@ impl<W: PackageChangesWatcher + 'static> FileWatching<W> {
     pub fn get_or_init_package_changes_watcher(&self) -> Arc<W> {
         self.package_changes_watcher
             .get_or_init(|| {
-                let recv = self.watcher.watch();
                 let args = PackageChangesWatcherArgs {
                     repo_root: self.repo_root.clone(),
-                    file_events: recv,
+                    file_events: self.watcher.source(),
                     hash_watcher: self.hash_watcher.clone(),
                     custom_turbo_json_path: self.custom_turbo_json_path.clone(),
                     allow_no_package_manager: self.allow_no_package_manager,
@@ -500,9 +499,13 @@ async fn watch_root<W: PackageChangesWatcher + 'static>(
     trigger_shutdown: mpsc::Sender<()>,
     mut exit_signal: oneshot::Receiver<()>,
 ) -> Result<(), WatchError> {
+    let watched_root = root.clone();
     let mut recv_events = filewatching_access
         .watcher
-        .subscribe()
+        .source()
+        .subscribe(WatchScope::predicate(move |path| {
+            path == watched_root.as_std_path()
+        }))
         .await
         // we can only encounter an error here if the file watcher is closed (a recv error)
         .map_err(|_| WatchError::Setup("file watching shut down".to_string()))?;
@@ -524,7 +527,7 @@ async fn watch_root<W: PackageChangesWatcher + 'static>(
                     // before triggering a shutdown
                     Ok(event) if event.paths.iter().any(|p| p == (&root as &AbsoluteSystemPath)) => !root.exists(),
                     Ok(_) => false,
-                    Err(_) => true
+                    Err(error) => !error.is_invalidation()
                 };
                 if should_trigger_shutdown {
                     warn!("Root watcher triggering shutdown");

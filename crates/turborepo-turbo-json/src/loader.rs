@@ -921,7 +921,7 @@ mod tests {
         );
         let mut turbo_json = loader.load(&PackageName::Root).unwrap().clone();
         turbo_json.clear_metadata();
-        for (_, task_definition) in turbo_json.tasks.iter_mut() {
+        for task_definition in turbo_json.tasks.values_mut() {
             task_definition.path = None;
             task_definition.text = None;
         }

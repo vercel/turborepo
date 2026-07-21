@@ -262,7 +262,43 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
             }
         }
 
+        self.add_toolchain_affected_packages(&mut changed_packages);
         PackageChanges::Some(changed_packages)
+    }
+
+    fn add_toolchain_affected_packages(
+        &self,
+        changed_packages: &mut HashMap<WorkspacePackage, PackageInclusionReason>,
+    ) {
+        let directly_changed: Vec<_> = changed_packages
+            .keys()
+            .map(|package| package.name.clone())
+            .collect();
+        for dependency in directly_changed {
+            let Some(info) = self.pkg_graph.package_info(&dependency) else {
+                continue;
+            };
+            let Some(toolchain) = self.pkg_graph.toolchains().get(&info.toolchain) else {
+                continue;
+            };
+            for affected in toolchain.additional_affected_packages(dependency.as_str()) {
+                let name = PackageName::Other(affected);
+                let Some(info) = self.pkg_graph.package_info(&name) else {
+                    continue;
+                };
+                let Some(path) = info.package_json_path.parent() else {
+                    continue;
+                };
+                changed_packages
+                    .entry(WorkspacePackage {
+                        name,
+                        path: path.to_owned(),
+                    })
+                    .or_insert_with(|| PackageInclusionReason::DependencyChanged {
+                        dependency: dependency.clone(),
+                    });
+            }
+        }
     }
 
     fn get_changed_packages_from_lockfile(

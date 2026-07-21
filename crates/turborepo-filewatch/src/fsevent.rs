@@ -20,13 +20,16 @@
 
 use std::{
     collections::HashMap,
-    ffi::{CStr, CString},
+    ffi::{CStr, CString, OsStr},
     fmt,
     io::ErrorKind,
     os::{raw, unix::prelude::MetadataExt},
     path::{Path, PathBuf},
     ptr,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
     thread,
 };
 
@@ -143,6 +146,15 @@ impl DeviceContext {
         self.mount_point
             .join(device_relative.trim_start_matches(std::path::MAIN_SEPARATOR))
     }
+
+    fn bytes_to_absolute(&self, device_relative: &[u8]) -> PathBuf {
+        use std::os::unix::ffi::OsStrExt;
+
+        let relative = device_relative
+            .strip_prefix(b"/")
+            .unwrap_or(device_relative);
+        self.mount_point.join(OsStr::from_bytes(relative))
+    }
 }
 
 /// FSEvents-based `Watcher` implementation.
@@ -194,6 +206,8 @@ pub struct FsEventWatcher {
     /// Device context for path transformation. Set when the first path is
     /// watched. All subsequent paths must be on the same device.
     device_context: Option<DeviceContext>,
+    /// Last event observed by the callback, used to resume after watch changes.
+    latest_event_id: Arc<AtomicU64>,
 }
 
 impl fmt::Debug for FsEventWatcher {
@@ -374,6 +388,7 @@ struct StreamContextInfo {
     /// Device context for converting device-relative paths back to absolute
     /// paths.
     device_context: DeviceContext,
+    latest_event_id: Arc<AtomicU64>,
 }
 
 // Free the context when the stream created by `FSEventStreamCreate` is
@@ -453,6 +468,7 @@ impl FsEventWatcher {
             runloop: None,
             recursive_info: HashMap::new(),
             device_context: None,
+            latest_event_id: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -495,6 +511,10 @@ impl FsEventWatcher {
 
             // Wait for the thread to shut down.
             let _ = thread_handle.join();
+            let latest_event_id = self.latest_event_id.load(Ordering::Acquire);
+            if latest_event_id != 0 {
+                self.since_when = latest_event_id;
+            }
         }
     }
 
@@ -613,6 +633,7 @@ impl FsEventWatcher {
             event_handler: self.event_handler.clone(),
             recursive_info: self.recursive_info.clone(),
             device_context: device_context.clone(),
+            latest_event_id: self.latest_event_id.clone(),
         }));
 
         let stream_context = fs::FSEventStreamContext {
@@ -727,27 +748,23 @@ unsafe fn callback_impl(
     num_events: libc::size_t,                        // size_t numEvents
     event_paths: *mut libc::c_void,                  // void *eventPaths
     event_flags: *const fs::FSEventStreamEventFlags, // const FSEventStreamEventFlags eventFlags[]
-    _event_ids: *const fs::FSEventStreamEventId,     // const FSEventStreamEventId eventIds[]
+    event_ids: *const fs::FSEventStreamEventId,      // const FSEventStreamEventId eventIds[]
 ) {
     let event_paths = event_paths as *const *const libc::c_char;
     let info = info as *const StreamContextInfo;
     let event_handler = unsafe { &(*info).event_handler };
     let device_context = unsafe { &(*info).device_context };
+    let latest_event_id = unsafe { &(*info).latest_event_id };
 
     for p in 0..num_events {
-        // SAFETY: We must not panic in this extern "C" callback.
-        // Handle invalid UTF-8 gracefully by skipping the event.
-        let raw_path = match unsafe { CStr::from_ptr(*event_paths.add(p)) }.to_str() {
-            Ok(s) => s,
-            Err(_) => {
-                // Skip events with non-UTF8 paths rather than panic.
-                // This is rare but possible with malformed filesystem entries.
-                continue;
-            }
-        };
+        let event_id = unsafe { *event_ids.add(p) };
+        latest_event_id.fetch_max(event_id, Ordering::Release);
+        // SAFETY: The FSEvents path is a NUL-terminated byte string valid for
+        // this callback. Preserve its bytes because Unix paths need not be UTF-8.
+        let raw_path = unsafe { CStr::from_ptr(*event_paths.add(p)) };
 
         // Use DeviceContext to convert device-relative path back to absolute
-        let path = device_context.to_absolute(raw_path);
+        let path = device_context.bytes_to_absolute(raw_path.to_bytes());
 
         let flag = unsafe { *event_flags.add(p) };
         // Use from_bits_truncate to handle unknown flags gracefully instead of
@@ -872,6 +889,21 @@ fn test_device_context_round_trips_non_root_mount_paths() {
 
     assert_eq!(device_relative, "/project/file.txt");
     assert_eq!(device_context.to_absolute(&device_relative), absolute_path);
+}
+
+#[test]
+fn test_device_context_preserves_non_utf8_paths() {
+    use std::os::unix::ffi::OsStrExt;
+
+    let device_context = DeviceContext {
+        device_id: 1,
+        mount_point: PathBuf::from("/Volumes/Data"),
+    };
+    let path = device_context.bytes_to_absolute(b"/repo/invalid-\xff");
+    assert_eq!(
+        path.as_os_str().as_bytes(),
+        b"/Volumes/Data/repo/invalid-\xff"
+    );
 }
 
 /// A temporary RAM disk volume for testing FSEvents on non-root filesystems.

@@ -761,6 +761,11 @@ fn parse_resolution(events: &mut Events) -> FResult<PackageResolution> {
     let mut directory = None;
     let mut repo = None;
     let mut commit = None;
+    // Unknown resolution fields (e.g. the `variants` list of a
+    // `type: variations` runtime resolution) must round-trip through `other`
+    // rather than be dropped, mirroring the serde flatten catch-all on
+    // `PackageResolution`.
+    let mut other = Map::new();
     while !events.at_mapping_end()? {
         let key = events.string()?;
         match key.as_str() {
@@ -770,7 +775,12 @@ fn parse_resolution(events: &mut Events) -> FResult<PackageResolution> {
             "directory" => set_once(&mut directory, events.string()?)?,
             "repo" => set_once(&mut repo, events.string()?)?,
             "commit" => set_once(&mut commit, events.string()?)?,
-            _ => events.skip_node()?,
+            _ => {
+                let value = parse_value(events)?;
+                if other.insert(key, value).is_some() {
+                    return Err(Unsupported::here());
+                }
+            }
         }
     }
     Ok(PackageResolution {
@@ -780,6 +790,7 @@ fn parse_resolution(events: &mut Events) -> FResult<PackageResolution> {
         directory,
         repo,
         commit,
+        other,
     })
 }
 

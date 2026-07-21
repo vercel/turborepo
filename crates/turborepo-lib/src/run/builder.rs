@@ -25,7 +25,7 @@ use turborepo_scm::SCM;
 use turborepo_scope::filter::ResolutionError;
 use turborepo_shim::TurboState;
 use turborepo_signals::SignalHandler;
-use turborepo_task_id::TaskName;
+use turborepo_task_id::{TaskId, TaskName};
 use turborepo_telemetry::events::{
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
@@ -36,6 +36,12 @@ use turborepo_types::{FilterMode, UIMode};
 use turborepo_ui::ColorConfig;
 use turborepo_vercel_api::CachingStatusResponse;
 use url::Url;
+
+type FilteredPackages = (
+    HashMap<PackageName, PackageInclusionReason>,
+    FilterMode,
+    HashSet<PackageName>,
+);
 
 use crate::{
     commands::CommandBase,
@@ -338,13 +344,13 @@ impl RunBuilder {
     /// When `AllPackages` is active and every requested task uses
     /// `package#task` syntax, the set is narrowed to only the referenced
     /// packages.
-    pub fn calculate_filtered_packages(
+    pub(crate) fn calculate_filtered_packages(
         repo_root: &AbsoluteSystemPath,
         opts: &Opts,
         pkg_dep_graph: &PackageGraph,
         scm: &SCM,
         root_turbo_json: &TurboJson,
-    ) -> Result<HashMap<PackageName, PackageInclusionReason>, Error> {
+    ) -> Result<FilteredPackages, Error> {
         let (mut filtered_pkgs, filter_mode) = scope::resolve_packages(
             &opts.scope_opts,
             repo_root,
@@ -412,6 +418,8 @@ impl RunBuilder {
             }
         }
 
+        let unqualified_entrypoint_packages = filtered_pkgs.keys().cloned().collect();
+
         // Packages referenced by `pkg#task` CLI args are direct task graph
         // entry points regardless of --filter. Add them to filtered_pkgs so
         // the engine builder iterates their workspace.
@@ -426,7 +434,7 @@ impl RunBuilder {
             }
         }
 
-        Ok(filtered_pkgs)
+        Ok((filtered_pkgs, filter_mode, unqualified_entrypoint_packages))
     }
 
     #[tracing::instrument(skip(self, signal_handler))]
@@ -783,7 +791,7 @@ impl RunBuilder {
             });
         }
 
-        let filtered_pkgs = {
+        let (filtered_pkgs, filter_mode, unqualified_entrypoint_packages) = {
             let _span = tracing::info_span!("calculate_filtered_packages").entered();
             Self::calculate_filtered_packages(
                 &self.repo_root,
@@ -793,6 +801,25 @@ impl RunBuilder {
                 &root_turbo_json,
             )?
         };
+        let mut scoped_entrypoint_exclusions = self.task_entrypoint_exclusions(
+            &pkg_dep_graph,
+            unqualified_entrypoint_packages.iter(),
+            pkg_dep_graph.packages().map(|(name, _)| name),
+            &filter_mode,
+        );
+        let explicitly_requested_tasks: HashSet<_> = self
+            .opts
+            .run_opts
+            .tasks
+            .iter()
+            .filter_map(|task| {
+                TaskName::from(task.as_str())
+                    .task_id()
+                    .map(TaskId::into_owned)
+            })
+            .collect();
+        scoped_entrypoint_exclusions
+            .retain(|task_id| !explicitly_requested_tasks.contains(task_id));
 
         // When filterUsingTasks is active, --affected is handled by the
         // same task-level filter rather than a separate codepath.
@@ -814,6 +841,11 @@ impl RunBuilder {
             || use_task_level_filter
             || use_watch_task_level_filter
             || self.add_all_tasks;
+        let entrypoint_exclusions = if needs_all_packages {
+            HashSet::new()
+        } else {
+            scoped_entrypoint_exclusions
+        };
 
         // When task-level filtering or add_all_tasks is active, the engine must
         // contain tasks for ALL packages so that tasks in packages not flagged
@@ -837,6 +869,7 @@ impl RunBuilder {
             &pkg_dep_graph,
             &root_turbo_json,
             engine_pkgs,
+            &entrypoint_exclusions,
             &turbo_json_loader,
             &env_at_execution_start,
         )?;
@@ -862,6 +895,7 @@ impl RunBuilder {
                 &pkg_dep_graph,
                 &root_turbo_json,
                 engine_pkgs,
+                &entrypoint_exclusions,
                 &turbo_json_loader,
                 &env_at_execution_start,
             )?;
@@ -892,10 +926,24 @@ impl RunBuilder {
                     None
                 };
 
-            engine = super::task_filter::filter_engine_to_tasks(
+            let package_tasks: HashSet<_> = self
+                .opts
+                .run_opts
+                .tasks
+                .iter()
+                .filter_map(|task| {
+                    TaskName::from(task.as_str())
+                        .task_id()
+                        .map(TaskId::into_owned)
+                })
+                .collect();
+            engine = super::task_filter::filter_engine_to_tasks_with_inclusions(
                 engine,
                 &selectors,
-                affected_constraint.as_ref(),
+                super::task_filter::TaskFilterConstraints {
+                    affected: affected_constraint.as_ref(),
+                    always_include: &package_tasks,
+                },
                 &pkg_dep_graph,
                 &scm,
                 &self.repo_root,
@@ -911,6 +959,10 @@ impl RunBuilder {
                 &root_turbo_json,
                 &scm,
             )?;
+        }
+
+        if needs_all_packages {
+            engine = self.select_engine_task_entrypoints(engine, &pkg_dep_graph, &filter_mode);
         }
 
         // Validate after all filtering so the persistent task count reflects
@@ -1114,12 +1166,133 @@ impl RunBuilder {
         }
     }
 
+    fn task_entrypoint_exclusions<'a>(
+        &self,
+        pkg_dep_graph: &PackageGraph,
+        candidates: impl Iterator<Item = &'a PackageName>,
+        exclusion_candidates: impl Iterator<Item = &'a PackageName>,
+        filter_mode: &FilterMode,
+    ) -> HashSet<TaskId<'static>> {
+        let candidates: Vec<_> = candidates.cloned().collect();
+        let exclusion_candidates: Vec<_> = exclusion_candidates.cloned().collect();
+        self.opts
+            .run_opts
+            .tasks
+            .iter()
+            .map(|requested| TaskName::from(requested.as_str()))
+            .filter(|task| task.package().is_none())
+            .flat_map(|task| {
+                self.task_entrypoint_exclusions_for_task(
+                    pkg_dep_graph,
+                    &task,
+                    &candidates,
+                    &exclusion_candidates,
+                    filter_mode,
+                )
+            })
+            .collect()
+    }
+
+    fn task_entrypoint_exclusions_for_task(
+        &self,
+        pkg_dep_graph: &PackageGraph,
+        task: &TaskName,
+        candidates: &[PackageName],
+        exclusion_candidates: &[PackageName],
+        filter_mode: &FilterMode,
+    ) -> HashSet<TaskId<'static>> {
+        let mut exclusions = HashSet::new();
+        for toolchain in pkg_dep_graph.toolchains().iter() {
+            let toolchain_id = toolchain.id();
+            let candidate_names: Vec<_> = candidates
+                .iter()
+                .filter_map(|name| {
+                    pkg_dep_graph
+                        .package_info(name)
+                        .filter(|info| info.toolchain == toolchain_id)
+                        .map(|_| name.as_str().to_string())
+                })
+                .collect();
+            let prefer_workspace = match filter_mode {
+                FilterMode::AllPackages => true,
+                FilterMode::ExcludeOnly { .. } => false,
+                FilterMode::ExplicitSelection => candidate_names.len() == 1,
+            };
+            let Some(selected) =
+                toolchain.select_task_entrypoints(task.task(), &candidate_names, prefer_workspace)
+            else {
+                continue;
+            };
+            let selected: HashSet<_> = selected.into_iter().collect();
+            exclusions.extend(
+                exclusion_candidates
+                    .iter()
+                    .filter_map(|name| {
+                        pkg_dep_graph
+                            .package_info(name)
+                            .filter(|info| info.toolchain == toolchain_id)
+                            .map(|_| name.as_str().to_string())
+                    })
+                    .filter(|name| !selected.contains(name))
+                    .map(|name| TaskId::new(&name, task.task()).into_owned()),
+            );
+        }
+        exclusions
+    }
+
+    fn select_engine_task_entrypoints(
+        &self,
+        engine: Engine,
+        pkg_dep_graph: &PackageGraph,
+        filter_mode: &FilterMode,
+    ) -> Engine {
+        let package_tasks: HashSet<_> = self
+            .opts
+            .run_opts
+            .tasks
+            .iter()
+            .filter_map(|task| {
+                TaskName::from(task.as_str())
+                    .task_id()
+                    .map(TaskId::into_owned)
+            })
+            .collect();
+        let mut exclusions = HashSet::new();
+        for requested in &self.opts.run_opts.tasks {
+            let task = TaskName::from(requested.as_str());
+            if task.package().is_some() {
+                continue;
+            }
+            let candidates: Vec<_> = engine
+                .task_ids()
+                .filter(|task_id| {
+                    task_id.task() == task.task() && !package_tasks.contains(*task_id)
+                })
+                .map(|task_id| PackageName::from(task_id.package()))
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect();
+            exclusions.extend(self.task_entrypoint_exclusions_for_task(
+                pkg_dep_graph,
+                &task,
+                &candidates,
+                &candidates,
+                filter_mode,
+            ));
+        }
+        if exclusions.is_empty() {
+            return engine;
+        }
+        engine.remove_tasks(&exclusions)
+    }
+
     #[tracing::instrument(skip_all)]
     fn build_engine<'a>(
         &self,
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
         filtered_pkgs: impl Iterator<Item = &'a PackageName>,
+        entrypoint_exclusions: &HashSet<TaskId<'static>>,
         turbo_json_loader: &impl turborepo_engine::TurboJsonLoader,
         environment: &EnvironmentVariableMap,
     ) -> Result<Engine, Error> {
@@ -1145,6 +1318,7 @@ impl RunBuilder {
         )
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
         .with_tasks_only(self.opts.run_opts.only)
+        .with_entrypoint_exclusions(entrypoint_exclusions.clone())
         .with_workspaces(filtered_pkgs.cloned().collect())
         .with_future_flags(self.opts.future_flags)
         .with_global_deps(global_deps_for_task_inputs)

@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use regex::regex;
 
 use super::{
     BunLockfile, PackageIdent, PackageInfo, PackageKey, is_git_or_github_package,
@@ -61,7 +61,6 @@ impl BunLockfile {
     /// Add trailing commas to JSON values before closing brackets/braces
     /// Handles strings, numbers, booleans, nulls, and nested structures
     fn add_trailing_commas(json: &str) -> String {
-        static TRAILING_COMMA_RE: OnceLock<Option<regex::Regex>> = OnceLock::new();
         // Match: any JSON value (string, number, boolean, null, ] or }) followed by
         // newline+whitespace and then a closing bracket/brace
         // Pattern covers:
@@ -70,12 +69,7 @@ impl BunLockfile {
         // - Booleans: true, false
         // - Null: null
         // - Nested closings: ] or }
-        let Some(re) = TRAILING_COMMA_RE
-            .get_or_init(|| regex::Regex::new(r#"("|true|false|null|\d|[\]}])\n(\s*)([\]}])"#).ok())
-            .as_ref()
-        else {
-            return json.to_string();
-        };
+        let re = regex!(r#"("|true|false|null|\d|[\]}])\n(\s*)([\]}])"#);
         // Run multiple passes until no more changes (handles deeply nested structures)
         let mut result = json.to_string();
         loop {

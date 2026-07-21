@@ -11,10 +11,7 @@ use turborepo_types::{
 
 use crate::{
     TaskExecutionSummary,
-    task::{
-        SharedTaskSummary, SinglePackageTaskSummary, TaskCacheSummary, TaskEnvVarSummary,
-        TaskSummary,
-    },
+    task::{SharedTaskSummary, TaskCacheSummary, TaskEnvVarSummary, TaskSummary},
 };
 
 pub struct TaskSummaryFactory<'a, E, H, R> {
@@ -90,23 +87,6 @@ where
             task_id,
             task,
             package,
-            shared,
-        })
-    }
-
-    pub fn single_task_summary(
-        &self,
-        task_id: TaskId<'static>,
-        execution: Option<TaskExecutionSummary>,
-    ) -> Result<SinglePackageTaskSummary, Error> {
-        let workspace_info = self.workspace_info(&task_id)?;
-        let shared = self.shared(&task_id, execution, workspace_info, |dep_task_id| {
-            Some(dep_task_id.task().to_string())
-        })?;
-
-        Ok(SinglePackageTaskSummary {
-            task_id: task_id.task().to_string(),
-            task: task_id.task().to_string(),
             shared,
         })
     }
