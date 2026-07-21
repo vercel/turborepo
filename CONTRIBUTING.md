@@ -122,26 +122,6 @@ cargo lint
 
 Rust targets deny `.unwrap()`, `.unwrap_err()`, `.unwrap_none()`, and `.expect()` by default. Tests are exempt from that panic-extraction policy, but still linted for other Clippy warnings. Existing implementation-code violations are temporarily allowed at crate roots while they are removed incrementally.
 
-### Finding unused public APIs with Hawk
-
-[Hawk](https://github.com/astral-sh/hawk) performs a closed-world analysis of workspace `pub` surface against the shipped `turbo` and `turborepo-lsp` binaries. Configuration lives in [`hawk.toml`](./hawk.toml).
-
-Hawk is pinned to Rust 1.97.1 and does not use this repository's nightly toolchain. To run it:
-
-1. Install Hawk and its toolchain per the upstream README (`cargo-hawk` + Rust 1.97.1).
-2. Temporarily drop the nightly-only `-Z…` rustflags from [`.cargo/config.toml`](./.cargo/config.toml), and set `RUSTC_BOOTSTRAP=1` in that file's `[env]` table so `#![feature]` gates compile on 1.97.1.
-3. Analyze:
-
-```bash
-cargo +1.97.1 hawk check \
-  --manifest-path Cargo.toml \
-  --exclude-crate turborepo_napi \
-  --exclude-crate libghostty_vt_sys \
-  --exclude-crate libghostty_vt
-```
-
-`turborepo_napi` is excluded because its public surface is a Node-API boundary outside the binary product model. Restore `.cargo/config.toml` after the run.
-
 ## Manually testing `turbo`
 
 After [building `turbo`](#building-turborepo), you can manually test `turbo` for the behaviors you're affecting with your changes. We recommend setting an alias to the built binary so you can call it with your alias.
