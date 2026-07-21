@@ -767,9 +767,12 @@ mod tests {
             import('@repo/package-b');
             import(packageName);
         "#;
-        let path = AbsoluteSystemPath::new("/repo/packages/package-a/index.ts").unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let path = AbsoluteSystemPath::new(tmp.path().to_str().unwrap())
+            .unwrap()
+            .join_component("index.ts");
 
-        let (imports, _) = parse_with_comments(path, source).unwrap();
+        let (imports, _) = parse_with_comments(&path, source).unwrap();
         let specifiers: HashSet<_> = imports
             .iter()
             .map(|import| import.specifier.as_str())
