@@ -7,7 +7,7 @@ import { JSX } from "solid-js";
 
 // Button
 type ButtonElement = HTMLButtonElement;
-type PrimitveButtonProps = JSX.IntrinsicElements["button"];
+type PrimitiveButtonProps = JSX.IntrinsicElements["button"];
 
 // Div
 type DivElement = HTMLDivElement;
@@ -24,7 +24,7 @@ type PrimitiveSpanProps = JSX.IntrinsicElements['span'];
 // exports
 export type {
     ButtonElement,
-    PrimitveButtonProps,
+    PrimitiveButtonProps,
     DivElement,
     PrimitiveDivProps,
     SpanElement,

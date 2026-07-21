@@ -497,7 +497,7 @@ fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
         .into_iter()
         .filter_map(|(not_sep, chunk)| (not_sep).then_some(chunk));
 
-    // multi cartisian product allows us to get all the possible combinations
+    // multi cartesian product allows us to get all the possible combinations
     // of path components for each chunk. for example, if we have a glob
     // `{a,b}/1/{c,d}`, it will lazily yield the following sets of segments:
     //   ["a", "1", "c"]
