@@ -17,11 +17,13 @@ use globwalk::{Settings, ValidatedGlob};
 use indicatif::ProgressBar;
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
 use oxc_ast::ast::Comment;
+use oxc_span::Span;
+use oxc_syntax::module_record::ModuleRecord;
 use rayon::prelude::*;
 pub use tags::{ProcessedPermissions, ProcessedRule, ProcessedRulesMap};
 use thiserror::Error;
 use tracing::{debug_span, info_span};
-use turbo_trace::{ImportTraceType, Tracer, find_imports};
+use turbo_trace::{ImportResult, ImportTraceType, ImportType, Tracer, find_imports};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_log::Subsystem;
@@ -312,6 +314,32 @@ impl BoundariesResult {
     }
 }
 
+fn find_dynamic_imports(module_record: &ModuleRecord, source: &str) -> Vec<ImportResult> {
+    module_record
+        .dynamic_imports
+        .iter()
+        .filter_map(|dynamic_import| {
+            let request_span = dynamic_import.module_request;
+            let request = source.get(request_span.start as usize..request_span.end as usize)?;
+            let allocator = oxc_allocator::Allocator::default();
+            let parsed =
+                oxc_parser::Parser::new(&allocator, request, oxc_span::SourceType::default())
+                    .parse();
+            let literal = &parsed.program.directives.first()?.expression;
+
+            Some(ImportResult {
+                specifier: literal.value.to_string(),
+                span: Span::new(
+                    request_span.start + literal.span.start,
+                    request_span.start + literal.span.end,
+                ),
+                statement_span: dynamic_import.span,
+                import_type: ImportType::Value,
+            })
+        })
+        .collect()
+}
+
 /// Parse a file with oxc, returning both imports and comments.
 ///
 /// We parse directly here (rather than using `turbo_trace::parse_file`) because
@@ -327,7 +355,8 @@ fn parse_with_comments(
     if ret.panicked {
         return None;
     }
-    let imports = find_imports(&ret.module_record, &ret.program.body, ImportTraceType::All);
+    let mut imports = find_imports(&ret.module_record, &ret.program.body, ImportTraceType::All);
+    imports.extend(find_dynamic_imports(&ret.module_record, source));
     let comments: Vec<Comment> = ret.program.comments.iter().copied().collect();
     Some((imports, comments))
 }
@@ -730,6 +759,31 @@ impl BoundariesChecker {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finds_string_literal_dynamic_imports() {
+        let source = r#"
+            import("../package-b/index.ts");
+            import('@repo/package-b');
+            import(packageName);
+        "#;
+        let path = AbsoluteSystemPath::new("/repo/packages/package-a/index.ts").unwrap();
+
+        let (imports, _) = parse_with_comments(path, source).unwrap();
+        let specifiers: HashSet<_> = imports
+            .iter()
+            .map(|import| import.specifier.as_str())
+            .collect();
+
+        assert_eq!(imports.len(), 2);
+        assert!(specifiers.contains("../package-b/index.ts"));
+        assert!(specifiers.contains("@repo/package-b"));
+        assert!(
+            imports
+                .iter()
+                .all(|import| import.import_type == ImportType::Value)
+        );
+    }
 
     #[test]
     fn test_potential_package_name() {
