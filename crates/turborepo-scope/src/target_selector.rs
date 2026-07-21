@@ -2,33 +2,11 @@
 //!
 //! This module parses filter strings into structured selectors.
 
-use std::{str::FromStr, sync::LazyLock};
+use std::str::FromStr;
 
-use regex::Regex;
+use regex::regex;
 use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;
-
-/// Regex for parsing target selector syntax.
-///
-/// Syntax: `[name_pattern]{directory}[git_range]`
-///
-/// Examples:
-/// - `"foo"` → name_pattern="foo"
-/// - `"{packages/*}"` → directory="packages/*"
-/// - `"[HEAD~1]"` → git_range from HEAD~1
-/// - `"foo{src}[main]"` → all three components
-///
-/// Pattern breakdown:
-/// - `(?P<name>...)` - Package name/pattern (cannot start with `.` or contain
-///   `{}[]`)
-/// - `(\{(?P<directory>[^}]*)\})?` - Optional directory in curly braces
-/// - `(?P<commits>(?:\.{3})?\[[^\]]*\])?` - Optional git range in square
-///   brackets, optionally prefixed with `...` for match_dependencies
-static SELECTOR_REGEX: LazyLock<Result<Regex, regex::Error>> = LazyLock::new(|| {
-    Regex::new(
-        r"^(?P<name>[^.](?:[^{}\[\]]*[^{}\[\].])?)?(\{(?P<directory>[^}]*)})?(?P<commits>(?:\.{3})?\[[^\]]*\])?$",
-    )
-});
 
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct GitRange {
@@ -103,10 +81,19 @@ impl FromStr for TargetSelector {
 
         // We explicitly allow empty git ranges so we can return a more targeted error
         // below
-        let captures = SELECTOR_REGEX
-            .as_ref()
-            .map_err(|err| InvalidSelectorError::InvalidSelectorRegex(err.to_string()))?
-            .captures(selector);
+        //
+        // Regex for parsing target selector syntax.
+        // Syntax: `[name_pattern]{directory}[git_range]`
+        // Pattern breakdown:
+        // - `(?P<name>...)` - Package name/pattern (cannot start with `.` or contain
+        //   `{}[]`)
+        // - `(\{(?P<directory>[^}]*)\})?` - Optional directory in curly braces
+        // - `(?P<commits>(?:\.{3})?\[[^\]]*\])?` - Optional git range in square
+        //   brackets, optionally prefixed with `...` for match_dependencies
+        let captures = regex!(
+            r"^(?P<name>[^.](?:[^{}\[\]]*[^{}\[\].])?)?(\{(?P<directory>[^}]*)})?(?P<commits>(?:\.{3})?\[[^\]]*\])?$"
+        )
+        .captures(selector);
 
         let captures = match captures {
             Some(captures) => captures,
@@ -248,9 +235,6 @@ pub enum InvalidSelectorError {
     EmptyPathSpecification,
     #[error("invalid git range selector: {0}")]
     InvalidGitRange(String),
-
-    #[error("invalid selector regex: {0}")]
-    InvalidSelectorRegex(String),
 
     #[error("selector \"{0}\" must have a reference, directory, or name pattern")]
     InvalidSelector(String),
