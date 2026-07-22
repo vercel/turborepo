@@ -1155,9 +1155,9 @@ impl PackageManager {
             }
             PackageManager::Berry => {
                 // Take ownership of yarnrc fields to avoid cloning
-                let (catalog, catalogs) = yarnrc
-                    .map(|y| (y.catalog, y.catalogs))
-                    .unwrap_or((None, None));
+                let (catalog, catalogs, package_extensions) = yarnrc
+                    .map(|y| (y.catalog, y.catalogs, y.package_extensions))
+                    .unwrap_or((None, None, None));
 
                 let manifest = turborepo_lockfiles::BerryManifest::new(
                     root_package_json
@@ -1167,6 +1167,14 @@ impl PackageManager {
                         .map(|(k, v)| (k.clone(), v.clone())),
                     catalog,
                     catalogs,
+                )
+                .with_package_extensions(
+                    package_extensions
+                        .into_iter()
+                        .flatten()
+                        .map(|(selector, extension)| {
+                            (selector, extension.dependencies.unwrap_or_default())
+                        }),
                 );
                 Box::new(turborepo_lockfiles::BerryLockfile::load(
                     contents,

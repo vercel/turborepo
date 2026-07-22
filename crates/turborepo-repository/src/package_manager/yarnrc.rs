@@ -32,6 +32,16 @@ pub struct YarnRc {
     /// Yarn 4+ catalog support - named catalogs
     #[serde(default)]
     pub catalogs: Option<Map<String, Map<String, String>>>,
+    /// Dependencies injected into matching packages by Yarn.
+    #[serde(default)]
+    pub package_extensions: Option<Map<String, PackageExtension>>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageExtension {
+    #[serde(default)]
+    pub dependencies: Option<Map<String, String>>,
 }
 
 fn default_enable_transparent_workspaces() -> bool {
@@ -44,6 +54,7 @@ impl Default for YarnRc {
             enable_transparent_workspaces: default_enable_transparent_workspaces(),
             catalog: None,
             catalogs: None,
+            package_extensions: None,
         }
     }
 }
@@ -78,6 +89,7 @@ mod test {
                 enable_transparent_workspaces: true,
                 catalog: None,
                 catalogs: None,
+                package_extensions: None,
             }
         );
     }
@@ -91,6 +103,7 @@ mod test {
                 enable_transparent_workspaces: false,
                 catalog: None,
                 catalogs: None,
+                package_extensions: None,
             }
         );
     }
@@ -104,6 +117,7 @@ mod test {
                 enable_transparent_workspaces: true,
                 catalog: None,
                 catalogs: None,
+                package_extensions: None,
             }
         );
     }
@@ -122,6 +136,7 @@ mod test {
                 enable_transparent_workspaces: true,
                 catalog: Some(expected_catalog),
                 catalogs: None,
+                package_extensions: None,
             }
         );
     }
@@ -145,7 +160,30 @@ mod test {
                 enable_transparent_workspaces: true,
                 catalog: None,
                 catalogs: Some(expected_catalogs),
+                package_extensions: None,
             }
+        );
+    }
+
+    #[test]
+    fn test_parses_package_extensions() {
+        let yarnrc = YarnRc::from_reader(
+            b"packageExtensions:\n  ansi-regex@*:\n    dependencies:\n      left-pad: \"*\""
+                .as_slice(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            yarnrc
+                .package_extensions
+                .unwrap()
+                .get("ansi-regex@*")
+                .unwrap()
+                .dependencies
+                .as_ref()
+                .unwrap()
+                .get("left-pad"),
+            Some(&"*".to_string())
         );
     }
 }
