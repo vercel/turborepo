@@ -40,7 +40,6 @@ use std::{
 
 use serde::Deserialize;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-use turborepo_errors::Spanned;
 
 use crate::{
     package_json::PackageJson,
@@ -1699,15 +1698,15 @@ impl Toolchain for CargoToolchain {
                     .chain(std::iter::once(rustc.clone()))
                     .collect();
                 crate_names.push(cargo_crate.name.clone());
-                packages.push(DiscoveredPackage {
-                    descriptor: PackageJson {
-                        name: Some(Spanned::new(cargo_crate.name)),
+                packages.push(DiscoveredPackage::package(
+                    Some(cargo_crate.name.clone()),
+                    PackageJson {
                         dependencies: Some(dependencies),
                         ..Default::default()
                     },
-                    manifest_path: cargo_crate.manifest_path,
-                    external_dependencies: Some(external_dependencies),
-                });
+                    cargo_crate.manifest_path,
+                    Some(external_dependencies),
+                ));
             }
 
             // The synthetic workspace package, anchored at the root
@@ -1729,17 +1728,17 @@ impl Toolchain for CargoToolchain {
                     .into_iter()
                     .map(|name| (name, "workspace:*".to_string()))
                     .collect();
-                packages.push(DiscoveredPackage {
-                    descriptor: PackageJson {
-                        name: Some(Spanned::new(workspace_name)),
+                packages.push(DiscoveredPackage::aggregate(
+                    workspace_name,
+                    PackageJson {
                         dependencies: Some(dependencies),
                         ..Default::default()
                     },
-                    manifest_path: self.repo_root.join_component(CARGO_TOML),
+                    self.repo_root.join_component(CARGO_TOML),
                     // Workspace-scoped verbs run every crate, so the union
                     // of all closures is this package's external surface.
-                    external_dependencies: Some(workspace_externals),
-                });
+                    Some(workspace_externals),
+                ));
             }
 
             Ok(packages)
@@ -2445,6 +2444,7 @@ struct ResolvedMetadataPackage {
 #[cfg(test)]
 mod test {
     use turbopath::{AbsoluteSystemPathBuf, IntoUnix};
+    use turborepo_errors::Spanned;
 
     use super::*;
 
@@ -3640,7 +3640,13 @@ release: 1.96.0-nightly\n",
         let toolchain = CargoToolchain::new(root.clone());
         assert_eq!(toolchain.id(), ToolchainId::RUST);
 
-        let mut packages = toolchain.discover_packages().await.unwrap();
+        let mut packages: Vec<_> = toolchain
+            .discover_packages()
+            .await
+            .unwrap()
+            .into_iter()
+            .map(DiscoveredPackage::into_parts)
+            .collect();
         packages.sort_by(|a, b| {
             a.descriptor
                 .name

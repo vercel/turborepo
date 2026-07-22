@@ -145,21 +145,23 @@ impl Toolchain for StubIOToolchain {
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
         Box::pin(async move {
-            let package = |name: &str, dependencies: &[(&str, &str)]| DiscoveredPackage {
-                descriptor: PackageJson {
-                    name: Some(Spanned::new(name.to_string())),
-                    dependencies: Some(
-                        dependencies
-                            .iter()
-                            .map(|(name, version)| (name.to_string(), version.to_string()))
-                            .collect(),
-                    ),
-                    ..Default::default()
-                },
-                manifest_path: self
-                    .repo_root
-                    .join_components(&["packages", name, "stub.json"]),
-                external_dependencies: Some(HashSet::new()),
+            let package = |name: &str, dependencies: &[(&str, &str)]| {
+                DiscoveredPackage::package(
+                    Some(name.to_string()),
+                    PackageJson {
+                        name: Some(Spanned::new(name.to_string())),
+                        dependencies: Some(
+                            dependencies
+                                .iter()
+                                .map(|(name, version)| (name.to_string(), version.to_string()))
+                                .collect(),
+                        ),
+                        ..Default::default()
+                    },
+                    self.repo_root
+                        .join_components(&["packages", name, "stub.json"]),
+                    Some(HashSet::new()),
+                )
             };
             Ok(vec![
                 package("app", &[("lib", "workspace:*")]),

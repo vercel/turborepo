@@ -135,10 +135,20 @@ Represents the workspace structure and package dependencies:
 
 - Identifies the JavaScript package manager, when present
 - Discovers packages in workspace
+- Builds one immutable `RepositoryKnowledge` generation containing repository
+  root, root JavaScript execution scope, real package identities and source
+  boundaries, native definition paths, provenance, and required aggregate scopes
 - Performs ecosystem-specific lockfile analysis
 - Builds dependency relationships between workspace packages
 - Validates that all non-root packages have a `name` field
   (`PackageGraph::validate()`)
+
+`RepositoryKnowledge` is the crate-private authority for package identity and
+paths during node assembly, and the resulting `PackageGraph` retains that exact
+immutable generation. Consumers use narrow knowledge-backed graph queries
+rather than accessing its storage. `PackageInfo` remains a compatibility
+projection for relationship and task behavior; native manifests and metadata do
+not enter repository knowledge.
 
 The package graph intentionally allows cyclic dependencies between packages —
 this aligns with how npm, pnpm, and yarn handle cyclic workspace deps. Cycle
@@ -148,10 +158,10 @@ topological (`^`) dependencies.
 
 #### Toolchains (`crates/turborepo-repository/src/toolchain.rs`)
 
-The package graph is generic over language toolchains. A `Toolchain` answers
-ecosystem-specific questions — which packages exist, what command a task
-runs, what hash wiring a task derives — so graph construction and execution
-never branch on a specific ecosystem. All lookups go through the
+The package graph is generic over language toolchains. Native discovery output
+contributes package/scope observations to repository knowledge, while a
+`Toolchain` continues to answer ecosystem-specific behavioral questions such as
+what command a task runs and what hash wiring a task derives. All lookups go through the
 `ToolchainRegistry` (carried by the `PackageGraph`); `ToolchainId` is an
 open string identifier, not a closed enum; and trait methods are
 coarse-grained and data-in/data-out, keeping the door open to out-of-process
@@ -208,8 +218,9 @@ whether anything changed; Cargo decides how and in what order to build.**
   workspace's deliverables. *Libraries* exist in the package graph and expose
   filtered build and verification tasks. Unfiltered builds prefer entrypoints
   because Cargo builds their library dependency closures implicitly. A synthetic
-  *workspace* package — named by the user via `[workspace.metadata] name` in
-  the root Cargo.toml, a hard requirement — depends on every crate and hosts
+  *workspace* scope — named by the user via `[workspace.metadata] name` in
+  the root Cargo.toml, a hard requirement — is an aggregate in repository
+  knowledge. Its compatibility package depends on every crate and hosts
   workspace-scoped verification verbs.
 - **Execution and entrypoint selection** (`Toolchain::task_command` and
   `Toolchain::select_task_entrypoints`): crate-scoped build and verification

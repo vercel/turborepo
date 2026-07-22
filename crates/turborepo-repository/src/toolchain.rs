@@ -47,6 +47,7 @@
 use std::{borrow::Cow, ffi::OsString, fmt, future::Future, pin::Pin, sync::Arc};
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_errors::Spanned;
 
 use crate::{
     discovery::{self, PackageDiscovery},
@@ -94,20 +95,25 @@ impl fmt::Display for ToolchainId {
     }
 }
 
-/// A package discovered by a toolchain.
+/// Compatibility output from native package discovery.
 ///
-/// `descriptor` is the toolchain-neutral package descriptor. [`PackageJson`]
-/// serves as that descriptor for every toolchain: JavaScript packages parse
-/// theirs from disk, while other toolchains synthesize one from their native
-/// manifest (only the fields they populate — at minimum `name` and internal
-/// dependencies — are meaningful).
+/// Identity and source facts feed [`crate::knowledge::RepositoryKnowledge`].
+/// `descriptor` remains temporarily for relationship and task consumers:
+/// JavaScript packages retain their parsed manifest while other toolchains
+/// synthesize only the compatibility fields those consumers need.
 #[derive(Debug, Clone)]
 pub struct DiscoveredPackage {
-    /// The toolchain-neutral package descriptor.
-    pub descriptor: PackageJson,
+    /// Real user-facing identity, extracted by the native producer. `None`
+    /// preserves JavaScript's historical unnamed-package suppression.
+    name: Option<String>,
+    /// Whether this is a real package or an execution-only aggregate scope.
+    scope_kind: DiscoveredScopeKind,
+    /// Temporary relationship/task compatibility data; never identity or path
+    /// authority.
+    descriptor: PackageJson,
     /// Absolute path to the package's native manifest (`package.json`,
     /// `Cargo.toml`, ...).
-    pub manifest_path: AbsoluteSystemPathBuf,
+    manifest_path: AbsoluteSystemPathBuf,
     /// External-dependency identities for this package, when the toolchain
     /// resolves them at discovery time. They feed the package's
     /// external-dependency hash: a task's hash changes exactly when an
@@ -120,7 +126,78 @@ pub struct DiscoveredPackage {
     /// builder's lockfile phase — deliberately concurrent with run setup —
     /// rather than through this field; folding that in requires a
     /// deferred-aware trait surface.
+    external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DiscoveredScopeKind {
+    Package,
+    Aggregate,
+}
+
+pub(crate) struct DiscoveredPackageParts {
+    pub name: Option<String>,
+    pub scope_kind: DiscoveredScopeKind,
+    pub descriptor: PackageJson,
+    pub manifest_path: AbsoluteSystemPathBuf,
     pub external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
+}
+
+impl DiscoveredPackage {
+    /// Construct a real package observation. The compatibility descriptor's
+    /// name is normalized to the authoritative identity, making divergence
+    /// structurally impossible. `None` preserves unnamed JavaScript package
+    /// suppression.
+    pub fn package(
+        name: Option<String>,
+        mut descriptor: PackageJson,
+        manifest_path: AbsoluteSystemPathBuf,
+        external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
+    ) -> Self {
+        descriptor.name = name.clone().map(Spanned::new);
+        Self {
+            name,
+            scope_kind: DiscoveredScopeKind::Package,
+            descriptor,
+            manifest_path,
+            external_dependencies,
+        }
+    }
+
+    /// Construct a named aggregate execution scope and normalize its temporary
+    /// compatibility descriptor to the same identity.
+    pub fn aggregate(
+        name: String,
+        mut descriptor: PackageJson,
+        manifest_path: AbsoluteSystemPathBuf,
+        external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
+    ) -> Self {
+        descriptor.name = Some(Spanned::new(name.clone()));
+        Self {
+            name: Some(name),
+            scope_kind: DiscoveredScopeKind::Aggregate,
+            descriptor,
+            manifest_path,
+            external_dependencies,
+        }
+    }
+
+    pub(crate) fn into_parts(self) -> DiscoveredPackageParts {
+        let Self {
+            name,
+            scope_kind,
+            descriptor,
+            manifest_path,
+            external_dependencies,
+        } = self;
+        DiscoveredPackageParts {
+            name,
+            scope_kind,
+            descriptor,
+            manifest_path,
+            external_dependencies,
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -880,14 +957,16 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
                     .into_par_iter()
                     .map(|workspace| {
                         let descriptor = PackageJson::load(&workspace.package_json)?;
-                        Ok(DiscoveredPackage {
+                        let name = descriptor.name.as_ref().map(|name| name.as_inner().clone());
+                        Ok(DiscoveredPackage::package(
+                            name,
                             descriptor,
-                            manifest_path: workspace.package_json,
+                            workspace.package_json,
                             // JavaScript closures come from the builder's
                             // (deliberately concurrent) lockfile phase; see
                             // the field docs.
-                            external_dependencies: None,
-                        })
+                            None,
+                        ))
                     })
                     .collect::<Result<Vec<_>, Error>>()
             })
@@ -911,6 +990,51 @@ mod tests {
         assert_eq!(custom.to_string(), "gleam");
         let dynamic = ToolchainId::new(String::from("python-uv"));
         assert_eq!(dynamic.as_str(), "python-uv");
+    }
+
+    #[test]
+    fn discovered_package_constructor_enforces_one_identity() {
+        let path = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            r"C:\repo\package.json"
+        } else {
+            "/repo/package.json"
+        })
+        .unwrap();
+        let mismatched = PackageJson {
+            name: Some(Spanned::new("payload-name".to_string())),
+            ..Default::default()
+        };
+
+        let package = DiscoveredPackage::package(
+            Some("authoritative-name".to_string()),
+            mismatched.clone(),
+            path.clone(),
+            None,
+        )
+        .into_parts();
+        assert_eq!(package.name.as_deref(), Some("authoritative-name"));
+        assert_eq!(
+            package.descriptor.name.as_ref().map(|name| name.as_str()),
+            Some("authoritative-name")
+        );
+
+        let unnamed = DiscoveredPackage::package(None, mismatched, path.clone(), None).into_parts();
+        assert_eq!(unnamed.name, None);
+        assert_eq!(unnamed.descriptor.name, None);
+
+        let aggregate = DiscoveredPackage::aggregate(
+            "workspace".to_string(),
+            PackageJson::default(),
+            path,
+            None,
+        )
+        .into_parts();
+        assert_eq!(aggregate.name.as_deref(), Some("workspace"));
+        assert_eq!(aggregate.scope_kind, DiscoveredScopeKind::Aggregate);
+        assert_eq!(
+            aggregate.descriptor.name.as_ref().map(|name| name.as_str()),
+            Some("workspace")
+        );
     }
 
     #[test]
