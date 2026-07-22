@@ -83,9 +83,13 @@ fn test_malformed_package_json() {
 
     let output = run_turbo(tempdir.path(), &["build"]);
     assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stderr = String::from_utf8_lossy(&output.stderr).replace('\\', "/");
     assert!(
         stderr.contains("package_json_parse_error"),
         "expected parse error: {stderr}"
+    );
+    assert!(
+        stderr.contains("apps/my-app/package.json"),
+        "expected malformed manifest path: {stderr}"
     );
 }
