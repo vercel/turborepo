@@ -184,7 +184,8 @@ root and adds them to the package graph. Cargo workspaces can stand alone or
 coexist with JavaScript workspaces; a root `package.json` and JavaScript package
 manager are only required when JavaScript packages participate. Cargo-only
 repositories may omit `package.json`; when one exists, it must still be valid.
-`CargoToolchain` is the second `Toolchain` implementation.
+`CargoAdapter` performs discovery and prepares an immutable, graph-local
+`CargoToolchain`; its only interior memoization is lazy Cargo binary lookup.
 
 Turborepo does not replace Cargo. Cargo is itself a build system with its
 own dependency graph, scheduler, and incremental cache (`target/`), so the

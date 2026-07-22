@@ -20,7 +20,7 @@ use turborepo_repository::{
     },
     package_graph::{PackageGraph, PackageGraphBuilder, PackageName, WorkspacePackage},
     package_json::PackageJson,
-    toolchain::{Toolchain, WatchSpec},
+    toolchain::{EcosystemAdapter, WatchSpec},
 };
 use turborepo_scm::GitHashes;
 
@@ -66,7 +66,7 @@ impl PackageChangesWatcher {
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
         allow_no_package_manager: bool,
-        extra_toolchains: Vec<Arc<dyn Toolchain>>,
+        ecosystem_adapters: Vec<Arc<dyn EcosystemAdapter>>,
     ) -> Self {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (package_change_events_tx, package_change_events_rx) =
@@ -79,7 +79,7 @@ impl PackageChangesWatcher {
             custom_turbo_json_path,
             single_package,
             allow_no_package_manager,
-            extra_toolchains,
+            ecosystem_adapters,
         );
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
@@ -129,10 +129,10 @@ struct Subscriber {
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     single_package: bool,
     allow_no_package_manager: bool,
-    /// Toolchains registered in addition to JavaScript (e.g. Cargo when
+    /// Ecosystem adapters registered in addition to JavaScript (e.g. Cargo when
     /// futureFlags.experimentalCargoWorkspaces is enabled), mirroring the
     /// run builder so the watcher sees the same package graph a run would.
-    extra_toolchains: Vec<Arc<dyn Toolchain>>,
+    ecosystem_adapters: Vec<Arc<dyn EcosystemAdapter>>,
 }
 
 fn is_in_git_folder(path: &AnchoredSystemPath) -> bool {
@@ -321,7 +321,7 @@ impl Subscriber {
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
         allow_no_package_manager: bool,
-        extra_toolchains: Vec<Arc<dyn Toolchain>>,
+        ecosystem_adapters: Vec<Arc<dyn EcosystemAdapter>>,
     ) -> Self {
         // Try to canonicalize the custom path to match what the file watcher reports
         let normalized_custom_path = custom_turbo_json_path.map(|path| {
@@ -359,8 +359,8 @@ impl Subscriber {
             .repository_ignore()
             .unwrap_or_else(|| RepositoryIgnore::new(repo_root.as_std_path()));
         let mut watch_spec = WatchSpec::default();
-        for toolchain in &extra_toolchains {
-            watch_spec.extend(toolchain.watch_spec());
+        for adapter in &ecosystem_adapters {
+            watch_spec.extend(adapter.watch_spec());
         }
 
         Subscriber {
@@ -374,7 +374,7 @@ impl Subscriber {
             custom_turbo_json_path: normalized_custom_path,
             single_package,
             allow_no_package_manager,
-            extra_toolchains,
+            ecosystem_adapters,
         }
     }
 
@@ -388,8 +388,8 @@ impl Subscriber {
         let mut builder = PackageGraphBuilder::new(&self.repo_root, root_package_json.clone())
             .with_single_package_mode(self.single_package)
             .with_allow_no_package_manager(self.allow_no_package_manager);
-        for toolchain in &self.extra_toolchains {
-            builder = builder.with_toolchain(toolchain.clone());
+        for adapter in &self.ecosystem_adapters {
+            builder = builder.with_ecosystem_adapter(adapter.clone());
         }
         let Ok(pkg_dep_graph) = builder.build().await else {
             tracing::debug!("package graph not available, package watcher not available");

@@ -573,10 +573,11 @@ impl RunBuilder {
                     .with_closure_hasher(std::sync::Arc::new(
                         turborepo_task_hash::hash_sorted_closures,
                     ));
-            if cargo_enabled(&self.opts.future_flags) {
-                builder = builder.with_toolchain(turborepo_repository::cargo::CargoToolchain::new(
-                    self.repo_root.to_owned(),
-                ));
+            for adapter in configured_ecosystem_adapters(
+                &self.repo_root,
+                cargo_enabled(&self.opts.future_flags),
+            ) {
+                builder = builder.with_ecosystem_adapter(adapter);
             }
 
             let graph = builder
@@ -1392,6 +1393,20 @@ pub(crate) fn cargo_enabled(future_flags: &turborepo_turbo_json::FutureFlags) ->
     future_flags.experimental_cargo_workspaces
 }
 
+pub(crate) fn configured_ecosystem_adapters(
+    repo_root: &AbsoluteSystemPath,
+    cargo_enabled: bool,
+) -> Vec<std::sync::Arc<dyn turborepo_repository::toolchain::EcosystemAdapter>> {
+    let mut adapters = Vec::new();
+    if cargo_enabled {
+        adapters.push(
+            turborepo_repository::cargo::CargoAdapter::new(repo_root.to_owned())
+                as std::sync::Arc<dyn turborepo_repository::toolchain::EcosystemAdapter>,
+        );
+    }
+    adapters
+}
+
 fn origins_match(url1: &str, url2: &str) -> bool {
     let (Ok(url1), Ok(url2)) = (Url::parse(url1), Url::parse(url2)) else {
         return false;
@@ -1416,8 +1431,10 @@ mod task_io_context_tests {
     use turborepo_env::EnvironmentVariableMap;
     use turborepo_hash::TaskHashable;
     use turborepo_repository::{
-        cargo::CargoToolchain,
-        toolchain::{DiscoverPackagesFuture, Toolchain, ToolchainId, ToolchainRegistry},
+        cargo::CargoAdapter,
+        toolchain::{
+            DiscoverPackagesFuture, EcosystemAdapter, Toolchain, ToolchainId, ToolchainRegistry,
+        },
     };
     use turborepo_types::EnvMode;
 
@@ -1477,12 +1494,20 @@ mod task_io_context_tests {
         assert_eq!(beta_environment.get("UNDECLARED_SECRET"), None);
     }
 
-    #[test]
-    fn cargo_projection_keeps_only_rustup_selection_environment() {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn cargo_projection_keeps_only_rustup_selection_environment() {
         let root = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(root.path()).unwrap();
         let mut toolchains = ToolchainRegistry::new();
-        toolchains.register(CargoToolchain::new(root)).unwrap();
+        toolchains
+            .register(
+                CargoAdapter::new(root)
+                    .contribute()
+                    .await
+                    .unwrap()
+                    .prepared_runtime,
+            )
+            .unwrap();
         let environment = EnvironmentVariableMap::from(HashMap::from([
             ("RUSTUP_HOME".to_string(), "/rustup".to_string()),
             ("RUSTUP_TOOLCHAIN".to_string(), "stable-host".to_string()),
