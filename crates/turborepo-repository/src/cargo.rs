@@ -988,13 +988,22 @@ fn cargo_output_layout(
 /// root contains a `Cargo.toml`.
 pub struct CargoToolchain {
     repo_root: AbsoluteSystemPathBuf,
-    /// Per-package details recorded during discovery, consumed by command
-    /// resolution. Keyed by package name.
-    details: std::sync::Mutex<HashMap<String, CargoPackageDetails>>,
-    workspace_details: std::sync::Mutex<Option<CargoWorkspaceDetails>>,
+    /// Prevent concurrent discoveries from publishing snapshots out of order.
+    discovery_lock: tokio::sync::Mutex<()>,
+    /// The immutable result of the most recent successful discovery. Discovery
+    /// builds this model locally and publishes it in one operation so readers
+    /// cannot observe package and workspace details from different runs.
+    model: std::sync::RwLock<Arc<CargoModel>>,
     /// The cargo binary, resolved lazily so runs without Cargo tasks never
     /// pay for a PATH scan.
     cargo_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+}
+
+#[derive(Default)]
+struct CargoModel {
+    /// Per-package details keyed by package name.
+    details: HashMap<String, CargoPackageDetails>,
+    workspace_details: Option<CargoWorkspaceDetails>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -1007,32 +1016,28 @@ impl CargoToolchain {
     pub fn new(repo_root: AbsoluteSystemPathBuf) -> Arc<Self> {
         Arc::new(Self {
             repo_root,
-            details: std::sync::Mutex::new(HashMap::new()),
-            workspace_details: std::sync::Mutex::new(None),
+            discovery_lock: tokio::sync::Mutex::new(()),
+            model: std::sync::RwLock::new(Arc::new(CargoModel::default())),
             cargo_binary: std::sync::OnceLock::new(),
         })
     }
 
-    fn package_details(&self, package: &str) -> Option<CargoPackageDetails> {
-        self.details
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .get(package)
-            .cloned()
-    }
-
-    fn record_details(&self, package: String, details: CargoPackageDetails) {
-        self.details
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .insert(package, details);
-    }
-
-    fn workspace_details(&self) -> Option<CargoWorkspaceDetails> {
-        self.workspace_details
-            .lock()
+    fn model(&self) -> Arc<CargoModel> {
+        self.model
+            .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone()
+    }
+
+    fn publish_model(&self, model: CargoModel) {
+        *self
+            .model
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Arc::new(model);
+    }
+
+    fn package_details(&self, package: &str) -> Option<CargoPackageDetails> {
+        self.model().details.get(package).cloned()
     }
 }
 
@@ -1254,11 +1259,9 @@ impl Toolchain for CargoToolchain {
     }
 
     fn additional_affected_packages(&self, package: &str) -> Vec<String> {
-        let details = self
+        let model = self.model();
+        let mut affected: Vec<_> = model
             .details
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let mut affected: Vec<_> = details
             .iter()
             .filter(|(_, details)| details.kind != CargoPackageKind::Workspace)
             .filter(|(_, details)| {
@@ -1280,10 +1283,8 @@ impl Toolchain for CargoToolchain {
         prefer_workspace: bool,
     ) -> Option<Vec<String>> {
         let subcommand = library_subcommand(task)?;
-        let details = self
-            .details
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let model = self.model();
+        let details = &model.details;
         if subcommand == "build" {
             let crates: Vec<_> = candidates
                 .iter()
@@ -1369,10 +1370,11 @@ impl Toolchain for CargoToolchain {
         let pruned_lock = turborepo_lockfiles::cargo_prune_lock(&lock_contents, kept_packages)
             .map_err(|err| failed(Error::Lockfile(err)))?;
 
+        let model = self.model();
         let mut kept_dirs = Vec::with_capacity(pruned_lock.members.len());
         let mut extra_packages = Vec::new();
         for member in &pruned_lock.members {
-            let Some(details) = self.package_details(member) else {
+            let Some(details) = model.details.get(member) else {
                 // A lock member that discovery never saw; the lockfile and
                 // the workspace disagree. Keep going — the manifest rewrite
                 // simply won't list it, and cargo will report specifics.
@@ -1467,7 +1469,8 @@ impl Toolchain for CargoToolchain {
         context: &toolchain::TaskIOContext<'_>,
     ) -> Option<toolchain::DerivedTaskIO> {
         let name = package.package_name()?;
-        let details = self.package_details(&name)?;
+        let model = self.model();
+        let details = model.details.get(&name)?;
         let subcommand = task_subcommand(details.kind, task)?;
 
         // The workspace lockfile/manifest, Cargo config, and pinned
@@ -1480,7 +1483,7 @@ impl Toolchain for CargoToolchain {
             env: HASHED_ENV_VARS.iter().map(|var| var.to_string()).collect(),
             ..Default::default()
         };
-        if let Some(workspace) = self.workspace_details()
+        if let Some(workspace) = &model.workspace_details
             && (workspace.repository_config_untracked || workspace.external_config_present)
         {
             io.input_safety = toolchain::DerivedInputSafety::Untracked;
@@ -1500,7 +1503,7 @@ impl Toolchain for CargoToolchain {
                 .filter(|dep| dep.toolchain == ToolchainId::RUST)
                 .filter(|dep| {
                     dep.package_name()
-                        .and_then(|dep_name| self.package_details(&dep_name))
+                        .and_then(|dep_name| model.details.get(&dep_name))
                         .is_some_and(|details| details.kind != CargoPackageKind::Workspace)
                 })
                 .flat_map(|dep| {
@@ -1508,7 +1511,7 @@ impl Toolchain for CargoToolchain {
                 })
                 .collect();
             for dependency in &details.compilation_dependencies {
-                if let Some(dependency) = self.package_details(dependency) {
+                if let Some(dependency) = model.details.get(dependency) {
                     globs.extend(crate_source_globs(path_to_root, &dependency.dir));
                 }
             }
@@ -1532,13 +1535,14 @@ impl Toolchain for CargoToolchain {
                     if details.kind == CargoPackageKind::Library {
                         io.outputs = toolchain::DerivedOutputs::Unavailable;
                     } else {
-                        io.outputs = self
-                            .workspace_details()
+                        io.outputs = model
+                            .workspace_details
+                            .as_ref()
                             .and_then(|workspace| {
                                 let layout = cargo_output_layout(
                                     &self.repo_root,
-                                    &workspace,
-                                    &details,
+                                    workspace,
+                                    details,
                                     context,
                                 )?;
                                 let effective_target =
@@ -1583,6 +1587,7 @@ impl Toolchain for CargoToolchain {
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
         Box::pin(async move {
+            let _discovery_guard = self.discovery_lock.lock().await;
             // Discovery spawns `cargo metadata` synchronously, so keep it off
             // the async runtime like the JavaScript manifest-parsing path.
             let workspace =
@@ -1596,6 +1601,7 @@ impl Toolchain for CargoToolchain {
                     turborepo_rayon_compat::block_in_place(|| validate_lockfile(&self.repo_root))
                         .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
                 }
+                self.publish_model(CargoModel::default());
                 return Ok(Vec::new());
             }
 
@@ -1636,23 +1642,19 @@ impl Toolchain for CargoToolchain {
                     ))
                 })
                 .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+            let mut model = CargoModel::default();
             if let Some(target_directory) = target_directory {
                 let startup_environment = CargoHomeEnvironment::current();
                 let config = cargo_config_influence(&self.repo_root, &startup_environment);
-                *self
-                    .workspace_details
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner()) =
-                    Some(CargoWorkspaceDetails {
-                        target_directory,
-                        host_target,
-                        supported_targets,
-                        repository_config_alters_output_layout: config
-                            .repository_alters_output_layout,
-                        repository_config_untracked: config.repository_config_untracked,
-                        external_config_present: config.external_present,
-                        manifest_alters_profile_dirs: manifest_alters_profile_dirs(&self.repo_root),
-                    });
+                model.workspace_details = Some(CargoWorkspaceDetails {
+                    target_directory,
+                    host_target,
+                    supported_targets,
+                    repository_config_alters_output_layout: config.repository_alters_output_layout,
+                    repository_config_untracked: config.repository_config_untracked,
+                    external_config_present: config.external_present,
+                    manifest_alters_profile_dirs: manifest_alters_profile_dirs(&self.repo_root),
+                });
             }
             let workspace_externals: HashSet<turborepo_lockfiles::Package> = closures
                 .values()
@@ -1682,7 +1684,7 @@ impl Toolchain for CargoToolchain {
                     })
                     .map(|dir| dir.to_unix().to_string())
                     .unwrap_or_default();
-                self.record_details(
+                model.details.insert(
                     cargo_crate.name.clone(),
                     CargoPackageDetails {
                         kind,
@@ -1715,7 +1717,7 @@ impl Toolchain for CargoToolchain {
             // name`. It depends on every crate so `--affected` and
             // dependent-filters propagate crate changes to it.
             if !crate_names.is_empty() {
-                self.record_details(
+                model.details.insert(
                     workspace_name.clone(),
                     CargoPackageDetails {
                         kind: CargoPackageKind::Workspace,
@@ -1742,6 +1744,7 @@ impl Toolchain for CargoToolchain {
                 });
             }
 
+            self.publish_model(model);
             Ok(packages)
         })
     }
@@ -3716,6 +3719,80 @@ release: 1.96.0-nightly\n",
         assert!(toolchain.discover_packages().await.unwrap().is_empty());
     }
 
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_toolchain_rediscovery_removes_stale_package_details() {
+        let (_tmp, root) = tempdir_root();
+        write(
+            &root,
+            &["Cargo.toml"],
+            "[workspace]\nmembers = [\"crates/*\"]\nresolver = \
+             \"2\"\n\n[workspace.metadata]\nname = \"fixture-ws\"\n",
+        );
+        for name in ["kept", "removed"] {
+            write(
+                &root,
+                &["crates", name, "Cargo.toml"],
+                &format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"),
+            );
+            write(&root, &["crates", name, "src", "lib.rs"], "");
+        }
+        generate_lockfile(&root);
+
+        let toolchain = CargoToolchain::new(root.clone());
+        toolchain.discover_packages().await.unwrap();
+        assert!(toolchain.package_details("removed").is_some());
+
+        std::fs::remove_dir_all(root.join_components(&["crates", "removed"]).as_std_path())
+            .unwrap();
+        generate_lockfile(&root);
+        let packages = toolchain.discover_packages().await.unwrap();
+
+        assert!(toolchain.package_details("removed").is_none());
+        assert_eq!(
+            packages.len(),
+            2,
+            "only the kept crate and workspace remain"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_toolchain_memberless_rediscovery_clears_model() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+
+        let toolchain = CargoToolchain::new(root.clone());
+        toolchain.discover_packages().await.unwrap();
+        let initial_model = toolchain.model();
+        assert!(initial_model.workspace_details.is_some());
+        assert!(!initial_model.details.is_empty());
+
+        write(&root, &["Cargo.toml"], "[workspace]\nmembers = []\n");
+        assert!(toolchain.discover_packages().await.unwrap().is_empty());
+
+        let rediscovered_model = toolchain.model();
+        assert!(rediscovered_model.workspace_details.is_none());
+        assert!(rediscovered_model.details.is_empty());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_toolchain_failed_rediscovery_preserves_model() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+
+        let toolchain = CargoToolchain::new(root.clone());
+        toolchain.discover_packages().await.unwrap();
+        let initial_model = toolchain.model();
+
+        write(&root, &["Cargo.toml"], "[workspace\nmembers = [");
+        assert!(toolchain.discover_packages().await.is_err());
+
+        let model_after_failure = toolchain.model();
+        assert!(
+            Arc::ptr_eq(&initial_model, &model_after_failure),
+            "failed discovery must not publish partial state"
+        );
+    }
+
     fn package_info(name: &str, manifest_rel: &str) -> crate::package_graph::PackageInfo {
         crate::package_graph::PackageInfo {
             package_json: PackageJson {
@@ -4034,7 +4111,8 @@ release: 1.96.0-nightly\n",
         let toolchain::DerivedOutputs::Resolved(outputs) = &io.outputs else {
             panic!("Cargo host outputs must remain resolved");
         };
-        let workspace_details = toolchain.workspace_details().unwrap();
+        let model = toolchain.model();
+        let workspace_details = model.workspace_details.as_ref().unwrap();
         let platform = target_platform(&workspace_details.host_target).unwrap();
         let basename = deliverable_basename(
             &Deliverable {
