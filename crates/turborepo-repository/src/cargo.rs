@@ -44,7 +44,10 @@ use turborepo_errors::Spanned;
 
 use crate::{
     package_json::PackageJson,
-    toolchain::{self, DiscoverPackagesFuture, DiscoveredPackage, Toolchain, ToolchainId},
+    toolchain::{
+        self, ContributeFuture, DiscoveredPackage, EcosystemAdapter, EcosystemContribution,
+        EcosystemContributionFuture, Toolchain, ToolchainId,
+    },
 };
 
 /// The conventional file name for a Cargo manifest.
@@ -982,16 +985,23 @@ fn cargo_output_layout(
     })
 }
 
-/// The Cargo toolchain. Registered in the
-/// [`crate::toolchain::ToolchainRegistry`] when
-/// `futureFlags.experimentalCargoWorkspaces` is enabled and the repository
-/// root contains a `Cargo.toml`.
+/// Stateless, reusable Cargo discovery input. Every contribution contains a
+/// newly prepared runtime, so rediscovery cannot alter an existing graph.
+pub struct CargoAdapter {
+    repo_root: AbsoluteSystemPathBuf,
+}
+
+impl CargoAdapter {
+    pub fn new(repo_root: AbsoluteSystemPathBuf) -> Arc<Self> {
+        Arc::new(Self { repo_root })
+    }
+}
+
+/// Immutable Cargo behavior prepared for one package graph.
 pub struct CargoToolchain {
     repo_root: AbsoluteSystemPathBuf,
-    /// Per-package details recorded during discovery, consumed by command
-    /// resolution. Keyed by package name.
-    details: std::sync::Mutex<HashMap<String, CargoPackageDetails>>,
-    workspace_details: std::sync::Mutex<Option<CargoWorkspaceDetails>>,
+    details: HashMap<String, CargoPackageDetails>,
+    workspace_details: Option<CargoWorkspaceDetails>,
     /// The cargo binary, resolved lazily so runs without Cargo tasks never
     /// pay for a PATH scan.
     cargo_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
@@ -1004,35 +1014,25 @@ enum CargoCommandError {
 }
 
 impl CargoToolchain {
-    pub fn new(repo_root: AbsoluteSystemPathBuf) -> Arc<Self> {
+    fn prepared(
+        repo_root: AbsoluteSystemPathBuf,
+        details: HashMap<String, CargoPackageDetails>,
+        workspace_details: Option<CargoWorkspaceDetails>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             repo_root,
-            details: std::sync::Mutex::new(HashMap::new()),
-            workspace_details: std::sync::Mutex::new(None),
+            details,
+            workspace_details,
             cargo_binary: std::sync::OnceLock::new(),
         })
     }
 
-    fn package_details(&self, package: &str) -> Option<CargoPackageDetails> {
-        self.details
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .get(package)
-            .cloned()
+    fn package_details(&self, package: &str) -> Option<&CargoPackageDetails> {
+        self.details.get(package)
     }
 
-    fn record_details(&self, package: String, details: CargoPackageDetails) {
-        self.details
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .insert(package, details);
-    }
-
-    fn workspace_details(&self) -> Option<CargoWorkspaceDetails> {
-        self.workspace_details
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone()
+    fn workspace_details(&self) -> Option<&CargoWorkspaceDetails> {
+        self.workspace_details.as_ref()
     }
 }
 
@@ -1151,7 +1151,7 @@ impl Toolchain for CargoToolchain {
             .package_name()
             .and_then(|name| self.package_details(&name))
             .map(|details| {
-                registered_tasks(&details)
+                registered_tasks(details)
                     .into_iter()
                     .map(str::to_string)
                     .collect()
@@ -1163,7 +1163,7 @@ impl Toolchain for CargoToolchain {
         package
             .package_name()
             .and_then(|name| self.package_details(&name))
-            .is_some_and(|details| registered_tasks(&details).contains(&task))
+            .is_some_and(|details| registered_tasks(details).contains(&task))
     }
 
     /// Route rustc invocations through the embedded sccache, with the
@@ -1254,11 +1254,8 @@ impl Toolchain for CargoToolchain {
     }
 
     fn additional_affected_packages(&self, package: &str) -> Vec<String> {
-        let details = self
+        let mut affected: Vec<_> = self
             .details
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let mut affected: Vec<_> = details
             .iter()
             .filter(|(_, details)| details.kind != CargoPackageKind::Workspace)
             .filter(|(_, details)| {
@@ -1280,10 +1277,7 @@ impl Toolchain for CargoToolchain {
         prefer_workspace: bool,
     ) -> Option<Vec<String>> {
         let subcommand = library_subcommand(task)?;
-        let details = self
-            .details
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let details = &self.details;
         if subcommand == "build" {
             let crates: Vec<_> = candidates
                 .iter()
@@ -1330,10 +1324,6 @@ impl Toolchain for CargoToolchain {
                 .cloned()
                 .collect(),
         )
-    }
-
-    fn watch_spec(&self) -> toolchain::WatchSpec {
-        watch_spec()
     }
 
     /// Prune the Cargo workspace machinery around the kept crates:
@@ -1537,8 +1527,8 @@ impl Toolchain for CargoToolchain {
                             .and_then(|workspace| {
                                 let layout = cargo_output_layout(
                                     &self.repo_root,
-                                    &workspace,
-                                    &details,
+                                    workspace,
+                                    details,
                                     context,
                                 )?;
                                 let effective_target =
@@ -1580,8 +1570,10 @@ impl Toolchain for CargoToolchain {
 
         Some(io)
     }
+}
 
-    fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+impl CargoAdapter {
+    fn prepare(&self) -> EcosystemContributionFuture<'_, Arc<CargoToolchain>> {
         Box::pin(async move {
             // Discovery spawns `cargo metadata` synchronously, so keep it off
             // the async runtime like the JavaScript manifest-parsing path.
@@ -1596,7 +1588,14 @@ impl Toolchain for CargoToolchain {
                     turborepo_rayon_compat::block_in_place(|| validate_lockfile(&self.repo_root))
                         .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
                 }
-                return Ok(Vec::new());
+                return Ok(EcosystemContribution {
+                    packages: Vec::new(),
+                    prepared_runtime: CargoToolchain::prepared(
+                        self.repo_root.clone(),
+                        HashMap::new(),
+                        None,
+                    ),
+                });
             }
 
             // Using Turborepo with Rust requires naming the workspace: the
@@ -1636,24 +1635,19 @@ impl Toolchain for CargoToolchain {
                     ))
                 })
                 .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
-            if let Some(target_directory) = target_directory {
+            let workspace_details = target_directory.map(|target_directory| {
                 let startup_environment = CargoHomeEnvironment::current();
                 let config = cargo_config_influence(&self.repo_root, &startup_environment);
-                *self
-                    .workspace_details
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner()) =
-                    Some(CargoWorkspaceDetails {
-                        target_directory,
-                        host_target,
-                        supported_targets,
-                        repository_config_alters_output_layout: config
-                            .repository_alters_output_layout,
-                        repository_config_untracked: config.repository_config_untracked,
-                        external_config_present: config.external_present,
-                        manifest_alters_profile_dirs: manifest_alters_profile_dirs(&self.repo_root),
-                    });
-            }
+                CargoWorkspaceDetails {
+                    target_directory,
+                    host_target,
+                    supported_targets,
+                    repository_config_alters_output_layout: config.repository_alters_output_layout,
+                    repository_config_untracked: config.repository_config_untracked,
+                    external_config_present: config.external_present,
+                    manifest_alters_profile_dirs: manifest_alters_profile_dirs(&self.repo_root),
+                }
+            });
             let workspace_externals: HashSet<turborepo_lockfiles::Package> = closures
                 .values()
                 .flatten()
@@ -1663,6 +1657,7 @@ impl Toolchain for CargoToolchain {
 
             let mut packages = Vec::with_capacity(crates.len() + 1);
             let mut crate_names = Vec::with_capacity(crates.len());
+            let mut details = HashMap::with_capacity(crates.len() + 1);
             for cargo_crate in crates {
                 let dependencies = cargo_crate
                     .internal_dependencies
@@ -1682,7 +1677,7 @@ impl Toolchain for CargoToolchain {
                     })
                     .map(|dir| dir.to_unix().to_string())
                     .unwrap_or_default();
-                self.record_details(
+                details.insert(
                     cargo_crate.name.clone(),
                     CargoPackageDetails {
                         kind,
@@ -1715,7 +1710,7 @@ impl Toolchain for CargoToolchain {
             // name`. It depends on every crate so `--affected` and
             // dependent-filters propagate crate changes to it.
             if !crate_names.is_empty() {
-                self.record_details(
+                details.insert(
                     workspace_name.clone(),
                     CargoPackageDetails {
                         kind: CargoPackageKind::Workspace,
@@ -1742,7 +1737,35 @@ impl Toolchain for CargoToolchain {
                 });
             }
 
-            Ok(packages)
+            Ok(EcosystemContribution {
+                packages,
+                prepared_runtime: CargoToolchain::prepared(
+                    self.repo_root.clone(),
+                    details,
+                    workspace_details,
+                ),
+            })
+        })
+    }
+}
+
+impl EcosystemAdapter for CargoAdapter {
+    fn id(&self) -> ToolchainId {
+        ToolchainId::RUST
+    }
+
+    fn watch_spec(&self) -> toolchain::WatchSpec {
+        watch_spec()
+    }
+
+    fn contribute(&self) -> ContributeFuture<'_> {
+        Box::pin(async move {
+            let contribution = self.prepare().await?;
+            let prepared_runtime: Arc<dyn Toolchain> = contribution.prepared_runtime;
+            Ok(EcosystemContribution {
+                packages: contribution.packages,
+                prepared_runtime,
+            })
         })
     }
 }
@@ -2737,10 +2760,11 @@ dependencies = ["lib-a"]
         write(&root, &["src", "lib.rs"], "");
         generate_lockfile(&root);
 
-        let error = CargoToolchain::new(root)
-            .discover_packages()
+        let error = CargoAdapter::new(root)
+            .prepare()
             .await
-            .unwrap_err();
+            .err()
+            .expect("root package must fail");
         assert!(
             error.to_string().contains("root-package")
                 && error.to_string().contains("root Cargo.toml"),
@@ -3452,8 +3476,11 @@ release: 1.96.0-nightly\n",
             "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n",
         );
 
-        let toolchain = CargoToolchain::new(root.clone());
-        let err = toolchain.discover_packages().await.unwrap_err();
+        let err = CargoAdapter::new(root.clone())
+            .prepare()
+            .await
+            .err()
+            .expect("missing workspace name must fail");
         assert!(
             err.to_string().contains("[workspace.metadata]"),
             "the error must show the fix, got: {err}"
@@ -3536,7 +3563,7 @@ release: 1.96.0-nightly\n",
     #[test]
     fn test_compile_cache_env_routes_rustc_through_sccache() {
         let (_tmp, root) = tempdir_root();
-        let toolchain = CargoToolchain::new(root);
+        let toolchain = CargoToolchain::prepared(root, HashMap::new(), None);
         let endpoint = toolchain::CompileCacheEndpoint {
             url: "http://127.0.0.1:42123".to_string(),
             token: "proxy-token".to_string(),
@@ -3573,7 +3600,7 @@ release: 1.96.0-nightly\n",
     #[test]
     fn test_compile_cache_env_stands_down_for_competing_configuration() {
         let (_tmp, root) = tempdir_root();
-        let toolchain = CargoToolchain::new(root);
+        let toolchain = CargoToolchain::prepared(root, HashMap::new(), None);
         let endpoint = toolchain::CompileCacheEndpoint {
             url: "http://127.0.0.1:42123".to_string(),
             token: "proxy-token".to_string(),
@@ -3604,7 +3631,7 @@ release: 1.96.0-nightly\n",
         // a competing compiler cache: the injection proceeds and the
         // explicit value is left alone.
         let (_tmp, root) = tempdir_root();
-        let toolchain = CargoToolchain::new(root);
+        let toolchain = CargoToolchain::prepared(root, HashMap::new(), None);
         let endpoint = toolchain::CompileCacheEndpoint {
             url: "http://127.0.0.1:42123".to_string(),
             token: "proxy-token".to_string(),
@@ -3637,10 +3664,10 @@ release: 1.96.0-nightly\n",
         let (_tmp, root) = tempdir_root();
         write_fixture_workspace(&root);
 
-        let toolchain = CargoToolchain::new(root.clone());
-        assert_eq!(toolchain.id(), ToolchainId::RUST);
+        let contribution = CargoAdapter::new(root.clone()).prepare().await.unwrap();
+        assert_eq!(contribution.prepared_runtime.id(), ToolchainId::RUST);
 
-        let mut packages = toolchain.discover_packages().await.unwrap();
+        let mut packages = contribution.packages;
         packages.sort_by(|a, b| {
             a.descriptor
                 .name
@@ -3703,8 +3730,8 @@ release: 1.96.0-nightly\n",
     #[tokio::test(flavor = "multi_thread")]
     async fn test_cargo_toolchain_empty_without_manifest() {
         let (_tmp, root) = tempdir_root();
-        let toolchain = CargoToolchain::new(root);
-        assert!(toolchain.discover_packages().await.unwrap().is_empty());
+        let contribution = CargoAdapter::new(root).prepare().await.unwrap();
+        assert!(contribution.packages.is_empty());
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -3712,8 +3739,8 @@ release: 1.96.0-nightly\n",
         let (_tmp, root) = tempdir_root();
         write(&root, &["Cargo.toml"], "[workspace]\nmembers = []\n");
 
-        let toolchain = CargoToolchain::new(root);
-        assert!(toolchain.discover_packages().await.unwrap().is_empty());
+        let contribution = CargoAdapter::new(root).prepare().await.unwrap();
+        assert!(contribution.packages.is_empty());
     }
 
     fn package_info(name: &str, manifest_rel: &str) -> crate::package_graph::PackageInfo {
@@ -3740,9 +3767,11 @@ release: 1.96.0-nightly\n",
         let (_tmp, root) = tempdir_root();
         write_fixture_workspace(&root);
 
-        let toolchain = CargoToolchain::new(root.clone());
-        // Discovery records the per-package details command resolution uses.
-        toolchain.discover_packages().await.unwrap();
+        let toolchain = CargoAdapter::new(root.clone())
+            .prepare()
+            .await
+            .unwrap()
+            .prepared_runtime;
 
         let app = package_info("app", "crates/app/Cargo.toml");
         let lib_a = package_info("lib-a", "crates/lib-a/Cargo.toml");
@@ -3928,8 +3957,11 @@ release: 1.96.0-nightly\n",
         let (_tmp, root) = tempdir_root();
         write_fixture_workspace(&root);
 
-        let toolchain = CargoToolchain::new(root.clone());
-        toolchain.discover_packages().await.unwrap();
+        let toolchain = CargoAdapter::new(root.clone())
+            .prepare()
+            .await
+            .unwrap()
+            .prepared_runtime;
 
         let lib_a = package_info("lib-a", "crates/lib-a/Cargo.toml");
         let workspace = package_info("fixture-ws", "Cargo.toml");
@@ -3973,8 +4005,11 @@ release: 1.96.0-nightly\n",
         let (_tmp, root) = tempdir_root();
         write_fixture_workspace(&root);
 
-        let toolchain = CargoToolchain::new(root.clone());
-        toolchain.discover_packages().await.unwrap();
+        let toolchain = CargoAdapter::new(root.clone())
+            .prepare()
+            .await
+            .unwrap()
+            .prepared_runtime;
 
         let app = package_info("app", "crates/app/Cargo.toml");
         let lib_a = package_info("lib-a", "crates/lib-a/Cargo.toml");

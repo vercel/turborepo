@@ -1974,7 +1974,7 @@ version = "0.1.0"
                 map
             }))
             .with_lockfile(Some(Box::new(MockLockfile {})))
-            .with_toolchain(crate::cargo::CargoToolchain::new(root.clone()))
+            .with_ecosystem_adapter(crate::cargo::CargoAdapter::new(root.clone()))
             .build()
             .await
             .unwrap();
@@ -2048,7 +2048,7 @@ version = "0.1.0"
         write_cargo_workspace_fixture(&root);
 
         let pkg_graph = PackageGraph::builder_optional(&root, None)
-            .with_toolchain(crate::cargo::CargoToolchain::new(root.clone()))
+            .with_ecosystem_adapter(crate::cargo::CargoAdapter::new(root.clone()))
             .build()
             .await
             .unwrap();
@@ -2084,6 +2084,127 @@ version = "0.1.0"
         );
     }
 
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_rediscovery_prepares_graph_local_runtime() {
+        let (_tmp, root) = canonical_tempdir();
+        write_cargo_workspace_fixture(&root);
+        let adapter = crate::cargo::CargoAdapter::new(root.clone());
+
+        let graph_a = PackageGraph::builder_optional(&root, None)
+            .with_ecosystem_adapter(adapter.clone())
+            .build()
+            .await
+            .unwrap();
+        let app_name = PackageName::from("app");
+        let app_a = graph_a.package_info(&app_name).unwrap();
+        assert!(
+            graph_a
+                .toolchains()
+                .get(&crate::toolchain::ToolchainId::RUST)
+                .unwrap()
+                .defines_task(app_a, "run")
+        );
+
+        // Rediscovery through the same adapter sees `app` change from an
+        // entrypoint to a library. Graph A must retain its original behavior.
+        std::fs::write(
+            root.join_components(&["rust", "app", "Cargo.toml"])
+                .as_std_path(),
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \
+             \"2021\"\n\n[dependencies]\nlib-a = { path = \"../lib-a\" }\n",
+        )
+        .unwrap();
+        std::fs::remove_file(
+            root.join_components(&["rust", "app", "src", "main.rs"])
+                .as_std_path(),
+        )
+        .unwrap();
+        std::fs::write(
+            root.join_components(&["rust", "app", "src", "lib.rs"])
+                .as_std_path(),
+            "",
+        )
+        .unwrap();
+
+        let graph_b = PackageGraph::builder_optional(&root, None)
+            .with_ecosystem_adapter(adapter.clone())
+            .build()
+            .await
+            .unwrap();
+        let app_b = graph_b.package_info(&app_name).unwrap();
+        assert!(
+            !graph_b
+                .toolchains()
+                .get(&crate::toolchain::ToolchainId::RUST)
+                .unwrap()
+                .defines_task(app_b, "run")
+        );
+        assert!(graph_a.package_info(&app_name).is_some());
+        assert!(
+            graph_a
+                .toolchains()
+                .get(&crate::toolchain::ToolchainId::RUST)
+                .unwrap()
+                .defines_task(app_a, "run")
+        );
+
+        // A memberless contribution must not retain behavior from either
+        // earlier graph.
+        std::fs::write(
+            root.join_component("Cargo.toml").as_std_path(),
+            "[workspace]\nmembers = []\n",
+        )
+        .unwrap();
+        let graph_c = PackageGraph::builder_optional(&root, None)
+            .with_ecosystem_adapter(adapter.clone())
+            .build()
+            .await
+            .unwrap();
+        assert!(graph_c.package_info(&app_name).is_none());
+        assert!(
+            !graph_c
+                .toolchains()
+                .get(&crate::toolchain::ToolchainId::RUST)
+                .unwrap()
+                .defines_task(app_a, "run")
+        );
+
+        // A later contribution that core rejects must likewise have no route
+        // to mutate any successfully constructed graph. Restore `app` as an
+        // entrypoint so leaking the rejected runtime would be observable on B.
+        write_cargo_workspace_fixture(&root);
+        let failed = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(HashMap::from([(
+            root.join_components(&["js-app", "package.json"]),
+            PackageJson::from_value(json!({ "name": "app" })).unwrap(),
+        )])))
+        .with_lockfile(Some(Box::new(MockLockfile {})))
+        .with_ecosystem_adapter(adapter)
+        .build()
+        .await;
+        assert!(matches!(failed, Err(Error::DuplicateWorkspace { .. })));
+        assert!(graph_a.package_info(&app_name).is_some());
+        assert!(graph_b.package_info(&app_name).is_some());
+        assert!(
+            graph_a
+                .toolchains()
+                .get(&crate::toolchain::ToolchainId::RUST)
+                .unwrap()
+                .defines_task(app_a, "run")
+        );
+        assert!(
+            !graph_b
+                .toolchains()
+                .get(&crate::toolchain::ToolchainId::RUST)
+                .unwrap()
+                .defines_task(app_b, "run")
+        );
+    }
+
     /// A crate and a JS package sharing a name is a hard error, like any
     /// other duplicate package name.
     #[tokio::test(flavor = "multi_thread")]
@@ -2105,7 +2226,7 @@ version = "0.1.0"
             map
         }))
         .with_lockfile(Some(Box::new(MockLockfile {})))
-        .with_toolchain(crate::cargo::CargoToolchain::new(root.clone()))
+        .with_ecosystem_adapter(crate::cargo::CargoAdapter::new(root.clone()))
         .build()
         .await;
 

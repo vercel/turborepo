@@ -23,7 +23,8 @@ use crate::{
     package_json::{DependencyKind, PackageJson},
     package_manager::{PackageManager, pnpm::PnpmCatalogs},
     toolchain::{
-        DiscoveredPackage, JavaScriptToolchain, Toolchain, ToolchainId, ToolchainRegistry,
+        DiscoveredPackage, DuplicateToolchainError, EcosystemAdapter, JavaScriptToolchain,
+        Toolchain, ToolchainId, ToolchainRegistry,
     },
 };
 
@@ -46,6 +47,7 @@ pub struct PackageGraphBuilder<'a, T> {
     /// are discovered alongside JavaScript packages; name collisions across
     /// toolchains are a hard error.
     extra_toolchains: Vec<Arc<dyn Toolchain>>,
+    ecosystem_adapters: Vec<Arc<dyn EcosystemAdapter>>,
 }
 
 #[derive(Debug, Diagnostic, thiserror::Error)]
@@ -69,6 +71,25 @@ pub enum Error {
     PackageJson(#[from] crate::package_json::Error),
     #[error("package.json must have a name field:\n{0}")]
     PackageJsonMissingName(AbsoluteSystemPathBuf),
+    #[error("package contributed by toolchain {toolchain} must have a name:\n{manifest}")]
+    AdapterPackageMissingName {
+        toolchain: ToolchainId,
+        manifest: AbsoluteSystemPathBuf,
+    },
+    #[error("package contributed by toolchain {toolchain} is outside the repository:\n{manifest}")]
+    AdapterPackageOutsideRepository {
+        toolchain: ToolchainId,
+        manifest: AbsoluteSystemPathBuf,
+    },
+    #[error("ecosystem adapter {adapter} prepared a runtime for a different toolchain: {runtime}")]
+    AdapterRuntimeMismatch {
+        adapter: ToolchainId,
+        runtime: ToolchainId,
+    },
+    #[error("ecosystem adapters are not supported in single-package mode")]
+    AdapterInSinglePackageMode,
+    #[error(transparent)]
+    DuplicateToolchain(#[from] DuplicateToolchainError),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error(transparent)]
@@ -114,9 +135,9 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
     /// Build over a repository that may have no root `package.json`. When
     /// `root_package_json` is `None`, the JavaScript toolchain contributes
     /// nothing (no package manager, no lockfile); the graph is populated
-    /// entirely by the extra toolchains registered via
-    /// [`PackageGraphBuilder::with_toolchain`] (Cargo). When it is `Some`,
-    /// this behaves exactly like [`PackageGraphBuilder::new`].
+    /// entirely by ecosystem adapters registered via
+    /// [`PackageGraphBuilder::with_ecosystem_adapter`] (Cargo). When it is
+    /// `Some`, this behaves exactly like [`PackageGraphBuilder::new`].
     pub fn new_optional(
         repo_root: &'a AbsoluteSystemPath,
         root_package_json: Option<PackageJson>,
@@ -136,6 +157,7 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
             defer_closures: false,
             closure_hasher: None,
             extra_toolchains: Vec::new(),
+            ecosystem_adapters: Vec::new(),
         }
     }
 
@@ -199,6 +221,13 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         self
     }
 
+    /// Register a reusable discovery adapter. Its fresh prepared runtime is
+    /// committed to the graph only after all contributed packages validate.
+    pub fn with_ecosystem_adapter(mut self, adapter: Arc<dyn EcosystemAdapter>) -> Self {
+        self.ecosystem_adapters.push(adapter);
+        self
+    }
+
     /// Set the package discovery strategy to use. Note that whatever strategy
     /// selected here will be wrapped in a `CachingPackageDiscovery` to
     /// prevent unnecessary work during building.
@@ -217,6 +246,7 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
             defer_closures: self.defer_closures,
             closure_hasher: self.closure_hasher,
             extra_toolchains: self.extra_toolchains,
+            ecosystem_adapters: self.ecosystem_adapters,
         }
     }
 }
@@ -231,6 +261,9 @@ where
     #[tracing::instrument(skip(self))]
     pub async fn build(mut self) -> Result<PackageGraph, Error> {
         let is_single_package = self.is_single_package;
+        if is_single_package && !self.ecosystem_adapters.is_empty() {
+            return Err(Error::AdapterInSinglePackageMode);
+        }
 
         // If no pre-supplied lockfile, start reading it on a blocking thread
         // concurrently with package discovery + JSON parsing. A pure Cargo
@@ -298,9 +331,10 @@ struct BuildState<'a, S, T> {
     /// pure Cargo workspace, where there is no JavaScript project to resolve
     /// a package manager or lockfile from.
     javascript: Option<Arc<JavaScriptToolchain<T>>>,
-    /// Every toolchain contributing packages, JavaScript included. Package
-    /// discovery goes through this and only this.
+    /// Prepared behavior runtimes, plus compatibility toolchains (including
+    /// JavaScript) that still own their discovery.
     toolchains: ToolchainRegistry,
+    ecosystem_adapters: Vec<Arc<dyn EcosystemAdapter>>,
 }
 
 // Allows us to perform workspace discovery and parse package jsons
@@ -342,6 +376,7 @@ where
             package_discovery,
             package_manager: _,
             extra_toolchains,
+            ecosystem_adapters,
         } = builder;
         // Pure Cargo workspace: with no root package.json there is no
         // JavaScript project, so the JavaScript toolchain is neither
@@ -388,11 +423,11 @@ where
             // JavaScript registers first: its packages claim names before any
             // other toolchain's, so a cross-toolchain collision surfaces as the
             // non-JS package failing to add.
-            toolchains.register(javascript.clone());
+            toolchains.register(javascript.clone())?;
             Some(javascript)
         };
         for toolchain in extra_toolchains {
-            toolchains.register(toolchain);
+            toolchains.register(toolchain)?;
         }
 
         Ok(BuildState {
@@ -412,6 +447,7 @@ where
             state: std::marker::PhantomData,
             javascript,
             toolchains,
+            ecosystem_adapters,
         })
     }
 }
@@ -501,6 +537,45 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             discovered.extend(packages.into_iter().map(|package| (id.clone(), package)));
         }
 
+        let mut prepared_runtimes = Vec::with_capacity(self.ecosystem_adapters.len());
+        for adapter in &self.ecosystem_adapters {
+            let id = adapter.id();
+            let contribution = adapter.contribute().await?;
+            let runtime_id = contribution.prepared_runtime.id();
+            if runtime_id != id {
+                return Err(Error::AdapterRuntimeMismatch {
+                    adapter: id,
+                    runtime: runtime_id,
+                });
+            }
+            for package in &contribution.packages {
+                if package
+                    .descriptor
+                    .name
+                    .as_ref()
+                    .is_none_or(|name| name.as_inner().is_empty())
+                {
+                    return Err(Error::AdapterPackageMissingName {
+                        toolchain: id.clone(),
+                        manifest: package.manifest_path.clone(),
+                    });
+                }
+                if !self.repo_root.contains(&package.manifest_path) {
+                    return Err(Error::AdapterPackageOutsideRepository {
+                        toolchain: id.clone(),
+                        manifest: package.manifest_path.clone(),
+                    });
+                }
+            }
+            discovered.extend(
+                contribution
+                    .packages
+                    .into_iter()
+                    .map(|package| (id.clone(), package)),
+            );
+            prepared_runtimes.push(contribution.prepared_runtime);
+        }
+
         self.workspaces.reserve(discovered.len());
         self.node_lookup.reserve(discovered.len());
 
@@ -519,6 +594,11 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                 Err(err) => return Err(err),
             }
         }
+        // A collision returns before the prepared runtimes enter even this
+        // build-local registry; no adapter-owned state was mutated either way.
+        for runtime in prepared_runtimes {
+            self.toolchains.register(runtime)?;
+        }
 
         let Self {
             repo_root,
@@ -532,6 +612,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             lockfile,
             javascript,
             toolchains,
+            ecosystem_adapters: _,
             defer_closures,
             closure_hasher,
             ..
@@ -548,6 +629,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             lockfile,
             javascript,
             toolchains,
+            ecosystem_adapters: Vec::new(),
             defer_closures,
             closure_hasher,
             package_jsons: None,
@@ -567,6 +649,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             lockfile,
             javascript,
             toolchains,
+            ecosystem_adapters: _,
             repo_root,
             ..
         } = self;
@@ -776,6 +859,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             state: std::marker::PhantomData,
             javascript,
             toolchains,
+            ecosystem_adapters: Vec::new(),
         })
     }
 }
@@ -1020,7 +1104,7 @@ impl PackageInfo {
 
 #[cfg(test)]
 mod test {
-    use std::{assert_matches, collections::HashMap};
+    use std::{assert_matches, collections::HashMap, sync::Arc};
 
     use turborepo_errors::Spanned;
 
@@ -1042,6 +1126,114 @@ mod test {
         ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
             self.discover_packages().await
         }
+    }
+
+    struct FakeRuntime(ToolchainId);
+
+    impl Toolchain for FakeRuntime {
+        fn id(&self) -> ToolchainId {
+            self.0.clone()
+        }
+    }
+
+    struct FakeAdapter {
+        id: ToolchainId,
+        runtime_id: ToolchainId,
+        package: DiscoveredPackage,
+    }
+
+    impl EcosystemAdapter for FakeAdapter {
+        fn id(&self) -> ToolchainId {
+            self.id.clone()
+        }
+
+        fn watch_spec(&self) -> crate::toolchain::WatchSpec {
+            crate::toolchain::WatchSpec::default()
+        }
+
+        fn contribute(&self) -> crate::toolchain::ContributeFuture<'_> {
+            let packages = vec![self.package.clone()];
+            let runtime: Arc<dyn Toolchain> = Arc::new(FakeRuntime(self.runtime_id.clone()));
+            Box::pin(async move {
+                Ok(crate::toolchain::EcosystemContribution {
+                    packages,
+                    prepared_runtime: runtime,
+                })
+            })
+        }
+    }
+
+    fn fake_adapter(
+        root: &AbsoluteSystemPath,
+        id: &str,
+        runtime_id: &str,
+        name: Option<&str>,
+    ) -> Arc<dyn EcosystemAdapter> {
+        Arc::new(FakeAdapter {
+            id: ToolchainId::new(id.to_string()),
+            runtime_id: ToolchainId::new(runtime_id.to_string()),
+            package: DiscoveredPackage {
+                descriptor: PackageJson {
+                    name: name.map(|name| Spanned::new(name.to_string())),
+                    ..Default::default()
+                },
+                manifest_path: root.join_component(&format!("{id}.toml")),
+                external_dependencies: None,
+            },
+        })
+    }
+
+    #[tokio::test]
+    async fn adapter_runtime_id_must_match_contribution_id() {
+        let root = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(root.path()).unwrap();
+        let result = PackageGraphBuilder::new_optional(&root, None)
+            .with_ecosystem_adapter(fake_adapter(&root, "rust", "other", Some("app")))
+            .build()
+            .await;
+
+        assert!(matches!(result, Err(Error::AdapterRuntimeMismatch { .. })));
+    }
+
+    #[tokio::test]
+    async fn adapter_packages_require_names() {
+        let root = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(root.path()).unwrap();
+        let result = PackageGraphBuilder::new_optional(&root, None)
+            .with_ecosystem_adapter(fake_adapter(&root, "rust", "rust", None))
+            .build()
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(Error::AdapterPackageMissingName { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn adapter_ids_must_be_unique() {
+        let root = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(root.path()).unwrap();
+        let result = PackageGraphBuilder::new_optional(&root, None)
+            .with_ecosystem_adapter(fake_adapter(&root, "rust", "rust", Some("app")))
+            .with_ecosystem_adapter(fake_adapter(&root, "rust", "rust", Some("lib")))
+            .build()
+            .await;
+
+        assert!(matches!(result, Err(Error::DuplicateToolchain(_))));
+    }
+
+    #[tokio::test]
+    async fn adapters_are_rejected_in_single_package_mode() {
+        let root = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(root.path()).unwrap();
+        let result = PackageGraphBuilder::new_optional(&root, None)
+            .with_single_package_mode(true)
+            .with_ecosystem_adapter(fake_adapter(&root, "rust", "rust", Some("app")))
+            .build()
+            .await;
+
+        assert!(matches!(result, Err(Error::AdapterInSinglePackageMode)));
     }
 
     // Regression test: connect_internal_dependencies must produce correct

@@ -1,17 +1,15 @@
 //! Toolchains: the abstraction that makes Turborepo generic over language
 //! ecosystems.
 //!
-//! A [`Toolchain`] answers ecosystem-specific questions about packages —
-//! starting with "which packages exist?" — so that the package graph and the
-//! rest of the system never branch on a specific ecosystem. JavaScript is the
-//! first implementation ([`JavaScriptToolchain`]); additional toolchains
-//! (e.g. Cargo) register alongside it in the [`ToolchainRegistry`].
+//! An [`EcosystemAdapter`] discovers packages and prepares a graph-local
+//! [`Toolchain`] runtime. The runtime answers ecosystem-specific behavioral
+//! questions, so the package graph and the rest of the system never branch on
+//! a specific ecosystem. JavaScript temporarily combines these roles for
+//! compatibility; Cargo uses the split model.
 //!
-//! The trait grows one concern at a time (discovery today; command
-//! resolution, derived task inputs/outputs, external-dependency hashing,
-//! watch triggers, and prune participation as they are needed), and every
-//! concern must ship with real implementations for every registered
-//! toolchain.
+//! `Toolchain` remains a compatibility runtime while those behavioral answers
+//! move into core-owned contribution data. New discovery state belongs in
+//! [`EcosystemContribution`], not on a `Toolchain` implementation.
 //!
 //! # Design rules
 //!
@@ -141,6 +139,30 @@ pub enum Error {
 pub type DiscoverPackagesFuture<'a> =
     Pin<Box<dyn Future<Output = Result<Vec<DiscoveredPackage>, Error>> + Send + 'a>>;
 
+/// A complete, graph-local contribution from an ecosystem adapter.
+///
+/// Discovery and preparation happen together, but core owns committing both:
+/// the runtime is registered only after every package has been accepted by the
+/// package graph builder.
+pub struct EcosystemContribution<R> {
+    pub packages: Vec<DiscoveredPackage>,
+    pub prepared_runtime: R,
+}
+
+pub type EcosystemContributionFuture<'a, R> =
+    Pin<Box<dyn Future<Output = Result<EcosystemContribution<R>, Error>> + Send + 'a>>;
+pub type ContributeFuture<'a> = EcosystemContributionFuture<'a, Arc<dyn Toolchain>>;
+
+/// Stateless, reusable input to package graph construction.
+///
+/// Each call prepares a fresh immutable behavior runtime for the graph being
+/// built. Adapters must not expose partially discovered state.
+pub trait EcosystemAdapter: Send + Sync {
+    fn id(&self) -> ToolchainId;
+    fn watch_spec(&self) -> WatchSpec;
+    fn contribute(&self) -> ContributeFuture<'_>;
+}
+
 /// A command resolved by a toolchain for a task, as plain data. The executor
 /// turns it into a process, applying the task's environment, stdin policy,
 /// and any decorations that are not toolchain concerns (e.g.
@@ -193,8 +215,11 @@ pub trait Toolchain: Send + Sync {
     /// This toolchain's identifier.
     fn id(&self) -> ToolchainId;
 
-    /// Discover this toolchain's packages.
-    fn discover_packages(&self) -> DiscoverPackagesFuture<'_>;
+    /// Compatibility discovery path. Prepared runtimes should leave this at
+    /// its empty default; adapters own discovery for core-built graphs.
+    fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
 
     /// Resolve the command that implements `task` for `package`, or `None`
     /// when the toolchain defines no command for it — the task is then a
@@ -597,19 +622,26 @@ pub struct ToolchainRegistry {
     toolchains: Vec<Arc<dyn Toolchain>>,
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("toolchain {0:?} was registered more than once")]
+pub struct DuplicateToolchainError(ToolchainId);
+
 impl ToolchainRegistry {
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Register a toolchain. Registration order is discovery order.
-    pub fn register(&mut self, toolchain: Arc<dyn Toolchain>) {
-        debug_assert!(
-            self.get(&toolchain.id()).is_none(),
-            "toolchain {} registered twice",
-            toolchain.id()
-        );
+    pub fn register(
+        &mut self,
+        toolchain: Arc<dyn Toolchain>,
+    ) -> Result<(), DuplicateToolchainError> {
+        let id = toolchain.id();
+        if self.get(&id).is_some() {
+            return Err(DuplicateToolchainError(id));
+        }
         self.toolchains.push(toolchain);
+        Ok(())
     }
 
     pub fn get(&self, id: &ToolchainId) -> Option<&dyn Toolchain> {
@@ -1079,12 +1111,21 @@ mod tests {
         }
 
         let mut registry = ToolchainRegistry::new();
-        registry.register(Arc::new(Fake(ToolchainId::JAVASCRIPT)));
-        registry.register(Arc::new(Fake(ToolchainId::new("gleam"))));
+        registry
+            .register(Arc::new(Fake(ToolchainId::JAVASCRIPT)))
+            .unwrap();
+        registry
+            .register(Arc::new(Fake(ToolchainId::new("gleam"))))
+            .unwrap();
 
         assert!(registry.get(&ToolchainId::JAVASCRIPT).is_some());
         assert!(registry.get(&ToolchainId::new("gleam")).is_some());
         assert!(registry.get(&ToolchainId::new("zig")).is_none());
         assert_eq!(registry.iter().count(), 2);
+        assert!(
+            registry
+                .register(Arc::new(Fake(ToolchainId::new("gleam"))))
+                .is_err()
+        );
     }
 }

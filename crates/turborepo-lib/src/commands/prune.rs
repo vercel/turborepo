@@ -755,10 +755,11 @@ impl<'a> Prune<'a> {
 
         let mut graph_builder = PackageGraph::builder(&base.repo_root, root_package_json)
             .with_allow_no_package_manager(allow_missing_package_manager);
-        if crate::run::builder::cargo_enabled(&base.opts().future_flags) {
-            graph_builder = graph_builder.with_toolchain(
-                turborepo_repository::cargo::CargoToolchain::new(base.repo_root.clone()),
-            );
+        for adapter in crate::run::builder::configured_ecosystem_adapters(
+            &base.repo_root,
+            crate::run::builder::cargo_enabled(&base.opts().future_flags),
+        ) {
+            graph_builder = graph_builder.with_ecosystem_adapter(adapter);
         }
         let package_graph = graph_builder.build().await?;
 

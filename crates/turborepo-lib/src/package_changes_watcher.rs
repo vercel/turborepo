@@ -2,7 +2,7 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     ops::DerefMut,
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
 
 use notify::Event;
@@ -19,8 +19,8 @@ use turborepo_repository::{
         ChangeMapper, GlobalDepsPackageChangeMapper, LockfileContents, PackageChanges,
     },
     package_graph::{PackageGraph, PackageGraphBuilder, PackageName, WorkspacePackage},
-    package_json::PackageJson,
-    toolchain::{Toolchain, WatchSpec},
+    package_json::{self, PackageJson},
+    toolchain::{EcosystemAdapter, WatchSpec},
 };
 use turborepo_scm::GitHashes;
 
@@ -66,7 +66,7 @@ impl PackageChangesWatcher {
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
         allow_no_package_manager: bool,
-        extra_toolchains: Vec<Arc<dyn Toolchain>>,
+        ecosystem_adapters: Vec<Arc<dyn EcosystemAdapter>>,
     ) -> Self {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (package_change_events_tx, package_change_events_rx) =
@@ -79,7 +79,7 @@ impl PackageChangesWatcher {
             custom_turbo_json_path,
             single_package,
             allow_no_package_manager,
-            extra_toolchains,
+            ecosystem_adapters,
         );
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
@@ -123,16 +123,16 @@ struct Subscriber {
     changed_files: Mutex<RefCell<ChangedFiles>>,
     repo_root: AbsoluteSystemPathBuf,
     repository_ignore: RepositoryIgnore,
-    watch_spec: Arc<RwLock<WatchSpec>>,
+    watch_spec: WatchSpec,
     package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
     hash_watcher: Arc<HashWatcher>,
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     single_package: bool,
     allow_no_package_manager: bool,
-    /// Toolchains registered in addition to JavaScript (e.g. Cargo when
+    /// Ecosystem adapters registered in addition to JavaScript (e.g. Cargo when
     /// futureFlags.experimentalCargoWorkspaces is enabled), mirroring the
     /// run builder so the watcher sees the same package graph a run would.
-    extra_toolchains: Vec<Arc<dyn Toolchain>>,
+    ecosystem_adapters: Vec<Arc<dyn EcosystemAdapter>>,
 }
 
 fn is_in_git_folder(path: &AnchoredSystemPath) -> bool {
@@ -321,7 +321,7 @@ impl Subscriber {
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
         allow_no_package_manager: bool,
-        extra_toolchains: Vec<Arc<dyn Toolchain>>,
+        ecosystem_adapters: Vec<Arc<dyn EcosystemAdapter>>,
     ) -> Self {
         // Try to canonicalize the custom path to match what the file watcher reports
         let normalized_custom_path = custom_turbo_json_path.map(|path| {
@@ -359,8 +359,8 @@ impl Subscriber {
             .repository_ignore()
             .unwrap_or_else(|| RepositoryIgnore::new(repo_root.as_std_path()));
         let mut watch_spec = WatchSpec::default();
-        for toolchain in &extra_toolchains {
-            watch_spec.extend(toolchain.watch_spec());
+        for adapter in &ecosystem_adapters {
+            watch_spec.extend(adapter.watch_spec());
         }
 
         Subscriber {
@@ -368,28 +368,37 @@ impl Subscriber {
             file_events,
             changed_files: Default::default(),
             repository_ignore,
-            watch_spec: Arc::new(RwLock::new(watch_spec)),
+            watch_spec,
             package_change_events_tx,
             hash_watcher,
             custom_turbo_json_path: normalized_custom_path,
             single_package,
             allow_no_package_manager,
-            extra_toolchains,
+            ecosystem_adapters,
         }
     }
 
     async fn initialize_repo_state(&self) -> Option<RepoState> {
-        let Ok(root_package_json) =
-            PackageJson::load(&self.repo_root.join_component("package.json"))
-        else {
-            tracing::debug!("no package.json found, package watcher not available");
-            return None;
+        let package_json_path = self.repo_root.join_component("package.json");
+        let root_package_json = match PackageJson::load(&package_json_path) {
+            Ok(package_json) => Some(package_json),
+            Err(package_json::Error::Io(error))
+                if error.kind() == std::io::ErrorKind::NotFound
+                    && !self.ecosystem_adapters.is_empty() =>
+            {
+                None
+            }
+            Err(error) => {
+                tracing::debug!(%error, "package watcher root package unavailable");
+                return None;
+            }
         };
-        let mut builder = PackageGraphBuilder::new(&self.repo_root, root_package_json.clone())
-            .with_single_package_mode(self.single_package)
-            .with_allow_no_package_manager(self.allow_no_package_manager);
-        for toolchain in &self.extra_toolchains {
-            builder = builder.with_toolchain(toolchain.clone());
+        let mut builder =
+            PackageGraphBuilder::new_optional(&self.repo_root, root_package_json.clone())
+                .with_single_package_mode(self.single_package)
+                .with_allow_no_package_manager(self.allow_no_package_manager);
+        for adapter in &self.ecosystem_adapters {
+            builder = builder.with_ecosystem_adapter(adapter.clone());
         }
         let Ok(pkg_dep_graph) = builder.build().await else {
             tracing::debug!("package graph not available, package watcher not available");
@@ -418,6 +427,10 @@ impl Subscriber {
 
         let reader = TurboJsonReader::new(self.repo_root.clone());
         let root_turbo_json = if self.single_package {
+            let Some(root_package_json) = root_package_json else {
+                tracing::debug!("single-package watching requires a root package.json");
+                return None;
+            };
             UnifiedTurboJsonLoader::single_package(reader, config_path, root_package_json)
         } else {
             UnifiedTurboJsonLoader::workspace(reader, config_path, pkg_dep_graph.packages())
@@ -425,12 +438,6 @@ impl Subscriber {
         .load(&PackageName::Root)
         .ok()
         .cloned();
-
-        *self
-            .watch_spec
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) =
-            pkg_dep_graph.toolchains().watch_spec();
 
         Some(RepoState {
             root_turbo_json,
@@ -471,13 +478,15 @@ impl Subscriber {
         true
     }
 
-    /// Send a Rediscover event and reinitialize repo state. Returns the new
-    /// state tuple on success, or `None` if the caller should break.
+    /// Build a replacement repository state and publish Rediscover only after
+    /// it succeeds. A failed candidate leaves the current state active so a
+    /// later file event can retry.
     async fn rediscover_and_reinit(&self) -> Option<RepoState> {
+        let state = self.initialize_repo_state().await?;
         let _ = self
             .package_change_events_tx
             .send(PackageChangeEvent::Rediscover);
-        self.initialize_repo_state().await
+        Some(state)
     }
 
     async fn watch(self, exit_rx: oneshot::Receiver<()>) {
@@ -510,9 +519,6 @@ impl Subscriber {
                 let Ok(path) = repo_root.anchor(&absolute_path) else {
                     return false;
                 };
-                let watch_spec = watch_spec
-                    .read()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 let in_ignored_prefix = watch_spec.ignore_prefixes.iter().any(|prefix| {
                     path.components()
                         .next()
@@ -646,7 +652,7 @@ impl Subscriber {
             macro_rules! rediscover {
                 ($self:expr, $repo_state:ident, $change_mapper:ident) => {{
                     let Some(new_state) = $self.rediscover_and_reinit().await else {
-                        break;
+                        continue;
                     };
                     $repo_state = new_state;
                     $change_mapper = match $repo_state.get_change_mapper() {
@@ -677,14 +683,13 @@ impl Subscriber {
                     continue;
                 };
 
-                let watch_spec = repo_state.pkg_dep_graph.toolchains().watch_spec();
                 let action = classify_changed_files(
                     &trie,
                     &self.repo_root,
                     &self.repository_ignore,
                     self.custom_turbo_json_path.as_ref(),
                     &change_mapper,
-                    &watch_spec,
+                    &self.watch_spec,
                 );
                 tracing::debug!(?action, "classified file changes");
 
@@ -771,10 +776,11 @@ mod test {
         hash_watcher::HashWatcher, NotifyError, OptionalWatch, WatchEventSender, WatchSource,
     };
     use turborepo_repository::{
+        cargo::CargoAdapter,
         change_mapper::{ChangeMapper, GlobalDepsPackageChangeMapper, PackageChanges},
         package_graph::{PackageGraph, PackageGraphBuilder},
         package_json::PackageJson,
-        toolchain::WatchSpec,
+        toolchain::{EcosystemAdapter, WatchSpec},
     };
     use turborepo_scm::SCM;
 
@@ -1383,6 +1389,20 @@ mod test {
         single_package: bool,
         allow_no_package_manager: bool,
     ) -> TestWatcherHandle {
+        create_test_watcher_with_adapters(
+            repo_root,
+            single_package,
+            allow_no_package_manager,
+            Vec::new(),
+        )
+    }
+
+    fn create_test_watcher_with_adapters(
+        repo_root: &AbsoluteSystemPathBuf,
+        single_package: bool,
+        allow_no_package_manager: bool,
+        ecosystem_adapters: Vec<Arc<dyn EcosystemAdapter>>,
+    ) -> TestWatcherHandle {
         let (file_events_tx, file_events) = WatchSource::channel_for_root(repo_root.as_std_path());
 
         // Keep the discovery sender alive so the HashWatcher doesn't busy-loop
@@ -1410,7 +1430,7 @@ mod test {
             None,
             single_package,
             allow_no_package_manager,
-            Vec::new(),
+            ecosystem_adapters,
         );
 
         TestWatcherHandle {
@@ -1443,6 +1463,81 @@ mod test {
             matches!(event, Some(PackageChangeEvent::Rediscover)),
             "expected Rediscover, got {:?}",
             event
+        );
+    }
+
+    #[tokio::test]
+    async fn cargo_only_watcher_initializes_from_adapter() {
+        let (_tmp, repo_root) = setup_git_repo();
+        std::fs::remove_file(repo_root.join_component("package.json").as_std_path()).unwrap();
+        std::fs::remove_file(repo_root.join_component("package-lock.json").as_std_path()).unwrap();
+        let crate_dir = repo_root.join_components(&["crates", "app"]);
+        crate_dir.join_component("src").create_dir_all().unwrap();
+        let workspace_manifest = b"[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n\n[workspace.metadata]\nname = \"fixture\"\n";
+        let workspace_manifest_path = repo_root.join_component("Cargo.toml");
+        repo_root
+            .join_component("Cargo.toml")
+            .create_with_contents(workspace_manifest)
+            .unwrap();
+        crate_dir
+            .join_component("Cargo.toml")
+            .create_with_contents(
+                b"[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            )
+            .unwrap();
+        crate_dir
+            .join_components(&["src", "lib.rs"])
+            .create_with_contents(b"")
+            .unwrap();
+        repo_root
+            .join_component("Cargo.lock")
+            .create_with_contents(
+                b"version = 4\n\n[[package]]\nname = \"app\"\nversion = \"0.1.0\"\n",
+            )
+            .unwrap();
+
+        let handle = create_test_watcher_with_adapters(
+            &repo_root,
+            false,
+            false,
+            vec![CargoAdapter::new(repo_root.clone())],
+        );
+        let mut rx = handle.watcher.package_change_events_rx.resubscribe();
+
+        let event = recv_event(&mut rx, Duration::from_secs(2)).await;
+        assert!(
+            matches!(event, Some(PackageChangeEvent::Rediscover)),
+            "expected Cargo-only watcher initialization, got {event:?}"
+        );
+
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        workspace_manifest_path
+            .create_with_contents(b"[workspace\nmembers = [")
+            .unwrap();
+        handle
+            .file_events_tx
+            .send(Ok(make_notify_event_from(&[&workspace_manifest_path])))
+            .unwrap();
+        assert!(
+            recv_event(&mut rx, Duration::from_millis(500))
+                .await
+                .is_none(),
+            "failed repository candidates must not be published"
+        );
+
+        workspace_manifest_path
+            .create_with_contents(workspace_manifest)
+            .unwrap();
+        handle
+            .file_events_tx
+            .send(Ok(make_notify_event_from(&[&workspace_manifest_path])))
+            .unwrap();
+        assert!(
+            matches!(
+                recv_event(&mut rx, Duration::from_secs(2)).await,
+                Some(PackageChangeEvent::Rediscover)
+            ),
+            "watcher must retry after a failed repository candidate"
         );
     }
 

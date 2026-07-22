@@ -148,10 +148,14 @@ topological (`^`) dependencies.
 
 #### Toolchains (`crates/turborepo-repository/src/toolchain.rs`)
 
-The package graph is generic over language toolchains. A `Toolchain` answers
-ecosystem-specific questions — which packages exist, what command a task
-runs, what hash wiring a task derives — so graph construction and execution
-never branch on a specific ecosystem. All lookups go through the
+The package graph is generic over ecosystems. An `EcosystemAdapter` is a
+stateless, reusable graph-construction input: each contribution contains
+discovered packages plus a fresh immutable `Toolchain` behavior runtime. Core
+validates ecosystem identity, package names and paths, and duplicate
+registrations before committing the prepared runtime to the resulting graph. A
+failed build publishes nothing, and watcher rediscovery cannot mutate earlier
+graphs. A `Toolchain` answers behavioral questions —
+what command a task runs and what hash wiring it derives. All lookups go through the
 `ToolchainRegistry` (carried by the `PackageGraph`); `ToolchainId` is an
 open string identifier, not a closed enum; and trait methods are
 coarse-grained and data-in/data-out, keeping the door open to out-of-process
@@ -182,7 +186,8 @@ root and adds them to the package graph. Cargo workspaces can stand alone or
 coexist with JavaScript workspaces; a root `package.json` and JavaScript package
 manager are only required when JavaScript packages participate. Cargo-only
 repositories may omit `package.json`; when one exists, it must still be valid.
-`CargoToolchain` is the second `Toolchain` implementation.
+`CargoAdapter` performs discovery and prepares an immutable, graph-local
+`CargoToolchain`; its only interior memoization is lazy Cargo binary lookup.
 
 Turborepo does not replace Cargo. Cargo is itself a build system with its
 own dependency graph, scheduler, and incremental cache (`target/`), so the
@@ -313,8 +318,8 @@ whether anything changed; Cargo decides how and in what order to build.**
   requested process, and library artifacts have no stable final path to restore.
   An explicit turbo.json `cache` setting overrides the toolchain default.
 
-- **Watch mode** (`Toolchain::watch_spec`, consumed by
-  `turborepo-lib/src/package_changes_watcher.rs`): each toolchain declares
+- **Watch mode** (`EcosystemAdapter::watch_spec`, consumed by
+  `turborepo-lib/src/package_changes_watcher.rs`): each adapter declares
   its workspace-definition files and build-byproduct directories. For
   Cargo, any `Cargo.toml` or the root `Cargo.lock` triggers full
   rediscovery (the crate set or its edges may have changed), while events
@@ -322,10 +327,12 @@ whether anything changed; Cargo decides how and in what order to build.**
   continuously during builds, and the feedback loop must not depend on a
   `.gitignore` entry (`Cargo.toml` files under `target/` are build
   byproducts, not workspace definition). The watcher builds its package
-  graph with the same toolchains a run would register, so watch sees the
+  graph with the same adapters a run would register, so watch sees the
   same package set. JavaScript declares nothing extra: workspace
   redefinition is caught by the change mapper's conservative
-  all-packages fallback. Known gap: the hash watcher's content-hash dedup
+  all-packages fallback. Watch builds a complete replacement graph before
+  publishing a rediscovery event; invalid candidates retain the current graph
+  and later filesystem events retry. Known gap: the hash watcher's content-hash dedup
   is JS-glob-based, so a no-op save inside a crate re-runs its tasks as a
   fast cache hit rather than being suppressed.
 
