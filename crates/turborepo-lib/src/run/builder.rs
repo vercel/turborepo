@@ -1447,14 +1447,18 @@ mod task_io_context_tests {
         let alpha = ToolchainId::new("alpha");
         let beta = ToolchainId::new("beta");
         let mut toolchains = ToolchainRegistry::new();
-        toolchains.register(Arc::new(Stub {
-            id: alpha.clone(),
-            environment: vec!["ALPHA_*"],
-        }));
-        toolchains.register(Arc::new(Stub {
-            id: beta.clone(),
-            environment: vec!["BETA_KEY"],
-        }));
+        toolchains
+            .register(Arc::new(Stub {
+                id: alpha.clone(),
+                environment: vec!["ALPHA_*"],
+            }))
+            .unwrap();
+        toolchains
+            .register(Arc::new(Stub {
+                id: beta.clone(),
+                environment: vec!["BETA_KEY"],
+            }))
+            .unwrap();
         let environment = EnvironmentVariableMap::from(HashMap::from([
             ("ALPHA_TARGET".to_string(), "alpha".to_string()),
             ("BETA_KEY".to_string(), "beta".to_string()),
@@ -1478,7 +1482,7 @@ mod task_io_context_tests {
         let root = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(root.path()).unwrap();
         let mut toolchains = ToolchainRegistry::new();
-        toolchains.register(CargoToolchain::new(root));
+        toolchains.register(CargoToolchain::new(root)).unwrap();
         let environment = EnvironmentVariableMap::from(HashMap::from([
             ("RUSTUP_HOME".to_string(), "/rustup".to_string()),
             ("RUSTUP_TOOLCHAIN".to_string(), "stable-host".to_string()),
@@ -1498,10 +1502,12 @@ mod task_io_context_tests {
     fn projected_task_hash(layout: &str, secret: &str) -> String {
         let alpha = ToolchainId::new("alpha");
         let mut toolchains = ToolchainRegistry::new();
-        toolchains.register(Arc::new(Stub {
-            id: alpha.clone(),
-            environment: vec!["ALPHA_*"],
-        }));
+        toolchains
+            .register(Arc::new(Stub {
+                id: alpha.clone(),
+                environment: vec!["ALPHA_*"],
+            }))
+            .unwrap();
         let environment = EnvironmentVariableMap::from(HashMap::from([
             ("ALPHA_TARGET".to_string(), layout.to_string()),
             ("UNDECLARED_SECRET".to_string(), secret.to_string()),

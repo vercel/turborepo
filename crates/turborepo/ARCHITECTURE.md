@@ -148,14 +148,16 @@ topological (`^`) dependencies.
 
 #### Toolchains (`crates/turborepo-repository/src/toolchain.rs`)
 
-The package graph is generic over language toolchains. A `Toolchain` answers
-ecosystem-specific questions — which packages exist, what command a task
-runs, what hash wiring a task derives — so graph construction and execution
-never branch on a specific ecosystem. All lookups go through the
-`ToolchainRegistry` (carried by the `PackageGraph`); `ToolchainId` is an
-open string identifier, not a closed enum; and trait methods are
-coarse-grained and data-in/data-out, keeping the door open to out-of-process
-plugin adapters. JavaScript is the first, production implementation: its
+The package graph is generic over ecosystems. An `EcosystemAdapter` is a
+reusable graph-construction input: each contribution contains discovered
+packages plus a fresh graph-local compatibility runtime. Core validates
+ecosystem identity, package names and paths, and duplicate registrations before
+committing that runtime to the resulting graph. `Toolchain` remains the runtime
+compatibility surface while its behavioral callbacks move into contribution
+data. All runtime lookups go through the `ToolchainRegistry` (carried by the
+`PackageGraph`); `ToolchainId` is an open string identifier, not a closed enum;
+and trait methods are coarse-grained and data-in/data-out, keeping the door open
+to out-of-process plugin adapters. JavaScript is the first, production implementation: its
 discovery, script command construction, and phantom-task detection flow
 through the trait. Machinery that predates the abstraction and has no trait
 surface yet (package-manager resolution for dependency splitting, the JS
