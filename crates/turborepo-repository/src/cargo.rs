@@ -1326,12 +1326,6 @@ impl Toolchain for CargoToolchain {
         )
     }
 
-    // Compatibility runtime hook. Watch interests move fully onto the adapter
-    // in the follow-up watcher transaction change.
-    fn watch_spec(&self) -> toolchain::WatchSpec {
-        watch_spec()
-    }
-
     /// Prune the Cargo workspace machinery around the kept crates:
     ///
     /// * `Cargo.lock` is subset to the closure of the kept crates, so `cargo
