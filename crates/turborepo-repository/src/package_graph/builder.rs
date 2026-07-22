@@ -20,10 +20,12 @@ use crate::{
         self, CachingPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscovery,
         PackageDiscoveryBuilder,
     },
+    knowledge::{PackageScopeObservation, RepositoryKnowledge, ScopeKind},
     package_json::{DependencyKind, PackageJson},
     package_manager::{PackageManager, pnpm::PnpmCatalogs},
     toolchain::{
-        DiscoveredPackage, JavaScriptToolchain, Toolchain, ToolchainId, ToolchainRegistry,
+        DiscoveredPackage, DiscoveredPackageParts, DiscoveredScopeKind, JavaScriptToolchain,
+        Toolchain, ToolchainId, ToolchainRegistry,
     },
 };
 
@@ -69,6 +71,17 @@ pub enum Error {
     PackageJson(#[from] crate::package_json::Error),
     #[error("package.json must have a name field:\n{0}")]
     PackageJsonMissingName(AbsoluteSystemPathBuf),
+    #[error("package definition {path} is outside repository root {repository_root}")]
+    DefinitionOutsideRepository {
+        path: AbsoluteSystemPathBuf,
+        repository_root: AbsoluteSystemPathBuf,
+    },
+    #[error("missing compatibility projection for discovered scope {name}")]
+    MissingCompatibilityProjection { name: String },
+    #[error("compatibility projection {name} has no authoritative discovered scope")]
+    UnexpectedCompatibilityProjection { name: String },
+    #[error("repository package knowledge was not constructed")]
+    MissingRepositoryKnowledge,
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error(transparent)]
@@ -87,6 +100,30 @@ impl From<crate::toolchain::Error> for Error {
             crate::toolchain::Error::Discovery(err) => Error::Discovery(err),
             crate::toolchain::Error::Descriptor(err) => Error::PackageJson(err),
             crate::toolchain::Error::Failed(err) => Error::Toolchain(err),
+        }
+    }
+}
+
+impl From<crate::knowledge::Error> for Error {
+    fn from(error: crate::knowledge::Error) -> Self {
+        match error {
+            crate::knowledge::Error::DuplicateScope {
+                name,
+                path,
+                existing_path,
+            } => Error::DuplicateWorkspace {
+                name,
+                path: path.to_string(),
+                existing_path: existing_path.to_string(),
+            },
+            crate::knowledge::Error::DefinitionOutsideRepository {
+                path,
+                repository_root,
+            } => Error::DefinitionOutsideRepository {
+                path,
+                repository_root,
+            },
+            crate::knowledge::Error::Path(error) => Error::Path(error),
         }
     }
 }
@@ -280,6 +317,7 @@ struct BuildState<'a, S, T> {
     repo_root: &'a AbsoluteSystemPath,
     single: bool,
     assembler: PackageGraphAssembler,
+    knowledge: Option<Arc<RepositoryKnowledge>>,
     /// The root `package.json`, absent for a pure Cargo workspace. See
     /// [`PackageGraphBuilder::root_package_json`].
     root_package_json: Option<PackageJson>,
@@ -370,6 +408,42 @@ impl PackageGraphAssembler {
         }
     }
 
+    fn add_knowledge(
+        &mut self,
+        knowledge: &RepositoryKnowledge,
+        compatibility: Vec<(String, PackageInfo)>,
+    ) -> Result<(), Error> {
+        let mut compatibility: HashMap<_, _> = compatibility.into_iter().collect();
+        self.reserve(knowledge.packages().count() + knowledge.aggregate_scopes().count());
+
+        for package in knowledge.packages() {
+            let name = package.identity();
+            let mut info = compatibility.remove(name).ok_or_else(|| {
+                Error::MissingCompatibilityProjection {
+                    name: name.to_string(),
+                }
+            })?;
+            info.package_json_path = package.definition_path().to_owned();
+            info.toolchain = package.toolchain().clone();
+            self.add_package(PackageName::Other(name.to_string()), info)?;
+        }
+        for aggregate in knowledge.aggregate_scopes() {
+            let name = aggregate.identity();
+            let mut info = compatibility.remove(name).ok_or_else(|| {
+                Error::MissingCompatibilityProjection {
+                    name: name.to_string(),
+                }
+            })?;
+            info.package_json_path = aggregate.definition_path().to_owned();
+            info.toolchain = aggregate.toolchain().clone();
+            self.add_package(PackageName::Other(name.to_string()), info)?;
+        }
+        if let Some(name) = compatibility.keys().next() {
+            return Err(Error::UnexpectedCompatibilityProjection { name: name.clone() });
+        }
+        Ok(())
+    }
+
     fn finish(self) -> PackageGraphAssembly {
         PackageGraphAssembly {
             workspaces: self.workspaces,
@@ -455,6 +529,7 @@ where
             single,
 
             assembler,
+            knowledge: None,
             lockfile,
             package_jsons,
             root_package_json,
@@ -468,24 +543,20 @@ where
 }
 
 impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManager, T> {
-    fn add_package(
-        &mut self,
+    fn observe_package(
+        &self,
         toolchain: ToolchainId,
         package: DiscoveredPackage,
-    ) -> Result<(), Error> {
-        let DiscoveredPackage {
+    ) -> Result<(PackageScopeObservation, Option<(String, PackageInfo)>), Error> {
+        let DiscoveredPackageParts {
+            name,
+            scope_kind,
             descriptor: json,
             manifest_path,
             external_dependencies,
-        } = package;
+        } = package.into_parts();
         let relative_json_path =
             AnchoredSystemPathBuf::relative_path_between(self.repo_root, &manifest_path);
-        let name = PackageName::Other(
-            json.name
-                .clone()
-                .ok_or(Error::PackageJsonMissingName(manifest_path))?
-                .into_inner(),
-        );
         // Toolchain-resolved external identities (e.g. Cargo's per-crate
         // lockfile closures), in the sorted representation the JS lockfile
         // phase produces. That phase later fills this for JavaScript
@@ -500,11 +571,27 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
         let entry = PackageInfo {
             package_json: json,
             package_json_path: relative_json_path,
-            toolchain,
+            toolchain: toolchain.clone(),
             transitive_dependencies,
             ..Default::default()
         };
-        self.assembler.add_package(name, entry)
+        let observation = PackageScopeObservation {
+            identity: name.clone(),
+            definition_path: manifest_path.clone(),
+            toolchain,
+            scope_kind: match scope_kind {
+                DiscoveredScopeKind::Package => ScopeKind::Package,
+                DiscoveredScopeKind::Aggregate => ScopeKind::Aggregate,
+            },
+        };
+        let compatibility = name.map(|name| (name, entry));
+        if compatibility.is_none() {
+            tracing::debug!(
+                "ignoring package definition at {} since it has no name",
+                manifest_path
+            );
+        }
+        Ok((observation, compatibility))
     }
 
     // need our own type
@@ -523,11 +610,12 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                 discovered.extend(jsons.into_iter().map(|(path, json)| {
                     (
                         ToolchainId::JAVASCRIPT,
-                        DiscoveredPackage {
-                            descriptor: json,
-                            manifest_path: path,
-                            external_dependencies: None,
-                        },
+                        DiscoveredPackage::package(
+                            json.name.as_ref().map(|name| name.as_inner().clone()),
+                            json,
+                            path,
+                            None,
+                        ),
                     )
                 }));
                 continue;
@@ -536,28 +624,35 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             discovered.extend(packages.into_iter().map(|package| (id.clone(), package)));
         }
 
-        self.assembler.reserve(discovered.len());
-
         let _span = tracing::info_span!("add_packages").entered();
+        let mut observations = Vec::with_capacity(discovered.len());
+        let mut compatibility = Vec::with_capacity(discovered.len());
         for (toolchain, package) in discovered {
-            match self.add_package(toolchain, package) {
-                Ok(()) => {}
-                Err(Error::PackageJsonMissingName(path)) => {
-                    // previous implementations of turbo would silently ignore package.json files
-                    // that didn't have a name field (well, actually, if two or more had the same
-                    // name, it would throw a 'name clash' error, but that's a different story)
-                    //
-                    // let's try to match that behavior, but log a debug message
-                    tracing::debug!("ignoring package.json at {} since it has no name", path);
-                }
-                Err(err) => return Err(err),
+            let (observation, projection) = self.observe_package(toolchain, package)?;
+            observations.push(observation);
+            if let Some(projection) = projection {
+                compatibility.push(projection);
             }
         }
+        let root_name = self.root_package_json.as_ref().map(|package_json| {
+            package_json
+                .name
+                .as_ref()
+                .map(|name| name.as_inner().clone())
+        });
+        let knowledge = Arc::new(RepositoryKnowledge::build(
+            self.repo_root,
+            root_name,
+            &observations,
+        )?);
+        self.assembler.add_knowledge(&knowledge, compatibility)?;
+        self.knowledge = Some(knowledge);
 
         let Self {
             repo_root,
             single,
             assembler,
+            knowledge,
             root_package_json,
             lockfile,
             javascript,
@@ -570,6 +665,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             repo_root,
             single,
             assembler,
+            knowledge,
             root_package_json,
             lockfile,
             javascript,
@@ -581,10 +677,11 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
         })
     }
 
-    async fn build_single_package_graph(self) -> Result<PackageGraph, discovery::Error> {
+    async fn build_single_package_graph(self) -> Result<PackageGraph, Error> {
         let Self {
             single,
             assembler,
+            knowledge,
             root_package_json,
             lockfile,
             javascript,
@@ -592,6 +689,18 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             repo_root,
             ..
         } = self;
+        let knowledge = match knowledge {
+            Some(knowledge) => knowledge,
+            None => {
+                let root_name = root_package_json.as_ref().map(|package_json| {
+                    package_json
+                        .name
+                        .as_ref()
+                        .map(|name| name.as_inner().clone())
+                });
+                Arc::new(RepositoryKnowledge::build(repo_root, root_name, &[])?)
+            }
+        };
         let PackageGraphAssembly {
             workspaces,
             workspace_graph,
@@ -625,7 +734,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             packages: workspaces,
             lockfile: lockfile.map(Arc::from),
             package_manager,
-            repo_root: repo_root.to_owned(),
+            knowledge,
             deferred_closures: std::sync::Mutex::new(None),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
             root_internal_dependencies: std::sync::OnceLock::new(),
@@ -788,6 +897,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             repo_root,
             single,
             assembler,
+            knowledge,
             root_package_json,
             javascript,
             toolchains,
@@ -799,6 +909,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             repo_root,
             single,
             assembler,
+            knowledge,
             root_package_json,
             lockfile,
             defer_closures,
@@ -961,11 +1072,14 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
         };
         let Self {
             assembler,
+            knowledge,
             root_package_json,
             toolchains,
-            repo_root,
             ..
         } = self;
+        let knowledge = knowledge.ok_or(discovery::Error::Failed(Box::new(
+            Error::MissingRepositoryKnowledge,
+        )))?;
         let PackageGraphAssembly {
             workspaces,
             workspace_graph,
@@ -982,7 +1096,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             packages: workspaces,
             package_manager,
             lockfile: arc_lockfile,
-            repo_root: repo_root.to_owned(),
+            knowledge,
             deferred_closures: std::sync::Mutex::new(deferred_closures),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
             root_internal_dependencies: std::sync::OnceLock::new(),
@@ -1117,6 +1231,46 @@ mod test {
                 .await
                 .unwrap();
 
+            let knowledge = graph.repository_knowledge();
+            assert_eq!(knowledge.repository_root(), root.as_ref());
+            let root_scope = knowledge
+                .root_javascript_scope()
+                .expect("a root package.json creates a JavaScript execution scope");
+            assert_eq!(root_scope.user_facing_name(), root_name);
+            assert_eq!(
+                graph
+                    .package_dir(&PackageName::Root)
+                    .expect("root graph scope has a directory")
+                    .to_unix()
+                    .as_str(),
+                ""
+            );
+            assert_eq!(
+                root_scope.definition_path().to_unix().as_str(),
+                "package.json"
+            );
+            assert_eq!(knowledge.packages().count(), 2);
+            assert!(knowledge.scope("//").is_none());
+            assert!(knowledge.scope("unnamed").is_none());
+            assert_eq!(knowledge.aggregate_scopes().count(), 0);
+            assert_ne!(
+                PackageNode::Root,
+                PackageNode::Workspace(PackageName::Root),
+                "the graph sentinel and root execution scope node are distinct"
+            );
+
+            for package in knowledge.packages() {
+                let graph_name = PackageName::from(package.identity());
+                assert_eq!(graph.package_dir(&graph_name), Some(package.directory()));
+                assert_eq!(
+                    graph
+                        .package_info(&graph_name)
+                        .expect("knowledge package is assembled into the graph")
+                        .package_json_path(),
+                    package.definition_path()
+                );
+            }
+
             let mut packages = graph
                 .packages()
                 .map(|(name, info)| {
@@ -1172,6 +1326,17 @@ mod test {
         .build()
         .await
         .unwrap();
+
+        let retained_generation = graph.knowledge.clone();
+        assert!(Arc::ptr_eq(&retained_generation, &graph.knowledge));
+        assert_eq!(
+            retained_generation
+                .root_javascript_scope()
+                .expect("single-package mode retains the root execution scope")
+                .user_facing_name(),
+            Some("user-facing-root-name")
+        );
+        assert_eq!(retained_generation.packages().count(), 0);
 
         let packages = graph.packages().collect::<Vec<_>>();
         assert_eq!(packages.len(), 1);
@@ -1878,6 +2043,77 @@ mod test {
             paths,
             ["packages/a/package.json", "packages/b/package.json"]
         );
+    }
+
+    #[tokio::test]
+    async fn package_definition_outside_repository_is_a_typed_error() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let outside = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            r"C:\outside\package.json"
+        } else {
+            "/outside/package.json"
+        })
+        .unwrap();
+        let result = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::from([(
+                outside.clone(),
+                PackageJson {
+                    name: Some(Spanned::new("escaped".into())),
+                    ..Default::default()
+                },
+            )])))
+            .build()
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(Error::DefinitionOutsideRepository {
+                path,
+                repository_root,
+            }) if path == outside && repository_root == root
+        ));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn package_definition_escaping_through_symlink_is_a_typed_error() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let repository = tempdir.path().join("repository");
+        let outside = tempdir.path().join("outside");
+        std::fs::create_dir_all(repository.join("packages")).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("package.json"), "{}").unwrap();
+        std::os::unix::fs::symlink(&outside, repository.join("packages/escaped")).unwrap();
+
+        let root = AbsoluteSystemPathBuf::new(
+            dunce::canonicalize(&repository)
+                .unwrap()
+                .to_string_lossy()
+                .into_owned(),
+        )
+        .unwrap();
+        let definition = root.join_components(&["packages", "escaped", "package.json"]);
+        let result = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::from([(
+                definition.clone(),
+                PackageJson {
+                    name: Some(Spanned::new("escaped".into())),
+                    ..Default::default()
+                },
+            )])))
+            .build()
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(Error::DefinitionOutsideRepository {
+                path,
+                repository_root,
+            }) if path == definition && repository_root == root
+        ));
     }
 
     #[test]

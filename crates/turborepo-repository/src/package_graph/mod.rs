@@ -11,14 +11,12 @@ use petgraph::{
 };
 use serde::Serialize;
 use tracing::debug;
-use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
-};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
 
 use crate::{
-    discovery::LocalPackageDiscoveryBuilder, package_json::PackageJson,
-    package_manager::PackageManager,
+    discovery::LocalPackageDiscoveryBuilder, knowledge::RepositoryKnowledge,
+    package_json::PackageJson, package_manager::PackageManager,
 };
 
 pub mod builder;
@@ -53,7 +51,7 @@ pub struct PackageGraph {
     root_package_json: Option<PackageJson>,
     package_manager: Option<PackageManager>,
     lockfile: Option<Arc<dyn Lockfile>>,
-    repo_root: AbsoluteSystemPathBuf,
+    knowledge: Arc<RepositoryKnowledge>,
     /// Receiver for background transitive-closure computation when the graph
     /// was built with deferred closures. Consumed (exactly once) by
     /// [`Self::ensure_transitive_closures`].
@@ -94,13 +92,13 @@ impl WorkspacePackage {
     }
 }
 
-/// PackageInfo represents a package within the workspace.
+/// Compatibility data retained for relationship and task consumers.
+///
+/// Package identity, directory ownership, definition source, and provenance
+/// are authoritative in [`RepositoryKnowledge`], not in this projection.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PackageInfo {
-    /// The toolchain-neutral package descriptor (see
-    /// [`crate::toolchain::DiscoveredPackage`]). For JavaScript packages
-    /// this is the parsed `package.json`; other toolchains synthesize one
-    /// from their native manifest.
+    /// A temporary compatibility descriptor for relationships and tasks.
     pub package_json: PackageJson,
     /// Path to the package's native manifest, anchored to the repo root.
     pub package_json_path: AnchoredSystemPathBuf,
@@ -228,17 +226,18 @@ impl PackageGraph {
     /// missing a `name` field in its package.json.
     #[tracing::instrument(skip(self))]
     pub fn validate(&self) -> Result<(), Error> {
-        for (package_name, info) in self.packages.iter() {
-            if matches!(package_name, PackageName::Root) {
-                continue;
+        for package in self.knowledge.packages() {
+            if package.user_facing_name().is_empty() {
+                return Err(Error::PackageJsonMissingName(
+                    self.repo_root().resolve(package.definition_path()),
+                ));
             }
-            let name = info.package_json.name.as_ref().map(|name| name.as_str());
-            match name {
-                Some("") | None => {
-                    let package_json_path = self.repo_root.resolve(info.package_json_path());
-                    return Err(Error::PackageJsonMissingName(package_json_path));
-                }
-                Some(_) => continue,
+        }
+        for aggregate in self.knowledge.aggregate_scopes() {
+            if aggregate.user_facing_name().is_empty() {
+                return Err(Error::PackageJsonMissingName(
+                    self.repo_root().resolve(aggregate.definition_path()),
+                ));
             }
         }
 
@@ -384,7 +383,90 @@ impl PackageGraph {
     }
 
     pub fn repo_root(&self) -> &AbsoluteSystemPath {
-        &self.repo_root
+        self.knowledge.repository_root()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn repository_knowledge(&self) -> &RepositoryKnowledge {
+        &self.knowledge
+    }
+
+    /// Whether a root `package.json` contributed a JavaScript execution scope.
+    pub fn has_root_javascript_scope(&self) -> bool {
+        self.knowledge.root_javascript_scope().is_some()
+    }
+
+    /// The root JavaScript scope's user-facing package name. The outer option
+    /// distinguishes no JavaScript scope (pure Cargo) from an unnamed root
+    /// JavaScript scope.
+    pub fn root_javascript_scope_name(&self) -> Option<Option<&str>> {
+        self.knowledge
+            .root_javascript_scope()
+            .map(|scope| scope.user_facing_name())
+    }
+
+    /// User-facing identities of real packages, excluding root and aggregate
+    /// execution scopes.
+    pub fn real_package_names(&self) -> impl Iterator<Item = &str> {
+        self.knowledge.packages().map(|scope| scope.identity())
+    }
+
+    /// User-facing identities of non-package aggregate execution scopes.
+    pub fn aggregate_scope_names(&self) -> impl Iterator<Item = &str> {
+        self.knowledge
+            .aggregate_scopes()
+            .map(|scope| scope.identity())
+    }
+
+    /// Native definition path for a package or execution scope. A pure Cargo
+    /// repository's compatibility root node has no native definition.
+    pub fn package_definition_path(&self, package: &PackageName) -> Option<&AnchoredSystemPath> {
+        match package {
+            PackageName::Root => self
+                .knowledge
+                .root_javascript_scope()
+                .map(|scope| scope.definition_path()),
+            PackageName::Other(name) => self
+                .knowledge
+                .scope(name)
+                .map(|scope| scope.definition_path()),
+        }
+    }
+
+    /// Toolchain provenance for a package or execution scope.
+    pub fn package_toolchain(
+        &self,
+        package: &PackageName,
+    ) -> Option<&crate::toolchain::ToolchainId> {
+        match package {
+            PackageName::Root => self
+                .knowledge
+                .root_javascript_scope()
+                .map(|scope| scope.toolchain()),
+            PackageName::Other(name) => self.knowledge.scope(name).map(|scope| scope.toolchain()),
+        }
+    }
+
+    pub fn is_real_package(&self, package: &PackageName) -> bool {
+        matches!(
+            package,
+            PackageName::Other(name)
+                if self
+                    .knowledge
+                    .scope(name)
+                    .is_some_and(|scope| scope.kind() == crate::knowledge::ScopeKind::Package)
+        )
+    }
+
+    pub fn is_aggregate_scope(&self, package: &PackageName) -> bool {
+        matches!(
+            package,
+            PackageName::Other(name)
+                if self
+                    .knowledge
+                    .scope(name)
+                    .is_some_and(|scope| scope.kind() == crate::knowledge::ScopeKind::Aggregate)
+        )
     }
 
     pub fn lockfile(&self) -> Option<&dyn Lockfile> {
@@ -437,13 +519,10 @@ impl PackageGraph {
     }
 
     pub fn package_dir(&self, package: &PackageName) -> Option<&AnchoredSystemPath> {
-        let entry = self.packages.get(package)?;
-        Some(
-            entry
-                .package_json_path()
-                .parent()
-                .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap()),
-        )
+        match package {
+            PackageName::Root => Some(self.knowledge.repository_directory()),
+            PackageName::Other(name) => self.knowledge.scope(name).map(|scope| scope.directory()),
+        }
     }
 
     pub fn package_info(&self, package: &PackageName) -> Option<&PackageInfo> {
@@ -960,6 +1039,7 @@ mod test {
     use std::{fs, path::Path, process::Command};
 
     use serde_json::json;
+    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_errors::Spanned;
 
     use super::*;
@@ -1991,6 +2071,31 @@ version = "0.1.0"
             let workspace_pkg = pkg_graph.package_info(&PackageName::from("acme")).unwrap();
             assert_eq!(workspace_pkg.toolchain, crate::toolchain::ToolchainId::RUST);
 
+            let knowledge = pkg_graph.repository_knowledge();
+            let cargo_app = knowledge.scope("app").expect("Cargo crate is a package");
+            assert_eq!(
+                cargo_app.definition_path().to_unix().as_str(),
+                "rust/app/Cargo.toml"
+            );
+            assert_eq!(cargo_app.toolchain(), &crate::toolchain::ToolchainId::RUST);
+            assert_eq!(cargo_app.kind(), crate::knowledge::ScopeKind::Package);
+            let cargo_workspace = knowledge
+                .scope("acme")
+                .expect("Cargo workspace compatibility package is an aggregate scope");
+            assert_eq!(
+                cargo_workspace.kind(),
+                crate::knowledge::ScopeKind::Aggregate
+            );
+            assert_eq!(cargo_workspace.directory().to_unix().as_str(), "");
+            assert_eq!(
+                cargo_workspace.definition_path().to_unix().as_str(),
+                "Cargo.toml"
+            );
+            assert_eq!(
+                pkg_graph.package_dir(&PackageName::from("acme")),
+                Some(cargo_workspace.directory())
+            );
+
             // Crate path dependencies became graph edges.
             let app_deps = pkg_graph
                 .immediate_dependencies(&PackageNode::Workspace(PackageName::from("app")))
@@ -2054,6 +2159,24 @@ version = "0.1.0"
             .unwrap();
 
         assert!(pkg_graph.validate().is_ok());
+
+        assert!(
+            pkg_graph
+                .repository_knowledge()
+                .root_javascript_scope()
+                .is_none(),
+            "a pure Cargo repository has no root JavaScript execution scope"
+        );
+        assert!(!pkg_graph.has_root_javascript_scope());
+        assert_eq!(pkg_graph.package_definition_path(&PackageName::Root), None);
+        assert_eq!(pkg_graph.package_toolchain(&PackageName::Root), None);
+        assert!(
+            pkg_graph
+                .repository_knowledge()
+                .scope("acme")
+                .is_some_and(|scope| scope.kind() == crate::knowledge::ScopeKind::Aggregate),
+            "existing workspace-scoped Cargo behavior is represented as an aggregate"
+        );
 
         // No JavaScript project: no package manager, no root manifest.
         assert!(
