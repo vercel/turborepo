@@ -447,6 +447,8 @@ impl PackageGraph {
         }
     }
 
+    /// Whether this identity represents a real package rather than an
+    /// execution-only scope.
     pub fn is_real_package(&self, package: &PackageName) -> bool {
         matches!(
             package,
@@ -458,6 +460,7 @@ impl PackageGraph {
         )
     }
 
+    /// Whether this identity represents a non-package aggregate scope.
     pub fn is_aggregate_scope(&self, package: &PackageName) -> bool {
         matches!(
             package,

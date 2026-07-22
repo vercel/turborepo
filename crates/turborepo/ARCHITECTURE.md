@@ -145,10 +145,11 @@ Represents the workspace structure and package dependencies:
 
 `RepositoryKnowledge` is the crate-private authority for package identity and
 paths during node assembly, and the resulting `PackageGraph` retains that exact
-immutable generation. Consumers use narrow knowledge-backed graph queries
-rather than accessing its storage. `PackageInfo` remains a compatibility
-projection for relationship and task behavior; native manifests and metadata do
-not enter repository knowledge.
+immutable generation. Consumers migrate incrementally through narrow
+knowledge-backed graph queries and may temporarily use derived `PackageInfo`
+compatibility projections. Native manifests and metadata do not enter repository
+knowledge. Native definition paths must remain within the repository, including
+after resolving existing symlinks.
 
 The package graph intentionally allows cyclic dependencies between packages —
 this aligns with how npm, pnpm, and yarn handle cyclic workspace deps. Cycle
