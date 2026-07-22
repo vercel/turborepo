@@ -279,11 +279,7 @@ where
 struct BuildState<'a, S, T> {
     repo_root: &'a AbsoluteSystemPath,
     single: bool,
-    workspaces: HashMap<PackageName, PackageInfo>,
-    workspace_graph: Graph<PackageNode, DependencyKind>,
-    root_node_index: NodeIndex,
-    root_workspace_index: NodeIndex,
-    node_lookup: HashMap<PackageNode, NodeIndex>,
+    assembler: PackageGraphAssembler,
     /// The root `package.json`, absent for a pure Cargo workspace. See
     /// [`PackageGraphBuilder::root_package_json`].
     root_package_json: Option<PackageJson>,
@@ -303,6 +299,88 @@ struct BuildState<'a, S, T> {
     toolchains: ToolchainRegistry,
 }
 
+struct PackageGraphAssembler {
+    workspaces: HashMap<PackageName, PackageInfo>,
+    workspace_graph: Graph<PackageNode, DependencyKind>,
+    root_node_index: NodeIndex,
+    root_workspace_index: NodeIndex,
+    node_lookup: HashMap<PackageNode, NodeIndex>,
+}
+
+struct PackageGraphAssembly {
+    workspaces: HashMap<PackageName, PackageInfo>,
+    workspace_graph: Graph<PackageNode, DependencyKind>,
+    root_node_index: NodeIndex,
+    root_workspace_index: NodeIndex,
+    node_lookup: HashMap<PackageNode, NodeIndex>,
+}
+
+impl PackageGraphAssembler {
+    fn new(root_package_info: PackageInfo) -> Self {
+        let mut workspaces = HashMap::new();
+        workspaces.insert(PackageName::Root, root_package_info);
+
+        let mut workspace_graph = Graph::new();
+        let root_node_index = workspace_graph.add_node(PackageNode::Root);
+        let root_workspace = PackageNode::Workspace(PackageName::Root);
+        let root_workspace_index = workspace_graph.add_node(root_workspace.clone());
+        workspace_graph.add_edge(
+            root_workspace_index,
+            root_node_index,
+            DependencyKind::Production,
+        );
+
+        let mut node_lookup = HashMap::new();
+        node_lookup.insert(PackageNode::Root, root_node_index);
+        node_lookup.insert(root_workspace, root_workspace_index);
+
+        Self {
+            workspaces,
+            workspace_graph,
+            root_node_index,
+            root_workspace_index,
+            node_lookup,
+        }
+    }
+
+    fn reserve(&mut self, additional: usize) {
+        self.workspaces.reserve(additional);
+        self.node_lookup.reserve(additional);
+    }
+
+    fn add_package(&mut self, name: PackageName, info: PackageInfo) -> Result<(), Error> {
+        match self.workspaces.entry(name) {
+            std::collections::hash_map::Entry::Vacant(vacant) => {
+                let name = vacant.key().clone();
+                vacant.insert(info);
+                let node = PackageNode::Workspace(name);
+                let idx = self.workspace_graph.add_node(node.clone());
+                self.node_lookup.insert(node, idx);
+                Ok(())
+            }
+            std::collections::hash_map::Entry::Occupied(occupied) => {
+                let existing_path = occupied.get().package_json_path.to_string();
+                let name = occupied.key().to_string();
+                Err(Error::DuplicateWorkspace {
+                    name,
+                    path: info.package_json_path.to_string(),
+                    existing_path,
+                })
+            }
+        }
+    }
+
+    fn finish(self) -> PackageGraphAssembly {
+        PackageGraphAssembly {
+            workspaces: self.workspaces,
+            workspace_graph: self.workspace_graph,
+            root_node_index: self.root_node_index,
+            root_workspace_index: self.root_workspace_index,
+            node_lookup: self.node_lookup,
+        }
+    }
+}
+
 // Allows us to perform workspace discovery and parse package jsons
 enum ResolvedPackageManager {}
 
@@ -311,14 +389,6 @@ enum ResolvedWorkspaces {}
 
 // Allows us to collect all transitive deps
 enum ResolvedLockfile {}
-
-impl<S, T> BuildState<'_, S, T> {
-    fn add_node(&mut self, node: PackageNode) -> NodeIndex {
-        let idx = self.workspace_graph.add_node(node.clone());
-        self.node_lookup.insert(node, idx);
-        idx
-    }
-}
 
 impl<'a, T> BuildState<'a, ResolvedPackageManager, T>
 where
@@ -348,7 +418,6 @@ where
         // registered nor queried for a package manager. The graph is built
         // entirely from the extra toolchains (Cargo).
         let no_javascript = root_package_json.is_none();
-        let mut workspaces = HashMap::new();
         let root_package_info = PackageInfo {
             // The root node always needs a descriptor; a pure Cargo workspace
             // has none, so it gets an empty one. The graph's public
@@ -357,21 +426,7 @@ where
             package_json_path: AnchoredSystemPathBuf::from_raw("package.json")?,
             ..Default::default()
         };
-        workspaces.insert(PackageName::Root, root_package_info);
-
-        let mut workspace_graph = Graph::new();
-        let root_node_index = workspace_graph.add_node(PackageNode::Root);
-        let root_workspace = PackageNode::Workspace(PackageName::Root);
-        let root_workspace_index = workspace_graph.add_node(root_workspace.clone());
-        workspace_graph.add_edge(
-            root_workspace_index,
-            root_node_index,
-            DependencyKind::Production,
-        );
-
-        let mut node_lookup = HashMap::new();
-        node_lookup.insert(PackageNode::Root, root_node_index);
-        node_lookup.insert(root_workspace, root_workspace_index);
+        let assembler = PackageGraphAssembler::new(root_package_info);
 
         // The discovery strategy is shared (via the JavaScript toolchain)
         // between package discovery and package-manager resolution; the
@@ -399,13 +454,9 @@ where
             repo_root,
             single,
 
-            workspaces,
+            assembler,
             lockfile,
             package_jsons,
-            workspace_graph,
-            root_node_index,
-            root_workspace_index,
-            node_lookup,
             root_package_json,
             defer_closures,
             closure_hasher,
@@ -453,23 +504,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             transitive_dependencies,
             ..Default::default()
         };
-        match self.workspaces.entry(name) {
-            std::collections::hash_map::Entry::Vacant(vacant) => {
-                let name = vacant.key().clone();
-                vacant.insert(entry);
-                self.add_node(PackageNode::Workspace(name));
-                Ok(())
-            }
-            std::collections::hash_map::Entry::Occupied(occupied) => {
-                let existing_path = occupied.get().package_json_path.to_string();
-                let name = occupied.key().to_string();
-                Err(Error::DuplicateWorkspace {
-                    name,
-                    path: entry.package_json_path.to_string(),
-                    existing_path,
-                })
-            }
-        }
+        self.assembler.add_package(name, entry)
     }
 
     // need our own type
@@ -501,8 +536,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             discovered.extend(packages.into_iter().map(|package| (id.clone(), package)));
         }
 
-        self.workspaces.reserve(discovered.len());
-        self.node_lookup.reserve(discovered.len());
+        self.assembler.reserve(discovered.len());
 
         let _span = tracing::info_span!("add_packages").entered();
         for (toolchain, package) in discovered {
@@ -523,11 +557,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
         let Self {
             repo_root,
             single,
-            workspaces,
-            workspace_graph,
-            root_node_index,
-            root_workspace_index,
-            node_lookup,
+            assembler,
             root_package_json,
             lockfile,
             javascript,
@@ -539,11 +569,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
         Ok(BuildState {
             repo_root,
             single,
-            workspaces,
-            workspace_graph,
-            root_node_index,
-            root_workspace_index,
-            node_lookup,
+            assembler,
             root_package_json,
             lockfile,
             javascript,
@@ -558,11 +584,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
     async fn build_single_package_graph(self) -> Result<PackageGraph, discovery::Error> {
         let Self {
             single,
-            workspaces,
-            workspace_graph,
-            root_node_index,
-            root_workspace_index,
-            node_lookup,
+            assembler,
             root_package_json,
             lockfile,
             javascript,
@@ -570,6 +592,13 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             repo_root,
             ..
         } = self;
+        let PackageGraphAssembly {
+            workspaces,
+            workspace_graph,
+            root_node_index,
+            root_workspace_index,
+            node_lookup,
+        } = assembler.finish();
 
         let package_manager = match &javascript {
             Some(javascript) => {
@@ -611,7 +640,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
         &mut self,
         package_manager: Option<&PackageManager>,
     ) -> Result<(), Error> {
-        let path_index = WorkspacePathIndex::new(&self.workspaces);
+        let path_index = WorkspacePathIndex::new(&self.assembler.workspaces);
         // Compute once — for pnpm/Berry this reads a config file from disk.
         // Without hoisting, the par_iter below would redundantly read the
         // same file N times (once per workspace). A pure Cargo workspace has
@@ -626,7 +655,8 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
         // so this is safe. Graph mutation stays sequential below.
         let split_deps = {
             use rayon::prelude::*;
-            self.workspaces
+            self.assembler
+                .workspaces
                 .par_iter()
                 .map(|(name, entry)| {
                     (
@@ -634,7 +664,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
                         Dependencies::new(
                             self.repo_root,
                             &entry.package_json_path,
-                            &self.workspaces,
+                            &self.assembler.workspaces,
                             link_workspace_packages,
                             entry.package_json.dependencies_with_kind(),
                             &path_index,
@@ -646,28 +676,36 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
         };
         for (name, deps) in split_deps {
             let entry = self
+                .assembler
                 .workspaces
                 .get_mut(&name)
                 .expect("workspace present in ");
             let Dependencies { internal, external } = deps;
             let node_idx = self
+                .assembler
                 .node_lookup
                 .get(&PackageNode::Workspace(name))
                 .expect("unable to find workspace node index");
             if internal.is_empty() {
                 let root_idx = self
+                    .assembler
                     .node_lookup
                     .get(&PackageNode::Root)
                     .expect("root node should have index");
-                self.workspace_graph
-                    .add_edge(*node_idx, *root_idx, DependencyKind::Production);
+                self.assembler.workspace_graph.add_edge(
+                    *node_idx,
+                    *root_idx,
+                    DependencyKind::Production,
+                );
             }
             for (dependency, kind) in internal {
                 let dependency_idx = self
+                    .assembler
                     .node_lookup
                     .get(&PackageNode::Workspace(dependency))
                     .expect("unable to find workspace node index");
-                self.workspace_graph
+                self.assembler
+                    .workspace_graph
                     .add_edge(*node_idx, *dependency_idx, kind);
             }
             entry.unresolved_external_dependencies = Some(external);
@@ -686,7 +724,8 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             None => {
                 let lockfile = package_manager.read_lockfile(
                     self.repo_root,
-                    self.workspaces
+                    self.assembler
+                        .workspaces
                         .get(&PackageName::Root)
                         .as_ref()
                         .map(|e| &e.package_json)
@@ -748,11 +787,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
         let Self {
             repo_root,
             single,
-            workspaces,
-            workspace_graph,
-            root_node_index,
-            root_workspace_index,
-            node_lookup,
+            assembler,
             root_package_json,
             javascript,
             toolchains,
@@ -763,11 +798,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
         Ok(BuildState {
             repo_root,
             single,
-            workspaces,
-            workspace_graph,
-            root_node_index,
-            root_workspace_index,
-            node_lookup,
+            assembler,
             root_package_json,
             lockfile,
             defer_closures,
@@ -793,7 +824,8 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
     fn all_external_dependencies(
         &self,
     ) -> Result<HashMap<String, BTreeMap<String, String>>, Error> {
-        self.workspaces
+        self.assembler
+            .workspaces
             .values()
             // Only JavaScript packages participate in the JS lockfile's
             // external-dependency closures. This map is keyed by directory,
@@ -842,7 +874,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             .as_ref()
             .map(|hasher| hasher(&closures))
             .unwrap_or_default();
-        for entry in self.workspaces.values_mut() {
+        for entry in self.assembler.workspaces.values_mut() {
             // Mirror of the filter in all_external_dependencies: a non-JS
             // package sharing a directory with a JS package must not steal
             // its closure.
@@ -928,16 +960,19 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             None => None,
         };
         let Self {
-            workspaces,
-            workspace_graph,
-            root_node_index,
-            root_workspace_index,
-            node_lookup,
+            assembler,
             root_package_json,
             toolchains,
             repo_root,
             ..
         } = self;
+        let PackageGraphAssembly {
+            workspaces,
+            workspace_graph,
+            root_node_index,
+            root_workspace_index,
+            node_lookup,
+        } = assembler.finish();
         Ok(PackageGraph {
             graph: workspace_graph,
             root_node_index,
