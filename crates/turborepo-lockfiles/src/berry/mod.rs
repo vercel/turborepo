@@ -58,6 +58,8 @@ pub enum Error {
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
 type CatalogMap = Map<String, Map<String, String>>;
+type PackageExtensionMap = Map<String, Map<String, String>>;
+type ManifestParts = (Map<Resolution, String>, CatalogMap, PackageExtensionMap);
 
 #[derive(Debug)]
 pub struct BerryLockfile {
@@ -68,8 +70,10 @@ pub struct BerryLockfile {
     locator_package: Map<Locator<'static>, BerryPackage>,
     // Map of regular locators to patch locators that apply to them
     patches: Map<Locator<'static>, Locator<'static>>,
-    // Descriptors that come from default package extensions that ship with berry
+    // Descriptors that come from package extensions.
     extensions: HashSet<Descriptor<'static>>,
+    // Project-defined package extensions and the descriptors they inject.
+    project_extensions: Vec<(Descriptor<'static>, Vec<Descriptor<'static>>)>,
     // Package overrides
     overrides: Map<Resolution, String>,
     // Map from workspace paths to package locators
@@ -123,6 +127,8 @@ pub struct BerryManifest {
     catalog: Option<Map<String, String>>,
     // Yarn 4+ catalog support - named catalogs
     catalogs: Option<Map<String, Map<String, String>>>,
+    // Dependencies injected by project-level packageExtensions.
+    package_extensions: Option<Map<String, Map<String, String>>>,
 }
 
 fn builtin_dependency_extension_is_needed(
@@ -176,10 +182,10 @@ impl BerryLockfile {
             }
         }
 
-        let (overrides, catalogs) = if let Some(manifest) = manifest {
+        let (overrides, catalogs, package_extensions) = if let Some(manifest) = manifest {
             manifest.into_parts()?
         } else {
-            (Map::new(), Map::new())
+            (Map::new(), Map::new(), Map::new())
         };
 
         let mut this = Self {
@@ -190,11 +196,13 @@ impl BerryLockfile {
             patches,
             overrides,
             extensions: Default::default(),
+            project_extensions: Vec::new(),
             workspace_path_to_locator,
             catalogs: Arc::new(catalogs),
         };
 
         this.populate_extensions()?;
+        this.populate_project_extensions(package_extensions)?;
 
         Ok(this)
     }
@@ -230,6 +238,58 @@ impl BerryLockfile {
                 .into_iter()
                 .map(|desc| desc.clone().into_owned()),
         );
+        Ok(())
+    }
+
+    fn populate_project_extensions(
+        &mut self,
+        package_extensions: Map<String, Map<String, String>>,
+    ) -> Result<(), Error> {
+        for (selector, dependencies) in package_extensions {
+            let selector = Descriptor::try_from(selector.as_str())?.into_owned();
+            let dependencies = dependencies
+                .into_iter()
+                .map(|(name, range)| {
+                    let mut descriptor = Descriptor::new(&name, &range)?;
+                    if descriptor.protocol().is_none()
+                        && let Some(range) = self.resolver.get(&descriptor)
+                    {
+                        descriptor.range = range.to_string().into();
+                    }
+                    Ok(descriptor.into_owned())
+                })
+                .collect::<Result<Vec<_>, Error>>()?;
+            self.project_extensions.push((selector, dependencies));
+        }
+        Ok(())
+    }
+
+    fn add_extension_descriptor(
+        &self,
+        descriptor: &Descriptor<'static>,
+        resolutions: &mut Map<Descriptor<'static>, Locator<'static>>,
+    ) -> Result<(), Error> {
+        let locator = self
+            .resolutions
+            .get(descriptor)
+            .ok_or_else(|| Error::MissingLocator(descriptor.to_owned()))?;
+        resolutions.insert(descriptor.clone(), locator.clone());
+
+        let mut queue = vec![locator.clone()];
+        while let Some(locator) = queue.pop() {
+            if let Some(package) = self.locator_package.get(&locator) {
+                for (name, range) in package.dependencies.iter().flatten() {
+                    if let Ok(dependency) = self.resolve_dependency(&locator, name, range)
+                        && let Some(dependency_locator) = self.resolutions.get(&dependency)
+                        && !resolutions.contains_key(&dependency)
+                    {
+                        resolutions.insert(dependency, dependency_locator.clone());
+                        queue.push(dependency_locator.clone());
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -398,10 +458,12 @@ impl BerryLockfile {
             let mut dependency_names = HashSet::new();
             let mut package_names = HashSet::new();
             let mut peer_descriptors = HashSet::new();
+            let mut reachable_locators = Vec::new();
             for key in packages {
                 if let Ok(package_locator) = Locator::try_from(key.as_str())
                     && let Some(package) = self.locator_package.get(&package_locator)
                 {
+                    reachable_locators.push(package_locator.clone());
                     package_names.insert(package_locator.ident.to_string());
                     for (name, _) in package.dependencies.iter().flatten() {
                         dependency_names.insert(name.as_str());
@@ -422,6 +484,7 @@ impl BerryLockfile {
                     .chain(iter::once("."))
                     .any(|path| package_locator.is_workspace_path(path))
                 {
+                    reachable_locators.push(package_locator.clone());
                     for (name, _) in package.dependencies.iter().flatten() {
                         dependency_names.insert(name.as_str());
                     }
@@ -435,11 +498,34 @@ impl BerryLockfile {
                 }
             }
 
+            let project_extension_descriptors = self
+                .project_extensions
+                .iter()
+                .filter(|(selector, _)| {
+                    let Ok(range) = node_semver::Range::parse(Descriptor::strip_protocol(
+                        selector.range.as_ref(),
+                    )) else {
+                        return false;
+                    };
+                    reachable_locators.iter().any(|locator| {
+                        locator.ident == selector.ident
+                            && self
+                                .locator_package
+                                .get(locator)
+                                .and_then(|package| {
+                                    node_semver::Version::parse(&package.version).ok()
+                                })
+                                .is_some_and(|version| range.satisfies(&version))
+                    })
+                })
+                .flat_map(|(_, dependencies)| dependencies)
+                .collect::<HashSet<_>>();
+
+            for descriptor in project_extension_descriptors {
+                self.add_extension_descriptor(descriptor, &mut resolutions)?;
+            }
+
             for descriptor in &self.extensions {
-                let locator = self
-                    .resolutions
-                    .get(descriptor)
-                    .ok_or_else(|| Error::MissingLocator(descriptor.to_owned()))?;
                 let ident = descriptor.ident.to_string();
                 let needed = peer_descriptors.contains(descriptor)
                     || ident
@@ -448,23 +534,7 @@ impl BerryLockfile {
                     || builtin_dependency_extension_is_needed(descriptor, &package_names);
 
                 if needed {
-                    resolutions.insert(descriptor.clone(), locator.clone());
-                    let mut queue = vec![locator.clone()];
-                    while let Some(locator) = queue.pop() {
-                        if let Some(package) = self.locator_package.get(&locator) {
-                            for (name, range) in package.dependencies.iter().flatten() {
-                                if let Ok(dependency) =
-                                    self.resolve_dependency(&locator, name, range)
-                                    && let Some(dependency_locator) =
-                                        self.resolutions.get(&dependency)
-                                    && !resolutions.contains_key(&dependency)
-                                {
-                                    resolutions.insert(dependency, dependency_locator.clone());
-                                    queue.push(dependency_locator.clone());
-                                }
-                            }
-                        }
-                    }
+                    self.add_extension_descriptor(descriptor, &mut resolutions)?;
                 }
             }
         }
@@ -478,6 +548,7 @@ impl BerryLockfile {
             locator_package: self.locator_package.clone(),
             resolver: self.resolver.clone(),
             extensions: self.extensions.clone(),
+            project_extensions: self.project_extensions.clone(),
             overrides: self.overrides.clone(),
             workspace_path_to_locator: self.workspace_path_to_locator.clone(),
             catalogs: Arc::clone(&self.catalogs),
@@ -697,7 +768,22 @@ impl BerryManifest {
             resolutions,
             catalog,
             catalogs,
+            package_extensions: None,
         }
+    }
+
+    pub fn with_package_extensions<I, D>(mut self, package_extensions: I) -> Self
+    where
+        I: IntoIterator<Item = (String, D)>,
+        D: IntoIterator<Item = (String, String)>,
+    {
+        self.package_extensions = Some(
+            package_extensions
+                .into_iter()
+                .map(|(selector, dependencies)| (selector, dependencies.into_iter().collect()))
+                .collect(),
+        );
+        self
     }
 
     pub fn with_resolutions<I>(resolutions: I) -> Self
@@ -707,7 +793,7 @@ impl BerryManifest {
         Self::new(resolutions, None, None)
     }
 
-    pub fn into_parts(self) -> Result<(Map<Resolution, String>, CatalogMap), Error> {
+    pub fn into_parts(self) -> Result<ManifestParts, Error> {
         let overrides = self
             .resolutions
             .map(|resolutions| {
@@ -729,7 +815,11 @@ impl BerryManifest {
             catalogs.insert("default".to_string(), default_catalog);
         }
 
-        Ok((overrides, catalogs))
+        Ok((
+            overrides,
+            catalogs,
+            self.package_extensions.unwrap_or_default(),
+        ))
     }
 }
 
@@ -1185,9 +1275,11 @@ mod test {
             resolutions: None,
             catalog: Some(default_catalog),
             catalogs: Some(named_catalogs),
+            package_extensions: None,
         };
 
-        let (overrides, all_catalogs) = manifest.into_parts().unwrap();
+        let (overrides, all_catalogs, package_extensions) = manifest.into_parts().unwrap();
+        assert!(package_extensions.is_empty());
 
         // No resolutions, so overrides should be empty
         assert!(overrides.is_empty());
