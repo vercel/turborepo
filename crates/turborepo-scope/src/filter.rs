@@ -991,7 +991,7 @@ mod test {
                         self.definition_path.clone(),
                         None,
                     )],
-                    vec![WorkspaceRoot::new("cargo", root, self.id())],
+                    vec![WorkspaceRoot::new("cargo", root)],
                 ))
             })
         }
