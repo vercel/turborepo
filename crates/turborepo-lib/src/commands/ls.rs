@@ -152,11 +152,11 @@ async fn query_packages(
         .filter_map(|item| {
             let name = item.get("name")?.as_str()?.to_string();
             let path = item.get("path")?.as_str()?.to_string();
-            let pkg_name = PackageName::from(name.as_str());
-            if pkg_name == PackageName::Root {
+            let package_name = PackageName::from(name.as_str());
+            if package_name == PackageName::Root {
                 return None;
             }
-            if !filtered_pkgs.contains(&pkg_name) {
+            if !filtered_pkgs.contains(&package_name) {
                 return None;
             }
             Some(PackageDetailDisplay { name, path })
