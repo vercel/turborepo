@@ -917,7 +917,10 @@ mod test {
         package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
         package_json::PackageJson,
         package_manager::PackageManager,
-        toolchain::{DiscoverPackagesFuture, DiscoveredPackage, Toolchain, ToolchainId},
+        toolchain::{
+            DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, Toolchain, ToolchainId,
+            WorkspaceRoot,
+        },
     };
 
     use super::{FilterResolver, PackageInference};
@@ -976,12 +979,20 @@ mod test {
 
         fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
             Box::pin(async move {
-                Ok(vec![DiscoveredPackage::aggregate(
-                    "cargo-workspace".to_string(),
-                    PackageJson::default(),
-                    self.definition_path.clone(),
-                    None,
-                )])
+                let root = self
+                    .definition_path
+                    .parent()
+                    .map(ToOwned::to_owned)
+                    .unwrap_or_else(|| self.definition_path.clone());
+                Ok(DiscoveredPackages::new(
+                    vec![DiscoveredPackage::aggregate(
+                        "cargo-workspace".to_string(),
+                        PackageJson::default(),
+                        self.definition_path.clone(),
+                        None,
+                    )],
+                    vec![WorkspaceRoot::new("cargo", root, self.id())],
+                ))
             })
         }
     }
