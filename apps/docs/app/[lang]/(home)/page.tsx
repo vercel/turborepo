@@ -77,8 +77,8 @@ export default function HomePage() {
             <div className="flex justify-center mt-2 mb-10">
               <div className="relative inline-flex w-full xs:w-auto">
                 <div className="absolute inset-0 rounded-lg xs:rounded-[22px] bg-gradient-to-r from-[#FF1E56] to-[#0196FF] w-full xs:w-auto"></div>
-                <div className="relative text-center rounded-md xs:rounded-[20px] m-[2px] bg-background dark:bg-black px-4 py-1.5 md:px-5 md:py-0.5 w-full xs:w-auto">
-                  <span className="flex flex-col gap-0 items-center xs:flex-row sm:gap-1 text-base sm:text-xl leading-tight bg-gradient-to-r from-[#FF1E56] to-[#0196FF] bg-clip-text text-transparent">
+                <div className="relative text-center rounded-md xs:rounded-[20px] m-[2px] bg-background dark:bg-black px-2 py-1.5 md:px-5 md:py-0.5 w-full xs:w-auto">
+                  <span className="flex flex-col gap-0 items-center xs:flex-row xs:gap-1 text-base md:text-xl leading-tight bg-gradient-to-r from-[#FF1E56] to-[#0196FF] bg-clip-text text-transparent">
                     <RemoteCacheCounterClient className="" />
                     <span className="whitespace-nowrap">hours of compute saved</span>
                   </span>
