@@ -80,7 +80,7 @@ export default function HomePage() {
                 <div className="relative text-center rounded-md xs:rounded-[20px] m-[2px] bg-background dark:bg-black px-4 py-1.5 md:px-5 md:py-0.5 w-full xs:w-auto">
                   <span className="flex flex-col gap-0 items-center xs:flex-row sm:gap-1 text-base sm:text-xl leading-tight bg-gradient-to-r from-[#FF1E56] to-[#0196FF] bg-clip-text text-transparent">
                     <RemoteCacheCounterClient className="" />
-                    <span>hours of compute saved</span>
+                    <span className="whitespace-nowrap">hours of compute saved</span>
                   </span>
                 </div>
               </div>
