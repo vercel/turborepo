@@ -20,7 +20,9 @@ use crate::{
         self, CachingPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscovery,
         PackageDiscoveryBuilder,
     },
-    knowledge::{PackageScopeObservation, RepositoryKnowledge, ScopeKind},
+    knowledge::{
+        PackageScopeObservation, RepositoryKnowledge, ScopeKind, WorkspaceRootObservation,
+    },
     package_json::{DependencyKind, PackageJson},
     package_manager::{PackageManager, pnpm::PnpmCatalogs},
     toolchain::{
@@ -83,6 +85,27 @@ pub enum Error {
     #[error("repository package knowledge was not constructed")]
     MissingRepositoryKnowledge,
     #[error(transparent)]
+    DuplicateToolchain(#[from] crate::toolchain::DuplicateToolchainError),
+    #[error(
+        "toolchain {toolchain} contributed multiple workspace roots: accepted {accepted_kind} \
+         root {accepted_root}, conflicting {conflicting_kind} root {conflicting_root}"
+    )]
+    MultipleWorkspaceRoots {
+        toolchain: ToolchainId,
+        accepted_kind: String,
+        accepted_root: AnchoredSystemPathBuf,
+        conflicting_kind: String,
+        conflicting_root: AnchoredSystemPathBuf,
+    },
+    #[error("{kind} workspace root {path} is outside repository root {repository_root}")]
+    WorkspaceRootOutsideRepository {
+        kind: String,
+        path: AbsoluteSystemPathBuf,
+        repository_root: AbsoluteSystemPathBuf,
+    },
+    #[error("toolchain {toolchain} contributed packages without a workspace root")]
+    MissingWorkspaceRoot { toolchain: ToolchainId },
+    #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error(transparent)]
     Discovery(#[from] crate::discovery::Error),
@@ -123,6 +146,31 @@ impl From<crate::knowledge::Error> for Error {
                 path,
                 repository_root,
             },
+            crate::knowledge::Error::MultipleWorkspaceRoots {
+                toolchain,
+                accepted_kind,
+                accepted_root,
+                conflicting_kind,
+                conflicting_root,
+            } => Error::MultipleWorkspaceRoots {
+                toolchain,
+                accepted_kind,
+                accepted_root,
+                conflicting_kind,
+                conflicting_root,
+            },
+            crate::knowledge::Error::WorkspaceRootOutsideRepository {
+                kind,
+                path,
+                repository_root,
+            } => Error::WorkspaceRootOutsideRepository {
+                kind,
+                path,
+                repository_root,
+            },
+            crate::knowledge::Error::MissingWorkspaceRoot { toolchain } => {
+                Error::MissingWorkspaceRoot { toolchain }
+            }
             crate::knowledge::Error::Path(error) => Error::Path(error),
         }
     }
@@ -284,8 +332,10 @@ where
                     })
             })
             .map(|pm| pm.with_resolved_nub_lockfile(self.repo_root));
+        self.package_manager.clone_from(&known_pm);
         let lockfile_future = if !is_single_package && self.lockfile.is_none() {
-            if let (Some(pm), Some(root_package_json)) = (known_pm, self.root_package_json.clone())
+            if let (Some(pm), Some(root_package_json)) =
+                (known_pm.clone(), self.root_package_json.clone())
             {
                 let repo_root = self.repo_root.to_owned();
                 Some(tokio::task::spawn_blocking(
@@ -484,7 +534,7 @@ where
             package_jsons,
             lockfile,
             package_discovery,
-            package_manager: _,
+            package_manager,
             extra_toolchains,
         } = builder;
         // Pure Cargo workspace: with no root package.json there is no
@@ -511,17 +561,19 @@ where
         let javascript = if no_javascript {
             None
         } else {
-            let javascript = Arc::new(JavaScriptToolchain::new(CachingPackageDiscovery::new(
-                package_discovery.build().map_err(Into::into)?,
-            )));
+            let javascript = Arc::new(JavaScriptToolchain::new(
+                CachingPackageDiscovery::new(package_discovery.build().map_err(Into::into)?),
+                repo_root.to_owned(),
+                package_manager,
+            ));
             // JavaScript registers first: its packages claim names before any
             // other toolchain's, so a cross-toolchain collision surfaces as the
             // non-JS package failing to add.
-            toolchains.register(javascript.clone());
+            toolchains.register(javascript.clone())?;
             Some(javascript)
         };
         for toolchain in extra_toolchains {
-            toolchains.register(toolchain);
+            toolchains.register(toolchain)?;
         }
 
         Ok(BuildState {
@@ -602,11 +654,18 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
         // discovery only; other toolchains always discover for themselves.
         let mut pre_supplied = self.package_jsons.take();
         let mut discovered: Vec<(ToolchainId, DiscoveredPackage)> = Vec::new();
+        let mut workspace_roots = Vec::new();
         for toolchain in self.toolchains.iter() {
             let id = toolchain.id();
             if id == ToolchainId::JAVASCRIPT
                 && let Some(jsons) = pre_supplied.take()
             {
+                if let Some(javascript) = self.javascript.as_ref() {
+                    workspace_roots.push(WorkspaceRootObservation::new(
+                        javascript.workspace_root().await?,
+                        id.clone(),
+                    ));
+                }
                 discovered.extend(jsons.into_iter().map(|(path, json)| {
                     (
                         ToolchainId::JAVASCRIPT,
@@ -620,7 +679,13 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                 }));
                 continue;
             }
-            let packages = toolchain.discover_packages().await?;
+            let output = toolchain.discover_packages().await?;
+            let (packages, roots) = output.into_parts();
+            workspace_roots.extend(
+                roots
+                    .into_iter()
+                    .map(|root| WorkspaceRootObservation::new(root, id.clone())),
+            );
             discovered.extend(packages.into_iter().map(|package| (id.clone(), package)));
         }
 
@@ -644,7 +709,16 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             self.repo_root,
             root_name,
             &observations,
+            &workspace_roots,
         )?);
+        for root in knowledge.workspace_roots() {
+            tracing::debug!(
+                kind = root.kind(),
+                path = %root.path(),
+                toolchain = %root.toolchain(),
+                "observed native workspace root"
+            );
+        }
         self.assembler.add_knowledge(&knowledge, compatibility)?;
         self.knowledge = Some(knowledge);
 
@@ -689,6 +763,13 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             repo_root,
             ..
         } = self;
+        let workspace_roots = match &javascript {
+            Some(javascript) => vec![WorkspaceRootObservation::new(
+                javascript.workspace_root().await?,
+                ToolchainId::JAVASCRIPT,
+            )],
+            None => Vec::new(),
+        };
         let knowledge = match knowledge {
             Some(knowledge) => knowledge,
             None => {
@@ -698,7 +779,12 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                         .as_ref()
                         .map(|name| name.as_inner().clone())
                 });
-                Arc::new(RepositoryKnowledge::build(repo_root, root_name, &[])?)
+                Arc::new(RepositoryKnowledge::build(
+                    repo_root,
+                    root_name,
+                    &[],
+                    &workspace_roots,
+                )?)
             }
         };
         let PackageGraphAssembly {
@@ -1174,6 +1260,7 @@ mod test {
     use turborepo_errors::Spanned;
 
     use super::*;
+    use crate::toolchain::{DiscoverPackagesFuture, DiscoveredPackages, WorkspaceRoot};
 
     struct MockDiscovery;
     impl PackageDiscovery for MockDiscovery {
@@ -1190,6 +1277,65 @@ mod test {
             &self,
         ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
             self.discover_packages().await
+        }
+    }
+
+    #[derive(Clone)]
+    struct ManagerDiscovery(PackageManager);
+
+    impl PackageDiscovery for ManagerDiscovery {
+        async fn discover_packages(
+            &self,
+        ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
+            Ok(crate::discovery::DiscoveryResponse {
+                package_manager: self.0.clone(),
+                workspaces: Vec::new(),
+            })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
+            self.discover_packages().await
+        }
+    }
+
+    struct RootObservingToolchain {
+        id: ToolchainId,
+        roots: Vec<WorkspaceRoot>,
+    }
+
+    impl Toolchain for RootObservingToolchain {
+        fn id(&self) -> ToolchainId {
+            self.id.clone()
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async move { Ok(DiscoveredPackages::new(Vec::new(), self.roots.clone())) })
+        }
+    }
+
+    struct PackageWithoutRootToolchain {
+        root: AbsoluteSystemPathBuf,
+    }
+
+    impl Toolchain for PackageWithoutRootToolchain {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::new("missing-root")
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async move {
+                Ok(DiscoveredPackages::new(
+                    vec![DiscoveredPackage::package(
+                        Some("orphan".to_string()),
+                        PackageJson::default(),
+                        self.root.join_components(&["orphan", "manifest"]),
+                        None,
+                    )],
+                    Vec::new(),
+                ))
+            })
         }
     }
 
@@ -2113,6 +2259,278 @@ mod test {
                 path,
                 repository_root,
             }) if path == definition && repository_root == root
+        ));
+    }
+
+    #[tokio::test]
+    async fn single_package_reports_only_javascript_root_without_running_extra_toolchains() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let graph = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_manager(PackageManager::Npm)
+            .with_single_package_mode(true)
+            .with_toolchain(Arc::new(RootObservingToolchain {
+                id: ToolchainId::new("unused-extra"),
+                roots: vec![WorkspaceRoot::new(
+                    "unused-extra",
+                    root.join_component("other"),
+                )],
+            }))
+            .build()
+            .await
+            .unwrap();
+        let roots = graph
+            .repository_knowledge()
+            .workspace_roots()
+            .collect::<Vec<_>>();
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].kind(), "npm");
+    }
+
+    #[tokio::test]
+    async fn toolchain_cannot_contribute_multiple_workspace_root_kinds() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let first = root.join_component("first");
+        let second = root.join_component("second");
+
+        let duplicate = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_toolchain(Arc::new(RootObservingToolchain {
+                id: ToolchainId::new("future-one"),
+                roots: vec![
+                    WorkspaceRoot::new("npm", first.clone()),
+                    WorkspaceRoot::new("pnpm", second.clone()),
+                ],
+            }))
+            .build()
+            .await;
+        assert!(matches!(
+            duplicate,
+            Err(Error::MultipleWorkspaceRoots {
+                ref toolchain,
+                ref accepted_kind,
+                ref conflicting_kind,
+                ..
+            }) if toolchain == &ToolchainId::new("future-one")
+                && accepted_kind == "npm"
+                && conflicting_kind == "pnpm"
+        ));
+
+        let graph = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_toolchain(Arc::new(RootObservingToolchain {
+                id: ToolchainId::new("future-two"),
+                roots: vec![WorkspaceRoot::new("future-a", first)],
+            }))
+            .with_toolchain(Arc::new(RootObservingToolchain {
+                id: ToolchainId::new("future-three"),
+                roots: vec![WorkspaceRoot::new("future-b", second)],
+            }))
+            .build()
+            .await
+            .unwrap();
+        assert_eq!(graph.repository_knowledge().workspace_roots().count(), 3);
+    }
+
+    #[tokio::test]
+    async fn same_physical_root_retains_each_core_bound_producer() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let first = ToolchainId::new("future-first");
+        let second = ToolchainId::new("future-second");
+        let graph = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_toolchain(Arc::new(RootObservingToolchain {
+                id: first.clone(),
+                roots: vec![WorkspaceRoot::new("shared", root.clone())],
+            }))
+            .with_toolchain(Arc::new(RootObservingToolchain {
+                id: second.clone(),
+                roots: vec![WorkspaceRoot::new("shared", root.clone())],
+            }))
+            .build()
+            .await
+            .unwrap();
+        let owners = graph
+            .repository_knowledge()
+            .workspace_roots()
+            .filter(|root| root.kind() == "shared")
+            .map(|root| root.toolchain().clone())
+            .collect::<HashSet<_>>();
+
+        assert_eq!(owners, HashSet::from([first, second]));
+    }
+
+    #[tokio::test]
+    async fn contributed_packages_require_a_workspace_root() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let result = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_toolchain(Arc::new(PackageWithoutRootToolchain { root: root.clone() }))
+            .build()
+            .await;
+        assert!(matches!(
+            result,
+            Err(Error::MissingWorkspaceRoot { ref toolchain })
+                if toolchain == &ToolchainId::new("missing-root")
+        ));
+
+        // A root returned by another registry entry cannot claim ownership for
+        // the package producer, even when its kind and path would otherwise be
+        // accepted.
+        let cross_producer = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_toolchain(Arc::new(RootObservingToolchain {
+                id: ToolchainId::new("spoof-attempt"),
+                roots: vec![WorkspaceRoot::new("claimed", root.clone())],
+            }))
+            .with_toolchain(Arc::new(PackageWithoutRootToolchain { root: root.clone() }))
+            .build()
+            .await;
+        assert!(matches!(
+            cross_producer,
+            Err(Error::MissingWorkspaceRoot { ref toolchain })
+                if toolchain == &ToolchainId::new("missing-root")
+        ));
+
+        PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_toolchain(Arc::new(RootObservingToolchain {
+                id: ToolchainId::new("empty-no-op"),
+                roots: Vec::new(),
+            }))
+            .build()
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn discovery_manager_must_match_the_authoritative_command_family() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let mismatch = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_manager(PackageManager::Npm)
+            .with_package_discovery(ManagerDiscovery(PackageManager::Pnpm9))
+            .build()
+            .await;
+        assert!(matches!(
+            mismatch,
+            Err(Error::Discovery(crate::discovery::Error::InvalidResponse(
+                _
+            )))
+        ));
+
+        for (authoritative, discovered, family) in [
+            (PackageManager::Pnpm9, PackageManager::Pnpm6, "pnpm"),
+            (PackageManager::Berry, PackageManager::Yarn, "yarn"),
+        ] {
+            let graph = PackageGraphBuilder::new(&root, PackageJson::default())
+                .with_package_manager(authoritative.clone())
+                .with_package_discovery(ManagerDiscovery(discovered))
+                .build()
+                .await
+                .unwrap();
+            assert_eq!(graph.package_manager(), Some(&authoritative));
+            assert!(
+                graph
+                    .repository_knowledge()
+                    .workspace_roots()
+                    .any(|root| root.kind() == family)
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn multiple_contributed_cargo_roots_use_generic_core_validation() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let result = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_toolchain(Arc::new(RootObservingToolchain {
+                id: ToolchainId::new("future-cargo-adapter"),
+                roots: vec![
+                    WorkspaceRoot::new("cargo", root.join_component("first")),
+                    WorkspaceRoot::new("cargo", root.join_component("second")),
+                ],
+            }))
+            .build()
+            .await;
+        assert!(matches!(
+            result,
+            Err(Error::MultipleWorkspaceRoots { ref toolchain, .. })
+                if toolchain == &ToolchainId::new("future-cargo-adapter")
+        ));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn workspace_root_symlink_aliases_deduplicate_by_physical_path() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let physical = root.join_component("physical");
+        std::fs::create_dir_all(physical.as_std_path()).unwrap();
+        let alias = root.join_component("alias");
+        std::os::unix::fs::symlink(physical.as_std_path(), alias.as_std_path()).unwrap();
+
+        let graph = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_toolchain(Arc::new(RootObservingToolchain {
+                id: ToolchainId::new("future-symlink"),
+                roots: vec![
+                    WorkspaceRoot::new("future-build", physical),
+                    WorkspaceRoot::new("future-build", alias),
+                ],
+            }))
+            .build()
+            .await
+            .unwrap();
+        assert_eq!(
+            graph
+                .repository_knowledge()
+                .workspace_roots()
+                .filter(|root| root.kind() == "future-build")
+                .count(),
+            1
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn workspace_root_symlink_escape_is_rejected() {
+        let repository = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(repository.path()).unwrap();
+        let outside_root = AbsoluteSystemPathBuf::try_from(outside.path()).unwrap();
+        let alias = root.join_component("escaped");
+        std::os::unix::fs::symlink(outside_root.as_std_path(), alias.as_std_path()).unwrap();
+        let unresolved_root = alias.join_component("not-created");
+
+        let result = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_toolchain(Arc::new(RootObservingToolchain {
+                id: ToolchainId::new("future-symlink-escape"),
+                roots: vec![WorkspaceRoot::new("future-build", unresolved_root.clone())],
+            }))
+            .build()
+            .await;
+        assert!(matches!(
+            result,
+            Err(Error::WorkspaceRootOutsideRepository {
+                ref kind,
+                ref path,
+                ..
+            }) if kind == "future-build" && path == &unresolved_root
         ));
     }
 
