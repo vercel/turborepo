@@ -227,7 +227,7 @@ describe("getTurboConfigs", () => {
   it("throws when both turbo.json and turbo.jsonc exist", () => {
     const { root } = useFixture({ fixture: "both-configs" });
     expect(() => getTurboConfigs(root)).toThrow(
-      /Found both turbo\.json and turbo\.jsonc in the same directory/
+      /Found multiple turbo config files in the same directory/
     );
   });
 });

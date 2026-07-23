@@ -24,7 +24,7 @@ use turborepo_ui::BOLD;
 
 use super::CommandBase;
 use crate::{
-    config::{CONFIG_FILE, CONFIG_FILE_JSONC},
+    config::{CONFIG_FILE, CONFIG_FILE_JSONC, CONFIG_FILE_TOML},
     turbo_json::{RawRootTurboJson, RawTurboJson},
 };
 
@@ -135,6 +135,11 @@ fn turbo_json() -> &'static AnchoredSystemPath {
 fn turbo_jsonc() -> &'static AnchoredSystemPath {
     static PATH: OnceLock<&'static AnchoredSystemPath> = OnceLock::new();
     PATH.get_or_init(|| anchored_path(CONFIG_FILE_JSONC))
+}
+
+fn turbo_toml() -> &'static AnchoredSystemPath {
+    static PATH: OnceLock<&'static AnchoredSystemPath> = OnceLock::new();
+    PATH.get_or_init(|| anchored_path(CONFIG_FILE_TOML))
 }
 
 #[allow(clippy::expect_used)]
@@ -1272,6 +1277,7 @@ impl<'a> Prune<'a> {
             .get_turbo_json(turbo_json())
             .transpose()
             .or_else(|| self.get_turbo_json(turbo_jsonc()).transpose())
+            .or_else(|| self.get_turbo_json(turbo_toml()).transpose())
             .transpose()?
         else {
             return Ok(());
@@ -1316,7 +1322,10 @@ impl<'a> Prune<'a> {
             let anchored = AnchoredSystemPathBuf::new(&self.root, file_path)?;
             // turbo.json is already written by copy_turbo_json as a pruned
             // version. Don't overwrite it with the original.
-            if anchored.as_str() == CONFIG_FILE || anchored.as_str() == CONFIG_FILE_JSONC {
+            if anchored.as_str() == CONFIG_FILE
+                || anchored.as_str() == CONFIG_FILE_JSONC
+                || anchored.as_str() == CONFIG_FILE_TOML
+            {
                 continue;
             }
             trace!("Copying global dependency: {}", anchored);
@@ -1331,6 +1340,7 @@ impl<'a> Prune<'a> {
             .get_turbo_json(turbo_json())
             .transpose()
             .or_else(|| self.get_turbo_json(turbo_jsonc()).transpose())
+            .or_else(|| self.get_turbo_json(turbo_toml()).transpose())
             .transpose()?
         else {
             return Ok(());
@@ -1338,7 +1348,20 @@ impl<'a> Prune<'a> {
 
         let pruned_turbo_json = turbo_json.prune_tasks(workspaces);
         let new_turbo_path = self.full_directory.resolve(turbo_json_name);
-        new_turbo_path.create_with_contents(serde_json::to_string_pretty(&pruned_turbo_json)?)?;
+        let contents = if turbo_json_name.as_str() == CONFIG_FILE_TOML {
+            // Preserve TOML for repositories that use turbo.toml. Serialize via
+            // serde_json::Value so the shared RawTurboJson shape can be emitted as TOML.
+            let value = serde_json::to_value(&pruned_turbo_json)?;
+            toml::to_string_pretty(&value).map_err(|error| {
+                Error::Io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    error.to_string(),
+                ))
+            })?
+        } else {
+            serde_json::to_string_pretty(&pruned_turbo_json)?
+        };
+        new_turbo_path.create_with_contents(contents)?;
 
         Ok(())
     }
@@ -1353,7 +1376,8 @@ impl<'a> Prune<'a> {
         };
 
         let turbo_json =
-            RawRootTurboJson::parse(&turbo_json_contents, turbo_json_name.as_str())?.try_into()?;
+            RawRootTurboJson::parse_from_path(&turbo_json_contents, turbo_json_name.as_str())?
+                .try_into()?;
         Ok(Some((turbo_json, turbo_json_name)))
     }
 }

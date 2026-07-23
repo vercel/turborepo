@@ -4,13 +4,18 @@ import type { Schema } from "@turbo/types";
 import { findRootSync } from "@manypkg/find-root";
 import json5 from "json5";
 
-const TURBO_CONFIG_FILES = ["turbo.json", "turbo.jsonc"] as const;
+const TURBO_CONFIG_FILES = ["turbo.json", "turbo.jsonc", "turbo.toml"] as const;
 
 interface Options {
   cache?: boolean;
 }
 
-function isRootTurboConfig(content: string): boolean {
+function isRootTurboConfig(content: string, filename: string): boolean {
+  if (filename.endsWith(".toml")) {
+    // Codemods don't fully parse TOML yet; treat as a package config when a
+    // top-level `extends` assignment is present, otherwise assume root.
+    return !/^\s*extends\s*=/m.test(content);
+  }
   const result: Schema | undefined = json5.parse(content);
   return !(result && "extends" in result);
 }
@@ -25,10 +30,10 @@ export function clearTurboRootCache(): void {
 }
 
 /**
- * Search upward from `cwd` for a directory containing turbo.json or turbo.jsonc
- * that is a root config (no "extends" key). Both filenames are checked at each
- * directory level so that a turbo.jsonc in a closer directory takes priority
- * over a turbo.json in a parent directory.
+ * Search upward from `cwd` for a directory containing turbo.json, turbo.jsonc,
+ * or turbo.toml that is a root config (no "extends" key). All filenames are
+ * checked at each directory level so that a config in a closer directory takes
+ * priority over one in a parent directory.
  */
 function searchUpForTurboConfig(cwd: string): string | null {
   const fsRoot = path.parse(cwd).root;
@@ -38,7 +43,7 @@ function searchUpForTurboConfig(cwd: string): string | null {
     for (const filename of TURBO_CONFIG_FILES) {
       try {
         const content = fs.readFileSync(path.join(dir, filename)).toString();
-        if (isRootTurboConfig(content)) {
+        if (isRootTurboConfig(content, filename)) {
           return dir;
         }
       } catch {
@@ -59,7 +64,7 @@ export function getTurboRoot(cwd?: string, opts?: Options): string | null {
     return configCache[currentDir];
   }
 
-  // Turborepo root can be determined by a turbo.json or turbo.jsonc without an extends key
+  // Turborepo root can be determined by a turbo config without an extends key
   let root = searchUpForTurboConfig(currentDir);
 
   if (!root) {

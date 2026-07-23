@@ -136,17 +136,14 @@ const packageJsonDependencies = (filePath: string): Set<string> => {
 };
 
 /**
- * Find turbo.json or turbo.jsonc in a directory if it exists
+ * Find turbo.json, turbo.jsonc, or turbo.toml in a directory if it exists
  */
 function findTurboConfigInDir(dirPath: string): string | null {
-  const turboJsonPath = path.join(dirPath, "turbo.json");
-  const turboJsoncPath = path.join(dirPath, "turbo.jsonc");
-
-  if (fs.existsSync(turboJsonPath)) {
-    return turboJsonPath;
-  }
-  if (fs.existsSync(turboJsoncPath)) {
-    return turboJsoncPath;
+  for (const name of ["turbo.json", "turbo.jsonc", "turbo.toml"] as const) {
+    const configPath = path.join(dirPath, name);
+    if (fs.existsSync(configPath)) {
+      return configPath;
+    }
   }
   return null;
 }

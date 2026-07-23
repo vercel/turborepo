@@ -22,6 +22,10 @@ use crate::{Error, FutureFlags, Pipeline, RawTaskDefinition, TurboJson};
 /// Configuration file names
 pub const CONFIG_FILE: &str = "turbo.json";
 pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
+pub const CONFIG_FILE_TOML: &str = "turbo.toml";
+
+/// All recognized turbo configuration file names, in discovery order.
+pub const CONFIG_FILE_NAMES: [&str; 3] = [CONFIG_FILE, CONFIG_FILE_JSONC, CONFIG_FILE_TOML];
 
 /// Path to the config file that will be used to store the trace results
 /// (relative to repo root)
@@ -157,17 +161,18 @@ impl TurboJsonReader {
 /// Represents where to look for a turbo.json file
 #[derive(Debug, Clone)]
 pub enum TurboJsonPath<'a> {
-    /// Look for turbo.json/turbo.jsonc in this directory
+    /// Look for turbo.json / turbo.jsonc / turbo.toml in this directory
     Dir(&'a AbsoluteSystemPath),
     /// Only use this specific file path (does not need to be named turbo.json)
     File(&'a AbsoluteSystemPath),
 }
 
-/// Load a turbo.json from a path, handling both turbo.json and turbo.jsonc
+/// Load a turbo config from a path, handling turbo.json, turbo.jsonc, and
+/// turbo.toml.
 ///
 /// This function handles the logic of:
-/// - Looking for both turbo.json and turbo.jsonc in a directory
-/// - Erroring if both exist
+/// - Looking for each recognized config file name in a directory
+/// - Erroring if more than one valid config is present
 /// - Returning the appropriate one if only one exists
 pub fn load_from_path(
     reader: &TurboJsonReader,
@@ -176,14 +181,7 @@ pub fn load_from_path(
 ) -> Result<TurboJson, Error> {
     let result = match turbo_json_path {
         TurboJsonPath::Dir(turbo_json_dir_path) => {
-            let turbo_json_path = turbo_json_dir_path.join_component(CONFIG_FILE);
-            let turbo_jsonc_path = turbo_json_dir_path.join_component(CONFIG_FILE_JSONC);
-
-            // Load both turbo.json and turbo.jsonc
-            let turbo_json = reader.read(&turbo_json_path, is_root);
-            let turbo_jsonc = reader.read(&turbo_jsonc_path, is_root);
-
-            select_turbo_json(turbo_json_dir_path, turbo_json, turbo_jsonc)
+            load_from_dir(reader, turbo_json_dir_path, is_root)
         }
         TurboJsonPath::File(turbo_json_path) => reader.read(turbo_json_path, is_root),
     };
@@ -198,36 +196,49 @@ pub fn load_from_path(
     }
 }
 
-/// Helper for selecting the correct turbo.json read result when both
-/// turbo.json and turbo.jsonc might exist
-fn select_turbo_json(
-    turbo_json_dir_path: &AbsoluteSystemPath,
-    turbo_json: Result<Option<TurboJson>, Error>,
-    turbo_jsonc: Result<Option<TurboJson>, Error>,
+/// Load the turbo config present in a directory, if any.
+///
+/// Reads every recognized config file name and selects exactly one successful
+/// parse. Multiple successful parses produce `MultipleTurboConfigs`. When no
+/// file is present, returns `Ok(None)`. When files are present but all fail to
+/// parse, returns the first parse error.
+fn load_from_dir(
+    reader: &TurboJsonReader,
+    dir_path: &AbsoluteSystemPath,
+    is_root: bool,
 ) -> Result<Option<TurboJson>, Error> {
-    tracing::debug!(
-        "path: {}, turbo_json: {:?}, turbo_jsonc: {:?}",
-        turbo_json_dir_path.as_str(),
-        turbo_json.as_ref().map(|v| v.as_ref().map(|_| ())),
-        turbo_jsonc.as_ref().map(|v| v.as_ref().map(|_| ()))
-    );
-    match (turbo_json, turbo_jsonc) {
-        // If both paths contain valid turbo.json error
-        (Ok(Some(_)), Ok(Some(_))) => Err(Error::MultipleTurboConfigs {
-            directory: turbo_json_dir_path.to_string(),
-        }),
-        // If turbo.json is valid and turbo.jsonc is missing or invalid, use turbo.json
-        (Ok(Some(turbo_json)), Ok(None)) | (Ok(Some(turbo_json)), Err(_)) => Ok(Some(turbo_json)),
-        // If turbo.jsonc is valid and turbo.json is missing or invalid, use turbo.jsonc
-        (Ok(None), Ok(Some(turbo_jsonc))) | (Err(_), Ok(Some(turbo_jsonc))) => {
-            Ok(Some(turbo_jsonc))
+    let mut found: Vec<TurboJson> = Vec::new();
+    let mut first_err: Option<Error> = None;
+
+    for name in CONFIG_FILE_NAMES {
+        let path = dir_path.join_component(name);
+        match reader.read(&path, is_root) {
+            Ok(Some(turbo_json)) => found.push(turbo_json),
+            Ok(None) => {}
+            Err(e) => {
+                if first_err.is_none() {
+                    first_err = Some(e);
+                }
+            }
         }
-        // If neither are present, then choose nothing
-        (Ok(None), Ok(None)) => Ok(None),
-        // If only one has an error return the failure
-        (Err(e), Ok(None)) | (Ok(None), Err(e)) => Err(e),
-        // If both fail then just return error for `turbo.json`
-        (Err(e), Err(_)) => Err(e),
+    }
+
+    tracing::debug!(
+        path = dir_path.as_str(),
+        found = found.len(),
+        has_error = first_err.is_some(),
+        "selecting turbo config from directory"
+    );
+
+    match found.len() {
+        0 => match first_err {
+            Some(e) => Err(e),
+            None => Ok(None),
+        },
+        1 => Ok(found.into_iter().next()),
+        _ => Err(Error::MultipleTurboConfigs {
+            directory: dir_path.to_string(),
+        }),
     }
 }
 
@@ -565,14 +576,7 @@ fn load_turbo_json_from_file(
 ) -> Result<TurboJson, LoaderError> {
     let result = match turbo_json_path {
         LoadTurboJsonPath::Dir(turbo_json_dir_path) => {
-            let turbo_json_path = turbo_json_dir_path.join_component(CONFIG_FILE);
-            let turbo_jsonc_path = turbo_json_dir_path.join_component(CONFIG_FILE_JSONC);
-
-            // Load both turbo.json and turbo.jsonc
-            let turbo_json = reader.read(&turbo_json_path, is_root);
-            let turbo_jsonc = reader.read(&turbo_jsonc_path, is_root);
-
-            select_turbo_json(turbo_json_dir_path, turbo_json, turbo_jsonc)
+            load_from_dir(reader, turbo_json_dir_path, is_root)
         }
         LoadTurboJsonPath::File(turbo_json_path) => reader.read(turbo_json_path, is_root),
     };
@@ -754,6 +758,22 @@ mod tests {
     }
 
     #[test]
+    fn test_load_from_path_with_json_and_toml() {
+        let tmp_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+        let reader = TurboJsonReader::new(repo_root.to_owned());
+
+        fs::write(repo_root.join_component(CONFIG_FILE), "{}").unwrap();
+        fs::write(repo_root.join_component(CONFIG_FILE_TOML), "").unwrap();
+
+        let result = load_from_path(&reader, TurboJsonPath::Dir(repo_root), true);
+        assert!(matches!(
+            result.unwrap_err(),
+            Error::MultipleTurboConfigs { .. }
+        ));
+    }
+
+    #[test]
     fn test_load_from_path_with_only_turbo_json() {
         let tmp_dir = tempdir().unwrap();
         let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
@@ -779,6 +799,38 @@ mod tests {
 
         let result = load_from_path(&reader, TurboJsonPath::Dir(repo_root), true);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_load_from_path_with_only_turbo_toml() {
+        let tmp_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+        let reader = TurboJsonReader::new(repo_root.to_owned());
+
+        let turbo_toml_path = repo_root.join_component(CONFIG_FILE_TOML);
+        fs::write(
+            &turbo_toml_path,
+            r#"
+[tasks.build]
+dependsOn = ["^build"]
+outputs = ["dist/**"]
+"#,
+        )
+        .unwrap();
+
+        let result = load_from_path(&reader, TurboJsonPath::Dir(repo_root), true).unwrap();
+        assert!(result.tasks.contains_key(&"build".into()));
+        let build = result.tasks.get(&"build".into()).unwrap();
+        assert_eq!(
+            build
+                .depends_on
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|d| d.as_inner().as_str())
+                .collect::<Vec<_>>(),
+            vec!["^build"]
+        );
     }
 
     #[test]
@@ -1130,8 +1182,8 @@ mod tests {
             *directory = "some-dir".to_owned()
         }
         assert_snapshot!(err, @r"
-        Found both turbo.json and turbo.jsonc in the same directory: some-dir
-        Remove either turbo.json or turbo.jsonc so there is only one.
+        Found multiple turbo config files in the same directory: some-dir
+        Only one of turbo.json, turbo.jsonc, or turbo.toml is allowed.
         ");
     }
 

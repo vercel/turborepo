@@ -255,7 +255,7 @@ describe("transform-env-literals-to-wildcards", () => {
     expect(read("turbo.json")).toBeUndefined();
     expect(result.fatalError).toBeDefined();
     expect(result.fatalError?.message).toMatch(
-      /No turbo\.json or turbo\.jsonc found at .*?\. Is the path correct\?/
+      /No turbo\.json, turbo\.jsonc, or turbo\.toml found at .*?\. Is the path correct\?/
     );
   });
 
@@ -288,7 +288,7 @@ describe("transform-env-literals-to-wildcards", () => {
 
     expect(result.fatalError).toBeDefined();
     expect(result.fatalError?.message).toContain(
-      "Found both turbo.json and turbo.jsonc"
+      "Found multiple turbo config files"
     );
   });
 });

@@ -72,10 +72,11 @@ pub fn filter_existing_changed_files(
 /// Root-level files that always trigger a full rebuild when changed.
 ///
 /// - `package.json`: workspace topology or root dependency changes
-/// - `turbo.json`/`turbo.jsonc`: task definitions, global deps, pipelines
+/// - `turbo.json`/`turbo.jsonc`/`turbo.toml`: task definitions, global deps,
+///   pipelines
 ///
 /// Lockfile changes are detected separately via the package manager.
-const DEFAULT_GLOBAL_DEPS: &[&str] = &["turbo.json", "turbo.jsonc"];
+const DEFAULT_GLOBAL_DEPS: &[&str] = &["turbo.json", "turbo.jsonc", "turbo.toml"];
 
 /// Determines which tasks are directly affected by the given set of changed
 /// files. Does NOT expand to transitive dependents or dependencies. Callers
@@ -121,7 +122,8 @@ pub fn affected_task_ids(
 /// tasks should be considered affected regardless of their individual inputs.
 ///
 /// Global changes include:
-/// - Root config files: `package.json`, `turbo.json`, `turbo.jsonc`
+/// - Root config files: `package.json`, `turbo.json`, `turbo.jsonc`,
+///   `turbo.toml`
 /// - The package manager's lockfile
 /// - Files matching user-configured `globalDependencies` globs
 fn is_global_change(
