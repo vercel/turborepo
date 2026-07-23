@@ -310,6 +310,11 @@
           "description": "Resolve `--filter` at the task level instead of the package level. Git-range filters (e.g. `--filter=[main]`) will match against task `inputs` globs, and the `...` dependency/dependent syntax will traverse the task graph in addition to the package graph.",
           "default": false,
           "type": "boolean"
+        },
+        "strictTaskEntrypointSelection": {
+          "description": "Select requested task entrypoints according to whether the task resolves a command in the repository. When any package can run a requested task, packages without a command are skipped as entrypoints. Tasks with no command anywhere remain available for graph-only orchestration.",
+          "default": false,
+          "type": "boolean"
         }
       }
     },

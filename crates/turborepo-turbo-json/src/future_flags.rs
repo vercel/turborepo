@@ -74,6 +74,13 @@ pub struct FutureFlags {
     /// traverse the task graph in addition to the package graph.
     #[serde(default)]
     pub filter_using_tasks: bool,
+    /// Select requested task entrypoints according to whether the task resolves
+    /// a command in the repository. When any package can run a requested task,
+    /// packages without a command are not used as entrypoints. Tasks with no
+    /// command anywhere remain available for graph-only orchestration, and
+    /// missing tasks reached as dependencies remain in the Task Graph.
+    #[serde(default)]
+    pub strict_task_entrypoint_selection: bool,
     /// Move global configuration keys (like `globalDependencies`, `ui`,
     /// `envMode`, etc.) under a top-level `global` key for clarity.
     ///
@@ -152,16 +159,18 @@ impl TS for FutureFlags {
     fn inline() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
          boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
-         pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
-         boolean, experimentalCargoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
+         pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
+         strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
+         experimentalCargoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
             .to_string()
     }
 
     fn inline_flattened() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
          boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
-         pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
-         boolean, experimentalCargoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
+         pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
+         strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
+         experimentalCargoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
             .to_string()
     }
 
@@ -169,8 +178,8 @@ impl TS for FutureFlags {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
          boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
-         experimentalTaskCommand?: boolean };"
+         strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
+         experimentalCargoWorkspaces?: boolean, experimentalTaskCommand?: boolean };"
             .to_string()
     }
 
@@ -178,8 +187,8 @@ impl TS for FutureFlags {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
          boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
-         experimentalTaskCommand?: boolean };"
+         strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
+         experimentalCargoWorkspaces?: boolean, experimentalTaskCommand?: boolean };"
             .to_string()
     }
 

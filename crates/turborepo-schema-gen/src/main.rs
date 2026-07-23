@@ -795,6 +795,15 @@ export interface FutureFlags {
    */
   filterUsingTasks?: boolean;
   /**
+   * Select requested task entrypoints according to whether the task resolves
+   * a command in the repository. When any package can run a requested task,
+   * packages without a command are skipped as entrypoints. Tasks with no
+   * command anywhere remain available for graph-only orchestration.
+   *
+   * @defaultValue `false`
+   */
+  strictTaskEntrypointSelection?: boolean;
+  /**
    * Move global configuration keys under a top-level `global` key.
    *
    * When enabled, keys like `globalDependencies`, `globalEnv`, `ui`,
