@@ -246,7 +246,8 @@ fn validate_workspace_roots(
     repository_root: &AbsoluteSystemPath,
     observations: &[WorkspaceRootObservation],
 ) -> Result<Vec<WorkspaceRootKnowledge>, Error> {
-    let mut accepted = HashMap::<String, (std::path::PathBuf, AnchoredSystemPathBuf)>::new();
+    let mut accepted =
+        HashMap::<ToolchainId, (String, std::path::PathBuf, AnchoredSystemPathBuf)>::new();
     let mut roots = Vec::with_capacity(observations.len());
 
     for observation in observations {
@@ -264,29 +265,27 @@ fn validate_workspace_roots(
         }
         let physical_path = canonical_physical_path(observation.path().as_std_path())
             .unwrap_or_else(|| observation.path().as_std_path().to_owned());
-        if let Some((accepted_physical_path, accepted_path)) = accepted.get(observation.kind()) {
-            if accepted_physical_path == &physical_path {
-                if roots.iter().any(|root: &WorkspaceRootKnowledge| {
-                    root.kind == observation.kind() && root.toolchain == observation.producer
-                }) {
-                    continue;
-                }
-                roots.push(WorkspaceRootKnowledge {
-                    kind: observation.kind().to_string(),
-                    path: accepted_path.clone(),
-                    toolchain: observation.producer.clone(),
-                });
+        if let Some((accepted_kind, accepted_physical_path, accepted_path)) =
+            accepted.get(&observation.producer)
+        {
+            if accepted_kind == observation.kind() && accepted_physical_path == &physical_path {
                 continue;
             }
-            return Err(Error::DuplicateWorkspaceRoot {
-                kind: observation.kind().to_string(),
+            return Err(Error::MultipleWorkspaceRoots {
+                toolchain: observation.producer.clone(),
+                accepted_kind: accepted_kind.clone(),
                 accepted_root: accepted_path.clone(),
+                conflicting_kind: observation.kind().to_string(),
                 conflicting_root: anchored_path,
             });
         }
         accepted.insert(
-            observation.kind().to_string(),
-            (physical_path, anchored_path.clone()),
+            observation.producer.clone(),
+            (
+                observation.kind().to_string(),
+                physical_path,
+                anchored_path.clone(),
+            ),
         );
         roots.push(WorkspaceRootKnowledge {
             kind: observation.kind().to_string(),
@@ -354,12 +353,14 @@ pub(crate) enum Error {
         repository_root: AbsoluteSystemPathBuf,
     },
     #[error(
-        "multiple independent {kind} workspace roots are unsupported: accepted {accepted_root}, \
-         conflicting {conflicting_root}"
+        "toolchain {toolchain} contributed multiple workspace roots: accepted {accepted_kind} \
+         root {accepted_root}, conflicting {conflicting_kind} root {conflicting_root}"
     )]
-    DuplicateWorkspaceRoot {
-        kind: String,
+    MultipleWorkspaceRoots {
+        toolchain: ToolchainId,
+        accepted_kind: String,
         accepted_root: AnchoredSystemPathBuf,
+        conflicting_kind: String,
         conflicting_root: AnchoredSystemPathBuf,
     },
     #[error("{kind} workspace root {path} is outside repository root {repository_root}")]

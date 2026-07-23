@@ -87,12 +87,14 @@ pub enum Error {
     #[error(transparent)]
     DuplicateToolchain(#[from] crate::toolchain::DuplicateToolchainError),
     #[error(
-        "multiple independent {kind} workspace roots are unsupported: accepted {accepted_root}, \
-         conflicting {conflicting_root}"
+        "toolchain {toolchain} contributed multiple workspace roots: accepted {accepted_kind} \
+         root {accepted_root}, conflicting {conflicting_kind} root {conflicting_root}"
     )]
-    DuplicateWorkspaceRoot {
-        kind: String,
+    MultipleWorkspaceRoots {
+        toolchain: ToolchainId,
+        accepted_kind: String,
         accepted_root: AnchoredSystemPathBuf,
+        conflicting_kind: String,
         conflicting_root: AnchoredSystemPathBuf,
     },
     #[error("{kind} workspace root {path} is outside repository root {repository_root}")]
@@ -144,13 +146,17 @@ impl From<crate::knowledge::Error> for Error {
                 path,
                 repository_root,
             },
-            crate::knowledge::Error::DuplicateWorkspaceRoot {
-                kind,
+            crate::knowledge::Error::MultipleWorkspaceRoots {
+                toolchain,
+                accepted_kind,
                 accepted_root,
+                conflicting_kind,
                 conflicting_root,
-            } => Error::DuplicateWorkspaceRoot {
-                kind,
+            } => Error::MultipleWorkspaceRoots {
+                toolchain,
+                accepted_kind,
                 accepted_root,
+                conflicting_kind,
                 conflicting_root,
             },
             crate::knowledge::Error::WorkspaceRootOutsideRepository {
@@ -2282,7 +2288,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn future_workspace_root_kinds_are_validated_and_distinct_kinds_coexist() {
+    async fn toolchain_cannot_contribute_multiple_workspace_root_kinds() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let first = root.join_component("first");
@@ -2294,15 +2300,22 @@ mod test {
             .with_toolchain(Arc::new(RootObservingToolchain {
                 id: ToolchainId::new("future-one"),
                 roots: vec![
-                    WorkspaceRoot::new("future-build", first.clone()),
-                    WorkspaceRoot::new("future-build", second.clone()),
+                    WorkspaceRoot::new("npm", first.clone()),
+                    WorkspaceRoot::new("pnpm", second.clone()),
                 ],
             }))
             .build()
             .await;
         assert!(matches!(
             duplicate,
-            Err(Error::DuplicateWorkspaceRoot { ref kind, .. }) if kind == "future-build"
+            Err(Error::MultipleWorkspaceRoots {
+                ref toolchain,
+                ref accepted_kind,
+                ref conflicting_kind,
+                ..
+            }) if toolchain == &ToolchainId::new("future-one")
+                && accepted_kind == "npm"
+                && conflicting_kind == "pnpm"
         ));
 
         let graph = PackageGraphBuilder::new(&root, PackageJson::default())
@@ -2310,23 +2323,16 @@ mod test {
             .with_package_jsons(Some(HashMap::new()))
             .with_toolchain(Arc::new(RootObservingToolchain {
                 id: ToolchainId::new("future-two"),
-                roots: vec![
-                    WorkspaceRoot::new("future-a", first.clone()),
-                    WorkspaceRoot::new("future-b", second),
-                    WorkspaceRoot::new("future-a", first),
-                ],
+                roots: vec![WorkspaceRoot::new("future-a", first)],
+            }))
+            .with_toolchain(Arc::new(RootObservingToolchain {
+                id: ToolchainId::new("future-three"),
+                roots: vec![WorkspaceRoot::new("future-b", second)],
             }))
             .build()
             .await
             .unwrap();
-        assert_eq!(
-            graph
-                .repository_knowledge()
-                .workspace_roots()
-                .filter(|root| root.toolchain() == &ToolchainId::new("future-two"))
-                .count(),
-            2
-        );
+        assert_eq!(graph.repository_knowledge().workspace_roots().count(), 3);
     }
 
     #[tokio::test]
@@ -2460,7 +2466,8 @@ mod test {
             .await;
         assert!(matches!(
             result,
-            Err(Error::DuplicateWorkspaceRoot { ref kind, .. }) if kind == "cargo"
+            Err(Error::MultipleWorkspaceRoots { ref toolchain, .. })
+                if toolchain == &ToolchainId::new("future-cargo-adapter")
         ));
     }
 
