@@ -532,6 +532,20 @@ impl PackageGraph {
             .map(|scope| scope.identity())
     }
 
+    /// Iterates authoritative execution-scope identities and their directories.
+    /// The structural graph sentinel is excluded, while aggregate scopes are
+    /// included and the root JavaScript scope is present only when it exists.
+    pub fn package_scope_directories(
+        &self,
+    ) -> impl Iterator<Item = (PackageName, &AnchoredSystemPath)> + '_ {
+        self.node_views().filter_map(|(node, view)| match node {
+            PackageNode::Root => None,
+            PackageNode::Workspace(package) => {
+                view.directory().map(|directory| (package, directory))
+            }
+        })
+    }
+
     /// Native definition path for a package or execution scope. A pure Cargo
     /// repository's compatibility root node has no native definition.
     pub fn package_definition_path(&self, package: &PackageName) -> Option<&AnchoredSystemPath> {
@@ -2327,6 +2341,15 @@ version = "0.1.0"
             pkg_graph
                 .node_views()
                 .all(|(_, view)| view.kind() != PackageGraphNodeKind::RootJavaScript)
+        );
+        let scope_directories = pkg_graph
+            .package_scope_directories()
+            .map(|(name, directory)| (name, directory.to_owned()))
+            .collect::<BTreeMap<_, _>>();
+        assert!(!scope_directories.contains_key(&PackageName::Root));
+        assert_eq!(
+            scope_directories.get(&PackageName::from("acme")),
+            Some(&AnchoredSystemPathBuf::from_raw("").unwrap())
         );
         assert!(
             pkg_graph

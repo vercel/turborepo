@@ -154,6 +154,13 @@ compatibility data. Native manifests and metadata do not enter repository
 knowledge. Native definition paths must remain within the repository, including
 after resolving existing symlinks.
 
+Turbo configuration lookup receives knowledge-backed package and aggregate
+scope directories directly. Engine repository-wide task-definition enumeration
+and non-root missing-scope validation use the same views. The root Turbo task
+namespace remains available independently of whether a root JavaScript package
+scope was contributed; package.json scripts remain a separate temporary
+task-synthesis compatibility input.
+
 Repository knowledge accepts at most one physical workspace root for each open
 `ToolchainId`, so a repository cannot combine multiple package managers for one
 language. Repeated observations from one producer of the same kind and

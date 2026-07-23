@@ -738,23 +738,33 @@ impl RunBuilder {
             // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
             (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
             {
+                let package_scripts = pkg_dep_graph
+                    .packages()
+                    .map(|(package, info)| {
+                        (
+                            package.clone(),
+                            info.package_json.scripts.keys().cloned().collect(),
+                        )
+                    })
+                    .collect();
                 UnifiedTurboJsonLoader::workspace_no_turbo_json(
                     reader,
-                    pkg_dep_graph.packages(),
+                    pkg_dep_graph.package_scope_directories(),
+                    package_scripts,
                     micro_frontend_configs.clone(),
                 )
             } else if let Some(micro_frontends) = &micro_frontend_configs {
                 UnifiedTurboJsonLoader::workspace_with_microfrontends(
                     reader,
                     root_turbo_json_path.clone(),
-                    pkg_dep_graph.packages(),
+                    pkg_dep_graph.package_scope_directories(),
                     micro_frontends.clone(),
                 )
             } else {
                 UnifiedTurboJsonLoader::workspace(
                     reader,
                     root_turbo_json_path.clone(),
-                    pkg_dep_graph.packages(),
+                    pkg_dep_graph.package_scope_directories(),
                 )
             }
         };
