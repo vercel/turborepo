@@ -161,6 +161,14 @@ namespace remains available independently of whether a root JavaScript package
 scope was contributed; package.json scripts remain a separate temporary
 task-synthesis compatibility input.
 
+Run scope resolution, affected fallback enumeration, and task-level directory
+filters also consume these knowledge-backed views. Aggregate scopes remain
+selectable. The always-available root Turbo task namespace remains distinct
+from root JavaScript package knowledge: explicit `//`, repository-root
+directory syntax `{.}`, root-task injection, and all-packages affected
+fallbacks can select that namespace even in a pure native repository. This
+namespace behavior does not imply that a root package owns the directory.
+
 Repository knowledge accepts at most one physical workspace root for each open
 `ToolchainId`, so a repository cannot combine multiple package managers for one
 language. Repeated observations from one producer of the same kind and
