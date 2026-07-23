@@ -840,13 +840,121 @@ impl<P: PackageDiscovery + Send + Sync> JavaScriptToolchain<P> {
         let _ = self.resolved_package_manager.set(package_manager);
     }
 
-    pub(crate) async fn workspace_root(&self) -> Result<WorkspaceRoot, Error> {
-        let package_manager = self.package_manager().await?;
-        Ok(WorkspaceRoot::new(
-            package_manager.command(),
-            self.repo_root.clone(),
+    pub(crate) async fn discover_for_graph(
+        &self,
+        include_packages: bool,
+    ) -> Result<DiscoveredPackages, Error> {
+        use tracing::Instrument;
+        if !include_packages && let Some(package_manager) = self.known_package_manager.as_ref() {
+            return Ok(DiscoveredPackages::new(
+                Vec::new(),
+                javascript_workspace_roots(&self.repo_root, package_manager, std::iter::empty()),
+            ));
+        }
+        let response = self
+            .discovery
+            .discover_packages()
+            .instrument(tracing::info_span!("workspace_discovery"))
+            .await?;
+        let package_manager = self.reconcile_package_manager(response.package_manager)?;
+        if !include_packages {
+            return Ok(DiscoveredPackages::new(
+                Vec::new(),
+                javascript_workspace_roots(&self.repo_root, &package_manager, std::iter::empty()),
+            ));
+        }
+
+        // Parse manifests in parallel; manifest parsing dominates discovery
+        // time on large repositories.
+        let _span = tracing::info_span!("manifest_parse").entered();
+        let packages = turborepo_rayon_compat::block_in_place(|| {
+            use rayon::prelude::*;
+            response
+                .workspaces
+                .into_par_iter()
+                .map(|workspace| {
+                    let descriptor = PackageJson::load(&workspace.package_json)?;
+                    let name = descriptor.name.as_ref().map(|name| name.as_inner().clone());
+                    Ok(DiscoveredPackage::package(
+                        name,
+                        descriptor,
+                        workspace.package_json,
+                        // JavaScript closures come from the builder's
+                        // (deliberately concurrent) lockfile phase; see the
+                        // field docs.
+                        None,
+                    ))
+                })
+                .collect::<Result<Vec<_>, Error>>()
+        })?;
+        let workspace_roots = javascript_workspace_roots(
+            &self.repo_root,
+            &package_manager,
+            packages
+                .iter()
+                .map(|package| (&*package.manifest_path, &package.descriptor)),
+        );
+        Ok(DiscoveredPackages::new(packages, workspace_roots))
+    }
+
+    pub(crate) async fn workspace_roots_for_manifests(
+        &self,
+        manifests: &std::collections::HashMap<AbsoluteSystemPathBuf, PackageJson>,
+    ) -> Result<Vec<WorkspaceRoot>, Error> {
+        let package_manager = match self.known_package_manager.as_ref() {
+            Some(package_manager) => package_manager.clone(),
+            None => {
+                let response = self.discovery.discover_packages().await?;
+                self.reconcile_package_manager(response.package_manager)?
+            }
+        };
+        Ok(javascript_workspace_roots(
+            &self.repo_root,
+            &package_manager,
+            manifests.iter().map(|(path, manifest)| (&**path, manifest)),
         ))
     }
+
+    fn reconcile_package_manager(
+        &self,
+        discovered: PackageManager,
+    ) -> Result<PackageManager, Error> {
+        match self.known_package_manager.as_ref() {
+            Some(known) if known.command() != discovered.command() => {
+                Err(discovery::Error::InvalidResponse(format!(
+                    "package manager family `{}` does not match authoritative family `{}`",
+                    discovered.command(),
+                    known.command()
+                ))
+                .into())
+            }
+            Some(known) => Ok(known.clone()),
+            None => Ok(discovered),
+        }
+    }
+}
+
+fn javascript_workspace_roots<'a>(
+    repo_root: &AbsoluteSystemPath,
+    package_manager: &PackageManager,
+    manifests: impl Iterator<Item = (&'a AbsoluteSystemPath, &'a PackageJson)>,
+) -> Vec<WorkspaceRoot> {
+    let active_kind = package_manager.workspace_root_kind();
+    let mut roots = vec![WorkspaceRoot::new(active_kind, repo_root.to_owned())];
+    for (manifest_path, manifest) in manifests {
+        let Some(package_root) = manifest_path.parent() else {
+            continue;
+        };
+        let declared_kind = PackageManager::declared_workspace_root_kind(package_root, manifest);
+        let kind = declared_kind.unwrap_or(active_kind);
+        let nested_manager = declared_kind
+            .and_then(|kind| PackageManager::for_workspace_root_kind(kind, package_root))
+            .unwrap_or_else(|| package_manager.clone());
+        if nested_manager.has_workspace_root_config(package_root, manifest) {
+            roots.push(WorkspaceRoot::new(kind, package_root.to_owned()));
+        }
+    }
+    roots
 }
 
 #[cfg(windows)]
@@ -1021,52 +1129,7 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
     }
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
-        Box::pin(async move {
-            use tracing::Instrument;
-            let response = self
-                .discovery
-                .discover_packages()
-                .instrument(tracing::info_span!("workspace_discovery"))
-                .await?;
-            let package_manager = match self.known_package_manager.as_ref() {
-                Some(known) if known.command() != response.package_manager.command() => {
-                    return Err(discovery::Error::InvalidResponse(format!(
-                        "package manager family `{}` does not match authoritative family `{}`",
-                        response.package_manager.command(),
-                        known.command()
-                    ))
-                    .into());
-                }
-                Some(known) => known,
-                None => &response.package_manager,
-            };
-            let workspace_root =
-                WorkspaceRoot::new(package_manager.command(), self.repo_root.clone());
-            // Parse manifests in parallel; manifest parsing dominates discovery
-            // time on large repositories.
-            let _span = tracing::info_span!("manifest_parse").entered();
-            let packages = turborepo_rayon_compat::block_in_place(|| {
-                use rayon::prelude::*;
-                response
-                    .workspaces
-                    .into_par_iter()
-                    .map(|workspace| {
-                        let descriptor = PackageJson::load(&workspace.package_json)?;
-                        let name = descriptor.name.as_ref().map(|name| name.as_inner().clone());
-                        Ok(DiscoveredPackage::package(
-                            name,
-                            descriptor,
-                            workspace.package_json,
-                            // JavaScript closures come from the builder's
-                            // (deliberately concurrent) lockfile phase; see
-                            // the field docs.
-                            None,
-                        ))
-                    })
-                    .collect::<Result<Vec<_>, Error>>()
-            })?;
-            Ok(DiscoveredPackages::new(packages, vec![workspace_root]))
-        })
+        Box::pin(self.discover_for_graph(true))
     }
 }
 

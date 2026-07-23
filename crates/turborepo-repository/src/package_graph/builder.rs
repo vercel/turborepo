@@ -84,6 +84,8 @@ pub enum Error {
     UnexpectedCompatibilityProjection { name: String },
     #[error("repository package knowledge was not constructed")]
     MissingRepositoryKnowledge,
+    #[error("JavaScript toolchain was not available for JavaScript discovery")]
+    MissingJavaScriptToolchain,
     #[error(transparent)]
     DuplicateToolchain(#[from] crate::toolchain::DuplicateToolchainError),
     #[error(
@@ -654,12 +656,17 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             if id == ToolchainId::JAVASCRIPT
                 && let Some(jsons) = pre_supplied.take()
             {
-                if let Some(javascript) = self.javascript.as_ref() {
-                    workspace_roots.push(WorkspaceRootObservation::new(
-                        javascript.workspace_root().await?,
-                        id.clone(),
-                    ));
-                }
+                let javascript = self
+                    .javascript
+                    .as_ref()
+                    .ok_or(Error::MissingJavaScriptToolchain)?;
+                workspace_roots.extend(
+                    javascript
+                        .workspace_roots_for_manifests(&jsons)
+                        .await?
+                        .into_iter()
+                        .map(|root| WorkspaceRootObservation::new(root, id.clone())),
+                );
                 discovered.extend(jsons.into_iter().map(|(path, json)| {
                     (
                         ToolchainId::JAVASCRIPT,
@@ -758,10 +765,14 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             ..
         } = self;
         let workspace_roots = match &javascript {
-            Some(javascript) => vec![WorkspaceRootObservation::new(
-                javascript.workspace_root().await?,
-                ToolchainId::JAVASCRIPT,
-            )],
+            Some(javascript) => javascript
+                .discover_for_graph(false)
+                .await?
+                .into_parts()
+                .1
+                .into_iter()
+                .map(|root| WorkspaceRootObservation::new(root, ToolchainId::JAVASCRIPT))
+                .collect(),
             None => Vec::new(),
         };
         let knowledge = match knowledge {
@@ -1249,7 +1260,7 @@ impl PackageInfo {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
 
     use turborepo_errors::Spanned;
 
@@ -2254,6 +2265,349 @@ mod test {
                 repository_root,
             }) if path == definition && repository_root == root
         ));
+    }
+
+    fn write_active_javascript_workspace(root: &AbsoluteSystemPath, kind: &str) {
+        root.join_component("package.json")
+            .create_with_contents(r#"{"name":"root","workspaces":["packages/*"]}"#)
+            .unwrap();
+        let nested = root.join_components(&["packages", "nested"]);
+        std::fs::create_dir_all(nested.as_std_path()).unwrap();
+        nested
+            .join_component("package.json")
+            .create_with_contents(r#"{"name":"nested","workspaces":["apps/*"]}"#)
+            .unwrap();
+        let workspace_file = match kind {
+            "pnpm" => Some(crate::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH),
+            "aube" => Some(crate::package_manager::aube::WORKSPACE_CONFIGURATION_PATH),
+            _ => None,
+        };
+        if let Some(workspace_file) = workspace_file {
+            root.join_component(workspace_file)
+                .create_with_contents("packages:\n  - packages/*\n")
+                .unwrap();
+            nested
+                .join_component(workspace_file)
+                .create_with_contents("packages:\n  - apps/*\n")
+                .unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn nested_javascript_workspace_roots_of_same_kind_are_rejected() {
+        let managers = [
+            ("npm", PackageManager::Npm),
+            ("pnpm", PackageManager::Pnpm6),
+            ("pnpm", PackageManager::Pnpm),
+            ("pnpm", PackageManager::Pnpm9),
+            ("yarn", PackageManager::Yarn),
+            ("yarn", PackageManager::Berry),
+            ("bun", PackageManager::Bun),
+            (
+                "nub",
+                PackageManager::Nub {
+                    lockfile: Box::new(PackageManager::Npm),
+                },
+            ),
+            (
+                "aube",
+                PackageManager::Aube {
+                    lockfile: Box::new(PackageManager::Npm),
+                },
+            ),
+        ];
+
+        for (kind, manager) in managers {
+            let tempdir = tempfile::tempdir().unwrap();
+            let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+            write_active_javascript_workspace(&root, kind);
+            let root_package_json =
+                PackageJson::load(&root.join_component("package.json")).unwrap();
+
+            let result = PackageGraphBuilder::new(&root, root_package_json)
+                .with_package_manager(manager)
+                .build()
+                .await;
+
+            assert!(
+                matches!(
+                    result,
+                    Err(Error::DuplicateWorkspaceRoot {
+                        kind: ref actual_kind,
+                        ref accepted_root,
+                        ref conflicting_root,
+                    }) if actual_kind == kind
+                        && accepted_root == &AnchoredSystemPathBuf::default()
+                        && conflicting_root == &AnchoredSystemPathBuf::from_raw("packages/nested").unwrap()
+                ),
+                "unexpected {kind} result: {result:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn pre_supplied_manifests_validate_nested_workspace_roots() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_active_javascript_workspace(&root, "npm");
+        let root_package_json = PackageJson::load(&root.join_component("package.json")).unwrap();
+        let nested_path = root.join_components(&["packages", "nested", "package.json"]);
+        let nested = PackageJson::load(&nested_path).unwrap();
+
+        let result = PackageGraphBuilder::new(&root, root_package_json)
+            .with_package_manager(PackageManager::Npm)
+            .with_package_jsons(Some(HashMap::from([(nested_path, nested)])))
+            .build()
+            .await;
+        assert!(matches!(
+            result,
+            Err(Error::DuplicateWorkspaceRoot { ref kind, .. }) if kind == "npm"
+        ));
+    }
+
+    #[tokio::test]
+    async fn unrelated_workspace_fixtures_are_not_observed() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component("package.json")
+            .create_with_contents(r#"{"name":"root","workspaces":["packages/*"]}"#)
+            .unwrap();
+        let fixture = root.join_component("fixtures");
+        std::fs::create_dir_all(fixture.as_std_path()).unwrap();
+        fixture
+            .join_component("package.json")
+            .create_with_contents(r#"{"workspaces":["apps/*"]}"#)
+            .unwrap();
+        let root_package_json = PackageJson::load(&root.join_component("package.json")).unwrap();
+
+        let graph = PackageGraphBuilder::new(&root, root_package_json)
+            .with_package_manager(PackageManager::Npm)
+            .build()
+            .await
+            .unwrap();
+        assert_eq!(graph.repository_knowledge().workspace_roots().count(), 1);
+    }
+
+    #[tokio::test]
+    async fn invalid_empty_nested_workspace_config_is_not_a_root() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component("package.json")
+            .create_with_contents(r#"{"name":"root","workspaces":["packages/*"]}"#)
+            .unwrap();
+        let nested = root.join_components(&["packages", "nested"]);
+        std::fs::create_dir_all(nested.as_std_path()).unwrap();
+        nested
+            .join_component("package.json")
+            .create_with_contents(r#"{"name":"nested","workspaces":[]}"#)
+            .unwrap();
+        let root_package_json = PackageJson::load(&root.join_component("package.json")).unwrap();
+
+        let graph = PackageGraphBuilder::new(&root, root_package_json)
+            .with_package_manager(PackageManager::Npm)
+            .build()
+            .await
+            .unwrap();
+        assert_eq!(graph.repository_knowledge().workspace_roots().count(), 1);
+    }
+
+    #[tokio::test]
+    async fn distinct_declared_nested_kind_coexists_and_is_recorded() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component("package.json")
+            .create_with_contents(r#"{"name":"root","workspaces":["packages/*"]}"#)
+            .unwrap();
+        let nested = root.join_components(&["packages", "nested"]);
+        std::fs::create_dir_all(nested.as_std_path()).unwrap();
+        nested
+            .join_component("package.json")
+            .create_with_contents(
+                r#"{"name":"nested","packageManager":"yarn@1.22.0","workspaces":["apps/*"]}"#,
+            )
+            .unwrap();
+        let root_package_json = PackageJson::load(&root.join_component("package.json")).unwrap();
+
+        let graph = PackageGraphBuilder::new(&root, root_package_json)
+            .with_package_manager(PackageManager::Npm)
+            .build()
+            .await
+            .unwrap();
+        let roots = graph
+            .repository_knowledge()
+            .workspace_roots()
+            .map(|root| (root.kind(), root.path().to_unix().to_string()))
+            .collect::<HashSet<_>>();
+        assert_eq!(
+            roots,
+            HashSet::from([
+                ("npm", "".to_string()),
+                ("yarn", "packages/nested".to_string()),
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn malformed_nested_declaration_inherits_active_kind_and_is_rejected() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component("package.json")
+            .create_with_contents(r#"{"name":"root","workspaces":["packages/*"]}"#)
+            .unwrap();
+        let nested = root.join_components(&["packages", "nested"]);
+        std::fs::create_dir_all(nested.as_std_path()).unwrap();
+        nested
+            .join_component("package.json")
+            .create_with_contents(
+                r#"{
+                    "name":"nested",
+                    "packageManager":"yarn",
+                    "devEngines":{"packageManager":{"name":"yarn","version":"4.0.0"}},
+                    "workspaces":["apps/*"]
+                }"#,
+            )
+            .unwrap();
+        let root_package_json = PackageJson::load(&root.join_component("package.json")).unwrap();
+
+        let result = PackageGraphBuilder::new(&root, root_package_json)
+            .with_package_manager(PackageManager::Npm)
+            .build()
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(Error::DuplicateWorkspaceRoot { ref kind, .. }) if kind == "npm"
+        ));
+    }
+
+    #[tokio::test]
+    async fn top_level_nested_declaration_takes_precedence_over_dev_engines() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component("package.json")
+            .create_with_contents(r#"{"name":"root","workspaces":["packages/*"]}"#)
+            .unwrap();
+        let nested = root.join_components(&["packages", "nested"]);
+        std::fs::create_dir_all(nested.as_std_path()).unwrap();
+        nested
+            .join_component("package.json")
+            .create_with_contents(
+                r#"{
+                    "name":"nested",
+                    "packageManager":"npm@10.0.0",
+                    "devEngines":{"packageManager":{"name":"yarn","version":"4.0.0"}},
+                    "workspaces":["apps/*"]
+                }"#,
+            )
+            .unwrap();
+        let root_package_json = PackageJson::load(&root.join_component("package.json")).unwrap();
+
+        let graph = PackageGraphBuilder::new(&root, root_package_json)
+            .with_package_manager(PackageManager::Bun)
+            .build()
+            .await
+            .unwrap();
+        let kinds = graph
+            .repository_knowledge()
+            .workspace_roots()
+            .map(|root| root.kind())
+            .collect::<HashSet<_>>();
+
+        assert_eq!(kinds, HashSet::from(["bun", "npm"]));
+    }
+
+    #[tokio::test]
+    async fn two_nested_declared_roots_of_same_distinct_kind_are_rejected() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component("package.json")
+            .create_with_contents(r#"{"name":"root","workspaces":["packages/*"]}"#)
+            .unwrap();
+        for name in ["first", "second"] {
+            let nested = root.join_components(&["packages", name]);
+            std::fs::create_dir_all(nested.as_std_path()).unwrap();
+            nested
+                .join_component("package.json")
+                .create_with_contents(format!(
+                    r#"{{"name":"{name}","packageManager":"yarn@4.0.0","workspaces":["apps/*"]}}"#
+                ))
+                .unwrap();
+        }
+        let root_package_json = PackageJson::load(&root.join_component("package.json")).unwrap();
+
+        let result = PackageGraphBuilder::new(&root, root_package_json)
+            .with_package_manager(PackageManager::Npm)
+            .build()
+            .await;
+        assert!(matches!(
+            result,
+            Err(Error::DuplicateWorkspaceRoot { ref kind, .. }) if kind == "yarn"
+        ));
+    }
+
+    #[tokio::test]
+    async fn nested_aube_pnpm_workspace_fallback_is_rejected() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component("package.json")
+            .create_with_contents(r#"{"name":"root","workspaces":["packages/*"]}"#)
+            .unwrap();
+        let nested = root.join_components(&["packages", "nested"]);
+        std::fs::create_dir_all(nested.as_std_path()).unwrap();
+        nested
+            .join_component("package.json")
+            .create_with_contents(r#"{"name":"nested"}"#)
+            .unwrap();
+        nested
+            .join_component(crate::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH)
+            .create_with_contents("packages:\n  - apps/*\n")
+            .unwrap();
+        nested
+            .join_component(crate::package_manager::pnpm::LOCKFILE)
+            .create_with_contents("lockfileVersion: '9.0'\n")
+            .unwrap();
+        let root_package_json = PackageJson::load(&root.join_component("package.json")).unwrap();
+
+        let result = PackageGraphBuilder::new(&root, root_package_json)
+            .with_package_manager(PackageManager::Aube {
+                lockfile: Box::new(PackageManager::Npm),
+            })
+            .build()
+            .await;
+        assert!(matches!(
+            result,
+            Err(Error::DuplicateWorkspaceRoot { ref kind, .. }) if kind == "aube"
+        ));
+    }
+
+    #[tokio::test]
+    async fn pnpm_member_lockfile_without_workspace_config_is_not_a_root() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component("package.json")
+            .create_with_contents(r#"{"name":"root"}"#)
+            .unwrap();
+        root.join_component(crate::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH)
+            .create_with_contents("packages:\n  - packages/*\n")
+            .unwrap();
+        let member = root.join_components(&["packages", "app"]);
+        std::fs::create_dir_all(member.as_std_path()).unwrap();
+        member
+            .join_component("package.json")
+            .create_with_contents(r#"{"name":"app"}"#)
+            .unwrap();
+        member
+            .join_component(crate::package_manager::pnpm::LOCKFILE)
+            .create_with_contents("lockfileVersion: '9.0'\n")
+            .unwrap();
+        let root_package_json = PackageJson::load(&root.join_component("package.json")).unwrap();
+
+        let graph = PackageGraphBuilder::new(&root, root_package_json)
+            .with_package_manager(PackageManager::Pnpm9)
+            .build()
+            .await
+            .unwrap();
+        assert_eq!(graph.repository_knowledge().workspace_roots().count(), 1);
     }
 
     #[tokio::test]

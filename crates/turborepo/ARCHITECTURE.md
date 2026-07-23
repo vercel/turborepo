@@ -163,11 +163,18 @@ different kinds may coexist. Public toolchain output supplies only root kind and
 path; core binds each root to the `ToolchainId` of the registry entry whose
 discovery envelope contained it. Every toolchain that contributes packages must
 own an accepted root, and contributed roots must remain physically within the
-repository. JavaScript reports only the repository root for its authoritative
-package-manager command family; if discovery reports a different family than
-an explicitly resolved manager, the response is rejected. Pnpm versions and
-Yarn/Berry share their respective canonical families. Cargo reports the current
-workspace root.
+repository. JavaScript reports the repository root plus nested authorities found
+among package manifests already discovered by the active workspace. Root
+classification uses the authoritative reconciled package manager; a discovery
+response from a different command family than an explicitly resolved manager is
+rejected. Pnpm versions and Yarn/Berry share their respective canonical
+families. A valid nested declaration parsed with normal package-manager
+precedence selects its canonical native kind; malformed or absent declarations
+inherit the active kind, and configuration is validated with that kind's native
+semantics. Discovery does not scan unrelated fixtures, examples, generated
+output, or vendored trees. A member-level `pnpm-lock.yaml` under
+`shared-workspace-lockfile=false` is resolution data, not a workspace-root
+observation. Cargo reports the current workspace root.
 Resolution-domain/root validation remains Phase 3 work; this package/scope
 knowledge validates workspace authorities only.
 
@@ -181,9 +188,12 @@ topological (`^`) dependencies.
 
 The package graph is generic over language toolchains. The existing discovery
 method returns one envelope containing packages/scopes and workspace-root
-observations. Core validates the combined contributed roots
-without adding another behavioral toolchain method. Watching native marker-only
-changes that are not observed by today's package watcher remains Phase 6 work.
+observations. Core validates the combined contributed roots without adding
+another behavioral toolchain method. Root observations are recomputed from each
+graph's active package manifests rather than persisted in daemon/watch transport.
+Watching native marker-only changes that are not observed by today's package
+watcher remains Phase 6 work; this package/scope slice does not claim atomic
+watch generations.
 Native discovery output contributes package/scope observations to repository
 knowledge, while a
 `Toolchain` continues to answer ecosystem-specific behavioral questions such as
@@ -238,7 +248,9 @@ whether anything changed; Cargo decides how and in what order to build.**
   package: automatic in-repository workspace members are supported, while
   excluded/non-member, outside-repository, and root-manifest local packages
   hard-error because Turborepo cannot hash, watch, or prune their sources
-  safely. The Cargo compatibility producer reports the current workspace root.
+  safely. The Cargo compatibility producer reports the single workspace root
+  actually used by this metadata invocation; it does not scan unrelated
+  `Cargo.toml` files.
 - **Package shapes**: crates are classified via `CargoPackageKind`.
   *Entrypoints* (crates with `bin`/`cdylib`/`staticlib` targets) are the
   workspace's deliverables. *Libraries* exist in the package graph and expose
