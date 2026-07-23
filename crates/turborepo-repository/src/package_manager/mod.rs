@@ -1484,6 +1484,83 @@ mod tests {
     }
 
     #[test]
+    fn workspace_discovery_is_consistent_across_javascript_package_managers() {
+        let (_dir, repo_root) = temp_repo_root().unwrap();
+        std::fs::write(
+            repo_root.join_component("package.json").as_std_path(),
+            r#"{"workspaces":["packages/**"]}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            repo_root
+                .join_component(pnpm::WORKSPACE_CONFIGURATION_PATH)
+                .as_std_path(),
+            "packages:\n  - packages/**\n",
+        )
+        .unwrap();
+        std::fs::write(
+            repo_root
+                .join_component(aube::WORKSPACE_CONFIGURATION_PATH)
+                .as_std_path(),
+            "packages:\n  - packages/**\n",
+        )
+        .unwrap();
+
+        for (components, name) in [
+            (&["packages", "app"][..], "app"),
+            (&["packages", "group", "nested"][..], "@scope/nested"),
+        ] {
+            let directory = repo_root.join_components(components);
+            std::fs::create_dir_all(directory.as_std_path()).unwrap();
+            std::fs::write(
+                directory.join_component("package.json").as_std_path(),
+                format!(r#"{{"name":"{name}"}}"#),
+            )
+            .unwrap();
+        }
+        // A matching directory without a manifest is not a package.
+        std::fs::create_dir_all(
+            repo_root
+                .join_components(&["packages", "missing"])
+                .as_std_path(),
+        )
+        .unwrap();
+
+        let package_managers = [
+            PackageManager::Npm,
+            PackageManager::Pnpm9,
+            PackageManager::Yarn,
+            PackageManager::Berry,
+            PackageManager::Bun,
+            PackageManager::Nub {
+                lockfile: Box::new(PackageManager::Npm),
+            },
+            PackageManager::Aube {
+                lockfile: Box::new(PackageManager::Npm),
+            },
+        ];
+
+        for package_manager in package_managers {
+            let mut manifests = package_manager
+                .get_package_jsons(&repo_root)
+                .unwrap()
+                .map(|path| repo_root.anchor(path).unwrap().to_unix().to_string())
+                .collect::<Vec<_>>();
+            manifests.sort();
+
+            assert_eq!(
+                manifests,
+                [
+                    "packages/app/package.json",
+                    "packages/group/nested/package.json",
+                ],
+                "{} workspace discovery",
+                package_manager.name()
+            );
+        }
+    }
+
+    #[test]
     fn test_get_workspace_ignores() {
         let root = repo_root();
         let fixtures = root.join_components(&[

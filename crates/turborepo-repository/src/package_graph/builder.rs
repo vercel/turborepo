@@ -1020,7 +1020,7 @@ impl PackageInfo {
 
 #[cfg(test)]
 mod test {
-    use std::{assert_matches, collections::HashMap};
+    use std::collections::HashMap;
 
     use turborepo_errors::Spanned;
 
@@ -1042,6 +1042,121 @@ mod test {
         ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
             self.discover_packages().await
         }
+    }
+
+    #[tokio::test]
+    async fn javascript_packages_have_canonical_identities_paths_and_root_scope() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+
+        for root_name in [Some("named-root"), None] {
+            let package_jsons = HashMap::from([
+                (
+                    root.join_components(&["apps", "app", "package.json"]),
+                    PackageJson {
+                        name: Some(Spanned::new("app".into())),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    root.join_components(&["packages", "group", "nested", "package.json"]),
+                    PackageJson {
+                        name: Some(Spanned::new("@scope/nested".into())),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    root.join_components(&["packages", "unnamed", "package.json"]),
+                    PackageJson::default(),
+                ),
+            ]);
+            let root_package_json = PackageJson {
+                name: root_name.map(|name| Spanned::new(name.to_string())),
+                ..Default::default()
+            };
+
+            let graph = PackageGraphBuilder::new(&root, root_package_json)
+                .with_package_discovery(MockDiscovery)
+                .with_package_jsons(Some(package_jsons))
+                .build()
+                .await
+                .unwrap();
+
+            let mut packages = graph
+                .packages()
+                .map(|(name, info)| {
+                    (
+                        name.as_str().to_string(),
+                        info.package_path().to_unix().to_string(),
+                        info.package_json_path().to_unix().to_string(),
+                        info.package_name(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            packages.sort();
+
+            assert_eq!(
+                packages,
+                vec![
+                    (
+                        "//".to_string(),
+                        "".to_string(),
+                        "package.json".to_string(),
+                        root_name.map(str::to_string),
+                    ),
+                    (
+                        "@scope/nested".to_string(),
+                        "packages/group/nested".to_string(),
+                        "packages/group/nested/package.json".to_string(),
+                        Some("@scope/nested".to_string()),
+                    ),
+                    (
+                        "app".to_string(),
+                        "apps/app".to_string(),
+                        "apps/app/package.json".to_string(),
+                        Some("app".to_string()),
+                    ),
+                ]
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn single_package_mode_exposes_only_the_canonical_root_scope() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let graph = PackageGraphBuilder::new(
+            &root,
+            PackageJson {
+                name: Some(Spanned::new("user-facing-root-name".into())),
+                ..Default::default()
+            },
+        )
+        .with_single_package_mode(true)
+        .with_package_discovery(MockDiscovery)
+        .build()
+        .await
+        .unwrap();
+
+        let packages = graph.packages().collect::<Vec<_>>();
+        assert_eq!(packages.len(), 1);
+        assert_eq!(packages[0].0, &PackageName::Root);
+        assert_eq!(
+            graph
+                .package_dir(&PackageName::Root)
+                .unwrap()
+                .to_unix()
+                .to_string(),
+            ""
+        );
+        assert_eq!(
+            packages[0].1.package_json_path().to_unix().to_string(),
+            "package.json"
+        );
+        assert_eq!(
+            packages[0].1.package_name().as_deref(),
+            Some("user-facing-root-name")
+        );
     }
 
     // Regression test: connect_internal_dependencies must produce correct
@@ -1696,14 +1811,14 @@ mod test {
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(
-                root.join_component("a"),
+                root.join_components(&["packages", "a", "package.json"]),
                 PackageJson {
                     name: Some(Spanned::new("foo".into())),
                     ..Default::default()
                 },
             );
             map.insert(
-                root.join_component("b"),
+                root.join_components(&["packages", "b", "package.json"]),
                 PackageJson {
                     name: Some(Spanned::new("foo".into())),
                     ..Default::default()
@@ -1711,7 +1826,23 @@ mod test {
             );
             map
         }));
-        assert_matches!(builder.build().await, Err(Error::DuplicateWorkspace { .. }));
+        let error = builder.build().await.unwrap_err();
+        let Error::DuplicateWorkspace {
+            name,
+            path,
+            existing_path,
+        } = error
+        else {
+            panic!("expected duplicate workspace error, got {error:?}");
+        };
+        let mut paths = [path.replace('\\', "/"), existing_path.replace('\\', "/")];
+        paths.sort();
+
+        assert_eq!(name, "foo");
+        assert_eq!(
+            paths,
+            ["packages/a/package.json", "packages/b/package.json"]
+        );
     }
 
     #[test]
