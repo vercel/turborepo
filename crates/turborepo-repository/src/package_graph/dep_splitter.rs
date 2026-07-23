@@ -6,7 +6,7 @@ use turbopath::{
 };
 
 use super::{PackageInfo, PackageName};
-use crate::package_manager::pnpm::PnpmCatalogs;
+use crate::{knowledge::RepositoryKnowledge, package_manager::pnpm::PnpmCatalogs};
 
 /// Reverse index from package path to package name, built once and shared
 /// across all `DependencySplitter` instances.
@@ -15,15 +15,44 @@ use crate::package_manager::pnpm::PnpmCatalogs;
 /// specifiers can never target them, and the synthetic Cargo workspace
 /// package lives at the repo root, which would otherwise collide with the
 /// Root package's path.
-pub struct WorkspacePathIndex<'a>(HashMap<&'a AnchoredSystemPath, &'a PackageName>);
+pub struct WorkspacePathIndex<'a>(HashMap<&'a AnchoredSystemPath, PackageName>);
 
 impl<'a> WorkspacePathIndex<'a> {
+    #[cfg(test)]
     pub fn new(workspaces: &'a HashMap<PackageName, PackageInfo>) -> Self {
         Self(
             workspaces
                 .iter()
                 .filter(|(_, info)| info.toolchain == crate::toolchain::ToolchainId::JAVASCRIPT)
-                .map(|(name, info)| (info.package_path(), name))
+                .map(|(name, info)| (info.package_path(), name.clone()))
+                .collect(),
+        )
+    }
+
+    /// Builds the production index from authoritative package/scope paths and
+    /// provenance rather than compatibility `PackageInfo` fields.
+    pub(crate) fn from_knowledge(knowledge: &'a RepositoryKnowledge) -> Self {
+        let root = knowledge.root_javascript_scope().map(|scope| {
+            (
+                knowledge.repository_directory(),
+                PackageName::Root,
+                scope.toolchain(),
+            )
+        });
+        let scopes = knowledge.scopes().map(|scope| {
+            (
+                scope.directory(),
+                PackageName::Other(scope.identity().to_string()),
+                scope.toolchain(),
+            )
+        });
+        Self(
+            root.into_iter()
+                .chain(scopes)
+                .filter(|(_, _, toolchain)| {
+                    *toolchain == &crate::toolchain::ToolchainId::JAVASCRIPT
+                })
+                .map(|(directory, name, _)| (directory, name))
                 .collect(),
         )
     }

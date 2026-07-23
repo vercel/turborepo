@@ -835,7 +835,11 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
         &mut self,
         package_manager: Option<&PackageManager>,
     ) -> Result<(), Error> {
-        let path_index = WorkspacePathIndex::new(&self.assembler.workspaces);
+        let knowledge = self
+            .knowledge
+            .as_deref()
+            .ok_or(Error::MissingRepositoryKnowledge)?;
+        let path_index = WorkspacePathIndex::from_knowledge(knowledge);
         // Compute once — for pnpm/Berry this reads a config file from disk.
         // Without hoisting, the par_iter below would redundantly read the
         // same file N times (once per workspace). A pure Cargo workspace has
@@ -1017,13 +1021,31 @@ pub type ClosureHasher = Arc<
         + Sync,
 >;
 
+fn scope_directory_and_toolchain<'a>(
+    knowledge: &'a RepositoryKnowledge,
+    name: &PackageName,
+) -> Option<(&'a AnchoredSystemPath, &'a ToolchainId)> {
+    match name {
+        PackageName::Root => knowledge
+            .root_javascript_scope()
+            .map(|scope| (knowledge.repository_directory(), scope.toolchain())),
+        PackageName::Other(name) => knowledge
+            .scope(name)
+            .map(|scope| (scope.directory(), scope.toolchain())),
+    }
+}
+
 impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
     fn all_external_dependencies(
         &self,
     ) -> Result<HashMap<String, BTreeMap<String, String>>, Error> {
+        let knowledge = self
+            .knowledge
+            .as_deref()
+            .ok_or(Error::MissingRepositoryKnowledge)?;
         self.assembler
             .workspaces
-            .values()
+            .iter()
             // Only JavaScript packages participate in the JS lockfile's
             // external-dependency closures. This map is keyed by directory,
             // and a non-JS package can share a directory with a JS one (the
@@ -1031,13 +1053,12 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             // the root package) — including both would let HashMap iteration
             // order decide which entry survives, flipping the root's
             // external-dependency hash run to run.
-            .filter(|entry| entry.toolchain == ToolchainId::JAVASCRIPT)
-            .map(|entry| {
-                let workspace_path = entry
-                    .package_json_path
-                    .parent()
-                    .unwrap_or(AnchoredSystemPath::new("")?)
-                    .to_unix();
+            .filter_map(|(name, entry)| {
+                let (directory, toolchain) = scope_directory_and_toolchain(knowledge, name)?;
+                (toolchain == &ToolchainId::JAVASCRIPT).then_some((directory, entry))
+            })
+            .map(|(directory, entry)| {
+                let workspace_path = directory.to_unix();
                 let workspace_string = workspace_path.as_str();
                 let external_deps = entry
                     .unresolved_external_dependencies
@@ -1071,14 +1092,22 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             .as_ref()
             .map(|hasher| hasher(&closures))
             .unwrap_or_default();
-        for entry in self.assembler.workspaces.values_mut() {
+        let knowledge = self
+            .knowledge
+            .as_deref()
+            .ok_or(Error::MissingRepositoryKnowledge)?;
+        for (name, entry) in &mut self.assembler.workspaces {
             // Mirror of the filter in all_external_dependencies: a non-JS
             // package sharing a directory with a JS package must not steal
             // its closure.
-            if entry.toolchain != ToolchainId::JAVASCRIPT {
+            let Some((directory, toolchain)) = scope_directory_and_toolchain(knowledge, name)
+            else {
+                continue;
+            };
+            if toolchain != &ToolchainId::JAVASCRIPT {
                 continue;
             }
-            let dir = entry.unix_dir_str()?;
+            let dir = directory.to_unix().to_string();
             entry.transitive_dependencies = closures.remove(&dir);
             entry.external_deps_hash = hashes.remove(&dir);
         }
@@ -1242,17 +1271,6 @@ impl Dependencies {
     }
 }
 
-impl PackageInfo {
-    fn unix_dir_str(&self) -> Result<String, Error> {
-        let unix = self
-            .package_json_path
-            .parent()
-            .unwrap_or_else(|| AnchoredSystemPath::new("").expect("empty path is anchored"))
-            .to_unix();
-        Ok(unix.to_string())
-    }
-}
-
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
@@ -1404,6 +1422,53 @@ mod test {
                 PackageNode::Workspace(PackageName::Root),
                 "the graph sentinel and root execution scope node are distinct"
             );
+            assert_eq!(graph.root_javascript_scope_name(), Some(root_name));
+            let sentinel = graph
+                .node_view(&PackageNode::Root)
+                .expect("the graph sentinel is always present");
+            assert_eq!(
+                sentinel.kind(),
+                super::super::PackageGraphNodeKind::GraphSentinel
+            );
+            assert_eq!(sentinel.directory(), None);
+            assert_eq!(sentinel.definition_path(), None);
+            assert_eq!(sentinel.toolchain(), None);
+
+            let root_view = graph
+                .node_view(&PackageNode::Workspace(PackageName::Root))
+                .expect("a package.json contributes the root JavaScript scope");
+            assert_eq!(
+                root_view.kind(),
+                super::super::PackageGraphNodeKind::RootJavaScript
+            );
+            assert_eq!(
+                root_view.directory(),
+                Some(knowledge.repository_directory())
+            );
+            assert_eq!(
+                root_view
+                    .definition_path()
+                    .map(|path| path.to_unix().to_string()),
+                Some("package.json".to_string())
+            );
+            assert_eq!(root_view.toolchain(), Some(&ToolchainId::JAVASCRIPT));
+
+            let app_view = graph
+                .node_view(&PackageNode::Workspace(PackageName::from("app")))
+                .expect("the real package has an authoritative view");
+            assert_eq!(app_view.kind(), super::super::PackageGraphNodeKind::Package);
+            assert_eq!(
+                app_view.directory().map(|path| path.to_unix().to_string()),
+                Some("apps/app".to_string())
+            );
+            assert_eq!(
+                app_view
+                    .definition_path()
+                    .map(|path| path.to_unix().to_string()),
+                Some("apps/app/package.json".to_string())
+            );
+            assert_eq!(app_view.toolchain(), Some(&ToolchainId::JAVASCRIPT));
+            assert_eq!(graph.node_views().count(), 4);
 
             for package in knowledge.packages() {
                 let graph_name = PackageName::from(package.identity());

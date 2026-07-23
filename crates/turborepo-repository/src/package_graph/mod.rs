@@ -184,6 +184,49 @@ impl PackageNode {
     }
 }
 
+/// The role of an identity-bearing scope or structural node in the package
+/// graph. In particular, the graph sentinel and the root JavaScript execution
+/// scope are separate nodes even though both have historically been called
+/// "root".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PackageGraphNodeKind {
+    Package,
+    Aggregate,
+    RootJavaScript,
+    GraphSentinel,
+}
+
+/// Manifest-independent facts about a package graph node.
+///
+/// Paths and provenance come from the graph's immutable repository knowledge,
+/// not from the [`PackageInfo`] compatibility projection. The graph sentinel
+/// has no directory, native definition, or toolchain provenance.
+#[derive(Debug, Clone, Copy)]
+pub struct PackageGraphNodeView<'a> {
+    kind: PackageGraphNodeKind,
+    directory: Option<&'a AnchoredSystemPath>,
+    definition_path: Option<&'a AnchoredSystemPath>,
+    toolchain: Option<&'a crate::toolchain::ToolchainId>,
+}
+
+impl<'a> PackageGraphNodeView<'a> {
+    pub fn kind(&self) -> PackageGraphNodeKind {
+        self.kind
+    }
+
+    pub fn directory(&self) -> Option<&'a AnchoredSystemPath> {
+        self.directory
+    }
+
+    pub fn definition_path(&self) -> Option<&'a AnchoredSystemPath> {
+        self.definition_path
+    }
+
+    pub fn toolchain(&self) -> Option<&'a crate::toolchain::ToolchainId> {
+        self.toolchain
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExternalDependencyChange {
     pub package: WorkspacePackage,
@@ -405,6 +448,77 @@ impl PackageGraph {
             .map(|scope| scope.user_facing_name())
     }
 
+    /// Looks up manifest-independent facts for an identity-bearing scope or
+    /// the structural graph sentinel. In a pure Cargo repository,
+    /// `Workspace(Root)` has no corresponding scope and therefore returns
+    /// `None`; `Root` still returns the graph sentinel view.
+    pub fn node_view(&self, node: &PackageNode) -> Option<PackageGraphNodeView<'_>> {
+        match node {
+            PackageNode::Root => Some(PackageGraphNodeView {
+                kind: PackageGraphNodeKind::GraphSentinel,
+                directory: None,
+                definition_path: None,
+                toolchain: None,
+            }),
+            PackageNode::Workspace(package) => self.package_view(package),
+        }
+    }
+
+    /// Looks up manifest-independent facts for a compatibility package
+    /// identity. Unlike [`Self::package_dir`], this returns `None` for the
+    /// synthetic root workspace when no root JavaScript scope exists.
+    pub fn package_view(&self, package: &PackageName) -> Option<PackageGraphNodeView<'_>> {
+        match package {
+            PackageName::Root => {
+                let scope = self.knowledge.root_javascript_scope()?;
+                Some(PackageGraphNodeView {
+                    kind: PackageGraphNodeKind::RootJavaScript,
+                    directory: Some(self.knowledge.repository_directory()),
+                    definition_path: Some(scope.definition_path()),
+                    toolchain: Some(scope.toolchain()),
+                })
+            }
+            PackageName::Other(name) => {
+                let scope = self.knowledge.scope(name)?;
+                let kind = match scope.kind() {
+                    crate::knowledge::ScopeKind::Package => PackageGraphNodeKind::Package,
+                    crate::knowledge::ScopeKind::Aggregate => PackageGraphNodeKind::Aggregate,
+                };
+                Some(PackageGraphNodeView {
+                    kind,
+                    directory: Some(scope.directory()),
+                    definition_path: Some(scope.definition_path()),
+                    toolchain: Some(scope.toolchain()),
+                })
+            }
+        }
+    }
+
+    /// Iterates the structural graph sentinel followed by every authoritative
+    /// execution scope. The root JavaScript scope is omitted when no root
+    /// `package.json` exists.
+    pub fn node_views(&self) -> impl Iterator<Item = (PackageNode, PackageGraphNodeView<'_>)> + '_ {
+        std::iter::once((PackageNode::Root, self.node_view(&PackageNode::Root)))
+            .chain(std::iter::once((
+                PackageNode::Workspace(PackageName::Root),
+                self.node_view(&PackageNode::Workspace(PackageName::Root)),
+            )))
+            .chain(self.knowledge.scopes().map(|scope| {
+                let node = PackageNode::Workspace(PackageName::Other(scope.identity().to_string()));
+                let view = PackageGraphNodeView {
+                    kind: match scope.kind() {
+                        crate::knowledge::ScopeKind::Package => PackageGraphNodeKind::Package,
+                        crate::knowledge::ScopeKind::Aggregate => PackageGraphNodeKind::Aggregate,
+                    },
+                    directory: Some(scope.directory()),
+                    definition_path: Some(scope.definition_path()),
+                    toolchain: Some(scope.toolchain()),
+                };
+                (node, Some(view))
+            }))
+            .filter_map(|(node, view)| view.map(|view| (node, view)))
+    }
+
     /// User-facing identities of real packages, excluding root and aggregate
     /// execution scopes.
     pub fn real_package_names(&self) -> impl Iterator<Item = &str> {
@@ -421,16 +535,7 @@ impl PackageGraph {
     /// Native definition path for a package or execution scope. A pure Cargo
     /// repository's compatibility root node has no native definition.
     pub fn package_definition_path(&self, package: &PackageName) -> Option<&AnchoredSystemPath> {
-        match package {
-            PackageName::Root => self
-                .knowledge
-                .root_javascript_scope()
-                .map(|scope| scope.definition_path()),
-            PackageName::Other(name) => self
-                .knowledge
-                .scope(name)
-                .map(|scope| scope.definition_path()),
-        }
+        self.package_view(package)?.definition_path()
     }
 
     /// Toolchain provenance for a package or execution scope.
@@ -438,38 +543,20 @@ impl PackageGraph {
         &self,
         package: &PackageName,
     ) -> Option<&crate::toolchain::ToolchainId> {
-        match package {
-            PackageName::Root => self
-                .knowledge
-                .root_javascript_scope()
-                .map(|scope| scope.toolchain()),
-            PackageName::Other(name) => self.knowledge.scope(name).map(|scope| scope.toolchain()),
-        }
+        self.package_view(package)?.toolchain()
     }
 
     /// Whether this identity represents a real package rather than an
     /// execution-only scope.
     pub fn is_real_package(&self, package: &PackageName) -> bool {
-        matches!(
-            package,
-            PackageName::Other(name)
-                if self
-                    .knowledge
-                    .scope(name)
-                    .is_some_and(|scope| scope.kind() == crate::knowledge::ScopeKind::Package)
-        )
+        self.package_view(package)
+            .is_some_and(|view| view.kind() == PackageGraphNodeKind::Package)
     }
 
     /// Whether this identity represents a non-package aggregate scope.
     pub fn is_aggregate_scope(&self, package: &PackageName) -> bool {
-        matches!(
-            package,
-            PackageName::Other(name)
-                if self
-                    .knowledge
-                    .scope(name)
-                    .is_some_and(|scope| scope.kind() == crate::knowledge::ScopeKind::Aggregate)
-        )
+        self.package_view(package)
+            .is_some_and(|view| view.kind() == PackageGraphNodeKind::Aggregate)
     }
 
     pub fn lockfile(&self) -> Option<&dyn Lockfile> {
@@ -494,15 +581,27 @@ impl PackageGraph {
                 mut closures,
                 mut hashes,
             })) => {
-                for info in self.packages.values_mut() {
+                let knowledge = &self.knowledge;
+                for (name, info) in &mut self.packages {
                     // Mirror of the filter in the inline path
                     // (`populate_transitive_dependencies`): a non-JS package
                     // sharing a directory with a JS package must not steal
                     // its closure.
-                    if info.toolchain != crate::toolchain::ToolchainId::JAVASCRIPT {
+                    let facts = match name {
+                        PackageName::Root => knowledge
+                            .root_javascript_scope()
+                            .map(|scope| (knowledge.repository_directory(), scope.toolchain())),
+                        PackageName::Other(name) => knowledge
+                            .scope(name)
+                            .map(|scope| (scope.directory(), scope.toolchain())),
+                    };
+                    let Some((directory, toolchain)) = facts else {
+                        continue;
+                    };
+                    if toolchain != &crate::toolchain::ToolchainId::JAVASCRIPT {
                         continue;
                     }
-                    let dir = info.package_path().to_unix();
+                    let dir = directory.to_unix();
                     info.transitive_dependencies = closures.remove(dir.as_str());
                     info.external_deps_hash = hashes.remove(dir.as_str());
                 }
@@ -523,8 +622,11 @@ impl PackageGraph {
 
     pub fn package_dir(&self, package: &PackageName) -> Option<&AnchoredSystemPath> {
         match package {
+            // Compatibility: the synthetic root workspace has historically
+            // had the repository directory even when no JavaScript scope
+            // exists. `node_view` is the API that distinguishes those cases.
             PackageName::Root => Some(self.knowledge.repository_directory()),
-            PackageName::Other(name) => self.knowledge.scope(name).map(|scope| scope.directory()),
+            PackageName::Other(_) => self.package_view(package)?.directory(),
         }
     }
 
@@ -826,15 +928,15 @@ impl PackageGraph {
 
         let external_deps = self
             .packages()
-            .filter_map(|(_name, info)| {
-                info.unresolved_external_dependencies.as_ref().map(|dep| {
-                    (
-                        info.package_path().to_unix().to_string(),
-                        dep.iter()
-                            .map(|(name, version)| (name.to_owned(), version.to_owned()))
-                            .collect(),
-                    )
-                })
+            .filter_map(|(name, info)| {
+                let dep = info.unresolved_external_dependencies.as_ref()?;
+                let directory = self.package_dir(name)?;
+                Some((
+                    directory.to_unix().to_string(),
+                    dep.iter()
+                        .map(|(name, version)| (name.to_owned(), version.to_owned()))
+                        .collect(),
+                ))
             })
             .collect::<HashMap<_, BTreeMap<_, _>>>();
 
@@ -854,7 +956,8 @@ impl PackageGraph {
             self.packages
                 .iter()
                 .filter_map(|(name, info)| {
-                    let previous_closure = closures.get(info.package_path().to_unix().as_str());
+                    let package_dir = self.package_dir(name)?;
+                    let previous_closure = closures.get(package_dir.to_unix().as_str());
                     // Both closures are sorted by (key, version), so `Vec`
                     // equality is set equality here.
                     let not_equal = previous_closure != info.transitive_dependencies.as_ref();
@@ -883,17 +986,17 @@ impl PackageGraph {
                             .map(|pkg| (*pkg).clone())
                             .sorted()
                             .collect::<Vec<_>>();
-                        Some((name, info, added, removed))
+                        Some((name, package_dir, added, removed))
                     } else {
                         None
                     }
                 })
-                .map(|(name, info, added, removed)| match name {
+                .map(|(name, package_dir, added, removed)| match name {
                     PackageName::Other(n) => {
                         let w_name = PackageName::Other(n.to_owned());
                         let package = WorkspacePackage {
                             name: w_name.clone(),
-                            path: info.package_path().to_owned(),
+                            path: package_dir.to_owned(),
                         };
                         Some(ExternalDependencyChange {
                             package,
@@ -911,16 +1014,17 @@ impl PackageGraph {
         Ok(changed.unwrap_or_else(|| {
             self.packages
                 .iter()
-                .map(|(name, info)| {
+                .filter_map(|(name, _info)| {
+                    let path = self.package_dir(name)?.to_owned();
                     let package = WorkspacePackage {
                         name: name.clone(),
-                        path: info.package_path().to_owned(),
+                        path,
                     };
-                    ExternalDependencyChange {
+                    Some(ExternalDependencyChange {
                         package,
                         added: Vec::new(),
                         removed: Vec::new(),
-                    }
+                    })
                 })
                 .collect()
         }))
@@ -2082,6 +2186,26 @@ version = "0.1.0"
             );
             assert_eq!(cargo_app.toolchain(), &crate::toolchain::ToolchainId::RUST);
             assert_eq!(cargo_app.kind(), crate::knowledge::ScopeKind::Package);
+            let cargo_app_view = pkg_graph
+                .package_view(&PackageName::from("app"))
+                .expect("Cargo contributes a real package");
+            assert_eq!(cargo_app_view.kind(), PackageGraphNodeKind::Package);
+            assert_eq!(
+                cargo_app_view
+                    .directory()
+                    .map(|path| path.to_unix().to_string()),
+                Some("rust/app".to_string())
+            );
+            assert_eq!(
+                cargo_app_view
+                    .definition_path()
+                    .map(|path| path.to_unix().to_string()),
+                Some("rust/app/Cargo.toml".to_string())
+            );
+            assert_eq!(
+                cargo_app_view.toolchain(),
+                Some(&crate::toolchain::ToolchainId::RUST)
+            );
             let cargo_workspace = knowledge
                 .scope("acme")
                 .expect("Cargo workspace compatibility package is an aggregate scope");
@@ -2097,6 +2221,20 @@ version = "0.1.0"
             assert_eq!(
                 pkg_graph.package_dir(&PackageName::from("acme")),
                 Some(cargo_workspace.directory())
+            );
+            let cargo_workspace_view = pkg_graph
+                .node_view(&PackageNode::Workspace(PackageName::from("acme")))
+                .expect("Cargo contributes an aggregate execution scope");
+            assert_eq!(cargo_workspace_view.kind(), PackageGraphNodeKind::Aggregate);
+            assert_eq!(
+                cargo_workspace_view
+                    .definition_path()
+                    .map(|path| path.to_unix().to_string()),
+                Some("Cargo.toml".to_string())
+            );
+            assert_eq!(
+                cargo_workspace_view.toolchain(),
+                Some(&crate::toolchain::ToolchainId::RUST)
             );
 
             // Crate path dependencies became graph edges.
@@ -2173,6 +2311,23 @@ version = "0.1.0"
         assert!(!pkg_graph.has_root_javascript_scope());
         assert_eq!(pkg_graph.package_definition_path(&PackageName::Root), None);
         assert_eq!(pkg_graph.package_toolchain(&PackageName::Root), None);
+        assert!(
+            pkg_graph
+                .node_view(&PackageNode::Workspace(PackageName::Root))
+                .is_none(),
+            "the compatibility root workspace is not a JavaScript scope"
+        );
+        assert_eq!(
+            pkg_graph
+                .node_view(&PackageNode::Root)
+                .map(|view| view.kind()),
+            Some(PackageGraphNodeKind::GraphSentinel)
+        );
+        assert!(
+            pkg_graph
+                .node_views()
+                .all(|(_, view)| view.kind() != PackageGraphNodeKind::RootJavaScript)
+        );
         assert!(
             pkg_graph
                 .repository_knowledge()

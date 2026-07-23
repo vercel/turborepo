@@ -157,6 +157,10 @@ impl RepositoryKnowledge {
             .filter(|scope| scope.kind == ScopeKind::Aggregate)
     }
 
+    pub(crate) fn scopes(&self) -> impl Iterator<Item = &ScopeKnowledge> {
+        self.scopes.iter()
+    }
+
     pub(crate) fn scope(&self, identity: &str) -> Option<&ScopeKnowledge> {
         self.scope_lookup
             .get(identity)
