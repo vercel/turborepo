@@ -179,6 +179,99 @@ export async function migrate(
     os.EOL
   );
 
+  // Check if turbo uses a catalog reference (e.g. "turbo": "catalog:" in package.json).
+  // If so, update the version in the catalog file instead of letting the package
+  // manager overwrite the catalog reference with a literal version.
+  let catalogInfo: CatalogInfo | undefined;
+  if (project) {
+    catalogInfo = detectCatalog({
+      root: project.paths.root,
+      packageManager: project.packageManager
+    });
+  }
+
+  if (catalogInfo) {
+    if (options.dryRun) {
+      logger.log(
+        `Would update turbo version in catalog file ${picocolors.dim(
+          catalogInfo.catalogFile
+        )} ${picocolors.dim("(dry run)")}`,
+        os.EOL
+      );
+    } else {
+      const updated = updateCatalogVersion({
+        catalogInfo,
+        version: toVersion
+      });
+      if (updated) {
+        logger.log(
+          `Updated turbo version to ${picocolors.bold(
+            toVersion
+          )} in ${picocolors.dim(catalogInfo.catalogFile)}`,
+          os.EOL
+        );
+      }
+    }
+  }
+
+  // Find the upgrade command and run it before changing project configuration.
+  const upgradeCommand = await getTurboUpgradeCommand({
+    project,
+    to: options.to,
+    catalogInfo
+  });
+
+  if (!upgradeCommand) {
+    return endMigration({
+      success: false,
+      message: "Unable to determine upgrade command"
+    });
+  }
+
+  if (options.install) {
+    if (options.dryRun) {
+      logger.log(
+        `Upgrading turbo with ${picocolors.bold(
+          upgradeCommand
+        )} ${picocolors.dim("(dry run)")}`,
+        os.EOL
+      );
+    } else {
+      logger.log(
+        `Upgrading turbo with ${picocolors.bold(upgradeCommand)}`,
+        os.EOL
+      );
+      try {
+        execSync(upgradeCommand, { stdio: "pipe", cwd: project.paths.root });
+      } catch (err: unknown) {
+        return endMigration({
+          success: false,
+          message: `Unable to upgrade turbo: ${String(err)}`
+        });
+      }
+
+      const installedVersion = getCurrentVersion(project, {
+        ...options,
+        from: undefined
+      });
+      if (installedVersion !== toVersion) {
+        return endMigration({
+          success: false,
+          message: [
+            "The package manager did not install the expected version of Turbo.",
+            "",
+            `Expected: ${toVersion}`,
+            `Installed: ${installedVersion ?? "unknown"}`,
+            "",
+            "No codemods or schema updates were applied."
+          ].join(os.EOL)
+        });
+      }
+    }
+  } else {
+    logger.log(`Upgrade turbo with ${picocolors.bold(upgradeCommand)}`, os.EOL);
+  }
+
   const results: Array<TransformerResults> = [];
   for (const [idx, codemod] of codemods.entries()) {
     logger.log(
@@ -222,84 +315,6 @@ export async function migrate(
       message:
         "Could not complete migration due to codemod errors. Please fix the errors and try again."
     });
-  }
-
-  // step 5
-
-  // Check if turbo uses a catalog reference (e.g. "turbo": "catalog:" in package.json).
-  // If so, update the version in the catalog file instead of letting the package
-  // manager overwrite the catalog reference with a literal version.
-  let catalogInfo: CatalogInfo | undefined;
-  if (project) {
-    catalogInfo = detectCatalog({
-      root: project.paths.root,
-      packageManager: project.packageManager
-    });
-  }
-
-  if (catalogInfo) {
-    if (options.dryRun) {
-      logger.log(
-        `Would update turbo version in catalog file ${picocolors.dim(
-          catalogInfo.catalogFile
-        )} ${picocolors.dim("(dry run)")}`,
-        os.EOL
-      );
-    } else {
-      const updated = updateCatalogVersion({
-        catalogInfo,
-        version: toVersion
-      });
-      if (updated) {
-        logger.log(
-          `Updated turbo version to ${picocolors.bold(
-            toVersion
-          )} in ${picocolors.dim(catalogInfo.catalogFile)}`,
-          os.EOL
-        );
-      }
-    }
-  }
-
-  // find the upgrade command, and run it
-  const upgradeCommand = await getTurboUpgradeCommand({
-    project,
-    to: options.to,
-    catalogInfo
-  });
-
-  if (!upgradeCommand) {
-    return endMigration({
-      success: false,
-      message: "Unable to determine upgrade command"
-    });
-  }
-
-  // install
-  if (options.install) {
-    if (options.dryRun) {
-      logger.log(
-        `Upgrading turbo with ${picocolors.bold(
-          upgradeCommand
-        )} ${picocolors.dim("(dry run)")}`,
-        os.EOL
-      );
-    } else {
-      logger.log(
-        `Upgrading turbo with ${picocolors.bold(upgradeCommand)}`,
-        os.EOL
-      );
-      try {
-        execSync(upgradeCommand, { stdio: "pipe", cwd: project.paths.root });
-      } catch (err: unknown) {
-        return endMigration({
-          success: false,
-          message: `Unable to upgrade turbo: ${String(err)}`
-        });
-      }
-    }
-  } else {
-    logger.log(`Upgrade turbo with ${picocolors.bold(upgradeCommand)}`, os.EOL);
   }
 
   endMigration({ success: true });
