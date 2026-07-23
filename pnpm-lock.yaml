@@ -45,8 +45,8 @@ importers:
   apps/agents:
     dependencies:
       '@vercel/connect':
-        specifier: 0.2.2
-        version: 0.2.2(ai@7.0.0-beta.178(zod@4.4.3))(eve@0.22.5(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/functions@3.4.4)(ai@7.0.0-beta.178(zod@4.4.3))(chokidar@5.0.0)(dotenv@16.0.3)(lru-cache@11.3.3))
+        specifier: 0.4.2
+        version: 0.4.2(ai@7.0.0-beta.178(zod@4.4.3))(eve@0.22.5(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/functions@3.4.4)(ai@7.0.0-beta.178(zod@4.4.3))(chokidar@5.0.0)(dotenv@16.0.3)(lru-cache@11.3.3))
       ai:
         specifier: 7.0.0-beta.178
         version: 7.0.0-beta.178(zod@4.4.3)
@@ -5208,22 +5208,25 @@ packages:
   '@vercel/cli-config@0.2.0':
     resolution: {integrity: sha512-fJRRRB7734BDuXZ89yBEaA2ncYhH7bWX30mk04W80J6VAfQc+4iB8lyzAdaGpFV3/vNlkt9VZt+/uoQoWX6UsQ==}
 
-  '@vercel/cli-exec@0.1.1':
-    resolution: {integrity: sha512-LMRMEai3Z+BODyxGcU9+KiWrS/UElNiOLKiNRfGNt2Vu3NTEmXgFeXG9wBfocAnTe5yJCX/DY6k3k7S/LkPp/g==}
+  '@vercel/cli-exec@1.0.0':
+    resolution: {integrity: sha512-kQF8LGie/Hbdq9/psJxLE7owRTcqMQMhgybU04gCeR7cbQAr5t8OrjefDNColJv1QSSucFt4pLwRiARVmlOnug==}
     engines: {node: '>= 18'}
 
-  '@vercel/connect@0.2.2':
-    resolution: {integrity: sha512-XJti9hGkjoMp1BrHIbAsTyl7kseALOWtizYe6S3C3RAq8xDW4OcdLVPYjowkqE0KRuIzhIzIwtpHPfqohqLG1w==}
+  '@vercel/connect@0.4.2':
+    resolution: {integrity: sha512-3Lr2yFI2Z2NPR+T3DWOqrygBpxZUK6H+wCesijT2pV7VmuG8l5ZYSxk4tdzZwF4SWYJOXQFzcELtFLCGvBw5mg==}
     peerDependencies:
       '@ai-sdk/mcp': ^1 || ^2
       '@auth/core': '>=0.37.0'
-      ai: ^6 || ^7
+      '@chat-adapter/slack': ^4.0.0
+      ai: ^6 || ^7.0.0-beta.0
       better-auth: '>=1.5.0'
-      eve: '>=0.6.0-beta.1'
+      eve: '>=0.13.7'
     peerDependenciesMeta:
       '@ai-sdk/mcp':
         optional: true
       '@auth/core':
+        optional: true
+      '@chat-adapter/slack':
         optional: true
       ai:
         optional: true
@@ -5258,8 +5261,8 @@ packages:
     resolution: {integrity: sha512-UUqZ2y+VXHgVH1Luoo+477/NcrO4X+ln38U70ldRgGiWJAuHhtjTm7cCAnyLkl2feg7ZmTBK3F1kvJKFEQc01w==}
     engines: {node: '>= 20'}
 
-  '@vercel/oidc@3.6.1':
-    resolution: {integrity: sha512-8ipTFoiX3WBRrvXLjSrmgAiwtMDQk3EgSxe8N7v2rXBz39NBIIyoGXeVbJRoBcP8WEuVnvjvIQsggbGU7ZKrMw==}
+  '@vercel/oidc@3.8.0':
+    resolution: {integrity: sha512-r00laGW6Pv778RoR6M2NxX91ycSj+PBwVo+fOb9Bif+F0IyUKt25zrvBzfEzQpeAzbqOgPZyQibEWDdDFApd+A==}
     engines: {node: '>= 20'}
 
   '@vercel/sandbox@2.5.0':
@@ -14262,13 +14265,13 @@ snapshots:
       xdg-app-paths: 5.1.0
       zod: 4.1.11
 
-  '@vercel/cli-exec@0.1.1':
+  '@vercel/cli-exec@1.0.0':
     dependencies:
       execa: 5.1.1
 
-  '@vercel/connect@0.2.2(ai@7.0.0-beta.178(zod@4.4.3))(eve@0.22.5(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/functions@3.4.4)(ai@7.0.0-beta.178(zod@4.4.3))(chokidar@5.0.0)(dotenv@16.0.3)(lru-cache@11.3.3))':
+  '@vercel/connect@0.4.2(ai@7.0.0-beta.178(zod@4.4.3))(eve@0.22.5(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/functions@3.4.4)(ai@7.0.0-beta.178(zod@4.4.3))(chokidar@5.0.0)(dotenv@16.0.3)(lru-cache@11.3.3))':
     dependencies:
-      '@vercel/oidc': 3.6.1
+      '@vercel/oidc': 3.8.0
     optionalDependencies:
       ai: 7.0.0-beta.178(zod@4.4.3)
       eve: 0.22.5(@azure/identity@4.13.1)(@opentelemetry/api@1.9.0)(@vercel/functions@3.4.4)(ai@7.0.0-beta.178(zod@4.4.3))(chokidar@5.0.0)(dotenv@16.0.3)(lru-cache@11.3.3)
@@ -14341,10 +14344,10 @@ snapshots:
   '@vercel/oidc@3.2.1':
     optional: true
 
-  '@vercel/oidc@3.6.1':
+  '@vercel/oidc@3.8.0':
     dependencies:
       '@vercel/cli-config': 0.2.0
-      '@vercel/cli-exec': 0.1.1
+      '@vercel/cli-exec': 1.0.0
       jose: 5.10.0
 
   '@vercel/sandbox@2.5.0':
