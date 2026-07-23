@@ -64,7 +64,7 @@ export default function HomePage() {
         }}
         className="relative border border-border/50"
       >
-        <GridCell className="relative border-b border-border/50 col-span-2 px-6 py-12 xs:px-6 xs:py-12 md:p-16">
+        <GridCell className="relative border-b border-border/50 col-span-full px-6 py-12 xs:px-6 xs:py-12 md:p-16">
           <DottedLines className="absolute top-0 bottom-0 left-0 right-0 overflow-hidden text-center flex items-center justify-center" />
           <div className="relative z-1 flex flex-col justify-center">
             <h1 className="mb-4 text-6xl font-semibold tracking-tighter text-center md:text-7xl">
@@ -99,7 +99,7 @@ export default function HomePage() {
             </div>
           </div>
         </GridCell>
-        <GridCell className="border-0 h-fit col-span-2 px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
+        <GridCell className="border-0 h-fit col-span-full px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
           <h2 className="mb-1 text-[32px] font-semibold tracking-tighter">
             Scale your workflows
           </h2>
@@ -121,7 +121,7 @@ export default function HomePage() {
             ))}
           </div>
         </GridCell>
-        <GridCell className="col-span-2 px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
+        <GridCell className="col-span-full px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
           <div className="flex flex-col items-start justify-between gap-y-4 md:flex-row">
             <div className="flex flex-col gap-y-1">
               <h2 className="text-[32px] font-semibold tracking-tighter">
@@ -166,14 +166,14 @@ export default function HomePage() {
             </div>
           </div>
         </GridCell>
-        <GridCell className="col-span-2 px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12 border-b border-border/50">
+        <GridCell className="col-span-full px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12 border-b border-border/50">
           <h2 className="text-[32px] font-semibold tracking-tighter">
             What builders say about Turborepo
           </h2>
 
           <Testimonials />
         </GridCell>
-        <GridCell className="col-span-2 px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
+        <GridCell className="col-span-full px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
           <div className="flex flex-col items-start gap-y-6 md:flex-row md:items-center md:justify-between md:gap-x-6">
             <h2 className="text-[32px] font-semibold tracking-tighter md:text-[40px]">
               Deploy your Turborepo today.
