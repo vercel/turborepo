@@ -15,7 +15,7 @@
 //! and `crate::task_change_detector::affected_task_ids`, sharing code with
 //! `--affected` + `affectedUsingTaskInputs`.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
@@ -24,7 +24,7 @@ use turborepo_scope::{target_selector::GitRange, TargetSelector};
 use turborepo_task_id::TaskId;
 use wax::Program;
 
-use crate::engine::Engine;
+use crate::engine::{task_has_command, Engine, TaskNode};
 
 /// Resolves an `--affected` range to the set of task IDs that are affected
 /// (changed + dependents). Used by the builder to compute an intersection
@@ -55,12 +55,16 @@ pub fn resolve_affected_tasks(
         scm,
         repo_root,
         global_deps,
+        None,
     )
 }
 
 pub(crate) struct TaskFilterConstraints<'a> {
     pub affected: Option<&'a HashSet<TaskId<'static>>>,
     pub always_include: &'a HashSet<TaskId<'static>>,
+    pub entrypoints: Option<&'a HashSet<TaskId<'static>>>,
+    pub excluded_entrypoints: &'a HashSet<TaskId<'static>>,
+    pub orchestration_entrypoints: Option<&'a HashMap<String, HashSet<TaskId<'static>>>>,
 }
 
 /// Filters an engine down to only the tasks matching the given selectors.
@@ -79,12 +83,16 @@ pub fn filter_engine_to_tasks(
     global_deps: &[String],
 ) -> Result<Engine, crate::run::error::Error> {
     let always_include = HashSet::new();
+    let excluded_entrypoints = HashSet::new();
     filter_engine_to_tasks_with_inclusions(
         engine,
         selectors,
         TaskFilterConstraints {
             affected: affected_constraint,
             always_include: &always_include,
+            entrypoints: None,
+            excluded_entrypoints: &excluded_entrypoints,
+            orchestration_entrypoints: None,
         },
         pkg_dep_graph,
         scm,
@@ -114,13 +122,16 @@ pub(crate) fn filter_engine_to_tasks_with_inclusions(
             scm,
             repo_root,
             global_deps,
+            constraints.entrypoints,
         )?;
         included_tasks.extend(matched);
     }
 
     // If there were no include selectors (only excludes), start with all tasks.
     if include.is_empty() {
-        included_tasks = engine.task_ids().cloned().collect();
+        included_tasks = constraints
+            .entrypoints
+            .map_or_else(|| engine.task_ids().cloned().collect(), HashSet::clone);
     }
 
     if let Some(affected) = constraints.affected {
@@ -135,11 +146,23 @@ pub(crate) fn filter_engine_to_tasks_with_inclusions(
             scm,
             repo_root,
             global_deps,
+            constraints.entrypoints,
         )?;
         included_tasks.retain(|t| !to_exclude.contains(t));
     }
 
+    included_tasks.retain(|task| !constraints.excluded_entrypoints.contains(task));
+
     included_tasks.extend(constraints.always_include.iter().cloned());
+
+    if let Some(orchestration_entrypoints) = constraints.orchestration_entrypoints {
+        return Ok(retain_strict_task_graph(
+            engine,
+            pkg_dep_graph,
+            included_tasks,
+            orchestration_entrypoints,
+        ));
+    }
 
     if included_tasks.is_empty() {
         return Ok(engine.retain_filtered_tasks(&included_tasks));
@@ -169,6 +192,7 @@ fn resolve_selector_to_tasks(
     scm: &SCM,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
+    entrypoints: Option<&HashSet<TaskId<'static>>>,
 ) -> Result<HashSet<TaskId<'static>>, crate::run::error::Error> {
     if selector.match_dependencies {
         return resolve_match_dependencies(
@@ -178,11 +202,19 @@ fn resolve_selector_to_tasks(
             scm,
             repo_root,
             global_deps,
+            entrypoints,
         );
     }
 
-    let base_tasks =
-        resolve_base_tasks(engine, selector, pkg_dep_graph, scm, repo_root, global_deps)?;
+    let base_tasks = resolve_base_tasks(
+        engine,
+        selector,
+        pkg_dep_graph,
+        scm,
+        repo_root,
+        global_deps,
+        entrypoints,
+    )?;
 
     let mut result = HashSet::new();
 
@@ -225,19 +257,24 @@ fn resolve_base_tasks(
     scm: &SCM,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
+    entrypoints: Option<&HashSet<TaskId<'static>>>,
 ) -> Result<HashSet<TaskId<'static>>, crate::run::error::Error> {
     let tasks_from_packages = resolve_name_and_dir(engine, selector, pkg_dep_graph);
     let tasks_from_git_range =
         resolve_git_range(engine, selector, pkg_dep_graph, scm, repo_root, global_deps)?;
 
-    match (tasks_from_packages, tasks_from_git_range) {
+    let mut tasks = match (tasks_from_packages, tasks_from_git_range) {
         (Some(pkg_tasks), Some(git_tasks)) => {
             // Intersection: task must match both name/dir AND git range.
-            Ok(pkg_tasks.intersection(&git_tasks).cloned().collect())
+            pkg_tasks.intersection(&git_tasks).cloned().collect()
         }
-        (Some(tasks), None) | (None, Some(tasks)) => Ok(tasks),
-        (None, None) => Ok(HashSet::new()),
+        (Some(tasks), None) | (None, Some(tasks)) => tasks,
+        (None, None) => HashSet::new(),
+    };
+    if let Some(entrypoints) = entrypoints {
+        tasks.retain(|task| entrypoints.contains(task));
     }
+    Ok(tasks)
 }
 
 /// Matches tasks by package name pattern and/or directory.
@@ -347,6 +384,7 @@ fn resolve_match_dependencies(
     scm: &SCM,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
+    entrypoints: Option<&HashSet<TaskId<'static>>>,
 ) -> Result<HashSet<TaskId<'static>>, crate::run::error::Error> {
     let git_range = match &selector.git_range {
         Some(range) => range,
@@ -355,7 +393,10 @@ fn resolve_match_dependencies(
 
     // Find all tasks in the named packages
     let matching_packages = find_matching_packages(selector, pkg_dep_graph);
-    let package_tasks = engine.task_ids_for_packages(&matching_packages);
+    let mut package_tasks = engine.task_ids_for_packages(&matching_packages);
+    if let Some(entrypoints) = entrypoints {
+        package_tasks.retain(|task| entrypoints.contains(task));
+    }
 
     // Expand to include all task-graph dependencies
     let mut candidate_tasks = engine.collect_task_dependencies(&package_tasks);
@@ -413,7 +454,7 @@ fn get_changed_files(
 /// When `retain_filtered_tasks` prunes the engine via forward DFS, edge-less
 /// `with` siblings are unreachable and get dropped. This function closes that
 /// gap by expanding the retained set before pruning.
-fn expand_with_siblings(
+pub(crate) fn expand_with_siblings(
     engine: &Engine,
     tasks: HashSet<TaskId<'static>>,
 ) -> HashSet<TaskId<'static>> {
@@ -451,6 +492,83 @@ fn expand_with_siblings(
     result
 }
 
+pub(crate) fn retain_strict_task_graph(
+    engine: Engine,
+    pkg_dep_graph: &PackageGraph,
+    selected: HashSet<TaskId<'static>>,
+    orchestration: &HashMap<String, HashSet<TaskId<'static>>>,
+) -> Engine {
+    let orchestration_tasks: HashSet<_> = orchestration
+        .values()
+        .flatten()
+        .filter(|task| selected.contains(*task))
+        .cloned()
+        .collect();
+    let command_entrypoints: HashSet<_> =
+        selected.difference(&orchestration_tasks).cloned().collect();
+    let command_entrypoints = expand_with_siblings(&engine, command_entrypoints);
+    let mut retained = command_entrypoints.clone();
+    retained.extend(engine.collect_task_dependencies(&command_entrypoints));
+
+    for entrypoints in orchestration.values() {
+        let selected_entrypoints: HashSet<_> =
+            entrypoints.intersection(&selected).cloned().collect();
+        if selected_entrypoints.is_empty() {
+            continue;
+        }
+
+        let has_command_path = entrypoints
+            .iter()
+            .any(|entrypoint| orchestration_branch(&engine, pkg_dep_graph, entrypoint).is_some());
+        let mut paths_to_commands = HashSet::new();
+        for entrypoint in &selected_entrypoints {
+            if let Some(branch) = orchestration_branch(&engine, pkg_dep_graph, entrypoint) {
+                paths_to_commands.extend(branch);
+            }
+        }
+
+        if !has_command_path {
+            retained.extend(selected_entrypoints.iter().cloned());
+            retained.extend(engine.collect_task_dependencies(&selected_entrypoints));
+        } else {
+            retained.extend(paths_to_commands);
+        }
+    }
+
+    let expanded = expand_with_siblings(&engine, retained);
+    let mut retained = expanded.clone();
+    retained.extend(engine.collect_task_dependencies(&expanded));
+    engine.retain_task_subset(&retained)
+}
+
+fn orchestration_branch(
+    engine: &Engine,
+    pkg_dep_graph: &PackageGraph,
+    task_id: &TaskId<'static>,
+) -> Option<HashSet<TaskId<'static>>> {
+    if task_has_command(engine, pkg_dep_graph, task_id) {
+        let entrypoint = HashSet::from([task_id.clone()]);
+        let mut retained = entrypoint.clone();
+        retained.extend(engine.collect_task_dependencies(&entrypoint));
+        return Some(retained);
+    }
+
+    let mut retained = HashSet::new();
+    for dependency in engine.dependencies(task_id).into_iter().flatten() {
+        let TaskNode::Task(dependency) = dependency else {
+            continue;
+        };
+        if let Some(branch) = orchestration_branch(engine, pkg_dep_graph, dependency) {
+            retained.extend(branch);
+        }
+    }
+
+    (!retained.is_empty()).then(|| {
+        retained.insert(task_id.clone());
+        retained
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::{HashMap, HashSet};
@@ -463,7 +581,7 @@ mod tests {
         package_manager::PackageManager,
     };
     use turborepo_task_id::TaskId;
-    use turborepo_types::{TaskDefinition, TaskInputs};
+    use turborepo_types::{TaskCommandOverride, TaskDefinition, TaskInputs};
 
     use crate::engine::{Building, Engine};
 
@@ -530,6 +648,104 @@ mod tests {
             },
             ..Default::default()
         }
+    }
+
+    fn command_def() -> TaskDefinition {
+        TaskDefinition {
+            command: Some(TaskCommandOverride::Argv(vec!["run".to_string()])),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn strict_orchestration_retains_only_paths_to_commands() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["app", "lib"]).await;
+
+        let app_checks = TaskId::new("app", "checks");
+        let app_package_types = TaskId::new("app", "package:types");
+        let lib_checks = TaskId::new("lib", "checks");
+        let lib_package_types = TaskId::new("lib", "package:types");
+        let engine = make_engine(
+            &[
+                (app_checks.clone(), TaskDefinition::default()),
+                (app_package_types.clone(), TaskDefinition::default()),
+                (lib_checks.clone(), TaskDefinition::default()),
+                (lib_package_types.clone(), command_def()),
+            ],
+            &[
+                (app_checks.clone(), app_package_types),
+                (lib_checks.clone(), lib_package_types.clone()),
+            ],
+        );
+        let selected = HashSet::from([app_checks.clone(), lib_checks.clone()]);
+        let orchestration = HashMap::from([(
+            "checks".to_string(),
+            HashSet::from([app_checks, lib_checks.clone()]),
+        )]);
+
+        let result = super::retain_strict_task_graph(engine, &pkg_graph, selected, &orchestration);
+        let remaining: HashSet<_> = result.task_ids().cloned().collect();
+
+        assert_eq!(remaining, HashSet::from([lib_checks, lib_package_types]));
+    }
+
+    #[tokio::test]
+    async fn strict_orchestration_preserves_fully_scriptless_graph() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["app", "lib"]).await;
+
+        let app_topo = TaskId::new("app", "topo");
+        let lib_topo = TaskId::new("lib", "topo");
+        let engine = make_engine(
+            &[
+                (app_topo.clone(), TaskDefinition::default()),
+                (lib_topo.clone(), TaskDefinition::default()),
+            ],
+            &[(app_topo.clone(), lib_topo.clone())],
+        );
+        let selected = HashSet::from([app_topo.clone(), lib_topo.clone()]);
+        let orchestration = HashMap::from([("topo".to_string(), selected.clone())]);
+
+        let result = super::retain_strict_task_graph(engine, &pkg_graph, selected, &orchestration);
+        let remaining: HashSet<_> = result.task_ids().cloned().collect();
+
+        assert_eq!(remaining, HashSet::from([app_topo, lib_topo]));
+    }
+
+    #[tokio::test]
+    async fn strict_orchestration_filter_drops_selected_dead_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["app", "lib"]).await;
+
+        let app_checks = TaskId::new("app", "checks");
+        let app_package_types = TaskId::new("app", "package:types");
+        let lib_checks = TaskId::new("lib", "checks");
+        let lib_package_types = TaskId::new("lib", "package:types");
+        let engine = make_engine(
+            &[
+                (app_checks.clone(), TaskDefinition::default()),
+                (app_package_types.clone(), TaskDefinition::default()),
+                (lib_checks.clone(), TaskDefinition::default()),
+                (lib_package_types.clone(), command_def()),
+            ],
+            &[
+                (app_checks.clone(), app_package_types),
+                (lib_checks.clone(), lib_package_types),
+            ],
+        );
+        let selected = HashSet::from([app_checks.clone()]);
+        let orchestration = HashMap::from([(
+            "checks".to_string(),
+            HashSet::from([app_checks, lib_checks]),
+        )]);
+
+        let result = super::retain_strict_task_graph(engine, &pkg_graph, selected, &orchestration);
+
+        assert!(result.task_ids().next().is_none());
     }
 
     /// `--filter=web...` should pick up cross-package task deps.
@@ -651,7 +867,7 @@ mod tests {
         };
 
         let tasks =
-            super::resolve_selector_to_tasks(&engine, &selector, &pkg_graph, &scm, root, &[])
+            super::resolve_selector_to_tasks(&engine, &selector, &pkg_graph, &scm, root, &[], None)
                 .unwrap();
 
         assert!(tasks.contains(&web_build));
@@ -687,7 +903,7 @@ mod tests {
         };
 
         let tasks =
-            super::resolve_selector_to_tasks(&engine, &selector, &pkg_graph, &scm, root, &[])
+            super::resolve_selector_to_tasks(&engine, &selector, &pkg_graph, &scm, root, &[], None)
                 .unwrap();
 
         assert!(
@@ -698,6 +914,96 @@ mod tests {
             tasks.contains(&schema_gen),
             "schema#gen should be included via task graph traversal: {tasks:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn plain_filter_drops_missing_requested_task_and_implicit_dependencies() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["web"]).await;
+        let scm = turborepo_scm::SCM::new(root);
+
+        let web_test = TaskId::new("web", "test");
+        let web_build = TaskId::new("web", "build");
+        let engine = make_engine(
+            &[
+                (web_test.clone(), TaskDefinition::default()),
+                (web_build.clone(), TaskDefinition::default()),
+            ],
+            &[(web_test.clone(), web_build.clone())],
+        );
+        let entrypoints = HashSet::from([web_test.clone()]);
+        let excluded_entrypoints = HashSet::from([web_test]);
+        let always_include = HashSet::new();
+        let selector = turborepo_scope::TargetSelector {
+            name_pattern: "web".to_string(),
+            ..Default::default()
+        };
+
+        let result = super::filter_engine_to_tasks_with_inclusions(
+            engine,
+            &[selector],
+            super::TaskFilterConstraints {
+                affected: None,
+                always_include: &always_include,
+                entrypoints: Some(&entrypoints),
+                excluded_entrypoints: &excluded_entrypoints,
+                orchestration_entrypoints: None,
+            },
+            &pkg_graph,
+            &scm,
+            root,
+            &[],
+        )
+        .unwrap();
+
+        assert!(result.task_ids().next().is_none());
+    }
+
+    #[tokio::test]
+    async fn dependency_filter_keeps_tasks_beyond_missing_requested_task() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["web"]).await;
+        let scm = turborepo_scm::SCM::new(root);
+
+        let web_test = TaskId::new("web", "test");
+        let web_build = TaskId::new("web", "build");
+        let engine = make_engine(
+            &[
+                (web_test.clone(), TaskDefinition::default()),
+                (web_build.clone(), TaskDefinition::default()),
+            ],
+            &[(web_test.clone(), web_build.clone())],
+        );
+        let entrypoints = HashSet::from([web_test.clone()]);
+        let excluded_entrypoints = HashSet::from([web_test]);
+        let always_include = HashSet::new();
+        let selector = turborepo_scope::TargetSelector {
+            name_pattern: "web".to_string(),
+            include_dependencies: true,
+            ..Default::default()
+        };
+
+        let result = super::filter_engine_to_tasks_with_inclusions(
+            engine,
+            &[selector],
+            super::TaskFilterConstraints {
+                affected: None,
+                always_include: &always_include,
+                entrypoints: Some(&entrypoints),
+                excluded_entrypoints: &excluded_entrypoints,
+                orchestration_entrypoints: None,
+            },
+            &pkg_graph,
+            &scm,
+            root,
+            &[],
+        )
+        .unwrap();
+        let remaining: HashSet<_> = result.task_ids().cloned().collect();
+
+        assert_eq!(remaining, HashSet::from([web_build]));
     }
 
     /// resolve_selector_to_tasks with include_dependents traverses
@@ -727,7 +1033,7 @@ mod tests {
         };
 
         let tasks =
-            super::resolve_selector_to_tasks(&engine, &selector, &pkg_graph, &scm, root, &[])
+            super::resolve_selector_to_tasks(&engine, &selector, &pkg_graph, &scm, root, &[], None)
                 .unwrap();
 
         assert!(
@@ -1093,7 +1399,7 @@ mod tests {
         };
 
         let tasks =
-            super::resolve_selector_to_tasks(&engine, &selector, &pkg_graph, &scm, root, &[])
+            super::resolve_selector_to_tasks(&engine, &selector, &pkg_graph, &scm, root, &[], None)
                 .unwrap();
 
         assert!(
@@ -1133,7 +1439,7 @@ mod tests {
         };
 
         let tasks =
-            super::resolve_selector_to_tasks(&engine, &selector, &pkg_graph, &scm, root, &[])
+            super::resolve_selector_to_tasks(&engine, &selector, &pkg_graph, &scm, root, &[], None)
                 .unwrap();
 
         assert!(
