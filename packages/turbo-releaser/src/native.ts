@@ -13,10 +13,12 @@ export const archToHuman: Record<SupportedArch, HumanArch> = {
   arm64: "arm64"
 };
 
-export const nodeOSLookup: Record<SupportedOS, NpmOs> = {
-  darwin: "darwin",
-  linux: "linux",
-  windows: "win32"
+/* The Linux binaries are also compatible with Android (e.g. Termux),
+   so allow npm/pnpm to install them there. */
+export const nodeOSLookup: Record<SupportedOS, ReadonlyArray<NpmOs>> = {
+  darwin: ["darwin"],
+  linux: ["android", "linux"],
+  windows: ["win32"]
 };
 
 const templateDir = path.join(__dirname, "..", "template");
@@ -72,7 +74,7 @@ async function generateNativePackage({
     bugs: "https://github.com/vercel/turborepo/issues",
     homepage: "https://turborepo.dev",
     license: "MIT",
-    os: [nodeOSLookup[os]],
+    os: nodeOSLookup[os],
     cpu: [arch],
     preferUnplugged: true
   };
