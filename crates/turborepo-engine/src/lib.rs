@@ -497,6 +497,19 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         self.prune_to_reachable(&reachable, false)
     }
 
+    /// Retains exactly the given task nodes and any dependency edges between
+    /// them. Unlike `retain_filtered_tasks`, this does not add transitive
+    /// dependencies.
+    pub fn retain_task_subset(self, retained_tasks: &HashSet<TaskId>) -> Self {
+        let mut retained: HashSet<_> = retained_tasks
+            .iter()
+            .filter_map(|task| self.task_lookup.get(task))
+            .copied()
+            .collect();
+        retained.insert(self.root_index);
+        self.prune_to_reachable(&retained, false)
+    }
+
     /// Computes the full reachable set from seed nodes: reverse DFS for
     /// transitive dependents, then forward DFS for transitive dependencies.
     /// Root is always included so `prune_to_reachable` can recover it.

@@ -1821,6 +1821,15 @@ fn test_pure_cargo_workspace_filtered_execution() {
 fn test_unfiltered_cargo_verification_runs_once_at_workspace_scope() {
     let tempdir = cargo_tempdir();
     setup_cargo_monorepo(tempdir.path());
+    let turbo_json_path = tempdir.path().join("turbo.json");
+    let mut turbo_json: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&turbo_json_path).unwrap()).unwrap();
+    turbo_json["futureFlags"]["strictTaskEntrypointSelection"] = true.into();
+    fs::write(
+        turbo_json_path,
+        serde_json::to_string_pretty(&turbo_json).unwrap(),
+    )
+    .unwrap();
 
     let output = run_turbo(tempdir.path(), &["run", "test", "--dry-run=json"]);
     assert!(output.status.success(), "dry run failed: {output:?}");
@@ -1881,7 +1890,8 @@ fn test_cargo_verification_works_with_task_level_filters() {
   "$schema": "https://turborepo.dev/schema.json",
   "futureFlags": {
     "experimentalCargoWorkspaces": true,
-    "filterUsingTasks": true
+    "filterUsingTasks": true,
+    "strictTaskEntrypointSelection": true
   },
   "tasks": {}
 }"#,

@@ -43,9 +43,17 @@ type FilteredPackages = (
     HashSet<PackageName>,
 );
 
+#[derive(Default)]
+struct TaskEntrypointSelection {
+    candidates: HashSet<TaskId<'static>>,
+    selected: HashSet<TaskId<'static>>,
+    excluded: HashSet<TaskId<'static>>,
+    orchestration: HashMap<String, HashSet<TaskId<'static>>>,
+}
+
 use crate::{
     commands::CommandBase,
-    engine::{Engine, EngineBuilder, EngineExt},
+    engine::{task_has_command, Engine, EngineBuilder, EngineExt},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     run::{
@@ -903,6 +911,18 @@ impl RunBuilder {
 
         // Task-level filter: resolve --filter and/or --affected against the task graph.
         if use_task_level_filter {
+            let task_entrypoints = self
+                .opts
+                .future_flags
+                .strict_task_entrypoint_selection
+                .then(|| {
+                    self.command_task_entrypoints(
+                        &engine,
+                        &pkg_dep_graph,
+                        &all_pkgs.iter().cloned().collect(),
+                    )
+                });
+            let excluded_entrypoints = HashSet::new();
             let selectors: Vec<turborepo_scope::TargetSelector> = self
                 .opts
                 .scope_opts
@@ -943,6 +963,15 @@ impl RunBuilder {
                 super::task_filter::TaskFilterConstraints {
                     affected: affected_constraint.as_ref(),
                     always_include: &package_tasks,
+                    entrypoints: task_entrypoints
+                        .as_ref()
+                        .map(|selection| &selection.candidates),
+                    excluded_entrypoints: task_entrypoints
+                        .as_ref()
+                        .map_or(&excluded_entrypoints, |selection| &selection.excluded),
+                    orchestration_entrypoints: task_entrypoints
+                        .as_ref()
+                        .map(|selection| &selection.orchestration),
                 },
                 &pkg_dep_graph,
                 &scm,
@@ -963,6 +992,23 @@ impl RunBuilder {
 
         if needs_all_packages {
             engine = self.select_engine_task_entrypoints(engine, &pkg_dep_graph, &filter_mode);
+        }
+
+        if self.opts.future_flags.strict_task_entrypoint_selection
+            && !use_task_level_filter
+            && !self.add_all_tasks
+        {
+            let task_entrypoints = self.command_task_entrypoints(
+                &engine,
+                &pkg_dep_graph,
+                &unqualified_entrypoint_packages,
+            );
+            engine = super::task_filter::retain_strict_task_graph(
+                engine,
+                &pkg_dep_graph,
+                task_entrypoints.selected,
+                &task_entrypoints.orchestration,
+            );
         }
 
         // Validate after all filtering so the persistent task count reflects
@@ -1191,6 +1237,65 @@ impl RunBuilder {
                 )
             })
             .collect()
+    }
+
+    fn command_task_entrypoints(
+        &self,
+        engine: &Engine,
+        pkg_dep_graph: &PackageGraph,
+        candidate_packages: &HashSet<PackageName>,
+    ) -> TaskEntrypointSelection {
+        let mut selection = TaskEntrypointSelection::default();
+
+        for requested in &self.opts.run_opts.tasks {
+            let task = TaskName::from(requested.as_str());
+            if let Some(task_id) = task.task_id().map(TaskId::into_owned) {
+                if engine.task_definition(&task_id).is_some() {
+                    selection.candidates.insert(task_id.clone());
+                    selection.selected.insert(task_id.clone());
+                    if !task_has_command(engine, pkg_dep_graph, &task_id) {
+                        selection
+                            .orchestration
+                            .entry(task.to_string())
+                            .or_default()
+                            .insert(task_id);
+                    }
+                }
+                continue;
+            }
+
+            let has_command = pkg_dep_graph.packages().any(|(_, package)| {
+                pkg_dep_graph
+                    .toolchains()
+                    .get(&package.toolchain)
+                    .is_some_and(|toolchain| toolchain.defines_task(package, task.task()))
+            }) || engine.task_ids().any(|task_id| {
+                task_id.task() == task.task() && task_has_command(engine, pkg_dep_graph, task_id)
+            });
+
+            for package in candidate_packages {
+                let task_id = TaskId::new(package.as_ref(), task.task()).into_owned();
+                if engine.task_definition(&task_id).is_none() {
+                    continue;
+                }
+
+                selection.candidates.insert(task_id.clone());
+                if !has_command || task_has_command(engine, pkg_dep_graph, &task_id) {
+                    selection.selected.insert(task_id.clone());
+                    if !has_command {
+                        selection
+                            .orchestration
+                            .entry(task.task().to_string())
+                            .or_default()
+                            .insert(task_id);
+                    }
+                } else {
+                    selection.excluded.insert(task_id);
+                }
+            }
+        }
+
+        selection
     }
 
     fn task_entrypoint_exclusions_for_task(
