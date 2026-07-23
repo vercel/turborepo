@@ -1,3 +1,3 @@
-import { config } from '@repo/eslint-config/index.js';
+import { createConfig } from '@repo/eslint-config';
 
-export default [...config];
+export default createConfig(import.meta.dirname);
