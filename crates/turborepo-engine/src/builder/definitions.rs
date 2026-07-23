@@ -857,7 +857,7 @@ mod command_override_tests {
         }
 
         fn discover_packages(&self) -> turborepo_repository::toolchain::DiscoverPackagesFuture<'_> {
-            Box::pin(async { Ok(Vec::new()) })
+            Box::pin(async { Ok(turborepo_repository::toolchain::DiscoveredPackages::default()) })
         }
 
         fn authors_task(&self, _package: &PackageInfo, _task: &str) -> bool {

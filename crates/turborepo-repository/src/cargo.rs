@@ -43,7 +43,10 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf
 
 use crate::{
     package_json::PackageJson,
-    toolchain::{self, DiscoverPackagesFuture, DiscoveredPackage, Toolchain, ToolchainId},
+    toolchain::{
+        self, DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, Toolchain,
+        ToolchainId, WorkspaceRoot,
+    },
 };
 
 /// The conventional file name for a Cargo manifest.
@@ -1587,6 +1590,13 @@ impl Toolchain for CargoToolchain {
             let workspace =
                 turborepo_rayon_compat::block_in_place(|| discover_crates(&self.repo_root))
                     .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+            let workspace_roots = self
+                .repo_root
+                .join_component(CARGO_TOML)
+                .exists()
+                .then(|| WorkspaceRoot::new("cargo", self.repo_root.clone(), ToolchainId::RUST))
+                .into_iter()
+                .collect();
             let target_directory = workspace.target_directory.clone();
             let crates = workspace.crates;
 
@@ -1595,7 +1605,7 @@ impl Toolchain for CargoToolchain {
                     turborepo_rayon_compat::block_in_place(|| validate_lockfile(&self.repo_root))
                         .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
                 }
-                return Ok(Vec::new());
+                return Ok(DiscoveredPackages::new(Vec::new(), workspace_roots));
             }
 
             // Using Turborepo with Rust requires naming the workspace: the
@@ -1741,7 +1751,7 @@ impl Toolchain for CargoToolchain {
                 ));
             }
 
-            Ok(packages)
+            Ok(DiscoveredPackages::new(packages, workspace_roots))
         })
     }
 }
@@ -3640,10 +3650,11 @@ release: 1.96.0-nightly\n",
         let toolchain = CargoToolchain::new(root.clone());
         assert_eq!(toolchain.id(), ToolchainId::RUST);
 
-        let mut packages: Vec<_> = toolchain
-            .discover_packages()
-            .await
-            .unwrap()
+        let (packages, roots) = toolchain.discover_packages().await.unwrap().into_parts();
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].kind(), "cargo");
+        assert_eq!(roots[0].path(), root.as_ref());
+        let mut packages: Vec<_> = packages
             .into_iter()
             .map(DiscoveredPackage::into_parts)
             .collect();
@@ -3710,7 +3721,9 @@ release: 1.96.0-nightly\n",
     async fn test_cargo_toolchain_empty_without_manifest() {
         let (_tmp, root) = tempdir_root();
         let toolchain = CargoToolchain::new(root);
-        assert!(toolchain.discover_packages().await.unwrap().is_empty());
+        let (packages, roots) = toolchain.discover_packages().await.unwrap().into_parts();
+        assert!(packages.is_empty());
+        assert!(roots.is_empty());
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -3719,7 +3732,9 @@ release: 1.96.0-nightly\n",
         write(&root, &["Cargo.toml"], "[workspace]\nmembers = []\n");
 
         let toolchain = CargoToolchain::new(root);
-        assert!(toolchain.discover_packages().await.unwrap().is_empty());
+        let (packages, roots) = toolchain.discover_packages().await.unwrap().into_parts();
+        assert!(packages.is_empty());
+        assert_eq!(roots.len(), 1);
     }
 
     fn package_info(name: &str, manifest_rel: &str) -> crate::package_graph::PackageInfo {
