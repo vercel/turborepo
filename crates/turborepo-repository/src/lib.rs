@@ -15,6 +15,7 @@ pub mod cargo;
 pub mod change_mapper;
 pub mod discovery;
 pub mod inference;
+mod knowledge;
 mod manifest_parser;
 pub mod package_graph;
 pub mod package_json;
