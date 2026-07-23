@@ -156,12 +156,18 @@ after resolving existing symlinks.
 
 Repository knowledge accepts at most one physical workspace root for each open
 native kind (including kinds introduced by future toolchains). Repeated
-observations of the same canonical root deduplicate; different roots of the
-same kind are an explicit construction error, while different kinds may
-coexist. Every toolchain that contributes packages must also contribute a root,
-and contributed roots must remain physically within the repository. JavaScript
-reports only the repository root for its active package-manager family; Cargo
-reports the current workspace root.
+observations from one producer of the same canonical root deduplicate, while
+observations from different producers retain each producer as an owner.
+Different roots of the same kind are an explicit construction error, while
+different kinds may coexist. Public toolchain output supplies only root kind and
+path; core binds each root to the `ToolchainId` of the registry entry whose
+discovery envelope contained it. Every toolchain that contributes packages must
+own an accepted root, and contributed roots must remain physically within the
+repository. JavaScript reports only the repository root for its authoritative
+package-manager command family; if discovery reports a different family than
+an explicitly resolved manager, the response is rejected. Pnpm versions and
+Yarn/Berry share their respective canonical families. Cargo reports the current
+workspace root.
 Resolution-domain/root validation remains Phase 3 work; this package/scope
 knowledge validates workspace authorities only.
 

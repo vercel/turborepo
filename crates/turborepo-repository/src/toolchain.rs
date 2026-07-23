@@ -148,19 +148,13 @@ pub(crate) struct DiscoveredPackageParts {
 pub struct WorkspaceRoot {
     kind: String,
     path: AbsoluteSystemPathBuf,
-    toolchain: ToolchainId,
 }
 
 impl WorkspaceRoot {
-    pub fn new(
-        kind: impl Into<String>,
-        path: AbsoluteSystemPathBuf,
-        toolchain: ToolchainId,
-    ) -> Self {
+    pub fn new(kind: impl Into<String>, path: AbsoluteSystemPathBuf) -> Self {
         Self {
             kind: kind.into(),
             path,
-            toolchain,
         }
     }
 
@@ -170,10 +164,6 @@ impl WorkspaceRoot {
 
     pub fn path(&self) -> &AbsoluteSystemPath {
         &self.path
-    }
-
-    pub fn toolchain(&self) -> &ToolchainId {
-        &self.toolchain
     }
 }
 
@@ -855,7 +845,6 @@ impl<P: PackageDiscovery + Send + Sync> JavaScriptToolchain<P> {
         Ok(WorkspaceRoot::new(
             package_manager.command(),
             self.repo_root.clone(),
-            ToolchainId::JAVASCRIPT,
         ))
     }
 }
@@ -1039,11 +1028,20 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
                 .discover_packages()
                 .instrument(tracing::info_span!("workspace_discovery"))
                 .await?;
-            let workspace_root = WorkspaceRoot::new(
-                response.package_manager.command(),
-                self.repo_root.clone(),
-                ToolchainId::JAVASCRIPT,
-            );
+            let package_manager = match self.known_package_manager.as_ref() {
+                Some(known) if known.command() != response.package_manager.command() => {
+                    return Err(discovery::Error::InvalidResponse(format!(
+                        "package manager family `{}` does not match authoritative family `{}`",
+                        response.package_manager.command(),
+                        known.command()
+                    ))
+                    .into());
+                }
+                Some(known) => known,
+                None => &response.package_manager,
+            };
+            let workspace_root =
+                WorkspaceRoot::new(package_manager.command(), self.repo_root.clone());
             // Parse manifests in parallel; manifest parsing dominates discovery
             // time on large repositories.
             let _span = tracing::info_span!("manifest_parse").entered();
