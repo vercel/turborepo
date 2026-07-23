@@ -137,7 +137,8 @@ Represents the workspace structure and package dependencies:
 - Discovers packages in workspace
 - Builds one immutable `RepositoryKnowledge` generation containing repository
   root, root JavaScript execution scope, real package identities and source
-  boundaries, native definition paths, provenance, and required aggregate scopes
+  boundaries, native definition paths, native workspace roots, provenance, and
+  required aggregate scopes
 - Performs ecosystem-specific lockfile analysis
 - Builds dependency relationships between workspace packages
 - Validates that all non-root packages have a `name` field
@@ -153,6 +154,17 @@ compatibility data. Native manifests and metadata do not enter repository
 knowledge. Native definition paths must remain within the repository, including
 after resolving existing symlinks.
 
+Repository knowledge accepts at most one physical workspace root for each open
+native kind (including kinds introduced by future toolchains). Repeated
+observations of the same canonical root deduplicate; different roots of the
+same kind are an explicit construction error, while different kinds may
+coexist. Every toolchain that contributes packages must also contribute a root,
+and contributed roots must remain physically within the repository. JavaScript
+reports only the repository root for its active package-manager family; Cargo
+reports the current workspace root.
+Resolution-domain/root validation remains Phase 3 work; this package/scope
+knowledge validates workspace authorities only.
+
 The package graph intentionally allows cyclic dependencies between packages —
 this aligns with how npm, pnpm, and yarn handle cyclic workspace deps. Cycle
 detection is deferred to the task graph layer (engine builder), since
@@ -161,8 +173,13 @@ topological (`^`) dependencies.
 
 #### Toolchains (`crates/turborepo-repository/src/toolchain.rs`)
 
-The package graph is generic over language toolchains. Native discovery output
-contributes package/scope observations to repository knowledge, while a
+The package graph is generic over language toolchains. The existing discovery
+method returns one parser-neutral envelope containing packages/scopes and
+workspace-root observations. Core validates the combined contributed roots
+without adding another behavioral toolchain method. Watching native marker-only
+changes that are not observed by today's package watcher remains Phase 6 work.
+Native discovery output contributes package/scope observations to repository
+knowledge, while a
 `Toolchain` continues to answer ecosystem-specific behavioral questions such as
 what command a task runs and what hash wiring a task derives. All lookups go through the
 `ToolchainRegistry` (carried by the `PackageGraph`); `ToolchainId` is an
@@ -215,7 +232,7 @@ whether anything changed; Cargo decides how and in what order to build.**
   package: automatic in-repository workspace members are supported, while
   excluded/non-member, outside-repository, and root-manifest local packages
   hard-error because Turborepo cannot hash, watch, or prune their sources
-  safely.
+  safely. The Cargo compatibility producer reports the current workspace root.
 - **Package shapes**: crates are classified via `CargoPackageKind`.
   *Entrypoints* (crates with `bin`/`cdylib`/`staticlib` targets) are the
   workspace's deliverables. *Libraries* exist in the package graph and expose

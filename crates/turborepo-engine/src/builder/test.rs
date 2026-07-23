@@ -17,7 +17,8 @@ use turborepo_repository::{
     package_manager::PackageManager,
     toolchain::{
         DerivedInputSafety, DerivedOutputs, DerivedTaskIO, DiscoverPackagesFuture,
-        DiscoveredPackage, TaskIOContext, Toolchain, ToolchainId,
+        DiscoveredPackage, DiscoveredPackages, TaskIOContext, Toolchain, ToolchainId,
+        WorkspaceRoot,
     },
 };
 use turborepo_task_id::{TaskId, TaskName};
@@ -163,10 +164,17 @@ impl Toolchain for StubIOToolchain {
                     Some(HashSet::new()),
                 )
             };
-            Ok(vec![
-                package("app", &[("lib", "workspace:*")]),
-                package("lib", &[]),
-            ])
+            Ok(DiscoveredPackages::new(
+                vec![
+                    package("app", &[("lib", "workspace:*")]),
+                    package("lib", &[]),
+                ],
+                vec![WorkspaceRoot::new(
+                    "stub-io",
+                    self.repo_root.clone(),
+                    self.id(),
+                )],
+            ))
         })
     }
 

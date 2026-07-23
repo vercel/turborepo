@@ -143,6 +143,68 @@ pub(crate) struct DiscoveredPackageParts {
     pub external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
 }
 
+/// Parser-neutral observation of one contributed native workspace root.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceRoot {
+    kind: String,
+    path: AbsoluteSystemPathBuf,
+    toolchain: ToolchainId,
+}
+
+impl WorkspaceRoot {
+    pub fn new(
+        kind: impl Into<String>,
+        path: AbsoluteSystemPathBuf,
+        toolchain: ToolchainId,
+    ) -> Self {
+        Self {
+            kind: kind.into(),
+            path,
+            toolchain,
+        }
+    }
+
+    pub fn kind(&self) -> &str {
+        &self.kind
+    }
+
+    pub fn path(&self) -> &AbsoluteSystemPath {
+        &self.path
+    }
+
+    pub fn toolchain(&self) -> &ToolchainId {
+        &self.toolchain
+    }
+}
+
+/// One toolchain's package/scope and native workspace-root observations.
+#[derive(Debug, Default)]
+pub struct DiscoveredPackages {
+    packages: Vec<DiscoveredPackage>,
+    workspace_roots: Vec<WorkspaceRoot>,
+}
+
+impl DiscoveredPackages {
+    pub fn new(packages: Vec<DiscoveredPackage>, workspace_roots: Vec<WorkspaceRoot>) -> Self {
+        Self {
+            packages,
+            workspace_roots,
+        }
+    }
+
+    pub fn packages(&self) -> &[DiscoveredPackage] {
+        &self.packages
+    }
+
+    pub fn workspace_roots(&self) -> &[WorkspaceRoot] {
+        &self.workspace_roots
+    }
+
+    pub fn into_parts(self) -> (Vec<DiscoveredPackage>, Vec<WorkspaceRoot>) {
+        (self.packages, self.workspace_roots)
+    }
+}
+
 impl DiscoveredPackage {
     /// Construct a real package observation. The compatibility descriptor's
     /// name is normalized to the authoritative identity, making divergence
@@ -216,7 +278,7 @@ pub enum Error {
 /// trait stays object-safe; toolchains live behind `dyn Toolchain` in the
 /// [`ToolchainRegistry`].
 pub type DiscoverPackagesFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<Vec<DiscoveredPackage>, Error>> + Send + 'a>>;
+    Pin<Box<dyn Future<Output = Result<DiscoveredPackages, Error>> + Send + 'a>>;
 
 /// A command resolved by a toolchain for a task, as plain data. The executor
 /// turns it into a process, applying the task's environment, stdin policy,
@@ -270,7 +332,8 @@ pub trait Toolchain: Send + Sync {
     /// This toolchain's identifier.
     fn id(&self) -> ToolchainId;
 
-    /// Discover this toolchain's packages.
+    /// Discover this toolchain's packages/scopes and native workspace roots in
+    /// one observation envelope.
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_>;
 
     /// Resolve the command that implements `task` for `package`, or `None`
@@ -674,19 +737,28 @@ pub struct ToolchainRegistry {
     toolchains: Vec<Arc<dyn Toolchain>>,
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("toolchain {id} was registered more than once")]
+pub struct DuplicateToolchainError {
+    pub id: ToolchainId,
+}
+
 impl ToolchainRegistry {
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Register a toolchain. Registration order is discovery order.
-    pub fn register(&mut self, toolchain: Arc<dyn Toolchain>) {
-        debug_assert!(
-            self.get(&toolchain.id()).is_none(),
-            "toolchain {} registered twice",
-            toolchain.id()
-        );
+    pub fn register(
+        &mut self,
+        toolchain: Arc<dyn Toolchain>,
+    ) -> Result<(), DuplicateToolchainError> {
+        let id = toolchain.id();
+        if self.get(&id).is_some() {
+            return Err(DuplicateToolchainError { id });
+        }
         self.toolchains.push(toolchain);
+        Ok(())
     }
 
     pub fn get(&self, id: &ToolchainId) -> Option<&dyn Toolchain> {
@@ -727,6 +799,8 @@ impl fmt::Debug for ToolchainRegistry {
 /// and parses each manifest into the package descriptor.
 pub struct JavaScriptToolchain<P> {
     discovery: P,
+    repo_root: AbsoluteSystemPathBuf,
+    known_package_manager: Option<PackageManager>,
     /// The package manager as resolved during graph construction, recorded
     /// by the builder so synchronous concerns (command resolution) can use
     /// it without re-running discovery.
@@ -744,9 +818,15 @@ enum JavaScriptCommandError {
 }
 
 impl<P: PackageDiscovery + Send + Sync> JavaScriptToolchain<P> {
-    pub fn new(discovery: P) -> Self {
+    pub fn new(
+        discovery: P,
+        repo_root: AbsoluteSystemPathBuf,
+        known_package_manager: Option<PackageManager>,
+    ) -> Self {
         Self {
             discovery,
+            repo_root,
+            known_package_manager,
             resolved_package_manager: std::sync::OnceLock::new(),
             package_manager_binary: std::sync::OnceLock::new(),
         }
@@ -758,13 +838,25 @@ impl<P: PackageDiscovery + Send + Sync> JavaScriptToolchain<P> {
     /// handling in the package graph builder are not yet trait concerns, so
     /// they reach into the JavaScript toolchain directly for this.
     pub async fn package_manager(&self) -> Result<PackageManager, discovery::Error> {
-        Ok(self.discovery.discover_packages().await?.package_manager)
+        match self.known_package_manager.as_ref() {
+            Some(package_manager) => Ok(package_manager.clone()),
+            None => Ok(self.discovery.discover_packages().await?.package_manager),
+        }
     }
 
     /// Record the package manager resolved during graph construction. Called
     /// by the package graph builder; later calls are no-ops.
     pub fn set_resolved_package_manager(&self, package_manager: PackageManager) {
         let _ = self.resolved_package_manager.set(package_manager);
+    }
+
+    pub(crate) async fn workspace_root(&self) -> Result<WorkspaceRoot, Error> {
+        let package_manager = self.package_manager().await?;
+        Ok(WorkspaceRoot::new(
+            package_manager.command(),
+            self.repo_root.clone(),
+            ToolchainId::JAVASCRIPT,
+        ))
     }
 }
 
@@ -942,18 +1034,23 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
         Box::pin(async move {
             use tracing::Instrument;
-            let workspaces = self
+            let response = self
                 .discovery
                 .discover_packages()
                 .instrument(tracing::info_span!("workspace_discovery"))
-                .await?
-                .workspaces;
-            // Parse manifests in parallel; manifest parsing dominates
-            // discovery time on large repositories.
+                .await?;
+            let workspace_root = WorkspaceRoot::new(
+                response.package_manager.command(),
+                self.repo_root.clone(),
+                ToolchainId::JAVASCRIPT,
+            );
+            // Parse manifests in parallel; manifest parsing dominates discovery
+            // time on large repositories.
             let _span = tracing::info_span!("manifest_parse").entered();
-            turborepo_rayon_compat::block_in_place(|| {
+            let packages = turborepo_rayon_compat::block_in_place(|| {
                 use rayon::prelude::*;
-                workspaces
+                response
+                    .workspaces
                     .into_par_iter()
                     .map(|workspace| {
                         let descriptor = PackageJson::load(&workspace.package_json)?;
@@ -969,7 +1066,8 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
                         ))
                     })
                     .collect::<Result<Vec<_>, Error>>()
-            })
+            })?;
+            Ok(DiscoveredPackages::new(packages, vec![workspace_root]))
         })
     }
 }
@@ -1037,6 +1135,52 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn javascript_discovery_reports_only_the_base_canonical_manager_root() {
+        #[derive(Clone)]
+        struct StubDiscovery(discovery::DiscoveryResponse);
+
+        impl PackageDiscovery for StubDiscovery {
+            async fn discover_packages(
+                &self,
+            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+                Ok(self.0.clone())
+            }
+
+            async fn discover_packages_blocking(
+                &self,
+            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+                self.discover_packages().await
+            }
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let package_root = repo_root.join_components(&["packages", "app"]);
+        std::fs::create_dir_all(package_root.as_std_path()).unwrap();
+        let package_json = package_root.join_component("package.json");
+        package_json
+            .create_with_contents(r#"{"name":"app"}"#)
+            .unwrap();
+        let toolchain = JavaScriptToolchain::new(
+            StubDiscovery(discovery::DiscoveryResponse {
+                workspaces: vec![discovery::WorkspaceData {
+                    package_json,
+                    turbo_json: None,
+                }],
+                package_manager: PackageManager::Pnpm6,
+            }),
+            repo_root.clone(),
+            None,
+        );
+
+        let discovered = toolchain.discover_packages().await.unwrap();
+        assert_eq!(discovered.packages().len(), 1);
+        assert_eq!(discovered.workspace_roots().len(), 1);
+        assert_eq!(discovered.workspace_roots()[0].kind(), "pnpm");
+        assert_eq!(discovered.workspace_roots()[0].path(), repo_root.as_ref());
+    }
+
     #[test]
     fn test_javascript_task_command() {
         struct StubDiscovery;
@@ -1060,7 +1204,11 @@ mod tests {
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let repo_root = repo_root_buf.as_ref() as &AbsoluteSystemPath;
 
-        let toolchain = JavaScriptToolchain::new(StubDiscovery);
+        let toolchain = JavaScriptToolchain::new(
+            StubDiscovery,
+            repo_root_buf.clone(),
+            Some(PackageManager::Npm),
+        );
         toolchain.set_resolved_package_manager(PackageManager::Npm);
 
         let package = crate::package_graph::PackageInfo {
@@ -1198,13 +1346,21 @@ mod tests {
                 self.0.clone()
             }
             fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
-                Box::pin(async { Ok(Vec::new()) })
+                Box::pin(async { Ok(DiscoveredPackages::default()) })
             }
         }
 
         let mut registry = ToolchainRegistry::new();
-        registry.register(Arc::new(Fake(ToolchainId::JAVASCRIPT)));
-        registry.register(Arc::new(Fake(ToolchainId::new("gleam"))));
+        registry
+            .register(Arc::new(Fake(ToolchainId::JAVASCRIPT)))
+            .unwrap();
+        registry
+            .register(Arc::new(Fake(ToolchainId::new("gleam"))))
+            .unwrap();
+        let duplicate = registry
+            .register(Arc::new(Fake(ToolchainId::new("gleam"))))
+            .unwrap_err();
+        assert_eq!(duplicate.id, ToolchainId::new("gleam"));
 
         assert!(registry.get(&ToolchainId::JAVASCRIPT).is_some());
         assert!(registry.get(&ToolchainId::new("gleam")).is_some());
