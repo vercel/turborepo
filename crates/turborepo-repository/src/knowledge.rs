@@ -12,6 +12,28 @@ use turbopath::{
 
 use crate::toolchain::{ToolchainId, WorkspaceRoot};
 
+/// A workspace root paired by core with the registry entry that produced its
+/// discovery envelope. The public adapter output cannot supply provenance.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct WorkspaceRootObservation {
+    root: WorkspaceRoot,
+    producer: ToolchainId,
+}
+
+impl WorkspaceRootObservation {
+    pub(crate) fn new(root: WorkspaceRoot, producer: ToolchainId) -> Self {
+        Self { root, producer }
+    }
+
+    fn kind(&self) -> &str {
+        self.root.kind()
+    }
+
+    fn path(&self) -> &AbsoluteSystemPath {
+        self.root.path()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ScopeKind {
     Package,
@@ -145,7 +167,7 @@ impl RepositoryKnowledge {
         repository_root: &AbsoluteSystemPath,
         root_javascript_name: Option<Option<String>>,
         observations: &[PackageScopeObservation],
-        workspace_root_observations: &[WorkspaceRoot],
+        workspace_root_observations: &[WorkspaceRootObservation],
     ) -> Result<Self, Error> {
         let root_definition_path = AnchoredSystemPathBuf::from_raw("package.json")?;
         let root_javascript_scope =
@@ -162,7 +184,7 @@ impl RepositoryKnowledge {
             validate_workspace_roots(repository_root, workspace_root_observations)?;
 
         for observation in observations {
-            if !workspace_root_observations
+            if !workspace_roots
                 .iter()
                 .any(|root| root.toolchain() == &observation.toolchain)
             {
@@ -222,7 +244,7 @@ impl RepositoryKnowledge {
 
 fn validate_workspace_roots(
     repository_root: &AbsoluteSystemPath,
-    observations: &[WorkspaceRoot],
+    observations: &[WorkspaceRootObservation],
 ) -> Result<Vec<WorkspaceRootKnowledge>, Error> {
     let mut accepted = HashMap::<String, (std::path::PathBuf, AnchoredSystemPathBuf)>::new();
     let mut roots = Vec::with_capacity(observations.len());
@@ -244,6 +266,16 @@ fn validate_workspace_roots(
             .unwrap_or_else(|| observation.path().as_std_path().to_owned());
         if let Some((accepted_physical_path, accepted_path)) = accepted.get(observation.kind()) {
             if accepted_physical_path == &physical_path {
+                if roots.iter().any(|root: &WorkspaceRootKnowledge| {
+                    root.kind == observation.kind() && root.toolchain == observation.producer
+                }) {
+                    continue;
+                }
+                roots.push(WorkspaceRootKnowledge {
+                    kind: observation.kind().to_string(),
+                    path: accepted_path.clone(),
+                    toolchain: observation.producer.clone(),
+                });
                 continue;
             }
             return Err(Error::DuplicateWorkspaceRoot {
@@ -259,7 +291,7 @@ fn validate_workspace_roots(
         roots.push(WorkspaceRootKnowledge {
             kind: observation.kind().to_string(),
             path: anchored_path,
-            toolchain: observation.toolchain().clone(),
+            toolchain: observation.producer.clone(),
         });
     }
 

@@ -169,11 +169,7 @@ impl Toolchain for StubIOToolchain {
                     package("app", &[("lib", "workspace:*")]),
                     package("lib", &[]),
                 ],
-                vec![WorkspaceRoot::new(
-                    "stub-io",
-                    self.repo_root.clone(),
-                    self.id(),
-                )],
+                vec![WorkspaceRoot::new("stub-io", self.repo_root.clone())],
             ))
         })
     }

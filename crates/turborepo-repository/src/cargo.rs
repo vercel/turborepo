@@ -1594,7 +1594,7 @@ impl Toolchain for CargoToolchain {
                 .repo_root
                 .join_component(CARGO_TOML)
                 .exists()
-                .then(|| WorkspaceRoot::new("cargo", self.repo_root.clone(), ToolchainId::RUST))
+                .then(|| WorkspaceRoot::new("cargo", self.repo_root.clone()))
                 .into_iter()
                 .collect();
             let target_directory = workspace.target_directory.clone();

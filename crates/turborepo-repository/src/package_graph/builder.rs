@@ -20,7 +20,9 @@ use crate::{
         self, CachingPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscovery,
         PackageDiscoveryBuilder,
     },
-    knowledge::{PackageScopeObservation, RepositoryKnowledge, ScopeKind},
+    knowledge::{
+        PackageScopeObservation, RepositoryKnowledge, ScopeKind, WorkspaceRootObservation,
+    },
     package_json::{DependencyKind, PackageJson},
     package_manager::{PackageManager, pnpm::PnpmCatalogs},
     toolchain::{
@@ -653,7 +655,10 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                 && let Some(jsons) = pre_supplied.take()
             {
                 if let Some(javascript) = self.javascript.as_ref() {
-                    workspace_roots.push(javascript.workspace_root().await?);
+                    workspace_roots.push(WorkspaceRootObservation::new(
+                        javascript.workspace_root().await?,
+                        id.clone(),
+                    ));
                 }
                 discovered.extend(jsons.into_iter().map(|(path, json)| {
                     (
@@ -670,7 +675,11 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             }
             let output = toolchain.discover_packages().await?;
             let (packages, roots) = output.into_parts();
-            workspace_roots.extend(roots);
+            workspace_roots.extend(
+                roots
+                    .into_iter()
+                    .map(|root| WorkspaceRootObservation::new(root, id.clone())),
+            );
             discovered.extend(packages.into_iter().map(|package| (id.clone(), package)));
         }
 
@@ -749,7 +758,10 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             ..
         } = self;
         let workspace_roots = match &javascript {
-            Some(javascript) => vec![javascript.workspace_root().await?],
+            Some(javascript) => vec![WorkspaceRootObservation::new(
+                javascript.workspace_root().await?,
+                ToolchainId::JAVASCRIPT,
+            )],
             None => Vec::new(),
         };
         let knowledge = match knowledge {
@@ -1252,6 +1264,26 @@ mod test {
             Ok(crate::discovery::DiscoveryResponse {
                 package_manager: crate::package_manager::PackageManager::Npm,
                 workspaces: vec![],
+            })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
+            self.discover_packages().await
+        }
+    }
+
+    #[derive(Clone)]
+    struct ManagerDiscovery(PackageManager);
+
+    impl PackageDiscovery for ManagerDiscovery {
+        async fn discover_packages(
+            &self,
+        ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
+            Ok(crate::discovery::DiscoveryResponse {
+                package_manager: self.0.clone(),
+                workspaces: Vec::new(),
             })
         }
 
@@ -2236,7 +2268,6 @@ mod test {
                 roots: vec![WorkspaceRoot::new(
                     "unused-extra",
                     root.join_component("other"),
-                    ToolchainId::new("unused-extra"),
                 )],
             }))
             .build()
@@ -2263,16 +2294,8 @@ mod test {
             .with_toolchain(Arc::new(RootObservingToolchain {
                 id: ToolchainId::new("future-one"),
                 roots: vec![
-                    WorkspaceRoot::new(
-                        "future-build",
-                        first.clone(),
-                        ToolchainId::new("future-one"),
-                    ),
-                    WorkspaceRoot::new(
-                        "future-build",
-                        second.clone(),
-                        ToolchainId::new("future-one"),
-                    ),
+                    WorkspaceRoot::new("future-build", first.clone()),
+                    WorkspaceRoot::new("future-build", second.clone()),
                 ],
             }))
             .build()
@@ -2288,9 +2311,9 @@ mod test {
             .with_toolchain(Arc::new(RootObservingToolchain {
                 id: ToolchainId::new("future-two"),
                 roots: vec![
-                    WorkspaceRoot::new("future-a", first.clone(), ToolchainId::new("future-two")),
-                    WorkspaceRoot::new("future-b", second, ToolchainId::new("future-two")),
-                    WorkspaceRoot::new("future-a", first, ToolchainId::new("future-two")),
+                    WorkspaceRoot::new("future-a", first.clone()),
+                    WorkspaceRoot::new("future-b", second),
+                    WorkspaceRoot::new("future-a", first),
                 ],
             }))
             .build()
@@ -2304,6 +2327,36 @@ mod test {
                 .count(),
             2
         );
+    }
+
+    #[tokio::test]
+    async fn same_physical_root_retains_each_core_bound_producer() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let first = ToolchainId::new("future-first");
+        let second = ToolchainId::new("future-second");
+        let graph = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_toolchain(Arc::new(RootObservingToolchain {
+                id: first.clone(),
+                roots: vec![WorkspaceRoot::new("shared", root.clone())],
+            }))
+            .with_toolchain(Arc::new(RootObservingToolchain {
+                id: second.clone(),
+                roots: vec![WorkspaceRoot::new("shared", root.clone())],
+            }))
+            .build()
+            .await
+            .unwrap();
+        let owners = graph
+            .repository_knowledge()
+            .workspace_roots()
+            .filter(|root| root.kind() == "shared")
+            .map(|root| root.toolchain().clone())
+            .collect::<HashSet<_>>();
+
+        assert_eq!(owners, HashSet::from([first, second]));
     }
 
     #[tokio::test]
@@ -2322,6 +2375,25 @@ mod test {
                 if toolchain == &ToolchainId::new("missing-root")
         ));
 
+        // A root returned by another registry entry cannot claim ownership for
+        // the package producer, even when its kind and path would otherwise be
+        // accepted.
+        let cross_producer = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_toolchain(Arc::new(RootObservingToolchain {
+                id: ToolchainId::new("spoof-attempt"),
+                roots: vec![WorkspaceRoot::new("claimed", root.clone())],
+            }))
+            .with_toolchain(Arc::new(PackageWithoutRootToolchain { root: root.clone() }))
+            .build()
+            .await;
+        assert!(matches!(
+            cross_producer,
+            Err(Error::MissingWorkspaceRoot { ref toolchain })
+                if toolchain == &ToolchainId::new("missing-root")
+        ));
+
         PackageGraphBuilder::new(&root, PackageJson::default())
             .with_package_discovery(MockDiscovery)
             .with_package_jsons(Some(HashMap::new()))
@@ -2335,6 +2407,42 @@ mod test {
     }
 
     #[tokio::test]
+    async fn discovery_manager_must_match_the_authoritative_command_family() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let mismatch = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_manager(PackageManager::Npm)
+            .with_package_discovery(ManagerDiscovery(PackageManager::Pnpm9))
+            .build()
+            .await;
+        assert!(matches!(
+            mismatch,
+            Err(Error::Discovery(crate::discovery::Error::InvalidResponse(
+                _
+            )))
+        ));
+
+        for (authoritative, discovered, family) in [
+            (PackageManager::Pnpm9, PackageManager::Pnpm6, "pnpm"),
+            (PackageManager::Berry, PackageManager::Yarn, "yarn"),
+        ] {
+            let graph = PackageGraphBuilder::new(&root, PackageJson::default())
+                .with_package_manager(authoritative.clone())
+                .with_package_discovery(ManagerDiscovery(discovered))
+                .build()
+                .await
+                .unwrap();
+            assert_eq!(graph.package_manager(), Some(&authoritative));
+            assert!(
+                graph
+                    .repository_knowledge()
+                    .workspace_roots()
+                    .any(|root| root.kind() == family)
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn multiple_contributed_cargo_roots_use_generic_core_validation() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
@@ -2344,16 +2452,8 @@ mod test {
             .with_toolchain(Arc::new(RootObservingToolchain {
                 id: ToolchainId::new("future-cargo-adapter"),
                 roots: vec![
-                    WorkspaceRoot::new(
-                        "cargo",
-                        root.join_component("first"),
-                        ToolchainId::new("future-cargo-adapter"),
-                    ),
-                    WorkspaceRoot::new(
-                        "cargo",
-                        root.join_component("second"),
-                        ToolchainId::new("future-cargo-adapter"),
-                    ),
+                    WorkspaceRoot::new("cargo", root.join_component("first")),
+                    WorkspaceRoot::new("cargo", root.join_component("second")),
                 ],
             }))
             .build()
@@ -2380,12 +2480,8 @@ mod test {
             .with_toolchain(Arc::new(RootObservingToolchain {
                 id: ToolchainId::new("future-symlink"),
                 roots: vec![
-                    WorkspaceRoot::new(
-                        "future-build",
-                        physical,
-                        ToolchainId::new("future-symlink"),
-                    ),
-                    WorkspaceRoot::new("future-build", alias, ToolchainId::new("future-symlink")),
+                    WorkspaceRoot::new("future-build", physical),
+                    WorkspaceRoot::new("future-build", alias),
                 ],
             }))
             .build()
@@ -2417,11 +2513,7 @@ mod test {
             .with_package_jsons(Some(HashMap::new()))
             .with_toolchain(Arc::new(RootObservingToolchain {
                 id: ToolchainId::new("future-symlink-escape"),
-                roots: vec![WorkspaceRoot::new(
-                    "future-build",
-                    unresolved_root.clone(),
-                    ToolchainId::new("future-symlink-escape"),
-                )],
+                roots: vec![WorkspaceRoot::new("future-build", unresolved_root.clone())],
             }))
             .build()
             .await;
