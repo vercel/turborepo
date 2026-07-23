@@ -249,6 +249,102 @@ impl From<std::convert::Infallible> for Error {
 }
 
 impl PackageManager {
+    pub(crate) fn workspace_root_kind(&self) -> &'static str {
+        match self {
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => "pnpm",
+            PackageManager::Yarn | PackageManager::Berry => "yarn",
+            PackageManager::Npm => "npm",
+            PackageManager::Bun => "bun",
+            PackageManager::Nub { .. } => "nub",
+            PackageManager::Aube { .. } => "aube",
+        }
+    }
+
+    pub(crate) fn declared_workspace_root_kind(
+        root_path: &AbsoluteSystemPath,
+        package_json: &PackageJson,
+    ) -> Option<&'static str> {
+        // Use the normal parser so declaration validity and precedence stay
+        // identical to graph package-manager resolution. In particular, a
+        // malformed legacy `packageManager` is authoritative and must not fall
+        // through to `devEngines.packageManager`.
+        Self::get_package_manager(root_path, package_json)
+            .ok()
+            .map(|manager| manager.workspace_root_kind())
+    }
+
+    pub(crate) fn for_workspace_root_kind(
+        kind: &str,
+        root_path: &AbsoluteSystemPath,
+    ) -> Option<Self> {
+        match kind {
+            "pnpm" => Some(PackageManager::Pnpm),
+            "yarn" => Some(PackageManager::Yarn),
+            "npm" => Some(PackageManager::Npm),
+            "bun" => Some(PackageManager::Bun),
+            "nub" => Some(PackageManager::Nub {
+                lockfile: Box::new(nub::underlying_lockfile_manager(root_path)),
+            }),
+            "aube" => Some(PackageManager::Aube {
+                lockfile: Box::new(aube::underlying_lockfile_manager(root_path)),
+            }),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn has_workspace_root_config(
+        &self,
+        root_path: &AbsoluteSystemPath,
+        package_json: &PackageJson,
+    ) -> bool {
+        let package_json_has_workspaces = || {
+            package_json
+                .other
+                .get("workspaces")
+                .cloned()
+                .and_then(|workspaces| serde_json::from_value::<Workspaces>(workspaces).ok())
+                .is_some_and(|workspaces| !workspaces.as_ref().is_empty())
+        };
+        match self {
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
+                pnpm::get_configured_workspace_globs(root_path).is_some()
+            }
+            PackageManager::Aube { .. } => {
+                if root_path
+                    .join_component(aube::WORKSPACE_CONFIGURATION_PATH)
+                    .exists()
+                {
+                    pnpm::get_configured_workspace_globs_from_path(
+                        root_path,
+                        aube::WORKSPACE_CONFIGURATION_PATH,
+                    )
+                    .is_some()
+                } else if aube::underlying_lockfile_manager(root_path).is_pnpm_family()
+                    && root_path
+                        .join_component(pnpm::WORKSPACE_CONFIGURATION_PATH)
+                        .exists()
+                {
+                    pnpm::get_configured_workspace_globs(root_path).is_some()
+                } else {
+                    package_json_has_workspaces()
+                }
+            }
+            PackageManager::Nub { .. }
+                if nub::underlying_lockfile_manager(root_path).is_pnpm_family()
+                    && root_path
+                        .join_component(pnpm::WORKSPACE_CONFIGURATION_PATH)
+                        .exists() =>
+            {
+                pnpm::get_configured_workspace_globs(root_path).is_some()
+            }
+            PackageManager::Npm
+            | PackageManager::Yarn
+            | PackageManager::Berry
+            | PackageManager::Bun
+            | PackageManager::Nub { .. } => package_json_has_workspaces(),
+        }
+    }
+
     /// Returns the package manager responsible for lockfile operations.
     pub fn lockfile_manager(&self) -> &PackageManager {
         match self {
