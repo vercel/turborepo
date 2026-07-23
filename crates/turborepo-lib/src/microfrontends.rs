@@ -2,9 +2,12 @@ use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
 use tracing::warn;
-use turbopath::{AbsoluteSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
 use turborepo_microfrontends::{Error, TurborepoMfeConfig as MfeConfig, MICROFRONTENDS_PACKAGE};
-use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
+use turborepo_repository::{
+    package_graph::{PackageGraph, PackageGraphNodeKind, PackageInfo, PackageName},
+    toolchain::ToolchainId,
+};
 use turborepo_task_executor::MfeConfigProvider;
 use turborepo_task_id::{TaskId, TaskName};
 
@@ -43,19 +46,24 @@ impl MicrofrontendsConfigs {
             configs: Vec<(&'a str, Result<Option<MfeConfig>, Error>)>,
         }
 
-        let any_has_mfe_dep = package_graph.packages().any(|(_, info)| {
-            info.package_json
-                .all_dependencies()
-                .any(|(dep, _)| dep.as_str() == MICROFRONTENDS_PACKAGE)
-        });
+        let packages = javascript_packages(package_graph).collect::<Vec<_>>();
+
+        // Dependency tables intentionally remain a Phase 2 PackageJson
+        // compatibility read. Package identity and source roots above are
+        // authoritative repository-knowledge views.
+        let any_has_mfe_dep = packages
+            .iter()
+            .filter_map(|(_, info, _)| *info)
+            .any(has_mfe_dependency);
         tracing::debug!(
             "from_disk - any package has @vercel/microfrontends dep: {}",
             any_has_mfe_dep
         );
 
         type LoadedConfig<'a> = (
-            &'a PackageName,
-            &'a PackageInfo,
+            &'a str,
+            Option<&'a PackageInfo>,
+            &'a AnchoredSystemPath,
             Result<Option<MfeConfig>, Error>,
         );
         // Probing every package directory for a config is two file reads per
@@ -63,17 +71,15 @@ impl MicrofrontendsConfigs {
         // indexed collect), so downstream config processing is unaffected.
         let loaded: Vec<LoadedConfig> = crate::rayon_compat::block_in_place(|| {
             use rayon::prelude::*;
-            package_graph
-                .packages()
-                .collect::<Vec<_>>()
+            packages
                 .into_par_iter()
-                .map(|(name, info)| {
+                .map(|(name, info, directory)| {
                     let config_result = MfeConfig::load_from_dir_with_mfe_dep(
                         repo_root,
-                        info.package_path(),
+                        directory,
                         any_has_mfe_dep,
                     );
-                    (name, info, config_result)
+                    (name, info, directory, config_result)
                 })
                 .collect()
         });
@@ -84,13 +90,10 @@ impl MicrofrontendsConfigs {
                 has_mfe_dep: HashMap::new(),
                 configs: Vec::new(),
             },
-            |mut acc, (name, info, config_result)| {
-                let name_str = name.as_str();
+            |mut acc, (name, info, directory, config_result)| {
+                let name_str = name;
                 acc.names.insert(name_str);
-                let has_dep = info
-                    .package_json
-                    .all_dependencies()
-                    .any(|(dep, _)| dep.as_str() == MICROFRONTENDS_PACKAGE);
+                let has_dep = info.is_some_and(has_mfe_dependency);
                 tracing::debug!(
                     "from_disk - package: {}, has @vercel/microfrontends dep: {}",
                     name_str,
@@ -102,7 +105,7 @@ impl MicrofrontendsConfigs {
                     tracing::debug!(
                         "from_disk - found config in package: {}, path: {:?}",
                         name_str,
-                        info.package_path()
+                        directory
                     );
                 } else if let Err(ref e) = config_result {
                     tracing::debug!(
@@ -349,6 +352,47 @@ impl MicrofrontendsConfigs {
     }
 }
 
+/// The scopes historically probed by microfrontends: the JavaScript root and
+/// real JavaScript workspace packages. Native packages and aggregate execution
+/// scopes are not package directories and must not be interpreted as such.
+fn javascript_packages(
+    package_graph: &PackageGraph,
+) -> impl Iterator<Item = (&str, Option<&PackageInfo>, &turbopath::AnchoredSystemPath)> {
+    package_graph.node_views().filter_map(|(node, view)| {
+        let is_historical_js_scope = matches!(
+            view.kind(),
+            PackageGraphNodeKind::Package | PackageGraphNodeKind::RootJavaScript
+        ) && view.toolchain() == Some(&ToolchainId::JAVASCRIPT);
+        if !is_historical_js_scope {
+            return None;
+        }
+        let name = match node {
+            turborepo_repository::package_graph::PackageNode::Root => return None,
+            turborepo_repository::package_graph::PackageNode::Workspace(PackageName::Root) => "//",
+            turborepo_repository::package_graph::PackageNode::Workspace(PackageName::Other(
+                name,
+            )) => package_graph
+                .real_package_names()
+                .find(|candidate| **candidate == name)?,
+        };
+        let compatibility_name = match name {
+            "//" => PackageName::Root,
+            name => PackageName::Other(name.to_owned()),
+        };
+        Some((
+            name,
+            package_graph.package_info(&compatibility_name),
+            view.directory()?,
+        ))
+    })
+}
+
+fn has_mfe_dependency(info: &PackageInfo) -> bool {
+    info.package_json
+        .all_dependencies()
+        .any(|(dep, _)| dep.as_str() == MICROFRONTENDS_PACKAGE)
+}
+
 impl MfeConfigProvider for MicrofrontendsConfigs {
     fn task_has_mfe_proxy(&self, task_id: &TaskId) -> bool {
         MicrofrontendsConfigs::task_has_mfe_proxy(self, task_id)
@@ -541,9 +585,92 @@ impl ConfigInfo {
 #[cfg(test)]
 mod test {
     use serde_json::json;
+    use tempfile::TempDir;
+    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_microfrontends::MICROFRONTENDS_PACKAGE;
+    use turborepo_repository::{
+        cargo::CargoToolchain, package_graph::PackageGraph, package_json::PackageJson,
+    };
 
     use super::*;
+
+    fn temp_root(tmp: &TempDir) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf::try_from(tmp.path().to_path_buf()).unwrap()
+    }
+
+    fn write_mfe_config(root: &AbsoluteSystemPath, package: &str) {
+        root.join_component("microfrontends.json")
+            .create_with_contents(format!(
+                r#"{{"version":"1","applications":{{"{package}":{{"development":{{"local":3000}}}}}}}}"#
+            ))
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn from_disk_probes_the_authoritative_javascript_root() {
+        let tmp = TempDir::new().unwrap();
+        let root = temp_root(&tmp);
+        let root_package_json = PackageJson::from_value(json!({
+            "name": "root-app",
+            "packageManager": "pnpm@9.0.0"
+        }))
+        .unwrap();
+        root.join_component("package.json")
+            .create_with_contents(r#"{"name":"root-app","packageManager":"pnpm@9.0.0"}"#)
+            .unwrap();
+        write_mfe_config(&root, "root-app");
+        let graph = PackageGraph::builder(&root, root_package_json)
+            .with_single_package_mode(true)
+            .build()
+            .await
+            .unwrap();
+
+        let configs = MicrofrontendsConfigs::from_disk(&root, &graph)
+            .unwrap()
+            .expect("root config should be loaded");
+        assert!(configs
+            .config_filename(PackageName::Root.as_str())
+            .is_some());
+    }
+
+    #[tokio::test]
+    async fn from_disk_does_not_probe_cargo_aggregate_as_a_package() {
+        let tmp = TempDir::new().unwrap();
+        let root = temp_root(&tmp);
+        root.join_component("Cargo.toml")
+            .create_with_contents(
+                "[workspace]\nmembers = [\"member\"]\n\n[workspace.metadata]\nname = \
+                 \"aggregate\"\n",
+            )
+            .unwrap();
+        root.join_components(&["member", "src"])
+            .create_dir_all()
+            .unwrap();
+        root.join_components(&["member", "Cargo.toml"])
+            .create_with_contents(
+                "[package]\nname = \"member\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            )
+            .unwrap();
+        root.join_components(&["member", "src", "lib.rs"])
+            .create_with_contents("")
+            .unwrap();
+        root.join_component("Cargo.lock")
+            .create_with_contents(
+                "version = 4\n\n[[package]]\nname = \"member\"\nversion = \"0.1.0\"\n",
+            )
+            .unwrap();
+        write_mfe_config(&root, "aggregate");
+
+        let graph = PackageGraph::builder_optional(&root, None)
+            .with_toolchain(CargoToolchain::new(root.clone()))
+            .build()
+            .await
+            .unwrap();
+
+        assert!(MicrofrontendsConfigs::from_disk(&root, &graph)
+            .unwrap()
+            .is_none());
+    }
 
     struct PackageUpdateTest {
         package_name: &'static str,
