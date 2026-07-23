@@ -435,6 +435,9 @@ describe("migrate", () => {
     const mockedGetLatestVersion = jest
       .spyOn(getLatestVersion, "getLatestVersion")
       .mockResolvedValue("1.3.1");
+    const mockedGetInstalledVersion = jest
+      .spyOn(getCurrentVersion, "getInstalledVersion")
+      .mockReturnValue("1.3.1");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "getTurboUpgradeCommand")
       .mockResolvedValue("npm install turbo@1.3.1");
@@ -484,6 +487,7 @@ describe("migrate", () => {
     mockedCheckGitStatus.mockRestore();
     mockedGetCurrentVersion.mockRestore();
     mockedGetLatestVersion.mockRestore();
+    mockedGetInstalledVersion.mockRestore();
     mockedGetTurboUpgradeCommand.mockRestore();
     mockedGetWorkspaceDetails.mockRestore();
     mockedExecSync.mockRestore();
@@ -507,6 +511,9 @@ describe("migrate", () => {
     const mockedGetLatestVersion = jest
       .spyOn(getLatestVersion, "getLatestVersion")
       .mockResolvedValue("1.7.0");
+    const mockedGetInstalledVersion = jest
+      .spyOn(getCurrentVersion, "getInstalledVersion")
+      .mockReturnValue("1.7.0");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "getTurboUpgradeCommand")
       .mockResolvedValue("pnpm install -g turbo@1.7.0");
@@ -590,43 +597,36 @@ describe("migrate", () => {
     mockedCheckGitStatus.mockRestore();
     mockedGetCurrentVersion.mockRestore();
     mockedGetLatestVersion.mockRestore();
+    mockedGetInstalledVersion.mockRestore();
     mockedGetTurboUpgradeCommand.mockRestore();
     mockedGetAvailablePackageManagers.mockRestore();
     mockedGetWorkspaceDetails.mockRestore();
     mockedExecSync.mockRestore();
   });
 
-  it("fails gracefully when the correct upgrade command cannot be found", async () => {
+  it("fails when the package manager does not install the expected version", async () => {
     const { root, readJson } = useFixture({
-      fixture: "old-turbo"
+      fixture: "turbo-2"
     });
 
     const packageManager = "pnpm";
-    const packageManagerVersion = "1.2.3";
+    const turboJson = readJson("turbo.json");
 
-    // setup mocks
     const mockedCheckGitStatus = jest
       .spyOn(checkGitStatus, "checkGitStatus")
       .mockReturnValue(undefined);
     const mockedGetCurrentVersion = jest
       .spyOn(getCurrentVersion, "getCurrentVersion")
-      .mockReturnValue("1.0.0");
+      .mockReturnValue("2.8.0");
     const mockedGetLatestVersion = jest
       .spyOn(getLatestVersion, "getLatestVersion")
-      .mockResolvedValue("1.7.0");
+      .mockResolvedValue("2.9.3");
+    const mockedGetInstalledVersion = jest
+      .spyOn(getCurrentVersion, "getInstalledVersion")
+      .mockReturnValue("2.8.0");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "getTurboUpgradeCommand")
-      .mockResolvedValue(undefined);
-    const mockedGetAvailablePackageManagers = jest
-      .spyOn(turboUtils, "getAvailablePackageManagers")
-      .mockResolvedValue({
-        pnpm: packageManagerVersion,
-        npm: undefined,
-        yarn: undefined,
-        bun: undefined,
-        nub: undefined,
-        aube: undefined
-      });
+      .mockResolvedValue("pnpm add turbo@latest --save-dev -w");
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
       .mockResolvedValue(
@@ -646,27 +646,62 @@ describe("migrate", () => {
       install: true
     });
 
-    expect(readJson("package.json")).toStrictEqual(
-      expectedPackageJsonWithPackageManager({
-        name: "no-turbo-json",
-        turboVersion: "1.0.0"
-      })
-    );
-    expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turborepo.dev/schema.json",
-      pipeline: {
-        build: {
-          outputs: [".next/**", "!.next/cache/**"]
-        },
-        dev: {
-          cache: false
-        },
-        lint: {},
-        test: {
-          outputs: ["dist/**", "build/**"]
-        }
-      }
+    expect(mockExit.exit).toHaveBeenCalledWith(1);
+    expect(readJson("turbo.json")).toStrictEqual(turboJson);
+    expect(mockedGetInstalledVersion).toHaveBeenCalled();
+
+    mockedCheckGitStatus.mockRestore();
+    mockedGetCurrentVersion.mockRestore();
+    mockedGetLatestVersion.mockRestore();
+    mockedGetInstalledVersion.mockRestore();
+    mockedGetTurboUpgradeCommand.mockRestore();
+    mockedGetWorkspaceDetails.mockRestore();
+    mockedExecSync.mockRestore();
+  });
+
+  it("fails gracefully when the correct upgrade command cannot be found", async () => {
+    const { root, readJson } = useFixture({
+      fixture: "old-turbo"
     });
+
+    const packageManager = "pnpm";
+    const packageJson = readJson("package.json");
+    const turboJson = readJson("turbo.json");
+
+    // setup mocks
+    const mockedCheckGitStatus = jest
+      .spyOn(checkGitStatus, "checkGitStatus")
+      .mockReturnValue(undefined);
+    const mockedGetCurrentVersion = jest
+      .spyOn(getCurrentVersion, "getCurrentVersion")
+      .mockReturnValue("1.0.0");
+    const mockedGetLatestVersion = jest
+      .spyOn(getLatestVersion, "getLatestVersion")
+      .mockResolvedValue("1.7.0");
+    const mockedGetTurboUpgradeCommand = jest
+      .spyOn(getTurboUpgradeCommand, "getTurboUpgradeCommand")
+      .mockResolvedValue(undefined);
+    const mockedGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager
+        })
+      );
+    const mockedExecSync = jest
+      .spyOn(childProcess, "execSync")
+      .mockReturnValue("installed");
+
+    await migrate(root, {
+      force: false,
+      dryRun: false,
+      print: false,
+      install: true
+    });
+
+    expect(readJson("package.json")).toStrictEqual(packageJson);
+    expect(readJson("turbo.json")).toStrictEqual(turboJson);
 
     expect(mockExit.exit).toHaveBeenCalledWith(1);
 
@@ -675,7 +710,6 @@ describe("migrate", () => {
     expect(mockedGetCurrentVersion).toHaveBeenCalled();
     expect(mockedGetLatestVersion).toHaveBeenCalled();
     expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
-    expect(mockedGetAvailablePackageManagers).toHaveBeenCalled();
     expect(mockedGetWorkspaceDetails).toHaveBeenCalled();
     expect(mockedExecSync).toHaveBeenCalledTimes(2);
     expect(mockedExecSync).toHaveBeenNthCalledWith(1, "turbo bin", {
@@ -692,7 +726,6 @@ describe("migrate", () => {
     mockedGetCurrentVersion.mockRestore();
     mockedGetLatestVersion.mockRestore();
     mockedGetTurboUpgradeCommand.mockRestore();
-    mockedGetAvailablePackageManagers.mockRestore();
     mockedGetWorkspaceDetails.mockRestore();
     mockedExecSync.mockRestore();
   });
@@ -841,7 +874,6 @@ describe("migrate", () => {
     });
 
     const packageManager = "pnpm";
-    const packageManagerVersion = "1.2.3";
 
     // setup mocks
     const mockedCheckGitStatus = jest
@@ -853,16 +885,9 @@ describe("migrate", () => {
     const mockedGetLatestVersion = jest
       .spyOn(getLatestVersion, "getLatestVersion")
       .mockResolvedValue("1.7.0");
-    const mockedGetAvailablePackageManagers = jest
-      .spyOn(turboUtils, "getAvailablePackageManagers")
-      .mockResolvedValue({
-        pnpm: packageManagerVersion,
-        npm: undefined,
-        yarn: undefined,
-        bun: undefined,
-        nub: undefined,
-        aube: undefined
-      });
+    const mockedGetTurboUpgradeCommand = jest
+      .spyOn(getTurboUpgradeCommand, "getTurboUpgradeCommand")
+      .mockResolvedValue("pnpm add turbo@latest --save-dev -w");
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
       .mockResolvedValue(
@@ -885,14 +910,14 @@ describe("migrate", () => {
     expect(mockedCheckGitStatus).not.toHaveBeenCalled();
     expect(mockedGetCurrentVersion).toHaveBeenCalled();
     expect(mockedGetLatestVersion).toHaveBeenCalled();
-    expect(mockedGetAvailablePackageManagers).toHaveBeenCalled();
+    expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
     expect(mockedGetWorkspaceDetails).toHaveBeenCalled();
 
     // restore mocks
     mockedCheckGitStatus.mockRestore();
     mockedGetCurrentVersion.mockRestore();
     mockedGetLatestVersion.mockRestore();
-    mockedGetAvailablePackageManagers.mockRestore();
+    mockedGetTurboUpgradeCommand.mockRestore();
     mockedGetWorkspaceDetails.mockRestore();
   });
 
