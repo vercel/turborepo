@@ -13,15 +13,20 @@ use axum::{
     response::IntoResponse,
     routing::{get, head, options, post, put},
 };
+use base64::{Engine, engine::general_purpose::STANDARD};
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tokio::{net::TcpListener, sync::Mutex};
 use turborepo_vercel_api::{
-    AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse,
-    User, UserResponse, telemetry::TelemetryEvent,
+    AnalyticsEvent, CachingCapabilities, CachingStatus, CachingStatusResponse,
+    IncrementalArtifactsCapability, Membership, Role, Team, TeamsResponse, User, UserResponse,
+    telemetry::TelemetryEvent,
 };
 
 pub const EXPECTED_TOKEN: &str = "expected_token";
+pub const EXPECTED_INCREMENTAL_PUBLISH_TOKEN: &str = "expected_incremental_publish_token";
+pub const MAX_INCREMENTAL_ARTIFACT_SIZE: u64 = 1024 * 1024;
 pub const EXPECTED_USER_ID: &str = "expected_user_id";
 pub const EXPECTED_USERNAME: &str = "expected_username";
 pub const EXPECTED_EMAIL: &str = "expected_email";
@@ -50,6 +55,41 @@ struct VercelAppTokenRevokeRequest {
 /// Per-artifact SCM metadata: (sha, dirty_hash).
 type ArtifactScmMetadata = HashMap<String, (Option<String>, Option<String>)>;
 
+fn authorized(headers: &HeaderMap, token: &str) -> bool {
+    headers
+        .get("authorization")
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value == format!("Bearer {token}"))
+}
+
+fn valid_incremental_key(key: &str) -> bool {
+    key.len() == 64
+        && key
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn incremental_headers(body: &[u8]) -> Option<HeaderMap> {
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_LENGTH, HeaderValue::from(body.len()));
+    let digest = format!("sha-256=:{}:", STANDARD.encode(Sha256::digest(body)));
+    headers.insert("content-digest", HeaderValue::from_str(&digest).ok()?);
+    Some(headers)
+}
+
+fn forbidden(message: &str) -> axum::response::Response {
+    (
+        StatusCode::FORBIDDEN,
+        Json(serde_json::json!({
+            "error": {
+                "code": "forbidden",
+                "message": message,
+            }
+        })),
+    )
+        .into_response()
+}
+
 pub async fn start_test_server(
     port: u16,
     ready_tx: Option<tokio::sync::oneshot::Sender<()>>,
@@ -68,6 +108,11 @@ pub async fn start_test_server(
     let post_analytics_events_ref = get_analytics_events_ref.clone();
 
     let telemetry_events_ref = Arc::new(Mutex::new(Vec::new()));
+
+    let incremental_artifacts_ref = Arc::new(Mutex::new(HashMap::<String, Vec<u8>>::new()));
+    let get_incremental_artifacts_ref = incremental_artifacts_ref.clone();
+    let head_incremental_artifacts_ref = incremental_artifacts_ref.clone();
+    let put_incremental_artifacts_ref = incremental_artifacts_ref.clone();
 
     let app = Router::new()
         .route(
@@ -113,7 +158,115 @@ pub async fn start_test_server(
             get(|| async {
                 Json(CachingStatusResponse {
                     status: CachingStatus::Enabled,
+                    capabilities: Some(CachingCapabilities {
+                        incremental_artifacts_v1: Some(IncrementalArtifactsCapability {
+                            max_artifact_size: MAX_INCREMENTAL_ARTIFACT_SIZE,
+                        }),
+                    }),
                 })
+            }),
+        )
+        .route(
+            "/v8/artifacts/incremental/{key}",
+            options(|| async {
+                let mut headers = HeaderMap::new();
+                headers.insert(
+                    "Access-Control-Allow-Headers",
+                    HeaderValue::from_static(
+                        "Authorization, Content-Length, Content-Type, User-Agent",
+                    ),
+                );
+                headers
+            }),
+        )
+        .route(
+            "/v8/artifacts/incremental/{key}",
+            put(
+                |Path(key): Path<String>, headers: HeaderMap, body: Body| async move {
+                    if !authorized(&headers, EXPECTED_INCREMENTAL_PUBLISH_TOKEN) {
+                        return forbidden("token cannot publish incremental artifacts");
+                    }
+                    if !valid_incremental_key(&key) {
+                        return StatusCode::BAD_REQUEST.into_response();
+                    }
+                    let Some(content_length) = headers
+                        .get(CONTENT_LENGTH)
+                        .and_then(|value| value.to_str().ok())
+                        .and_then(|value| value.parse::<u64>().ok())
+                    else {
+                        return StatusCode::BAD_REQUEST.into_response();
+                    };
+                    if content_length > MAX_INCREMENTAL_ARTIFACT_SIZE {
+                        return StatusCode::PAYLOAD_TOO_LARGE.into_response();
+                    }
+
+                    let mut artifact = Vec::with_capacity(content_length as usize);
+                    let mut body_stream = body.into_data_stream();
+                    while let Some(chunk) = body_stream.next().await {
+                        let Ok(chunk) = chunk else {
+                            return StatusCode::BAD_REQUEST.into_response();
+                        };
+                        artifact.extend_from_slice(&chunk);
+                        if artifact.len() as u64 > MAX_INCREMENTAL_ARTIFACT_SIZE {
+                            return StatusCode::PAYLOAD_TOO_LARGE.into_response();
+                        }
+                    }
+                    if artifact.len() as u64 != content_length {
+                        return StatusCode::BAD_REQUEST.into_response();
+                    }
+
+                    put_incremental_artifacts_ref
+                        .lock()
+                        .await
+                        .insert(key, artifact);
+                    StatusCode::CREATED.into_response()
+                },
+            ),
+        )
+        .route(
+            "/v8/artifacts/incremental/{key}",
+            get(|Path(key): Path<String>, headers: HeaderMap| async move {
+                if !authorized(&headers, EXPECTED_TOKEN) {
+                    return forbidden("token cannot read incremental artifacts");
+                }
+                if !valid_incremental_key(&key) {
+                    return StatusCode::BAD_REQUEST.into_response();
+                }
+                let Some(artifact) = get_incremental_artifacts_ref
+                    .lock()
+                    .await
+                    .get(&key)
+                    .cloned()
+                else {
+                    return StatusCode::NOT_FOUND.into_response();
+                };
+                let Some(headers) = incremental_headers(&artifact) else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+                (StatusCode::OK, headers, artifact).into_response()
+            }),
+        )
+        .route(
+            "/v8/artifacts/incremental/{key}",
+            head(|Path(key): Path<String>, headers: HeaderMap| async move {
+                if !authorized(&headers, EXPECTED_TOKEN) {
+                    return forbidden("token cannot read incremental artifacts");
+                }
+                if !valid_incremental_key(&key) {
+                    return StatusCode::BAD_REQUEST.into_response();
+                }
+                let Some(artifact) = head_incremental_artifacts_ref
+                    .lock()
+                    .await
+                    .get(&key)
+                    .cloned()
+                else {
+                    return StatusCode::NOT_FOUND.into_response();
+                };
+                let Some(headers) = incremental_headers(&artifact) else {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                };
+                (StatusCode::OK, headers).into_response()
             }),
         )
         .route(
