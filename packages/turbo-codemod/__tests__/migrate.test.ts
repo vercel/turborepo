@@ -431,13 +431,11 @@ describe("migrate", () => {
       .mockReturnValue(undefined);
     const mockedGetCurrentVersion = jest
       .spyOn(getCurrentVersion, "getCurrentVersion")
-      .mockReturnValue("1.3.0");
+      .mockReturnValueOnce("1.3.0")
+      .mockReturnValueOnce("1.3.1");
     const mockedGetLatestVersion = jest
       .spyOn(getLatestVersion, "getLatestVersion")
       .mockResolvedValue("1.3.1");
-    const mockedGetInstalledVersion = jest
-      .spyOn(getCurrentVersion, "getInstalledVersion")
-      .mockReturnValue("1.3.1");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "getTurboUpgradeCommand")
       .mockResolvedValue("npm install turbo@1.3.1");
@@ -487,7 +485,6 @@ describe("migrate", () => {
     mockedCheckGitStatus.mockRestore();
     mockedGetCurrentVersion.mockRestore();
     mockedGetLatestVersion.mockRestore();
-    mockedGetInstalledVersion.mockRestore();
     mockedGetTurboUpgradeCommand.mockRestore();
     mockedGetWorkspaceDetails.mockRestore();
     mockedExecSync.mockRestore();
@@ -507,13 +504,11 @@ describe("migrate", () => {
       .mockReturnValue(undefined);
     const mockedGetCurrentVersion = jest
       .spyOn(getCurrentVersion, "getCurrentVersion")
-      .mockReturnValue("1.0.0");
+      .mockReturnValueOnce("1.0.0")
+      .mockReturnValueOnce("1.7.0");
     const mockedGetLatestVersion = jest
       .spyOn(getLatestVersion, "getLatestVersion")
       .mockResolvedValue("1.7.0");
-    const mockedGetInstalledVersion = jest
-      .spyOn(getCurrentVersion, "getInstalledVersion")
-      .mockReturnValue("1.7.0");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "getTurboUpgradeCommand")
       .mockResolvedValue("pnpm install -g turbo@1.7.0");
@@ -597,7 +592,6 @@ describe("migrate", () => {
     mockedCheckGitStatus.mockRestore();
     mockedGetCurrentVersion.mockRestore();
     mockedGetLatestVersion.mockRestore();
-    mockedGetInstalledVersion.mockRestore();
     mockedGetTurboUpgradeCommand.mockRestore();
     mockedGetAvailablePackageManagers.mockRestore();
     mockedGetWorkspaceDetails.mockRestore();
@@ -621,9 +615,6 @@ describe("migrate", () => {
     const mockedGetLatestVersion = jest
       .spyOn(getLatestVersion, "getLatestVersion")
       .mockResolvedValue("2.9.3");
-    const mockedGetInstalledVersion = jest
-      .spyOn(getCurrentVersion, "getInstalledVersion")
-      .mockReturnValue("2.8.0");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "getTurboUpgradeCommand")
       .mockResolvedValue("pnpm add turbo@latest --save-dev -w");
@@ -648,12 +639,11 @@ describe("migrate", () => {
 
     expect(mockExit.exit).toHaveBeenCalledWith(1);
     expect(readJson("turbo.json")).toStrictEqual(turboJson);
-    expect(mockedGetInstalledVersion).toHaveBeenCalled();
+    expect(mockedGetCurrentVersion).toHaveBeenCalledTimes(2);
 
     mockedCheckGitStatus.mockRestore();
     mockedGetCurrentVersion.mockRestore();
     mockedGetLatestVersion.mockRestore();
-    mockedGetInstalledVersion.mockRestore();
     mockedGetTurboUpgradeCommand.mockRestore();
     mockedGetWorkspaceDetails.mockRestore();
     mockedExecSync.mockRestore();

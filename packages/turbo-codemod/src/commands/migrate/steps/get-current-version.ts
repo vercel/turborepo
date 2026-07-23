@@ -2,7 +2,15 @@ import { type Project } from "@turbo/workspaces";
 import { exec } from "../utils";
 import type { MigrateCommandOptions } from "../types";
 
-export function getInstalledVersion(project: Project): string | undefined {
+export function getCurrentVersion(
+  project: Project,
+  opts: MigrateCommandOptions
+): string | undefined {
+  const { from } = opts;
+  if (from) {
+    return from;
+  }
+
   // try global first
   const turboVersionFromGlobal = exec(`turbo --version`, {
     cwd: project.paths.root
@@ -21,16 +29,4 @@ export function getInstalledVersion(project: Project): string | undefined {
   }
 
   return exec(`npm exec -c 'turbo --version'`, { cwd: project.paths.root });
-}
-
-export function getCurrentVersion(
-  project: Project,
-  opts: MigrateCommandOptions
-): string | undefined {
-  const { from } = opts;
-  if (from) {
-    return from;
-  }
-
-  return getInstalledVersion(project);
 }

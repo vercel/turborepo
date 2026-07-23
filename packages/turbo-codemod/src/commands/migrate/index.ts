@@ -10,10 +10,7 @@ import { Runner } from "../../runner/runner";
 import { looksLikeRepo } from "../../utils/looks-like-repo";
 import type { TransformerResults } from "../../runner";
 import { transformer as updateVersionedSchema } from "../../transforms/update-versioned-schema-json";
-import {
-  getCurrentVersion,
-  getInstalledVersion
-} from "./steps/get-current-version";
+import { getCurrentVersion } from "./steps/get-current-version";
 import { getLatestVersion } from "./steps/get-latest-version";
 import { getTransformsForMigration } from "./steps/get-transforms-for-migration";
 import { getTurboUpgradeCommand } from "./steps/get-turbo-upgrade-command";
@@ -253,7 +250,10 @@ export async function migrate(
         });
       }
 
-      const installedVersion = getInstalledVersion(project);
+      const installedVersion = getCurrentVersion(project, {
+        ...options,
+        from: undefined
+      });
       if (installedVersion !== toVersion) {
         return endMigration({
           success: false,
