@@ -10,6 +10,7 @@ pub use turborepo_engine::{
     Built, ExecuteError, ExecutionOptions, Message, TaskDefinitionInfo, TaskNode,
 };
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_task_id::TaskId;
 use turborepo_types::{TaskDefinition, UIMode};
 
 /// Type alias for Engine specialized with TaskDefinition.
@@ -70,6 +71,31 @@ pub trait EngineExt {
     ) -> Result<(), Vec<ValidateError>>;
 }
 
+pub(crate) fn task_has_command(
+    engine: &Engine<Built>,
+    package_graph: &PackageGraph,
+    task: &TaskId<'static>,
+) -> bool {
+    if task.task() == "proxy" {
+        return true;
+    }
+
+    let Some(info) = package_graph.package_info(&PackageName::from(task.package())) else {
+        return false;
+    };
+    match engine
+        .task_definition(task)
+        .and_then(|definition| definition.command.as_ref())
+    {
+        Some(turborepo_types::TaskCommandOverride::Argv(_)) => true,
+        Some(turborepo_types::TaskCommandOverride::OptOut) => false,
+        None => package_graph
+            .toolchains()
+            .get(&info.toolchain)
+            .is_some_and(|toolchain| toolchain.defines_task(info, task.task())),
+    }
+}
+
 impl EngineExt for Engine<Built> {
     fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String> {
         self.tasks()
@@ -77,9 +103,7 @@ impl EngineExt for Engine<Built> {
                 TaskNode::Root => None,
                 TaskNode::Task(task) => Some(task),
             })
-            .filter_map(|task| {
-                let pkg_name = PackageName::from(task.package());
-                let info = pkg_graph.package_info(&pkg_name)?;
+            .filter(|task| {
                 // Ask the package's toolchain whether the task resolves to a
                 // runnable command — the same authority execution uses. For
                 // JS packages this is the package.json scripts lookup; for
@@ -88,19 +112,9 @@ impl EngineExt for Engine<Built> {
                 // override is authoritative in both directions: an argv
                 // executes even where the toolchain defines nothing, and an
                 // opt-out never executes even where it does.
-                let has_command = match self
-                    .task_definition(task)
-                    .and_then(|def| def.command.as_ref())
-                {
-                    Some(turborepo_types::TaskCommandOverride::Argv(_)) => true,
-                    Some(turborepo_types::TaskCommandOverride::OptOut) => false,
-                    None => pkg_graph
-                        .toolchains()
-                        .get(&info.toolchain)
-                        .is_some_and(|toolchain| toolchain.defines_task(info, task.task())),
-                };
-                (task.task() == "proxy" || has_command).then(|| task.to_string())
+                task_has_command(self, pkg_graph, task)
             })
+            .map(ToString::to_string)
             .collect()
     }
 

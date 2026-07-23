@@ -330,6 +330,11 @@
           "default": false,
           "type": "boolean"
         },
+        "strictTaskEntrypointSelection": {
+          "description": "Select requested task entrypoints according to whether the task resolves a command in the repository. When any package can run a requested task, packages without a command are not used as entrypoints. Tasks with no command anywhere remain available for graph-only orchestration, and missing tasks reached as dependencies remain in the Task Graph.",
+          "default": false,
+          "type": "boolean"
+        },
         "watchUsingTaskInputs": {
           "description": "Use task-level `inputs` globs to determine which tasks to re-run when files change in `turbo watch`. When enabled, only tasks whose declared inputs match the changed files are re-executed, rather than re-running all tasks in changed packages.",
           "default": false,

@@ -441,6 +441,44 @@ In this example, `--filter=[main]` would not select `build` for a package if onl
   selected, regardless of individual task `inputs`.
 </Callout>
 
+#### `strictTaskEntrypointSelection`
+
+Default: `false`
+
+Select requested tasks according to whether they resolve a command in the
+repository. When at least one package can run a requested task, packages
+without a command do not become entrypoints and their dependencies are not
+included merely because the task was requested.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "strictTaskEntrypointSelection": true,
+  },
+  "tasks": {
+    "test": {
+      "dependsOn": ["build"],
+    },
+  },
+}
+```
+
+If `web` has a `test` command and `docs` does not, `turbo run test` starts from
+`web#test` but not `docs#test`. Missing tasks reached from retained tasks remain
+in the Task Graph, preserving Transit Nodes and cache invalidation.
+
+When no package resolves a command for a configured or implicitly registered
+task, it remains available for graph-only orchestration. For example, a
+scriptless `ci:checks` task can continue to run its configured dependencies.
+When any of those dependency branches reaches a runnable command, branches that
+never reach runnable work are removed. A fully scriptless graph is preserved
+when none of its branches contains a runnable command.
+
+This flag is independent of [`filterUsingTasks`](#filterusingtasks). When both
+are enabled, a plain task-level filter drops a matching task without a command,
+while `...` can explicitly select executable dependencies or dependents through
+that missing task node.
+
 #### `globalConfiguration`
 
 Default: `false`

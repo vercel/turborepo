@@ -440,6 +440,34 @@ The core task graph consists of:
   execution-only compile-cache environment injection likewise apply only to
   native toolchain-resolved commands.
 
+#### Run Entrypoint Selection (`crates/turborepo-lib/src/run/builder.rs`)
+
+- This behavior is gated by
+  `futureFlags.strictTaskEntrypointSelection` and is independent of
+  `futureFlags.filterUsingTasks`.
+- Requested task names that resolve a command anywhere in the repository start
+  only in scoped packages where that task resolves a command. A missing task is
+  therefore not allowed to pull its configured dependencies into a run merely
+  because another package implements the requested task.
+- When no package resolves a command for a configured or toolchain-registered
+  task, its scoped package nodes remain entrypoints so graph-only orchestration
+  tasks continue to fan out to their configured dependencies. If any branch
+  reaches a runnable command, only paths to runnable work are retained; when no
+  branch is runnable, the fully scriptless graph remains intact.
+- Entrypoint selection happens independently from dependency traversal. Missing
+  tasks reached from a retained task stay in the graph for ordering and hash
+  propagation. Explicitly requesting another task unions its retained graph, so
+  `turbo run build test` still runs every selected `build` command.
+- With `filterUsingTasks`, package and git selectors start from the requested
+  task nodes rather than every dependency task already present in the package.
+  Missing requested nodes are dropped after selector expansion: a plain filter
+  runs nothing for a missing command, while trailing or leading `...` may retain
+  executable tasks reached through that node in the Task Graph.
+- Native package scripts, resolved `command` overrides, and toolchain-provided
+  commands all count as executable definitions. Toolchain-specific entrypoint
+  selection, including Cargo workspace/crate selection, remains authoritative
+  and is composed with this generic command-aware pruning.
+
 #### Engine Execution (`crates/turborepo-lib/src/engine/execute.rs`)
 
 - Orchestrates task execution in topological order
