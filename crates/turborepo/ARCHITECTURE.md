@@ -180,8 +180,8 @@ topological (`^`) dependencies.
 #### Toolchains (`crates/turborepo-repository/src/toolchain.rs`)
 
 The package graph is generic over language toolchains. The existing discovery
-method returns one parser-neutral envelope containing packages/scopes and
-workspace-root observations. Core validates the combined contributed roots
+method returns one envelope containing packages/scopes and workspace-root
+observations. Core validates the combined contributed roots
 without adding another behavioral toolchain method. Watching native marker-only
 changes that are not observed by today's package watcher remains Phase 6 work.
 Native discovery output contributes package/scope observations to repository
