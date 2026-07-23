@@ -88,8 +88,9 @@ fn test_malformed_package_json() {
         stderr.contains("package_json_parse_error"),
         "expected parse error: {stderr}"
     );
+    let compact_stderr = stderr.split_whitespace().collect::<String>();
     assert!(
-        stderr.contains("apps/my-app/package.json"),
+        compact_stderr.contains("apps/my-app/package.json"),
         "expected malformed manifest path: {stderr}"
     );
 }
