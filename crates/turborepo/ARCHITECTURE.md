@@ -146,8 +146,10 @@ Represents the workspace structure and package dependencies:
 `RepositoryKnowledge` is the crate-private authority for package identity and
 paths during node assembly, and the resulting `PackageGraph` retains that exact
 immutable generation. Consumers migrate incrementally through narrow
-knowledge-backed graph queries and may temporarily use derived `PackageInfo`
-compatibility projections. Native manifests and metadata do not enter repository
+knowledge-backed graph queries and may temporarily use `PackageInfo`
+compatibility projections. Their identity, path, scope kind, and provenance are
+knowledge-backed; relationship and task payloads remain associated native
+compatibility data. Native manifests and metadata do not enter repository
 knowledge. Native definition paths must remain within the repository, including
 after resolving existing symlinks.
 
