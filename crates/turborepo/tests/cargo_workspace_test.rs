@@ -334,6 +334,8 @@ fn test_cargo_packages_in_task_graph() {
     // The bin crate is an entrypoint: it executes a real cargo command.
     let app_build = task("app#build").expect("app#build in graph");
     assert_eq!(app_build["command"], "cargo build --package=app --locked");
+    assert_eq!(app_build["directory"], "crates/app");
+    assert_eq!(app_build["logFile"], "crates/app/.turbo/turbo-build.log");
     // Unfiltered builds select entrypoint crates; Cargo builds their library
     // dependency closures without a redundant package-scoped process.
     assert!(task("lib-a#build").is_none());
@@ -1726,6 +1728,12 @@ fn test_pure_cargo_workspace_dry_run_has_no_package_json() {
     // The bin crate is an entrypoint: it executes a real cargo command.
     let app_build = task("app#build").expect("app#build in graph");
     assert_eq!(app_build["command"], "cargo build --package=app --locked");
+    assert_eq!(app_build["directory"], "crates/app");
+    assert_eq!(app_build["logFile"], "crates/app/.turbo/turbo-build.log");
+    assert_eq!(
+        json["packages"],
+        serde_json::json!(["acme", "app", "lib-a"])
+    );
     // The unfiltered build delegates the dependency closure to the entrypoint's
     // Cargo process instead of scheduling a redundant library build.
     assert!(task("lib-a#build").is_none());
@@ -2160,6 +2168,9 @@ fn test_cargo_tasks_are_registered_without_task_configuration() {
             definition["command"],
             format!("cargo {subcommand} --workspace --locked")
         );
+        assert_eq!(definition["directory"], "");
+        assert_eq!(definition["logFile"], format!(".turbo/turbo-{task}.log"));
+        assert_eq!(json["packages"], serde_json::json!(["acme"]));
     }
 }
 
