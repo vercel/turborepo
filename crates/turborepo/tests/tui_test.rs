@@ -15,7 +15,7 @@ use anyhow::{Context, Result, bail};
 use serde_json::json;
 use tempfile::TempDir;
 use terminal_control::{
-    frame::Frame,
+    frame::{Cell, Color, Frame},
     session::Session,
     shot::{Options, Shot},
 };
@@ -188,6 +188,29 @@ fn visible_sidebar_tasks(text: &str) -> Vec<&str> {
         .collect()
 }
 
+fn cells_for_text<'a>(frame: &'a Frame, text: &str) -> Result<Vec<&'a Cell>> {
+    let characters = text.chars().collect::<Vec<_>>();
+    for y in 0..frame.rows {
+        for x in 0..=frame.cols.saturating_sub(characters.len() as u16) {
+            let cells = characters
+                .iter()
+                .enumerate()
+                .map(|(offset, character)| {
+                    frame.cells.iter().find(|cell| {
+                        cell.x == x + offset as u16
+                            && cell.y == y
+                            && cell.text.starts_with(*character)
+                    })
+                })
+                .collect::<Option<Vec<_>>>();
+            if let Some(cells) = cells {
+                return Ok(cells);
+            }
+        }
+    }
+    bail!("visible frame did not contain {text:?}")
+}
+
 #[test]
 fn renders_tasks_and_navigates_between_their_output() -> Result<()> {
     let mut context = launch_tui()?;
@@ -208,6 +231,28 @@ fn renders_tasks_and_navigates_between_their_output() -> Result<()> {
         STARTUP_TIMEOUT,
         |text, _| text.contains("INTERACTIVE_READY"),
     )?;
+    Ok(())
+}
+
+#[test]
+fn preserves_task_output_colors_end_to_end() -> Result<()> {
+    let mut context = launch_tui()?;
+    let shot = wait_for_screen(
+        &mut context.session,
+        "colored task output did not render",
+        STARTUP_TIMEOUT,
+        |text, _| text.contains("COLOR_OUTPUT"),
+    )?;
+
+    let cells = cells_for_text(&shot.frame, "COLOR_OUTPUT")?;
+    assert!(cells.iter().all(|cell| {
+        cell.foreground
+            == Color {
+                r: 12,
+                g: 200,
+                b: 123,
+            }
+    }));
     Ok(())
 }
 
