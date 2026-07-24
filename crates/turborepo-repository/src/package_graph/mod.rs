@@ -1013,8 +1013,8 @@ impl PackageGraph {
 
         Ok(changed.unwrap_or_else(|| {
             self.packages
-                .iter()
-                .filter_map(|(name, _info)| {
+                .keys()
+                .filter_map(|name| {
                     let path = self.package_dir(name)?.to_owned();
                     let package = WorkspacePackage {
                         name: name.clone(),
