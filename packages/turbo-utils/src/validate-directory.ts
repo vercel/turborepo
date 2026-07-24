@@ -11,11 +11,14 @@ export function validateDirectory(directory: string): {
 } {
   // Basic sanity checks on the provided directory string to prevent
   // unsafe paths from flowing into tooling that invokes git or other CLIs.
+  const trimmedDirectory =
+    typeof directory === "string" ? directory.trim() : "";
   if (
     !directory ||
     typeof directory !== "string" ||
-    directory.trim() === "" ||
-    directory.includes("\0")
+    trimmedDirectory === "" ||
+    directory.includes("\0") ||
+    trimmedDirectory.startsWith("-")
   ) {
     const safeDirectory = typeof directory === "string" ? directory : "";
     return {
