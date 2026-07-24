@@ -275,10 +275,10 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
             .map(|package| package.name.clone())
             .collect();
         for dependency in directly_changed {
-            let Some(view) = self.pkg_graph.package_view(&dependency) else {
+            let Some(context) = self.pkg_graph.package_task_context(&dependency) else {
                 continue;
             };
-            let Some(toolchain_id) = view.toolchain() else {
+            let Some(toolchain_id) = context.toolchain() else {
                 continue;
             };
             let Some(toolchain) = self.pkg_graph.toolchains().get(toolchain_id) else {
@@ -286,13 +286,13 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
             };
             for affected in toolchain.additional_affected_packages(dependency.as_str()) {
                 let name = PackageName::Other(affected);
-                let Some(path) = self.pkg_graph.package_dir(&name) else {
+                let Some(context) = self.pkg_graph.package_task_context(&name) else {
                     continue;
                 };
                 changed_packages
                     .entry(WorkspacePackage {
                         name,
-                        path: path.to_owned(),
+                        path: context.directory().to_owned(),
                     })
                     .or_insert_with(|| PackageInclusionReason::DependencyChanged {
                         dependency: dependency.clone(),
