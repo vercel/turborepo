@@ -654,21 +654,21 @@ impl PnpmLockfile {
     ) -> Result<(Packages, Option<Snapshots>), crate::Error> {
         let mut pruned_packages = BTreeMap::new();
         if let Some(snapshots) = self.snapshots.as_ref() {
-            let mut pruned_snapshots = BTreeMap::new();
+            let mut pruned_snapshots = Some(BTreeMap::new());
             for package in packages {
-                let entry = snapshots
-                    .get(package.as_str())
-                    .ok_or_else(|| crate::Error::MissingPackage(package.clone()))?;
-                pruned_snapshots.insert(package.clone(), entry.clone());
+                if !snapshots.contains_key(package.as_str()) {
+                    return Err(crate::Error::MissingPackage(package.clone()));
+                }
 
                 let package_key = self.package_key_for_snapshot(package.as_str())?;
-                let entry = self
-                    .get_packages(&package_key)
-                    .ok_or_else(|| crate::Error::MissingPackage(package_key.clone()))?;
-                pruned_packages.insert(package_key, entry.clone());
+                if self.get_packages(&package_key).is_none() {
+                    return Err(crate::Error::MissingPackage(package_key));
+                }
+
+                self.retain_package(package, &mut pruned_packages, &mut pruned_snapshots)?;
             }
 
-            return Ok((pruned_packages, Some(pruned_snapshots)));
+            return Ok((pruned_packages, pruned_snapshots));
         }
 
         for package in packages {
@@ -707,7 +707,11 @@ impl PnpmLockfile {
             }
 
             for (dep_name, dep_version) in snapshot.dependencies() {
-                let dep_key = self.format_key(&dep_name, &dep_version);
+                let dep_key = if self.has_package(&dep_version) {
+                    dep_version
+                } else {
+                    self.format_key(&dep_name, &dep_version)
+                };
                 self.retain_package(&dep_key, pruned_packages, pruned_snapshots)?;
             }
 
@@ -1398,6 +1402,59 @@ importers:
             lockfile.patches().unwrap(),
             Vec::<RelativeUnixPathBuf>::new()
         );
+    }
+
+    #[test]
+    fn test_subgraph_preserves_aliased_dependency_targets() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+importers:
+
+  .: {}
+
+  apps/web:
+    dependencies:
+      pretty-format:
+        specifier: 30.2.0
+        version: 30.2.0
+
+packages:
+
+  pretty-format@30.2.0:
+    resolution: {integrity: sha512-abc}
+
+  react-is@19.2.8:
+    resolution: {integrity: sha512-def}
+
+snapshots:
+
+  pretty-format@30.2.0:
+    dependencies:
+      react-is-19: react-is@19.2.8
+
+  react-is@19.2.8: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+        let pruned = lockfile
+            .subgraph(
+                &["apps/web".to_string()],
+                &["pretty-format@30.2.0".to_string()],
+            )
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should have packages");
+        let snapshots = pruned_lockfile
+            .snapshots
+            .as_ref()
+            .expect("should have snapshots");
+
+        assert!(packages.contains_key("react-is@19.2.8"));
+        assert!(snapshots.contains_key("react-is@19.2.8"));
     }
 
     #[test]
