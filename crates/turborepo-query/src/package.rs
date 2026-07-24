@@ -40,7 +40,7 @@ impl Package {
         &self.name
     }
 
-    fn from_node(&self, node: &PackageNode) -> Option<Self> {
+    fn package_from_node(&self, node: &PackageNode) -> Option<Self> {
         let PackageNode::Workspace(name) = node else {
             return None;
         };
@@ -57,7 +57,7 @@ impl Package {
     fn collect_nodes<'a>(&self, nodes: impl IntoIterator<Item = &'a PackageNode>) -> Array<Self> {
         nodes
             .into_iter()
-            .filter_map(|node| self.from_node(node))
+            .filter_map(|node| self.package_from_node(node))
             .sorted_by(|a, b| a.name.cmp(&b.name))
             .collect()
     }
