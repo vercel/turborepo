@@ -591,6 +591,19 @@ impl PackageGraph {
         self.packages.remove(package)
     }
 
+    #[cfg(any(test, feature = "test-util"))]
+    pub fn set_package_json_path_for_test(
+        &mut self,
+        package: &PackageName,
+        package_json_path: AnchoredSystemPathBuf,
+    ) -> bool {
+        let Some(package_info) = self.packages.get_mut(package) else {
+            return false;
+        };
+        package_info.package_json_path = package_json_path;
+        true
+    }
+
     /// Iterates the structural graph sentinel followed by every authoritative
     /// execution scope. The root JavaScript scope is omitted when no root
     /// `package.json` exists.

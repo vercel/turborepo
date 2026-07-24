@@ -23,7 +23,7 @@ use turborepo_errors::TURBO_SITE;
 use turborepo_log::grouping::{GroupingLayer, GroupingMode};
 use turborepo_process::ProcessManager;
 use turborepo_repository::{
-    package_graph::{PackageGraph, PackageInfo, PackageName, ROOT_PKG_NAME},
+    package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
     toolchain::CompileCacheEndpoint,
 };
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker, TaskTracker};
@@ -127,6 +127,8 @@ pub enum Error {
     Engine(#[from] crate::engine::ExecuteError),
     #[error(transparent)]
     TaskHash(#[from] TaskHashError),
+    #[error(transparent)]
+    RunCache(#[from] turborepo_run_cache::Error),
     #[error(transparent)]
     RunSummary(#[from] summary::Error),
     #[error("Internal errors encountered: {0}")]
@@ -840,36 +842,20 @@ impl<'a> Visitor<'a> {
 
             debug!("task {} hash is {}", info, task_hash);
 
-            let synthetic_root;
-            let workspace_info = match package_context.package_info() {
-                Some(workspace_info) => workspace_info,
-                None if !package_context.requires_compatibility_payload() => {
-                    let Ok(package_json_path) = AnchoredSystemPathBuf::from_raw("package.json")
-                    else {
-                        dispatch_error = Some(Error::MissingPackage {
-                            package_name,
-                            task_id: info.clone(),
-                        });
-                        break;
-                    };
-                    synthetic_root = PackageInfo {
-                        package_json_path,
-                        ..Default::default()
-                    };
-                    &synthetic_root
-                }
-                None => {
-                    dispatch_error = Some(Error::TaskHash(TaskHashError::MissingPackagePayload(
-                        package_name,
-                    )));
-                    break;
-                }
-            };
-
             let task_cache = {
                 let _span = tracing::info_span!("task_cache_new").entered();
-                self.run_cache
-                    .task_cache(task_definition, workspace_info, info.clone(), &task_hash)
+                match self.run_cache.task_cache(
+                    task_definition,
+                    &package_context,
+                    info.clone(),
+                    &task_hash,
+                ) {
+                    Ok(task_cache) => task_cache,
+                    Err(err) => {
+                        dispatch_error = Some(Error::RunCache(err));
+                        break;
+                    }
+                }
             };
 
             // Drop to avoid holding the span across an await
