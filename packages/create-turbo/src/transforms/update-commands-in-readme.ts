@@ -8,11 +8,21 @@ const meta = {
   name: "update-commands-in-readme"
 };
 
-const PACKAGE_MANAGERS: Array<PackageManager> = ["pnpm", "npm", "yarn", "bun"];
+const PACKAGE_MANAGER_COMMANDS = [
+  "pnpm",
+  "npm",
+  "yarn",
+  "bun",
+  "nub",
+  "aube",
+  "ut"
+];
 
 // Ordered longest-first so regex alternation matches "pnpm run" before bare "pnpm".
-const PM_RUN_PATTERN = PACKAGE_MANAGERS.map((pm) => `${pm} run`).join("|");
-const PM_BARE_PATTERN = PACKAGE_MANAGERS.join("|");
+const PM_RUN_PATTERN = PACKAGE_MANAGER_COMMANDS.map((pm) => `${pm} run`).join(
+  "|"
+);
+const PM_BARE_PATTERN = PACKAGE_MANAGER_COMMANDS.join("|");
 
 // Matches compound "<pm> run" commands inside word boundaries.
 const PM_RUN_REGEX = new RegExp(`\\b(?:${PM_RUN_PATTERN})\\b`, "g");
@@ -68,11 +78,12 @@ export function replacePackageManagerReferences(
   targetPm: PackageManager,
   text: string
 ): string {
+  const targetCommand = targetPm === "utoo" ? "ut" : targetPm;
   return text.replace(CODE_REGION_REGEX, (codeBlock) => {
     // Pass 1: replace compound "<pm> run" → "<selected> run"
-    let result = codeBlock.replace(PM_RUN_REGEX, `${targetPm} run`);
+    let result = codeBlock.replace(PM_RUN_REGEX, `${targetCommand} run`);
     // Pass 2: replace bare "<pm>" (not followed by "run") → "<selected>"
-    result = result.replace(PM_BARE_REGEX, targetPm);
+    result = result.replace(PM_BARE_REGEX, targetCommand);
     return result;
   });
 }

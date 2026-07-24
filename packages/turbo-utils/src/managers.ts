@@ -185,17 +185,27 @@ async function getAubeBinPath() {
   return path.dirname(aubeBinaryPath);
 }
 
+async function getUtooBinPath() {
+  const utooBinaryPath = await exec("which", ["ut"]);
+  if (!utooBinaryPath) {
+    return undefined;
+  }
+
+  return path.dirname(utooBinaryPath);
+}
+
 export async function getAvailablePackageManagers(
   options: PackageManagerDetectionOptions = {}
 ): Promise<Record<PackageManager, string | undefined>> {
   const projectRoot = options.projectRoot ?? process.cwd();
-  const [yarn, npm, pnpm, bun, nub, aube] = await Promise.all([
+  const [yarn, npm, pnpm, bun, nub, aube, utoo] = await Promise.all([
     getYarnVersion(projectRoot),
     exec("npm", ["--version"]),
     exec("pnpm", ["--version"]),
     exec("bun", ["--version"]),
     exec("nub", ["--version"]),
-    exec("aube", ["--version"])
+    exec("aube", ["--version"]),
+    exec("ut", ["--version"])
   ]);
 
   return {
@@ -204,7 +214,8 @@ export async function getAvailablePackageManagers(
     npm: parsePackageManagerVersion(npm),
     bun: parsePackageManagerVersion(bun),
     nub: parsePackageManagerVersion(nub),
-    aube: parsePackageManagerVersion(aube)
+    aube: parsePackageManagerVersion(aube),
+    utoo: parsePackageManagerVersion(utoo)
   };
 }
 
@@ -212,13 +223,14 @@ export async function getPackageManagersBinPaths(
   options: PackageManagerDetectionOptions = {}
 ): Promise<Record<PackageManager, string | undefined>> {
   const projectRoot = options.projectRoot ?? process.cwd();
-  const [yarn, npm, pnpm, bun, nub, aube] = await Promise.all([
+  const [yarn, npm, pnpm, bun, nub, aube, utoo] = await Promise.all([
     getYarnBinPath(projectRoot),
     exec("npm", ["config", "get", "prefix"]),
     exec("pnpm", ["bin", "--global"]),
     exec("bun", ["pm", "--g", "bin"]),
     getNubBinPath(),
-    getAubeBinPath()
+    getAubeBinPath(),
+    getUtooBinPath()
   ]);
 
   return {
@@ -227,6 +239,7 @@ export async function getPackageManagersBinPaths(
     npm,
     bun,
     nub,
-    aube
+    aube,
+    utoo
   };
 }

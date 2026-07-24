@@ -64,7 +64,8 @@ describe("managers", () => {
         .mockResolvedValueOnce({ stdout: "8.6.7" } as any) // pnpm
         .mockResolvedValueOnce({ stdout: "1.0.0" } as any) // bun
         .mockResolvedValueOnce({ stdout: "0.1.0" } as any) // nub
-        .mockResolvedValueOnce({ stdout: "0.1.0" } as any); // aube
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any) // aube
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any); // utoo
 
       const result = await getAvailablePackageManagers({
         projectRoot: MISSING_PROJECT_ROOT
@@ -76,7 +77,8 @@ describe("managers", () => {
         pnpm: "8.6.7",
         bun: "1.0.0",
         nub: "0.1.0",
-        aube: "0.1.0"
+        aube: "0.1.0",
+        utoo: "0.1.0"
       });
     });
 
@@ -89,7 +91,8 @@ describe("managers", () => {
         .mockResolvedValueOnce({ stdout: "0.1.0" } as any) // nub
         .mockResolvedValueOnce({
           stdout: "1.25.1 macos-arm64 (2026-06-30)"
-        } as any); // aube
+        } as any) // aube
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any); // utoo
 
       const result = await getAvailablePackageManagers({
         projectRoot: MISSING_PROJECT_ROOT
@@ -105,7 +108,8 @@ describe("managers", () => {
         .mockResolvedValueOnce({ stdout: "8.6.7" } as any) // pnpm
         .mockRejectedValueOnce(new Error("bun not found")) // bun
         .mockRejectedValueOnce(new Error("nub not found")) // nub
-        .mockRejectedValueOnce(new Error("aube not found")); // aube
+        .mockRejectedValueOnce(new Error("aube not found")) // aube
+        .mockRejectedValueOnce(new Error("ut not found")); // utoo
 
       const result = await getAvailablePackageManagers({
         projectRoot: MISSING_PROJECT_ROOT
@@ -117,7 +121,8 @@ describe("managers", () => {
         pnpm: "8.6.7",
         bun: undefined,
         nub: undefined,
-        aube: undefined
+        aube: undefined,
+        utoo: undefined
       });
     });
 
@@ -130,7 +135,8 @@ describe("managers", () => {
         .mockResolvedValueOnce({ stdout: "8.6.7" } as any) // pnpm
         .mockResolvedValueOnce({ stdout: "1.0.0" } as any) // bun
         .mockResolvedValueOnce({ stdout: "0.1.0" } as any) // nub
-        .mockResolvedValueOnce({ stdout: "0.1.0" } as any); // aube
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any) // aube
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any); // utoo
 
       const result = await getAvailablePackageManagers({ projectRoot });
 
@@ -140,14 +146,16 @@ describe("managers", () => {
         pnpm: "8.6.7",
         bun: "1.0.0",
         nub: "0.1.0",
-        aube: "0.1.0"
+        aube: "0.1.0",
+        utoo: "0.1.0"
       });
       expect(mockExeca.mock.calls.map(([command]) => command)).toEqual([
         "npm",
         "pnpm",
         "bun",
         "nub",
-        "aube"
+        "aube",
+        "ut"
       ]);
     });
 
@@ -160,7 +168,8 @@ describe("managers", () => {
         .mockResolvedValueOnce({ stdout: "8.6.7" } as any) // pnpm
         .mockResolvedValueOnce({ stdout: "1.0.0" } as any) // bun
         .mockResolvedValueOnce({ stdout: "0.1.0" } as any) // nub
-        .mockResolvedValueOnce({ stdout: "0.1.0" } as any); // aube
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any) // aube
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any); // utoo
 
       const result = await getAvailablePackageManagers({ projectRoot });
 
@@ -170,7 +179,8 @@ describe("managers", () => {
         "pnpm",
         "bun",
         "nub",
-        "aube"
+        "aube",
+        "ut"
       ]);
     });
 
@@ -183,7 +193,8 @@ describe("managers", () => {
         .mockResolvedValueOnce({ stdout: "8.6.7" } as any) // pnpm
         .mockResolvedValueOnce({ stdout: "1.0.0" } as any) // bun
         .mockResolvedValueOnce({ stdout: "0.1.0" } as any) // nub
-        .mockResolvedValueOnce({ stdout: "0.1.0" } as any); // aube
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any) // aube
+        .mockResolvedValueOnce({ stdout: "0.1.0" } as any); // utoo
 
       const result = await getAvailablePackageManagers({ projectRoot });
 
@@ -193,7 +204,8 @@ describe("managers", () => {
         "pnpm",
         "bun",
         "nub",
-        "aube"
+        "aube",
+        "ut"
       ]);
     });
   });
@@ -206,7 +218,8 @@ describe("managers", () => {
         .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm bin
         .mockResolvedValueOnce({ stdout: "/usr/local/bun" } as any) // bun bin
         .mockResolvedValueOnce({ stdout: "/usr/local/bin/nub" } as any) // nub bin
-        .mockResolvedValueOnce({ stdout: "/usr/local/bin/aube" } as any); // aube bin
+        .mockResolvedValueOnce({ stdout: "/usr/local/bin/aube" } as any) // aube bin
+        .mockResolvedValueOnce({ stdout: "/usr/local/bin/ut" } as any); // utoo bin
 
       const result = await getPackageManagersBinPaths({
         projectRoot: MISSING_PROJECT_ROOT
@@ -218,7 +231,8 @@ describe("managers", () => {
         pnpm: "/usr/local/pnpm",
         bun: "/usr/local/bun",
         nub: "/usr/local/bin",
-        aube: "/usr/local/bin"
+        aube: "/usr/local/bin",
+        utoo: "/usr/local/bin"
       });
     });
 
@@ -248,6 +262,9 @@ describe("managers", () => {
         if (command === "which" && args?.[0] === "aube") {
           return Promise.resolve({ stdout: "/usr/local/bin/aube" } as any);
         }
+        if (command === "which" && args?.[0] === "ut") {
+          return Promise.resolve({ stdout: "/usr/local/bin/ut" } as any);
+        }
         return Promise.reject(new Error(`${command} not found`));
       }) as typeof execa);
 
@@ -261,6 +278,7 @@ describe("managers", () => {
       expect(result.bun).toBe("/usr/local/bun");
       expect(result.nub).toBe("/usr/local/bin");
       expect(result.aube).toBe("/usr/local/bin");
+      expect(result.utoo).toBe("/usr/local/bin");
     });
 
     test("should return undefined for failed package manager checks", async () => {
@@ -270,7 +288,8 @@ describe("managers", () => {
         .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm
         .mockRejectedValueOnce(new Error("bun not found")) // bun
         .mockRejectedValueOnce(new Error("nub not found")) // nub
-        .mockRejectedValueOnce(new Error("aube not found")); // aube
+        .mockRejectedValueOnce(new Error("aube not found")) // aube
+        .mockRejectedValueOnce(new Error("ut not found")); // utoo
 
       const result = await getPackageManagersBinPaths({
         projectRoot: MISSING_PROJECT_ROOT
@@ -282,7 +301,8 @@ describe("managers", () => {
         pnpm: "/usr/local/pnpm",
         bun: undefined,
         nub: undefined,
-        aube: undefined
+        aube: undefined,
+        utoo: undefined
       });
     });
 
@@ -326,6 +346,11 @@ describe("managers", () => {
         env: { COREPACK_ENABLE_STRICT: "0" },
         timeout: 5000
       });
+      expect(mockExeca).toHaveBeenCalledWith("which", ["ut"], {
+        cwd: "/tmp",
+        env: { COREPACK_ENABLE_STRICT: "0" },
+        timeout: 5000
+      });
     });
 
     test("should infer yarn berry bin path without executing yarn", async () => {
@@ -337,7 +362,8 @@ describe("managers", () => {
         .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm bin
         .mockResolvedValueOnce({ stdout: "/usr/local/bun" } as any) // bun bin
         .mockResolvedValueOnce({ stdout: "/usr/local/bin/nub" } as any) // nub bin
-        .mockResolvedValueOnce({ stdout: "/usr/local/bin/aube" } as any); // aube bin
+        .mockResolvedValueOnce({ stdout: "/usr/local/bin/aube" } as any) // aube bin
+        .mockResolvedValueOnce({ stdout: "/usr/local/bin/ut" } as any); // utoo bin
 
       const result = await getPackageManagersBinPaths({ projectRoot });
 
@@ -347,12 +373,14 @@ describe("managers", () => {
         pnpm: "/usr/local/pnpm",
         bun: "/usr/local/bun",
         nub: "/usr/local/bin",
-        aube: "/usr/local/bin"
+        aube: "/usr/local/bin",
+        utoo: "/usr/local/bin"
       });
       expect(mockExeca.mock.calls.map(([command]) => command)).toEqual([
         "npm",
         "pnpm",
         "bun",
+        "which",
         "which",
         "which"
       ]);

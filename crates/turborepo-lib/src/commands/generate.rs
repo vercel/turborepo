@@ -76,6 +76,10 @@ fn turbo_gen_command(package_manager: &PackageManager, tag: &str) -> PackageMana
             executable: "aubx",
             args: vec![package],
         },
+        PackageManager::Utoo { .. } => PackageManagerCommand {
+            executable: "utx",
+            args: vec![package],
+        },
     }
 }
 

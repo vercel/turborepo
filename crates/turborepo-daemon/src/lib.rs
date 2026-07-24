@@ -220,13 +220,17 @@ pub mod proto {
                 PackageManager::Pnpm6 => Self::Pnpm6,
                 PackageManager::Pnpm9 => Self::Pnpm9,
                 PackageManager::Bun => Self::Bun,
-                // The wire format does not carry nub's underlying lockfile
-                // manager. Clients must call [`PackageManager::with_resolved_nub_lockfile`]
-                // after deserializing to re-resolve from disk.
+                // The wire format does not carry wrapper managers' underlying
+                // lockfile manager. Clients must call
+                // [`PackageManager::with_resolved_nub_lockfile`] after
+                // deserializing to re-resolve from disk.
                 PackageManager::Nub => Self::Nub {
                     lockfile: Box::new(Self::Npm),
                 },
                 PackageManager::Aube => Self::Aube {
+                    lockfile: Box::new(Self::Npm),
+                },
+                PackageManager::Utoo => Self::Utoo {
                     lockfile: Box::new(Self::Npm),
                 },
             }
@@ -245,6 +249,7 @@ pub mod proto {
                 turborepo_repository::package_manager::PackageManager::Bun => Self::Bun,
                 turborepo_repository::package_manager::PackageManager::Nub { .. } => Self::Nub,
                 turborepo_repository::package_manager::PackageManager::Aube { .. } => Self::Aube,
+                turborepo_repository::package_manager::PackageManager::Utoo { .. } => Self::Utoo,
             }
         }
     }

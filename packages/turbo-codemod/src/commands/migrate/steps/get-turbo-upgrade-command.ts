@@ -47,6 +47,9 @@ function getGlobalUpgradeCommand({
     case "aube": {
       return `aube add turbo@${to} --global`;
     }
+    case "utoo": {
+      return `ut add turbo@${to} --global`;
+    }
   }
 }
 
@@ -131,6 +134,15 @@ function getLocalUpgradeCommand({
         isUsingWorkspaces && "-w"
       ]);
     }
+    case "utoo": {
+      return renderCommand([
+        "ut",
+        "add",
+        `turbo@${to}`,
+        installType === "devDependencies" && "--save-dev",
+        isUsingWorkspaces && "-w"
+      ]);
+    }
   }
 }
 
@@ -157,6 +169,9 @@ function getInstallCommand({
     }
     case "aube": {
       return "aube install";
+    }
+    case "utoo": {
+      return "ut install";
     }
   }
 }

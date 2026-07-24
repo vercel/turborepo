@@ -64,7 +64,8 @@ describe("create-turbo", () => {
           pnpm: "7.22.2",
           bun: "1.0.1",
           nub: "0.1.0",
-          aube: "0.1.0"
+          aube: "0.1.0",
+          utoo: "0.1.0"
         });
 
       const mockCreateProject = jest
@@ -162,7 +163,8 @@ describe("create-turbo", () => {
           pnpm: "7.22.2",
           bun: "1.0.1",
           nub: "0.1.0",
-          aube: "0.1.0"
+          aube: "0.1.0",
+          utoo: "0.1.0"
         });
 
       const mockCreateProject = jest
@@ -248,7 +250,8 @@ describe("create-turbo", () => {
         pnpm: "7.22.2",
         bun: "1.0.1",
         nub: "0.1.0",
-        aube: "0.1.0"
+        aube: "0.1.0",
+        utoo: "0.1.0"
       });
 
     const mockCreateProject = jest
@@ -313,7 +316,8 @@ describe("create-turbo", () => {
         pnpm: "7.22.2",
         bun: "1.0.1",
         nub: "0.1.0",
-        aube: "0.1.0"
+        aube: "0.1.0",
+        utoo: "0.1.0"
       });
 
     const mockCreateProject = jest
@@ -376,7 +380,8 @@ describe("create-turbo", () => {
         pnpm: "7.22.2",
         bun: "1.0.1",
         nub: "0.1.0",
-        aube: "0.1.0"
+        aube: "0.1.0",
+        utoo: "0.1.0"
       });
 
     const mockCreateProject = jest
