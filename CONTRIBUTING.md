@@ -26,7 +26,7 @@ Thank you for your interest in contributing to Turborepo!
 You will need to have these dependencies installed on your machine to work on this repository:
 
 - [Rust](https://www.rust-lang.org/tools/install) (via [rustup](https://rustup.rs/), which will automatically use the [repository toolchain](https://github.com/vercel/turborepo/blob/main/rust-toolchain.toml))
-- [Node.js](https://nodejs.org/en) v22
+- [Node.js](https://nodejs.org/en) v24
 - [pnpm](https://pnpm.io/) v10
 - [protoc](https://grpc.io/docs/protoc-installation/)
 - [capnp](https://capnproto.org)
@@ -43,12 +43,13 @@ You will need to have these dependencies installed on your machine to work on th
 
 ## Structure of the repository
 
-In general, there are two major areas in the repository:
+The repository has several major areas:
 
 - The `crates` directory with the Rust code for the `turbo` binary
 - The `packages` directory with JavaScript packages
 - The `examples` directory with examples of how to use Turborepo with other tools and frameworks
 - The `docs` directory with the documentation for Turborepo
+- The `turborepo-tests` directory with integration and Terminal UI test fixtures
 
 ## Building Turborepo
 
@@ -228,6 +229,13 @@ devturbo run build --ui=tui --skip-infer 2> ~/tmp/logs.txt
 
 > [!IMPORTANT]
 > The `--skip-infer` flag is required so that `turbo` doesn't try to use a locally installed binary of `turbo`. Forgetting to use this flag will cause `devturbo` to defer to the binary installed into the repository rather than the one you're developing.
+
+The Terminal UI also has Ubuntu-focused black-box sanity tests. Build the debug binary and run them with:
+
+```bash
+cargo build --package turbo
+TURBO_BINARY_PATH="$PWD/target/debug/turbo" turbo run test:tui --filter=@turbo/tui-tests
+```
 
 ## Publishing `turbo` to the npm registry
 

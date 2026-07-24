@@ -38,6 +38,10 @@
       // actually need to build before running tests.
       "dependsOn": ["^build"]
     },
+    "test:tui": {
+      "cache": false,
+      "env": ["TURBO_BINARY_PATH"]
+    },
     // The Rust workspace tests run through nextest with per-test process
     // isolation. Some tests read root-level config and integration fixtures
     // outside the Cargo workspace, so declare them explicitly.
