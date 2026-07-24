@@ -1331,12 +1331,12 @@ impl RunBuilder {
             let toolchain_id = toolchain.id();
             let candidate_names: Vec<_> = candidates
                 .iter()
-                .filter_map(|name| {
+                .filter(|name| {
                     pkg_dep_graph
                         .package_toolchain(name)
                         .is_some_and(|candidate_toolchain| candidate_toolchain == &toolchain_id)
-                        .then(|| name.as_str().to_string())
                 })
+                .map(|name| name.as_str().to_string())
                 .collect();
             let prefer_workspace = match filter_mode {
                 FilterMode::AllPackages => true,
@@ -1352,12 +1352,12 @@ impl RunBuilder {
             exclusions.extend(
                 exclusion_candidates
                     .iter()
-                    .filter_map(|name| {
+                    .filter(|name| {
                         pkg_dep_graph
                             .package_toolchain(name)
                             .is_some_and(|candidate_toolchain| candidate_toolchain == &toolchain_id)
-                            .then(|| name.as_str().to_string())
                     })
+                    .map(|name| name.as_str().to_string())
                     .filter(|name| !selected.contains(name))
                     .map(|name| TaskId::new(&name, task.task()).into_owned()),
             );
