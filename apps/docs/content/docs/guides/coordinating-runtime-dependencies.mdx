@@ -13,6 +13,10 @@ related:
 
 Some development tasks need another service to be available before they can start. For example, a frontend may need an API to be accepting requests before its development server starts.
 
+<Callout type="info">
+  This pattern is intended for coordinating services during local development. For CI and production, use the service orchestration and readiness capabilities provided by your CI provider or deployment platform.
+</Callout>
+
 Turborepo can coordinate this workflow by combining:
 
 - [`with`](/docs/reference/configuration#with) to start the service alongside the task that needs it
