@@ -73,7 +73,6 @@ impl<'a> ExecContextFactory<'a> {
         let mut command_factory = CommandFactory::new();
         if let Some(micro_frontends_configs) = visitor.micro_frontends_configs {
             command_factory.add_provider(MicroFrontendProxyProvider::new(
-                visitor.repo_root,
                 visitor.package_graph.as_ref(),
                 engine.task_ids(),
                 micro_frontends_configs,
