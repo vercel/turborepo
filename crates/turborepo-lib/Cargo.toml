@@ -28,7 +28,9 @@ tempfile = { workspace = true }
 test-case = { workspace = true }
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 tracing.workspace = true
-turborepo-repository = { path = "../turborepo-repository", features = ["test-util"] }
+turborepo-repository = { path = "../turborepo-repository", features = [
+  "test-util",
+] }
 turborepo-vercel-api-mock = { workspace = true }
 
 [lints]
