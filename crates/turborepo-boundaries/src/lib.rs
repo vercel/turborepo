@@ -906,10 +906,23 @@ mod tests {
 
     impl MockGraph {
         fn new(packages: Vec<(PackageName, PackageInfo)>) -> Self {
+            let authoritative_directories = packages
+                .iter()
+                .map(|(name, _)| {
+                    (
+                        name.clone(),
+                        turbopath::AnchoredSystemPathBuf::from_raw(format!(
+                            "packages/{}",
+                            name.as_str()
+                        ))
+                        .unwrap(),
+                    )
+                })
+                .collect();
             Self {
                 packages,
                 aggregates: HashSet::new(),
-                authoritative_directories: HashMap::new(),
+                authoritative_directories,
                 missing_payloads: HashSet::new(),
             }
         }
@@ -935,14 +948,14 @@ mod tests {
 
     impl PackageGraphProvider for MockGraph {
         fn package_scopes(&self) -> Box<dyn Iterator<Item = PackageScope<'_>> + '_> {
-            Box::new(self.packages.iter().map(|(name, info)| {
+            Box::new(self.packages.iter().map(|(name, _)| {
                 PackageScope {
                     name: name.clone(),
                     directory: self
                         .authoritative_directories
                         .get(name)
                         .map(|path| path.as_ref())
-                        .unwrap_or_else(|| info.package_path()),
+                        .expect("mock package must have an authoritative directory"),
                     kind: if self.aggregates.contains(name) {
                         PackageGraphNodeKind::Aggregate
                     } else {
@@ -1038,10 +1051,6 @@ mod tests {
                 PackageName::Other("pkg-a".into()),
                 PackageInfo {
                     package_json: Default::default(),
-                    package_json_path: turbopath::AnchoredSystemPathBuf::from_raw(
-                        "packages/pkg-a/package.json",
-                    )
-                    .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
                     ..Default::default()
@@ -1051,10 +1060,6 @@ mod tests {
                 PackageName::Other("pkg-b".into()),
                 PackageInfo {
                     package_json: Default::default(),
-                    package_json_path: turbopath::AnchoredSystemPathBuf::from_raw(
-                        "packages/pkg-b/package.json",
-                    )
-                    .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
                     ..Default::default()
@@ -1097,8 +1102,6 @@ mod tests {
         let graph = MockGraph::new(vec![(
             aggregate_name.clone(),
             PackageInfo {
-                package_json_path: turbopath::AnchoredSystemPathBuf::from_raw("Cargo.toml")
-                    .unwrap(),
                 ..Default::default()
             },
         )])
@@ -1128,10 +1131,6 @@ mod tests {
         let graph = MockGraph::new(vec![(
             package_name.clone(),
             PackageInfo {
-                package_json_path: turbopath::AnchoredSystemPathBuf::from_raw(
-                    "packages/web/package.json",
-                )
-                .unwrap(),
                 ..Default::default()
             },
         )])
@@ -1174,10 +1173,6 @@ mod tests {
         let graph = MockGraph::new(vec![(
             package_name.clone(),
             PackageInfo {
-                package_json_path: turbopath::AnchoredSystemPathBuf::from_raw(
-                    "stale/web/package.json",
-                )
-                .unwrap(),
                 ..Default::default()
             },
         )])

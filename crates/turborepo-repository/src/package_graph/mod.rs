@@ -47,7 +47,7 @@ pub struct PackageGraph {
     root_workspace_index: NodeIndex,
     #[allow(dead_code)]
     node_lookup: HashMap<PackageNode, petgraph::graph::NodeIndex>,
-    packages: HashMap<PackageName, PackageInfo>,
+    package_payloads: HashMap<PackageName, PackageInfo>,
     root_package_json: Option<PackageJson>,
     package_manager: Option<PackageManager>,
     lockfile: Option<Arc<dyn Lockfile>>,
@@ -98,9 +98,9 @@ impl WorkspacePackage {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PackageInfo {
     /// A temporary compatibility descriptor for relationships and tasks.
+    /// Its native `name` may be retained for later payload semantics, but must
+    /// never be used as package identity or to derive paths or provenance.
     pub package_json: PackageJson,
-    /// Path to the package's native manifest, anchored to the repo root.
-    pub package_json_path: AnchoredSystemPathBuf,
     pub unresolved_external_dependencies: Option<BTreeMap<PackageKey, PackageVersion>>, /* name -> version */
     /// The workspace's external dependency closure, sorted by `Package`'s
     /// `(key, version)` ordering. Members are `Arc`-shared across workspaces.
@@ -111,31 +111,6 @@ pub struct PackageInfo {
     /// resolved closures, e.g. Cargo's), consumers compute the hash from
     /// the sorted closure on demand.
     pub external_deps_hash: Option<String>,
-    /// The toolchain that discovered this package. Defaults to JavaScript.
-    pub toolchain: crate::toolchain::ToolchainId,
-}
-
-impl PackageInfo {
-    pub fn package_name(&self) -> Option<String> {
-        self.package_json
-            .name
-            .as_ref()
-            .map(|name| name.as_inner().clone())
-    }
-
-    pub fn package_json_path(&self) -> &AnchoredSystemPath {
-        &self.package_json_path
-    }
-
-    /// Get the path to this package.
-    ///
-    /// note: This is infallible because `package_json_path` is guaranteed to
-    /// have       at least one segment
-    pub fn package_path(&self) -> &AnchoredSystemPath {
-        self.package_json_path
-            .parent()
-            .expect("at least one segment")
-    }
 }
 
 type PackageKey = String;
@@ -237,7 +212,8 @@ impl<'a> PackageTaskContext<'a> {
     #[cfg(test)]
     #[rustfmt::skip]
     pub(crate) fn new_for_test(package: PackageName, repository_root: &'a AbsoluteSystemPath, directory: &'a AnchoredSystemPath, package_info: Option<&'a PackageInfo>, kind: PackageTaskContextKind, toolchain: Option<&'a crate::toolchain::ToolchainId>) -> Self {
-        Self { package, repository_root, directory, package_info, kind, toolchain, requires_compatibility_payload: package_info.is_some() }
+        let requires_compatibility_payload = package != PackageName::Root || toolchain == Some(&crate::toolchain::ToolchainId::JAVASCRIPT);
+        Self { package, repository_root, directory, package_info, kind, toolchain, requires_compatibility_payload }
     }
 
     pub fn package(&self) -> &PackageName {
@@ -469,11 +445,11 @@ impl PackageGraph {
     /// Returns the number of packages in the repo
     /// *including* the root package.
     pub fn len(&self) -> usize {
-        self.packages.len()
+        self.package_task_contexts().count()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.packages.is_empty()
+        false
     }
 
     pub fn package_manager(&self) -> Option<&PackageManager> {
@@ -603,7 +579,7 @@ impl PackageGraph {
                 )
             }
         };
-        let package_info = self.packages.get(&package);
+        let package_info = self.package_payloads.get(&package);
 
         Some(PackageTaskContext {
             package,
@@ -639,45 +615,19 @@ impl PackageGraph {
     /// compatibility projection.
     #[cfg(any(test, feature = "test-util"))]
     pub fn remove_package_info_for_test(&mut self, package: &PackageName) -> Option<PackageInfo> {
-        self.packages.remove(package)
+        self.package_payloads.remove(package)
     }
 
     #[cfg(any(test, feature = "test-util"))]
-    pub fn set_package_json_path_for_test(
+    pub fn set_compatibility_manifest_name_for_test(
         &mut self,
         package: &PackageName,
-        package_json_path: AnchoredSystemPathBuf,
+        compatibility_manifest_name: Option<String>,
     ) -> bool {
-        let Some(package_info) = self.packages.get_mut(package) else {
+        let Some(payload) = self.package_payloads.get_mut(package) else {
             return false;
         };
-        package_info.package_json_path = package_json_path;
-        true
-    }
-
-    #[cfg(any(test, feature = "test-util"))]
-    pub fn set_package_json_name_for_test(
-        &mut self,
-        package: &PackageName,
-        name: Option<String>,
-    ) -> bool {
-        let Some(package_info) = self.packages.get_mut(package) else {
-            return false;
-        };
-        package_info.package_json.name = name.map(turborepo_errors::Spanned::new);
-        true
-    }
-
-    #[cfg(any(test, feature = "test-util"))]
-    pub fn set_compatibility_toolchain_for_test(
-        &mut self,
-        package: &PackageName,
-        toolchain: crate::toolchain::ToolchainId,
-    ) -> bool {
-        let Some(package_info) = self.packages.get_mut(package) else {
-            return false;
-        };
-        package_info.toolchain = toolchain;
+        payload.package_json.name = compatibility_manifest_name.map(turborepo_errors::Spanned::new);
         true
     }
 
@@ -783,7 +733,7 @@ impl PackageGraph {
                 mut hashes,
             })) => {
                 let knowledge = &self.knowledge;
-                for (name, info) in &mut self.packages {
+                for (name, info) in &mut self.package_payloads {
                     // Mirror of the filter in the inline path
                     // (`populate_transitive_dependencies`): a non-JS package
                     // sharing a directory with a JS package must not steal
@@ -817,7 +767,7 @@ impl PackageGraph {
     }
 
     pub fn package_json(&self, package: &PackageName) -> Option<&PackageJson> {
-        let entry = self.packages.get(package)?;
+        let entry = self.package_payloads.get(package)?;
         Some(&entry.package_json)
     }
 
@@ -832,7 +782,7 @@ impl PackageGraph {
     }
 
     pub fn package_info(&self, package: &PackageName) -> Option<&PackageInfo> {
-        self.packages.get(package)
+        self.package_payloads.get(package)
     }
 
     fn package_dir_for_node(&self, node: &PackageNode) -> Option<&AnchoredSystemPath> {
@@ -863,10 +813,6 @@ impl PackageGraph {
             .edges_connecting(*from_index, *to_index)
             .next()
             .map(|edge| *edge.weight())
-    }
-
-    pub fn packages(&self) -> impl Iterator<Item = (&PackageName, &PackageInfo)> {
-        self.packages.iter()
     }
 
     pub fn root_package_json(&self) -> Option<&PackageJson> {
@@ -1111,7 +1057,7 @@ impl PackageGraph {
     ) -> HashSet<&turborepo_lockfiles::Package> {
         packages
             .into_iter()
-            .filter_map(|package| self.packages.get(package))
+            .filter_map(|package| self.package_payloads.get(package))
             .filter_map(|entry| entry.transitive_dependencies.as_ref())
             .flatten()
             .map(|pkg| &**pkg)
@@ -1127,13 +1073,21 @@ impl PackageGraph {
     ) -> Result<Vec<ExternalDependencyChange>, ChangedPackagesError> {
         let current = self.lockfile().ok_or(ChangedPackagesError::NoLockfile)?;
 
+        for context in self.package_task_contexts() {
+            if context.requires_compatibility_payload() && context.package_info().is_none() {
+                return Err(ChangedPackagesError::MissingPackagePayload(
+                    context.package().clone(),
+                ));
+            }
+        }
+
         let external_deps = self
-            .packages()
-            .filter_map(|(name, info)| {
+            .package_task_contexts()
+            .filter_map(|context| {
+                let info = context.package_info()?;
                 let dep = info.unresolved_external_dependencies.as_ref()?;
-                let directory = self.package_dir(name)?;
                 Some((
-                    directory.to_unix().to_string(),
+                    context.directory().to_unix().to_string(),
                     dep.iter()
                         .map(|(name, version)| (name.to_owned(), version.to_owned()))
                         .collect(),
@@ -1154,10 +1108,11 @@ impl PackageGraph {
         let changed = if global_change {
             None
         } else {
-            self.packages
-                .iter()
-                .filter_map(|(name, info)| {
-                    let package_dir = self.package_dir(name)?;
+            self.package_task_contexts()
+                .filter_map(|context| {
+                    let info = context.package_info()?;
+                    let name = context.package().clone();
+                    let package_dir = context.directory();
                     let previous_closure = closures.get(package_dir.to_unix().as_str());
                     // Both closures are sorted by (key, version), so `Vec`
                     // equality is set equality here.
@@ -1213,19 +1168,17 @@ impl PackageGraph {
         };
 
         Ok(changed.unwrap_or_else(|| {
-            self.packages
-                .keys()
-                .filter_map(|name| {
-                    let path = self.package_dir(name)?.to_owned();
+            self.package_task_contexts()
+                .map(|context| {
                     let package = WorkspacePackage {
-                        name: name.clone(),
-                        path,
+                        name: context.package().clone(),
+                        path: context.directory().to_owned(),
                     };
-                    Some(ExternalDependencyChange {
+                    ExternalDependencyChange {
                         package,
                         added: Vec::new(),
                         removed: Vec::new(),
-                    })
+                    }
                 })
                 .collect()
         }))
@@ -1251,10 +1204,17 @@ impl PackageGraph {
         // TODO: provide size hint from Lockfile trait
         let mut map: HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>> = HashMap::new();
         // First find which packages directly depend on each external package
-        for (pkg, info) in self.packages.iter() {
+        for context in self.package_task_contexts() {
+            let Some(info) = context.package_info() else {
+                debug_assert!(
+                    !context.requires_compatibility_payload(),
+                    "builder invariant: required package context has no payload"
+                );
+                continue;
+            };
             for dep in info.transitive_dependencies.iter().flatten() {
                 let rdeps = map.entry((**dep).clone()).or_default();
-                rdeps.insert(PackageNode::Workspace(pkg.clone()));
+                rdeps.insert(PackageNode::Workspace(context.package().clone()));
             }
         }
         // Now trace through all ancestors of the direct dependants
@@ -1288,7 +1248,7 @@ impl PackageGraph {
         &self,
         package: &PackageName,
     ) -> Option<&BTreeMap<PackageKey, PackageVersion>> {
-        let entry = self.packages.get(package)?;
+        let entry = self.package_payloads.get(package)?;
         entry.unresolved_external_dependencies.as_ref()
     }
 }
@@ -1297,6 +1257,8 @@ impl PackageGraph {
 pub enum ChangedPackagesError {
     #[error("No lockfile")]
     NoLockfile,
+    #[error("Missing compatibility payload for package {0}")]
+    MissingPackagePayload(PackageName),
     #[error("Lockfile error")]
     Lockfile(#[from] turborepo_lockfiles::Error),
 }
@@ -1499,7 +1461,7 @@ mod test {
                 .unwrap();
 
             apply_patch(tempdir.path(), lockfile, dep_patch);
-            let dep_graph = build_lockfile_aware_graph(&root, package_manager.clone());
+            let mut dep_graph = build_lockfile_aware_graph(&root, package_manager.clone());
             let mut dep_changed = dep_graph
                 .changed_packages_from_lockfile(previous.as_ref())
                 .unwrap();
@@ -1513,6 +1475,12 @@ mod test {
                 vec![PackageName::from("b")],
                 "{pm_name}: dependency lockfile change should only affect b"
             );
+            let missing = PackageName::from("b");
+            assert!(dep_graph.remove_package_info_for_test(&missing).is_some());
+            assert!(matches!(
+                dep_graph.changed_packages_from_lockfile(previous.as_ref()),
+                Err(ChangedPackagesError::MissingPackagePayload(name)) if name == missing
+            ));
 
             let previous_dep = package_manager
                 .read_lockfile(&root, &root_package_json)
@@ -1614,7 +1582,7 @@ mod test {
             .collect::<HashSet<_>>()
         );
         let b_external = pkg_graph
-            .packages
+            .package_payloads
             .get(&PackageName::from("b"))
             .unwrap()
             .unresolved_external_dependencies
@@ -1745,14 +1713,14 @@ mod test {
         let bar = PackageName::from("bar");
 
         let foo_deps = pkg_graph
-            .packages
+            .package_payloads
             .get(&foo)
             .unwrap()
             .transitive_dependencies
             .as_ref()
             .unwrap();
         let bar_deps = pkg_graph
-            .packages
+            .package_payloads
             .get(&bar)
             .unwrap()
             .transitive_dependencies
@@ -1843,7 +1811,7 @@ mod test {
         // Before the join, closures are absent.
         assert!(
             deferred
-                .packages
+                .package_payloads
                 .values()
                 .all(|info| info.transitive_dependencies.is_none()),
             "deferred graph must not have closures before ensure"
@@ -1853,8 +1821,8 @@ mod test {
         // Idempotent.
         deferred.ensure_transitive_closures();
 
-        for (name, info) in inline.packages.iter() {
-            let deferred_info = deferred.packages.get(name).unwrap();
+        for (name, info) in &inline.package_payloads {
+            let deferred_info = deferred.package_payloads.get(name).unwrap();
             assert_eq!(
                 info.transitive_dependencies, deferred_info.transitive_dependencies,
                 "closures must match for {name}"
@@ -2347,7 +2315,7 @@ version = "0.1.0"
         // was decided by HashMap iteration order, roughly a coin flip per
         // process/build.
         for _ in 0..8 {
-            let pkg_graph = PackageGraph::builder(
+            let mut pkg_graph = PackageGraph::builder(
                 &root,
                 PackageJson::from_value(json!({ "name": "root", "dependencies": { "a": "1" } }))
                     .unwrap(),
@@ -2368,16 +2336,39 @@ version = "0.1.0"
             .unwrap();
 
             assert!(pkg_graph.validate().is_ok());
+            assert!(pkg_graph.package_task_contexts().all(|context| {
+                context.requires_compatibility_payload() && context.package_info().is_some()
+            }));
 
-            // All packages present, tagged with their toolchain.
-            let app = pkg_graph.package_info(&PackageName::from("app")).unwrap();
-            assert_eq!(app.toolchain, crate::toolchain::ToolchainId::RUST);
-            let js_pkg = pkg_graph
-                .package_info(&PackageName::from("js-pkg"))
-                .unwrap();
-            assert_eq!(js_pkg.toolchain, crate::toolchain::ToolchainId::JAVASCRIPT);
+            let app_name = PackageName::from("app");
+            assert!(pkg_graph.set_compatibility_manifest_name_for_test(
+                &app_name,
+                Some("stale-payload-name".into())
+            ));
+            assert_eq!(
+                pkg_graph.package_task_context(&app_name).unwrap().package(),
+                &app_name
+            );
+            assert!(
+                pkg_graph
+                    .package_task_context(&PackageName::from("stale-payload-name"))
+                    .is_none()
+            );
+
+            // All packages are present with knowledge-backed provenance.
+            assert_eq!(
+                pkg_graph.package_toolchain(&PackageName::from("app")),
+                Some(&crate::toolchain::ToolchainId::RUST)
+            );
+            assert_eq!(
+                pkg_graph.package_toolchain(&PackageName::from("js-pkg")),
+                Some(&crate::toolchain::ToolchainId::JAVASCRIPT)
+            );
             let workspace_pkg = pkg_graph.package_info(&PackageName::from("acme")).unwrap();
-            assert_eq!(workspace_pkg.toolchain, crate::toolchain::ToolchainId::RUST);
+            assert_eq!(
+                pkg_graph.package_toolchain(&PackageName::from("acme")),
+                Some(&crate::toolchain::ToolchainId::RUST)
+            );
 
             let knowledge = pkg_graph.repository_knowledge();
             let cargo_app = knowledge.scope("app").expect("Cargo crate is a package");
@@ -2520,10 +2511,8 @@ version = "0.1.0"
         );
         assert_eq!(root_context.kind(), PackageTaskContextKind::Root);
         assert_eq!(root_context.toolchain(), None);
-        assert!(std::ptr::eq(
-            root_context.package_info().unwrap(),
-            pkg_graph.package_info(&PackageName::Root).unwrap()
-        ));
+        assert!(root_context.package_info().is_none());
+        assert!(pkg_graph.package_info(&PackageName::Root).is_none());
         assert_eq!(pkg_graph.package_definition_path(&PackageName::Root), None);
         assert_eq!(pkg_graph.package_toolchain(&PackageName::Root), None);
         assert!(
@@ -2571,23 +2560,22 @@ version = "0.1.0"
         );
 
         // The Cargo crates and synthetic workspace package populate the graph.
-        let app = pkg_graph.package_info(&PackageName::from("app")).unwrap();
-        assert_eq!(app.toolchain, crate::toolchain::ToolchainId::RUST);
-        let lib_a = pkg_graph.package_info(&PackageName::from("lib-a")).unwrap();
-        assert_eq!(lib_a.toolchain, crate::toolchain::ToolchainId::RUST);
-        let workspace_pkg = pkg_graph.package_info(&PackageName::from("acme")).unwrap();
-        assert_eq!(workspace_pkg.toolchain, crate::toolchain::ToolchainId::RUST);
+        assert_eq!(
+            pkg_graph.package_toolchain(&PackageName::from("app")),
+            Some(&crate::toolchain::ToolchainId::RUST)
+        );
+        assert_eq!(
+            pkg_graph.package_toolchain(&PackageName::from("lib-a")),
+            Some(&crate::toolchain::ToolchainId::RUST)
+        );
+        assert_eq!(
+            pkg_graph.package_toolchain(&PackageName::from("acme")),
+            Some(&crate::toolchain::ToolchainId::RUST)
+        );
 
-        // Compatibility identity, path, and provenance may be stale without
-        // changing command resolution. The graph-created context remains
-        // bound to repository knowledge and Cargo receives those facts.
+        // Command resolution receives identity, path, and provenance from the
+        // graph-created context.
         let app_name = PackageName::from("app");
-        {
-            let stale = pkg_graph.packages.get_mut(&app_name).unwrap();
-            stale.package_json.name = Some(Spanned::new("stale-app".to_string()));
-            stale.package_json_path = AnchoredSystemPathBuf::from_raw("stale/Cargo.toml").unwrap();
-            stale.toolchain = crate::toolchain::ToolchainId::JAVASCRIPT;
-        }
         let app_context = pkg_graph.package_task_context(&app_name).unwrap();
         assert_eq!(app_context.package(), &app_name);
         assert_eq!(
@@ -2628,7 +2616,7 @@ version = "0.1.0"
         assert!(
             pkg_graph
                 .remove_package_info_for_test(&PackageName::Root)
-                .is_some()
+                .is_none()
         );
         assert!(pkg_graph.remove_package_info_for_test(&app_name).is_some());
         let contexts = pkg_graph.package_task_contexts().collect::<Vec<_>>();

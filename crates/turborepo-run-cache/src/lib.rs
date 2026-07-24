@@ -1077,15 +1077,11 @@ mod test {
     }
 
     #[tokio::test]
-    async fn task_cache_uses_context_and_ignores_stale_or_missing_payload() {
+    async fn task_cache_uses_context_and_ignores_missing_payload() {
         let tmp = tempdir().unwrap();
         let repo_root =
             AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
         let mut graph = javascript_graph(&repo_root, "packages").await;
-        assert!(graph.set_package_json_path_for_test(
-            &PackageName::from("app"),
-            AnchoredSystemPathBuf::from_raw(format!("stale{MAIN_SEPARATOR}package.json")).unwrap(),
-        ));
         let cache = run_cache(&repo_root);
         let definition = TaskDefinition {
             incremental: Some(vec![IncrementalPartition {

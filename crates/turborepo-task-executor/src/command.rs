@@ -122,13 +122,6 @@ pub enum CommandProviderError {
         repository_root: String,
         directory: String,
     },
-    #[error(
-        "Package payload identity {actual:?} does not match authoritative identity {expected}."
-    )]
-    PackagePayloadIdentityMismatch {
-        expected: PackageName,
-        actual: Option<String>,
-    },
     #[error("Missing microfrontends config path for package {package_name}.")]
     MissingMfeConfigPath { package_name: PackageName },
     #[error("Invalid microfrontends config path {path} for package {package_name}.")]
@@ -397,11 +390,6 @@ impl<'a, M: MfeConfigProvider> MicroFrontendProxyProvider<'a, M> {
     fn validate_package_context(
         context: PackageTaskContext<'_>,
     ) -> Result<PackageTaskContext<'_>, CommandProviderError> {
-        let Some(package_info) = context.package_info() else {
-            return Err(CommandProviderError::MissingPackagePayload {
-                package_name: context.package().clone(),
-            });
-        };
         let package_directory = context.repository_root().resolve(context.directory());
         if !context.repository_root().contains(&package_directory) {
             return Err(CommandProviderError::PackageDirectoryOutsideRepository {
@@ -417,13 +405,9 @@ impl<'a, M: MfeConfigProvider> MicroFrontendProxyProvider<'a, M> {
                 package_name: context.package().clone(),
             });
         }
-        let actual = package_info.package_name();
-        if context.kind() == turborepo_repository::package_graph::PackageTaskContextKind::Package
-            && actual.as_deref() != Some(context.package().as_ref())
-        {
-            return Err(CommandProviderError::PackagePayloadIdentityMismatch {
-                expected: context.package().clone(),
-                actual,
+        if context.package_info().is_none() {
+            return Err(CommandProviderError::MissingPackagePayload {
+                package_name: context.package().clone(),
             });
         }
         Ok(context)
@@ -593,7 +577,7 @@ mod tests {
     };
 
     use tempfile::TempDir;
-    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_errors::Spanned;
     use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
     use turborepo_task_id::TaskName;
@@ -680,18 +664,13 @@ mod tests {
         let package_path = AbsoluteSystemPathBuf::try_from(package_dir)
             .unwrap()
             .join_component("package.json");
-        let mut graph = PackageGraph::builder(repo_root, PackageJson::default())
+        PackageGraph::builder(repo_root, PackageJson::default())
             .with_package_manager(PackageManager::Npm)
             .with_package_jsons(Some(HashMap::from([(package_path, package_json)])))
             .with_allow_no_package_manager(true)
             .build()
             .await
-            .unwrap();
-        assert!(graph.set_package_json_path_for_test(
-            &PackageName::from("web"),
-            AnchoredSystemPathBuf::from_raw("stale/package.json").unwrap()
-        ));
-        graph
+            .unwrap()
     }
 
     async fn root_package_graph(
@@ -995,22 +974,7 @@ mod tests {
     async fn test_microfrontend_proxy_rejects_invalid_contexts_and_config_paths() {
         let (_tempdir, repo_root, package_dir) = create_test_repo();
         let environment = EnvironmentVariableMap::default();
-        let config = MockMfeConfig("configs/microfrontends.json");
-        let mut graph = package_graph(&repo_root, &package_dir, PackageJson::default()).await;
-
-        assert!(
-            graph.set_package_json_name_for_test(
-                &PackageName::from("web"),
-                Some("other".to_owned())
-            )
-        );
-        assert!(matches!(
-            proxy_command_result(&graph, &environment, &config, "web"),
-            Err(CommandProviderError::PackagePayloadIdentityMismatch { .. })
-        ));
-        assert!(
-            graph.set_package_json_name_for_test(&PackageName::from("web"), Some("web".to_owned()))
-        );
+        let graph = package_graph(&repo_root, &package_dir, PackageJson::default()).await;
         for path in [
             "../config.json",
             "C:/config.json",

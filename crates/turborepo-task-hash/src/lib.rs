@@ -1509,13 +1509,8 @@ mod test {
                 .to_string(),
         )
         .unwrap();
-        let mut graph = cargo_graph(&repo_root).await;
-        let with_payload = context_hash(&graph, PackageName::Root, false);
-        assert!(
-            graph
-                .remove_package_info_for_test(&PackageName::Root)
-                .is_some()
-        );
+        let graph = cargo_graph(&repo_root).await;
+        let baseline = context_hash(&graph, PackageName::Root, false);
         assert!(
             !graph
                 .package_task_context(&PackageName::Root)
@@ -1551,7 +1546,7 @@ mod test {
                 &graph.package_task_context(&PackageName::Root).unwrap(),
             )
             .unwrap();
-        assert_eq!(context_hash(&graph, PackageName::Root, false), with_payload);
+        assert_eq!(context_hash(&graph, PackageName::Root, false), baseline);
     }
 
     #[tokio::test(flavor = "multi_thread")]

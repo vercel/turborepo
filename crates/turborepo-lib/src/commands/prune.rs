@@ -1475,7 +1475,7 @@ mod tests {
     };
 
     use serde_json::json;
-    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_errors::Spanned;
     use turborepo_repository::{
         discovery::{DiscoveryResponse, PackageDiscovery},
@@ -1773,7 +1773,7 @@ mod tests {
             .unwrap();
 
         let web = PackageName::from("web");
-        let mut package_graph = PackageGraph::builder(
+        let package_graph = PackageGraph::builder(
             &root,
             PackageJson::from_value(json!({
                 "name": "repo",
@@ -1789,12 +1789,6 @@ mod tests {
         .build()
         .await
         .unwrap();
-        assert!(package_graph.set_package_json_path_for_test(
-            &web,
-            AnchoredSystemPathBuf::from_raw("stale/Cargo.toml").unwrap()
-        ));
-        assert!(package_graph.set_compatibility_toolchain_for_test(&web, ToolchainId::RUST));
-
         let out_directory = root.join_component("out");
         let full_directory = out_directory.join_component("full");
         let json_directory = out_directory.join_component("json");

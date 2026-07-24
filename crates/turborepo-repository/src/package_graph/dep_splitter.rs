@@ -18,17 +18,6 @@ use crate::{knowledge::RepositoryKnowledge, package_manager::pnpm::PnpmCatalogs}
 pub struct WorkspacePathIndex<'a>(HashMap<&'a AnchoredSystemPath, PackageName>);
 
 impl<'a> WorkspacePathIndex<'a> {
-    #[cfg(test)]
-    pub fn new(workspaces: &'a HashMap<PackageName, PackageInfo>) -> Self {
-        Self(
-            workspaces
-                .iter()
-                .filter(|(_, info)| info.toolchain == crate::toolchain::ToolchainId::JAVASCRIPT)
-                .map(|(name, info)| (info.package_path(), name.clone()))
-                .collect(),
-        )
-    }
-
     /// Builds the production index from authoritative package/scope paths and
     /// provenance rather than compatibility `PackageInfo` fields.
     pub(crate) fn from_knowledge(knowledge: &'a RepositoryKnowledge) -> Self {
@@ -307,6 +296,29 @@ mod test {
     use super::*;
     use crate::package_json::PackageJson;
 
+    fn path_index() -> WorkspacePathIndex<'static> {
+        let foo = if cfg!(windows) {
+            r"packages\@scope\foo"
+        } else {
+            "packages/@scope/foo"
+        };
+        let baz = if cfg!(windows) {
+            r"packages\baz"
+        } else {
+            "packages/baz"
+        };
+        WorkspacePathIndex(HashMap::from([
+            (
+                AnchoredSystemPath::new(foo).unwrap(),
+                PackageName::from("@scope/foo"),
+            ),
+            (
+                AnchoredSystemPath::new(baz).unwrap(),
+                PackageName::from("baz"),
+            ),
+        ]))
+    }
+
     #[test_case("1.2.3", None, "1.2.3", Some("@scope/foo"), true ; "handles exact match")]
     #[test_case("1.2.3", None, "^1.0.0", Some("@scope/foo"), true ; "handles semver range satisfied")]
     #[test_case("2.3.4", None, "^1.0.0", None, true ; "handles semver range not satisfied")]
@@ -359,11 +371,6 @@ mod test {
                         version: Some(package_version.to_string()),
                         ..Default::default()
                     },
-                    package_json_path: AnchoredSystemPathBuf::from_raw(
-                        ["packages", "@scope", "foo", "package.json"]
-                            .join(std::path::MAIN_SEPARATOR_STR),
-                    )
-                    .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
                     ..Default::default()
@@ -376,10 +383,6 @@ mod test {
                         version: Some("1.0.0".to_string()),
                         ..Default::default()
                     },
-                    package_json_path: AnchoredSystemPathBuf::from_raw(
-                        ["packages", "bar", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
-                    )
-                    .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
                     ..Default::default()
@@ -392,10 +395,6 @@ mod test {
                         version: Some("1.0.0".to_string()),
                         ..Default::default()
                     },
-                    package_json_path: AnchoredSystemPathBuf::from_raw(
-                        ["packages", "baz", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
-                    )
-                    .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
                     ..Default::default()
@@ -408,10 +407,6 @@ mod test {
                         version: Some("6.0.3".to_string()),
                         ..Default::default()
                     },
-                    package_json_path: AnchoredSystemPathBuf::from_raw(
-                        ["packages", "buffer", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
-                    )
-                    .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
                     ..Default::default()
@@ -420,7 +415,7 @@ mod test {
             map
         };
 
-        let path_index = WorkspacePathIndex::new(&workspaces);
+        let path_index = path_index();
         let splitter = DependencySplitter {
             repo_root: &root,
             workspace_dir: &pkg_dir,
@@ -500,10 +495,6 @@ mod test {
                         version: Some("1.0.0".to_string()),
                         ..Default::default()
                     },
-                    package_json_path: AnchoredSystemPathBuf::from_raw(
-                        ["packages", "pkg-b", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
-                    )
-                    .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
                     ..Default::default()
@@ -512,7 +503,7 @@ mod test {
             map
         };
         let catalogs = make_catalogs(&[("pkg-b", "workspace:*")], &[]);
-        let path_index = WorkspacePathIndex::new(&workspaces);
+        let path_index = path_index();
         let splitter = DependencySplitter {
             repo_root: &root,
             workspace_dir: &pkg_dir,
@@ -545,10 +536,6 @@ mod test {
                         version: Some("1.0.0".to_string()),
                         ..Default::default()
                     },
-                    package_json_path: AnchoredSystemPathBuf::from_raw(
-                        ["packages", "pkg-b", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
-                    )
-                    .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
                     ..Default::default()
@@ -557,7 +544,7 @@ mod test {
             map
         };
         let catalogs = make_catalogs(&[], &[("internal", &[("pkg-b", "workspace:*")])]);
-        let path_index = WorkspacePathIndex::new(&workspaces);
+        let path_index = path_index();
         let splitter = DependencySplitter {
             repo_root: &root,
             workspace_dir: &pkg_dir,
@@ -590,10 +577,6 @@ mod test {
                         version: Some("1.2.3".to_string()),
                         ..Default::default()
                     },
-                    package_json_path: AnchoredSystemPathBuf::from_raw(
-                        ["packages", "pkg-b", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
-                    )
-                    .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
                     ..Default::default()
@@ -603,7 +586,7 @@ mod test {
         };
         // catalog resolves to a semver range that matches the workspace package version
         let catalogs = make_catalogs(&[("pkg-b", "^1.0.0")], &[]);
-        let path_index = WorkspacePathIndex::new(&workspaces);
+        let path_index = path_index();
         let splitter = DependencySplitter {
             repo_root: &root,
             workspace_dir: &pkg_dir,
@@ -630,7 +613,7 @@ mod test {
         let workspaces = HashMap::new();
         // "react" is not a workspace package
         let catalogs = make_catalogs(&[("react", "^18.2.0")], &[]);
-        let path_index = WorkspacePathIndex::new(&workspaces);
+        let path_index = path_index();
         let splitter = DependencySplitter {
             repo_root: &root,
             workspace_dir: &pkg_dir,
@@ -660,10 +643,6 @@ mod test {
                         version: Some("1.0.0".to_string()),
                         ..Default::default()
                     },
-                    package_json_path: AnchoredSystemPathBuf::from_raw(
-                        ["packages", "pkg-b", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
-                    )
-                    .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
                     ..Default::default()
@@ -671,7 +650,7 @@ mod test {
             );
             map
         };
-        let path_index = WorkspacePathIndex::new(&workspaces);
+        let path_index = path_index();
         // No catalogs - catalog: specifier can't be resolved, treated as external
         let splitter = DependencySplitter {
             repo_root: &root,
@@ -702,10 +681,6 @@ mod test {
                         version: Some("1.0.0".to_string()),
                         ..Default::default()
                     },
-                    package_json_path: AnchoredSystemPathBuf::from_raw(
-                        ["packages", "pkg-b", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
-                    )
-                    .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
                     ..Default::default()
@@ -715,7 +690,7 @@ mod test {
         };
         // "catalog:default" should resolve to the default catalog
         let catalogs = make_catalogs(&[("pkg-b", "workspace:*")], &[]);
-        let path_index = WorkspacePathIndex::new(&workspaces);
+        let path_index = path_index();
         let splitter = DependencySplitter {
             repo_root: &root,
             workspace_dir: &pkg_dir,

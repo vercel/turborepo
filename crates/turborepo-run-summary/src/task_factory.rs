@@ -422,13 +422,12 @@ mod tests {
 
     #[tokio::test]
     async fn summary_uses_authoritative_path_and_toolchain_provenance() {
-        let (_tempdir, mut graph) = summary_graph().await;
+        let (_tempdir, graph) = summary_graph().await;
         let app = PackageName::from("app");
-        assert!(graph.set_package_json_path_for_test(
-            &app,
-            AnchoredSystemPathBuf::from_raw("stale/package.json").unwrap(),
-        ));
-        assert!(graph.set_compatibility_toolchain_for_test(&app, ToolchainId::RUST));
+        assert_eq!(
+            graph.package_task_context(&app).unwrap().toolchain(),
+            Some(&ToolchainId::JAVASCRIPT)
+        );
         let task_id = TaskId::new("app", "build").into_owned();
         let engine = TestEngine {
             definitions: HashMap::from([(task_id.clone(), TaskDefinition::default())]),
