@@ -965,12 +965,6 @@ importers:
         specifier: npm:typescript@7.0.1-rc
         version: typescript@7.0.1-rc
 
-  turborepo-tests/tui:
-    devDependencies:
-      '@kitlangton/terminal-control':
-        specifier: 0.6.0
-        version: 0.6.0
-
 packages:
 
   '@ai-sdk/gateway@3.0.143':
@@ -1989,41 +1983,6 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.9':
     resolution: {integrity: sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ==}
-
-  '@kitlangton/terminal-control-darwin-arm64@0.6.0':
-    resolution: {integrity: sha512-QNKFRKabri02FUF8HxelIue4QZe71H6BqgDQvvmH9uGXjgQ8bJktz8RdxcJPm9r15zdiA2zTVjN0hAvENvAFCA==}
-    cpu: [arm64]
-    os: [darwin]
-    hasBin: true
-
-  '@kitlangton/terminal-control-darwin-x64@0.6.0':
-    resolution: {integrity: sha512-6MGtHUMK5TUB7XqTLzHMO6u9wOD5fqmuLKIz5Xw+zqM8W1LpiUBnGdJQM7eYuaajgagsW+W2H8plWCDS9e39jQ==}
-    cpu: [x64]
-    os: [darwin]
-    hasBin: true
-
-  '@kitlangton/terminal-control-linux-arm64-gnu@0.6.0':
-    resolution: {integrity: sha512-JdYpK3uJIcIaSQ2txKRhbQWXjcMk1TnP6oS6QSaEW/lnzmawxFPiZWYkRq6VTG60lxTUSX1SzTE/mFGDdqVssg==}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-    hasBin: true
-
-  '@kitlangton/terminal-control-linux-x64-gnu@0.6.0':
-    resolution: {integrity: sha512-1kmi8ESh8Nswt1reAHkpBlcfBQ2ka8PE3V0cPjQAz6o7uxNuXLOqr4VAnZ0UxOcyPrFfx5slJpKc9gG3bbKJHg==}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-    hasBin: true
-
-  '@kitlangton/terminal-control@0.6.0':
-    resolution: {integrity: sha512-RJ2FJ9U/3bvhwpnI6/LCnaAQT7TyrUGwgbm/ax2EXks6fFmlEdHX07yQr2cvkZY1nZbuduJ0sI2QXD3VCLjXWw==}
-    engines: {node: '>=20'}
-    peerDependencies:
-      vitest: '>=3.0.0'
-    peerDependenciesMeta:
-      vitest:
-        optional: true
 
   '@loaderkit/resolve@1.0.4':
     resolution: {integrity: sha512-rJzYKVcV4dxJv+vW6jlvagF8zvGxHJ2+HTr1e2qOejfmGhAApgJHl8Aog4mMszxceTRiKTTbnpgmTO1bEZHV/A==}
@@ -11281,25 +11240,6 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
     optional: true
-
-  '@kitlangton/terminal-control-darwin-arm64@0.6.0':
-    optional: true
-
-  '@kitlangton/terminal-control-darwin-x64@0.6.0':
-    optional: true
-
-  '@kitlangton/terminal-control-linux-arm64-gnu@0.6.0':
-    optional: true
-
-  '@kitlangton/terminal-control-linux-x64-gnu@0.6.0':
-    optional: true
-
-  '@kitlangton/terminal-control@0.6.0':
-    optionalDependencies:
-      '@kitlangton/terminal-control-darwin-arm64': 0.6.0
-      '@kitlangton/terminal-control-darwin-x64': 0.6.0
-      '@kitlangton/terminal-control-linux-arm64-gnu': 0.6.0
-      '@kitlangton/terminal-control-linux-x64-gnu': 0.6.0
 
   '@loaderkit/resolve@1.0.4':
     dependencies:

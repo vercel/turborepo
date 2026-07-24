@@ -1,9 +1,9 @@
 # libghostty-vt-sys (Turborepo patch)
 
-Vendored copy of [`libghostty-vt-sys`](https://crates.io/crates/libghostty-vt-sys) 0.2.0 with
+Vendored copy of [`libghostty-vt-sys`](https://crates.io/crates/libghostty-vt-sys) 0.2.1 with
 Windows MSVC static-linking and portable CPU-target fixes.
 
-Upstream `0.2.0` emits `static=ghostty-vt`, which MSVC resolves to `ghostty-vt.lib` — the DLL
+Upstream `0.2.1` emits `static=ghostty-vt`, which MSVC resolves to `ghostty-vt.lib` — the DLL
 import library rather than the static archive. That leaves `turbo.exe` depending on
 `ghostty-vt.dll` at runtime.
 

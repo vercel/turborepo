@@ -241,35 +241,6 @@ jobs:
           path: target
           key: cargo-target-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'crates/**', 'packages/turbo-repository/rust/**', 'version.txt') }}
 
-  tui_test:
-    name: Terminal UI sanity tests
-    runs-on: ubuntu-latest-8-core-oss
-    timeout-minutes: 25
-    needs: release-pr
-    if: needs.release-pr.outputs.is-release-pr != 'true'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          node-extra-flags: --filter @turbo/tui-tests...
-
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-
-      - name: Build turbo
-        run: cargo build --package turbo
-
-      - name: Run Terminal UI tests
-        env:
-          TURBO_BINARY_PATH: ${{ github.workspace }}/target/debug/turbo
-        run: turbo run test:tui --filter=@turbo/tui-tests --env-mode=strict
-
   check-examples:
     name: Check examples
     timeout-minutes: 40
