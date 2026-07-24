@@ -154,6 +154,11 @@ compatibility data. Native manifests and metadata do not enter repository
 knowledge. Native definition paths must remain within the repository, including
 after resolving existing symlinks.
 
+Task hashing uses a graph-created `PackageTaskContext` that
+binds identity, repository root, directory, kind, and an optional compatibility
+payload. Pure Cargo retains the root Turbo namespace; hashers reject contexts
+from another repository and require the payload only for legacy task data.
+
 Turbo configuration lookup receives knowledge-backed package and aggregate
 scope directories directly. Engine repository-wide task-definition enumeration
 and non-root missing-scope validation use the same views. The root Turbo task
