@@ -223,6 +223,7 @@ pub struct PackageTaskContext<'a> {
     directory: &'a AnchoredSystemPath,
     package_info: Option<&'a PackageInfo>,
     kind: PackageTaskContextKind,
+    toolchain: Option<&'a crate::toolchain::ToolchainId>,
     requires_compatibility_payload: bool,
 }
 
@@ -234,6 +235,12 @@ pub enum PackageTaskContextKind {
 }
 
 impl<'a> PackageTaskContext<'a> {
+    #[cfg(test)]
+    #[rustfmt::skip]
+    pub(crate) fn new_for_test(package: PackageName, repository_root: &'a AbsoluteSystemPath, directory: &'a AnchoredSystemPath, package_info: Option<&'a PackageInfo>, kind: PackageTaskContextKind, toolchain: Option<&'a crate::toolchain::ToolchainId>) -> Self {
+        Self { package, repository_root, directory, package_info, kind, toolchain, requires_compatibility_payload: package_info.is_some() }
+    }
+
     pub fn package(&self) -> &PackageName {
         &self.package
     }
@@ -252,6 +259,10 @@ impl<'a> PackageTaskContext<'a> {
 
     pub fn kind(&self) -> PackageTaskContextKind {
         self.kind
+    }
+
+    pub fn toolchain(&self) -> Option<&'a crate::toolchain::ToolchainId> {
+        self.toolchain
     }
 
     pub fn requires_compatibility_payload(&self) -> bool {
@@ -551,11 +562,14 @@ impl PackageGraph {
     /// required to construct a context. The root identity denotes Turbo's root
     /// task namespace and is always anchored at the repository directory.
     pub fn package_task_context(&self, package: &PackageName) -> Option<PackageTaskContext<'_>> {
-        let (package, directory, kind, requires_compatibility_payload) = match package {
+        let (package, directory, kind, toolchain, requires_compatibility_payload) = match package {
             PackageName::Root => (
                 PackageName::Root,
                 self.knowledge.repository_directory(),
                 PackageTaskContextKind::Root,
+                self.knowledge
+                    .root_javascript_scope()
+                    .map(|scope| scope.toolchain()),
                 self.knowledge.root_javascript_scope().is_some(),
             ),
             PackageName::Other(name) => {
@@ -568,6 +582,7 @@ impl PackageGraph {
                     PackageName::Other(scope.identity().to_owned()),
                     scope.directory(),
                     kind,
+                    Some(scope.toolchain()),
                     true,
                 )
             }
@@ -580,6 +595,7 @@ impl PackageGraph {
             directory,
             package_info,
             kind,
+            toolchain,
             requires_compatibility_payload,
         })
     }
@@ -2442,6 +2458,7 @@ version = "0.1.0"
             pkg_graph.repository_knowledge().repository_directory()
         );
         assert_eq!(root_context.kind(), PackageTaskContextKind::Root);
+        assert_eq!(root_context.toolchain(), None);
         assert!(std::ptr::eq(
             root_context.package_info().unwrap(),
             pkg_graph.package_info(&PackageName::Root).unwrap()
@@ -2499,6 +2516,43 @@ version = "0.1.0"
         assert_eq!(lib_a.toolchain, crate::toolchain::ToolchainId::RUST);
         let workspace_pkg = pkg_graph.package_info(&PackageName::from("acme")).unwrap();
         assert_eq!(workspace_pkg.toolchain, crate::toolchain::ToolchainId::RUST);
+
+        // Compatibility identity, path, and provenance may be stale without
+        // changing command resolution. The graph-created context remains
+        // bound to repository knowledge and Cargo receives those facts.
+        let app_name = PackageName::from("app");
+        {
+            let stale = pkg_graph.packages.get_mut(&app_name).unwrap();
+            stale.package_json.name = Some(Spanned::new("stale-app".to_string()));
+            stale.package_json_path = AnchoredSystemPathBuf::from_raw("stale/Cargo.toml").unwrap();
+            stale.toolchain = crate::toolchain::ToolchainId::JAVASCRIPT;
+        }
+        let app_context = pkg_graph.package_task_context(&app_name).unwrap();
+        assert_eq!(app_context.package(), &app_name);
+        assert_eq!(
+            app_context.directory(),
+            AnchoredSystemPath::new("rust/app").unwrap()
+        );
+        assert_eq!(
+            app_context.toolchain(),
+            Some(&crate::toolchain::ToolchainId::RUST)
+        );
+        let command = pkg_graph
+            .toolchains()
+            .get(app_context.toolchain().unwrap())
+            .unwrap()
+            .task_command(&app_context, "build", None, None)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            command.args,
+            vec![
+                std::ffi::OsString::from("build"),
+                std::ffi::OsString::from("--package=app"),
+                std::ffi::OsString::from("--locked"),
+            ]
+        );
+        assert_eq!(command.cwd, root);
 
         // Crate path dependencies still become graph edges without a package
         // manager: the `workspace:*` protocol resolves internally regardless.

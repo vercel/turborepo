@@ -200,7 +200,7 @@ impl Toolchain for StubIOToolchain {
 
     fn defines_task(
         &self,
-        _package: &turborepo_repository::package_graph::PackageInfo,
+        _package: &turborepo_repository::package_graph::PackageTaskContext<'_>,
         task: &str,
     ) -> bool {
         matches!(task, "build" | "test")
@@ -208,7 +208,7 @@ impl Toolchain for StubIOToolchain {
 
     fn derives_task_io(
         &self,
-        package: &turborepo_repository::package_graph::PackageInfo,
+        package: &turborepo_repository::package_graph::PackageTaskContext<'_>,
         task: &str,
     ) -> bool {
         self.defines_task(package, task)
@@ -220,14 +220,14 @@ impl Toolchain for StubIOToolchain {
 
     fn derived_task_io(
         &self,
-        package: &turborepo_repository::package_graph::PackageInfo,
+        package: &turborepo_repository::package_graph::PackageTaskContext<'_>,
         task: &str,
         _path_to_root: &str,
-        _dependencies: &[&turborepo_repository::package_graph::PackageInfo],
+        _dependencies: &[turborepo_repository::package_graph::PackageTaskContext<'_>],
         _wants_automatic_inputs: bool,
         context: &TaskIOContext<'_>,
     ) -> Option<DerivedTaskIO> {
-        let package_name = package.package_name()?;
+        let package_name = package.package().as_ref();
         self.seen.lock().unwrap().insert(
             format!("{package_name}#{task}"),
             SeenTaskIO {

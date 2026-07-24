@@ -85,13 +85,13 @@ impl Package {
         let registered_tasks: HashSet<_> = self
             .run
             .pkg_dep_graph()
-            .package_info(&self.name)
-            .and_then(|package| {
+            .package_task_context(&self.name)
+            .and_then(|context| {
                 self.run
                     .pkg_dep_graph()
                     .toolchains()
-                    .get(&package.toolchain)
-                    .map(|toolchain| toolchain.registered_tasks(package))
+                    .get(context.toolchain()?)
+                    .map(|toolchain| toolchain.registered_tasks(&context))
             })
             .unwrap_or_default()
             .into_iter()

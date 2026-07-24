@@ -526,12 +526,17 @@ impl Run {
                     .or_insert_with(Vec::new)
                     .push(name.to_string())
             }
-            if let Some(toolchain) = self.pkg_dep_graph.toolchains().get(&info.toolchain) {
-                for task_name in toolchain.registered_tasks(info) {
-                    tasks
-                        .entry(task_name)
-                        .or_insert_with(Vec::new)
-                        .push(name.to_string());
+            if let Some(context) = self.pkg_dep_graph.package_task_context(name) {
+                if let Some(toolchain) = context
+                    .toolchain()
+                    .and_then(|id| self.pkg_dep_graph.toolchains().get(id))
+                {
+                    for task_name in toolchain.registered_tasks(&context) {
+                        tasks
+                            .entry(task_name)
+                            .or_insert_with(Vec::new)
+                            .push(name.to_string());
+                    }
                 }
             }
         }

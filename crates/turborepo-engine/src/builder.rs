@@ -210,12 +210,13 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
             // Collect tasks from each workspace and its extends chain
             for workspace in self.workspaces.iter() {
-                let implicit_tasks = if let Some(package) =
-                    self.package_graph.package_info(workspace)
-                    && let Some(toolchain) = self.package_graph.toolchains().get(&package.toolchain)
+                let implicit_tasks = if let Some(context) =
+                    self.package_graph.package_task_context(workspace)
+                    && let Some(toolchain_id) = context.toolchain()
+                    && let Some(toolchain) = self.package_graph.toolchains().get(toolchain_id)
                 {
                     toolchain
-                        .registered_tasks(package)
+                        .registered_tasks(&context)
                         .into_iter()
                         .map(TaskName::from)
                         .collect()

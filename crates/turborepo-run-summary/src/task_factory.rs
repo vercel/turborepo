@@ -111,10 +111,10 @@ where
             Some(turborepo_types::TaskCommandOverride::OptOut) => "<OPT OUT>".to_string(),
             None => self
                 .package_graph
-                .toolchains()
-                .get(&workspace_info.toolchain)
-                .and_then(|toolchain| {
-                    toolchain.task_display_command(workspace_info, task_id.task())
+                .package_task_context(&task_id.package().into())
+                .and_then(|context| {
+                    let toolchain = self.package_graph.toolchains().get(context.toolchain()?)?;
+                    toolchain.task_display_command(&context, task_id.task())
                 })
                 .unwrap_or_else(|| "<NONEXISTENT>".to_string()),
         };

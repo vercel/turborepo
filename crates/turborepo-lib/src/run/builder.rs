@@ -1284,14 +1284,19 @@ impl RunBuilder {
                 continue;
             }
 
-            let has_command = pkg_dep_graph.packages().any(|(_, package)| {
-                pkg_dep_graph
-                    .toolchains()
-                    .get(&package.toolchain)
-                    .is_some_and(|toolchain| toolchain.defines_task(package, task.task()))
-            }) || engine.task_ids().any(|task_id| {
-                task_id.task() == task.task() && task_has_command(engine, pkg_dep_graph, task_id)
-            });
+            let has_command = pkg_dep_graph
+                .packages()
+                .filter_map(|(name, _)| pkg_dep_graph.package_task_context(name))
+                .any(|context| {
+                    context
+                        .toolchain()
+                        .and_then(|id| pkg_dep_graph.toolchains().get(id))
+                        .is_some_and(|toolchain| toolchain.defines_task(&context, task.task()))
+                })
+                || engine.task_ids().any(|task_id| {
+                    task_id.task() == task.task()
+                        && task_has_command(engine, pkg_dep_graph, task_id)
+                });
 
             for package in candidate_packages {
                 let task_id = TaskId::new(package.as_ref(), task.task()).into_owned();

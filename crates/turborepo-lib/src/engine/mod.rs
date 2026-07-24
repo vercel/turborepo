@@ -80,7 +80,8 @@ pub(crate) fn task_has_command(
         return true;
     }
 
-    let Some(info) = package_graph.package_info(&PackageName::from(task.package())) else {
+    let Some(context) = package_graph.package_task_context(&PackageName::from(task.package()))
+    else {
         return false;
     };
     match engine
@@ -89,10 +90,10 @@ pub(crate) fn task_has_command(
     {
         Some(turborepo_types::TaskCommandOverride::Argv(_)) => true,
         Some(turborepo_types::TaskCommandOverride::OptOut) => false,
-        None => package_graph
-            .toolchains()
-            .get(&info.toolchain)
-            .is_some_and(|toolchain| toolchain.defines_task(info, task.task())),
+        None => context
+            .toolchain()
+            .and_then(|id| package_graph.toolchains().get(id))
+            .is_some_and(|toolchain| toolchain.defines_task(&context, task.task())),
     }
 }
 
