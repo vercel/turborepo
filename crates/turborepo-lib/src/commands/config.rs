@@ -1,10 +1,13 @@
 use camino::Utf8Path;
 use serde::Serialize;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_repository::{package_graph::PackageGraph, package_json::PackageJson};
+use turborepo_repository::{cargo::CargoToolchain, package_graph::PackageGraph};
 use turborepo_types::{EnvMode, UIMode};
 
-use crate::{cli, commands::CommandBase, Args};
+use crate::{
+    cli, config::resolve_configuration_from_args, run::builder::load_root_package_json,
+    turbo_json::RawTurboJson, Args,
+};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,12 +35,20 @@ struct ConfigOutput<'a> {
 }
 
 pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli::Error> {
-    let config = CommandBase::load_config(&repo_root, &args)?;
-    let root_package_json = PackageJson::load(&repo_root.join_component("package.json"))?;
+    let config = resolve_configuration_from_args(&repo_root, &args)?;
+    let root_turbo_json_path = config.root_turbo_json_path(&repo_root)?;
+    let future_flags = RawTurboJson::read(&repo_root, &root_turbo_json_path, true)?
+        .and_then(|raw| raw.future_flags.map(|flags| flags.into_inner()))
+        .unwrap_or_default();
+    let cargo_enabled = future_flags.experimental_cargo_workspaces;
+    let root_package_json = load_root_package_json(&repo_root, cargo_enabled)?;
 
-    let package_graph = PackageGraph::builder(&repo_root, root_package_json)
-        .build()
-        .await?;
+    let mut builder = PackageGraph::builder_optional(&repo_root, root_package_json)
+        .with_allow_no_package_manager(config.allow_no_package_manager());
+    if cargo_enabled {
+        builder = builder.with_toolchain(CargoToolchain::new(repo_root.clone()));
+    }
+    let package_graph = builder.build().await?;
 
     let package_manager = package_graph.package_manager().map(|pm| pm.name());
 

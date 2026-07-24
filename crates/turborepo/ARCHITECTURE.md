@@ -163,6 +163,16 @@ as compatibility payloads. Pure
 Cargo retains the root Turbo namespace; consumers reject contexts from another
 repository, and required missing payloads fail closed.
 
+Repository-facing commands use the same optional-root construction policy as
+`turbo run`: a missing root `package.json` is accepted only when Cargo support
+is enabled and a root `Cargo.toml` exists, while malformed manifests always
+fail. Devtools creates one package-graph generation per initial load or refresh
+and derives both its package and task protocol graphs from that generation; the
+server never performs independent package discovery. Each refresh also
+re-resolves configuration, default config-file selection, and future flags.
+Its watcher gives explicit custom config and repository-local config paths
+physical coverage even when normal ignored-directory filtering would omit them.
+
 Turbo configuration lookup receives knowledge-backed package and aggregate
 scope directories directly. Engine repository-wide task-definition enumeration
 and non-root missing-scope validation use the same views. The root Turbo task
