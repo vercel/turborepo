@@ -831,36 +831,16 @@ impl crate::Lockfile for PnpmLockfile {
             .and_then(|s| s.inject_workspace_packages)
             .unwrap_or(false);
 
-        for (importer_key, importer) in &importers {
-            if importer_key != "." {
-                for dependency in importer.dependencies.all_dependency_names() {
-                    let Some((_, version)) = importer.dependencies.find_resolution(dependency)
-                    else {
-                        continue;
-                    };
-
-                    let key = self.format_key(dependency, version);
-                    self.retain_package(&key, &mut pruned_packages, &mut pruned_snapshots)?;
-                }
-            }
-
-            // Dependencies resolved via the `runtime:` protocol (pnpm
-            // `devEngines.runtime` with `onFail: "download"`, e.g.
-            // `node@runtime:22.0.0`) are synthesized by pnpm and are not part
-            // of the package graph, so they never appear in the resolved
-            // closure passed to `subgraph`. The importer reference to them is
-            // preserved, so their `packages:`/`snapshots:` entries must be
-            // retained too or the pruned lockfile is left inconsistent and a
-            // frozen install fails. This applies to the root importer as well,
-            // whose regular deps are otherwise sourced from the closure.
+        // Importers are preserved verbatim, so their full dependency closures must be
+        // retained to keep the pruned lockfile valid for frozen installs.
+        for importer in importers.values() {
             for dependency in importer.dependencies.all_dependency_names() {
                 let Some((_, version)) = importer.dependencies.find_resolution(dependency) else {
                     continue;
                 };
-                if version.starts_with("runtime:") {
-                    let key = self.format_key(dependency, version);
-                    self.retain_package(&key, &mut pruned_packages, &mut pruned_snapshots)?;
-                }
+
+                let key = self.format_key(dependency, version);
+                self.retain_package(&key, &mut pruned_packages, &mut pruned_snapshots)?;
             }
 
             let injected_deps: Vec<_> = importer
@@ -1811,8 +1791,9 @@ snapshots:
         assert!(snapshots.contains_key("is-number@6.0.0"));
         assert!(snapshots.contains_key("lodash@4.17.21"));
 
-        // prettier should NOT be in the pruned lockfile (it's root-only)
-        assert!(!packages.contains_key("prettier@3.5.3"));
+        // Root importer dependencies must remain installable with a frozen lockfile.
+        assert!(packages.contains_key("prettier@3.5.3"));
+        assert!(snapshots.contains_key("prettier@3.5.3"));
     }
 
     #[test]
@@ -2931,7 +2912,7 @@ snapshots:
     }
 
     #[test]
-    fn test_subgraph_backfills_missing_workspace_importers() {
+    fn test_subgraph_backfills_importers_and_retains_root_dependencies() {
         // Workspace packages with no dependencies may be absent from the
         // lockfile's importers section. The pruned lockfile must still include
         // them so that pnpm --frozen-lockfile doesn't consider the lockfile
@@ -2978,7 +2959,8 @@ snapshots:
         );
 
         let workspace_packages = vec!["packages/config".to_string()];
-        let resolved_packages = vec!["is-number@6.0.0".to_string(), "is-odd@3.0.1".to_string()];
+        // Root devDependencies are not part of the selected workspace's closure.
+        let resolved_packages = vec![];
         let pruned = lockfile
             .subgraph(&workspace_packages, &resolved_packages)
             .unwrap();
@@ -3003,6 +2985,25 @@ snapshots:
 
         // Root importer should still be present.
         assert!(pruned_lockfile.importers.contains_key("."));
+
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should retain root dependency packages");
+        let snapshots = pruned_lockfile
+            .snapshots
+            .as_ref()
+            .expect("should retain root dependency snapshots");
+        for dependency in ["is-odd@3.0.1", "is-number@6.0.0"] {
+            assert!(
+                packages.contains_key(dependency),
+                "should retain {dependency} package"
+            );
+            assert!(
+                snapshots.contains_key(dependency),
+                "should retain {dependency} snapshot"
+            );
+        }
     }
 
     // A lockfile using pnpm's `runtime:` protocol (devEngines.runtime with
