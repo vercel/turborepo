@@ -70,7 +70,8 @@ pub struct App<W> {
     done: bool,
     preferences: PreferenceLoader,
     scrollback_len: u64,
-    scroll_momentum: ScrollMomentum,
+    log_scroll_momentum: ScrollMomentum,
+    task_list_scroll_momentum: ScrollMomentum,
     log_events: Vec<turborepo_log::LogEvent>,
     showing_log_panel: bool,
     /// While set, the pane footer shows "Copied to clipboard". Cleared once
@@ -147,7 +148,8 @@ impl<W> App<W> {
             is_task_selection_pinned: preferences.active_task().is_some(),
             preferences,
             scrollback_len,
-            scroll_momentum: ScrollMomentum::new(),
+            log_scroll_momentum: ScrollMomentum::new(),
+            task_list_scroll_momentum: ScrollMomentum::new(),
             log_events: Vec::new(),
             showing_log_panel: false,
             clipboard_notice_expiry: None,
@@ -314,7 +316,7 @@ impl<W> App<W> {
         } else {
             self.selected_task_index = (self.selected_task_index + 1) % num_rows;
             self.task_list_scroll.select(Some(self.selected_task_index));
-            self.task_list_scroll_detached = false;
+            self.reattach_task_list_scroll();
         }
 
         self.cancel_selection_drag_if_task_changed();
@@ -337,7 +339,7 @@ impl<W> App<W> {
                 .checked_sub(1)
                 .unwrap_or(num_rows - 1);
             self.task_list_scroll.select(Some(self.selected_task_index));
-            self.task_list_scroll_detached = false;
+            self.reattach_task_list_scroll();
         }
 
         self.cancel_selection_drag_if_task_changed();
@@ -346,6 +348,7 @@ impl<W> App<W> {
     }
 
     fn scroll_task_list(&mut self, direction: Direction) -> Result<(), Error> {
+        let lines = self.task_list_scroll_momentum.on_scroll_event(direction);
         let visible_rows = usize::from(self.size.task_list_visible_task_rows());
         let max_offset = self
             .tasks_by_status
@@ -355,13 +358,18 @@ impl<W> App<W> {
             Direction::Down => self
                 .task_list_scroll
                 .offset()
-                .saturating_add(1)
+                .saturating_add(lines)
                 .min(max_offset),
-            Direction::Up => self.task_list_scroll.offset().saturating_sub(1),
+            Direction::Up => self.task_list_scroll.offset().saturating_sub(lines),
         };
         *self.task_list_scroll.offset_mut() = offset;
         self.task_list_scroll_detached = true;
         Ok(())
+    }
+
+    fn reattach_task_list_scroll(&mut self) {
+        self.task_list_scroll_detached = false;
+        self.task_list_scroll_momentum.reset();
     }
 
     #[tracing::instrument(skip_all)]
@@ -371,9 +379,9 @@ impl<W> App<W> {
         use_momentum: bool,
     ) -> Result<(), Error> {
         let lines = if use_momentum {
-            self.scroll_momentum.on_scroll_event(direction)
+            self.log_scroll_momentum.on_scroll_event(direction)
         } else {
-            self.scroll_momentum.reset();
+            self.log_scroll_momentum.reset();
             1
         };
 
@@ -1022,7 +1030,7 @@ impl<W> App<W> {
         }
         self.selected_task_index = index;
         self.task_list_scroll.select(Some(index));
-        self.task_list_scroll_detached = false;
+        self.reattach_task_list_scroll();
         self.is_task_selection_pinned = true;
         self.persist_active_task().ok();
     }
@@ -1071,7 +1079,7 @@ impl<W> App<W> {
         };
         self.selected_task_index = new_index_to_highlight;
         self.task_list_scroll.select(Some(new_index_to_highlight));
-        self.task_list_scroll_detached = false;
+        self.reattach_task_list_scroll();
         self.cancel_selection_drag_if_task_changed();
 
         Ok(())
@@ -1081,7 +1089,7 @@ impl<W> App<W> {
     pub fn reset_scroll(&mut self) {
         self.is_task_selection_pinned = false;
         self.task_list_scroll.select(Some(0));
-        self.task_list_scroll_detached = false;
+        self.reattach_task_list_scroll();
         self.selected_task_index = 0;
         self.cancel_selection_drag_if_task_changed();
     }
@@ -1803,32 +1811,32 @@ fn update(
         }
         Event::ScrollUp => {
             app.is_task_selection_pinned = true;
-            app.scroll_momentum.reset();
+            app.log_scroll_momentum.reset();
             app.scroll_terminal_output(Direction::Up, false)?
         }
         Event::ScrollDown => {
             app.is_task_selection_pinned = true;
-            app.scroll_momentum.reset();
+            app.log_scroll_momentum.reset();
             app.scroll_terminal_output(Direction::Down, false)?;
         }
         Event::PageUp => {
             app.is_task_selection_pinned = true;
-            app.scroll_momentum.reset();
+            app.log_scroll_momentum.reset();
             app.scroll_terminal_output_by_page(Direction::Up)?;
         }
         Event::PageDown => {
             app.is_task_selection_pinned = true;
-            app.scroll_momentum.reset();
+            app.log_scroll_momentum.reset();
             app.scroll_terminal_output_by_page(Direction::Down)?;
         }
         Event::JumpToLogsTop => {
             app.is_task_selection_pinned = true;
-            app.scroll_momentum.reset();
+            app.log_scroll_momentum.reset();
             app.jump_to_logs_top()?;
         }
         Event::JumpToLogsBottom => {
             app.is_task_selection_pinned = true;
-            app.scroll_momentum.reset();
+            app.log_scroll_momentum.reset();
             app.jump_to_logs_bottom()?;
         }
         Event::ClearLogs => {
@@ -3501,19 +3509,21 @@ mod test {
         }
         assert_eq!(app.active_task()?, "task-0");
         assert_eq!(app.task_list_scroll.selected(), Some(0));
-        assert_eq!(app.task_list_scroll.offset(), 7);
+        let scrolled_offset = app.task_list_scroll.offset();
+        assert!((1..=7).contains(&scrolled_offset));
         assert!(!app.is_task_selection_pinned);
         assert_eq!(app.preferences.active_task(), None);
 
+        std::thread::sleep(Duration::from_millis(60));
         app.handle_mouse(scroll(MouseEventKind::ScrollUp))?;
         assert_eq!(app.active_task()?, "task-0");
-        assert_eq!(app.task_list_scroll.offset(), 6);
+        assert_eq!(app.task_list_scroll.offset(), scrolled_offset - 1);
 
         let mut pane_scroll = scroll(MouseEventKind::ScrollDown);
         pane_scroll.column = app.size.task_list_width();
         app.handle_mouse(pane_scroll)?;
         assert_eq!(app.active_task()?, "task-0");
-        assert_eq!(app.task_list_scroll.offset(), 6);
+        assert_eq!(app.task_list_scroll.offset(), scrolled_offset - 1);
 
         app.next();
         assert_eq!(app.active_task()?, "task-1");
