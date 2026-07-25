@@ -112,7 +112,7 @@ turborepo-shim = { path = "crates/turborepo-shim" }
 turborepo-vercel-api = { path = "crates/turborepo-vercel-api" }
 turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 turborepo-ghostty = { path = "crates/turborepo-ghostty" }
-libghostty-vt = "0.2.0"
+libghostty-vt = "0.2.1"
 
 reqwest = { version = "0.12.28", default-features = false }
 rustls-native-certs = "0.8.3"
@@ -215,5 +215,5 @@ schemars = "0.8.16"
 ts-rs = { version = "11.1.0", features = ["serde-compat"] }
 
 [patch.crates-io]
-# Upstream 0.2.0 links ghostty-vt.lib (MSVC DLL import lib) instead of ghostty-vt-static.lib.
+# Upstream 0.2.1 links ghostty-vt.lib (MSVC DLL import lib) instead of ghostty-vt-static.lib.
 libghostty-vt-sys = { path = "crates/libghostty-vt-sys" }
