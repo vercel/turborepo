@@ -754,11 +754,13 @@ fn test_fsevent_watches_multiple_paths() {
     let (tx, rx) = std::sync::mpsc::channel();
     let mut watcher = FsEventWatcher::new(tx, Default::default()).unwrap();
     watcher.watch(&first, RecursiveMode::Recursive).unwrap();
-    watcher.watch(&second, RecursiveMode::Recursive).unwrap();
 
     let first_file = first.join("first.txt");
     let second_file = second.join("second.txt");
+    // Create an event immediately before adding a second path. Restarting the
+    // stream must replay this event from the previous watermark.
     std::fs::write(&first_file, b"first").unwrap();
+    watcher.watch(&second, RecursiveMode::Recursive).unwrap();
     std::fs::write(&second_file, b"second").unwrap();
 
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -773,6 +775,22 @@ fn test_fsevent_watches_multiple_paths() {
 
     assert!(saw_first, "did not receive an event for {first_file:?}");
     assert!(saw_second, "did not receive an event for {second_file:?}");
+
+    watcher.unwatch(&first).unwrap();
+    assert_eq!(unsafe { cf::CFArrayGetCount(watcher.paths) }, 1);
+    while rx.try_recv().is_ok() {}
+
+    let remaining_file = second.join("remaining.txt");
+    std::fs::write(&remaining_file, b"remaining").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
+        if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(100))
+            && event.paths.contains(&remaining_file)
+        {
+            return;
+        }
+    }
+    panic!("remaining path stopped emitting events after unwatching the first path");
 }
 
 /// A temporary RAM disk volume for testing FSEvents on non-root filesystems.
