@@ -362,7 +362,6 @@ fn streams_logs_and_restores_the_terminal_on_shutdown() -> Result<()> {
 }
 
 #[test]
-#[ignore = "known bug: mouse-wheel input over the sidebar does not scroll the task list"]
 fn scrolls_the_task_list_with_the_mouse_wheel_over_the_sidebar() -> Result<()> {
     let mut context = launch_tui_with(
         "list",
@@ -382,13 +381,13 @@ fn scrolls_the_task_list_with_the_mouse_wheel_over_the_sidebar() -> Result<()> {
     let before_text = before.frame.text();
     let before_tasks = visible_sidebar_tasks(&before_text);
 
-    context
-        .session
-        .send(b"\x1b[<65;5;5M\x1b[<65;5;5M\x1b[<65;5;5M\x1b[<65;5;5M\x1b[<65;5;5M")?;
-    thread::sleep(Duration::from_millis(500));
-
-    let after = capture(&mut context.session)?;
-    assert_ne!(visible_sidebar_tasks(&after.frame.text()), before_tasks);
+    context.session.send(&b"\x1b[<65;5;5M".repeat(20))?;
+    wait_for_screen(
+        &mut context.session,
+        "mouse-wheel input did not scroll the task list",
+        Duration::from_secs(2),
+        |text, _| visible_sidebar_tasks(text) != before_tasks,
+    )?;
     Ok(())
 }
 

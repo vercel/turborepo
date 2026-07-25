@@ -341,6 +341,34 @@ impl<W> App<W> {
         self.persist_active_task().ok();
     }
 
+    fn scroll_task_list(&mut self, direction: Direction) -> Result<(), Error> {
+        if matches!(self.section_focus, LayoutSections::Search { .. }) {
+            return self.search_scroll(direction);
+        }
+        if matches!(self.section_focus, LayoutSections::SearchLocked { .. }) {
+            match direction {
+                Direction::Down => self.next(),
+                Direction::Up => self.previous(),
+            }
+            return Ok(());
+        }
+
+        let last_index = self.tasks_by_status.count_all().saturating_sub(1);
+        let index = match direction {
+            Direction::Down => self.selected_task_index.saturating_add(1).min(last_index),
+            Direction::Up => self.selected_task_index.saturating_sub(1),
+        };
+        if index != self.selected_task_index {
+            self.selected_task_index = index;
+            self.task_list_scroll.select(Some(index));
+            self.cancel_selection_drag_if_task_changed();
+        }
+
+        self.is_task_selection_pinned = true;
+        self.persist_active_task().ok();
+        Ok(())
+    }
+
     #[tracing::instrument(skip_all)]
     pub fn scroll_terminal_output(
         &mut self,
@@ -811,6 +839,27 @@ impl<W> App<W> {
         mut event: crossterm::event::MouseEvent,
         now: Instant,
     ) -> Result<(), Error> {
+        let has_sidebar = self.preferences.is_task_list_visible();
+        let table_width = if has_sidebar {
+            self.size.task_list_width()
+        } else {
+            0
+        };
+        let scroll_direction = match event.kind {
+            crossterm::event::MouseEventKind::ScrollDown => Some(Direction::Down),
+            crossterm::event::MouseEventKind::ScrollUp => Some(Direction::Up),
+            _ => None,
+        };
+        if let Some(direction) = scroll_direction {
+            if event.column < table_width {
+                self.scroll_task_list(direction)?;
+            } else {
+                self.is_task_selection_pinned = true;
+                self.scroll_terminal_output(direction, true)?;
+            }
+            return Ok(());
+        }
+
         let is_selection_down = matches!(
             event.kind,
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
@@ -886,13 +935,6 @@ impl<W> App<W> {
             }
         }
 
-        // Only offset by table width if the sidebar is visible
-        let has_sidebar = self.preferences.is_task_list_visible();
-        let table_width = if has_sidebar {
-            self.size.task_list_width()
-        } else {
-            0
-        };
         let pane_left_padding = self.size.pane_left_padding_with_sidebar(has_sidebar);
         let pane_rows = self.size.pane_rows();
         debug!("original mouse event: {event:?}, table_width: {table_width}");
@@ -1770,10 +1812,6 @@ fn update(
             app.is_task_selection_pinned = true;
             app.scroll_momentum.reset();
             app.scroll_terminal_output(Direction::Down, false)?;
-        }
-        Event::ScrollWithMomentum(direction) => {
-            app.is_task_selection_pinned = true;
-            app.scroll_terminal_output(direction, true)?;
         }
         Event::PageUp => {
             app.is_task_selection_pinned = true;
@@ -3424,6 +3462,48 @@ mod test {
         app.handle_mouse(click(5))?;
         assert_eq!(app.active_task()?, "task-4");
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_mouse_wheel_over_task_list_moves_selection_without_wrapping() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseEvent, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let mut app: App<()> = App::new_for_test(
+            6,
+            100,
+            (0..10).map(|i| format!("task-{i}")).collect(),
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+        let scroll = |kind| MouseEvent {
+            kind,
+            column: 0,
+            row: 2,
+            modifiers: KeyModifiers::empty(),
+        };
+
+        app.handle_mouse(scroll(MouseEventKind::ScrollUp))?;
+        assert_eq!(app.active_task()?, "task-0");
+        assert_eq!(app.preferences.active_task(), Some("task-0"));
+
+        for _ in 0..12 {
+            app.handle_mouse(scroll(MouseEventKind::ScrollDown))?;
+        }
+        assert_eq!(app.active_task()?, "task-9");
+        assert_eq!(app.task_list_scroll.selected(), Some(9));
+
+        app.handle_mouse(scroll(MouseEventKind::ScrollUp))?;
+        assert_eq!(app.active_task()?, "task-8");
+        assert_eq!(app.preferences.active_task(), Some("task-8"));
+
+        let mut pane_scroll = scroll(MouseEventKind::ScrollDown);
+        pane_scroll.column = app.size.task_list_width();
+        app.handle_mouse(pane_scroll)?;
+        assert_eq!(app.active_task()?, "task-8");
         Ok(())
     }
 
