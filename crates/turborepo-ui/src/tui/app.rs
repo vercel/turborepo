@@ -63,6 +63,7 @@ pub struct App<W> {
     tasks_by_status: TasksByStatus,
     section_focus: LayoutSections,
     task_list_scroll: TableState,
+    task_list_scroll_detached: bool,
     selected_task_index: usize,
     is_task_selection_pinned: bool,
     showing_help_popup: bool,
@@ -141,6 +142,7 @@ impl<W> App<W> {
             selected_task_index,
             tasks_by_status,
             task_list_scroll: TableState::default().with_selected(selected_task_index),
+            task_list_scroll_detached: false,
             showing_help_popup: false,
             is_task_selection_pinned: preferences.active_task().is_some(),
             preferences,
@@ -312,6 +314,7 @@ impl<W> App<W> {
         } else {
             self.selected_task_index = (self.selected_task_index + 1) % num_rows;
             self.task_list_scroll.select(Some(self.selected_task_index));
+            self.task_list_scroll_detached = false;
         }
 
         self.cancel_selection_drag_if_task_changed();
@@ -334,6 +337,7 @@ impl<W> App<W> {
                 .checked_sub(1)
                 .unwrap_or(num_rows - 1);
             self.task_list_scroll.select(Some(self.selected_task_index));
+            self.task_list_scroll_detached = false;
         }
 
         self.cancel_selection_drag_if_task_changed();
@@ -342,30 +346,21 @@ impl<W> App<W> {
     }
 
     fn scroll_task_list(&mut self, direction: Direction) -> Result<(), Error> {
-        if matches!(self.section_focus, LayoutSections::Search { .. }) {
-            return self.search_scroll(direction);
-        }
-        if matches!(self.section_focus, LayoutSections::SearchLocked { .. }) {
-            match direction {
-                Direction::Down => self.next(),
-                Direction::Up => self.previous(),
-            }
-            return Ok(());
-        }
-
-        let last_index = self.tasks_by_status.count_all().saturating_sub(1);
-        let index = match direction {
-            Direction::Down => self.selected_task_index.saturating_add(1).min(last_index),
-            Direction::Up => self.selected_task_index.saturating_sub(1),
+        let visible_rows = usize::from(self.size.task_list_visible_task_rows());
+        let max_offset = self
+            .tasks_by_status
+            .count_all()
+            .saturating_sub(visible_rows);
+        let offset = match direction {
+            Direction::Down => self
+                .task_list_scroll
+                .offset()
+                .saturating_add(1)
+                .min(max_offset),
+            Direction::Up => self.task_list_scroll.offset().saturating_sub(1),
         };
-        if index != self.selected_task_index {
-            self.selected_task_index = index;
-            self.task_list_scroll.select(Some(index));
-            self.cancel_selection_drag_if_task_changed();
-        }
-
-        self.is_task_selection_pinned = true;
-        self.persist_active_task().ok();
+        *self.task_list_scroll.offset_mut() = offset;
+        self.task_list_scroll_detached = true;
         Ok(())
     }
 
@@ -1027,6 +1022,7 @@ impl<W> App<W> {
         }
         self.selected_task_index = index;
         self.task_list_scroll.select(Some(index));
+        self.task_list_scroll_detached = false;
         self.is_task_selection_pinned = true;
         self.persist_active_task().ok();
     }
@@ -1075,6 +1071,7 @@ impl<W> App<W> {
         };
         self.selected_task_index = new_index_to_highlight;
         self.task_list_scroll.select(Some(new_index_to_highlight));
+        self.task_list_scroll_detached = false;
         self.cancel_selection_drag_if_task_changed();
 
         Ok(())
@@ -1084,6 +1081,7 @@ impl<W> App<W> {
     pub fn reset_scroll(&mut self) {
         self.is_task_selection_pinned = false;
         self.task_list_scroll.select(Some(0));
+        self.task_list_scroll_detached = false;
         self.selected_task_index = 0;
         self.cancel_selection_drag_if_task_changed();
     }
@@ -1924,7 +1922,19 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
     let [table, pane] = horizontal.areas(f.area());
 
     let table_to_render = TaskTable::new(&app.tasks_by_status, &app.section_focus);
-    f.render_stateful_widget(&table_to_render, table, &mut app.task_list_scroll);
+    if app.task_list_scroll_detached {
+        let offset = app.task_list_scroll.offset();
+        let visible_rows = usize::from(app.size.task_list_visible_task_rows());
+        let selected = app
+            .task_list_scroll
+            .selected()
+            .filter(|selected| (offset..offset.saturating_add(visible_rows)).contains(selected));
+        let mut render_state = app.task_list_scroll.with_selected(selected);
+        f.render_stateful_widget(&table_to_render, table, &mut render_state);
+        *app.task_list_scroll.offset_mut() = render_state.offset();
+    } else {
+        f.render_stateful_widget(&table_to_render, table, &mut app.task_list_scroll);
+    }
 
     if let Ok(active_task) = app.active_task() {
         let active_task = active_task.to_string();
@@ -3466,7 +3476,7 @@ mod test {
     }
 
     #[test]
-    fn test_mouse_wheel_over_task_list_moves_selection_without_wrapping() -> Result<(), Error> {
+    fn test_mouse_wheel_over_task_list_scrolls_viewport_without_selecting() -> Result<(), Error> {
         use crossterm::event::{KeyModifiers, MouseEvent, MouseEventKind};
 
         let repo_root_tmp = tempdir()?;
@@ -3486,24 +3496,28 @@ mod test {
             modifiers: KeyModifiers::empty(),
         };
 
-        app.handle_mouse(scroll(MouseEventKind::ScrollUp))?;
-        assert_eq!(app.active_task()?, "task-0");
-        assert_eq!(app.preferences.active_task(), Some("task-0"));
-
         for _ in 0..12 {
             app.handle_mouse(scroll(MouseEventKind::ScrollDown))?;
         }
-        assert_eq!(app.active_task()?, "task-9");
-        assert_eq!(app.task_list_scroll.selected(), Some(9));
+        assert_eq!(app.active_task()?, "task-0");
+        assert_eq!(app.task_list_scroll.selected(), Some(0));
+        assert_eq!(app.task_list_scroll.offset(), 7);
+        assert!(!app.is_task_selection_pinned);
+        assert_eq!(app.preferences.active_task(), None);
 
         app.handle_mouse(scroll(MouseEventKind::ScrollUp))?;
-        assert_eq!(app.active_task()?, "task-8");
-        assert_eq!(app.preferences.active_task(), Some("task-8"));
+        assert_eq!(app.active_task()?, "task-0");
+        assert_eq!(app.task_list_scroll.offset(), 6);
 
         let mut pane_scroll = scroll(MouseEventKind::ScrollDown);
         pane_scroll.column = app.size.task_list_width();
         app.handle_mouse(pane_scroll)?;
-        assert_eq!(app.active_task()?, "task-8");
+        assert_eq!(app.active_task()?, "task-0");
+        assert_eq!(app.task_list_scroll.offset(), 6);
+
+        app.next();
+        assert_eq!(app.active_task()?, "task-1");
+        assert!(!app.task_list_scroll_detached);
         Ok(())
     }
 
