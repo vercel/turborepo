@@ -20,10 +20,9 @@
 
 use std::{
     collections::HashMap,
-    ffi::{CStr, CString, OsStr},
+    ffi::{CStr, OsStr},
     fmt,
-    io::ErrorKind,
-    os::{raw, unix::prelude::MetadataExt},
+    os::{raw, unix::ffi::OsStrExt},
     path::{Path, PathBuf},
     ptr,
     sync::{
@@ -75,103 +74,12 @@ bitflags::bitflags! {
   }
 }
 
-/// Encapsulates device information and path transformation logic.
-///
-/// This type handles the bidirectional conversion between absolute filesystem
-/// paths and the device-relative paths used by FSEvents when watching non-root
-/// volumes.
-///
-/// # Path Transformation Contract
-///
-/// When registering a watch path:
-/// - `to_device_relative()` strips the mount point prefix and prepends "/"
-///
-/// When receiving events in the callback:
-/// - `to_absolute()` strips the leading separator and joins the mount point
-///   with the device-relative path
-///
-/// This symmetry must be maintained for correct path reporting.
-#[derive(Debug, Clone)]
-struct DeviceContext {
-    /// The device ID from `stat.st_dev`
-    device_id: i32,
-    /// The effective mount point of the device (e.g., "/", "/Volumes/Data")
-    mount_point: PathBuf,
-}
-
-impl DeviceContext {
-    /// Create a new DeviceContext for the given path.
-    fn new(path: &Path) -> Result<Self> {
-        let metadata = std::fs::symlink_metadata(path).map_err(|e| {
-            if e.kind() == ErrorKind::NotFound {
-                Error::path_not_found().add_path(path.into())
-            } else {
-                Error::io(e)
-            }
-        })?;
-        let device_id = metadata.dev() as i32;
-        let canonical_path = path.to_path_buf().canonicalize()?;
-        let mount_point = get_mount_point(&canonical_path)?;
-
-        Ok(Self {
-            device_id,
-            mount_point,
-        })
-    }
-
-    /// Convert an absolute path to a device-relative path for FSEvents
-    /// registration.
-    ///
-    /// Returns the path as a string suitable for
-    /// `FSEventStreamCreateRelativeToDevice`.
-    fn to_device_relative(&self, absolute_path: &Path) -> Result<String> {
-        let relative_path = absolute_path.strip_prefix(&self.mount_point).map_err(|_| {
-            Error::generic(&format!(
-                "path {:?} is not under device mount point {:?}",
-                absolute_path, self.mount_point
-            ))
-        })?;
-
-        let relative_str = relative_path
-            .to_str()
-            .ok_or_else(|| Error::generic("path contains invalid UTF-8"))?;
-
-        Ok(format!("/{}", relative_str))
-    }
-
-    /// Convert a device-relative path from FSEvents back to an absolute path.
-    ///
-    /// This is the inverse of `to_device_relative()`.
-    fn to_absolute(&self, device_relative: &str) -> PathBuf {
-        self.mount_point
-            .join(device_relative.trim_start_matches(std::path::MAIN_SEPARATOR))
-    }
-
-    fn bytes_to_absolute(&self, device_relative: &[u8]) -> PathBuf {
-        use std::os::unix::ffi::OsStrExt;
-
-        let relative = device_relative
-            .strip_prefix(b"/")
-            .unwrap_or(device_relative);
-        self.mount_point.join(OsStr::from_bytes(relative))
-    }
-}
-
 /// FSEvents-based `Watcher` implementation.
 ///
 /// # Platform-Specific Behavior
 ///
-/// This watcher uses `FSEventStreamCreateRelativeToDevice` which has the
-/// following limitations:
-///
-/// - **Single device only**: All watched paths must reside on the same
-///   filesystem device. Attempting to watch paths on different devices will
-///   return an error with the message "cannot watch multiple devices".
-///
-/// - **Path handling**: Paths are converted to device-relative format for
-///   FSEvents, then converted back to absolute paths when events are reported.
-///   This ensures correct path reporting on non-root volumes (e.g.,
-///   `/Volumes/External`).
+/// This watcher uses `FSEventStreamCreate`, which accepts multiple absolute
+/// paths across filesystem devices and reports absolute paths to the callback.
 ///
 /// # Example
 ///
@@ -181,11 +89,9 @@ impl DeviceContext {
 /// let (tx, rx) = std::sync::mpsc::channel();
 /// let mut watcher = FsEventWatcher::new(tx, Default::default())?;
 ///
-/// // Watch a path - all subsequent watches must be on the same device
+/// // Watch paths on the same or different filesystem devices.
 /// watcher.watch("/Users/foo/project", RecursiveMode::Recursive)?;
-///
-/// // This would fail if /Volumes/External is a different device:
-/// // watcher.watch("/Volumes/External/other", RecursiveMode::Recursive)?;
+/// watcher.watch("/Volumes/External/other", RecursiveMode::Recursive)?;
 /// ```
 pub struct FsEventWatcher {
     paths: cf::CFMutableArrayRef,
@@ -203,9 +109,6 @@ pub struct FsEventWatcher {
     /// For watching hundreds of paths, consider using a radix trie for
     /// O(depth) lookups.
     recursive_info: HashMap<PathBuf, bool>,
-    /// Device context for path transformation. Set when the first path is
-    /// watched. All subsequent paths must be on the same device.
-    device_context: Option<DeviceContext>,
     /// Last event observed by the callback, used to resume after watch changes.
     latest_event_id: Arc<AtomicU64>,
 }
@@ -385,10 +288,28 @@ fn translate_flags(flags: StreamFlags, precise: bool) -> Vec<Event> {
 struct StreamContextInfo {
     event_handler: Arc<Mutex<dyn EventHandler>>,
     recursive_info: HashMap<PathBuf, bool>,
-    /// Device context for converting device-relative paths back to absolute
-    /// paths.
-    device_context: DeviceContext,
     latest_event_id: Arc<AtomicU64>,
+}
+
+struct StreamOwner(fs::FSEventStreamRef);
+
+impl StreamOwner {
+    fn as_ptr(&self) -> fs::FSEventStreamRef {
+        self.0
+    }
+}
+
+// Safety: Apple documents Core Foundation references as safe to move between
+// threads. The stream itself is used only by the spawned run-loop thread.
+unsafe impl Send for StreamOwner {}
+
+impl Drop for StreamOwner {
+    fn drop(&mut self) {
+        unsafe {
+            fs::FSEventStreamInvalidate(self.0);
+            fs::FSEventStreamRelease(self.0);
+        }
+    }
 }
 
 // Free the context when the stream created by `FSEventStreamCreate` is
@@ -415,51 +336,14 @@ unsafe extern "C" {
 // CoreFoundation false value
 const FALSE: Boolean = 0x0;
 
-/// Get the effective mount point for path manipulation purposes.
-///
-/// This uses the statfs system call to get filesystem information.
-/// If the reported mount point is not a prefix of the path (which can happen
-/// on macOS with APFS firmlinks, e.g., `/private/var` reports mount point
-/// `/System/Volumes/Data` but the path doesn't have that prefix), we fall
-/// back to `/` as the effective mount point.
-fn get_mount_point(path: &Path) -> Result<PathBuf> {
-    let c_path = CString::new(
-        path.to_str()
-            .ok_or_else(|| Error::generic("path contains invalid UTF-8"))?,
-    )
-    .map_err(|_| Error::generic("path contains null byte"))?;
-
-    let mut stat: libc::statfs = unsafe { std::mem::zeroed() };
-
-    let result = unsafe { libc::statfs(c_path.as_ptr(), &mut stat) };
-
-    if result != 0 {
-        return Err(Error::io(std::io::Error::last_os_error()));
-    }
-
-    let mount_point = unsafe {
-        CStr::from_ptr(stat.f_mntonname.as_ptr())
-            .to_str()
-            .map_err(|_| Error::generic("mount point contains invalid UTF-8"))?
-    };
-
-    // If the path doesn't start with the reported mount point, it means
-    // the mount point is virtualized (e.g., via APFS firmlinks). In this
-    // case, use "/" as the effective mount point for path manipulation.
-    if !path.starts_with(mount_point) {
-        return Ok(PathBuf::from("/"));
-    }
-
-    Ok(PathBuf::from(mount_point))
-}
-
 impl FsEventWatcher {
     fn from_event_handler(event_handler: Arc<Mutex<dyn EventHandler>>) -> Result<Self> {
+        let since_when = unsafe { fs::FSEventsGetCurrentEventId() };
         Ok(FsEventWatcher {
             paths: unsafe {
                 cf::CFArrayCreateMutable(cf::kCFAllocatorDefault, 0, &cf::kCFTypeArrayCallBacks)
             },
-            since_when: fs::kFSEventStreamEventIdSinceNow,
+            since_when,
             latency: 0.01,
             flags: fs::kFSEventStreamCreateFlagFileEvents
                 | fs::kFSEventStreamCreateFlagNoDefer
@@ -467,25 +351,38 @@ impl FsEventWatcher {
             event_handler,
             runloop: None,
             recursive_info: HashMap::new(),
-            device_context: None,
-            latest_event_id: Arc::new(AtomicU64::new(0)),
+            latest_event_id: Arc::new(AtomicU64::new(since_when)),
         })
     }
 
     fn watch_inner(&mut self, path: &Path, recursive_mode: RecursiveMode) -> Result<()> {
         self.stop();
         let result = self.append_path(path, recursive_mode);
-        // ignore return error: may be empty path list
-        let _ = self.run();
-        result
+        let restart = self.restart();
+        Self::finish_restart(result, restart)
     }
 
     fn unwatch_inner(&mut self, path: &Path) -> Result<()> {
         self.stop();
         let result = self.remove_path(path);
-        // ignore return error: may be empty path list
-        let _ = self.run();
-        result
+        let restart = self.restart();
+        Self::finish_restart(result, restart)
+    }
+
+    fn finish_restart(operation: Result<()>, restart: Result<()>) -> Result<()> {
+        match (operation, restart) {
+            (_, Err(error)) => Err(error),
+            (Err(error), Ok(())) => Err(error),
+            (Ok(()), Ok(())) => Ok(()),
+        }
+    }
+
+    fn restart(&mut self) -> Result<()> {
+        if unsafe { cf::CFArrayGetCount(self.paths) } == 0 {
+            Ok(())
+        } else {
+            self.run()
+        }
     }
 
     #[inline]
@@ -519,7 +416,8 @@ impl FsEventWatcher {
     }
 
     fn remove_path(&mut self, path: &Path) -> Result<()> {
-        let str_path = path
+        let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_owned());
+        let str_path = canonical_path
             .to_str()
             .ok_or_else(|| Error::generic("path contains invalid UTF-8"))?;
         unsafe {
@@ -546,12 +444,7 @@ impl FsEventWatcher {
                 cf::CFArrayRemoveValueAtIndex(self.paths, *idx);
             }
         }
-        let p = if let Ok(canonicalized_path) = path.canonicalize() {
-            canonicalized_path
-        } else {
-            path.to_owned()
-        };
-        match self.recursive_info.remove(&p) {
+        match self.recursive_info.remove(&canonical_path) {
             Some(_) => Ok(()),
             None => Err(Error::watch_not_found()),
         }
@@ -559,47 +452,15 @@ impl FsEventWatcher {
 
     // https://github.com/thibaudgg/rb-fsevent/blob/master/ext/fsevent_watch/main.c
     //
-    // Path handling contract:
-    // 1. Paths are canonicalized and made relative to device mount point for
-    //    FSEvents
-    // 2. FSEvents returns device-relative paths in callbacks
-    // 3. callback_impl uses DeviceContext::to_absolute() to reconstruct absolute
-    //    paths
-    //
-    // This symmetry is enforced by the DeviceContext type.
     fn append_path(&mut self, path: &Path, recursive_mode: RecursiveMode) -> Result<()> {
         let canonical_path = path.to_path_buf().canonicalize()?;
-
-        // Initialize or validate device context
-        let device_context = if let Some(ref ctx) = self.device_context {
-            // Verify we're on the same device
-            let metadata = std::fs::symlink_metadata(path).map_err(|e| {
-                if e.kind() == ErrorKind::NotFound {
-                    Error::path_not_found().add_path(path.into())
-                } else {
-                    Error::io(e)
-                }
-            })?;
-            let device_id = metadata.dev() as i32;
-            if ctx.device_id != device_id {
-                return Err(Error::generic("cannot watch multiple devices"));
-            }
-            ctx
-        } else {
-            // First path - create device context
-            let ctx = DeviceContext::new(path)?;
-            self.device_context = Some(ctx);
-            self.device_context
-                .as_ref()
-                .ok_or_else(|| Error::generic("missing device context"))?
-        };
-
-        // Use DeviceContext to convert path to device-relative format
-        let str_path = device_context.to_device_relative(&canonical_path)?;
+        let str_path = canonical_path
+            .to_str()
+            .ok_or_else(|| Error::generic("path contains invalid UTF-8"))?;
 
         unsafe {
             let mut err: cf::CFErrorRef = ptr::null_mut();
-            let cf_path = cf::str_path_to_cfstring_ref(&str_path, &mut err);
+            let cf_path = cf::str_path_to_cfstring_ref(str_path, &mut err);
             if cf_path.is_null() {
                 // Most likely the directory was deleted, or permissions changed,
                 // while the above code was running.
@@ -619,20 +480,12 @@ impl FsEventWatcher {
             // TODO: Reconstruct and add paths to error
             return Err(Error::path_not_found());
         }
-        let device_context = self
-            .device_context
-            .clone()
-            .ok_or_else(|| Error::generic("no device context set for stream"))?;
-
-        // We need to associate the stream context with our callback in order to
-        // propagate events to the rest of the system. This will be owned by the
-        // stream, and will be freed when the stream is closed. This means we
-        // will leak the context if we panic before reaching
-        // `FSEventStreamRelease`.
+        // Associate the stream context with our callback. FSEvents owns it once
+        // stream creation succeeds, and `StreamOwner` releases the stream on
+        // every thread startup and shutdown path.
         let stream_context_info = Box::into_raw(Box::new(StreamContextInfo {
             event_handler: self.event_handler.clone(),
             recursive_info: self.recursive_info.clone(),
-            device_context: device_context.clone(),
             latest_event_id: self.latest_event_id.clone(),
         }));
 
@@ -645,17 +498,22 @@ impl FsEventWatcher {
         };
 
         let stream = unsafe {
-            fs::FSEventStreamCreateRelativeToDevice(
+            fs::FSEventStreamCreate(
                 cf::kCFAllocatorDefault,
                 callback,
                 &stream_context,
-                device_context.device_id,
                 self.paths,
                 self.since_when,
                 self.latency,
                 self.flags,
             )
         };
+        if stream.is_null() {
+            unsafe {
+                drop(Box::from_raw(stream_context_info));
+            }
+            return Err(Error::generic("FSEventStreamCreate failed"));
+        }
 
         // Wrapper to help send CFRef types across threads.
         struct CFSendWrapper(cf::CFRef);
@@ -665,44 +523,51 @@ impl FsEventWatcher {
         //   https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Multithreading/ThreadSafetySummary/ThreadSafetySummary.html
         unsafe impl Send for CFSendWrapper {}
 
-        // move into thread
-        let stream = CFSendWrapper(stream);
+        let stream = StreamOwner(stream);
 
         // channel to pass runloop around
-        let (rl_tx, rl_rx) = std::sync::mpsc::channel();
+        let (rl_tx, rl_rx) = std::sync::mpsc::channel::<Result<CFSendWrapper>>();
 
         let thread_handle = thread::Builder::new()
             .name("notify-rs fsevents loop".to_string())
             .spawn(move || {
-                let _ = &stream;
-                let stream = stream.0;
+                let stream_ref = stream.as_ptr();
 
                 unsafe {
                     let cur_runloop = cf::CFRunLoopGetCurrent();
 
                     fs::FSEventStreamScheduleWithRunLoop(
-                        stream,
+                        stream_ref,
                         cur_runloop,
                         cf::kCFRunLoopDefaultMode,
                     );
-                    if fs::FSEventStreamStart(stream) == FALSE {
-                        panic!("FSEventStream failed to start");
+                    if fs::FSEventStreamStart(stream_ref) == FALSE {
+                        let _ = rl_tx.send(Err(Error::generic("FSEventStream failed to start")));
+                        return;
                     }
 
                     // the calling to CFRunLoopRun will be terminated by CFRunLoopStop call in
                     // drop()
-                    let _ = rl_tx.send(CFSendWrapper(cur_runloop));
+                    if rl_tx.send(Ok(CFSendWrapper(cur_runloop))).is_err() {
+                        fs::FSEventStreamStop(stream_ref);
+                        return;
+                    }
 
                     cf::CFRunLoopRun();
-                    fs::FSEventStreamStop(stream);
-                    fs::FSEventStreamInvalidate(stream);
-                    fs::FSEventStreamRelease(stream);
+                    fs::FSEventStreamStop(stream_ref);
                 }
             })?;
         // block until runloop has been sent
-        let Ok(runloop) = rl_rx.recv() else {
-            let _ = thread_handle.join();
-            return Err(Error::generic("runloop channel disconnected"));
+        let runloop = match rl_rx.recv() {
+            Ok(Ok(runloop)) => runloop,
+            Ok(Err(error)) => {
+                let _ = thread_handle.join();
+                return Err(error);
+            }
+            Err(_) => {
+                let _ = thread_handle.join();
+                return Err(Error::generic("runloop channel disconnected"));
+            }
         };
         self.runloop = Some((runloop.0, thread_handle));
 
@@ -753,7 +618,6 @@ unsafe fn callback_impl(
     let event_paths = event_paths as *const *const libc::c_char;
     let info = info as *const StreamContextInfo;
     let event_handler = unsafe { &(*info).event_handler };
-    let device_context = unsafe { &(*info).device_context };
     let latest_event_id = unsafe { &(*info).latest_event_id };
 
     for p in 0..num_events {
@@ -763,8 +627,7 @@ unsafe fn callback_impl(
         // this callback. Preserve its bytes because Unix paths need not be UTF-8.
         let raw_path = unsafe { CStr::from_ptr(*event_paths.add(p)) };
 
-        // Use DeviceContext to convert device-relative path back to absolute
-        let path = device_context.bytes_to_absolute(raw_path.to_bytes());
+        let path = PathBuf::from(OsStr::from_bytes(raw_path.to_bytes()));
 
         let flag = unsafe { *event_flags.add(p) };
         // Use from_bits_truncate to handle unknown flags gracefully instead of
@@ -878,32 +741,38 @@ fn test_steam_context_info_send_and_sync() {
 }
 
 #[test]
-fn test_device_context_round_trips_non_root_mount_paths() {
-    let device_context = DeviceContext {
-        device_id: 0,
-        mount_point: PathBuf::from("/Volumes/TurboDisk"),
-    };
+fn test_fsevent_watches_multiple_paths() {
+    use std::time::{Duration, Instant};
 
-    let absolute_path = Path::new("/Volumes/TurboDisk/project/file.txt");
-    let device_relative = device_context.to_device_relative(absolute_path).unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().canonicalize().unwrap();
+    let first = root.join("first");
+    let second = root.join("second");
+    std::fs::create_dir_all(&first).unwrap();
+    std::fs::create_dir_all(&second).unwrap();
 
-    assert_eq!(device_relative, "/project/file.txt");
-    assert_eq!(device_context.to_absolute(&device_relative), absolute_path);
-}
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut watcher = FsEventWatcher::new(tx, Default::default()).unwrap();
+    watcher.watch(&first, RecursiveMode::Recursive).unwrap();
+    watcher.watch(&second, RecursiveMode::Recursive).unwrap();
 
-#[test]
-fn test_device_context_preserves_non_utf8_paths() {
-    use std::os::unix::ffi::OsStrExt;
+    let first_file = first.join("first.txt");
+    let second_file = second.join("second.txt");
+    std::fs::write(&first_file, b"first").unwrap();
+    std::fs::write(&second_file, b"second").unwrap();
 
-    let device_context = DeviceContext {
-        device_id: 1,
-        mount_point: PathBuf::from("/Volumes/Data"),
-    };
-    let path = device_context.bytes_to_absolute(b"/repo/invalid-\xff");
-    assert_eq!(
-        path.as_os_str().as_bytes(),
-        b"/Volumes/Data/repo/invalid-\xff"
-    );
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut saw_first = false;
+    let mut saw_second = false;
+    while Instant::now() < deadline && !(saw_first && saw_second) {
+        if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(100)) {
+            saw_first |= event.paths.contains(&first_file);
+            saw_second |= event.paths.contains(&second_file);
+        }
+    }
+
+    assert!(saw_first, "did not receive an event for {first_file:?}");
+    assert!(saw_second, "did not receive an event for {second_file:?}");
 }
 
 /// A temporary RAM disk volume for testing FSEvents on non-root filesystems.
@@ -1004,8 +873,7 @@ impl Drop for TestVolume {
 /// Test that file paths are reported correctly on non-root volumes.
 ///
 /// This creates a temporary RAM disk to ensure we're testing on a non-root
-/// volume where FSEventStreamCreateRelativeToDevice returns device-relative
-/// paths that must be correctly resolved to absolute paths.
+/// volume to ensure the absolute-path stream reports the mounted path.
 #[test]
 fn test_fsevent_reports_correct_absolute_paths() {
     use std::time::{Duration, Instant};
@@ -1023,6 +891,10 @@ fn test_fsevent_reports_correct_absolute_paths() {
 
     let (tx, rx) = std::sync::mpsc::channel();
     let mut watcher = FsEventWatcher::new(tx, Default::default()).unwrap();
+    let local = tempfile::tempdir().unwrap();
+    watcher
+        .watch(local.path(), RecursiveMode::Recursive)
+        .unwrap();
     watcher
         .watch(volume.path(), RecursiveMode::Recursive)
         .unwrap();
