@@ -60,7 +60,7 @@ impl ProperTaskGraphBuilder {
         let loader = UnifiedTurboJsonLoader::workspace(
             reader,
             root_turbo_json_path.clone(),
-            pkg_graph.packages(),
+            pkg_graph.package_scope_directories(),
         );
 
         // Determine if this is a single package repo

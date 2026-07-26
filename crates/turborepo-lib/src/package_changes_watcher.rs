@@ -420,7 +420,11 @@ impl Subscriber {
         let root_turbo_json = if self.single_package {
             UnifiedTurboJsonLoader::single_package(reader, config_path, root_package_json)
         } else {
-            UnifiedTurboJsonLoader::workspace(reader, config_path, pkg_dep_graph.packages())
+            UnifiedTurboJsonLoader::workspace(
+                reader,
+                config_path,
+                pkg_dep_graph.package_scope_directories(),
+            )
         }
         .load(&PackageName::Root)
         .ok()

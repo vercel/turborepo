@@ -39,14 +39,23 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         package_graph: &PackageGraph,
         task_name: &TaskName<'static>,
     ) -> Result<bool, BuilderError> {
-        for (package, _) in package_graph.packages() {
+        let packages =
+            std::iter::once(PackageName::Root).chain(package_graph.node_views().filter_map(
+                |(node, _)| match node {
+                    PackageNode::Workspace(package) if package != PackageName::Root => {
+                        Some(package)
+                    }
+                    _ => None,
+                },
+            ));
+        for package in packages {
             let task_id = task_name
                 .task_id()
                 .unwrap_or_else(|| TaskId::new(package.as_str(), task_name.task()));
             if Self::has_task_definition_or_registered(
                 loader,
                 package_graph,
-                package,
+                &package,
                 task_name,
                 &task_id,
             )? {

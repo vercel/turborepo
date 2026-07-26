@@ -313,9 +313,12 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 .keys()
                 .filter_map(|task| {
                     let pkg = task.package()?;
+                    if pkg == ROOT_PKG_NAME {
+                        return None;
+                    }
                     let missing_pkg = self
                         .package_graph
-                        .package_info(&PackageName::from(pkg))
+                        .package_view(&PackageName::from(pkg))
                         .is_none();
                     missing_pkg.then(|| (task.to_string(), pkg.to_string()))
                 })
@@ -407,7 +410,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             if task_id.package() != ROOT_PKG_NAME
                 && self
                     .package_graph
-                    .package_json(&PackageName::from(task_id.package()))
+                    .package_view(&PackageName::from(task_id.package()))
                     .is_none()
             {
                 // If we have a pkg it should be in PackageGraph.
