@@ -167,46 +167,48 @@ jobs:
             exit 1
           fi
 
-      - uses: ./.github/actions/setup-node
-        with:
-          enable-corepack: false
+      - parallel:
+          - name: Setup Node
+            uses: ./.github/actions/setup-node
+            with:
+              enable-corepack: false
+
+          - name: Get base SHA
+            id: base-sha
+            run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+          - name: Get previous tag
+            id: previous-tag
+            env:
+              INCREMENT: ${{ github.event_name == 'schedule' && 'prerelease' || inputs.increment }}
+            run: |
+              # For minor/major releases, compare against the previous minor/major
+              # release (vX.Y.0) so notes include all patches since then.
+              # For patch releases, compare against the latest stable tag.
+              # For canary releases, compare against the latest canary tag.
+              if [[ "$INCREMENT" == "minor" || "$INCREMENT" == "major" ]]; then
+                PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
+                  | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+                  | grep -v canary | grep -E 'v[0-9]+\.[0-9]+\.0$' | sort -V | tail -n 1)
+              elif [[ "$INCREMENT" == "patch" ]]; then
+                PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
+                  | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+                  | grep -v canary | sort -V | tail -n 1)
+              else
+                PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*-canary.*' \
+                  | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+                  | sort -V | tail -n 1)
+                if [ -z "$PREV_TAG" ]; then
+                  PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
+                    | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+                    | grep -v canary | sort -V | tail -n 1)
+                fi
+              fi
+              echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
+              echo "Previous tag: $PREV_TAG"
 
       - name: Build release tool
         run: pnpm --filter @turbo/releaser build
-
-      - name: Get base SHA
-        id: base-sha
-        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-
-      - name: Get previous tag
-        id: previous-tag
-        env:
-          INCREMENT: ${{ github.event_name == 'schedule' && 'prerelease' || inputs.increment }}
-        run: |
-          # For minor/major releases, compare against the previous minor/major
-          # release (vX.Y.0) so notes include all patches since then.
-          # For patch releases, compare against the latest stable tag.
-          # For canary releases, compare against the latest canary tag.
-          if [[ "$INCREMENT" == "minor" || "$INCREMENT" == "major" ]]; then
-            PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
-              | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
-              | grep -v canary | grep -E 'v[0-9]+\.[0-9]+\.0$' | sort -V | tail -n 1)
-          elif [[ "$INCREMENT" == "patch" ]]; then
-            PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
-              | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
-              | grep -v canary | sort -V | tail -n 1)
-          else
-            PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*-canary.*' \
-              | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
-              | sort -V | tail -n 1)
-            if [ -z "$PREV_TAG" ]; then
-              PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
-                | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
-                | grep -v canary | sort -V | tail -n 1)
-            fi
-          fi
-          echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
-          echo "Previous tag: $PREV_TAG"
 
       - name: Clear stale staging branch (if requested)
         if: ${{ inputs.clear-staging-branch }}
@@ -424,47 +426,48 @@ jobs:
         if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
         run: cargo install apple-codesign --version 0.29.0 --locked
 
-      - name: Write Apple signing certificate
-        if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
-        shell: bash
-        env:
-          APPLE_CERT_DATA: ${{ secrets.APPLE_CERT_DATA }}
-          APPLE_CERT_PATH: ${{ runner.temp }}/apple-certificate.p12
-        run: |
-          set -euo pipefail
-          umask 077
-          if [[ -z "$APPLE_CERT_DATA" ]]; then
-            echo "::error::APPLE_CERT_DATA secret is empty or unavailable"
-            exit 1
-          fi
-          printf '%s' "$APPLE_CERT_DATA" | base64 --decode > "$APPLE_CERT_PATH"
-          chmod 600 "$APPLE_CERT_PATH"
-          if [[ ! -s "$APPLE_CERT_PATH" ]]; then
-            echo "::error::Decoded Apple certificate is empty"
-            exit 1
-          fi
-          echo "APPLE_CERT_PATH=$APPLE_CERT_PATH" >> "$GITHUB_ENV"
+      - parallel:
+          - name: Write Apple signing certificate
+            if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
+            shell: bash
+            env:
+              APPLE_CERT_DATA: ${{ secrets.APPLE_CERT_DATA }}
+              APPLE_CERT_PATH: ${{ runner.temp }}/apple-certificate.p12
+            run: |
+              set -euo pipefail
+              umask 077
+              if [[ -z "$APPLE_CERT_DATA" ]]; then
+                echo "::error::APPLE_CERT_DATA secret is empty or unavailable"
+                exit 1
+              fi
+              printf '%s' "$APPLE_CERT_DATA" | base64 --decode > "$APPLE_CERT_PATH"
+              chmod 600 "$APPLE_CERT_PATH"
+              if [[ ! -s "$APPLE_CERT_PATH" ]]; then
+                echo "::error::Decoded Apple certificate is empty"
+                exit 1
+              fi
+              echo "APPLE_CERT_PATH=$APPLE_CERT_PATH" >> "$GITHUB_ENV"
 
-      - name: Write Apple notarization API key
-        if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
-        shell: bash
-        env:
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api-key.json
-        run: |
-          set -euo pipefail
-          umask 077
-          if [[ -z "$APPLE_API_KEY" ]]; then
-            echo "::error::APPLE_API_KEY secret is empty or unavailable"
-            exit 1
-          fi
-          printf '%s' "$APPLE_API_KEY" | base64 --decode > "$APPLE_API_KEY_PATH"
-          chmod 600 "$APPLE_API_KEY_PATH"
-          if [[ ! -s "$APPLE_API_KEY_PATH" ]]; then
-            echo "::error::Decoded Apple API key is empty"
-            exit 1
-          fi
-          echo "APPLE_API_KEY_PATH=$APPLE_API_KEY_PATH" >> "$GITHUB_ENV"
+          - name: Write Apple notarization API key
+            if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
+            shell: bash
+            env:
+              APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+              APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api-key.json
+            run: |
+              set -euo pipefail
+              umask 077
+              if [[ -z "$APPLE_API_KEY" ]]; then
+                echo "::error::APPLE_API_KEY secret is empty or unavailable"
+                exit 1
+              fi
+              printf '%s' "$APPLE_API_KEY" | base64 --decode > "$APPLE_API_KEY_PATH"
+              chmod 600 "$APPLE_API_KEY_PATH"
+              if [[ ! -s "$APPLE_API_KEY_PATH" ]]; then
+                echo "::error::Decoded Apple API key is empty"
+                exit 1
+              fi
+              echo "APPLE_API_KEY_PATH=$APPLE_API_KEY_PATH" >> "$GITHUB_ENV"
 
       - name: Sign macOS binary
         if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
@@ -553,20 +556,21 @@ jobs:
             with:
               path: rust-artifacts
 
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-        with:
-          turbo-version: ${{ inputs.ci-tag-override || '' }}
+      - parallel:
+          - name: Install Global Turbo
+            uses: ./.github/actions/install-global-turbo
+            with:
+              turbo-version: ${{ inputs.ci-tag-override || '' }}
 
-      - name: Move Rust artifacts into place
-        run: |
-          mkdir release-artifacts
-          mv rust-artifacts/turbo-aarch64-apple-darwin release-artifacts/dist-darwin-arm64
-          mv rust-artifacts/turbo-aarch64-unknown-linux-musl release-artifacts/dist-linux-arm64
-          cp -r rust-artifacts/turbo-x86_64-pc-windows-msvc release-artifacts/dist-windows-arm64
-          mv rust-artifacts/turbo-x86_64-unknown-linux-musl release-artifacts/dist-linux-x64
-          mv rust-artifacts/turbo-x86_64-apple-darwin release-artifacts/dist-darwin-x64
-          mv rust-artifacts/turbo-x86_64-pc-windows-msvc release-artifacts/dist-windows-x64
+          - name: Move Rust artifacts into place
+            run: |
+              mkdir release-artifacts
+              mv rust-artifacts/turbo-aarch64-apple-darwin release-artifacts/dist-darwin-arm64
+              mv rust-artifacts/turbo-aarch64-unknown-linux-musl release-artifacts/dist-linux-arm64
+              cp -r rust-artifacts/turbo-x86_64-pc-windows-msvc release-artifacts/dist-windows-arm64
+              mv rust-artifacts/turbo-x86_64-unknown-linux-musl release-artifacts/dist-linux-x64
+              mv rust-artifacts/turbo-x86_64-apple-darwin release-artifacts/dist-darwin-x64
+              mv rust-artifacts/turbo-x86_64-pc-windows-msvc release-artifacts/dist-windows-x64
 
       - name: Ensure npm version
         run: npm install -g npm@11.5.1
@@ -702,17 +706,18 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
-      - name: Get version and compute subdomain
-        id: version
-        run: |
-          VERSION=$(head -n 1 version.txt)
-          # Transform version to valid subdomain (replace dots with dashes, prepend v)
-          SUBDOMAIN=$(echo "v${VERSION}" | tr '.' '-')
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "subdomain=${SUBDOMAIN}" >> $GITHUB_OUTPUT
+      - parallel:
+          - name: Get version and compute subdomain
+            id: version
+            run: |
+              VERSION=$(head -n 1 version.txt)
+              # Transform version to valid subdomain (replace dots with dashes, prepend v)
+              SUBDOMAIN=$(echo "v${VERSION}" | tr '.' '-')
+              echo "version=${VERSION}" >> $GITHUB_OUTPUT
+              echo "subdomain=${SUBDOMAIN}" >> $GITHUB_OUTPUT
 
-      - name: Install Vercel CLI
-        run: npm install -g vercel@53.1.0
+          - name: Install Vercel CLI
+            run: npm install -g vercel@53.1.0
 
       - name: Find Vercel deployment for SHA
         id: find-deployment
