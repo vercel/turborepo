@@ -188,6 +188,15 @@ fn visible_sidebar_tasks(text: &str) -> Vec<&str> {
         .collect()
 }
 
+fn visible_pane_task(text: &str) -> Option<&str> {
+    text.lines().find_map(|line| {
+        line.split_once('│')?
+            .1
+            .split_once(" >")
+            .map(|(task, _)| task.trim())
+    })
+}
+
 fn cells_for_text<'a>(frame: &'a Frame, text: &str) -> Result<Vec<&'a Cell>> {
     let characters = text.chars().collect::<Vec<_>>();
     for y in 0..frame.rows {
@@ -362,7 +371,6 @@ fn streams_logs_and_restores_the_terminal_on_shutdown() -> Result<()> {
 }
 
 #[test]
-#[ignore = "known bug: mouse-wheel input over the sidebar does not scroll the task list"]
 fn scrolls_the_task_list_with_the_mouse_wheel_over_the_sidebar() -> Result<()> {
     let mut context = launch_tui_with(
         "list",
@@ -381,14 +389,21 @@ fn scrolls_the_task_list_with_the_mouse_wheel_over_the_sidebar() -> Result<()> {
     let before = capture(&mut context.session)?;
     let before_text = before.frame.text();
     let before_tasks = visible_sidebar_tasks(&before_text);
+    let before_active_task = visible_pane_task(&before_text)
+        .context("visible frame did not include the active task title")?
+        .to_owned();
 
-    context
-        .session
-        .send(b"\x1b[<65;5;5M\x1b[<65;5;5M\x1b[<65;5;5M\x1b[<65;5;5M\x1b[<65;5;5M")?;
-    thread::sleep(Duration::from_millis(500));
-
-    let after = capture(&mut context.session)?;
-    assert_ne!(visible_sidebar_tasks(&after.frame.text()), before_tasks);
+    context.session.send(&b"\x1b[<65;5;5M".repeat(20))?;
+    let after = wait_for_screen(
+        &mut context.session,
+        "mouse-wheel input did not scroll the task list",
+        Duration::from_secs(2),
+        |text, _| visible_sidebar_tasks(text) != before_tasks,
+    )?;
+    assert_eq!(
+        visible_pane_task(&after.frame.text()),
+        Some(before_active_task.as_str())
+    );
     Ok(())
 }
 
