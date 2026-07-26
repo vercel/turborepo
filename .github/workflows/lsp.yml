@@ -81,17 +81,18 @@ jobs:
         if: ${{ matrix.settings.prepare }}
         run: ${{ matrix.settings.prepare }}
 
-      - name: Setup capnproto
-        uses: ./.github/actions/setup-capnproto
+      - parallel:
+          - name: Setup capnproto
+            uses: ./.github/actions/setup-capnproto
 
-      - name: Rust Setup
-        uses: ./.github/actions/setup-rust
-        with:
-          github-token: ${{ github.token }}
-          targets: ${{ matrix.settings.target }}
+          - name: Rust Setup
+            uses: ./.github/actions/setup-rust
+            with:
+              github-token: ${{ github.token }}
+              targets: ${{ matrix.settings.target }}
 
-      - name: Setup Zig
-        uses: ./.github/actions/setup-zig
+          - name: Setup Zig
+            uses: ./.github/actions/setup-zig
 
       - name: Build Setup
         shell: bash
@@ -122,11 +123,6 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
 
-      - name: Setup Node
-        uses: ./.github/actions/setup-node
-        with:
-          extra-flags: "--frozen-lockfile"
-
       - name: Validate manual publish ref
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish && !inputs.dry_run }}
         env:
@@ -137,41 +133,47 @@ jobs:
             exit 1
           fi
 
-      - name: Download darwin arm64 LSP
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: turborepo-lsp-aarch64-apple-darwin
-          path: packages/turbo-vsc/out/artifacts/turborepo-lsp-aarch64-apple-darwin
+      - parallel:
+          - name: Setup Node
+            uses: ./.github/actions/setup-node
+            with:
+              extra-flags: "--frozen-lockfile"
 
-      - name: Download darwin x64 LSP
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: turborepo-lsp-x86_64-apple-darwin
-          path: packages/turbo-vsc/out/artifacts/turborepo-lsp-x86_64-apple-darwin
+          - name: Download darwin arm64 LSP
+            uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+            with:
+              name: turborepo-lsp-aarch64-apple-darwin
+              path: packages/turbo-vsc/out/artifacts/turborepo-lsp-aarch64-apple-darwin
 
-      - name: Download linux arm64 LSP
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: turborepo-lsp-aarch64-unknown-linux-musl
-          path: packages/turbo-vsc/out/artifacts/turborepo-lsp-aarch64-unknown-linux-musl
+          - name: Download darwin x64 LSP
+            uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+            with:
+              name: turborepo-lsp-x86_64-apple-darwin
+              path: packages/turbo-vsc/out/artifacts/turborepo-lsp-x86_64-apple-darwin
 
-      - name: Download linux x64 LSP
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: turborepo-lsp-x86_64-unknown-linux-musl
-          path: packages/turbo-vsc/out/artifacts/turborepo-lsp-x86_64-unknown-linux-musl
+          - name: Download linux arm64 LSP
+            uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+            with:
+              name: turborepo-lsp-aarch64-unknown-linux-musl
+              path: packages/turbo-vsc/out/artifacts/turborepo-lsp-aarch64-unknown-linux-musl
 
-      - name: Download win32 arm64 LSP
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: turborepo-lsp-aarch64-pc-windows-msvc
-          path: packages/turbo-vsc/out/artifacts/turborepo-lsp-aarch64-pc-windows-msvc
+          - name: Download linux x64 LSP
+            uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+            with:
+              name: turborepo-lsp-x86_64-unknown-linux-musl
+              path: packages/turbo-vsc/out/artifacts/turborepo-lsp-x86_64-unknown-linux-musl
 
-      - name: Download win32 x64 LSP
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: turborepo-lsp-x86_64-pc-windows-msvc
-          path: packages/turbo-vsc/out/artifacts/turborepo-lsp-x86_64-pc-windows-msvc
+          - name: Download win32 arm64 LSP
+            uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+            with:
+              name: turborepo-lsp-aarch64-pc-windows-msvc
+              path: packages/turbo-vsc/out/artifacts/turborepo-lsp-aarch64-pc-windows-msvc
+
+          - name: Download win32 x64 LSP
+            uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+            with:
+              name: turborepo-lsp-x86_64-pc-windows-msvc
+              path: packages/turbo-vsc/out/artifacts/turborepo-lsp-x86_64-pc-windows-msvc
 
       - name: Stamp extension version
         id: version
@@ -307,16 +309,17 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
 
-      - name: Setup Node
-        uses: ./.github/actions/setup-node
-        with:
-          extra-flags: "--frozen-lockfile"
+      - parallel:
+          - name: Setup Node
+            uses: ./.github/actions/setup-node
+            with:
+              extra-flags: "--frozen-lockfile"
 
-      - name: Download VSIX
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: turbo-vsc-${{ needs.package-vscode.outputs.version }}
-          path: packages/turbo-vsc
+          - name: Download VSIX
+            uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+            with:
+              name: turbo-vsc-${{ needs.package-vscode.outputs.version }}
+              path: packages/turbo-vsc
 
       - name: Publish VSIX
         working-directory: packages/turbo-vsc

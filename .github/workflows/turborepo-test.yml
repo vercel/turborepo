@@ -98,10 +98,24 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - parallel:
+          - name: Setup Node
+            uses: ./.github/actions/setup-node
+            env:
+              PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+          - name: Setup Rust
+            uses: ./.github/actions/setup-rust
+            with:
+              shared-cache-key: turborepo-debug-build
+              save-cache: true
+              github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+          - name: Setup Zig
+            uses: ./.github/actions/setup-zig
+
+          - name: Setup capnproto
+            uses: ./.github/actions/setup-capnproto
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
@@ -171,58 +185,74 @@ jobs:
         with:
           persist-credentials: false
 
-      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
-      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
-      # Pushes and same-repository PRs can mint OIDC tokens. Fork PRs remain
-      # local-only. With credentials present, turbo caches the test task
-      # remotely; Cargo reuses state from the target-cache restore below.
-      - name: Set up Turborepo Remote Cache
-        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-        uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
-        with:
-          team: ${{ vars.TURBO_TEAM }}
+      - parallel:
+          # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+          # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+          # Pushes and same-repository PRs can mint OIDC tokens. Fork PRs remain
+          # local-only. With credentials present, turbo caches the test task
+          # remotely; Cargo reuses state from the target-cache restore below.
+          - name: Set up Turborepo Remote Cache
+            if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+            uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
+            with:
+              team: ${{ vars.TURBO_TEAM }}
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
-          package-install: "false"
-          rust-cache: "false"
+          - name: Setup Node
+            uses: ./.github/actions/setup-node
+            with:
+              node-version: "18.20.2"
+              package-install: "false"
+            env:
+              PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
-      - name: Restore Cargo target
-        id: cargo-target-restore
-        if: matrix.os.name == 'ubuntu'
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: target
-          key: cargo-target-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'crates/**', 'packages/turbo-repository/rust/**', 'version.txt') }}
-          restore-keys: |
-            cargo-target-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'Cargo.lock') }}-
+          - name: Setup Rust
+            uses: ./.github/actions/setup-rust
+            with:
+              shared-cache-key: turborepo-debug-build
+              save-cache: true
+              cache: "false"
+              github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+          - name: Setup Zig
+            uses: ./.github/actions/setup-zig
 
-      - name: Install cargo-nextest
-        if: runner.os == 'Windows'
-        shell: cmd
-        run: |
-          curl -L -o "%TEMP%\nextest.zip" "https://get.nexte.st/latest/windows"
-          tar -xf "%TEMP%\nextest.zip" -C "%USERPROFILE%\.cargo\bin"
+          - name: Setup capnproto
+            uses: ./.github/actions/setup-capnproto
 
-      - name: Install cargo-nextest
-        if: runner.os != 'Windows'
-        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
-        with:
-          tool: nextest
+          - name: Restore Cargo target
+            id: cargo-target-restore
+            if: matrix.os.name == 'ubuntu'
+            uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+            with:
+              path: target
+              key: cargo-target-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'crates/**', 'packages/turbo-repository/rust/**', 'version.txt') }}
+              restore-keys: |
+                cargo-target-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'Cargo.lock') }}-
 
-      - name: Configure Insta workspace root
-        if: runner.os == 'Windows'
-        shell: bash
-        run: echo "INSTA_WORKSPACE_ROOT=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+          - name: Install Bun
+            uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
 
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
+      - parallel:
+          - name: Install cargo-nextest
+            if: runner.os == 'Windows'
+            shell: cmd
+            run: |
+              curl -L -o "%TEMP%\nextest.zip" "https://get.nexte.st/latest/windows"
+              tar -xf "%TEMP%\nextest.zip" -C "%USERPROFILE%\.cargo\bin"
+
+          - name: Install cargo-nextest
+            if: runner.os != 'Windows'
+            uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
+            with:
+              tool: nextest
+
+          - name: Configure Insta workspace root
+            if: runner.os == 'Windows'
+            shell: bash
+            run: echo "INSTA_WORKSPACE_ROOT=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+
+          - name: Install Global Turbo
+            uses: ./.github/actions/install-global-turbo
 
       # The nextest invocation (and its excludes) lives in turbo.json as
       # the turborepo-crates#test command; dogfooding the task command
@@ -260,20 +290,21 @@ jobs:
         with:
           persist-credentials: false
 
-      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
-      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
-      - name: Set up Turborepo Remote Cache
-        uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
-        with:
-          team: ${{ vars.TURBO_TEAM }}
+      - parallel:
+          # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+          # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+          - name: Set up Turborepo Remote Cache
+            uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
+            with:
+              team: ${{ vars.TURBO_TEAM }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "20"
+          - name: Setup Node.js
+            uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+            with:
+              node-version: "20"
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+          - name: Setup pnpm
+            uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
 
       - name: Install dependencies
         run: pnpm install
@@ -308,23 +339,37 @@ jobs:
         with:
           persist-credentials: false
 
-      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
-      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
-      # Pushes and same-repository PRs can mint OIDC tokens. Fork PRs remain
-      # local-only.
-      - name: Set up Turborepo Remote Cache
-        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-        uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
-        with:
-          team: ${{ vars.TURBO_TEAM }}
+      - parallel:
+          # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+          # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+          # Pushes and same-repository PRs can mint OIDC tokens. Fork PRs remain
+          # local-only.
+          - name: Set up Turborepo Remote Cache
+            if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+            uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
+            with:
+              team: ${{ vars.TURBO_TEAM }}
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          - name: Setup Node
+            uses: ./.github/actions/setup-node
+            env:
+              PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+          - name: Setup Rust
+            uses: ./.github/actions/setup-rust
+            with:
+              shared-cache-key: turborepo-debug-build
+              save-cache: true
+              github-token: ${{ secrets.GITHUB_TOKEN }}
+
+          - name: Setup Zig
+            uses: ./.github/actions/setup-zig
+
+          - name: Setup capnproto
+            uses: ./.github/actions/setup-capnproto
+
+          - name: Install Bun
+            uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
@@ -363,21 +408,36 @@ jobs:
         with:
           persist-credentials: false
 
-      # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
-      # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
-      # Pushes and same-repository PRs can mint OIDC tokens. Fork PRs remain
-      # local-only.
-      - name: Set up Turborepo Remote Cache
-        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-        uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
-        with:
-          team: ${{ vars.TURBO_TEAM }}
+      - parallel:
+          # Exchanges a GitHub OIDC token for a short-lived Remote Cache access
+          # token, exported as TURBO_TOKEN/TURBO_TEAM for subsequent steps.
+          # Pushes and same-repository PRs can mint OIDC tokens. Fork PRs remain
+          # local-only.
+          - name: Set up Turborepo Remote Cache
+            if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+            uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
+            with:
+              team: ${{ vars.TURBO_TEAM }}
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: ${{ matrix.node-version }}
+          - name: Setup Node
+            uses: ./.github/actions/setup-node
+            with:
+              node-version: ${{ matrix.node-version }}
+            env:
+              PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+          - name: Setup Rust
+            uses: ./.github/actions/setup-rust
+            with:
+              shared-cache-key: turborepo-debug-build
+              save-cache: true
+              github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+          - name: Setup Zig
+            uses: ./.github/actions/setup-zig
+
+          - name: Setup capnproto
+            uses: ./.github/actions/setup-capnproto
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
