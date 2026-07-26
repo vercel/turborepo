@@ -41,17 +41,15 @@ impl Package {
     }
 
     fn package_from_node(&self, node: &PackageNode) -> Option<Self> {
-        let PackageNode::Workspace(name) = node else {
-            return None;
+        let name = match node {
+            PackageNode::Root => PackageName::Root,
+            PackageNode::Workspace(name) => name.clone(),
         };
-        Self::new(self.run.clone(), name.clone()).ok()
+        Self::new(self.run.clone(), name).ok()
     }
 
     fn is_queryable_node(&self, node: &PackageNode) -> bool {
-        match node {
-            PackageNode::Root => false,
-            PackageNode::Workspace(name) => self.run.pkg_dep_graph().package_view(name).is_some(),
-        }
+        self.package_from_node(node).is_some()
     }
 
     fn collect_nodes<'a>(&self, nodes: impl IntoIterator<Item = &'a PackageNode>) -> Array<Self> {
@@ -180,6 +178,7 @@ impl Package {
             .ok_or_else(|| Error::PackageNotFound(self.name.clone()))?
             .directory()
             .ok_or_else(|| Error::PackageNotFound(self.name.clone()))?
+            .to_unix()
             .to_string())
     }
 

@@ -34,7 +34,7 @@ pub fn package_graph_to_data(pkg_graph: &PackageGraph) -> PackageGraphData {
         nodes.push(PackageNode {
             id: id.clone(),
             name: display_name,
-            path: path.to_string(),
+            path: path.to_unix().to_string(),
             scripts,
             is_root,
         });
