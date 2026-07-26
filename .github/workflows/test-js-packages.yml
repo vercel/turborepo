@@ -116,21 +116,22 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Set up Turborepo Remote Cache
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
-        with:
-          team: ${{ vars.TURBO_TEAM }}
+      - parallel:
+          - name: Set up Turborepo Remote Cache
+            if: github.event.pull_request.head.repo.full_name == github.repository
+            uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
+            with:
+              team: ${{ vars.TURBO_TEAM }}
 
-      - name: "Setup Node"
-        uses: ./.github/actions/setup-node
-        with:
-          node-version: ${{ matrix.node-version }}
-        env:
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+          - name: "Setup Node"
+            uses: ./.github/actions/setup-node
+            with:
+              node-version: ${{ matrix.node-version }}
+            env:
+              PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+          - name: Install Bun
+            uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo

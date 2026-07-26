@@ -117,23 +117,24 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          targets: ${{ matrix.settings.target }}
-          github-token: ${{ github.token }}
-        if: ${{ !matrix.settings.install }}
+      - parallel:
+          - name: Setup Rust
+            uses: ./.github/actions/setup-rust
+            with:
+              targets: ${{ matrix.settings.target }}
+              github-token: ${{ github.token }}
+            if: ${{ !matrix.settings.install }}
 
-      - name: Setup Node
-        uses: ./.github/actions/setup-node
-        with:
-          enable-corepack: false
-        if: ${{ !matrix.settings.install }}
+          - name: Setup Node
+            uses: ./.github/actions/setup-node
+            with:
+              enable-corepack: false
+            if: ${{ !matrix.settings.install }}
 
-      - name: Setup capnproto
-        uses: ./.github/actions/setup-capnproto
-        with:
-          use-cache: ${{ !matrix.settings.install }}
+          - name: Setup capnproto
+            uses: ./.github/actions/setup-capnproto
+            with:
+              use-cache: ${{ !matrix.settings.install }}
 
       - name: Setup toolchain
         run: ${{ matrix.settings.setup }}
@@ -171,11 +172,17 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Setup Node
-        uses: ./.github/actions/setup-node
-        with:
-          enable-corepack: false
-          package-install: false
+      - parallel:
+          - name: Setup Node
+            uses: ./.github/actions/setup-node
+            with:
+              enable-corepack: false
+              package-install: false
+
+          - name: Download Artifacts
+            uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+            with:
+              path: native-packages
 
       - name: Configure npm
         run: |
@@ -205,11 +212,6 @@ jobs:
             --message "library release: ${{ steps.version.outputs.version }}" \
             --all-tracked \
             --include-untracked
-
-      - name: Download Artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          path: native-packages
 
       - name: Move artifacts into place
         run: |
