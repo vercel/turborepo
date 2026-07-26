@@ -63,12 +63,15 @@ impl ProperTaskGraphBuilder {
             pkg_graph.package_scope_directories(),
         );
 
-        // Determine if this is a single package repo
-        let is_single = pkg_graph.len() == 1;
+        // Collect authoritative execution scopes, including aggregates. The
+        // compatibility PackageInfo map can contain a synthetic Cargo root.
+        let workspaces: Vec<PackageName> = pkg_graph
+            .package_scope_directories()
+            .map(|(name, _)| name)
+            .collect();
 
-        // Collect all workspaces
-        let workspaces: Vec<PackageName> =
-            pkg_graph.packages().map(|(name, _)| name.clone()).collect();
+        // Determine if this is a single package repo.
+        let is_single = workspaces.len() == 1;
 
         // Collect all root tasks from turbo.json AND root package.json scripts
         // For devtools, we want to show all tasks including root tasks
