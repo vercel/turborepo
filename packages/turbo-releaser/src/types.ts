@@ -7,3 +7,9 @@ export interface Platform {
   os: SupportedOS;
   arch: SupportedArch;
 }
+
+export interface NpmPackageArtifact {
+  packageName: string;
+  version: string;
+  tarball: string;
+}
