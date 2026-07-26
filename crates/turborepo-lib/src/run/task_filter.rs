@@ -309,19 +309,23 @@ fn find_matching_packages(
             if parent_dir.as_str() == "." {
                 packages.insert(PackageName::Root);
             } else {
-                for (name, info) in pkg_dep_graph.packages() {
-                    if globber.is_match(info.package_path().as_path()) {
-                        packages.insert(name.clone());
+                for (name, directory) in pkg_dep_graph.package_scope_directories() {
+                    if globber.is_match(directory.as_path()) {
+                        packages.insert(name);
                     }
                 }
             }
         }
     } else {
-        // Start with all packages when only name pattern is used
-        packages = pkg_dep_graph
-            .packages()
-            .map(|(name, _)| name.clone())
-            .collect();
+        // Root is also a Turbo task namespace even when there is no root
+        // JavaScript package. Keep it available for name matching without
+        // pretending that it owns the repository directory.
+        packages.insert(PackageName::Root);
+        packages.extend(
+            pkg_dep_graph
+                .package_scope_directories()
+                .map(|(name, _)| name),
+        );
     }
 
     // Name pattern matching
@@ -655,6 +659,83 @@ mod tests {
             command: Some(TaskCommandOverride::Argv(vec!["run".to_string()])),
             ..Default::default()
         }
+    }
+
+    #[tokio::test]
+    async fn package_matching_uses_scope_names_and_directories() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["web", "api"]).await;
+
+        let packages = super::find_matching_packages(
+            &turborepo_scope::TargetSelector {
+                parent_dir: Some(AnchoredSystemPathBuf::from_raw("packages/*").unwrap()),
+                ..Default::default()
+            },
+            &pkg_graph,
+        );
+        assert_eq!(
+            packages,
+            HashSet::from([PackageName::from("web"), PackageName::from("api")])
+        );
+
+        let root_directory = super::find_matching_packages(
+            &turborepo_scope::TargetSelector {
+                parent_dir: Some(AnchoredSystemPathBuf::from_raw(".").unwrap()),
+                ..Default::default()
+            },
+            &pkg_graph,
+        );
+        assert_eq!(root_directory, HashSet::from([PackageName::Root]));
+
+        let root_namespace = super::find_matching_packages(
+            &turborepo_scope::TargetSelector {
+                name_pattern: "//".to_string(),
+                ..Default::default()
+            },
+            &pkg_graph,
+        );
+        assert_eq!(root_namespace, HashSet::from([PackageName::Root]));
+    }
+
+    #[tokio::test]
+    async fn native_only_matching_keeps_root_namespace_without_root_package() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = PackageGraph::builder_optional(root, None)
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::new()))
+            .build()
+            .await
+            .unwrap();
+
+        assert!(!pkg_graph.has_root_javascript_scope());
+
+        let root_directory = super::find_matching_packages(
+            &turborepo_scope::TargetSelector {
+                parent_dir: Some(AnchoredSystemPathBuf::from_raw(".").unwrap()),
+                ..Default::default()
+            },
+            &pkg_graph,
+        );
+        assert_eq!(
+            root_directory,
+            HashSet::from([PackageName::Root]),
+            "{{.}} selects the root Turbo namespace without a root package"
+        );
+
+        let root_namespace = super::find_matching_packages(
+            &turborepo_scope::TargetSelector {
+                name_pattern: "//".to_string(),
+                ..Default::default()
+            },
+            &pkg_graph,
+        );
+        assert_eq!(
+            root_namespace,
+            HashSet::from([PackageName::Root]),
+            "root Turbo tasks remain addressable without a root package"
+        );
     }
 
     #[tokio::test]

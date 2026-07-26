@@ -344,8 +344,10 @@ impl RunBuilder {
     /// - **No filter** (`AllPackages`): root tasks defined in `turbo.json` are
     ///   included automatically.
     /// - **Exclude-only** (`ExcludeOnly`): semantically "all packages minus
-    ///   excluded ones" — root tasks are still included unless the root package
-    ///   itself was explicitly excluded (e.g. `--filter=!//`).
+    ///   excluded ones" — root tasks are still included unless the root Turbo
+    ///   namespace itself was explicitly excluded (e.g. `--filter=!//` or
+    ///   `--filter=!{.}`). Root-directory syntax addresses this namespace even
+    ///   when no root JavaScript package exists.
     /// - **Explicit selection** (`ExplicitSelection`): the user opted into
     ///   specific packages — root tasks are not auto-injected.
     ///
@@ -819,10 +821,21 @@ impl RunBuilder {
                 &root_turbo_json,
             )?
         };
+        // The root Turbo task namespace exists independently of a root
+        // JavaScript package scope. Non-root namespaces, including aggregate
+        // scopes, come from authoritative repository knowledge.
+        let task_namespace_packages: Vec<_> = std::iter::once(PackageName::Root)
+            .chain(
+                pkg_dep_graph
+                    .package_scope_directories()
+                    .map(|(name, _)| name)
+                    .filter(|name| name != &PackageName::Root),
+            )
+            .collect();
         let mut scoped_entrypoint_exclusions = self.task_entrypoint_exclusions(
             &pkg_dep_graph,
             unqualified_entrypoint_packages.iter(),
-            pkg_dep_graph.packages().map(|(name, _)| name),
+            task_namespace_packages.iter(),
             &filter_mode,
         );
         let explicitly_requested_tasks: HashSet<_> = self
@@ -870,10 +883,7 @@ impl RunBuilder {
         // by package-level scope resolution can still be matched. The
         // task-level filter (below) does the pruning when needed.
         let all_pkgs: Vec<PackageName> = if needs_all_packages {
-            pkg_dep_graph
-                .packages()
-                .map(|(name, _)| name.clone())
-                .collect()
+            task_namespace_packages
         } else {
             Vec::new()
         };
@@ -1321,12 +1331,12 @@ impl RunBuilder {
             let toolchain_id = toolchain.id();
             let candidate_names: Vec<_> = candidates
                 .iter()
-                .filter_map(|name| {
+                .filter(|name| {
                     pkg_dep_graph
-                        .package_info(name)
-                        .filter(|info| info.toolchain == toolchain_id)
-                        .map(|_| name.as_str().to_string())
+                        .package_toolchain(name)
+                        .is_some_and(|candidate_toolchain| candidate_toolchain == &toolchain_id)
                 })
+                .map(|name| name.as_str().to_string())
                 .collect();
             let prefer_workspace = match filter_mode {
                 FilterMode::AllPackages => true,
@@ -1342,12 +1352,12 @@ impl RunBuilder {
             exclusions.extend(
                 exclusion_candidates
                     .iter()
-                    .filter_map(|name| {
+                    .filter(|name| {
                         pkg_dep_graph
-                            .package_info(name)
-                            .filter(|info| info.toolchain == toolchain_id)
-                            .map(|_| name.as_str().to_string())
+                            .package_toolchain(name)
+                            .is_some_and(|candidate_toolchain| candidate_toolchain == &toolchain_id)
                     })
+                    .map(|name| name.as_str().to_string())
                     .filter(|name| !selected.contains(name))
                     .map(|name| TaskId::new(&name, task.task()).into_owned()),
             );
