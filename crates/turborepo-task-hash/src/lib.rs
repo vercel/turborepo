@@ -1529,6 +1529,16 @@ mod test {
         )
         .unwrap();
         let cargo_graph = cargo_graph(&cargo_root).await;
+        let cargo_package = cargo_graph
+            .package_scope_directories()
+            .find_map(|(name, directory)| {
+                (directory.to_unix().as_str() == "crates/app").then_some(name)
+            })
+            .expect("Cargo package context is discovered");
+        let cargo_aggregate = cargo_graph
+            .package_scope_directories()
+            .find_map(|(name, _)| cargo_graph.is_aggregate_scope(&name).then_some(name))
+            .expect("Cargo aggregate context is discovered");
 
         assert_eq!(
             context_hash(&js_graph, PackageName::Root, true),
@@ -1541,12 +1551,12 @@ mod test {
             "pure Cargo root Turbo hash bytes changed"
         );
         assert_eq!(
-            context_hash(&cargo_graph, PackageName::from("cargo-app"), true),
+            context_hash(&cargo_graph, cargo_package, true),
             "d4636fbf97ab13d4",
             "Cargo package hash bytes changed"
         );
         assert_eq!(
-            context_hash(&cargo_graph, PackageName::from("cargo-workspace"), true,),
+            context_hash(&cargo_graph, cargo_aggregate, true,),
             "f296efc7e9b4061a",
             "Cargo aggregate hash bytes changed"
         );
