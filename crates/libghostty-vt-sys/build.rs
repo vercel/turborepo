@@ -6,7 +6,7 @@ use std::{
 
 /// Pinned ghostty commit. Update this to pull a newer version.
 const GHOSTTY_REPO: &str = "https://github.com/ghostty-org/ghostty.git";
-const GHOSTTY_COMMIT: &str = "fdbf9ff3a31d7531b691cb49c98fc465a1a503a0";
+const GHOSTTY_COMMIT: &str = "a887df42c56f6de86c0fe6da9c4eeca37931e083";
 
 #[derive(Clone, Copy)]
 enum LinkMode {
@@ -132,7 +132,7 @@ fn build_vendored(link_mode: LinkMode) {
     let mut build = Command::new("zig");
     build
         .arg("build")
-        .arg("-Demit-lib-vt")
+        .arg("-Demit-lib-vt=true")
         .arg(format!("-Doptimize={optimize}"))
         // Cargo artifacts can run on a different machine than the one that
         // built them. Without an explicit CPU, Zig uses the build host's

@@ -80,34 +80,12 @@ export async function publishRelease({
     return;
   }
 
-  const existingVersion = npmVersionExists(version, root, dependencies.run);
-  if (existingVersion) {
-    throw new Error(
-      `turbo@${version} already exists on npm. A previous release may still be merging.`
-    );
-  }
-
   for (const releasePackage of releasePackages) {
     await dependencies.publishWithRetries({
-      packageName: `${releasePackage.name}@${version}`,
+      packageName: releasePackage.name,
+      version,
       tarball: path.join(root, `${releasePackage.tarball}-${version}.tgz`),
       npmTag
     });
-  }
-}
-
-function npmVersionExists(
-  version: string,
-  cwd: string,
-  run: PublishReleaseDependencies["run"]
-): boolean {
-  try {
-    run("npm", ["view", `turbo@${version}`, "version"], {
-      cwd,
-      stdio: "ignore"
-    });
-    return true;
-  } catch {
-    return false;
   }
 }

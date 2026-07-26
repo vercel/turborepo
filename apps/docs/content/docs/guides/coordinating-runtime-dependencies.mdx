@@ -1,0 +1,145 @@
+---
+title: Coordinating development runtime dependencies
+description: Learn how to coordinate development services that depend on each other at runtime.
+product: turborepo
+type: guide
+summary: Combine a readiness probe with with and dependsOn to coordinate runtime dependencies between development services.
+prerequisites:
+  - /docs/crafting-your-repository/developing-applications
+related:
+  - /docs/reference/configuration
+  - /docs/reference/run
+---
+
+Some development tasks need another service to be available before they can start. For example, a frontend may need an API to be accepting requests before its development server starts.
+
+<Callout type="info">
+  This pattern is intended for coordinating services during local development. For CI and production, use the service orchestration and readiness capabilities provided by your CI provider or deployment platform.
+</Callout>
+
+Turborepo can coordinate this workflow by combining:
+
+- [`with`](/docs/reference/configuration#with) to start the service alongside the task that needs it
+- [`dependsOn`](/docs/reference/configuration#dependson) to wait for a finite readiness probe to succeed
+- [`persistent`](/docs/reference/configuration#persistent) to mark the service as long-running
+
+This guide configures packages named `web` and `api`, where the API's development server exposes a health endpoint at `http://localhost:3001/health`.
+
+## Create a readiness probe
+
+The readiness probe should retry until the service is available, exit successfully when it is ready, and fail after a timeout. Keep the readiness condition specific to your service so it can check everything the dependent task requires, such as a database connection or completed initialization.
+
+```js title="./apps/api/scripts/wait-for-ready.mjs"
+const healthUrl = "http://localhost:3001/health";
+const deadline = Date.now() + 60_000;
+
+while (Date.now() < deadline) {
+  try {
+    const response = await fetch(healthUrl, {
+      signal: AbortSignal.timeout(1_000),
+    });
+
+    if (response.ok) {
+      console.log(`API is ready at ${healthUrl}`);
+      process.exit(0);
+    }
+  } catch {
+    // The service may still be starting. Try again until the deadline.
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 500));
+}
+
+console.error(`API did not become ready at ${healthUrl} within 60 seconds`);
+process.exit(1);
+```
+
+Add scripts for the long-running service and its finite readiness probe:
+
+```json title="./apps/api/package.json"
+{
+  "name": "api",
+  "scripts": {
+    "dev": "node ./server.mjs",
+    "dev:ready": "node ./scripts/wait-for-ready.mjs"
+  }
+}
+```
+
+The `api#dev:ready` script does not start the API. It only reports whether the API started by `api#dev` is ready.
+
+The `web` application also needs a `dev` script:
+
+```json title="./apps/web/package.json"
+{
+  "name": "web",
+  "scripts": {
+    "dev": "start-web"
+  }
+}
+```
+
+## Register the tasks
+
+Register both task names in the root `turbo.json`. The readiness probe must not be cached because its result depends on the state of a running service rather than files in the repository.
+
+```json title="./turbo.json"
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "dev:ready": {
+      "cache": false
+    }
+  }
+}
+```
+
+Next, use a [Package Configuration](/docs/reference/package-configurations) to describe the `web` application's runtime requirements:
+
+```json title="./apps/web/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "dev": {
+      "with": ["api#dev"],
+      "dependsOn": ["api#dev:ready"]
+    }
+  }
+}
+```
+
+When `web#dev` is selected, Turborepo:
+
+1. Adds the persistent `api#dev` task to the run because of `with`.
+2. Starts `api#dev` and the non-persistent `api#dev:ready` probe.
+3. Starts `web#dev` after the probe exits successfully.
+4. Continues monitoring `api#dev` and `web#dev` until you stop Turborepo or either task exits.
+
+Do not add `api#dev` to `dependsOn`. A persistent task does not exit, so it cannot complete and unblock a dependent task. The finite `api#dev:ready` probe provides that completion signal instead.
+
+## Run the application
+
+Select the `web` application to start the complete workflow:
+
+```bash title="Terminal"
+turbo run dev --filter=web
+```
+
+The default concurrency has enough capacity for this workflow. If you set [`--concurrency`](/docs/reference/run#--concurrency-number--percentage), use at least `3` so Turborepo has a slot for each persistent task and another for the readiness probe.
+
+If the API does not become ready before the probe's timeout, the probe exits with an error and `web#dev` does not start. Turborepo stops all tasks when you interrupt the run.
+
+## Probe other readiness conditions
+
+An HTTP endpoint is only one way to determine readiness. The probe script can wait for any condition your service exposes, including:
+
+- A TCP port accepting connections
+- A file or Unix socket being created
+- A database accepting queries
+- A specific initialization check succeeding
+
+You can implement the probe yourself, as shown above, or use a utility such as [`wait-on`](https://www.npmjs.com/package/wait-on). In either case, ensure the probe retries transient failures, has a timeout, and exits with a non-zero status when the service does not become ready.

@@ -36,7 +36,6 @@ pub enum Event {
     Down,
     ScrollUp,
     ScrollDown,
-    ScrollWithMomentum(Direction),
     PageUp,
     PageDown,
     JumpToLogsTop,

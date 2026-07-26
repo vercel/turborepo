@@ -612,11 +612,21 @@ This is because the Rust binary is never published to crates.io; it's only publi
 
 This section covers common failure scenarios and how to recover from them.
 
+#### Release Failed During or After npm Publish
+
+The workflow preserves the staging branch and any release tag once npm publishing starts. If publishing or a downstream job fails, re-run the failed jobs. The releaser checks each package version against the public npm registry: missing packages are published, while existing packages are skipped only when tarball integrity and the requested dist-tag match and a provenance attestation is present. Packages with different contents stop the release because npm versions are immutable. The primary `turbo` package is published last so it does not expose an incomplete release through the main package entry point.
+
+After `npm publish` reports an error, the releaser polls npm before retrying. If the registry accepted the package despite the CLI error, matching integrity confirms the publish and the release continues.
+
+The GitHub release step waits for the pushed tag to become visible through the GitHub API before creating the release. If that wait times out, verify that the tag points to the staging commit before re-running the failed jobs.
+
 #### Canary Release Failed Mid-Publish
 
 If a canary release fails after some packages were published but before others:
 
-1. **Identify what was published**:
+1. **Re-run the failed jobs**: The preserved staging branch and registry integrity checks allow the publisher to skip packages that completed and resume with missing packages.
+
+2. **If recovery reports different contents, identify what was published**:
 
    ```bash
    VERSION="2.6.1-canary.5"  # The failed version
@@ -625,7 +635,7 @@ If a canary release fails after some packages were published but before others:
    done
    ```
 
-2. **Option A - Deprecate and re-release**: If few packages were published, deprecate them and trigger a new canary:
+3. **Deprecate and re-release**: If a published package has different integrity, that version cannot be resumed safely. Deprecate the partial release and trigger a new canary:
 
    ```bash
    # Deprecate the partial release
@@ -636,7 +646,7 @@ If a canary release fails after some packages were published but before others:
    # Merge any PR to main to trigger a new canary release
    ```
 
-3. **Option B - Manual completion**: If most packages were published, manually publish the rest:
+4. **Manual completion**: If automated recovery is unavailable, publish the missing packages from the preserved staging branch:
 
    ```bash
    # Ensure you're on the staging branch

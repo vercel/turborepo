@@ -229,6 +229,14 @@ devturbo run build --ui=tui --skip-infer 2> ~/tmp/logs.txt
 > [!IMPORTANT]
 > The `--skip-infer` flag is required so that `turbo` doesn't try to use a locally installed binary of `turbo`. Forgetting to use this flag will cause `devturbo` to defer to the binary installed into the repository rather than the one you're developing.
 
+On Linux, the black-box Terminal UI tests run as part of the standard Rust suite. Run them directly with:
+
+```bash
+cargo nextest run --package turbo --test tui_test
+```
+
+Known TUI regressions are marked ignored. Reproduce them with `--run-ignored ignored-only`.
+
 ## Publishing `turbo` to the npm registry
 
 See [the publishing guide](./RELEASE.md).
