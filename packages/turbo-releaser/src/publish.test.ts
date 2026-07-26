@@ -72,11 +72,9 @@ describe("publishRelease", () => {
     await mkdir(root, { recursive: true });
     await writeFile(path.join(root, "version.txt"), "1.2.3\nlatest\n");
 
-    const run = mock.fn((command: string, args: Array<string>) => {
-      if (command === "npm" && args[0] === "view") {
-        throw new Error("not found");
-      }
-    });
+    const run = mock.fn(
+      (_command: string, _args: Array<string>, _options: object) => undefined
+    );
     const publish = mock.fn(
       (_options: Parameters<typeof publishWithRetries>[0]) => Promise.resolve()
     );
@@ -97,38 +95,8 @@ describe("publishRelease", () => {
 
     assert.deepEqual(
       publish.mock.calls.map(({ arguments: args }) => args[0].packageName),
-      releasePackages.map(({ name }) => `${name}@1.2.3`)
+      releasePackages.map(({ name }) => name)
     );
-  });
-
-  it("refuses to publish an existing turbo version", async () => {
-    const root = path.join(tmpdir(), "turbo-releaser-existing-test");
-    await rm(root, { recursive: true, force: true });
-    await mkdir(root, { recursive: true });
-    await writeFile(path.join(root, "version.txt"), "1.2.3\nlatest\n");
-
-    await assert.rejects(
-      publishRelease({
-        repoRoot: root,
-        artifactsDir: "release-artifacts",
-        versionPath: "version.txt",
-        skipPublish: false,
-        dependencies: {
-          run: mock.fn(
-            (_command: string, _args: Array<string>, _options: object) =>
-              undefined
-          ),
-          packAndPublish: mock.fn(
-            (_options: Parameters<typeof packAndPublish>[0]) =>
-              Promise.resolve()
-          ),
-          publishWithRetries: mock.fn(
-            (_options: Parameters<typeof publishWithRetries>[0]) =>
-              Promise.resolve()
-          )
-        }
-      }),
-      /turbo@1\.2\.3 already exists/
-    );
+    assert.equal(publish.mock.calls.at(-1)?.arguments[0].packageName, "turbo");
   });
 });

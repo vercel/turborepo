@@ -11,7 +11,7 @@
 # 7. Publish the VS Code extension from the release tag
 # 8. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
 # 9. Create a release branch and open a PR, even if VS Code publishing fails
-# 10. On failure, cleanup the staging branch and release tag automatically
+# 10. On failure before npm publishing starts, cleanup the staging branch
 #
 # Canary releases run on an hourly schedule.
 # Manual releases are triggered via workflow_dispatch.
@@ -530,6 +530,8 @@ jobs:
     # TODO: Add rust-smoke-test back to needs and if-condition when re-enabled.
     needs: [stage, build-rust, js-smoke-test]
     if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.js-smoke-test.result == 'success' }}
+    outputs:
+      publish-started: ${{ steps.publish-state.outputs.started }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -568,6 +570,11 @@ jobs:
 
       - name: Build release tool
         run: turbo run build --filter=@turbo/releaser
+
+      - name: Mark publishing started
+        if: ${{ !inputs.dry_run }}
+        id: publish-state
+        run: echo "started=true" >> "$GITHUB_OUTPUT"
 
       - name: Perform Release
         run: |
@@ -624,6 +631,20 @@ jobs:
           VERSION: ${{ needs.stage.outputs.version }}
           PREVIOUS_TAG: ${{ needs.stage.outputs.previous-tag }}
         run: |
+          EXPECTED_SHA=$(git rev-parse HEAD)
+          for ATTEMPT in {1..24}; do
+            REMOTE_SHA=$(gh api "repos/${{ github.repository }}/git/ref/tags/v${VERSION}" --jq '.object.sha' 2>/dev/null || true)
+            if [ "$REMOTE_SHA" = "$EXPECTED_SHA" ]; then
+              echo "Tag v${VERSION} is visible through the GitHub API."
+              break
+            fi
+            if [ "$ATTEMPT" -eq 24 ]; then
+              echo "::error::Tag v${VERSION} did not resolve to ${EXPECTED_SHA} through the GitHub API after 2 minutes. Last observed SHA: ${REMOTE_SHA:-missing}."
+              exit 1
+            fi
+            sleep 5
+          done
+
           PRERELEASE_FLAG=""
           if [[ "$VERSION" == *"-canary."* ]]; then
             PRERELEASE_FLAG=("--prerelease")
@@ -636,11 +657,15 @@ jobs:
             NOTES_START_TAG_FLAG=("--notes-start-tag" "$PREVIOUS_TAG")
           fi
 
-          gh release create "v${VERSION}" \
-            --title "Turborepo v${VERSION}" \
-            --generate-notes \
-            "${NOTES_START_TAG_FLAG[@]}" \
-            "${PRERELEASE_FLAG[@]}"
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            echo "GitHub release v${VERSION} already exists. Skipping."
+          else
+            gh release create "v${VERSION}" \
+              --title "Turborepo v${VERSION}" \
+              --generate-notes \
+              "${NOTES_START_TAG_FLAG[@]}" \
+              "${PRERELEASE_FLAG[@]}"
+          fi
 
   publish-vscode-extension:
     name: "Publish VS Code Extension"
@@ -892,6 +917,7 @@ jobs:
       ${{
         always()
         && needs.stage.result == 'success'
+        && needs.npm-publish.outputs.publish-started != 'true'
         && (
           needs.build-rust.result == 'failure'
           || needs.js-smoke-test.result == 'failure'

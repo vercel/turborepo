@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import type { Platform } from "./types";
+import type { NpmPackageArtifact, Platform } from "./types";
 import operations from "./operations";
 
 interface PackAndPublishOptions {
@@ -26,7 +26,7 @@ export async function packAndPublish({
   description
 }: PackAndPublishOptions) {
   console.log("Starting packAndPublish process...");
-  const artifacts: Array<string> = [];
+  const artifacts: Array<NpmPackageArtifact> = [];
 
   for (const platform of platforms) {
     console.log(`Processing platform: ${platform.os}-${platform.arch}`);

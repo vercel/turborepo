@@ -10,7 +10,6 @@ export const supportedPlatforms: Array<Platform> = [
 ];
 
 export const releasePackages = [
-  { name: "turbo", directory: "packages/turbo", tarball: "turbo" },
   {
     name: "create-turbo",
     directory: "packages/create-turbo",
@@ -50,7 +49,8 @@ export const releasePackages = [
     name: "@turbo/types",
     directory: "packages/turbo-types",
     tarball: "turbo-types"
-  }
+  },
+  { name: "turbo", directory: "packages/turbo", tarball: "turbo" }
 ] as const;
 
 export const releaseBuildFilters = releasePackages
