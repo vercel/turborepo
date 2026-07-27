@@ -142,6 +142,19 @@ impl Toolchain for AggregateToolchain {
             ))
         })
     }
+
+    fn task_command(
+        &self,
+        _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
+        _task: &str,
+        _pass_through_args: Option<&[String]>,
+        _override_command: Option<&[String]>,
+    ) -> Result<
+        Option<turborepo_repository::toolchain::TaskCommand>,
+        turborepo_repository::toolchain::Error,
+    > {
+        Ok(None)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -196,6 +209,19 @@ impl Toolchain for StubIOToolchain {
                 vec![WorkspaceRoot::new("stub-io", self.repo_root.clone())],
             ))
         })
+    }
+
+    fn task_command(
+        &self,
+        _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
+        _task: &str,
+        _pass_through_args: Option<&[String]>,
+        _override_command: Option<&[String]>,
+    ) -> Result<
+        Option<turborepo_repository::toolchain::TaskCommand>,
+        turborepo_repository::toolchain::Error,
+    > {
+        Ok(None)
     }
 
     fn defines_task(

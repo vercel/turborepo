@@ -1331,6 +1331,16 @@ mod test {
         fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
             Box::pin(async move { Ok(DiscoveredPackages::new(Vec::new(), self.roots.clone())) })
         }
+
+        fn task_command(
+            &self,
+            _context: &crate::package_graph::PackageTaskContext<'_>,
+            _task: &str,
+            _pass_through_args: Option<&[String]>,
+            _override_command: Option<&[String]>,
+        ) -> Result<Option<crate::toolchain::TaskCommand>, crate::toolchain::Error> {
+            Ok(None)
+        }
     }
 
     struct PackageWithoutRootToolchain {
@@ -1354,6 +1364,16 @@ mod test {
                     Vec::new(),
                 ))
             })
+        }
+
+        fn task_command(
+            &self,
+            _context: &crate::package_graph::PackageTaskContext<'_>,
+            _task: &str,
+            _pass_through_args: Option<&[String]>,
+            _override_command: Option<&[String]>,
+        ) -> Result<Option<crate::toolchain::TaskCommand>, crate::toolchain::Error> {
+            Ok(None)
         }
     }
 

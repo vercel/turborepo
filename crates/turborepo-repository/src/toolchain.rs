@@ -345,10 +345,7 @@ pub trait Toolchain: Send + Sync {
         task: &str,
         pass_through_args: Option<&[String]>,
         override_command: Option<&[String]>,
-    ) -> Result<Option<TaskCommand>, Error> {
-        let _ = (context, task, pass_through_args, override_command);
-        Ok(None)
-    }
+    ) -> Result<Option<TaskCommand>, Error>;
 
     /// A one-line description of what `task` runs for `package`, for
     /// dry-run output and run summaries. Derived from the same tables as
@@ -1405,6 +1402,16 @@ mod tests {
             }
             fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
                 Box::pin(async { Ok(DiscoveredPackages::default()) })
+            }
+
+            fn task_command(
+                &self,
+                _context: &crate::package_graph::PackageTaskContext<'_>,
+                _task: &str,
+                _pass_through_args: Option<&[String]>,
+                _override_command: Option<&[String]>,
+            ) -> Result<Option<TaskCommand>, Error> {
+                Ok(None)
             }
         }
 

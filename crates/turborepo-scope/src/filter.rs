@@ -1003,6 +1003,19 @@ mod test {
                 ))
             })
         }
+
+        fn task_command(
+            &self,
+            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
+            _task: &str,
+            _pass_through_args: Option<&[String]>,
+            _override_command: Option<&[String]>,
+        ) -> Result<
+            Option<turborepo_repository::toolchain::TaskCommand>,
+            turborepo_repository::toolchain::Error,
+        > {
+            Ok(None)
+        }
     }
 
     /// Make a project resolver with the provided dependencies. Extras is for
