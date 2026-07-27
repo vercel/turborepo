@@ -28,7 +28,7 @@ use turborepo_cache::{
     AsyncCache, CacheError, CacheHitMetadata, CacheOpts, CacheSource, http::UploadMap,
 };
 use turborepo_hash::{FileHashes, TurboHash};
-use turborepo_repository::package_graph::PackageInfo;
+use turborepo_repository::package_graph::PackageTaskContext;
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{TrackedErrors, task::PackageTaskEventBuilder};
@@ -54,6 +54,19 @@ pub enum Error {
     SpawnBlocking(String),
     #[error("Task output resolves outside of repository root: {0}")]
     OutputOutsideRepo(String),
+    #[error(
+        "Package context repository root {context_root} does not match run-cache repository root \
+         {repo_root}"
+    )]
+    ContextRepositoryRootMismatch {
+        context_root: AbsoluteSystemPathBuf,
+        repo_root: AbsoluteSystemPathBuf,
+    },
+    #[error("Task {task_id} does not belong to package context {package}")]
+    TaskPackageMismatch {
+        task_id: TaskId<'static>,
+        package: turborepo_repository::package_graph::PackageName,
+    },
     #[error(transparent)]
     Scm(#[from] turborepo_scm::Error),
     #[error(transparent)]
@@ -158,16 +171,29 @@ impl RunCache {
         self: &Arc<Self>,
         // TODO: Group these in a struct
         task_definition: &TaskDefinition,
-        workspace_info: &PackageInfo,
+        package_context: &PackageTaskContext<'_>,
         task_id: TaskId<'static>,
         hash: &str,
-    ) -> TaskCache {
+    ) -> Result<TaskCache, Error> {
+        if package_context.repository_root() != self.repo_root.as_ref() {
+            return Err(Error::ContextRepositoryRootMismatch {
+                context_root: package_context.repository_root().to_owned(),
+                repo_root: self.repo_root.clone(),
+            });
+        }
+        if task_id.to_workspace_name() != *package_context.package() {
+            return Err(Error::TaskPackageMismatch {
+                task_id,
+                package: package_context.package().clone(),
+            });
+        }
+        let package_directory = package_context.directory();
         let log_file_path = self
             .repo_root
-            .resolve(workspace_info.package_path())
+            .resolve(package_directory)
             .resolve(&TaskDefinition::workspace_relative_log_file(task_id.task()));
         let repo_relative_globs =
-            task_definition.repo_relative_hashable_outputs(&task_id, workspace_info.package_path());
+            task_definition.repo_relative_hashable_outputs(&task_id, package_directory);
 
         let mut task_output_logs = task_definition.output_logs;
         if let Some(task_output_logs_override) = self.task_output_logs {
@@ -177,7 +203,7 @@ impl RunCache {
         let caching_disabled = !task_definition.cache;
 
         let incremental_cache = task_definition.incremental.as_ref().map(|partitions| {
-            let package_dir = self.repo_root.resolve(workspace_info.package_path());
+            let package_dir = self.repo_root.resolve(package_directory);
             incremental::IncrementalTaskCache::new(
                 partitions.clone(),
                 task_id.package().to_string(),
@@ -189,7 +215,7 @@ impl RunCache {
             )
         });
 
-        TaskCache {
+        Ok(TaskCache {
             expanded_outputs: Vec::new(),
             run_cache: self.clone(),
             repo_relative_globs,
@@ -203,7 +229,7 @@ impl RunCache {
             warnings: self.warnings.clone(),
             errors_only_show_hash: self.errors_only_show_hash,
             incremental_cache,
-        }
+        })
     }
 
     pub async fn shutdown_cache(
@@ -917,6 +943,7 @@ mod test {
     use std::{
         collections::HashSet,
         io::Write,
+        path::MAIN_SEPARATOR,
         sync::{
             Arc, Mutex,
             atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -924,13 +951,21 @@ mod test {
         time::Duration,
     };
 
+    use serde_json::json;
     use tempfile::tempdir;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
     use turborepo_cache::{AsyncCache, CacheActions, CacheConfig, CacheOpts, LazyScmState};
     use turborepo_log::{LogSink, Logger, OutputChannel, grouping::GroupingLayer};
+    use turborepo_repository::{
+        cargo::CargoToolchain,
+        package_graph::{PackageGraph, PackageName},
+        package_json::PackageJson,
+    };
     use turborepo_task_id::TaskId;
     use turborepo_telemetry::events::task::PackageTaskEventBuilder;
-    use turborepo_types::{OutputLogsMode, TaskOutputs};
+    use turborepo_types::{
+        IncrementalPartition, OutputLogsMode, RunCacheOpts, TaskDefinition, TaskOutputs,
+    };
     use turborepo_ui::ColorConfig;
 
     use super::{OutputWatcher, OutputWatcherError, RunCache, TaskCache};
@@ -947,6 +982,273 @@ mod test {
             cache_max_age: None,
             cache_max_size: None,
         }
+    }
+
+    async fn javascript_graph(
+        repo_root: &AbsoluteSystemPathBuf,
+        packages_dir: &str,
+    ) -> PackageGraph {
+        let root_json = json!({
+            "name": "root",
+            "packageManager": "npm@10.0.0",
+            "workspaces": [format!("{packages_dir}/*")]
+        });
+        repo_root
+            .join_component("package.json")
+            .create_with_contents(serde_json::to_string(&root_json).unwrap())
+            .unwrap();
+        let app_json = repo_root.join_components(&[packages_dir, "app", "package.json"]);
+        app_json.ensure_dir().unwrap();
+        app_json
+            .create_with_contents(serde_json::to_string(&json!({ "name": "app" })).unwrap())
+            .unwrap();
+        PackageGraph::builder(repo_root, PackageJson::from_value(root_json).unwrap())
+            .build()
+            .await
+            .unwrap()
+    }
+
+    async fn cargo_graph(repo_root: &AbsoluteSystemPathBuf) -> PackageGraph {
+        repo_root
+            .join_component("Cargo.toml")
+            .create_with_contents(
+                "[workspace]\nmembers = [\"crates/app\"]\nresolver = \
+                 \"2\"\n\n[workspace.metadata]\nname = \"cargo-workspace\"\n",
+            )
+            .unwrap();
+        let manifest = repo_root.join_components(&["crates", "app", "Cargo.toml"]);
+        manifest.ensure_dir().unwrap();
+        manifest
+            .create_with_contents(
+                "[package]\nname = \"cargo-app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            )
+            .unwrap();
+        repo_root
+            .join_components(&["crates", "app", "src", "lib.rs"])
+            .ensure_dir()
+            .unwrap();
+        repo_root
+            .join_components(&["crates", "app", "src", "lib.rs"])
+            .create_with_contents("")
+            .unwrap();
+        repo_root
+            .join_component("Cargo.lock")
+            .create_with_contents(
+                "version = 4\n\n[[package]]\nname = \"cargo-app\"\nversion = \"0.1.0\"\n",
+            )
+            .unwrap();
+        PackageGraph::builder_optional(repo_root, None)
+            .with_toolchain(CargoToolchain::new(repo_root.clone()))
+            .build()
+            .await
+            .unwrap()
+    }
+
+    fn run_cache(repo_root: &AbsoluteSystemPathBuf) -> Arc<RunCache> {
+        let cache_opts = local_cache_opts(repo_root);
+        let cache = AsyncCache::new(
+            &cache_opts,
+            repo_root,
+            None,
+            None,
+            None,
+            LazyScmState::resolved(None),
+        )
+        .unwrap();
+        Arc::new(RunCache::new(
+            cache,
+            repo_root,
+            RunCacheOpts::default(),
+            &cache_opts,
+            None,
+            ColorConfig::new(false),
+            false,
+        ))
+    }
+
+    async fn assert_incremental_roundtrip(task_cache: &TaskCache, output: &AbsoluteSystemPathBuf) {
+        output.ensure_dir().unwrap();
+        output.create_with_contents("state").unwrap();
+        assert_eq!(task_cache.upload_incremental().await, 0);
+        task_cache.run_cache.cache.wait().await.unwrap();
+        output.remove_file().unwrap();
+        assert!(task_cache.fetch_incremental().await.any_restored());
+        assert!(output.exists());
+    }
+
+    #[tokio::test]
+    async fn task_cache_uses_context_and_ignores_stale_or_missing_payload() {
+        let tmp = tempdir().unwrap();
+        let repo_root =
+            AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
+        let mut graph = javascript_graph(&repo_root, "packages").await;
+        assert!(graph.set_package_json_path_for_test(
+            &PackageName::from("app"),
+            AnchoredSystemPathBuf::from_raw(format!("stale{MAIN_SEPARATOR}package.json")).unwrap(),
+        ));
+        let cache = run_cache(&repo_root);
+        let definition = TaskDefinition {
+            incremental: Some(vec![IncrementalPartition {
+                outputs: TaskOutputs {
+                    inclusions: vec![".incremental/**".to_string()],
+                    exclusions: Vec::new(),
+                },
+                inputs: Vec::new(),
+            }]),
+            ..Default::default()
+        };
+
+        let root = cache
+            .task_cache(
+                &definition,
+                &graph.package_task_context(&PackageName::Root).unwrap(),
+                TaskId::new("//", "build"),
+                "root-hash",
+            )
+            .unwrap();
+        assert_eq!(
+            root.log_file_path,
+            repo_root.join_components(&[".turbo", "turbo-build.log"])
+        );
+        let app_task = TaskId::from_static("app".to_string(), "build#variant".to_string());
+        let app = cache
+            .task_cache(
+                &definition,
+                &graph
+                    .package_task_context(&PackageName::from("app"))
+                    .unwrap(),
+                app_task.clone(),
+                "app-hash",
+            )
+            .unwrap();
+        assert_eq!(
+            app.log_file_path,
+            repo_root.join_components(&["packages", "app", ".turbo", "turbo-build#variant.log",])
+        );
+        assert!(
+            app.repo_relative_globs
+                .inclusions
+                .iter()
+                .all(|glob| glob
+                    .starts_with(&format!("packages{MAIN_SEPARATOR}app{MAIN_SEPARATOR}")))
+        );
+        assert_eq!(app.task_id, app_task);
+        assert_incremental_roundtrip(
+            &app,
+            &repo_root.join_components(&["packages", "app", ".incremental", "state.bin"]),
+        )
+        .await;
+
+        assert!(matches!(
+            cache.task_cache(
+                &definition,
+                &graph.package_task_context(&PackageName::Root).unwrap(),
+                TaskId::new("app", "build"),
+                "hash",
+            ),
+            Err(super::Error::TaskPackageMismatch { .. })
+        ));
+
+        graph.remove_package_info_for_test(&PackageName::from("app"));
+        assert!(
+            cache
+                .task_cache(
+                    &definition,
+                    &graph
+                        .package_task_context(&PackageName::from("app"))
+                        .unwrap(),
+                    TaskId::new("app", "build"),
+                    "hash",
+                )
+                .is_ok()
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn pure_native_root_and_cargo_aggregate_use_repository_directory() {
+        let tmp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        let mut graph = cargo_graph(&repo_root).await;
+        graph.remove_package_info_for_test(&PackageName::Root);
+        graph.remove_package_info_for_test(&PackageName::from("cargo-workspace"));
+        let cache = run_cache(&repo_root);
+        let definition = TaskDefinition {
+            outputs: TaskOutputs {
+                inclusions: vec!["dist/**".to_string()],
+                exclusions: Vec::new(),
+            },
+            incremental: Some(vec![IncrementalPartition {
+                outputs: TaskOutputs {
+                    inclusions: vec![".incremental/**".to_string()],
+                    exclusions: Vec::new(),
+                },
+                inputs: Vec::new(),
+            }]),
+            ..Default::default()
+        };
+
+        for package in [PackageName::Root, PackageName::from("cargo-workspace")] {
+            let task_cache = cache
+                .task_cache(
+                    &definition,
+                    &graph.package_task_context(&package).unwrap(),
+                    TaskId::new(package.as_str(), "build").into_owned(),
+                    "hash",
+                )
+                .unwrap();
+            assert_eq!(
+                task_cache.log_file_path,
+                repo_root.join_components(&[".turbo", "turbo-build.log"])
+            );
+            assert_eq!(
+                task_cache.repo_relative_globs,
+                TaskOutputs {
+                    inclusions: vec![".turbo/turbo-build.log".to_string(), "dist/**".to_string(),],
+                    exclusions: Vec::new(),
+                }
+            );
+            assert_incremental_roundtrip(
+                &task_cache,
+                &repo_root.join_components(&[".incremental", "state.bin"]),
+            )
+            .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn task_cache_rejects_same_name_context_from_another_repository() {
+        let first_tmp = tempdir().unwrap();
+        let first_root =
+            AbsoluteSystemPathBuf::new(first_tmp.path().to_string_lossy().to_string()).unwrap();
+        let first_graph = javascript_graph(&first_root, "packages").await;
+        let second_tmp = tempdir().unwrap();
+        let second_root =
+            AbsoluteSystemPathBuf::new(second_tmp.path().to_string_lossy().to_string()).unwrap();
+        let second_graph = javascript_graph(&second_root, "apps").await;
+        let package = PackageName::from("app");
+        assert_ne!(
+            first_graph
+                .package_task_context(&package)
+                .unwrap()
+                .directory(),
+            second_graph
+                .package_task_context(&package)
+                .unwrap()
+                .directory()
+        );
+        let result = run_cache(&second_root).task_cache(
+            &TaskDefinition::default(),
+            &first_graph.package_task_context(&package).unwrap(),
+            TaskId::new("app", "build"),
+            "hash",
+        );
+        assert!(matches!(
+            result,
+            Err(super::Error::ContextRepositoryRootMismatch { .. })
+        ));
     }
 
     fn task_cache_for_outputs(
