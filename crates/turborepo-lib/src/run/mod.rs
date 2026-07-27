@@ -1122,7 +1122,6 @@ impl Run {
             tokio::sync::oneshot::Receiver<()>,
         )>,
     ) -> Result<i32, Error> {
-        let workspaces = self.pkg_dep_graph.packages().collect();
         // Barrier for the untracked-file scan: file hashing below needs the
         // complete index. Nothing executes before this resolves, so hash
         // error semantics are unchanged from when `Run` construction waited.
@@ -1174,7 +1173,7 @@ impl Run {
                     file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
                         &self.scm,
                         self.engine.tasks(),
-                        workspaces,
+                        &self.pkg_dep_graph,
                         self.engine.task_definitions(),
                         &self.repo_root,
                         &self.run_telemetry,

@@ -209,6 +209,56 @@ pub struct PackageGraphNodeView<'a> {
     toolchain: Option<&'a crate::toolchain::ToolchainId>,
 }
 
+/// Identity-bearing execution context for a Turbo task namespace.
+///
+/// Only [`PackageGraph::package_task_context`] can construct this value, so
+/// its identity, authoritative directory, and optional compatibility payload
+/// cannot be assembled from unrelated graph entries. The root Turbo namespace
+/// exists at the repository directory even when the repository has no root
+/// JavaScript scope (for example, a pure Cargo workspace).
+#[derive(Debug, Clone)]
+pub struct PackageTaskContext<'a> {
+    package: PackageName,
+    repository_root: &'a AbsoluteSystemPath,
+    directory: &'a AnchoredSystemPath,
+    package_info: Option<&'a PackageInfo>,
+    kind: PackageTaskContextKind,
+    requires_compatibility_payload: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PackageTaskContextKind {
+    Root,
+    Package,
+    Aggregate,
+}
+
+impl<'a> PackageTaskContext<'a> {
+    pub fn package(&self) -> &PackageName {
+        &self.package
+    }
+
+    pub fn repository_root(&self) -> &'a AbsoluteSystemPath {
+        self.repository_root
+    }
+
+    pub fn directory(&self) -> &'a AnchoredSystemPath {
+        self.directory
+    }
+
+    pub fn package_info(&self) -> Option<&'a PackageInfo> {
+        self.package_info
+    }
+
+    pub fn kind(&self) -> PackageTaskContextKind {
+        self.kind
+    }
+
+    pub fn requires_compatibility_payload(&self) -> bool {
+        self.requires_compatibility_payload
+    }
+}
+
 impl<'a> PackageGraphNodeView<'a> {
     pub fn kind(&self) -> PackageGraphNodeKind {
         self.kind
@@ -492,6 +542,53 @@ impl PackageGraph {
                 })
             }
         }
+    }
+
+    /// Resolves the complete context for tasks in `package`.
+    ///
+    /// Non-root identities must exist in repository knowledge. Compatibility
+    /// payload is associated when present, but is not authoritative and is not
+    /// required to construct a context. The root identity denotes Turbo's root
+    /// task namespace and is always anchored at the repository directory.
+    pub fn package_task_context(&self, package: &PackageName) -> Option<PackageTaskContext<'_>> {
+        let (package, directory, kind, requires_compatibility_payload) = match package {
+            PackageName::Root => (
+                PackageName::Root,
+                self.knowledge.repository_directory(),
+                PackageTaskContextKind::Root,
+                self.knowledge.root_javascript_scope().is_some(),
+            ),
+            PackageName::Other(name) => {
+                let scope = self.knowledge.scope(name)?;
+                let kind = match scope.kind() {
+                    crate::knowledge::ScopeKind::Package => PackageTaskContextKind::Package,
+                    crate::knowledge::ScopeKind::Aggregate => PackageTaskContextKind::Aggregate,
+                };
+                (
+                    PackageName::Other(scope.identity().to_owned()),
+                    scope.directory(),
+                    kind,
+                    true,
+                )
+            }
+        };
+        let package_info = self.packages.get(&package);
+
+        Some(PackageTaskContext {
+            package,
+            repository_root: self.knowledge.repository_root(),
+            directory,
+            package_info,
+            kind,
+            requires_compatibility_payload,
+        })
+    }
+
+    /// Test hook for exercising knowledge-backed consumers without a
+    /// compatibility projection.
+    #[cfg(any(test, feature = "test-util"))]
+    pub fn remove_package_info_for_test(&mut self, package: &PackageName) -> Option<PackageInfo> {
+        self.packages.remove(package)
     }
 
     /// Iterates the structural graph sentinel followed by every authoritative
@@ -2307,7 +2404,7 @@ version = "0.1.0"
         let (_tmp, root) = canonical_tempdir();
         write_cargo_workspace_fixture(&root);
 
-        let pkg_graph = PackageGraph::builder_optional(&root, None)
+        let mut pkg_graph = PackageGraph::builder_optional(&root, None)
             .with_toolchain(crate::cargo::CargoToolchain::new(root.clone()))
             .build()
             .await
@@ -2323,6 +2420,19 @@ version = "0.1.0"
             "a pure Cargo repository has no root JavaScript execution scope"
         );
         assert!(!pkg_graph.has_root_javascript_scope());
+        let root_context = pkg_graph
+            .package_task_context(&PackageName::Root)
+            .expect("pure Cargo still has a root Turbo task namespace");
+        assert_eq!(root_context.package(), &PackageName::Root);
+        assert_eq!(
+            root_context.directory(),
+            pkg_graph.repository_knowledge().repository_directory()
+        );
+        assert_eq!(root_context.kind(), PackageTaskContextKind::Root);
+        assert!(std::ptr::eq(
+            root_context.package_info().unwrap(),
+            pkg_graph.package_info(&PackageName::Root).unwrap()
+        ));
         assert_eq!(pkg_graph.package_definition_path(&PackageName::Root), None);
         assert_eq!(pkg_graph.package_toolchain(&PackageName::Root), None);
         assert!(
@@ -2386,6 +2496,17 @@ version = "0.1.0"
             app_deps.contains(&PackageNode::Workspace(PackageName::from("lib-a"))),
             "app should depend on lib-a, got {app_deps:?}"
         );
+
+        assert!(
+            pkg_graph
+                .remove_package_info_for_test(&PackageName::Root)
+                .is_some()
+        );
+        let root_without_payload = pkg_graph
+            .package_task_context(&PackageName::Root)
+            .expect("root context is independent of compatibility payload");
+        assert!(root_without_payload.package_info().is_none());
+        assert_eq!(root_without_payload.repository_root(), root.as_ref());
     }
 
     /// A crate and a JS package sharing a name is a hard error, like any
