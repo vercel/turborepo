@@ -1461,8 +1461,10 @@ mod test {
     #[tokio::test(flavor = "multi_thread")]
     async fn file_hashing_supports_pure_cargo_root_turbo_namespace() {
         let tmp = tempdir().unwrap();
+        // dunce: `cargo metadata` reports plain (non-verbatim) paths on
+        // Windows, so the fixture root must be plain too.
         let repo_root = AbsoluteSystemPathBuf::new(
-            std::fs::canonicalize(tmp.path())
+            dunce::canonicalize(tmp.path())
                 .unwrap()
                 .to_string_lossy()
                 .to_string(),
@@ -1521,8 +1523,10 @@ mod test {
         let js_graph = javascript_graph(&js_root).await;
 
         let cargo_tmp = tempdir().unwrap();
+        // dunce: `cargo metadata` reports plain (non-verbatim) paths on
+        // Windows, so the fixture root must be plain too.
         let cargo_root = AbsoluteSystemPathBuf::new(
-            std::fs::canonicalize(cargo_tmp.path())
+            dunce::canonicalize(cargo_tmp.path())
                 .unwrap()
                 .to_string_lossy()
                 .to_string(),
