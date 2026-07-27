@@ -1167,13 +1167,10 @@ mod test {
     #[tokio::test(flavor = "multi_thread")]
     async fn pure_native_root_and_cargo_aggregate_use_repository_directory() {
         let tmp = tempdir().unwrap();
-        let repo_root = AbsoluteSystemPathBuf::new(
-            std::fs::canonicalize(tmp.path())
-                .unwrap()
-                .to_string_lossy()
-                .to_string(),
-        )
-        .unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
         let mut graph = cargo_graph(&repo_root).await;
         graph.remove_package_info_for_test(&PackageName::Root);
         graph.remove_package_info_for_test(&PackageName::from("cargo-workspace"));
@@ -1209,10 +1206,7 @@ mod test {
             assert_eq!(
                 task_cache.repo_relative_globs,
                 TaskOutputs {
-                    inclusions: vec![
-                        format!("{MAIN_SEPARATOR}.turbo/turbo-build.log"),
-                        format!("{MAIN_SEPARATOR}dist/**"),
-                    ],
+                    inclusions: vec![".turbo/turbo-build.log".to_string(), "dist/**".to_string(),],
                     exclusions: Vec::new(),
                 }
             );

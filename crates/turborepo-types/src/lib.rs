@@ -1089,6 +1089,9 @@ impl TaskDefinitionExt for TaskDefinition {
         workspace_dir: &AnchoredSystemPath,
     ) -> TaskOutputs {
         let make_glob_repo_relative = |glob: &str| -> String {
+            if workspace_dir.as_str().is_empty() {
+                return glob.to_owned();
+            }
             let mut repo_relative_glob = workspace_dir.to_string();
             repo_relative_glob.push(std::path::MAIN_SEPARATOR);
             repo_relative_glob.push_str(glob);
