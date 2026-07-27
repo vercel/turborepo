@@ -1210,7 +1210,7 @@ mod test {
                 task_cache.repo_relative_globs,
                 TaskOutputs {
                     inclusions: vec![
-                        format!("{MAIN_SEPARATOR}.turbo{MAIN_SEPARATOR}turbo-build.log"),
+                        format!("{MAIN_SEPARATOR}.turbo/turbo-build.log"),
                         format!("{MAIN_SEPARATOR}dist/**"),
                     ],
                     exclusions: Vec::new(),
