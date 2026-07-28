@@ -139,6 +139,13 @@ Represents the workspace structure and package dependencies:
   root, root JavaScript execution scope, real package identities and source
   boundaries, native definition paths, native workspace roots, provenance, and
   required aggregate scopes
+- Builds and retains a separate immutable, parser-neutral relationship
+  generation validated against that exact repository generation. Descriptors
+  without native facts (JavaScript and legacy custom toolchains) are classified
+  once with package-manager policy; Cargo supplies already-classified native
+  internal relationships. Cargo.lock external closures remain separate. Package
+  graph edges and unresolved external declaration maps are projections of the
+  normalized generation.
 - Performs ecosystem-specific lockfile analysis
 - Builds dependency relationships between workspace packages
 - Validates that all non-root packages have a `name` field
@@ -153,13 +160,19 @@ enumeration. Consumers enumerate and resolve authoritative contexts/views, then
 look up an optional payload only for the remaining relationship and task data.
 The retained native `PackageJson.name` is non-authoritative payload data: no
 consumer may derive package identity, path, or provenance from it.
+Compatibility payloads still provide JavaScript relationship-classification
+inputs, lockfile resolution and hash state, and task construction data. Cargo
+no longer synthesizes JavaScript dependency maps, but retains empty
+`PackageJson` descriptors until task compatibility payloads are removed.
 Native manifests and metadata do not enter repository knowledge. Native
 definition paths must remain within the repository, including after resolving
 existing symlinks.
 
 The remaining payload deletion phases are explicit:
 
-- **Phase 2:** Move script, dependency, and version reads behind task/relationship queries.
+- **Phase 2:** Move script and version reads behind task queries; normalized
+  relationship knowledge now owns graph assembly, while JavaScript declarations
+  remain a temporary classification input.
 - **Phase 3:** Move unresolved dependency and lockfile-closure/hash state behind lockfile and hashing queries.
 - **Phase 4:** Delete `PackageInfo`, its payload map, and optional-payload compatibility plumbing once all fail-closed consumers use those queries.
 

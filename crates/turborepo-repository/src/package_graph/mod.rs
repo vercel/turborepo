@@ -15,8 +15,10 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
 
 use crate::{
-    discovery::LocalPackageDiscoveryBuilder, knowledge::RepositoryKnowledge,
-    package_json::PackageJson, package_manager::PackageManager,
+    discovery::LocalPackageDiscoveryBuilder,
+    knowledge::{RelationshipKnowledge, RepositoryKnowledge},
+    package_json::PackageJson,
+    package_manager::PackageManager,
 };
 
 pub mod builder;
@@ -52,6 +54,10 @@ pub struct PackageGraph {
     package_manager: Option<PackageManager>,
     lockfile: Option<Arc<dyn Lockfile>>,
     knowledge: Arc<RepositoryKnowledge>,
+    /// The exact normalized relationship generation projected into `graph` and
+    /// unresolved external declaration maps.
+    #[allow(dead_code)]
+    relationship_knowledge: Arc<RelationshipKnowledge>,
     /// Receiver for background transitive-closure computation when the graph
     /// was built with deferred closures. Consumed (exactly once) by
     /// [`Self::ensure_transitive_closures`].
@@ -91,13 +97,15 @@ impl WorkspacePackage {
     }
 }
 
-/// Compatibility data retained for relationship and task consumers.
+/// Compatibility data retained for descriptor relationship classification,
+/// JavaScript lockfile resolution/hash state, and task consumers.
 ///
 /// Package identity, directory ownership, definition source, and provenance
 /// are authoritative in [`RepositoryKnowledge`], not in this projection.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PackageInfo {
-    /// A temporary compatibility descriptor for relationships and tasks.
+    /// A temporary compatibility descriptor for relationship classification
+    /// and tasks.
     /// Its native `name` may be retained for later payload semantics, but must
     /// never be used as package identity or to derive paths or provenance.
     pub package_json: PackageJson,

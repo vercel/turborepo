@@ -1,8 +1,9 @@
 //! Immutable, parser-neutral facts observed about a repository.
 //!
 //! This module deliberately contains no package manifests or native metadata.
-//! Those remain compatibility inputs for relationship and task construction;
-//! package identity, ownership boundaries, and definition sources live here.
+//! Parsers contribute normalized facts here; compatibility payloads remain
+//! inputs for classification, lockfile resolution and hash state, and task
+//! construction.
 
 use std::collections::HashMap;
 
@@ -10,7 +11,77 @@ use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
 
-use crate::toolchain::{ToolchainId, WorkspaceRoot};
+use crate::{
+    relationships::{Relationship, RelationshipTarget},
+    toolchain::{ToolchainId, WorkspaceRoot},
+};
+
+/// All normalized relationships observed for one authoritative source.
+#[derive(Debug)]
+pub(crate) struct RelationshipGroup {
+    source: String,
+    relationships: Box<[Relationship]>,
+}
+
+impl RelationshipGroup {
+    pub(crate) fn new(source: impl Into<String>, relationships: Vec<Relationship>) -> Self {
+        Self {
+            source: source.into(),
+            relationships: relationships.into_boxed_slice(),
+        }
+    }
+
+    pub(crate) fn source(&self) -> &str {
+        &self.source
+    }
+
+    pub(crate) fn relationships(&self) -> &[Relationship] {
+        &self.relationships
+    }
+}
+
+/// One validated, immutable generation of normalized package relationships.
+#[derive(Debug)]
+pub(crate) struct RelationshipKnowledge {
+    groups: Box<[RelationshipGroup]>,
+}
+
+impl RelationshipKnowledge {
+    pub(crate) fn build(
+        repository: &RepositoryKnowledge,
+        mut groups: Vec<RelationshipGroup>,
+    ) -> Result<Self, Error> {
+        for group in &groups {
+            if !repository.has_identity(group.source()) {
+                return Err(Error::UnknownRelationshipSource {
+                    identity: group.source().to_string(),
+                });
+            }
+            for relationship in group.relationships() {
+                if let RelationshipTarget::Internal(target) = relationship.target()
+                    && !repository.has_identity(target)
+                {
+                    return Err(Error::UnknownRelationshipTarget {
+                        identity: target.clone(),
+                    });
+                }
+            }
+        }
+
+        // Stable sorting makes source grouping deterministic while preserving
+        // declaration order within each source, where first occurrence carries
+        // compatibility precedence.
+        groups.sort_by(|left, right| left.source.cmp(&right.source));
+
+        Ok(Self {
+            groups: groups.into_boxed_slice(),
+        })
+    }
+
+    pub(crate) fn groups(&self) -> &[RelationshipGroup] {
+        &self.groups
+    }
+}
 
 /// A workspace root paired by core with the registry entry that produced its
 /// discovery envelope. The public adapter output cannot supply provenance.
@@ -129,6 +200,11 @@ impl WorkspaceRootKnowledge {
 }
 
 impl RepositoryKnowledge {
+    fn has_identity(&self, identity: &str) -> bool {
+        (identity == "//" && self.root_javascript_scope.is_some())
+            || self.scope_lookup.contains_key(identity)
+    }
+
     pub(crate) fn repository_root(&self) -> &AbsoluteSystemPath {
         &self.repository_root
     }
@@ -212,6 +288,11 @@ impl RepositoryKnowledge {
                 repository_root,
                 &observation.definition_path,
             );
+            if identity == "//" {
+                return Err(Error::ReservedRootIdentity {
+                    path: definition_path,
+                });
+            }
             if let Some(existing_path) =
                 definitions.insert(identity.clone(), definition_path.clone())
             {
@@ -375,6 +456,159 @@ pub(crate) enum Error {
     },
     #[error("toolchain {toolchain} contributed packages without a workspace root")]
     MissingWorkspaceRoot { toolchain: ToolchainId },
+    #[error("package or aggregate scope at {path} uses reserved root identity //")]
+    ReservedRootIdentity { path: AnchoredSystemPathBuf },
+    #[error("relationship source {identity} has no authoritative repository scope")]
+    UnknownRelationshipSource { identity: String },
+    #[error("internal relationship target {identity} has no authoritative repository scope")]
+    UnknownRelationshipTarget { identity: String },
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::relationships::{DependencyKind, Relationship};
+
+    fn repository(with_root_javascript: bool) -> RepositoryKnowledge {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        RepositoryKnowledge::build(
+            &root,
+            with_root_javascript.then_some(Some("root".to_string())),
+            &[
+                PackageScopeObservation {
+                    identity: Some("app".to_string()),
+                    definition_path: root.join_components(&["apps", "app", "package.json"]),
+                    toolchain: ToolchainId::JAVASCRIPT,
+                    scope_kind: ScopeKind::Package,
+                },
+                PackageScopeObservation {
+                    identity: Some("lib".to_string()),
+                    definition_path: root.join_components(&["packages", "lib", "package.json"]),
+                    toolchain: ToolchainId::JAVASCRIPT,
+                    scope_kind: ScopeKind::Package,
+                },
+            ],
+            &[WorkspaceRootObservation::new(
+                WorkspaceRoot::new("npm", root.clone()),
+                ToolchainId::JAVASCRIPT,
+            )],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn relationship_knowledge_rejects_unknown_source() {
+        let repository = repository(true);
+        let error = RelationshipKnowledge::build(
+            &repository,
+            vec![RelationshipGroup::new(
+                "missing",
+                vec![Relationship::new(
+                    "missing",
+                    DependencyKind::Production,
+                    RelationshipTarget::Internal("lib".to_string()),
+                )],
+            )],
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::UnknownRelationshipSource { identity } if identity == "missing"
+        ));
+    }
+
+    #[test]
+    fn repository_knowledge_rejects_reserved_root_package_identity() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let result = RepositoryKnowledge::build(
+            &root,
+            None,
+            &[PackageScopeObservation {
+                identity: Some("//".to_string()),
+                definition_path: root.join_components(&["native", "manifest"]),
+                toolchain: ToolchainId::new("native"),
+                scope_kind: ScopeKind::Aggregate,
+            }],
+            &[WorkspaceRootObservation::new(
+                WorkspaceRoot::new("native", root.clone()),
+                ToolchainId::new("native"),
+            )],
+        );
+
+        assert!(matches!(result, Err(Error::ReservedRootIdentity { .. })));
+    }
+
+    #[test]
+    fn relationship_knowledge_rejects_unknown_internal_target() {
+        let repository = repository(true);
+        let error = RelationshipKnowledge::build(
+            &repository,
+            vec![RelationshipGroup::new(
+                "app",
+                vec![Relationship::new(
+                    "missing",
+                    DependencyKind::Development,
+                    RelationshipTarget::Internal("missing".to_string()),
+                )],
+            )],
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::UnknownRelationshipTarget { identity } if identity == "missing"
+        ));
+    }
+
+    #[test]
+    fn root_identity_requires_and_accepts_root_javascript_scope() {
+        let observation = || {
+            RelationshipGroup::new(
+                "//",
+                vec![Relationship::new(
+                    "//",
+                    DependencyKind::Production,
+                    RelationshipTarget::Internal("app".to_string()),
+                )],
+            )
+        };
+
+        assert!(matches!(
+            RelationshipKnowledge::build(&repository(false), vec![observation()]),
+            Err(Error::UnknownRelationshipSource { identity }) if identity == "//"
+        ));
+        assert!(matches!(
+            RelationshipKnowledge::build(
+                &repository(false),
+                vec![RelationshipGroup::new("app", vec![Relationship::new(
+                    "//",
+                    DependencyKind::Production,
+                    RelationshipTarget::Internal("//".to_string()),
+                )])]
+            ),
+            Err(Error::UnknownRelationshipTarget { identity }) if identity == "//"
+        ));
+
+        let knowledge = RelationshipKnowledge::build(&repository(true), vec![observation()])
+            .expect("root JavaScript scope makes // authoritative");
+        assert_eq!(knowledge.groups()[0].source(), "//");
+
+        let root_target = RelationshipKnowledge::build(
+            &repository(true),
+            vec![RelationshipGroup::new(
+                "app",
+                vec![Relationship::new(
+                    "//",
+                    DependencyKind::Production,
+                    RelationshipTarget::Internal("//".to_string()),
+                )],
+            )],
+        );
+        assert!(root_target.is_ok());
+    }
 }

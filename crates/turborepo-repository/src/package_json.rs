@@ -6,12 +6,7 @@ use serde::Serialize;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 use turborepo_errors::{ParseDiagnostic, Spanned};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DependencyKind {
-    Production,
-    Development,
-    Peer { optional: bool },
-}
+pub use crate::relationships::DependencyKind;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
