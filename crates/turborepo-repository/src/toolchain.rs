@@ -296,8 +296,7 @@ pub struct TaskCommand {
 /// package's own, uniformly across toolchains; the caller supplies its
 /// toolchain-specific serial group.
 pub fn override_task_command(
-    repo_root: &AbsoluteSystemPath,
-    package: &crate::package_graph::PackageInfo,
+    context: &crate::package_graph::PackageTaskContext<'_>,
     override_command: &[String],
     pass_through_args: Option<&[String]>,
     serial_group: Option<String>,
@@ -310,7 +309,7 @@ pub fn override_task_command(
     Some(TaskCommand {
         program: OsString::from(program),
         args,
-        cwd: repo_root.resolve(package.package_path()),
+        cwd: context.repository_root().resolve(context.directory()),
         serial_group,
     })
 }
@@ -342,33 +341,20 @@ pub trait Toolchain: Send + Sync {
     /// cannot know an arbitrary command's separator convention.
     fn task_command(
         &self,
-        repo_root: &AbsoluteSystemPath,
-        package: &crate::package_graph::PackageInfo,
+        context: &crate::package_graph::PackageTaskContext<'_>,
         task: &str,
         pass_through_args: Option<&[String]>,
         override_command: Option<&[String]>,
-    ) -> Result<Option<TaskCommand>, Error> {
-        let _ = (
-            repo_root,
-            package,
-            task,
-            pass_through_args,
-            override_command,
-        );
-        Ok(None)
-    }
+    ) -> Result<Option<TaskCommand>, Error>;
 
     /// A one-line description of what `task` runs for `package`, for
     /// dry-run output and run summaries. Derived from the same tables as
     /// [`Toolchain::task_command`] so display cannot drift from execution.
     fn task_display_command(
         &self,
-        package: &crate::package_graph::PackageInfo,
+        context: &crate::package_graph::PackageTaskContext<'_>,
         task: &str,
-    ) -> Option<String> {
-        let _ = (package, task);
-        None
-    }
+    ) -> Option<String>;
 
     /// Whether the package itself *authors* a definition for `task` — a
     /// package.json script, written by the package's owner. Distinct from
@@ -377,22 +363,33 @@ pub trait Toolchain: Send + Sync {
     ///
     /// Authored definitions shadow unscoped `command` defaults from the
     /// root turbo.json; synthesized ones sit below them.
-    fn authors_task(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
-        let _ = (package, task);
+    fn authors_task(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> bool {
+        let _ = (context, task);
         false
     }
 
     /// Task names this toolchain makes available without an explicit
     /// turbo.json definition. These act as lowest-precedence empty task
     /// definitions; normal task configuration still overrides them.
-    fn registered_tasks(&self, package: &crate::package_graph::PackageInfo) -> Vec<String> {
-        let _ = package;
+    fn registered_tasks(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+    ) -> Vec<String> {
+        let _ = context;
         Vec::new()
     }
 
     /// Whether [`Toolchain::registered_tasks`] contains `task`.
-    fn registers_task(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
-        self.registered_tasks(package)
+    fn registers_task(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> bool {
+        self.registered_tasks(context)
             .iter()
             .any(|registered| registered == task)
     }
@@ -402,20 +399,21 @@ pub trait Toolchain: Send + Sync {
     /// solely for dependency ordering via `dependsOn: ["^task"]`): they do
     /// not execute, so hashing concerns like global input files must not
     /// apply to them.
-    fn defines_task(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
-        let _ = (package, task);
-        false
-    }
+    fn defines_task(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> bool;
 
     /// Defaults this toolchain supplies for `task` when turbo.json does not
     /// configure the corresponding field. Explicit user configuration always
     /// wins.
     fn task_defaults(
         &self,
-        package: &crate::package_graph::PackageInfo,
+        context: &crate::package_graph::PackageTaskContext<'_>,
         task: &str,
     ) -> TaskDefaults {
-        let _ = (package, task);
+        let _ = (context, task);
         TaskDefaults::default()
     }
 
@@ -445,10 +443,10 @@ pub trait Toolchain: Send + Sync {
     /// whole story.
     fn derived_task_io(
         &self,
-        package: &crate::package_graph::PackageInfo,
+        package: &crate::package_graph::PackageTaskContext<'_>,
         task: &str,
         path_to_root: &str,
-        dependencies: &[&crate::package_graph::PackageInfo],
+        dependencies: &[crate::package_graph::PackageTaskContext<'_>],
         wants_automatic_inputs: bool,
         context: &TaskIOContext<'_>,
     ) -> Option<DerivedTaskIO> {
@@ -467,7 +465,11 @@ pub trait Toolchain: Send + Sync {
     /// package/task. Callers use this to skip assembling the (expensive)
     /// dependency-closure argument when the answer is knowably `None` —
     /// notably engine construction, which resolves a definition per task.
-    fn derives_task_io(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
+    fn derives_task_io(
+        &self,
+        package: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> bool {
         let _ = (package, task);
         false
     }
@@ -495,18 +497,13 @@ pub trait Toolchain: Send + Sync {
     /// How filesystem events relate to this toolchain in watch mode:
     /// workspace-definition files whose change requires rediscovery, and
     /// build-byproduct directories whose events must be ignored.
-    fn watch_spec(&self) -> WatchSpec {
-        WatchSpec::default()
-    }
+    fn watch_spec(&self) -> WatchSpec;
 
     /// What `turbo prune` must carry for this toolchain so the pruned
     /// repository is self-contained, given the names of this toolchain's
     /// packages already selected for the pruned output. `None` means the
     /// toolchain contributes nothing beyond the packages themselves.
-    fn prune_plan(&self, kept_packages: &[String]) -> Result<Option<PrunePlan>, Error> {
-        let _ = kept_packages;
-        Ok(None)
-    }
+    fn prune_plan(&self, kept_packages: &[String]) -> Result<Option<PrunePlan>, Error>;
 
     /// Called after the pruned output is fully written, with its root
     /// directory. Toolchains may polish their own files in place (e.g.
@@ -899,8 +896,7 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
 
     fn task_command(
         &self,
-        repo_root: &AbsoluteSystemPath,
-        package: &crate::package_graph::PackageInfo,
+        context: &crate::package_graph::PackageTaskContext<'_>,
         task: &str,
         pass_through_args: Option<&[String]>,
         override_command: Option<&[String]>,
@@ -910,14 +906,16 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
         // bypasses `<pm> run`, so `node_modules/.bin` is not added to PATH.
         if let Some(override_command) = override_command {
             return Ok(override_task_command(
-                repo_root,
-                package,
+                context,
                 override_command,
                 pass_through_args,
                 None,
             ));
         }
         // No script (or an empty one) means the task is a no-op.
+        let Some(package) = context.package_info() else {
+            return Ok(None);
+        };
         if package
             .package_json
             .scripts
@@ -951,45 +949,56 @@ impl<P: PackageDiscovery + Send + Sync> Toolchain for JavaScriptToolchain<P> {
         Ok(Some(TaskCommand {
             program,
             args,
-            cwd: repo_root.resolve(package.package_path()),
+            cwd: context.repository_root().resolve(context.directory()),
             serial_group: None,
         }))
     }
 
     fn task_display_command(
         &self,
-        package: &crate::package_graph::PackageInfo,
+        context: &crate::package_graph::PackageTaskContext<'_>,
         task: &str,
     ) -> Option<String> {
         // Summaries show the script text itself, matching historical
         // behavior.
-        package
+        context
+            .package_info()?
             .package_json
             .scripts
             .get(task)
             .map(|script| script.as_inner().clone())
     }
 
-    fn defines_task(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
-        package
-            .package_json
-            .scripts
-            .get(task)
-            .is_some_and(|script| !script.is_empty())
+    fn defines_task(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> bool {
+        context.package_info().is_some_and(|package| {
+            package
+                .package_json
+                .scripts
+                .get(task)
+                .is_some_and(|script| !script.is_empty())
+        })
     }
 
     /// package.json scripts are authored by the package: they shadow
     /// unscoped `command` defaults.
-    fn authors_task(&self, package: &crate::package_graph::PackageInfo, task: &str) -> bool {
-        self.defines_task(package, task)
+    fn authors_task(
+        &self,
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> bool {
+        self.defines_task(context, task)
     }
 
     fn derived_task_io(
         &self,
-        _package: &crate::package_graph::PackageInfo,
+        _package: &crate::package_graph::PackageTaskContext<'_>,
         _task: &str,
         _path_to_root: &str,
-        _dependencies: &[&crate::package_graph::PackageInfo],
+        _dependencies: &[crate::package_graph::PackageTaskContext<'_>],
         _wants_automatic_inputs: bool,
         _context: &TaskIOContext<'_>,
     ) -> Option<DerivedTaskIO> {
@@ -1086,6 +1095,34 @@ mod tests {
         assert_eq!(custom.to_string(), "gleam");
         let dynamic = ToolchainId::new(String::from("python-uv"));
         assert_eq!(dynamic.as_str(), "python-uv");
+    }
+
+    #[test]
+    fn pure_native_root_override_uses_repository_context() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let directory = turbopath::AnchoredSystemPath::new("").unwrap();
+        let context = crate::package_graph::PackageTaskContext::new_for_test(
+            crate::package_graph::PackageName::Root,
+            &root,
+            directory,
+            None,
+            crate::package_graph::PackageTaskContextKind::Root,
+            None,
+        );
+        let argv = ["./scripts/release".to_string(), "check".to_string()];
+        let pass_through = ["--locked".to_string()];
+
+        let command = override_task_command(&context, &argv, Some(&pass_through), None)
+            .expect("non-empty root override resolves");
+
+        assert_eq!(command.program, OsString::from("./scripts/release"));
+        assert_eq!(
+            command.args,
+            vec![OsString::from("check"), OsString::from("--locked")]
+        );
+        assert_eq!(command.cwd, root);
+        assert_eq!(command.serial_group, None);
     }
 
     #[test]
@@ -1211,19 +1248,29 @@ mod tests {
 
         let package = crate::package_graph::PackageInfo {
             package_json: PackageJson::from_value(serde_json::json!({
-                "name": "web",
+                "name": "stale-web",
                 "scripts": { "build": "next build", "empty": "" }
             }))
             .unwrap(),
-            package_json_path: turbopath::AnchoredSystemPathBuf::from_raw(
-                ["apps", "web", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
-            )
-            .unwrap(),
+            // Identity/path/toolchain are deliberately stale compatibility
+            // fields. Command framing must come from `context`.
+            package_json_path: turbopath::AnchoredSystemPathBuf::from_raw("stale/package.json")
+                .unwrap(),
+            toolchain: ToolchainId::RUST,
             ..Default::default()
         };
+        let package_directory = turbopath::AnchoredSystemPath::new("apps/web").unwrap();
+        let context = crate::package_graph::PackageTaskContext::new_for_test(
+            "web".into(),
+            repo_root,
+            package_directory,
+            Some(&package),
+            crate::package_graph::PackageTaskContextKind::Package,
+            Some(&ToolchainId::JAVASCRIPT),
+        );
 
         let command = toolchain
-            .task_command(repo_root, &package, "build", None, None)
+            .task_command(&context, "build", None, None)
             .unwrap()
             .expect("script exists, command resolves");
         // The program is the resolved npm binary (or node.exe on Windows);
@@ -1245,23 +1292,23 @@ mod tests {
         // Missing and empty scripts are no-ops.
         assert!(
             toolchain
-                .task_command(repo_root, &package, "lint", None, None)
+                .task_command(&context, "lint", None, None)
                 .unwrap()
                 .is_none()
         );
         assert!(
             toolchain
-                .task_command(repo_root, &package, "empty", None, None)
+                .task_command(&context, "empty", None, None)
                 .unwrap()
                 .is_none()
         );
 
         // Display shows the script text itself.
         assert_eq!(
-            toolchain.task_display_command(&package, "build").as_deref(),
+            toolchain.task_display_command(&context, "build").as_deref(),
             Some("next build")
         );
-        assert_eq!(toolchain.task_display_command(&package, "lint"), None);
+        assert_eq!(toolchain.task_display_command(&context, "lint"), None);
 
         // A `command` override replaces the whole package-manager
         // indirection: argv[0] is the program, nothing is prepended, cwd is
@@ -1270,8 +1317,7 @@ mod tests {
         let override_argv = vec!["vitest".to_string(), "run".to_string()];
         let cmd = toolchain
             .task_command(
-                repo_root,
-                &package,
+                &context,
                 "lint",
                 Some(&["--bail".to_string()]),
                 Some(&override_argv),
@@ -1283,7 +1329,7 @@ mod tests {
             cmd.args,
             vec![OsString::from("run"), OsString::from("--bail")]
         );
-        assert_eq!(cmd.cwd, repo_root.resolve(package.package_path()));
+        assert_eq!(cmd.cwd, repo_root.resolve(package_directory));
         assert_eq!(cmd.serial_group, None);
     }
 
@@ -1345,6 +1391,40 @@ mod tests {
             }
             fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
                 Box::pin(async { Ok(DiscoveredPackages::default()) })
+            }
+
+            fn task_command(
+                &self,
+                _context: &crate::package_graph::PackageTaskContext<'_>,
+                _task: &str,
+                _pass_through_args: Option<&[String]>,
+                _override_command: Option<&[String]>,
+            ) -> Result<Option<TaskCommand>, Error> {
+                Ok(None)
+            }
+
+            fn task_display_command(
+                &self,
+                _context: &crate::package_graph::PackageTaskContext<'_>,
+                _task: &str,
+            ) -> Option<String> {
+                None
+            }
+
+            fn defines_task(
+                &self,
+                _context: &crate::package_graph::PackageTaskContext<'_>,
+                _task: &str,
+            ) -> bool {
+                false
+            }
+
+            fn watch_spec(&self) -> WatchSpec {
+                WatchSpec::default()
+            }
+
+            fn prune_plan(&self, _kept_packages: &[String]) -> Result<Option<PrunePlan>, Error> {
+                Ok(None)
             }
         }
 

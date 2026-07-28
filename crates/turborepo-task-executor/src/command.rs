@@ -10,7 +10,7 @@ use turbopath::{AbsoluteSystemPath, PathError, RelativeUnixPath};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_process::Command;
 use turborepo_repository::{
-    package_graph::{PackageGraph, PackageInfo, PackageName},
+    package_graph::{PackageGraph, PackageInfo, PackageName, PackageTaskContext},
     package_manager::PackageManager,
     toolchain::CompileCacheEndpoint,
 };
@@ -163,7 +163,6 @@ impl PackageInfoProvider for PackageGraph {
 /// microfrontends proxy decorations.
 #[derive(Debug)]
 pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
-    repo_root: &'a AbsoluteSystemPath,
     package_graph: &'a PackageGraph,
     task_args: TaskArgs<'a>,
     mfe_configs: Option<&'a M>,
@@ -179,7 +178,6 @@ pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
 
 impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
     pub fn new(
-        repo_root: &'a AbsoluteSystemPath,
         package_graph: &'a PackageGraph,
         task_args: TaskArgs<'a>,
         mfe_configs: Option<&'a M>,
@@ -187,7 +185,6 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
         command_overrides: HashMap<TaskId<'static>, TaskCommandOverride>,
     ) -> Self {
         Self {
-            repo_root,
             package_graph,
             task_args,
             mfe_configs,
@@ -196,9 +193,12 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
         }
     }
 
-    fn package_info(&self, task_id: &TaskId) -> Result<&PackageInfo, CommandProviderError> {
+    fn package_context(
+        &self,
+        task_id: &TaskId,
+    ) -> Result<PackageTaskContext<'_>, CommandProviderError> {
         self.package_graph
-            .package_info(&PackageName::from(task_id.package()))
+            .package_task_context(&PackageName::from(task_id.package()))
             .ok_or_else(|| CommandProviderError::MissingPackage {
                 package_name: task_id.package().into(),
                 task_id: task_id.clone().into_owned(),
@@ -218,15 +218,7 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
         task_id: &TaskId,
         environment: &EnvironmentVariableMap,
     ) -> Result<Option<Command>, E> {
-        let workspace_info = self.package_info(task_id)?;
-        let toolchain = self
-            .package_graph
-            .toolchains()
-            .get(&workspace_info.toolchain)
-            .ok_or_else(|| CommandProviderError::MissingToolchain {
-                toolchain: workspace_info.toolchain.clone(),
-                package_name: task_id.package().into(),
-            })?;
+        let package_context = self.package_context(task_id)?;
 
         // A resolved `command` override is authoritative in both
         // directions: an opt-out is an explicit no-op (same outcome as a
@@ -239,10 +231,39 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             None => None,
         };
 
+        // A pure-native repository still has Turbo's root task namespace, but
+        // no root language toolchain. Explicit root command overrides are
+        // generic argv and execute directly at the knowledge-backed repo root.
+        let Some(toolchain_id) = package_context.toolchain() else {
+            let Some(override_command) = override_command else {
+                return Ok(None);
+            };
+            let Some(spec) = turborepo_repository::toolchain::override_task_command(
+                &package_context,
+                override_command,
+                self.task_args.args_for_task(task_id),
+                None,
+            ) else {
+                return Ok(None);
+            };
+            let mut cmd = Command::new(spec.program);
+            cmd.args(spec.args).current_dir(spec.cwd);
+            apply_environment(&mut cmd, environment);
+            cmd.open_stdin();
+            return Ok(Some(cmd));
+        };
+        let toolchain = self
+            .package_graph
+            .toolchains()
+            .get(toolchain_id)
+            .ok_or_else(|| CommandProviderError::MissingToolchain {
+                toolchain: toolchain_id.clone(),
+                package_name: package_context.package().clone(),
+            })?;
+
         let spec = toolchain
             .task_command(
-                self.repo_root,
-                workspace_info,
+                &package_context,
                 task_id.task(),
                 self.task_args.args_for_task(task_id),
                 override_command,

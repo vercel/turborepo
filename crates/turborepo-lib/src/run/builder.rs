@@ -1284,14 +1284,19 @@ impl RunBuilder {
                 continue;
             }
 
-            let has_command = pkg_dep_graph.packages().any(|(_, package)| {
-                pkg_dep_graph
-                    .toolchains()
-                    .get(&package.toolchain)
-                    .is_some_and(|toolchain| toolchain.defines_task(package, task.task()))
-            }) || engine.task_ids().any(|task_id| {
-                task_id.task() == task.task() && task_has_command(engine, pkg_dep_graph, task_id)
-            });
+            let has_command = pkg_dep_graph
+                .packages()
+                .filter_map(|(name, _)| pkg_dep_graph.package_task_context(name))
+                .any(|context| {
+                    context
+                        .toolchain()
+                        .and_then(|id| pkg_dep_graph.toolchains().get(id))
+                        .is_some_and(|toolchain| toolchain.defines_task(&context, task.task()))
+                })
+                || engine.task_ids().any(|task_id| {
+                    task_id.task() == task.task()
+                        && task_has_command(engine, pkg_dep_graph, task_id)
+                });
 
             for package in candidate_packages {
                 let task_id = TaskId::new(package.as_ref(), task.task()).into_owned();
@@ -1562,6 +1567,49 @@ mod task_io_context_tests {
 
         fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
             Box::pin(async { Ok(DiscoveredPackages::default()) })
+        }
+
+        fn task_command(
+            &self,
+            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
+            _task: &str,
+            _pass_through_args: Option<&[String]>,
+            _override_command: Option<&[String]>,
+        ) -> Result<
+            Option<turborepo_repository::toolchain::TaskCommand>,
+            turborepo_repository::toolchain::Error,
+        > {
+            Ok(None)
+        }
+
+        fn task_display_command(
+            &self,
+            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
+            _task: &str,
+        ) -> Option<String> {
+            None
+        }
+
+        fn defines_task(
+            &self,
+            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
+            _task: &str,
+        ) -> bool {
+            false
+        }
+
+        fn watch_spec(&self) -> turborepo_repository::toolchain::WatchSpec {
+            turborepo_repository::toolchain::WatchSpec::default()
+        }
+
+        fn prune_plan(
+            &self,
+            _kept_packages: &[String],
+        ) -> Result<
+            Option<turborepo_repository::toolchain::PrunePlan>,
+            turborepo_repository::toolchain::Error,
+        > {
+            Ok(None)
         }
 
         fn task_io_env_vars(&self) -> &[&str] {

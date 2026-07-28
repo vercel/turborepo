@@ -64,7 +64,6 @@ impl<'a> ExecContextFactory<'a> {
             })
             .collect();
         let pkg_graph_provider = ToolchainCommandProvider::new(
-            visitor.repo_root,
             &visitor.package_graph,
             visitor.run_opts.task_args(),
             visitor.micro_frontends_configs,

@@ -41,16 +41,16 @@ impl RepositoryTask {
                 .package
                 .run()
                 .pkg_dep_graph()
-                .package_info(self.package.get_name())
-                .and_then(|package| {
+                .package_task_context(self.package.get_name())
+                .and_then(|context| {
                     self.package
                         .run()
                         .pkg_dep_graph()
                         .toolchains()
-                        .get(&package.toolchain)
-                        .map(|toolchain| (package, toolchain))
+                        .get(context.toolchain()?)
+                        .map(|toolchain| (context, toolchain))
                 })
-                .is_some_and(|(package, toolchain)| toolchain.defines_task(package, &self.name)),
+                .is_some_and(|(context, toolchain)| toolchain.defines_task(&context, &self.name)),
         }
     }
 
