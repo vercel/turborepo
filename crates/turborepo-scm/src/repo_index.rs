@@ -91,10 +91,6 @@ impl RepoGitIndex {
     fn new_from_gix_index(git: &GitRepo) -> Result<Self, Error> {
         use rayon::prelude::*;
 
-        // Resolve the actual git dir: in a linked worktree `.git` is a
-        // pointer file and the per-worktree index lives elsewhere. Without
-        // this, worktrees silently lost the gix fast path and fell back to
-        // one `git ls-tree` + `git status` subprocess per package.
         let git_dir = crate::worktree::resolve_git_dir(&git.root)?;
         let index_path = git_dir.join_component("index");
 
