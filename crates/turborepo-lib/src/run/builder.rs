@@ -511,25 +511,12 @@ impl RunBuilder {
                 })
             })
         };
-        let package_json_path = self.repo_root.join_component("package.json");
         // A pure Cargo workspace (experimentalCargoWorkspaces, no root
         // package.json) has no JavaScript root manifest. A *missing* file is
         // only tolerated in that mode; a malformed one always fails, and a
         // missing one without Cargo support keeps the original hard error.
-        let root_package_json = match PackageJson::load(&package_json_path) {
-            Ok(package_json) => Some(package_json),
-            Err(package_json::Error::Io(io))
-                if io.kind() == ErrorKind::NotFound
-                    && cargo_enabled(&self.opts.future_flags)
-                    && self
-                        .repo_root
-                        .join_component(turborepo_repository::cargo::CARGO_TOML)
-                        .exists() =>
-            {
-                None
-            }
-            Err(e) => return Err(e.into()),
-        };
+        let root_package_json =
+            load_root_package_json(&self.repo_root, cargo_enabled(&self.opts.future_flags))?;
         let run_telemetry = GenericEventBuilder::new().with_parent(&telemetry);
         let repo_telemetry =
             RepoEventBuilder::new(&self.repo_root.to_string()).with_parent(&telemetry);
@@ -1522,6 +1509,25 @@ impl RunBuilder {
 /// invoker sees the same package graph.
 pub(crate) fn cargo_enabled(future_flags: &turborepo_turbo_json::FutureFlags) -> bool {
     future_flags.experimental_cargo_workspaces
+}
+
+pub(crate) fn load_root_package_json(
+    repo_root: &AbsoluteSystemPath,
+    cargo_enabled: bool,
+) -> Result<Option<PackageJson>, package_json::Error> {
+    match PackageJson::load(&repo_root.join_component("package.json")) {
+        Ok(package_json) => Ok(Some(package_json)),
+        Err(package_json::Error::Io(io))
+            if io.kind() == ErrorKind::NotFound
+                && cargo_enabled
+                && repo_root
+                    .join_component(turborepo_repository::cargo::CARGO_TOML)
+                    .exists() =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 fn origins_match(url1: &str, url2: &str) -> bool {

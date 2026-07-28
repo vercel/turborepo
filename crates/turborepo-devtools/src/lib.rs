@@ -15,6 +15,8 @@ pub use server::{DevtoolsServer, ServerError};
 pub use types::*;
 pub use watcher::{DevtoolsWatcher, WatchError, WatchEvent};
 
+pub use crate::graph::package_graph_to_data;
+
 /// Default port for the devtools WebSocket server
 pub const DEFAULT_PORT: u16 = 9876;
 

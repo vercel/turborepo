@@ -28,11 +28,9 @@ use tokio::{
 };
 use tracing::{debug, error, info, warn};
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_repository::{package_graph::PackageGraphBuilder, package_json::PackageJson};
 
 use crate::{
-    graph::package_graph_to_data,
-    types::{GraphState, ServerMessage, TaskGraphBuilder},
+    types::{GraphState, RepositoryGraphBuilder, ServerMessage},
     watcher::{DevtoolsWatcher, WatchEvent},
 };
 
@@ -78,15 +76,16 @@ struct AppState {
 }
 
 /// The devtools WebSocket server
-pub struct DevtoolsServer<T: TaskGraphBuilder> {
+pub struct DevtoolsServer<T: RepositoryGraphBuilder> {
     repo_root: AbsoluteSystemPathBuf,
     port: u16,
     task_graph_builder: T,
+    watcher_paths: Vec<AbsoluteSystemPathBuf>,
     auth_token: String,
     allowed_origin: String,
 }
 
-impl<T: TaskGraphBuilder + 'static> DevtoolsServer<T> {
+impl<T: RepositoryGraphBuilder + 'static> DevtoolsServer<T> {
     /// Creates a new devtools server with a task graph builder.
     ///
     /// The task graph builder should use the same logic as `turbo run`
@@ -98,10 +97,28 @@ impl<T: TaskGraphBuilder + 'static> DevtoolsServer<T> {
         task_graph_builder: T,
         allowed_origin: impl Into<String>,
     ) -> Self {
+        Self::new_with_paths(
+            repo_root,
+            port,
+            task_graph_builder,
+            allowed_origin,
+            Vec::new(),
+        )
+    }
+
+    /// Creates a server that watches additional exact configuration paths.
+    pub fn new_with_paths(
+        repo_root: AbsoluteSystemPathBuf,
+        port: u16,
+        task_graph_builder: T,
+        allowed_origin: impl Into<String>,
+        watcher_paths: Vec<AbsoluteSystemPathBuf>,
+    ) -> Self {
         Self {
             repo_root,
             port,
             task_graph_builder,
+            watcher_paths,
             auth_token: generate_auth_token(),
             allowed_origin: allowed_origin.into(),
         }
@@ -125,7 +142,7 @@ impl<T: TaskGraphBuilder + 'static> DevtoolsServer<T> {
         let (update_tx, _) = broadcast::channel::<()>(16);
 
         // Start file watcher
-        let watcher = DevtoolsWatcher::new(self.repo_root.clone())?;
+        let watcher = DevtoolsWatcher::new_with_paths(self.repo_root.clone(), self.watcher_paths)?;
         let mut watch_rx = watcher.subscribe();
 
         // Spawn task to handle file changes and rebuild graph
@@ -326,35 +343,16 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 /// Build the current graph state from the repository
 async fn build_graph_state(
     repo_root: &AbsoluteSystemPathBuf,
-    task_graph_builder: &dyn TaskGraphBuilder,
+    task_graph_builder: &dyn RepositoryGraphBuilder,
 ) -> Result<GraphState, ServerError> {
-    // Load root package.json
-    let root_package_json_path = repo_root.join_component("package.json");
-    let root_package_json = PackageJson::load(&root_package_json_path)
-        .map_err(|e| ServerError::PackageJson(e.to_string()))?;
-
-    // Build package graph using local discovery (no daemon)
-    // We use allow_no_package_manager to be more permissive about package manager
-    // detection
-    let pkg_graph = PackageGraphBuilder::new(repo_root, root_package_json)
-        .with_allow_no_package_manager(true)
-        .build()
-        .await
-        .map_err(|e| ServerError::PackageGraph(e.to_string()))?;
-
-    // Convert package graph to serializable format
-    let package_graph = package_graph_to_data(&pkg_graph);
-
-    // Build task graph using the provided builder (which uses proper turbo run
-    // logic)
-    let task_graph = task_graph_builder
-        .build_task_graph()
+    let graphs = task_graph_builder
+        .build_graphs()
         .await
         .map_err(|e| ServerError::TaskGraph(e.to_string()))?;
 
     Ok(GraphState {
-        package_graph,
-        task_graph,
+        package_graph: graphs.package_graph,
+        task_graph: graphs.task_graph,
         repo_root: repo_root.to_string(),
         turbo_version: env!("CARGO_PKG_VERSION").to_string(),
     })
