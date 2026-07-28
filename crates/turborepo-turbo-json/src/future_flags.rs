@@ -57,6 +57,11 @@ pub struct FutureFlags {
     /// selecting all tasks in changed packages.
     #[serde(default)]
     pub affected_using_task_inputs: bool,
+    /// When GitHub Actions reports a base branch that is not available as a
+    /// local ref, fall back to `origin/<branch>`. This supports detached
+    /// checkouts where only remote-tracking refs are present.
+    #[serde(default)]
+    pub github_actions_remote_base_ref_fallback: bool,
     /// Use task-level `inputs` globs to determine which tasks to re-run when
     /// files change in `turbo watch`. When enabled, only tasks whose declared
     /// inputs match the changed files are re-executed, rather than re-running
@@ -158,18 +163,18 @@ impl TS for FutureFlags {
 
     fn inline() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
-         pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
+         boolean, affectedUsingTaskInputs?: boolean, githubActionsRemoteBaseRefFallback?: boolean, \
+         watchUsingTaskInputs?: boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: \
+         boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
             .to_string()
     }
 
     fn inline_flattened() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
-         pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
+         boolean, affectedUsingTaskInputs?: boolean, githubActionsRemoteBaseRefFallback?: boolean, \
+         watchUsingTaskInputs?: boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: \
+         boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
             .to_string()
     }
@@ -177,18 +182,20 @@ impl TS for FutureFlags {
     fn decl() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
-         boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
-         experimentalCargoWorkspaces?: boolean, experimentalTaskCommand?: boolean };"
+         boolean, githubActionsRemoteBaseRefFallback?: boolean, pruneIncludesGlobalFiles?: \
+         boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
+         globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
+         experimentalTaskCommand?: boolean };"
             .to_string()
     }
 
     fn decl_concrete() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
-         boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
-         experimentalCargoWorkspaces?: boolean, experimentalTaskCommand?: boolean };"
+         boolean, githubActionsRemoteBaseRefFallback?: boolean, pruneIncludesGlobalFiles?: \
+         boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
+         globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
+         experimentalTaskCommand?: boolean };"
             .to_string()
     }
 

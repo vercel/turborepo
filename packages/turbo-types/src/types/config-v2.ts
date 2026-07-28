@@ -267,6 +267,14 @@ export interface FutureFlags {
    */
   affectedUsingTaskInputs?: boolean;
   /**
+   * When GitHub Actions reports a base branch that is not available as a
+   * local ref, fall back to `origin/<branch>`. This supports detached
+   * checkouts where only remote-tracking refs are present.
+   *
+   * @defaultValue `false`
+   */
+  githubActionsRemoteBaseRefFallback?: boolean;
+  /**
    * Use task-level `inputs` globs to determine which tasks to re-run when
    * files change in `turbo watch`. When enabled, only tasks whose declared
    * inputs match the changed files are re-executed, rather than re-running

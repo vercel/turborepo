@@ -286,6 +286,11 @@
           "default": false,
           "type": "boolean"
         },
+        "githubActionsRemoteBaseRefFallback": {
+          "description": "When GitHub Actions reports a base branch that is not available as a local ref, fall back to `origin/<branch>`. This supports detached checkouts where only remote-tracking refs are present.",
+          "default": false,
+          "type": "boolean"
+        },
         "errorsOnlyShowHash": {
           "description": "When using `outputLogs: \"errors-only\"`, show task hashes when tasks complete successfully. This provides visibility into which tasks are running without showing full output logs.",
           "default": false,
