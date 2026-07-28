@@ -64,7 +64,16 @@ impl EventBuilder for PackageTaskEventBuilder {
     }
 
     fn child(&self) -> Self {
-        Self::new(&self.package, &self.task).with_parent(self)
+        // `package` and `task` are already obfuscated where required by
+        // `new`; reuse them instead of re-deriving (re-hashing them would
+        // also mislabel the child with double-hashed values).
+        Self {
+            id: Uuid::new_v4().to_string(),
+            package: self.package.clone(),
+            task: self.task.clone(),
+            parent_id: Some(self.id.clone()),
+            is_ci: self.is_ci,
+        }
     }
 }
 
