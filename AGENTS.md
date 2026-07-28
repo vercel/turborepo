@@ -42,7 +42,7 @@ When making changes to the codebase, check if the following docs need updates:
 
 - Test and lint workflows do not pre-classify changed paths. PR jobs run consistently and use the Turborepo task graph and cache where applicable.
 - Same-repository PRs authenticate to Remote Cache through OIDC; fork PRs remain local-only.
-- Rust CI restores full Cargo target state on Ubuntu from trusted `main` snapshots; only `main` writes. Repository sccache dogfooding is disabled.
+- Rust CI restores full Cargo target state on Ubuntu, Windows, and macOS from trusted `main` snapshots; only `main` writes (shard 1). Repository sccache dogfooding is disabled.
 - Linux Rust shards include `terminal-control` black-box TUI integration tests; known regressions remain explicitly ignored.
 - Example validation remains push-only because it requires Vercel credentials and project state.
 
