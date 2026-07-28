@@ -53,6 +53,7 @@ use crate::{
     discovery::{self, PackageDiscovery},
     package_json::PackageJson,
     package_manager::PackageManager,
+    relationships::Relationship,
 };
 
 /// Identifies a toolchain: the language ecosystem a package belongs to.
@@ -98,9 +99,12 @@ impl fmt::Display for ToolchainId {
 /// Compatibility output from native package discovery.
 ///
 /// Identity and source facts feed [`crate::knowledge::RepositoryKnowledge`].
-/// `descriptor` remains temporarily for relationship and task consumers:
-/// JavaScript packages retain their parsed manifest while other toolchains
-/// synthesize only the compatibility fields those consumers need.
+/// `descriptor` remains temporary compatibility input for relationship
+/// classification, JavaScript lockfile state, and task consumers. JavaScript
+/// packages retain their parsed manifest; native producers can contribute
+/// normalized relationships separately without synthesizing JavaScript
+/// dependency maps. Cargo still supplies an empty descriptor until task
+/// compatibility payloads are removed.
 #[derive(Debug, Clone)]
 pub struct DiscoveredPackage {
     /// Real user-facing identity, extracted by the native producer. `None`
@@ -127,6 +131,10 @@ pub struct DiscoveredPackage {
     /// rather than through this field; folding that in requires a
     /// deferred-aware trait surface.
     external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
+    /// Native relationship facts, already classified by the producer. `None`
+    /// preserves compatibility by asking core to classify `descriptor`,
+    /// regardless of the producer's toolchain id.
+    native_relationships: Option<Vec<Relationship>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,6 +149,7 @@ pub(crate) struct DiscoveredPackageParts {
     pub descriptor: PackageJson,
     pub manifest_path: AbsoluteSystemPathBuf,
     pub external_dependencies: Option<std::collections::HashSet<turborepo_lockfiles::Package>>,
+    pub native_relationships: Option<Vec<Relationship>>,
 }
 
 /// Parser-neutral observation of one contributed native workspace root.
@@ -213,6 +222,7 @@ impl DiscoveredPackage {
             descriptor,
             manifest_path,
             external_dependencies,
+            native_relationships: None,
         }
     }
 
@@ -231,7 +241,16 @@ impl DiscoveredPackage {
             descriptor,
             manifest_path,
             external_dependencies,
+            native_relationships: None,
         }
+    }
+
+    /// Supply already-classified native relationship facts. `Some(Vec::new())`
+    /// explicitly declares that this package has no relationships; leaving
+    /// this unset makes core classify `descriptor` for compatibility.
+    pub fn with_native_relationships(mut self, relationships: Vec<Relationship>) -> Self {
+        self.native_relationships = Some(relationships);
+        self
     }
 
     pub(crate) fn into_parts(self) -> DiscoveredPackageParts {
@@ -241,6 +260,7 @@ impl DiscoveredPackage {
             descriptor,
             manifest_path,
             external_dependencies,
+            native_relationships,
         } = self;
         DiscoveredPackageParts {
             name,
@@ -248,6 +268,7 @@ impl DiscoveredPackage {
             descriptor,
             manifest_path,
             external_dependencies,
+            native_relationships,
         }
     }
 }

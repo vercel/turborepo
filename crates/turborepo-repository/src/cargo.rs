@@ -42,7 +42,8 @@ use serde::Deserialize;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::{
-    package_json::PackageJson,
+    package_json::{DependencyKind, PackageJson},
+    relationships::Relationship,
     toolchain::{
         self, DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, Toolchain,
         ToolchainId, WorkspaceRoot,
@@ -1658,13 +1659,9 @@ impl Toolchain for CargoToolchain {
                 .name
                 .ok_or_else(|| toolchain::Error::Failed(Box::new(Error::MissingWorkspaceName)))?;
 
-            // Each crate becomes a package. Internal dependencies are
-            // expressed as `workspace:*` specifiers in the synthesized
-            // descriptor so the existing dependency splitter wires
-            // crate->crate edges (powering `--filter`/`--affected`).
-            // Discovery only reports dependencies on other discovered
-            // crates, so every synthesized specifier resolves internally and
-            // Cargo edges never leak into unresolved externals.
+            // Each crate contributes its already-classified native internal
+            // relationships directly. No JavaScript dependency descriptor or
+            // package-manager policy participates in Cargo graph assembly.
             // External dependencies (locked crates.io/git packages plus the
             // compiler itself) participate in each crate task's hash through
             // the same external-dependency mechanism JS packages use, scoped
@@ -1714,10 +1711,12 @@ impl Toolchain for CargoToolchain {
             let mut packages = Vec::with_capacity(crates.len() + 1);
             let mut crate_names = Vec::with_capacity(crates.len());
             for cargo_crate in crates {
-                let dependencies = cargo_crate
+                let relationships = cargo_crate
                     .internal_dependencies
                     .iter()
-                    .map(|dep| (dep.clone(), "workspace:*".to_string()))
+                    .map(|dependency| {
+                        Relationship::internal(dependency, DependencyKind::Production)
+                    })
                     .collect();
                 let kind = if cargo_crate.is_entrypoint() {
                     CargoPackageKind::Entrypoint
@@ -1749,15 +1748,15 @@ impl Toolchain for CargoToolchain {
                     .chain(std::iter::once(rustc.clone()))
                     .collect();
                 crate_names.push(cargo_crate.name.clone());
-                packages.push(DiscoveredPackage::package(
-                    Some(cargo_crate.name.clone()),
-                    PackageJson {
-                        dependencies: Some(dependencies),
-                        ..Default::default()
-                    },
-                    cargo_crate.manifest_path,
-                    Some(external_dependencies),
-                ));
+                packages.push(
+                    DiscoveredPackage::package(
+                        Some(cargo_crate.name.clone()),
+                        PackageJson::default(),
+                        cargo_crate.manifest_path,
+                        Some(external_dependencies),
+                    )
+                    .with_native_relationships(relationships),
+                );
             }
 
             // The synthetic workspace package, anchored at the root
@@ -1775,21 +1774,22 @@ impl Toolchain for CargoToolchain {
                         compilation_dependencies: Vec::new(),
                     },
                 );
-                let dependencies = crate_names
+                crate_names.sort();
+                let relationships = crate_names
                     .into_iter()
-                    .map(|name| (name, "workspace:*".to_string()))
+                    .map(|name| Relationship::internal(name, DependencyKind::Production))
                     .collect();
-                packages.push(DiscoveredPackage::aggregate(
-                    workspace_name,
-                    PackageJson {
-                        dependencies: Some(dependencies),
-                        ..Default::default()
-                    },
-                    self.repo_root.join_component(CARGO_TOML),
-                    // Workspace-scoped verbs run every crate, so the union
-                    // of all closures is this package's external surface.
-                    Some(workspace_externals),
-                ));
+                packages.push(
+                    DiscoveredPackage::aggregate(
+                        workspace_name,
+                        PackageJson::default(),
+                        self.repo_root.join_component(CARGO_TOML),
+                        // Workspace-scoped verbs run every crate, so the union
+                        // of all closures is this package's external surface.
+                        Some(workspace_externals),
+                    )
+                    .with_native_relationships(relationships),
+                );
             }
 
             Ok(DiscoveredPackages::new(packages, workspace_roots))
@@ -3684,7 +3684,7 @@ release: 1.96.0-nightly\n",
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_cargo_toolchain_synthesizes_descriptors() {
+    async fn test_cargo_toolchain_emits_native_relationships_without_dependency_descriptors() {
         let (_tmp, root) = tempdir_root();
         write_fixture_workspace(&root);
 
@@ -3699,17 +3699,11 @@ release: 1.96.0-nightly\n",
             .into_iter()
             .map(DiscoveredPackage::into_parts)
             .collect();
-        packages.sort_by(|a, b| {
-            a.descriptor
-                .name
-                .as_ref()
-                .map(|name| name.as_inner())
-                .cmp(&b.descriptor.name.as_ref().map(|name| name.as_inner()))
-        });
+        packages.sort_by(|a, b| a.name.cmp(&b.name));
 
         let names: Vec<&str> = packages
             .iter()
-            .map(|p| p.descriptor.name.as_ref().unwrap().as_inner().as_str())
+            .map(|package| package.name.as_deref().unwrap())
             .collect();
         assert_eq!(names, vec!["app", "fixture-ws", "lib-a", "lib-a-test-util"]);
 
@@ -3731,9 +3725,11 @@ release: 1.96.0-nightly\n",
         }
 
         let app = &packages[0];
+        assert!(app.descriptor.dependencies.is_none());
+        assert!(app.descriptor.dev_dependencies.is_none());
         assert_eq!(
-            app.descriptor.dependencies.as_ref().unwrap()["lib-a"],
-            "workspace:*"
+            app.native_relationships.as_deref(),
+            Some(&[Relationship::internal("lib-a", DependencyKind::Production)][..])
         );
         assert_eq!(
             app.manifest_path,
@@ -3744,9 +3740,17 @@ release: 1.96.0-nightly\n",
         // and depends on every crate.
         let workspace = &packages[1];
         assert_eq!(workspace.manifest_path, root.join_component(CARGO_TOML));
-        let workspace_deps = workspace.descriptor.dependencies.as_ref().unwrap();
-        assert_eq!(workspace_deps.len(), 3);
-        assert!(workspace_deps.values().all(|v| v == "workspace:*"));
+        assert!(workspace.descriptor.dependencies.is_none());
+        let workspace_relationships = workspace.native_relationships.as_ref().unwrap();
+        assert_eq!(workspace_relationships.len(), 3);
+        assert_eq!(
+            workspace_relationships,
+            &[
+                Relationship::internal("app", DependencyKind::Production),
+                Relationship::internal("lib-a", DependencyKind::Production),
+                Relationship::internal("lib-a-test-util", DependencyKind::Production),
+            ]
+        );
 
         // This all-local fixture has no external lockfile dependencies; the
         // compiler identity is the only external identity.
