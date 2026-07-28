@@ -783,6 +783,35 @@ mod tests {
     }
 
     #[test]
+    fn test_deserialize_future_flags_resolve_remote_base_refs() {
+        let json = r#"{
+            "tasks": {},
+            "futureFlags": {
+                "resolveRemoteBaseRefs": true
+            }
+        }"#;
+
+        let (deserialized, diagnostics) = deserialize_from_json_str(
+            json,
+            JsonParserOptions::default().with_allow_comments(),
+            "turbo.json",
+        );
+        assert!(diagnostics.is_empty());
+        let raw_turbo_json: RawTurboJson = deserialized.unwrap();
+        assert!(
+            raw_turbo_json
+                .future_flags
+                .as_ref()
+                .unwrap()
+                .as_inner()
+                .resolve_remote_base_refs
+        );
+
+        let turbo_json = TurboJson::try_from(raw_turbo_json).unwrap();
+        assert!(turbo_json.future_flags.resolve_remote_base_refs);
+    }
+
+    #[test]
     fn test_is_root_config_with_root_path() {
         let turbo_json = TurboJson {
             path: Some("turbo.json".into()),

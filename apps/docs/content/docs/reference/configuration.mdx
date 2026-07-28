@@ -362,6 +362,24 @@ In this example, if only `README.md` changed in a package, `build` would not run
   selected, regardless of individual task `inputs`.
 </Callout>
 
+#### `resolveRemoteBaseRefs`
+
+Default: `false`
+
+Fall back to `origin/<branch>` when an inferred base branch is not available as a local ref. This is useful in CI environments that use detached checkouts and only create remote-tracking refs.
+
+Local refs continue to take precedence. This flag only affects inferred base refs, including the base branch reported by GitHub Actions and the default `main` or `master` branch. Explicit refs provided through `TURBO_SCM_BASE` are used unchanged.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "resolveRemoteBaseRefs": true,
+  },
+}
+```
+
+For example, when GitHub Actions reports `main` as the pull request base but the checkout only contains `origin/main`, Turborepo will use `origin/main` for `--affected` comparisons.
+
 #### `watchUsingTaskInputs`
 
 Default: `false`
