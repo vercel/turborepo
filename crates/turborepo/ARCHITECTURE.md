@@ -144,8 +144,13 @@ Represents the workspace structure and package dependencies:
   without native facts (JavaScript and legacy custom toolchains) are classified
   once with package-manager policy; Cargo supplies already-classified native
   internal relationships. Cargo.lock external closures remain separate. Package
-  graph edges and unresolved external declaration maps are projections of the
-  normalized generation.
+  graph edges, unresolved external declaration maps, and the typed ordering,
+  filtering, affectedness, hashing, and pruning relationship views are
+  projections of the normalized generation. The typed views lazily initialize
+  and share one immutable, compact scope-ID relationship index, so current
+  consumers pay no construction cost. They expose only authoritative package
+  identities plus the always-present root Turbo task namespace, never the
+  package graph's structural root sentinel.
 - Performs ecosystem-specific lockfile analysis
 - Builds dependency relationships between workspace packages
 - Validates that all non-root packages have a `name` field
@@ -285,9 +290,9 @@ whether anything changed; Cargo decides how and in what order to build.**
   dependency tables, renames). Dev-dependency edges that would form a cycle
   are dropped (Cargo permits dev-dep cycles; crate edges must support
   topological `^` ordering). Crate names are validated, and a crate/JS package
-  name collision hard-errors. Crate path dependencies are synthesized as
-  `workspace:*` specifiers in the toolchain-neutral descriptor, so the existing
-  dependency splitter wires crate→crate edges. A second full `cargo metadata
+  name collision hard-errors. Cargo contributes its already-classified native
+  internal relationships directly, without JavaScript dependency descriptors
+  or package-manager policy. A second full `cargo metadata
   --locked --all-features` pass validates resolution and every resolved local
   package: automatic in-repository workspace members are supported, while
   excluded/non-member, outside-repository, and root-manifest local packages

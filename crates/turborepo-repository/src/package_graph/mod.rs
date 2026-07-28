@@ -23,8 +23,13 @@ use crate::{
 
 pub mod builder;
 mod dep_splitter;
+mod projections;
 
 pub use builder::{Error, PackageGraphBuilder};
+pub use projections::{
+    AffectedRelationships, FilteringRelationships, HashRelationships, OrderingRelationships,
+    PruneDependencyMode, PruneRelationships, RelationshipProjectionError,
+};
 
 pub use crate::package_json::DependencyKind;
 
@@ -58,6 +63,7 @@ pub struct PackageGraph {
     /// unresolved external declaration maps.
     #[allow(dead_code)]
     relationship_knowledge: Arc<RelationshipKnowledge>,
+    relationship_projections: OnceLock<projections::RelationshipProjections>,
     /// Receiver for background transitive-closure computation when the graph
     /// was built with deferred closures. Consumed (exactly once) by
     /// [`Self::ensure_transitive_closures`].
@@ -281,6 +287,47 @@ pub struct ExternalDependencyChange {
 }
 
 impl PackageGraph {
+    fn relationship_projections(&self) -> &projections::RelationshipProjections {
+        self.relationship_projections.get_or_init(|| {
+            projections::RelationshipProjections::build(
+                &self.knowledge,
+                &self.relationship_knowledge,
+            )
+        })
+    }
+
+    /// Returns direct graph-forming relationships for task ordering.
+    ///
+    /// The view shares this graph generation's immutable relationship index and
+    /// never exposes the structural [`PackageNode::Root`] sentinel.
+    pub fn ordering_relationships(&self) -> &OrderingRelationships {
+        self.relationship_projections().ordering()
+    }
+
+    /// Returns transitive relationships with root-implied filtering semantics.
+    pub fn filtering_relationships(&self) -> &FilteringRelationships {
+        self.relationship_projections().filtering()
+    }
+
+    /// Returns reverse ordering relationships for affectedness propagation.
+    pub fn affected_relationships(&self) -> &AffectedRelationships {
+        self.relationship_projections().affected()
+    }
+
+    /// Returns full transitive internal dependency inputs for hashing.
+    pub fn hash_relationships(&self) -> &HashRelationships {
+        self.relationship_projections().hash()
+    }
+
+    /// Returns install-oriented package relationships for pruning.
+    ///
+    /// Required peers whose declaration names match authoritative workspaces
+    /// are included independently of classification and graph declaration
+    /// precedence; optional peers are excluded.
+    pub fn prune_relationships(&self) -> &PruneRelationships {
+        self.relationship_projections().prune()
+    }
+
     pub fn builder(
         repo_root: &AbsoluteSystemPath,
         root_package_json: PackageJson,
@@ -2274,9 +2321,15 @@ mod test {
         write(&["rust", "app", "src", "main.rs"], "fn main() {}\n");
         write(
             &["rust", "lib-a", "Cargo.toml"],
-            "[package]\nname = \"lib-a\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            "[package]\nname = \"lib-a\"\nversion = \"0.1.0\"\nedition = \
+             \"2021\"\n\n[dependencies]\nlib-b = { path = \"../lib-b\" }\n",
         );
         write(&["rust", "lib-a", "src", "lib.rs"], "");
+        write(
+            &["rust", "lib-b", "Cargo.toml"],
+            "[package]\nname = \"lib-b\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        );
+        write(&["rust", "lib-b", "src", "lib.rs"], "");
         write(
             &["Cargo.lock"],
             r#"version = 4
@@ -2288,6 +2341,11 @@ dependencies = ["lib-a"]
 
 [[package]]
 name = "lib-a"
+version = "0.1.0"
+dependencies = ["lib-b"]
+
+[[package]]
+name = "lib-b"
 version = "0.1.0"
 "#,
         );
@@ -2445,6 +2503,20 @@ version = "0.1.0"
                 app_deps.contains(&PackageNode::Workspace(PackageName::from("lib-a"))),
                 "app should depend on lib-a, got {app_deps:?}"
             );
+            assert_eq!(
+                pkg_graph
+                    .ordering_relationships()
+                    .direct_dependencies(&PackageName::from("app"))
+                    .map(|dependencies| dependencies.cloned().collect::<Vec<_>>()),
+                Some(vec![PackageName::from("lib-a")])
+            );
+            assert_eq!(
+                pkg_graph
+                    .hash_relationships()
+                    .dependency_inputs(&PackageName::from("app")),
+                Some(vec![PackageName::from("lib-a"), PackageName::from("lib-b")]),
+                "mixed repositories retain transitive native hash inputs"
+            );
             let workspace_deps = pkg_graph
                 .immediate_dependencies(&PackageNode::Workspace(PackageName::from("acme")))
                 .unwrap();
@@ -2500,6 +2572,55 @@ version = "0.1.0"
             .unwrap();
 
         assert!(pkg_graph.validate().is_ok());
+        assert!(
+            pkg_graph.relationship_projections.get().is_none(),
+            "relationship projections must remain lazy for current consumers"
+        );
+
+        assert_eq!(
+            pkg_graph
+                .ordering_relationships()
+                .direct_dependencies(&PackageName::Root)
+                .map(|dependencies| dependencies.cloned().collect::<Vec<_>>()),
+            Some(Vec::new()),
+            "pure Cargo recognizes the root Turbo namespace without JS edges"
+        );
+        assert!(pkg_graph.relationship_projections.get().is_some());
+        let app = PackageName::from("app");
+        let expected_dependencies = vec![PackageName::from("lib-a"), PackageName::from("lib-b")];
+        assert_eq!(
+            pkg_graph.hash_relationships().dependency_inputs(&app),
+            Some(expected_dependencies.clone()),
+            "Cargo hash inputs include transitive path dependencies"
+        );
+        assert_eq!(
+            pkg_graph
+                .filtering_relationships()
+                .transitive_dependencies(&app),
+            Some(expected_dependencies.clone())
+        );
+        let mut graph_dependencies: Vec<_> = pkg_graph
+            .dependencies(&PackageNode::Workspace(app.clone()))
+            .into_iter()
+            .filter_map(|node| match node {
+                PackageNode::Workspace(name) if name != &app => Some(name.clone()),
+                PackageNode::Root | PackageNode::Workspace(_) => None,
+            })
+            .collect();
+        graph_dependencies.sort();
+        assert_eq!(graph_dependencies, expected_dependencies);
+        assert_eq!(
+            pkg_graph.prune_relationships().package_closure(
+                std::slice::from_ref(&app),
+                PruneDependencyMode::ProductionOnly,
+            ),
+            Ok(vec![
+                PackageName::Root,
+                PackageName::from("app"),
+                PackageName::from("lib-a"),
+                PackageName::from("lib-b"),
+            ])
+        );
 
         assert!(
             pkg_graph

@@ -918,6 +918,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             package_manager,
             knowledge,
             relationship_knowledge,
+            relationship_projections: std::sync::OnceLock::new(),
             deferred_closures: std::sync::Mutex::new(None),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
             root_internal_dependencies: std::sync::OnceLock::new(),
@@ -1320,6 +1321,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             lockfile: arc_lockfile,
             knowledge,
             relationship_knowledge,
+            relationship_projections: std::sync::OnceLock::new(),
             deferred_closures: std::sync::Mutex::new(deferred_closures),
             external_dep_to_internal_dependents: std::sync::OnceLock::new(),
             root_internal_dependencies: std::sync::OnceLock::new(),
@@ -1997,6 +1999,65 @@ mod test {
             web_deps.contains(&PackageNode::Workspace(ui_name.clone())),
             "web should depend on ui, got: {:?}",
             web_deps
+        );
+        let mut graph_ordering: Vec<_> = web_deps
+            .iter()
+            .filter_map(|node| match node {
+                PackageNode::Workspace(name) => Some(name.clone()),
+                PackageNode::Root => None,
+            })
+            .collect();
+        graph_ordering.sort();
+        let projected_ordering: Vec<_> = graph
+            .ordering_relationships()
+            .direct_dependencies(&web_name)
+            .expect("web is authoritative")
+            .cloned()
+            .collect();
+        assert_eq!(projected_ordering, graph_ordering);
+
+        let mut graph_dependencies: Vec<_> = graph
+            .dependencies(&PackageNode::Workspace(web_name.clone()))
+            .into_iter()
+            .filter_map(|node| match node {
+                PackageNode::Workspace(name) if name != &web_name => Some(name.clone()),
+                PackageNode::Root | PackageNode::Workspace(_) => None,
+            })
+            .collect();
+        graph_dependencies.sort();
+        assert_eq!(
+            graph
+                .filtering_relationships()
+                .transitive_dependencies(&web_name),
+            Some(graph_dependencies.clone())
+        );
+        assert_eq!(
+            graph.hash_relationships().dependency_inputs(&web_name),
+            Some(graph_dependencies)
+        );
+
+        let mut graph_dependents: Vec<_> = graph
+            .ancestors(&PackageNode::Workspace(ui_name.clone()))
+            .into_iter()
+            .filter_map(|node| match node {
+                PackageNode::Workspace(name) if name != &ui_name => Some(name.clone()),
+                PackageNode::Root | PackageNode::Workspace(_) => None,
+            })
+            .collect();
+        graph_dependents.sort();
+        assert_eq!(
+            graph
+                .filtering_relationships()
+                .transitive_dependents(&ui_name),
+            Some(graph_dependents.clone())
+        );
+        graph_dependents.push(ui_name.clone());
+        graph_dependents.sort();
+        assert_eq!(
+            graph
+                .affected_relationships()
+                .affected_by(std::slice::from_ref(&ui_name)),
+            Ok(graph_dependents)
         );
 
         // api -> utils (internal)

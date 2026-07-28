@@ -6,6 +6,11 @@ use std::{fs, path::Path};
 
 use common::{combined_output, git, run_turbo, setup};
 use serde_json::Value;
+use turbopath::AbsoluteSystemPathBuf;
+use turborepo_repository::{
+    package_graph::{PackageGraph, PackageName, PackageNode, PruneDependencyMode},
+    package_json::PackageJson,
+};
 
 const FIXTURE: &str = "relationship_projection_contract";
 
@@ -382,4 +387,144 @@ fn relation_names(package: &Value, relationship: &str) -> Vec<String> {
         .map(|item| item["name"].clone())
         .collect();
     strings(&Value::Array(names))
+}
+
+#[tokio::test]
+async fn typed_projections_match_the_contract_fixture_graph_and_prune_closures() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_fixture(tempdir.path());
+    let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+    let root_package_json = PackageJson::load(&root.join_component("package.json")).unwrap();
+    let graph = PackageGraph::builder(&root, root_package_json)
+        .build()
+        .await
+        .unwrap();
+    let app = PackageName::from("app");
+    let app_node = PackageNode::Workspace(app.clone());
+
+    let mut graph_direct: Vec<_> = graph
+        .immediate_dependencies(&app_node)
+        .unwrap()
+        .into_iter()
+        .filter_map(|node| match node {
+            PackageNode::Workspace(name) => Some(name.clone()),
+            PackageNode::Root => None,
+        })
+        .collect();
+    graph_direct.sort();
+    assert_eq!(
+        graph
+            .ordering_relationships()
+            .direct_dependencies(&app)
+            .unwrap()
+            .cloned()
+            .collect::<Vec<_>>(),
+        graph_direct
+    );
+
+    let mut graph_dependencies: Vec<_> = graph
+        .dependencies(&app_node)
+        .into_iter()
+        .filter_map(|node| match node {
+            PackageNode::Workspace(name) if name != &app => Some(name.clone()),
+            PackageNode::Root | PackageNode::Workspace(_) => None,
+        })
+        .collect();
+    graph_dependencies.sort();
+    assert_eq!(
+        graph
+            .filtering_relationships()
+            .transitive_dependencies(&app),
+        Some(graph_dependencies.clone())
+    );
+    assert_eq!(
+        graph.hash_relationships().dependency_inputs(&app),
+        Some(graph_dependencies)
+    );
+
+    let changed = PackageName::from("transitive-lib");
+    let mut graph_affected: Vec<_> = graph
+        .ancestors(&PackageNode::Workspace(changed.clone()))
+        .into_iter()
+        .filter_map(|node| match node {
+            PackageNode::Workspace(name) if name != &changed => Some(name.clone()),
+            PackageNode::Root | PackageNode::Workspace(_) => None,
+        })
+        .collect();
+    graph_affected.push(changed.clone());
+    graph_affected.sort();
+    assert_eq!(
+        graph
+            .affected_relationships()
+            .affected_by(std::slice::from_ref(&changed)),
+        Ok(graph_affected)
+    );
+
+    let root_input = PackageName::from("root-lib");
+    let graph_root_ancestors = graph.ancestors(&PackageNode::Workspace(root_input.clone()));
+    let mut graph_root_dependents: Vec<_> = graph_root_ancestors
+        .iter()
+        .filter_map(|node| match node {
+            PackageNode::Workspace(name) if name != &root_input => Some(name.clone()),
+            PackageNode::Root | PackageNode::Workspace(_) => None,
+        })
+        .collect();
+    graph_root_dependents.sort();
+    assert_eq!(
+        graph
+            .filtering_relationships()
+            .transitive_dependents(&root_input),
+        Some(graph_root_dependents)
+    );
+    let mut graph_root_affected: Vec<_> = graph_root_ancestors
+        .into_iter()
+        .filter_map(|node| match node {
+            PackageNode::Workspace(name) => Some(name.clone()),
+            PackageNode::Root => None,
+        })
+        .collect();
+    graph_root_affected.sort();
+    assert_eq!(
+        graph
+            .affected_relationships()
+            .affected_by(std::slice::from_ref(&root_input)),
+        Ok(graph_root_affected)
+    );
+
+    assert_eq!(
+        graph.prune_relationships().package_closure(
+            std::slice::from_ref(&app),
+            PruneDependencyMode::IncludeDevDependencies,
+        ),
+        Ok([
+            "//",
+            "app",
+            "dev-lib",
+            "optional-lib",
+            "prod-lib",
+            "required-peer",
+            "root-lib",
+            "transitive-lib",
+        ]
+        .into_iter()
+        .map(PackageName::from)
+        .collect())
+    );
+    assert_eq!(
+        graph
+            .prune_relationships()
+            .package_closure(&[app], PruneDependencyMode::ProductionOnly,),
+        Ok([
+            "//",
+            "app",
+            "optional-lib",
+            "prod-lib",
+            "required-peer",
+            "root-lib",
+            "transitive-lib",
+        ]
+        .into_iter()
+        .map(PackageName::from)
+        .collect())
+    );
 }
