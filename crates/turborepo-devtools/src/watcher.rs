@@ -242,22 +242,20 @@ mod tests {
 
     #[test]
     fn exact_config_paths_bypass_normal_ignore_and_filename_rules() {
-        let repo_root = AbsoluteSystemPathBuf::new("/repo".to_owned()).expect("absolute root");
+        let tempdir = tempfile::tempdir().expect("create temporary repository");
+        let repo_root = AbsoluteSystemPathBuf::new(tempdir.path().to_string_lossy().to_string())
+            .expect("absolute root");
         let custom = repo_root.join_components(&[".turbo", "custom.config"]);
         let arbitrary = repo_root.join_components(&["config", "devtools.conf"]);
-        let local_config = PathBuf::from("/repo/.turbo/config.json");
+        let local_config = repo_root.join_components(&[".turbo", "config.json"]);
+        let unrelated = repo_root.join_components(&[".turbo", "unrelated.json"]);
+        let turbo_json = repo_root.join_components(&[".turbo", "turbo.json"]);
         let exact_paths = exact_watch_paths(&repo_root, vec![custom.clone(), arbitrary.clone()]);
 
         assert!(should_watch_path(custom.as_std_path(), &exact_paths));
         assert!(should_watch_path(arbitrary.as_std_path(), &exact_paths));
-        assert!(should_watch_path(&local_config, &exact_paths));
-        assert!(!should_watch_path(
-            Path::new("/repo/.turbo/unrelated.json"),
-            &exact_paths
-        ));
-        assert!(!should_watch_path(
-            Path::new("/repo/.turbo/turbo.json"),
-            &exact_paths
-        ));
+        assert!(should_watch_path(local_config.as_std_path(), &exact_paths));
+        assert!(!should_watch_path(unrelated.as_std_path(), &exact_paths));
+        assert!(!should_watch_path(turbo_json.as_std_path(), &exact_paths));
     }
 }
