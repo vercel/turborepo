@@ -92,6 +92,12 @@ jobs:
     if: needs.release-pr.outputs.is-release-pr != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      # For the OIDC token exchanged for a Remote Cache access token.
+      id-token: write
+    env:
+      TURBO_CACHE: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && 'remote:rw' || 'local:rw' }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -99,6 +105,12 @@ jobs:
           persist-credentials: false
 
       - parallel:
+          - name: Set up Turborepo Remote Cache
+            if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+            uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
+            with:
+              team: ${{ vars.TURBO_TEAM }}
+
           - name: Setup Node
             uses: ./.github/actions/setup-node
             env:
