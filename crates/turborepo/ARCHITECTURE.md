@@ -144,23 +144,32 @@ Represents the workspace structure and package dependencies:
 - Validates that all non-root packages have a `name` field
   (`PackageGraph::validate()`)
 
-`RepositoryKnowledge` is the crate-private authority for package identity and
-paths during node assembly, and the resulting `PackageGraph` retains that exact
-immutable generation. Consumers migrate incrementally through narrow
-knowledge-backed graph queries and may temporarily use `PackageInfo`
-compatibility projections. Their identity, path, scope kind, and provenance are
-knowledge-backed; relationship and task payloads remain associated native
-compatibility data. Native manifests and metadata do not enter repository
-knowledge. Native definition paths must remain within the repository, including
-after resolving existing symlinks.
+`RepositoryKnowledge` is the crate-private authority for package identity,
+paths, scope kind, and provenance during node assembly, and the resulting
+`PackageGraph` retains that exact immutable generation. Phase 1 of the payload
+deletion is complete: `PackageInfo` carries no identity, definition path,
+directory, or toolchain provenance; the graph exposes no payload-map identity
+enumeration. Consumers enumerate and resolve authoritative contexts/views, then
+look up an optional payload only for the remaining relationship and task data.
+The retained native `PackageJson.name` is non-authoritative payload data: no
+consumer may derive package identity, path, or provenance from it.
+Native manifests and metadata do not enter repository knowledge. Native
+definition paths must remain within the repository, including after resolving
+existing symlinks.
+
+The remaining payload deletion phases are explicit:
+
+- **Phase 2:** Move script, dependency, and version reads behind task/relationship queries.
+- **Phase 3:** Move unresolved dependency and lockfile-closure/hash state behind lockfile and hashing queries.
+- **Phase 4:** Delete `PackageInfo`, its payload map, and optional-payload compatibility plumbing once all fail-closed consumers use those queries.
 
 Task hashing, run-cache path construction, and run-summary task directories use
 a graph-created `PackageTaskContext` that binds identity, repository root,
 directory, kind, and an optional compatibility payload. Repository-wide task
 namespace and external-dependency-hash enumeration is root-first, then follows
 repository observation order; scripts and dependency closures are joined only
-as compatibility payloads. Pure
-Cargo retains the root Turbo namespace; consumers reject contexts from another
+as compatibility payloads. Pure Cargo retains the root Turbo namespace without
+synthesizing an empty root payload; consumers reject contexts from another
 repository, and required missing payloads fail closed.
 
 Repository-facing commands use the same optional-root construction policy as

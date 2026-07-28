@@ -352,6 +352,8 @@ pub enum ChangeMapError {
     Yarnrc(#[from] yarnrc::Error),
     #[error("No lockfile")]
     NoLockfile,
+    #[error("Missing compatibility payload for package {0}")]
+    MissingPackagePayload(PackageName),
     #[error("Lockfile error: {0}")]
     Lockfile(turborepo_lockfiles::Error),
 }
@@ -360,6 +362,7 @@ impl From<ChangedPackagesError> for ChangeMapError {
     fn from(value: ChangedPackagesError) -> Self {
         match value {
             ChangedPackagesError::NoLockfile => Self::NoLockfile,
+            ChangedPackagesError::MissingPackagePayload(name) => Self::MissingPackagePayload(name),
             ChangedPackagesError::Lockfile(e) => Self::Lockfile(e),
         }
     }

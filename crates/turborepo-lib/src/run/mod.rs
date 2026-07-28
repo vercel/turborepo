@@ -1145,10 +1145,16 @@ impl Run {
         };
         let repo_index = repo_index_arc.as_ref().as_ref();
 
-        let root_workspace = self
+        let root_context = self
             .pkg_dep_graph
-            .package_info(&PackageName::Root)
+            .package_task_context(&PackageName::Root)
             .ok_or(Error::MissingRootWorkspace)?;
+        let empty_root_workspace = turborepo_repository::package_graph::PackageInfo::default();
+        let root_workspace = match root_context.package_info() {
+            Some(payload) => payload,
+            None if !root_context.requires_compatibility_payload() => &empty_root_workspace,
+            None => return Err(Error::MissingPackagePayload(PackageName::Root)),
+        };
 
         let is_monorepo = !self.opts.run_opts.single_package;
 
