@@ -620,6 +620,19 @@ impl PackageGraph {
         true
     }
 
+    #[cfg(any(test, feature = "test-util"))]
+    pub fn set_package_json_name_for_test(
+        &mut self,
+        package: &PackageName,
+        name: Option<String>,
+    ) -> bool {
+        let Some(package_info) = self.packages.get_mut(package) else {
+            return false;
+        };
+        package_info.package_json.name = name.map(turborepo_errors::Spanned::new);
+        true
+    }
+
     /// Iterates the structural graph sentinel followed by every authoritative
     /// execution scope. The root JavaScript scope is omitted when no root
     /// `package.json` exists.
