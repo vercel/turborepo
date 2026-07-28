@@ -420,8 +420,9 @@ where
 #[cfg(test)]
 mod tests {
     use turborepo_repository::{
-        package_graph::{PackageInfo, PackageName, PackageNode},
+        package_graph::{PackageGraphNodeKind, PackageInfo, PackageName, PackageNode},
         package_json::PackageJson,
+        toolchain::ToolchainId,
     };
 
     use super::*;
@@ -429,7 +430,7 @@ mod tests {
 
     // Minimal mock graph that tracks packages, dependencies, and ancestors.
     struct MockGraph {
-        packages: Vec<(PackageName, PackageInfo)>,
+        packages: Vec<(PackageName, turbopath::AnchoredSystemPathBuf, PackageInfo)>,
         deps: HashMap<PackageNode, Vec<PackageNode>>,
         ancestors: HashMap<PackageNode, Vec<PackageNode>>,
     }
@@ -447,14 +448,12 @@ mod tests {
             let pkg_name = PackageName::Other(name.into());
             self.packages.push((
                 pkg_name,
+                turbopath::AnchoredSystemPathBuf::from_raw(format!("packages/{name}")).unwrap(),
                 PackageInfo {
                     package_json: PackageJson::default(),
-                    package_json_path: turbopath::AnchoredSystemPathBuf::from_raw(format!(
-                        "packages/{name}/package.json"
-                    ))
-                    .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
+                    ..Default::default()
                 },
             ));
         }
@@ -471,8 +470,23 @@ mod tests {
     }
 
     impl PackageGraphProvider for MockGraph {
-        fn packages(&self) -> Box<dyn Iterator<Item = (&PackageName, &PackageInfo)> + '_> {
-            Box::new(self.packages.iter().map(|(n, i)| (n, i)))
+        fn package_scopes(&self) -> Box<dyn Iterator<Item = crate::PackageScope<'_>> + '_> {
+            Box::new(
+                self.packages
+                    .iter()
+                    .map(|(name, directory, _)| crate::PackageScope {
+                        name: name.clone(),
+                        directory,
+                        kind: PackageGraphNodeKind::Package,
+                        toolchain: &ToolchainId::JAVASCRIPT,
+                    }),
+            )
+        }
+
+        fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {
+            self.packages
+                .iter()
+                .find_map(|(candidate, _, info)| (candidate == name).then_some(info))
         }
 
         fn immediate_dependencies(&self, _node: &PackageNode) -> Option<HashSet<&PackageNode>> {

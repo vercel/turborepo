@@ -18,6 +18,27 @@ use turborepo_scm::{Error as ScmError, SCM, git::InvalidRange};
 
 use crate::ResolutionError;
 
+/// Expands an all-packages change to the root Turbo task namespace and every
+/// authoritative non-root execution scope.
+///
+/// The root namespace exists even when a pure native repository has no root
+/// JavaScript package. Package and aggregate identities still come exclusively
+/// from repository knowledge.
+pub(crate) fn all_package_changes(
+    pkg_graph: &PackageGraph,
+    reason: AllPackageChangeReason,
+) -> HashMap<PackageName, PackageInclusionReason> {
+    std::iter::once(PackageName::Root)
+        .chain(
+            pkg_graph
+                .package_scope_directories()
+                .map(|(name, _)| name)
+                .filter(|name| name != &PackageName::Root),
+        )
+        .map(|name| (name, PackageInclusionReason::All(reason.clone())))
+        .collect()
+}
+
 /// Given two git refs, determine which packages have changed between them.
 pub trait GitChangeDetector {
     /// Determine which packages have changed between two git refs.
@@ -74,10 +95,10 @@ impl<'a> ScopeChangeDetector<'a> {
         from_ref: Option<&str>,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
     ) -> LockfileContents {
-        let lockfile_path = self
-            .pkg_graph
-            .package_manager()
-            .lockfile_path(self.turbo_root);
+        let Some(package_manager) = self.pkg_graph.package_manager() else {
+            return LockfileContents::Unchanged;
+        };
+        let lockfile_path = package_manager.lockfile_path(self.turbo_root);
 
         if !ChangeMapper::<DefaultPackageChangeMapper>::lockfile_changed(
             self.turbo_root,
@@ -119,37 +140,22 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
             Ok(Ok(changed_files)) => changed_files,
             Ok(Err(InvalidRange { from_ref, to_ref })) => {
                 debug!("invalid ref range, defaulting to all packages changed");
-                return Ok(self
-                    .pkg_graph
-                    .packages()
-                    .map(|(name, _)| {
-                        (
-                            name.to_owned(),
-                            PackageInclusionReason::All(AllPackageChangeReason::GitRefNotFound {
-                                from_ref: from_ref.clone(),
-                                to_ref: to_ref.clone(),
-                            }),
-                        )
-                    })
-                    .collect());
+                return Ok(all_package_changes(
+                    self.pkg_graph,
+                    AllPackageChangeReason::GitRefNotFound { from_ref, to_ref },
+                ));
             }
             Err(ScmError::Path(err, _)) => {
                 warn!(
                     "SCM path error while detecting changed files: {err}. Defaulting to all \
                      packages changed."
                 );
-                return Ok(self
-                    .pkg_graph
-                    .packages()
-                    .map(|(name, _)| {
-                        (
-                            name.to_owned(),
-                            PackageInclusionReason::All(AllPackageChangeReason::ScmError {
-                                error: err.to_string(),
-                            }),
-                        )
-                    })
-                    .collect());
+                return Ok(all_package_changes(
+                    self.pkg_graph,
+                    AllPackageChangeReason::ScmError {
+                        error: err.to_string(),
+                    },
+                ));
             }
             Err(err) => return Err(err.into()),
         };
@@ -167,11 +173,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
         {
             PackageChanges::All(reason) => {
                 debug!("all packages changed: {:?}", reason);
-                Ok(self
-                    .pkg_graph
-                    .packages()
-                    .map(|(name, _)| (name.to_owned(), PackageInclusionReason::All(reason.clone())))
-                    .collect())
+                Ok(all_package_changes(self.pkg_graph, reason))
             }
             PackageChanges::Some(packages) => {
                 debug!(

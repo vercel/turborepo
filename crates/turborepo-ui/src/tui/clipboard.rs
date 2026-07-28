@@ -91,12 +91,15 @@ fn copy_impl(s: &str, provider: &Provider) -> std::io::Result<()> {
                 .stdin(Stdio::piped())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
-                .spawn()
-                .unwrap();
+                .spawn()?;
             // Do not exit early if we fail to write to the clipboard, make sure we attempt
             // to wait on the clipboard to exit to avoid a zombie process.
-            let write_result =
-                std::io::Write::write_all(&mut child.stdin.as_ref().unwrap(), s.as_bytes());
+            let write_result = match child.stdin.as_mut() {
+                Some(stdin) => std::io::Write::write_all(stdin, s.as_bytes()),
+                None => Err(std::io::Error::other(
+                    "clipboard provider stdin was unavailable",
+                )),
+            };
             let wait_result = child.wait();
             write_result?;
             wait_result?;
@@ -113,3 +116,20 @@ fn copy_impl(s: &str, provider: &Provider) -> std::io::Result<()> {
 }
 
 static PROVIDER: std::sync::LazyLock<Provider> = std::sync::LazyLock::new(detect_copy_provider);
+
+#[cfg(test)]
+mod tests {
+    use super::{Provider, copy_impl};
+
+    #[cfg(windows)]
+    const MISSING_PROVIDER: &str = r"C:\definitely\not\turbo-missing-clipboard-provider.exe";
+    #[cfg(not(windows))]
+    const MISSING_PROVIDER: &str = "/definitely/not/turbo-missing-clipboard-provider";
+
+    #[test]
+    fn exec_provider_spawn_failure_returns_error() {
+        let result = copy_impl("content", &Provider::Exec(MISSING_PROVIDER, Vec::new()));
+
+        assert!(result.is_err());
+    }
+}

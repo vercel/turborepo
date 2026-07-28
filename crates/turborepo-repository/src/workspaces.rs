@@ -17,6 +17,10 @@ pub enum Error {
     Globwalk(#[from] globwalk::GlobError),
     #[error(transparent)]
     WalkError(#[from] globwalk::WalkError),
+    #[error(transparent)]
+    Path(#[from] PathError),
+    #[error("Workspace package resolves outside repository root: {0}")]
+    WorkspacePackageOutsideRepo(String),
 }
 
 // WorkspaceGlobs is suitable for finding package.json files via globwalk
@@ -148,13 +152,24 @@ impl WorkspaceGlobs {
         &self,
         repo_root: &AbsoluteSystemPath,
     ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf> + use<>, Error> {
-        let files = globwalk::globwalk_with_settings(
-            repo_root,
-            &self.package_json_inclusions,
-            &self.validated_exclusions,
-            globwalk::WalkType::Files,
-            globwalk::Settings::default().follow_links(),
-        )?;
+        let files = {
+            let _span = tracing::info_span!("package_json_walk").entered();
+            globwalk::globwalk_with_settings(
+                repo_root,
+                &self.package_json_inclusions,
+                &self.validated_exclusions,
+                globwalk::WalkType::Files,
+                globwalk::Settings::default().follow_links(),
+            )?
+        };
+        let _span = tracing::info_span!("package_json_realpath_check").entered();
+        let repo_root = repo_root.to_realpath()?;
+        for file in &files {
+            let real_file = file.to_realpath()?;
+            if !real_file.starts_with(&repo_root) {
+                return Err(Error::WorkspacePackageOutsideRepo(file.to_string()));
+            }
+        }
         Ok(files.into_iter())
     }
 }
@@ -258,6 +273,34 @@ mod test {
                         .replace('/', std::path::MAIN_SEPARATOR_STR)
                 ),
                 "doublestar glob should find packages behind symlinks, got: {package_jsons:?}"
+            );
+        }
+
+        #[test]
+        fn rejects_package_behind_symlink_outside_repo_root() {
+            let root_tmp = tempfile::TempDir::with_prefix("ws-symlink-outside-root").unwrap();
+            let root = root_tmp.path();
+            let outside_tmp = tempfile::TempDir::with_prefix("ws-symlink-outside-target").unwrap();
+            let outside = outside_tmp.path();
+
+            std::fs::create_dir_all(outside.join("widget-a")).unwrap();
+            std::fs::write(
+                outside.join("widget-a/package.json"),
+                r#"{"name": "widget-a"}"#,
+            )
+            .unwrap();
+            std::fs::create_dir_all(root.join("widgets")).unwrap();
+            std::os::unix::fs::symlink(outside.join("widget-a"), root.join("widgets/widget-a"))
+                .unwrap();
+
+            let repo_root = AbsoluteSystemPathBuf::try_from(root).unwrap();
+            let globs = WorkspaceGlobs::new(vec!["widgets/*"], vec![]).unwrap();
+
+            let result = globs.get_package_jsons(&repo_root);
+
+            assert!(
+                result.is_err(),
+                "workspace discovery should reject symlinked packages outside the repo root"
             );
         }
     }

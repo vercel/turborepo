@@ -41,11 +41,9 @@ todos.md
 !lockfile-tests/fixtures/**/.npmrc
 !turborepo-tests/integration/fixtures/**/.npmrc
 .idea
-cli/libturbo.a
-cli/libturbo.h
-
 go-artifacts
 rust-artifacts
+release-artifacts
 rustc-ice-*.txt
 
 # CI
@@ -60,9 +58,6 @@ file_descriptor_set.bin
 
 # include .env files for tests
 !**/__fixtures__/**/*.env
-
-# include test fixtures for vt100
-!crates/turborepo-vt100/tests/data
 
 # DevContainer cache directories
 .devcontainer/cache/

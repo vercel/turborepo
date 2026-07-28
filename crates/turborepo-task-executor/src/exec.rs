@@ -8,7 +8,9 @@
 //! - Result types (`ExecOutcome`, `SuccessOutcome`, `InternalError`)
 
 use std::{
+    collections::HashMap,
     io::Write,
+    sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
@@ -18,7 +20,7 @@ use tracing::{Instrument, error};
 use turbopath::AnchoredSystemPathBuf;
 use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{EnvironmentVariableMap, platform::PlatformEnv};
-use turborepo_process::{ChildExit, Command, ProcessManager};
+use turborepo_process::{ChildExit, ChildStdin, Command, ProcessManager};
 use turborepo_run_cache::TaskCache;
 use turborepo_run_summary::TaskTracker;
 use turborepo_task_id::TaskId;
@@ -27,6 +29,18 @@ use turborepo_types::{ContinueMode, StopExecution, UIMode};
 use turborepo_ui::ColorConfig;
 
 use crate::{TaskAccessProvider, TaskOutput};
+
+/// Per-group mutexes for commands marked with a serial group (see
+/// [`Command::serial_group`]). At most one command per group runs at a time,
+/// process-wide.
+fn serial_group_lock(group: &str) -> Arc<tokio::sync::Mutex<()>> {
+    static GROUPS: OnceLock<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> = OnceLock::new();
+    let mut groups = GROUPS
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    groups.entry(group.to_string()).or_default().clone()
+}
 
 /// Windows NT status codes that indicate out-of-memory conditions.
 /// These are the signed i32 representations of the unsigned NT status codes.
@@ -265,11 +279,7 @@ where
             }
             Ok(ExecOutcome::Task { .. }) => {
                 callback
-                    .send(match self.continue_on_error {
-                        ContinueMode::Always => Ok(()),
-                        ContinueMode::DependenciesSuccessful => Err(StopExecution::DependentTasks),
-                        ContinueMode::Never => Err(StopExecution::AllTasks),
-                    })
+                    .send(stop_execution_for_task_error(self.continue_on_error))
                     .ok();
             }
             Ok(ExecOutcome::Shutdown) | Err(_) => {
@@ -282,7 +292,7 @@ where
 
         // Cache save runs after the callback so dependent tasks can start
         // while we walk the filesystem and write to cache.
-        if let Ok(ExecOutcome::Success(SuccessOutcome::Run)) = &result
+        if should_save_outputs_after_execute(&result)
             && self
                 .task_access
                 .can_cache(&self.task_hash, &self.task_id_for_display)
@@ -353,8 +363,6 @@ where
         task_handle: &mut turborepo_log::grouping::TaskHandle,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<ExecOutcome, InternalError> {
-        task_output.start(self.task_cache.output_logs().into());
-
         if !self.task_cache.is_caching_disabled() {
             let missing_platform_env = self.platform_env.validate(&self.execution_env);
             if !missing_platform_env.is_empty() {
@@ -411,6 +419,21 @@ where
             }
         }
 
+        // Commands in a serial group run one at a time: their tools hold
+        // global locks (e.g. Cargo's build directory), so concurrent
+        // processes cannot make progress and just emit "waiting for file
+        // lock" noise. The guard is held until the process exits.
+        let _serial_group_guard = match self.cmd.serial_group_name() {
+            Some(group) => Some(serial_group_lock(group).lock_owned().await),
+            None => None,
+        };
+
+        // The task is only presented as running once its process is about
+        // to exist. Everything before this point — cache restore, waiting
+        // on the serial group — happens while the task is still pending,
+        // and cache hits finish without ever starting.
+        task_output.start(self.task_cache.output_logs().into());
+
         // Spawn the process
         let cmd = self.cmd.clone();
         let mut process =
@@ -441,32 +464,43 @@ where
         // For persistent/interactive tasks, keep stdin alive so tools like
         // Vite that exit on EOF don't terminate prematurely.
         //
-        // In TUI mode, forward stdin to the TaskSender for interactive display.
-        // In stream mode (no TUI sender), hold stdin in a guard that lives
-        // until the process exits — process.stdin() uses .take(), so only the
-        // first call returns Some.
+        // In TUI mode, forward writable PTY stdin to the TaskSender for
+        // interactive display. Otherwise, hold stdin in a guard that lives
+        // until the process exits.
         let _stdin_guard = if self.takes_input {
-            let stdin = process.stdin();
-            if let Some(stdin) = stdin {
-                if task_output.sender().is_some() {
+            match process.take_stdin() {
+                Some(ChildStdin::Writable(stdin)) if task_output.sender().is_some() => {
                     task_output.set_stdin(stdin);
                     // TUI sender now owns stdin, no guard needed.
                     None
-                } else {
-                    // Stream mode: hold stdin open via the guard.
+                }
+                Some(stdin) => {
+                    // Non-interactive tasks still need stdin held open so dev
+                    // servers do not exit on EOF immediately after spawn.
                     Some(stdin)
                 }
+                None => None,
+            }
+        } else {
+            None
+        };
+
+        // Close piped stdin for non-interactive tasks so tools that read stdin
+        // before starting don't hang. In PTY mode, keep stdin open without
+        // forwarding input: EOF on a PTY is observable and can shut down tools
+        // that treat it as a terminal/session close signal.
+        let _non_interactive_stdin_guard = if !self.takes_input {
+            if self.manager.use_pty() {
+                process.take_stdin()
+            } else if !self.manager.closing_stdin_ends_process() {
+                process.stdin();
+                None
             } else {
                 None
             }
         } else {
             None
         };
-
-        // Close stdin for non-persistent tasks
-        if !self.takes_input && !self.manager.closing_stdin_ends_process() {
-            process.stdin();
-        }
 
         // Create output writer and pipe outputs.
         // The stdout_writer is scoped so that TaskHandleWriter drops before
@@ -606,6 +640,18 @@ where
     }
 }
 
+fn stop_execution_for_task_error(continue_on_error: ContinueMode) -> Result<(), StopExecution> {
+    match continue_on_error {
+        ContinueMode::Always => Ok(()),
+        ContinueMode::DependenciesSuccessful => Err(StopExecution::DependentTasks),
+        ContinueMode::Never => Err(StopExecution::AllTasks),
+    }
+}
+
+fn should_save_outputs_after_execute(result: &Result<ExecOutcome, InternalError>) -> bool {
+    matches!(result, Ok(ExecOutcome::Success(SuccessOutcome::Run)))
+}
+
 /// Execution context for dry runs.
 ///
 /// A simplified executor for dry run mode that only checks cache status.
@@ -624,5 +670,44 @@ impl<H: HashTrackerProvider> DryRunExecutor<H> {
         }
         tracker.dry_run().await;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn task_error_stop_signal_matches_continue_mode() {
+        assert_eq!(stop_execution_for_task_error(ContinueMode::Always), Ok(()));
+        assert_eq!(
+            stop_execution_for_task_error(ContinueMode::DependenciesSuccessful),
+            Err(StopExecution::DependentTasks)
+        );
+        assert_eq!(
+            stop_execution_for_task_error(ContinueMode::Never),
+            Err(StopExecution::AllTasks)
+        );
+    }
+
+    #[test]
+    fn only_successful_task_runs_save_outputs() {
+        assert!(should_save_outputs_after_execute(&Ok(
+            ExecOutcome::Success(SuccessOutcome::Run)
+        )));
+
+        for result in [
+            Ok(ExecOutcome::Success(SuccessOutcome::CacheHit)),
+            Ok(ExecOutcome::Success(SuccessOutcome::RunOutputError)),
+            Ok(ExecOutcome::Task {
+                exit_code: Some(1),
+                message: "failed".to_string(),
+            }),
+            Ok(ExecOutcome::Shutdown),
+            Ok(ExecOutcome::Restarted),
+            Err(InternalError::UnknownChildExit),
+        ] {
+            assert!(!should_save_outputs_after_execute(&result));
+        }
     }
 }

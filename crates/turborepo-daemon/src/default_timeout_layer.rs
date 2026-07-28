@@ -20,8 +20,6 @@
 //! a timeout that it wants (as long as it is less than 30s),
 //! and the server has sane defaults
 
-use std::time::Duration;
-
 use http_body::Body;
 use tonic::{codegen::http::Request, server::NamedService};
 use tower::{Layer, Service};
@@ -51,11 +49,7 @@ where
         if !req.uri().path().ends_with("Blocking") {
             req.headers_mut()
                 .entry("grpc-timeout")
-                .or_insert_with(move || {
-                    let dur = Duration::from_millis(100);
-                    tonic::codegen::http::HeaderValue::from_str(&format!("{}u", dur.as_micros()))
-                        .expect("numbers are always valid ascii")
-                });
+                .or_insert(tonic::codegen::http::HeaderValue::from_static("100000u"));
         };
 
         self.inner.call(req)

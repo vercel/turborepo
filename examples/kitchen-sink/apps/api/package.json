@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "start": "node dist/index.cjs",
-    "dev": "tsdown --watch --onSuccess \"node dist/index.cjs\"",
+    "dev": "tsx watch src/index.ts",
     "build": "tsdown",
     "check-types": "tsc --noEmit",
     "lint": "eslint src/ --max-warnings 0",
@@ -35,7 +35,8 @@
     "eslint": "^9.39.0",
     "jest": "^30.2.0",
     "supertest": "^7.1.0",
-    "tsdown": "0.9.3",
+    "tsdown": "0.12.0",
+    "tsx": "^4.19.4",
     "typescript": "5.9.3"
   }
 }

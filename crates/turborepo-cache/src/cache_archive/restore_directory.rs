@@ -114,7 +114,9 @@ impl CachedDirTree {
             // replaced with a real directory. Symlinks restored during the
             // current operation are preserved (they were intentionally placed
             // by the same tar archive).
-            let current = current_anchored.as_ref().unwrap();
+            let Some(current) = current_anchored.as_ref() else {
+                continue;
+            };
             let literal_path = anchor.resolve(AnchoredSystemPath::new(current.as_str())?);
             if let Ok(metadata) = literal_path.symlink_metadata()
                 && metadata.is_symlink()
@@ -141,28 +143,38 @@ impl CachedDirTree {
             );
         }
 
-        // If we have made it here we know that it is safe to call fs::create_dir_all
-        // on the join of anchor and processed_name.
-        //
-        // This could _still_ error, but we don't care.
+        // Directory modes are only applied when creating directories. A later
+        // path-based chmod could be redirected if a checked component is swapped.
         let resolved_name = anchor.resolve(processed_name);
         let directory_exists = resolved_name.try_exists();
         if matches!(directory_exists, Ok(false)) {
-            resolved_name.create_dir_all()?;
-        }
-
-        #[cfg(unix)]
-        {
-            use std::{fs, os::unix::fs::PermissionsExt};
-
-            let metadata = resolved_name.symlink_metadata()?;
-            let mut permissions = metadata.permissions();
-            permissions.set_mode(mode);
-            fs::set_permissions(&resolved_name, permissions)?;
+            create_dir_all_with_mode(&resolved_name, mode)?;
         }
 
         Ok(())
     }
+}
+
+#[cfg(unix)]
+fn create_dir_all_with_mode(path: &AbsoluteSystemPath, mode: u32) -> io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(mode & 0o777)
+        .create(path.as_path())
+}
+
+#[cfg(windows)]
+fn create_dir_all_with_mode(path: &AbsoluteSystemPath, _mode: u32) -> io::Result<()> {
+    // Windows restore does not apply tar modes, so there is no chmod equivalent
+    // to move to creation time.
+    path.create_dir_all()
+}
+
+#[cfg(not(any(unix, windows)))]
+fn create_dir_all_with_mode(path: &AbsoluteSystemPath, _mode: u32) -> io::Result<()> {
+    path.create_dir_all()
 }
 
 fn check_path(
@@ -194,32 +206,55 @@ fn check_path(
         return Ok(combined_path);
     }
 
-    // Check to see if the symlink targets outside of the originalAnchor.
-    // We don't do eval symlinks because we could find ourself in a totally
-    // different place.
-
-    // 1. Get the target.
+    // Check the real target of any existing path prefix so archive-created
+    // symlink chains cannot hide an escape behind lexical cleaning.
     let link_target = combined_path.read_link()?;
     debug!(
         "link source: {:?}, link target {:?}",
         combined_path, link_target
     );
-    if link_target.is_absolute() {
-        let absolute_link_target = AbsoluteSystemPathBuf::new(link_target.clone())?;
-        if path_clean::clean(&absolute_link_target).starts_with(original_anchor) {
-            return Ok(absolute_link_target);
-        }
+    let link_target_path = if link_target.is_absolute() {
+        AbsoluteSystemPathBuf::new(link_target.clone())?
     } else {
-        let relative_link_target = AnchoredSystemPath::new(link_target.as_str())?;
-        // We clean here to resolve the `..` and `.` segments.
-        let computed_target = path_clean::clean(accumulated_anchor.resolve(relative_link_target));
-        if computed_target.starts_with(original_anchor) {
-            return check_path(original_anchor, accumulated_anchor, relative_link_target);
-        }
+        accumulated_anchor.resolve(AnchoredSystemPath::new(link_target.as_str())?)
+    };
+
+    let real_anchor = original_anchor.to_realpath()?;
+    if let Some(real_target) = realpath_existing_prefix(&link_target_path)?
+        && !real_target.starts_with(&real_anchor)
+    {
+        return Err(CacheError::LinkOutsideOfDirectory(
+            link_target.to_string(),
+            Backtrace::capture(),
+        ));
+    }
+
+    let clean_target = link_target_path.clean()?;
+    if clean_target.starts_with(original_anchor) {
+        return Ok(clean_target);
     }
 
     Err(CacheError::LinkOutsideOfDirectory(
         link_target.to_string(),
         Backtrace::capture(),
     ))
+}
+
+pub(crate) fn realpath_existing_prefix(
+    path: &AbsoluteSystemPath,
+) -> Result<Option<AbsoluteSystemPathBuf>, CacheError> {
+    let mut candidate = path.as_path().to_path_buf();
+
+    loop {
+        let candidate_path = AbsoluteSystemPathBuf::try_from(candidate.as_std_path())?;
+        match candidate_path.to_realpath() {
+            Ok(realpath) => return Ok(Some(realpath)),
+            Err(err) if err.is_io_error(io::ErrorKind::NotFound) => {
+                if !candidate.pop() {
+                    return Ok(None);
+                }
+            }
+            Err(err) => return Err(err.into()),
+        }
+    }
 }

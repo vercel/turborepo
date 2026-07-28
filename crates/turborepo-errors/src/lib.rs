@@ -6,6 +6,8 @@
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 
+pub mod json;
+
 use std::{
     fmt::Display,
     iter,
@@ -40,6 +42,16 @@ pub struct ParseDiagnostic {
     source_code: NamedSource<String>,
     #[label]
     label: Option<SourceSpan>,
+}
+
+impl ParseDiagnostic {
+    pub fn new(message: String, path: &str, source: String, span: Option<Range<usize>>) -> Self {
+        Self {
+            message,
+            source_code: NamedSource::new(path, source),
+            label: span.map(|span| (span.start, span.len()).into()),
+        }
+    }
 }
 
 struct BiomeMessage<'a, T: ?Sized>(&'a T);

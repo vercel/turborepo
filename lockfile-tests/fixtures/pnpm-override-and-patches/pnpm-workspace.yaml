@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - packages/*
+
+autoInstallPeers: false
+dedupePeers: true
+allowUnusedPatches: true
+
+overrides:
+  ms@>=2.1.0: 2.0.0
+  picomatch@>=3.0.0 <4: 3.0.2
+
+patchedDependencies:
+  is-odd@3.0.1: patches/is-odd@3.0.1.patch

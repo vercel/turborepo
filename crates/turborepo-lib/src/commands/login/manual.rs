@@ -2,9 +2,10 @@ use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::CacheClient;
 use turborepo_auth::Token;
 use turborepo_json_rewrite::set_path;
+use turborepo_types::APIClientOpts;
 
 use super::{write_token, Error};
-use crate::{commands::CommandBase, opts::APIClientOpts};
+use crate::commands::CommandBase;
 
 #[derive(Default, Debug, PartialEq)]
 struct ManualLoginOptions<'a> {
@@ -155,7 +156,7 @@ fn write_remote(
     let with_api_url = set_path(
         &turbo_json_before,
         &["remoteCache", "apiUrl"],
-        &serde_json::to_string(api_url).unwrap(),
+        &serde_json::to_string(api_url)?,
     )?;
     let (key, value) = match team_id {
         TeamIdentifier::Id(id) => ("teamId", id),
@@ -164,7 +165,7 @@ fn write_remote(
     let with_team = set_path(
         &with_api_url,
         &["remoteCache", key],
-        &serde_json::to_string(&value).unwrap(),
+        &serde_json::to_string(&value)?,
     )?;
     root_turbo_json.ensure_dir()?;
     root_turbo_json.create_with_contents(with_team)?;
@@ -183,12 +184,14 @@ mod test {
     fn test_default_api_url_filtered_out() {
         let api_opts = APIClientOpts {
             api_url: "https://vercel.com/api".into(),
+            api_url_source: None,
             team_id: None,
             team_slug: None,
             token: None,
             timeout: 0,
             upload_timeout: 0,
             login_url: "".into(),
+            login_url_source: None,
             preflight: false,
             sso_login_callback_port: None,
         };
@@ -207,12 +210,14 @@ mod test {
     fn test_finds_existing_values() {
         let api_opts = APIClientOpts {
             api_url: "https://my-remote-cache.com".into(),
+            api_url_source: None,
             team_slug: Some("custom-cache".into()),
             team_id: None,
             token: Some("token".into()),
             timeout: 0,
             upload_timeout: 0,
             login_url: "".into(),
+            login_url_source: None,
             preflight: false,
             sso_login_callback_port: None,
         };

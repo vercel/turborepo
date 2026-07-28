@@ -18,7 +18,7 @@ runs:
         path: |
           /usr/bin/capnp
           /usr/bin/capnpc
-        key: ${{ runner.os }}-capnproto-1.1.0
+        key: ${{ runner.os }}-${{ github.head_ref || github.ref_name }}-capnproto-1.1.0
 
     - name: "Setup capnproto for Linux"
       if: runner.os == 'Linux' && (steps.cache-capnp-linux.outcome == 'skipped' || steps.cache-capnp-linux.outputs.cache-hit != 'true')
@@ -52,7 +52,7 @@ runs:
       id: cache-capnp-windows
       with:
         path: C:\capnproto
-        key: ${{ runner.os }}-capnproto-1.1.0
+        key: ${{ runner.os }}-${{ github.head_ref || github.ref_name }}-capnproto-1.1.0
 
     - name: "Setup capnproto for Windows"
       if: runner.os == 'Windows' && (steps.cache-capnp-windows.outcome == 'skipped' || steps.cache-capnp-windows.outputs.cache-hit != 'true')

@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 
+[lints]
+workspace = true
+
 [dependencies]
 # Foundation crates
 turbopath = { path = "../turborepo-paths" }
@@ -19,7 +22,7 @@ turborepo-cache = { path = "../turborepo-cache" }
 turborepo-run-cache = { path = "../turborepo-run-cache" }
 
 # UI
-turborepo-ui = { path = "../turborepo-ui" }
+turborepo-ui = { path = "../turborepo-ui", features = ["tui"] }
 
 # Command execution
 turborepo-env = { workspace = true }
@@ -63,11 +66,11 @@ chrono = { workspace = true }
 # Binary lookup
 which = { workspace = true }
 
-# Regex for turbo detection
-regex = { workspace = true }
-
 # Case conversion for error codes
 convert_case = "0.6.0"
 
 [dev-dependencies]
 tempfile = { workspace = true }
+turborepo-repository = { path = "../turborepo-repository", features = [
+  "test-util",
+] }

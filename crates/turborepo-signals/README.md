@@ -20,4 +20,4 @@ Key types:
 
 ## Notes
 
-Subscribers are notified when a signal occurs or when `close()` is called. The guard pattern ensures all subscribers complete their cleanup before shutdown proceeds.
+Subscribers are notified when a signal occurs or when `close()` is called. The first signal starts cleanup; subsequent signals are retained so shutdown code can reliably detect force-shutdown requests. The guard pattern ensures all subscribers complete their cleanup before shutdown proceeds.

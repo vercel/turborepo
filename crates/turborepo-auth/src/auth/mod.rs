@@ -4,16 +4,137 @@ mod sso;
 
 pub use login::*;
 pub use logout::*;
+use rand::distr::{Alphanumeric, SampleString};
 pub use sso::*;
 use tracing::warn;
 use turbopath::AbsoluteSystemPath;
 #[cfg(test)]
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{Client, TokenClient};
+use turborepo_types::{ConfigurationSource, SecretString};
 use turborepo_ui::ColorConfig;
+use url::Url;
+
+const CSRF_STATE_LENGTH: usize = 32;
 
 pub(crate) fn is_vercel(login_url: &str) -> bool {
-    login_url.contains("vercel.com")
+    Url::parse(login_url)
+        .ok()
+        .is_some_and(|url| is_trusted_vercel_origin(&url))
+}
+
+pub(crate) fn ensure_trusted_vercel_api<T: Client>(api_client: &T) -> Result<(), Error> {
+    let api_url = api_client.make_url("")?;
+
+    if is_trusted_vercel_origin(&api_url) {
+        return Ok(());
+    }
+
+    Err(Error::UntrustedVercelApiUrl {
+        api_url: api_url.to_string(),
+    })
+}
+
+pub(crate) fn ensure_non_vercel_redirect_allowed<T: Client>(
+    login_url: &Url,
+    login_url_source: Option<ConfigurationSource>,
+    api_client: &T,
+    api_url_source: Option<ConfigurationSource>,
+) -> Result<(), Error> {
+    ensure_non_vercel_login_url_is_safe(login_url)?;
+
+    if !is_user_controlled_url_source(login_url_source) {
+        return Err(Error::UntrustedNonVercelLoginUrlSource {
+            url_source: login_url_source,
+        });
+    }
+
+    let api_url = api_client.make_url("")?;
+    if !is_trusted_vercel_origin(&api_url) && !is_user_controlled_url_source(api_url_source) {
+        return Err(Error::UntrustedNonVercelApiUrlSource {
+            url_source: api_url_source,
+        });
+    }
+
+    Ok(())
+}
+
+fn is_user_controlled_url_source(source: Option<ConfigurationSource>) -> bool {
+    matches!(
+        source,
+        Some(ConfigurationSource::Cli)
+            | Some(ConfigurationSource::Environment)
+            | Some(ConfigurationSource::GlobalConfig)
+    )
+}
+
+fn ensure_non_vercel_login_url_is_safe(login_url: &Url) -> Result<(), Error> {
+    if !login_url.username().is_empty() || login_url.password().is_some() {
+        return Err(Error::LoginUrlIncludesCredentials);
+    }
+
+    if login_url.scheme() == "https" {
+        return Ok(());
+    }
+
+    if login_url.scheme() == "http" && login_url.host_str().is_some_and(is_localhost) {
+        return Ok(());
+    }
+
+    Err(Error::UntrustedNonVercelLoginUrlScheme)
+}
+
+fn is_localhost(host: &str) -> bool {
+    // `Url::host_str` returns IPv6 addresses wrapped in brackets (e.g. `[::1]`),
+    // so match both the bracketed and bare forms to be safe.
+    matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]")
+}
+
+pub(crate) fn should_attempt_vercel_token_refresh(source: ExistingTokenSource) -> bool {
+    matches!(
+        source,
+        ExistingTokenSource::TurboAuth
+            | ExistingTokenSource::TurboConfig
+            | ExistingTokenSource::LegacyAuth
+    )
+}
+
+pub(crate) fn should_skip_existing_token_for_login(
+    source: ExistingTokenSource,
+    is_vercel_login: bool,
+    login_url: &str,
+) -> bool {
+    if is_vercel_login {
+        return false;
+    }
+
+    matches!(
+        source,
+        ExistingTokenSource::TurboAuth | ExistingTokenSource::LegacyAuth
+    ) || (looks_like_vercel_substring(login_url) && source == ExistingTokenSource::TurboConfig)
+}
+
+fn looks_like_vercel_substring(login_url: &str) -> bool {
+    login_url.to_ascii_lowercase().contains("vercel.com")
+}
+
+fn is_trusted_vercel_origin(url: &Url) -> bool {
+    url.scheme() == "https"
+        && url.port().is_none_or(|port| port == 443)
+        && url.host_str().is_some_and(is_vercel_host)
+}
+
+fn is_vercel_host(host: &str) -> bool {
+    host == "vercel.com" || host.ends_with(".vercel.com")
+}
+
+fn generate_csrf_state() -> String {
+    #[cfg(test)]
+    if let Ok(state) = std::env::var("TURBO_TEST_CSRF_STATE") {
+        return state;
+    }
+
+    Alphanumeric.sample_string(&mut rand::rng(), CSRF_STATE_LENGTH)
 }
 
 const VERCEL_TOKEN_DIR: &str = "com.vercel.cli";
@@ -21,6 +142,7 @@ const VERCEL_TOKEN_FILE: &str = "auth.json";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ExistingTokenSource {
+    TurboAuth,
     TurboConfig,
     LegacyAuth,
     Other,
@@ -29,23 +151,36 @@ pub(crate) enum ExistingTokenSource {
 pub struct LoginOptions<'a, T: Client + TokenClient> {
     pub color_config: &'a ColorConfig,
     pub login_url: &'a str,
+    pub login_url_source: Option<ConfigurationSource>,
+    pub api_url_source: Option<ConfigurationSource>,
     pub api_client: &'a T,
 
     pub sso_team: Option<&'a str>,
     pub existing_token: Option<&'a str>,
     pub force: bool,
     pub sso_login_callback_port: Option<u16>,
+    /// The team currently linked in configuration, if any. When set, reusing
+    /// an existing token additionally requires that the token still has
+    /// access to this team. This catches tokens that are active at the user
+    /// level but have lost team access (e.g. an expired SAML session on an
+    /// SSO-enforced team).
+    pub linked_team_id: Option<&'a str>,
+    pub linked_team_slug: Option<&'a str>,
 }
 impl<'a, T: Client + TokenClient> LoginOptions<'a, T> {
     pub fn new(color_config: &'a ColorConfig, login_url: &'a str, api_client: &'a T) -> Self {
         Self {
             color_config,
             login_url,
+            login_url_source: None,
+            api_url_source: None,
             api_client,
             sso_team: None,
             existing_token: None,
             force: false,
             sso_login_callback_port: None,
+            linked_team_id: None,
+            linked_team_slug: None,
         }
     }
 }
@@ -130,29 +265,12 @@ fn load_turbo_auth_tokens_from_paths(
     Ok(load_tokens_from_path(turbo_config_path, "Turbo config file")?.unwrap_or_default())
 }
 
-fn load_turbo_auth_tokens() -> Result<crate::AuthTokens, Error> {
-    use crate::{TURBO_AUTH_FILE, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE};
-
-    let Some(turbo_config_dir) = turborepo_dirs::config_dir()? else {
-        return Ok(crate::AuthTokens::default());
-    };
-    let turbo_auth_path = turbo_config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_AUTH_FILE]);
-    let turbo_config_path = turbo_config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]);
-
-    load_turbo_auth_tokens_from_paths(&turbo_auth_path, &turbo_config_path)
-}
-
 pub(crate) fn classify_existing_vercel_token(token: &str) -> Result<ExistingTokenSource, Error> {
     if let Some(turbo_config_dir) = turborepo_dirs::config_dir()? {
         let turbo_auth_path =
             turbo_config_dir.join_components(&[crate::TURBO_TOKEN_DIR, crate::TURBO_AUTH_FILE]);
-        if let Some(turbo_auth_tokens) = load_tokens_from_path(&turbo_auth_path, "Turbo auth file")?
-            && turbo_auth_tokens
-                .token
-                .as_ref()
-                .is_some_and(|stored_token| stored_token.expose() == token)
-        {
-            return Ok(ExistingTokenSource::TurboConfig);
+        if path_contains_token(&turbo_auth_path, "Turbo auth file", token)? {
+            return Ok(ExistingTokenSource::TurboAuth);
         }
     }
 
@@ -165,20 +283,19 @@ pub(crate) fn classify_existing_vercel_token(token: &str) -> Result<ExistingToke
         return Ok(ExistingTokenSource::LegacyAuth);
     }
 
-    let turbo_auth_tokens = load_turbo_auth_tokens()?;
-    if turbo_auth_tokens
-        .token
-        .as_ref()
-        .is_some_and(|stored_token| stored_token.expose() == token)
-    {
-        return Ok(ExistingTokenSource::TurboConfig);
+    if let Some(turbo_config_dir) = turborepo_dirs::config_dir()? {
+        let turbo_config_path =
+            turbo_config_dir.join_components(&[crate::TURBO_TOKEN_DIR, crate::TURBO_TOKEN_FILE]);
+        if path_contains_token(&turbo_config_path, "Turbo config file", token)? {
+            return Ok(ExistingTokenSource::TurboConfig);
+        }
     }
 
     Ok(ExistingTokenSource::Other)
 }
 
 fn load_legacy_auth_tokens(
-    expected_token: Option<&turborepo_api_client::SecretString>,
+    expected_token: Option<&SecretString>,
 ) -> Result<crate::AuthTokens, Error> {
     use crate::Token;
 
@@ -212,9 +329,9 @@ fn load_legacy_auth_tokens(
 async fn exchange_legacy_auth_token(
     turbo_auth_path: &AbsoluteSystemPath,
     turbo_config_path: &AbsoluteSystemPath,
-    expected_token: Option<&turborepo_api_client::SecretString>,
+    expected_token: Option<&SecretString>,
     allow_legacy_token_fallback: bool,
-) -> Result<Option<turborepo_api_client::SecretString>, Error> {
+) -> Result<Option<SecretString>, Error> {
     let legacy_auth_tokens = load_legacy_auth_tokens(expected_token)?;
     exchange_auth_tokens(
         &legacy_auth_tokens,
@@ -261,7 +378,7 @@ async fn exchange_auth_tokens(
     turbo_config_path: &AbsoluteSystemPath,
     allow_token_fallback: bool,
     source_label: &str,
-) -> Result<Option<turborepo_api_client::SecretString>, Error> {
+) -> Result<Option<SecretString>, Error> {
     let Some(stored_token) = auth_tokens.token.clone() else {
         return Ok(None);
     };
@@ -313,10 +430,14 @@ async fn exchange_auth_tokens(
                 if let Some(refresh_error) = refresh_error {
                     warn!(
                         "Failed to refresh or exchange {source_label} after a forbidden response: \
-                         refresh error: {refresh_error}; exchange error: {e}"
+                         refresh error: {refresh_error}; exchange error: {e}. Run `turbo login` \
+                         to create a new local session."
                     );
                 } else {
-                    warn!("Failed to exchange {source_label} after a forbidden response: {e}");
+                    warn!(
+                        "Failed to exchange {source_label} after a forbidden response: {e}. Run \
+                         `turbo login` to create a new local session."
+                    );
                 }
                 Ok(None)
             }
@@ -328,7 +449,7 @@ async fn refresh_and_persist_turbo_token(
     auth_tokens: &crate::AuthTokens,
     turbo_auth_path: &AbsoluteSystemPath,
     turbo_config_path: &AbsoluteSystemPath,
-) -> Option<turborepo_api_client::SecretString> {
+) -> Option<SecretString> {
     if !can_refresh_token(auth_tokens) {
         return None;
     }
@@ -365,7 +486,7 @@ fn persist_turbo_oauth_tokens(
 async fn get_token_with_refresh_inner(
     allow_legacy_token_fallback: bool,
     allow_turbo_config_token_fallback: bool,
-) -> Result<Option<turborepo_api_client::SecretString>, Error> {
+) -> Result<Option<SecretString>, Error> {
     use crate::{TURBO_AUTH_FILE, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE};
 
     let turbo_config_dir = match turborepo_dirs::config_dir()? {
@@ -429,15 +550,14 @@ async fn get_token_with_refresh_inner(
 }
 
 /// Attempts to get a valid token with automatic refresh if expired.
-pub async fn get_token_with_refresh() -> Result<Option<turborepo_api_client::SecretString>, Error> {
+pub async fn get_token_with_refresh() -> Result<Option<SecretString>, Error> {
     get_token_with_refresh_inner(true, true).await
 }
 
 /// Login prefers upgrading legacy/config tokens into Turbo OAuth sessions. If
 /// that upgrade fails, callers should fall through to a fresh login instead of
 /// silently reusing the old token.
-pub async fn get_token_with_refresh_for_login()
--> Result<Option<turborepo_api_client::SecretString>, Error> {
+pub async fn get_token_with_refresh_for_login() -> Result<Option<SecretString>, Error> {
     get_token_with_refresh_inner(false, false).await
 }
 
@@ -445,8 +565,8 @@ pub async fn get_token_with_refresh_for_login()
 /// by the server. Unlike `get_token_with_refresh`, this never falls back to the
 /// same stored token.
 pub async fn recover_token_after_forbidden(
-    current_token: &turborepo_api_client::SecretString,
-) -> Result<Option<turborepo_api_client::SecretString>, Error> {
+    current_token: &SecretString,
+) -> Result<Option<SecretString>, Error> {
     use crate::{TURBO_AUTH_FILE, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE};
 
     let turbo_config_dir = match turborepo_dirs::config_dir()? {
@@ -467,7 +587,7 @@ pub async fn recover_token_after_forbidden(
             )
             .await
         }
-        ExistingTokenSource::TurboConfig => {
+        ExistingTokenSource::TurboAuth | ExistingTokenSource::TurboConfig => {
             let auth_tokens = load_auth_tokens(&turbo_auth_path, &turbo_config_path)?;
             if auth_tokens.token.as_ref().map(|token| token.expose())
                 != Some(current_token.expose())
@@ -513,11 +633,12 @@ mod tests {
     use tempfile::tempdir;
     use tokio::sync::Mutex;
     use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_types::SecretString;
 
     use super::{
         ExistingTokenSource, can_refresh_token, classify_existing_vercel_token,
         get_token_with_refresh, is_vercel, load_auth_tokens, recover_token_after_forbidden,
-        should_exchange_turbo_config_token,
+        should_exchange_turbo_config_token, should_skip_existing_token_for_login,
     };
     use crate::{
         AuthTokens, TURBO_AUTH_FILE, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, Token,
@@ -653,7 +774,7 @@ mod tests {
 
         let source = classify_existing_vercel_token("duplicated-token").unwrap();
 
-        assert_eq!(source, ExistingTokenSource::TurboConfig);
+        assert_eq!(source, ExistingTokenSource::TurboAuth);
 
         unsafe {
             env::remove_var("TURBO_CONFIG_DIR_PATH");
@@ -926,11 +1047,10 @@ mod tests {
             env::set_var("VERCEL_CONFIG_DIR_PATH", vercel_config_dir.as_path());
         }
 
-        let recovered = recover_token_after_forbidden(&turborepo_api_client::SecretString::new(
-            "other-token".to_string(),
-        ))
-        .await
-        .unwrap();
+        let recovered =
+            recover_token_after_forbidden(&SecretString::new("other-token".to_string()))
+                .await
+                .unwrap();
 
         assert!(recovered.is_none());
 
@@ -1107,10 +1227,8 @@ mod tests {
     async fn test_refreshability_depends_on_refresh_token_not_access_token_prefix() {
         for token in ["vca_token", "legacy_token", "corrupted!!!", ""] {
             let auth_tokens = AuthTokens {
-                token: Some(turborepo_api_client::SecretString::new(token.to_string())),
-                refresh_token: Some(turborepo_api_client::SecretString::new(
-                    "refresh_token".to_string(),
-                )),
+                token: Some(SecretString::new(token.to_string())),
+                refresh_token: Some(SecretString::new("refresh_token".to_string())),
                 expires_at: Some(current_unix_time_secs() - 3600),
             };
 
@@ -1121,9 +1239,7 @@ mod tests {
         }
 
         let auth_tokens = AuthTokens {
-            token: Some(turborepo_api_client::SecretString::new(
-                "vca_token".to_string(),
-            )),
+            token: Some(SecretString::new("vca_token".to_string())),
             refresh_token: None,
             expires_at: Some(current_unix_time_secs() - 3600),
         };
@@ -1136,7 +1252,28 @@ mod tests {
         assert!(is_vercel("https://vercel.com"));
         assert!(is_vercel("https://api.vercel.com"));
         assert!(is_vercel("https://vercel.com/api"));
+        assert!(is_vercel("https://preview.vercel.com/login"));
         assert!(!is_vercel("https://my-cache.example.com"));
         assert!(!is_vercel("http://localhost:3000"));
+        assert!(!is_vercel("http://vercel.com"));
+        assert!(!is_vercel("https://notvercel.com"));
+        assert!(!is_vercel("https://vercel.com.attacker.test"));
+        assert!(!is_vercel("https://attacker.test/vercel.com"));
+        assert!(!is_vercel("https://api.vercel.com:444"));
+    }
+
+    #[test]
+    fn test_suspicious_vercel_substring_skips_stored_config_token() {
+        assert!(should_skip_existing_token_for_login(
+            ExistingTokenSource::TurboConfig,
+            false,
+            "https://vercel.com.attacker.test"
+        ));
+
+        assert!(!should_skip_existing_token_for_login(
+            ExistingTokenSource::TurboConfig,
+            false,
+            "https://cache.example.com"
+        ));
     }
 }

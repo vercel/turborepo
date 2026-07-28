@@ -136,7 +136,9 @@ pub fn write_graph<T: TaskDefinitionInfo + Clone, S: ChildSpawner>(
                     .args(["-T", extension.as_str(), "-o", filename.as_str()])
                     .current_dir(cwd);
                 let child = spawner.spawn(cmd).map_err(Error::Graphviz)?;
-                let stdin = child.take_stdin().expect("graphviz should have a stdin");
+                let stdin = child.take_stdin().ok_or_else(|| {
+                    Error::GraphOutput(io::Error::other("graphviz process did not provide stdin"))
+                })?;
                 render_dot_graph(stdin, engine, single_package)?;
                 child.wait().map_err(Error::Graphviz)?;
             } else {
@@ -208,7 +210,8 @@ fn render_html<T: TaskDefinitionInfo + Clone>(
         .map_err(Error::GraphOutput)?;
     let mut graph_buffer = Vec::new();
     render_dot_graph(&mut graph_buffer, engine, single_package)?;
-    let graph_string = String::from_utf8(graph_buffer).expect("graph rendering should be UTF-8");
+    let graph_string = String::from_utf8(graph_buffer)
+        .map_err(|err| Error::GraphOutput(io::Error::new(io::ErrorKind::InvalidData, err)))?;
     let graph_json = html_safe_json_string(&graph_string);
 
     file.write_all(HTML_PREFIX.as_bytes())
@@ -227,7 +230,7 @@ fn render_html<T: TaskDefinitionInfo + Clone>(
 
 fn html_safe_json_string(value: &str) -> String {
     serde_json::to_string(value)
-        .expect("serializing graph output should not fail")
+        .unwrap_or_else(|_| "\"\"".to_string())
         .replace('<', "\\u003C")
         .replace('>', "\\u003E")
         .replace('&', "\\u0026")

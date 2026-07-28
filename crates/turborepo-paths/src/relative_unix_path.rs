@@ -64,13 +64,26 @@ impl RelativeUnixPath {
         &self,
         prefix: impl AsRef<RelativeUnixPath>,
     ) -> Result<&RelativeUnixPath, PathError> {
-        let stripped_path = self
-            .0
-            .strip_prefix(&prefix.as_ref().0)
-            .ok_or_else(|| PathError::NotParent(prefix.as_ref().to_string(), self.to_string()))?;
+        let prefix = prefix.as_ref();
+        let prefix_len = prefix.0.len();
+        if prefix_len == 0 {
+            return Ok(self);
+        }
 
-        // Remove leading '/' if present
-        let stripped_path = stripped_path.strip_prefix('/').unwrap_or(stripped_path);
+        if !self.0.starts_with(&prefix.0) {
+            return Err(PathError::NotParent(prefix.to_string(), self.to_string()));
+        }
+
+        if self.0.len() == prefix_len {
+            let empty = "";
+            return Ok(unsafe { &*(empty as *const str as *const Self) });
+        }
+
+        if self.0.as_bytes()[prefix_len] != b'/' {
+            return Err(PathError::PrefixError(prefix.to_string(), self.to_string()));
+        }
+
+        let stripped_path = &self.0[(prefix_len + 1)..];
 
         Ok(unsafe { &*(stripped_path as *const str as *const Self) })
     }
@@ -120,5 +133,23 @@ mod test {
         })
         .unwrap();
         assert_eq!(&*path.to_anchored_system_path_buf(), expected);
+    }
+
+    #[test]
+    fn test_strip_prefix_rejects_partial_component_match() {
+        let path = RelativeUnixPath::new("foobar/baz").unwrap();
+        let prefix = RelativeUnixPath::new("foo").unwrap();
+
+        assert!(path.strip_prefix(prefix).is_err());
+    }
+
+    #[test]
+    fn test_strip_prefix_accepts_component_boundary_match() {
+        let path = RelativeUnixPath::new("foo/bar/baz").unwrap();
+        let prefix = RelativeUnixPath::new("foo").unwrap();
+
+        let stripped = path.strip_prefix(prefix).unwrap();
+
+        assert_eq!(stripped.as_str(), "bar/baz");
     }
 }

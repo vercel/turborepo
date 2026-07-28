@@ -457,17 +457,8 @@ function SetupInstructions() {
         </p>
         <Callout type="info">
           <p>
-            Already ran it? Add{" "}
-            <code
-              className="px-1.5 py-0.5 rounded text-xs"
-              style={{
-                backgroundColor: "var(--ds-gray-200)",
-                color: "var(--ds-gray-1000)"
-              }}
-            >
-              ?port=&lt;your-port&gt;
-            </code>{" "}
-            to the URL to get connected.
+            Already ran it? Open the Browser URL printed by the command. It
+            includes the session token required to connect.
           </p>
         </Callout>
       </div>
@@ -707,6 +698,7 @@ function DevtoolsContent() {
   const port = searchParams.get("port");
   const { fitBounds, fitView, getNodes } = useReactFlow();
 
+  const [hashToken, setHashToken] = useState<string | null>();
   const [graphState, setGraphState] = useState<GraphState | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -722,6 +714,7 @@ function DevtoolsContent() {
   const [baseNodes, setBaseNodes] = useState<Array<Node>>([]);
   const [baseEdges, setBaseEdges] = useState<Array<Edge>>([]);
   const [rawEdges, setRawEdges] = useState<Array<GraphEdge>>([]);
+  const token = hashToken;
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<TurboNodeData>>(
     []
@@ -959,10 +952,29 @@ function DevtoolsContent() {
   }, [graphState]);
 
   useEffect(() => {
-    if (!port) return;
+    const updateHashToken = () => {
+      const hashParams = new URLSearchParams(window.location.hash.slice(1));
+      setHashToken(hashParams.get("token"));
+    };
+
+    updateHashToken();
+    window.addEventListener("hashchange", updateHashToken);
+
+    return () => {
+      window.removeEventListener("hashchange", updateHashToken);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!port || token === undefined) return;
 
     const connect = () => {
-      const ws = new WebSocket(`ws://localhost:${port}`);
+      const url = new URL(`ws://localhost:${port}`);
+      if (token) {
+        url.searchParams.set("token", token);
+      }
+
+      const ws = new WebSocket(url.toString());
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -1013,7 +1025,7 @@ function DevtoolsContent() {
         wsRef.current = null;
       }
     };
-  }, [port]);
+  }, [port, token]);
 
   useEffect(() => {
     if (graphState) {
@@ -1206,7 +1218,7 @@ function DevtoolsContent() {
       {!isConnected && graphState && <DisconnectedOverlay port={port} />}
 
       {error && (
-        <div className="absolute top-0 left-0 right-0 z-20 px-4 py-2 bg-red-900/30 text-red-400 text-sm">
+        <div className="absolute top-0 left-0 right-0 z-20 px-4 py-2 bg-red-1000/30 text-red-600 text-sm">
           Error: {error}
         </div>
       )}

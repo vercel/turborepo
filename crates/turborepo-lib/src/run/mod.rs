@@ -6,7 +6,6 @@ pub(crate) mod package_discovery;
 pub(crate) mod scope;
 pub mod task_access;
 pub(crate) mod task_filter;
-mod ui;
 pub mod watch;
 
 use std::{
@@ -22,13 +21,12 @@ use std::{
 };
 
 use chrono::{DateTime, Local};
-use futures::StreamExt;
 use itertools::Itertools;
 use shared_child::SharedChild;
 use tokio::{pin, select, task::JoinHandle};
 use tracing::{debug, error, info, instrument, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_api_client::APIAuth;
+use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends_proxy::ProxyServer;
@@ -37,10 +35,15 @@ use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode
 pub use turborepo_run_cache::{ConfigCache, RunCache, TaskCache};
 use turborepo_run_summary::{ObservabilityHandle, RunTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
-use turborepo_signals::{listeners::get_signal, ShutdownReason, SignalHandler};
+use turborepo_signals::{ShutdownReason, SignalHandler};
+use turborepo_task_hash::{
+    collect_global_file_hash_inputs, compute_external_deps_hashes, get_external_deps_hash,
+    get_internal_deps_hash, global_hash::GLOBAL_CACHE_KEY, GlobalHashableInputs,
+    PackageInputsHashes,
+};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_types::{EnvMode, UIMode};
-use turborepo_ui::{sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig};
+use turborepo_ui::{sender::UISender, tui, tui::TuiSender, ColorConfig, TerminalSink, LIGHT_GREY};
 
 pub use crate::run::error::Error;
 use crate::{
@@ -49,10 +52,6 @@ use crate::{
     opts::{Opts, RemoteCacheDisabledReason},
     run::task_access::TaskAccess,
     task_graph::Visitor,
-    task_hash::{
-        collect_global_file_hash_inputs, get_external_deps_hash, get_internal_deps_hash,
-        global_hash::GLOBAL_CACHE_KEY, GlobalHashableInputs, PackageInputsHashes,
-    },
     turbo_json::{TurboJson, UnifiedTurboJsonLoader},
 };
 
@@ -76,6 +75,39 @@ pub(crate) enum RemoteCacheStatus {
     Unavailable(RemoteCacheUnavailableReason),
 }
 
+/// A repo index whose untracked-file scan may still be running in the
+/// background. Holding this instead of the finished index lets `Run`
+/// construction complete without waiting for the scan; consumers await
+/// [`PendingRepoIndex::get`] at their barrier point and share the result.
+///
+/// A scan task that fails to join (panic/cancellation) resolves to `None`:
+/// every consumer treats the index as an optimization and has a slower
+/// index-free fallback.
+#[derive(Clone)]
+pub struct PendingRepoIndex {
+    index: futures::future::Shared<futures::future::BoxFuture<'static, Arc<Option<RepoGitIndex>>>>,
+}
+
+impl PendingRepoIndex {
+    pub(crate) fn new(task: tokio::task::JoinHandle<Option<RepoGitIndex>>) -> Self {
+        use futures::FutureExt;
+        Self {
+            index: async move {
+                Arc::new(task.await.unwrap_or_else(|e| {
+                    tracing::debug!("repo index task failed to join: {e}");
+                    None
+                }))
+            }
+            .boxed()
+            .shared(),
+        }
+    }
+
+    pub(crate) async fn get(&self) -> Arc<Option<RepoGitIndex>> {
+        self.index.clone().await
+    }
+}
+
 #[derive(Clone)]
 pub struct Run {
     version: &'static str,
@@ -86,6 +118,10 @@ pub struct Run {
     repo_root: AbsoluteSystemPathBuf,
     opts: Arc<Opts>,
     api_auth: Option<APIAuth>,
+    /// Kept for run-scoped services that talk to the Remote Cache outside
+    /// the task-cache pipeline (the sccache compile-cache proxy). `None`
+    /// when the run has no reason to initialize an HTTP client.
+    api_client: Option<APIClient>,
     env_at_execution_start: EnvironmentVariableMap,
     filtered_pkgs: HashSet<PackageName>,
     pkg_dep_graph: Arc<PackageGraph>,
@@ -98,18 +134,19 @@ pub struct Run {
     engine: Arc<Engine>,
     task_access: TaskAccess,
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
-    repo_index: Arc<Option<RepoGitIndex>>,
+    repo_index: PendingRepoIndex,
     observability_handle: Option<ObservabilityHandle>,
     pub(crate) query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
     shutdown_started_emitted: Arc<AtomicBool>,
 }
 
-type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
+// The join handle covers the render thread plus its sink-restoring
+// watchdog; render errors are logged there, not surfaced to the caller.
+type UIResult<T> = Result<Option<(T, JoinHandle<()>)>, Error>;
 
-type WuiResult = UIResult<WebUISender>;
 type TuiResult = UIResult<TuiSender>;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ForceShutdownReason {
     Signal,
     Timeout,
@@ -121,23 +158,77 @@ enum CacheShutdownOutcome {
     ForcedShutdown,
 }
 
-const SLOW_SHUTDOWN_WARNING_DELAY: Duration = Duration::from_secs(3);
+const SLOW_SHUTDOWN_STATUS_INTERVAL: Duration = Duration::from_secs(2);
+
+fn remote_cache_status_message(status: RemoteCacheStatus, api_url: &str) -> (String, bool) {
+    match status {
+        RemoteCacheStatus::Enabled => ("Remote caching enabled".to_string(), false),
+        RemoteCacheStatus::Disabled(reason) => {
+            let msg = match reason {
+                RemoteCacheDisabledReason::NotLinked => "Remote caching disabled".to_string(),
+                RemoteCacheDisabledReason::TokenWithoutTeam => {
+                    "Remote caching disabled (TURBO_TOKEN set without TURBO_TEAM)".to_string()
+                }
+                RemoteCacheDisabledReason::InConfig => {
+                    "Remote caching disabled (in configuration)".to_string()
+                }
+                RemoteCacheDisabledReason::InEnvVar => {
+                    "Remote caching disabled (by TURBO_REMOTE_CACHE_ENABLED)".to_string()
+                }
+                RemoteCacheDisabledReason::ByFlags => {
+                    "Remote caching disabled (by flags)".to_string()
+                }
+                RemoteCacheDisabledReason::RequestedWithoutCredentials => {
+                    "Remote caching disabled (remote cache requested \u{2014} set TURBO_TOKEN and \
+                     TURBO_TEAM, or run \"turbo login\" and \"turbo link\")"
+                        .to_string()
+                }
+            };
+            (msg, false)
+        }
+        RemoteCacheStatus::Unavailable(reason) => {
+            let msg = match reason {
+                RemoteCacheUnavailableReason::CouldNotConnect => {
+                    format!("Remote caching unavailable (Could not connect to \"{api_url}\")")
+                }
+                RemoteCacheUnavailableReason::AuthenticationFailed => {
+                    "Remote caching unavailable (Authentication failed \u{2014} check TURBO_TOKEN \
+                     or run \"turbo login\")"
+                        .to_string()
+                }
+                RemoteCacheUnavailableReason::UsageLimitExceeded => {
+                    "Remote caching unavailable (Usage limit exceeded)".to_string()
+                }
+                RemoteCacheUnavailableReason::SpendingPaused => {
+                    "Remote caching unavailable (Spending paused)".to_string()
+                }
+                RemoteCacheUnavailableReason::DisabledForTeam => {
+                    "Remote caching unavailable (Disabled for this team)".to_string()
+                }
+                RemoteCacheUnavailableReason::UnexpectedServerError => {
+                    format!("Remote caching unavailable (Unexpected server error at \"{api_url}\")")
+                }
+            };
+            (msg, true)
+        }
+    }
+}
 
 impl Run {
-    fn shutdown_started_message(force_shutdown_timeout: Option<Duration>) -> &'static str {
+    fn shutdown_started_message(force_shutdown_timeout: Option<Duration>) -> String {
         #[cfg(windows)]
-        {
+        let message = {
             let _ = force_shutdown_timeout;
             "Shutting down Turborepo tasks..."
-        }
+        };
 
         #[cfg(not(windows))]
-        {
-            match force_shutdown_timeout {
-                Some(_) => "Shutting down Turborepo tasks...",
-                None => "^C - Shutting down Turborepo tasks...",
-            }
-        }
+        let message = match force_shutdown_timeout {
+            Some(_) => "Shutting down Turborepo tasks...",
+            None => " - Shutting down Turborepo tasks...Press CTRL+C again to exit forcefully.",
+        };
+
+        LIGHT_GREY.apply_to(message).to_string()
     }
 
     fn force_shutdown_timeout() -> Option<Duration> {
@@ -164,33 +255,22 @@ impl Run {
         }
     }
 
-    fn emit_slow_tasks(task_names: &[String], force_shutdown_timeout: Option<Duration>) {
+    fn emit_shutdown_status(task_names: &[String]) {
         if task_names.is_empty() {
             return;
         }
 
-        let list = task_names.join(", ");
-        turborepo_log::warn(
+        let task_description = match task_names.len() {
+            1 => "1 task".to_string(),
+            count => format!("{count} tasks"),
+        };
+        turborepo_log::info(
             turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-            format!("Some tasks in your Turborepo are taking awhile to shut down: {list}"),
+            LIGHT_GREY
+                .apply_to(format!("{task_description} shutting down..."))
+                .to_string(),
         )
         .emit();
-
-        if let Some(remaining) = force_shutdown_timeout
-            .map(|timeout| timeout.saturating_sub(SLOW_SHUTDOWN_WARNING_DELAY))
-        {
-            turborepo_log::warn(
-                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-                format!("Shutting down forcibly in {}s...", remaining.as_secs()),
-            )
-            .emit();
-        } else {
-            turborepo_log::warn(
-                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-                "Press CTRL+C again to force shut down, or wait.",
-            )
-            .emit();
-        }
     }
 
     fn emit_force_shutdown_message(
@@ -200,54 +280,62 @@ impl Run {
     ) {
         let message = match (reason, task_names.is_empty()) {
             (ForceShutdownReason::Signal, false) if is_interactive => {
-                format!(
-                    " - Force killing Turborepo tasks: {}",
-                    task_names.join(", ")
-                )
+                format!(" - Force killed Turborepo tasks: {}", task_names.join(", "))
             }
             (ForceShutdownReason::Signal, false) => {
-                format!("Force killing Turborepo tasks: {}", task_names.join(", "))
+                format!("Force killed Turborepo tasks: {}", task_names.join(", "))
             }
             (ForceShutdownReason::Timeout, false) => format!(
-                "Graceful shutdown timed out. Force killing Turborepo tasks: {}",
+                "Graceful shutdown timed out. Force killed Turborepo tasks: {}",
                 task_names.join(", ")
             ),
             (ForceShutdownReason::Signal, true) if is_interactive => {
-                " - Force killing remaining Turborepo tasks...".to_string()
+                " - Force killed remaining Turborepo tasks...".to_string()
             }
             (ForceShutdownReason::Signal, true) => {
-                "Force killing remaining Turborepo tasks...".to_string()
+                "Force killed remaining Turborepo tasks...".to_string()
             }
-            (ForceShutdownReason::Timeout, true) => "Graceful shutdown timed out. Force killing \
-                                                     remaining Turborepo tasks..."
-                .to_string(),
+            (ForceShutdownReason::Timeout, true) => {
+                "Graceful shutdown timed out. Force killed remaining Turborepo tasks...".to_string()
+            }
         };
-        turborepo_log::warn(
+        turborepo_log::info(
             turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-            message,
+            LIGHT_GREY.apply_to(message).to_string(),
         )
         .emit();
     }
 
     async fn wait_for_forced_shutdown(
         force_shutdown_timeout: Option<Duration>,
+        signals: Option<tokio::sync::watch::Receiver<u64>>,
     ) -> ForceShutdownReason {
+        let signal = async move {
+            let Some(mut signals) = signals else {
+                std::future::pending::<()>().await;
+                return;
+            };
+
+            loop {
+                if *signals.borrow_and_update() > 1 {
+                    return;
+                }
+                if signals.changed().await.is_err() {
+                    std::future::pending::<()>().await;
+                }
+            }
+        };
+        pin!(signal);
+
         match force_shutdown_timeout {
             Some(timeout) => {
-                tokio::time::sleep(timeout).await;
-                ForceShutdownReason::Timeout
+                select! {
+                    _ = tokio::time::sleep(timeout) => ForceShutdownReason::Timeout,
+                    _ = &mut signal => ForceShutdownReason::Signal,
+                }
             }
             None => {
-                let interrupt = async {
-                    if let Ok(fut) = get_signal() {
-                        pin!(fut);
-                        fut.next().await;
-                    } else {
-                        tracing::warn!("could not register ctrl-c handler");
-                        tokio::time::sleep(Duration::MAX).await;
-                    }
-                };
-                interrupt.await;
+                signal.await;
                 ForceShutdownReason::Signal
             }
         }
@@ -256,6 +344,7 @@ impl Run {
     async fn wait_for_cache_shutdown<FClosed, FProgress>(
         shutdown_reason: Option<ShutdownReason>,
         force_shutdown_timeout: Option<Duration>,
+        signals: Option<tokio::sync::watch::Receiver<u64>>,
         closed: FClosed,
         progress: FProgress,
     ) -> CacheShutdownOutcome
@@ -267,7 +356,7 @@ impl Run {
             select! {
                 _ = closed => CacheShutdownOutcome::Complete,
                 _ = progress => CacheShutdownOutcome::Complete,
-                _ = Self::wait_for_forced_shutdown(force_shutdown_timeout) => {
+                _ = Self::wait_for_forced_shutdown(force_shutdown_timeout, signals) => {
                     CacheShutdownOutcome::ForcedShutdown
                 }
             }
@@ -282,23 +371,26 @@ impl Run {
     async fn wait_for_process_manager_shutdown<F>(
         process_manager: ProcessManager,
         force_shutdown_timeout: Option<Duration>,
+        signals: Option<tokio::sync::watch::Receiver<u64>>,
         graceful_shutdown: F,
     ) where
         F: Future<Output = ()> + Send,
     {
         let is_interactive = force_shutdown_timeout.is_none();
-        let slow_task_delay = tokio::time::sleep(SLOW_SHUTDOWN_WARNING_DELAY);
-        let force_shutdown = Self::wait_for_forced_shutdown(force_shutdown_timeout);
-        pin!(graceful_shutdown, slow_task_delay, force_shutdown);
-        let mut slow_tasks_emitted = false;
+        let mut shutdown_status = tokio::time::interval_at(
+            tokio::time::Instant::now() + SLOW_SHUTDOWN_STATUS_INTERVAL,
+            SLOW_SHUTDOWN_STATUS_INTERVAL,
+        );
+        shutdown_status.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let force_shutdown = Self::wait_for_forced_shutdown(force_shutdown_timeout, signals);
+        pin!(graceful_shutdown, force_shutdown);
 
         loop {
             select! {
                 _ = &mut graceful_shutdown => break,
-                _ = &mut slow_task_delay, if !slow_tasks_emitted => {
-                    slow_tasks_emitted = true;
+                _ = shutdown_status.tick() => {
                     let tasks = process_manager.running_task_ids();
-                    Self::emit_slow_tasks(&tasks, force_shutdown_timeout);
+                    Self::emit_shutdown_status(&tasks);
                 }
                 reason = &mut force_shutdown => {
                     let tasks = process_manager.running_task_ids();
@@ -350,60 +442,10 @@ impl Run {
             .emit();
         }
 
-        let api_url = &self.opts.api_client_opts.api_url;
-        let (base_msg, is_warning) = match self.remote_cache_status {
-            RemoteCacheStatus::Enabled => ("Remote caching enabled".to_string(), false),
-            RemoteCacheStatus::Disabled(reason) => {
-                let msg = match reason {
-                    RemoteCacheDisabledReason::NotLinked => "Remote caching disabled".to_string(),
-                    RemoteCacheDisabledReason::TokenWithoutTeam => {
-                        "Remote caching disabled (TURBO_TOKEN set without TURBO_TEAM)".to_string()
-                    }
-                    RemoteCacheDisabledReason::InConfig => {
-                        "Remote caching disabled (in configuration)".to_string()
-                    }
-                    RemoteCacheDisabledReason::InEnvVar => {
-                        "Remote caching disabled (by TURBO_REMOTE_CACHE_ENABLED)".to_string()
-                    }
-                    RemoteCacheDisabledReason::ByFlags => {
-                        "Remote caching disabled (by flags)".to_string()
-                    }
-                    RemoteCacheDisabledReason::RequestedWithoutCredentials => {
-                        "Remote caching disabled (remote cache requested \u{2014} set TURBO_TOKEN \
-                         and TURBO_TEAM, or run \"turbo login\" and \"turbo link\")"
-                            .to_string()
-                    }
-                };
-                (msg, false)
-            }
-            RemoteCacheStatus::Unavailable(reason) => {
-                let msg = match reason {
-                    RemoteCacheUnavailableReason::CouldNotConnect => {
-                        format!("Remote caching unavailable (Could not connect to \"{api_url}\")")
-                    }
-                    RemoteCacheUnavailableReason::AuthenticationFailed => {
-                        "Remote caching unavailable (Authentication failed \u{2014} check \
-                         TURBO_TOKEN or run \"turbo login\")"
-                            .to_string()
-                    }
-                    RemoteCacheUnavailableReason::UsageLimitExceeded => {
-                        "Remote caching unavailable (Usage limit exceeded)".to_string()
-                    }
-                    RemoteCacheUnavailableReason::SpendingPaused => {
-                        "Remote caching unavailable (Spending paused)".to_string()
-                    }
-                    RemoteCacheUnavailableReason::DisabledForTeam => {
-                        "Remote caching unavailable (Disabled for this team)".to_string()
-                    }
-                    RemoteCacheUnavailableReason::UnexpectedServerError => {
-                        format!(
-                            "Remote caching unavailable (Unexpected server error at \"{api_url}\")"
-                        )
-                    }
-                };
-                (msg, true)
-            }
-        };
+        let (base_msg, is_warning) = remote_cache_status_message(
+            self.remote_cache_status,
+            &self.opts.api_client_opts.api_url,
+        );
 
         let cache_status = if self.opts.run_opts.is_shared_worktree_cache {
             format!("{pad}• {base_msg}, using shared worktree cache")
@@ -474,15 +516,34 @@ impl Run {
     // Used to print a list of potential tasks to run. Obeys the `--filter` flag
     pub fn get_potential_tasks(&self) -> Result<BTreeMap<String, Vec<String>>, Error> {
         let mut tasks = BTreeMap::new();
-        for (name, info) in self.pkg_dep_graph.packages() {
+        for context in self.pkg_dep_graph.package_task_contexts() {
+            let name = context.package();
             if !self.filtered_pkgs.contains(name) {
                 continue;
             }
-            for task_name in info.package_json.scripts.keys() {
+            let package_info = context.package_info();
+            if context.requires_compatibility_payload() && package_info.is_none() {
+                return Err(Error::MissingPackagePayload(name.clone()));
+            }
+            for task_name in package_info
+                .into_iter()
+                .flat_map(|info| info.package_json.scripts.keys())
+            {
                 tasks
                     .entry(task_name.clone())
                     .or_insert_with(Vec::new)
                     .push(name.to_string())
+            }
+            if let Some(toolchain) = context
+                .toolchain()
+                .and_then(|id| self.pkg_dep_graph.toolchains().get(id))
+            {
+                for task_name in toolchain.registered_tasks(&context) {
+                    tasks
+                        .entry(task_name)
+                        .or_insert_with(Vec::new)
+                        .push(name.to_string());
+                }
             }
         }
 
@@ -515,31 +576,17 @@ impl Run {
             && tui::terminal_big_enough()?)
     }
 
-    pub fn start_ui(self: &Arc<Self>) -> UIResult<UISender> {
+    pub fn start_ui(self: &Arc<Self>, terminal_sink: Arc<TerminalSink>) -> UIResult<UISender> {
         match self.opts.run_opts.ui_mode {
             UIMode::Tui => self
-                .start_terminal_ui()
+                .start_terminal_ui(terminal_sink)
                 .map(|res| res.map(|(sender, handle)| (UISender::Tui(sender), handle))),
             UIMode::Stream | UIMode::StreamWithTimestamps => Ok(None),
-            UIMode::Web => self
-                .start_web_ui()
-                .map(|res| res.map(|(sender, handle)| (UISender::Wui(sender), handle))),
         }
-    }
-    fn start_web_ui(self: &Arc<Self>) -> WuiResult {
-        let Some(query_server) = self.query_server.clone() else {
-            tracing::warn!("Web UI requires a query server implementation");
-            return Ok(None);
-        };
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-
-        let handle = tokio::spawn(ui::start_web_ui_server(rx, self.clone(), query_server));
-
-        Ok(Some((WebUISender { tx }, handle)))
     }
 
     #[allow(clippy::type_complexity)]
-    fn start_terminal_ui(&self) -> TuiResult {
+    fn start_terminal_ui(&self, terminal_sink: Arc<TerminalSink>) -> TuiResult {
         if !self.should_start_ui()? {
             return Ok(None);
         }
@@ -554,15 +601,31 @@ impl Run {
         let color_config = self.color_config;
         let scrollback_len = self.opts.tui_opts.scrollback_length;
         let repo_root = self.repo_root.clone();
-        let handle = tokio::task::spawn(async move {
-            Ok(tui::run_app(
-                task_names,
-                receiver,
-                color_config,
-                &repo_root,
-                scrollback_len,
-            )
-            .await?)
+        let signal_handler = self.signal_handler.clone();
+        let interrupt = Arc::new(move || signal_handler.notify_signal());
+        let handle = tui::spawn_run_app(
+            task_names,
+            receiver,
+            color_config,
+            repo_root,
+            scrollback_len,
+            Some(interrupt),
+            terminal_sink.clone(),
+        )?;
+
+        // The terminal sink is disabled while the TUI owns the screen.
+        // Whatever ends the render thread — normal shutdown, a render
+        // error, a panic — output must return to the stream sink
+        // immediately: a mid-run TUI death would otherwise leave the rest
+        // of the run executing in silence, with every task's output
+        // dropped. Task output must always have a live sink.
+        let handle = tokio::spawn(async move {
+            match handle.await {
+                Ok(Err(e)) => tracing::error!("error encountered rendering tui: {e}"),
+                Err(e) => tracing::error!("render thread panicked: {e}"),
+                Ok(Ok(())) => {}
+            }
+            terminal_sink.enable();
         });
 
         Ok(Some((sender, handle)))
@@ -572,11 +635,14 @@ impl Run {
     pub fn stopper(&self) -> RunStopper {
         RunStopper {
             manager: self.processes.clone(),
+            run_cache: self.run_cache.clone(),
+            skip_cache_writes: self.opts.cache_opts.cache.skip_writes(),
         }
     }
 
     async fn start_proxy_if_needed(
         &self,
+        register_shutdown_handler: bool,
     ) -> Result<
         Option<(
             tokio::sync::broadcast::Sender<()>,
@@ -599,8 +665,11 @@ impl Run {
         let config = self.load_proxy_config(mfe_configs).await?;
         let (mut server, shutdown_handle) = self.start_proxy_server(config).await?;
 
-        let signal_handler_complete_rx =
-            self.setup_shutdown_handlers(&mut server, shutdown_handle.clone());
+        let signal_handler_complete_rx = self.setup_shutdown_handlers(
+            &mut server,
+            shutdown_handle.clone(),
+            register_shutdown_handler,
+        );
 
         tokio::spawn(async move {
             if let Err(e) = server.run().await {
@@ -660,23 +729,30 @@ impl Run {
         &self,
         server: &mut ProxyServer,
         shutdown_handle: tokio::sync::broadcast::Sender<()>,
+        register_signal_handler: bool,
     ) -> tokio::sync::oneshot::Receiver<()> {
         let (proxy_shutdown_complete_tx, proxy_shutdown_complete_rx) =
             tokio::sync::oneshot::channel();
         let (cleanup_complete_tx, cleanup_complete_rx) = tokio::sync::oneshot::channel();
-        let (signal_handler_complete_tx, signal_handler_complete_rx) =
-            tokio::sync::oneshot::channel();
+        let (signal_handler_complete_tx, signal_handler_complete_rx) = register_signal_handler
+            .then(tokio::sync::oneshot::channel)
+            .map(|(tx, rx)| (Some(tx), Some(rx)))
+            .unwrap_or((None, None));
 
         server.set_shutdown_complete_tx(proxy_shutdown_complete_tx);
 
         tokio::spawn(async move {
             if proxy_shutdown_complete_rx.await.is_ok() {
                 let _ = cleanup_complete_tx.send(());
-                let _ = signal_handler_complete_tx.send(());
+                if let Some(signal_handler_complete_tx) = signal_handler_complete_tx {
+                    let _ = signal_handler_complete_tx.send(());
+                }
             }
         });
 
-        self.register_proxy_signal_handler(shutdown_handle, signal_handler_complete_rx);
+        if let Some(signal_handler_complete_rx) = signal_handler_complete_rx {
+            self.register_proxy_signal_handler(shutdown_handle, signal_handler_complete_rx);
+        }
 
         cleanup_complete_rx
     }
@@ -693,7 +769,10 @@ impl Run {
             let shutdown_started_emitted = self.shutdown_started_emitted.clone();
             tokio::spawn(async move {
                 info!("Proxy signal handler registered and waiting");
-                let _guard = subscriber.listen().await;
+                let Ok(_guard) = subscriber.listen().await else {
+                    debug!("proxy signal handler exited before notifying subscriber");
+                    return;
+                };
 
                 let shutdown_reason = signal_handler.shutdown_reason();
 
@@ -741,6 +820,7 @@ impl Run {
                 Self::wait_for_process_manager_shutdown(
                     process_manager.clone(),
                     force_shutdown_timeout,
+                    Some(signal_handler.subscribe_signals()),
                     graceful_shutdown,
                 )
                 .await;
@@ -768,7 +848,12 @@ impl Run {
         let shutdown_started_emitted = self.shutdown_started_emitted.clone();
         let use_tui = self.opts.run_opts.ui_mode.use_tui();
         tokio::spawn(async move {
-            let _guard = subscriber.listen().await;
+            let Ok(_guard) = subscriber.listen().await else {
+                tracing::debug!(
+                    "signal handler exited before cache shutdown subscriber was notified"
+                );
+                return;
+            };
             let shutdown_reason = signal_handler.shutdown_reason();
 
             if shutdown_reason == Some(ShutdownReason::Signal) {
@@ -794,7 +879,9 @@ impl Run {
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
                         let (bytes_per_second, bytes_uploaded, bytes_total) = {
-                            let status = status.lock().unwrap();
+                            let status = status
+                                .lock()
+                                .unwrap_or_else(|poisoned| poisoned.into_inner());
                             let total_bps: f64 =
                                 status.values().filter_map(|task| task.average_bps()).sum();
                             let bytes_uploaded: usize =
@@ -830,6 +917,7 @@ impl Run {
                 if Self::wait_for_cache_shutdown(
                     shutdown_reason,
                     force_shutdown_timeout,
+                    Some(signal_handler.subscribe_signals()),
                     async {
                         let _ = closed.await;
                     },
@@ -859,7 +947,10 @@ impl Run {
         let force_shutdown_timeout = Self::force_shutdown_timeout();
         let shutdown_started_emitted = self.shutdown_started_emitted.clone();
         tokio::spawn(async move {
-            let _guard = subscriber.listen().await;
+            let Ok(_guard) = subscriber.listen().await else {
+                debug!("signal handler exited before process manager subscriber was notified");
+                return;
+            };
             let shutdown_reason = signal_handler.shutdown_reason();
 
             if shutdown_reason != Some(ShutdownReason::Signal) {
@@ -880,12 +971,125 @@ impl Run {
             Self::wait_for_process_manager_shutdown(
                 process_manager.clone(),
                 force_shutdown_timeout,
+                Some(signal_handler.subscribe_signals()),
                 graceful_shutdown,
             )
             .await;
 
             debug!("Child processes stopped");
         });
+    }
+
+    /// Start the sccache compile-cache proxy when
+    /// `futureFlags.experimentalCargoSccache` asks for it and the run can
+    /// support it. Every unmet precondition disables the proxy softly (the
+    /// compile cache is an optimization; a run without it is just slower),
+    /// with a log line naming the reason.
+    ///
+    /// Returns the endpoint to hand to toolchains plus the server's
+    /// shutdown handle.
+    async fn start_sccache_proxy_if_needed(
+        &self,
+    ) -> Option<(
+        turborepo_repository::toolchain::CompileCacheEndpoint,
+        tokio::sync::broadcast::Sender<()>,
+        std::sync::Arc<turborepo_sccache_proxy::IncrementalCacheStats>,
+    )> {
+        if !self.opts.future_flags.experimental_cargo_sccache {
+            return None;
+        }
+        if !builder::cargo_enabled(&self.opts.future_flags) {
+            warn!(
+                "experimentalCargoSccache requires experimentalCargoWorkspaces; compile cache \
+                 disabled"
+            );
+            return None;
+        }
+        // CI-only: sccache pays off in cold environments, while local
+        // development is already served by cargo's incremental compilation
+        // and a warm target directory — which the injected
+        // `CARGO_INCREMENTAL=0` would actively degrade. The flag is
+        // repo-level configuration, so without this gate, enabling it for
+        // CI would slow down every contributor's inner loop.
+        if !turborepo_ci::is_ci() {
+            debug!("sccache compile cache disabled: not running in CI");
+            return None;
+        }
+        // The compile cache *is* the remote cache; gate on the resolved
+        // runtime status, not just configuration. `Disabled` covers config
+        // (e.g. `TURBO_CACHE=local:rw` in PR CI, where credentials are
+        // placeholders); `Unavailable` covers what the preflight learned at
+        // run start (bad credentials, unreachable API, team over limit).
+        // Handing sccache a backend the run already knows is doomed would
+        // make its server refuse to start — its storage self-check failure
+        // is fatal — and every wrapper invocation error out.
+        // (`SCCACHE_IGNORE_SERVER_IO_ERROR` is the second layer of that
+        // defense, for failures that appear mid-run.)
+        if !matches!(self.remote_cache_status, RemoteCacheStatus::Enabled) {
+            debug!("sccache compile cache disabled: remote cache is not available for this run");
+            return None;
+        }
+        let (Some(client), Some(auth)) = (self.api_client.clone(), self.api_auth.clone()) else {
+            debug!("sccache compile cache disabled: Remote Cache is not configured");
+            return None;
+        };
+        // The compiler wrapper is this very binary: turbo embeds sccache
+        // and dispatches wrapper invocations to it, so nothing needs to be
+        // installed. Cargo needs the wrapper as an executable path.
+        let wrapper = match std::env::current_exe() {
+            Ok(path) => match path.into_os_string().into_string() {
+                Ok(path) => path,
+                Err(_) => {
+                    warn!("compile cache disabled: turbo's path is not valid UTF-8");
+                    return None;
+                }
+            },
+            Err(err) => {
+                warn!("compile cache disabled: cannot determine turbo's path: {err}");
+                return None;
+            }
+        };
+
+        let token_path = self
+            .repo_root
+            .join_components(&[".turbo", "sccache-proxy-token"]);
+        let token = match turborepo_sccache_proxy::load_or_create_token(&token_path) {
+            Ok(token) => token,
+            Err(err) => {
+                warn!("compile cache disabled: {err}");
+                return None;
+            }
+        };
+
+        // The port must be stable across runs: the sccache background
+        // server captures the endpoint at startup and outlives this run.
+        let port = turborepo_sccache_proxy::derive_port(&self.repo_root);
+        let server =
+            match turborepo_sccache_proxy::SccacheProxyServer::bind(port, client, auth, &token)
+                .await
+            {
+                Ok(server) => server,
+                Err(err) => {
+                    warn!("compile cache disabled: {err}");
+                    return None;
+                }
+            };
+
+        let endpoint = turborepo_repository::toolchain::CompileCacheEndpoint {
+            url: server.endpoint(),
+            token,
+            wrapper,
+            server_port: turborepo_sccache_proxy::derive_server_port(&self.repo_root),
+        };
+        let shutdown = server.shutdown_handle();
+        let stats = server.stats();
+        info!("sccache compile cache proxy listening on {}", endpoint.url);
+        tokio::spawn(async move {
+            if let Err(err) = server.run().await {
+                error!("sccache compile cache proxy error: {err}");
+            }
+        });
+        Some((endpoint, shutdown, stats))
     }
 
     async fn cleanup_proxy(
@@ -929,20 +1133,37 @@ impl Run {
             tokio::sync::oneshot::Receiver<()>,
         )>,
     ) -> Result<i32, Error> {
-        let workspaces = self.pkg_dep_graph.packages().collect();
-        let repo_index = self.repo_index.as_ref().as_ref();
+        // Barrier for the untracked-file scan: file hashing below needs the
+        // complete index. Nothing executes before this resolves, so hash
+        // error semantics are unchanged from when `Run` construction waited.
+        let repo_index_arc = {
+            use tracing::Instrument;
+            self.repo_index
+                .get()
+                .instrument(tracing::info_span!("repo_index_untracked_await"))
+                .await
+        };
+        let repo_index = repo_index_arc.as_ref().as_ref();
 
-        let root_workspace = self
+        let root_context = self
             .pkg_dep_graph
-            .package_info(&PackageName::Root)
-            .expect("must have root workspace");
+            .package_task_context(&PackageName::Root)
+            .ok_or(Error::MissingRootWorkspace)?;
+        let empty_root_workspace = turborepo_repository::package_graph::PackageInfo::default();
+        let root_workspace = match root_context.package_info() {
+            Some(payload) => payload,
+            None if !root_context.requires_compatibility_payload() => &empty_root_workspace,
+            None => return Err(Error::MissingPackagePayload(PackageName::Root)),
+        };
 
         let is_monorepo = !self.opts.run_opts.single_package;
 
-        // Run three expensive I/O-bound operations concurrently using rayon::scope:
+        // Run four expensive operations concurrently using rayon::scope:
         // 1. Package file hashing - walks every package's files and computes hashes
         // 2. Internal deps hashing - walks root internal dependency packages
         // 3. Global file hash inputs - globwalks global deps and hashes them
+        // 4. External deps hashing - hashes every package's transitive lockfile
+        //    dependencies (consumed later by the task hasher)
         //
         // These are completely independent and dominate the pre-execution phase.
         // Running them in parallel can significantly reduce wall-clock time.
@@ -956,6 +1177,7 @@ impl Run {
         let mut file_hash_result = None;
         let mut internal_deps_result = None;
         let mut global_file_result = None;
+        let mut external_deps_hashes = None;
 
         let _hash_scope_span = tracing::info_span!("hash_scope").entered();
         crate::rayon_compat::block_in_place(|| {
@@ -968,7 +1190,7 @@ impl Run {
                     file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
                         &self.scm,
                         self.engine.tasks(),
-                        workspaces,
+                        &self.pkg_dep_graph,
                         self.engine.task_definitions(),
                         &self.repo_root,
                         &self.run_telemetry,
@@ -1005,6 +1227,15 @@ impl Run {
                         &self.scm,
                     ));
                 });
+                if is_monorepo {
+                    s.spawn(|_| {
+                        let _span =
+                            tracing::info_span!("compute_external_deps_hashes_task").entered();
+                        external_deps_hashes = Some(compute_external_deps_hashes(
+                            self.pkg_dep_graph.package_task_contexts(),
+                        ));
+                    });
+                }
             });
         });
 
@@ -1012,14 +1243,19 @@ impl Run {
 
         let _setup_span = tracing::debug_span!("post_hashing_setup").entered();
 
-        let package_inputs_hashes = file_hash_result.expect("file hash task did not complete")?;
+        let package_inputs_hashes = file_hash_result.ok_or(Error::FileHashTaskIncomplete)??;
         let root_internal_dependencies_hash =
-            internal_deps_result.expect("internal deps task did not complete")?;
+            internal_deps_result.ok_or(Error::InternalDepsTaskIncomplete)??;
         let global_file_inputs =
-            global_file_result.expect("global file hash task did not complete")?;
+            global_file_result.ok_or(Error::GlobalFileHashTaskIncomplete)??;
+        let external_deps_hashes = external_deps_hashes.transpose()?;
 
-        let root_external_dependencies_hash =
-            is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
+        let root_external_dependencies_hash = is_monorepo.then(|| {
+            root_workspace
+                .external_deps_hash
+                .clone()
+                .unwrap_or_else(|| get_external_deps_hash(&root_workspace.transitive_dependencies))
+        });
 
         let pass_through_env = match env_mode {
             EnvMode::Loose => {
@@ -1066,6 +1302,13 @@ impl Run {
 
         drop(_setup_span);
 
+        let sccache_proxy = self.start_sccache_proxy_if_needed().await;
+        let (compile_cache_endpoint, sccache_shutdown, incremental_cache_stats) =
+            match sccache_proxy {
+                Some((endpoint, shutdown, stats)) => (Some(endpoint), Some(shutdown), Some(stats)),
+                None => (None, None, None),
+            };
+
         let mut visitor = Visitor::new(
             self.pkg_dep_graph.clone(),
             self.run_cache.clone(),
@@ -1078,13 +1321,17 @@ impl Run {
             self.color_config,
             self.processes.clone(),
             &self.repo_root,
+            &self.scm,
+            repo_index,
             global_env,
             &self.root_turbo_json.global_env,
             ui_sender,
             is_watch,
             self.micro_frontend_configs.as_ref(),
+            external_deps_hashes,
+            compile_cache_endpoint,
         )
-        .await;
+        .await?;
 
         if self.opts.run_opts.dry_run.is_some() {
             visitor.dry_run();
@@ -1104,15 +1351,24 @@ impl Run {
             .max()
             .unwrap_or(if errors.is_empty() { 0 } else { 1 });
 
+        // Task-scoped so sinks can attribute the failure to its task — e.g.
+        // the single-task stream filter drops errors from other tasks.
         for err in &errors {
             turborepo_log::error(
-                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-                err.to_string(),
+                turborepo_log::Source::task(err.task_id()),
+                err.cause().to_string(),
             )
             .emit();
         }
 
         self.cleanup_proxy(proxy_shutdown).await;
+
+        // Fire-and-forget: the proxy drains in-flight requests on its own,
+        // and trailing writes from the persistent sccache server after this
+        // point fail softly on its side (storage errors are cache misses).
+        if let Some(shutdown) = sccache_shutdown {
+            let _ = shutdown.send(());
+        }
 
         // When a proxy is present, the signal handler only stops processes on OS
         // signal. For normal completion without user interruption, we need an
@@ -1125,6 +1381,18 @@ impl Run {
             self.processes.stop().await;
         }
 
+        // Snapshot the incremental-cache traffic now that every task (and
+        // its tools) has finished. `None` when the proxy never started —
+        // the summary line only appears for runs that attempted
+        // incremental caching.
+        let incremental_cache = incremental_cache_stats.map(|stats| {
+            let snapshot = stats.snapshot();
+            turborepo_run_summary::IncrementalCacheSummary {
+                hits: snapshot.hits,
+                misses: snapshot.misses,
+            }
+        });
+
         visitor
             .finish(
                 exit_code,
@@ -1134,6 +1402,7 @@ impl Run {
                 &self.env_at_execution_start,
                 &self.scm,
                 self.opts.scope_opts.pkg_inference_root.as_deref(),
+                incremental_cache,
             )
             .await?;
 
@@ -1144,13 +1413,15 @@ impl Run {
 
     #[instrument(skip_all)]
     pub async fn run(&self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
-        let proxy_shutdown = self.start_proxy_if_needed().await?;
-        self.setup_cache_shutdown_handler();
+        let proxy_shutdown = self.start_proxy_if_needed(!is_watch).await?;
+        if !is_watch {
+            self.setup_cache_shutdown_handler();
+        }
 
         // If there's no proxy, we need a fallback signal handler for the process
         // manager When a proxy is present, register_proxy_signal_handler
         // handles process manager shutdown
-        if proxy_shutdown.is_none() {
+        if proxy_shutdown.is_none() && !is_watch {
             self.setup_process_manager_shutdown_handler();
         }
 
@@ -1181,14 +1452,64 @@ impl Run {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RunStopper {
     manager: ProcessManager,
+    run_cache: Arc<RunCache>,
+    skip_cache_writes: bool,
 }
 
 impl RunStopper {
     pub async fn stop(&self) {
         self.manager.stop().await;
+    }
+
+    pub async fn shutdown(
+        &self,
+        force_shutdown_timeout: Option<Duration>,
+        signals: Option<tokio::sync::watch::Receiver<u64>>,
+    ) {
+        let process_manager = self.manager.clone();
+        let graceful_process_manager = process_manager.clone();
+        let graceful_shutdown = async move {
+            graceful_process_manager.shutdown(None).await;
+        };
+        Run::wait_for_process_manager_shutdown(
+            process_manager,
+            force_shutdown_timeout,
+            signals,
+            graceful_shutdown,
+        )
+        .await;
+    }
+
+    pub async fn shutdown_cache(
+        &self,
+        shutdown_reason: Option<ShutdownReason>,
+        force_shutdown_timeout: Option<Duration>,
+        signals: Option<tokio::sync::watch::Receiver<u64>>,
+    ) {
+        if self.skip_cache_writes {
+            return;
+        }
+
+        let shutdown = async {
+            if let Ok((_status, closed)) = self.run_cache.shutdown_cache().await {
+                let _ = closed.await;
+            }
+        };
+        if shutdown_reason == Some(ShutdownReason::Signal) {
+            select! {
+                _ = shutdown => {}
+                _ = Run::wait_for_forced_shutdown(force_shutdown_timeout, signals) => {}
+            }
+        } else {
+            shutdown.await;
+        }
+    }
+
+    pub fn cache_writes_enabled(&self) -> bool {
+        !self.skip_cache_writes
     }
 
     pub async fn stop_tasks(&self, task_ids: &[turborepo_task_id::TaskId<'static>]) {
@@ -1271,6 +1592,7 @@ impl turborepo_query_api::QueryRun for Run {
             &self.scm,
             &self.root_turbo_json,
         )
+        .map(|(packages, _, _)| packages)
         .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))
     }
 
@@ -1332,7 +1654,52 @@ mod tests {
 
     use turborepo_signals::ShutdownReason;
 
-    use super::{CacheShutdownOutcome, Run};
+    use super::{
+        remote_cache_status_message, CacheShutdownOutcome, ForceShutdownReason, RemoteCacheStatus,
+        RemoteCacheUnavailableReason, Run,
+    };
+    use crate::opts::RemoteCacheDisabledReason;
+
+    #[test]
+    fn remote_cache_status_messages_match_prelude_contract() {
+        assert_eq!(
+            remote_cache_status_message(RemoteCacheStatus::Enabled, "https://cache.example.com"),
+            ("Remote caching enabled".to_string(), false)
+        );
+        assert_eq!(
+            remote_cache_status_message(
+                RemoteCacheStatus::Disabled(RemoteCacheDisabledReason::InConfig),
+                "https://cache.example.com",
+            ),
+            (
+                "Remote caching disabled (in configuration)".to_string(),
+                false
+            )
+        );
+        assert_eq!(
+            remote_cache_status_message(
+                RemoteCacheStatus::Disabled(RemoteCacheDisabledReason::RequestedWithoutCredentials),
+                "https://cache.example.com",
+            ),
+            (
+                "Remote caching disabled (remote cache requested — set TURBO_TOKEN and \
+                 TURBO_TEAM, or run \"turbo login\" and \"turbo link\")"
+                    .to_string(),
+                false,
+            )
+        );
+        assert_eq!(
+            remote_cache_status_message(
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::CouldNotConnect),
+                "https://cache.example.com",
+            ),
+            (
+                "Remote caching unavailable (Could not connect to \"https://cache.example.com\")"
+                    .to_string(),
+                true,
+            )
+        );
+    }
 
     #[tokio::test]
     async fn cache_shutdown_close_does_not_arm_force_timeout() {
@@ -1341,6 +1708,7 @@ mod tests {
             Run::wait_for_cache_shutdown(
                 Some(ShutdownReason::Close),
                 Some(Duration::from_millis(10)),
+                None,
                 pending::<()>(),
                 pending::<()>(),
             ),
@@ -1358,6 +1726,34 @@ mod tests {
         let result = Run::wait_for_cache_shutdown(
             Some(ShutdownReason::Signal),
             Some(Duration::from_millis(10)),
+            None,
+            pending::<()>(),
+            pending::<()>(),
+        )
+        .await;
+
+        assert_eq!(result, CacheShutdownOutcome::ForcedShutdown);
+    }
+
+    #[tokio::test]
+    async fn forced_shutdown_accepts_retained_second_signal_before_timeout() {
+        let (tx, rx) = tokio::sync::watch::channel(1);
+        tx.send(2).unwrap();
+
+        let result = Run::wait_for_forced_shutdown(Some(Duration::from_secs(60)), Some(rx)).await;
+
+        assert_eq!(result, ForceShutdownReason::Signal);
+    }
+
+    #[tokio::test]
+    async fn cache_shutdown_accepts_retained_second_signal() {
+        let (tx, rx) = tokio::sync::watch::channel(1);
+        tx.send(2).unwrap();
+
+        let result = Run::wait_for_cache_shutdown(
+            Some(ShutdownReason::Signal),
+            Some(Duration::from_secs(60)),
+            Some(rx),
             pending::<()>(),
             pending::<()>(),
         )

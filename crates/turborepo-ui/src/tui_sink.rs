@@ -2,28 +2,12 @@ use std::sync::Mutex;
 
 use turborepo_log::{Level, LogEvent, LogSink, OutputChannel, Source};
 
-use crate::tui::TuiSender;
-
-/// Normalize lone `\n` to `\r\n` for the TUI's VT100 terminal emulator.
-///
-/// Already-correct `\r\n` sequences are left as-is.
-fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
-    let mut result = Vec::with_capacity(bytes.len());
-    let mut prev_cr = false;
-    for &b in bytes {
-        if b == b'\n' && !prev_cr {
-            result.push(b'\r');
-        }
-        result.push(b);
-        prev_cr = b == b'\r';
-    }
-    result
-}
+use crate::{terminal_sink::normalize_newlines, tui::TuiSender};
 
 /// Format a task-scoped log event as a string for the task output pane.
 ///
 /// Produces output like `ERROR: command finished with error: exit code 1\r\n`
-/// that will be rendered by the TUI's VT100 parser in the task pane.
+/// that will be rendered by the TUI's virtual terminal parser in the task pane.
 fn format_task_event(event: &LogEvent) -> String {
     let badge = match event.level() {
         Level::Error => "ERROR: ",
@@ -74,7 +58,10 @@ impl TuiSink {
     /// events and task output through the sender, then forwards
     /// directly from here on.
     pub fn connect(&self, sender: TuiSender) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let SinkState::Buffering {
             events,
             task_output,
@@ -93,7 +80,10 @@ impl TuiSink {
 
 impl LogSink for TuiSink {
     fn emit(&self, event: &LogEvent) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         match &mut *state {
             SinkState::Buffering { events, .. } => events.push(event.clone()),
             SinkState::Connected(sender) => {
@@ -111,7 +101,10 @@ impl LogSink for TuiSink {
     }
 
     fn task_output(&self, task: &str, _channel: OutputChannel, bytes: &[u8]) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let normalized = normalize_newlines(bytes);
         match &mut *state {
             SinkState::Buffering { task_output, .. } => {

@@ -2,7 +2,10 @@ use tracing::{debug, trace};
 use turbopath::RelativeUnixPathBuf;
 
 use crate::{
-    Error, GitHashes, GitRepo, OidHash, ls_tree::SortedGitHashes, status::RepoStatusEntry,
+    Error, GitHashes, GitRepo, OidHash,
+    git_path::{UnsupportedGitPath, parse_git_path, parse_path, path_to_git_path_bytes},
+    ls_tree::{GitPathList, SortedGitHashes},
+    status::RepoStatusEntry,
 };
 
 /// Pre-computed repo-wide git index that caches file hashes and working-tree
@@ -17,7 +20,29 @@ pub struct RepoGitIndex {
     /// Sorted by path so per-package filtering can use binary-search range
     /// queries instead of linear scans.
     status_entries: Vec<RepoStatusEntry>,
+    /// Untracked symlinks discovered by the working-tree walk. Kept out of
+    /// `status_entries` so per-package hashing never attempts to hash them,
+    /// while dirty-hash provenance still reflects them (git tracks symlinks).
+    /// Only populated by [`Self::populate_untracked_for_prefixes`] /
+    /// [`Self::populate_all_untracked`].
+    untracked_symlinks: Vec<RelativeUnixPathBuf>,
+    unsupported_paths: Vec<UnsupportedGitPath>,
     untracked_entries_populated: bool,
+    /// True when some condition prevents proving that `git diff HEAD` would
+    /// be empty (sparse index, submodules, intent-to-add/skip-worktree
+    /// entries, `.gitattributes` presence, unsupported paths, or a
+    /// stat-stale entry whose content matched only after CRLF normalization
+    /// / with an exec-bit mismatch). See [`Self::tracked_diff_clean_root`].
+    diff_skip_blocked: bool,
+    /// True when at least one verified entry's diff-safety additionally
+    /// requires eol conversion to be off (`core.autocrlf` etc.) — checked by
+    /// the caller at dirty-hash time.
+    eol_sensitive: bool,
+    /// The index's cache-tree root oid (hex), present only when the TREE
+    /// extension is valid and covers every entry — i.e. this is the tree
+    /// `git write-tree` would produce. `None` after `git add` or when the
+    /// extension is missing.
+    cache_tree_root: Option<String>,
 }
 
 impl RepoGitIndex {
@@ -29,7 +54,12 @@ impl RepoGitIndex {
         Self {
             ls_tree_hashes,
             status_entries,
+            unsupported_paths: Vec::new(),
+            untracked_symlinks: Vec::new(),
             untracked_entries_populated: true,
+            diff_skip_blocked: true,
+            eol_sensitive: false,
+            cache_tree_root: None,
         }
     }
 
@@ -95,75 +125,155 @@ impl RepoGitIndex {
         // sequential scan of all entries).
         let num_entries = index.entries().len();
 
+        // Conditions under which we can never prove `git diff HEAD` empty:
+        // submodule changes don't appear in the index stat comparison;
+        // intent-to-add / skip-worktree / sparse entries all make `git diff`
+        // see things this walk doesn't; and any `.gitattributes` file could
+        // carry conversion rules (eol, filters, working-tree-encoding) that
+        // this code doesn't interpret. The attributes restriction is
+        // deliberately coarse for now — repos with no attributes are fully
+        // provable, repos with attributes always run the diff.
+        let has_special_entries = index.is_sparse()
+            || git.git_attrs().is_some()
+            || index.entries().iter().any(|e| {
+                e.mode.is_submodule()
+                    || e.flags.intersects(
+                        gix_index::entry::Flags::INTENT_TO_ADD
+                            | gix_index::entry::Flags::SKIP_WORKTREE,
+                    )
+                    || e.path(&index).ends_with(b".gitattributes")
+            });
+
+        // A valid cache-tree root covering every entry is exactly the tree
+        // `git write-tree` would produce for this index. If it equals
+        // HEAD^{tree} there are no staged changes. `git add`/merge conflicts
+        // invalidate the extension, so absence is the conservative signal.
+        let cache_tree_root = index.tree().and_then(|tree| {
+            (tree.name.is_empty() && tree.num_entries == Some(num_entries as u32))
+                .then(|| tree.id.to_string())
+        });
+
+        let attrs = git.git_attrs();
+
         // Classify entries in parallel: stat each file, compare with index,
         // and carry the raw ObjectId (20 bytes, Copy) instead of a heap-allocated
         // hex String. Hex conversion uses a thread-local stack buffer to avoid
         // allocator contention across rayon threads.
+        //
+        // Stat-stale (or racy) entries are content-verified inline with the
+        // hardware-accelerated blob hasher: if the working file still hashes
+        // to the index oid, the entry is clean and downstream consumers can
+        // use the committed hash instead of re-hashing it per package. This
+        // is what makes snapshot-restored workspaces (where every entry is
+        // stat-stale) behave like fresh checkouts.
         let classified: Vec<Result<EntryClassification, Error>> = index
             .entries()
             .par_iter()
             .filter(|e| !e.mode.is_submodule())
-            .map(|e| {
-                let path_bytes = e.path(&index);
-                let path_str = std::str::from_utf8(path_bytes).map_err(|err| {
-                    Error::git_error(format!("invalid utf8 in index path: {}", err))
-                })?;
-                let rel_path = RelativeUnixPathBuf::new(path_str)?;
-                let abs_path = git.root.join_unix_path(&rel_path);
+            .map_init(
+                || attrs.map(|a| a.new_outcome()),
+                |attr_outcome, e| {
+                    let path_bytes = e.path(&index);
+                    let rel_path = match parse_git_path(path_bytes, "git index path")? {
+                        Ok(path) => path,
+                        Err(path) => return Ok(EntryClassification::Unsupported(path)),
+                    };
+                    // Git index paths are normalized repo-relative paths, so avoid
+                    // per-entry path_clean normalization before stat calls.
+                    let abs_path = git.root.join_unix_path_unchecked(&rel_path);
 
-                match gix_index::fs::Metadata::from_path_no_follow(abs_path.as_std_path()) {
-                    Ok(fs_meta) => {
-                        let fs_stat = gix_index::entry::Stat::from_fs(&fs_meta).map_err(|err| {
-                            Error::git_error(format!(
-                                "failed to convert stat for {}: {}",
-                                path_str, err
-                            ))
-                        })?;
+                    match gix_index::fs::Metadata::from_path_no_follow(abs_path.as_std_path()) {
+                        Ok(fs_meta) => {
+                            let fs_stat =
+                                gix_index::entry::Stat::from_fs(&fs_meta).map_err(|err| {
+                                    Error::git_error(format!(
+                                        "failed to convert stat for {}: {}",
+                                        rel_path, err
+                                    ))
+                                })?;
 
-                        let stat_matches = e.stat.matches(&fs_stat, stat_opts);
+                            let stat_matches = e.stat.matches(&fs_stat, stat_opts);
+                            let is_racy = e.stat.is_racy(index_timestamp, stat_opts);
 
-                        if !stat_matches {
-                            return Ok(EntryClassification::Modified { path: rel_path });
+                            if !stat_matches || is_racy {
+                                let text_attr = match (attrs, attr_outcome.as_mut()) {
+                                    (Some(a), Some(o)) => {
+                                        a.resolve_text_attr_with(rel_path.as_str(), o)
+                                    }
+                                    _ => crate::crlf::TextAttr::Unspecified,
+                                };
+                                return Ok(verify_candidate(
+                                    e, rel_path, &abs_path, &fs_meta, text_attr,
+                                ));
+                            }
+
+                            let mut hex_buf = [0u8; 40];
+                            hex::encode_to_slice(e.id.as_bytes(), &mut hex_buf).map_err(|err| {
+                                Error::git_error(format!(
+                                    "failed to encode object id for {rel_path}: {err}"
+                                ))
+                            })?;
+                            Ok(EntryClassification::Clean {
+                                path: rel_path,
+                                oid: OidHash::from_hex_buf(hex_buf),
+                                diff_safe: DiffSafety::Safe,
+                            })
                         }
-
-                        let is_racy = e.stat.is_racy(index_timestamp, stat_opts);
-                        if is_racy {
-                            return Ok(EntryClassification::Modified { path: rel_path });
-                        }
-
-                        let mut hex_buf = [0u8; 40];
-                        hex::encode_to_slice(e.id.as_bytes(), &mut hex_buf).unwrap();
-                        Ok(EntryClassification::Clean {
-                            path: rel_path,
-                            oid: OidHash::from_hex_buf(hex_buf),
-                        })
+                        Err(_) => Ok(EntryClassification::Deleted { path: rel_path }),
                     }
-                    Err(_) => Ok(EntryClassification::Deleted { path: rel_path }),
-                }
-            })
+                },
+            )
             .collect();
 
         let mut ls_tree_hashes = SortedGitHashes::with_capacity(num_entries);
         let mut status_entries = Vec::new();
+        let mut unsupported_paths = Vec::new();
+        let mut diff_skip_blocked = has_special_entries;
+        let mut diff_unsafe_count = 0usize;
+        let mut eol_sensitive_count = 0usize;
 
         for result in classified {
             match result? {
-                EntryClassification::Clean { path, oid } => {
+                EntryClassification::Clean {
+                    path,
+                    oid,
+                    diff_safe,
+                } => {
+                    match diff_safe {
+                        DiffSafety::Safe => {}
+                        DiffSafety::SafeIfEolInert => eol_sensitive_count += 1,
+                        DiffSafety::Unsafe => {
+                            diff_skip_blocked = true;
+                            diff_unsafe_count += 1;
+                            if diff_unsafe_count <= 5 {
+                                debug!("diff-unsafe verified entry: {path}");
+                            }
+                        }
+                    }
                     ls_tree_hashes.push((path, oid));
                 }
                 EntryClassification::Modified { path } => {
                     status_entries.push(RepoStatusEntry {
                         path,
                         is_delete: false,
+                        is_untracked: false,
                     });
                 }
                 EntryClassification::Deleted { path } => {
                     status_entries.push(RepoStatusEntry {
                         path,
                         is_delete: true,
+                        is_untracked: false,
                     });
                 }
+                EntryClassification::Unsupported(path) => unsupported_paths.push(path),
             }
+        }
+
+        if !unsupported_paths.is_empty() {
+            // Unrepresentable paths are tracked files whose diff state we
+            // can't reason about.
+            diff_skip_blocked = true;
         }
 
         // ls_tree_hashes is already sorted (git index is sorted, rayon
@@ -172,17 +282,31 @@ impl RepoGitIndex {
         // (sorted). Sort once now so find_untracked_files can binary search
         // directly on &[RepoStatusEntry] without cloning paths into Strings.
         status_entries.sort_by(|a, b| a.path.cmp(&b.path));
+        unsupported_paths.sort();
+        unsupported_paths.dedup();
 
         debug!(
-            "built tracked repo git index (gix-index): clean_count={}, status_count={}",
+            "built tracked repo git index (gix-index): clean_count={}, status_count={}, \
+             diff_skip_blocked={}, diff_unsafe_count={}, eol_sensitive_count={}, special={}, \
+             cache_tree_root={:?}",
             ls_tree_hashes.len(),
             status_entries.len(),
+            diff_skip_blocked,
+            diff_unsafe_count,
+            eol_sensitive_count,
+            has_special_entries,
+            cache_tree_root,
         );
 
         Ok(Self {
             ls_tree_hashes,
             status_entries,
+            unsupported_paths,
+            untracked_symlinks: Vec::new(),
             untracked_entries_populated: false,
+            diff_skip_blocked,
+            eol_sensitive: eol_sensitive_count > 0,
+            cache_tree_root,
         })
     }
 
@@ -208,10 +332,10 @@ impl RepoGitIndex {
 
         enum UntrackedResult {
             /// Direct untracked file list from `git ls-files --others`
-            LsFiles(Result<Vec<RelativeUnixPathBuf>, Error>),
+            LsFiles(Result<GitPathList, Error>),
             /// All candidate files (tracked + untracked) from the walk;
             /// must be filtered against ls_tree to find untracked
-            Walk(Result<Vec<RelativeUnixPathBuf>, Error>),
+            Walk(Result<WalkedPaths, Error>),
         }
 
         let git1 = git.clone();
@@ -220,8 +344,10 @@ impl RepoGitIndex {
         let walk_root = git.root.as_std_path().to_path_buf();
         let walk_prefixes: Vec<_> = prefixes.to_vec();
 
-        let ls_tree_handle = thread::spawn(move || git1.git_ls_tree_repo_root_sorted());
-        let diff_index_handle = thread::spawn(move || git2.git_diff_index_repo_root());
+        let ls_tree_handle =
+            thread::spawn(move || git1.git_ls_tree_repo_root_sorted_with_unsupported());
+        let diff_index_handle =
+            thread::spawn(move || git2.git_diff_index_repo_root_with_unsupported());
 
         // Race: spawn both untracked discovery methods, use whichever
         // finishes first.
@@ -229,22 +355,26 @@ impl RepoGitIndex {
 
         let tx1 = untracked_tx.clone();
         let _ls_files_handle = thread::spawn(move || {
-            let result = git3.git_ls_files_untracked();
+            let result = git3.git_ls_files_untracked_with_unsupported();
             let _ = tx1.send(UntrackedResult::LsFiles(result));
         });
 
         let tx2 = untracked_tx;
         let _walk_handle = thread::spawn(move || {
-            let result = walk_candidate_files(&walk_root, Some(&walk_prefixes));
+            let result = walk_candidate_files_with_unsupported(&walk_root, Some(&walk_prefixes));
             let _ = tx2.send(UntrackedResult::Walk(result));
         });
 
-        let ls_tree_hashes = ls_tree_handle
+        let tree_state = ls_tree_handle
             .join()
             .map_err(|_| Error::git_error("git ls-tree thread panicked"))??;
-        let mut status_entries = diff_index_handle
+        let status_state = diff_index_handle
             .join()
             .map_err(|_| Error::git_error("git diff-index thread panicked"))??;
+        let ls_tree_hashes = tree_state.hashes;
+        let mut status_entries = status_state.entries;
+        let mut unsupported_paths = tree_state.unsupported_paths;
+        unsupported_paths.extend(status_state.unsupported_paths);
 
         // Use whichever untracked result arrives first.
         let untracked_winner = untracked_rx
@@ -256,12 +386,14 @@ impl RepoGitIndex {
                 let untracked_files = result?;
                 debug!(
                     "untracked race winner: git ls-files ({} files)",
-                    untracked_files.len()
+                    untracked_files.paths.len()
                 );
-                for path in untracked_files {
+                unsupported_paths.extend(untracked_files.unsupported_paths);
+                for path in untracked_files.paths {
                     status_entries.push(RepoStatusEntry {
                         path,
                         is_delete: false,
+                        is_untracked: true,
                     });
                 }
             }
@@ -269,20 +401,27 @@ impl RepoGitIndex {
                 let candidates = result?;
                 debug!(
                     "untracked race winner: walk ({} candidates)",
-                    candidates.len()
+                    candidates.paths.len()
                 );
-                let untracked =
-                    filter_untracked_from_candidates(candidates, &ls_tree_hashes, &status_entries);
+                unsupported_paths.extend(candidates.unsupported_paths);
+                let untracked = filter_untracked_from_candidates(
+                    candidates.paths,
+                    &ls_tree_hashes,
+                    &status_entries,
+                );
                 for path in untracked {
                     status_entries.push(RepoStatusEntry {
                         path,
                         is_delete: false,
+                        is_untracked: true,
                     });
                 }
             }
         }
 
         status_entries.sort_by(|a, b| a.path.cmp(&b.path));
+        unsupported_paths.sort();
+        unsupported_paths.dedup();
 
         debug!(
             "built repo git index (subprocess + walk race): clean_count={}, status_count={}",
@@ -293,7 +432,14 @@ impl RepoGitIndex {
         Ok(Self {
             ls_tree_hashes,
             status_entries,
+            unsupported_paths,
+            untracked_symlinks: Vec::new(),
             untracked_entries_populated: true,
+            // The subprocess path has no per-entry verification or
+            // cache-tree access; the dirty hash always runs the diff.
+            diff_skip_blocked: true,
+            eol_sensitive: false,
+            cache_tree_root: None,
         })
     }
 
@@ -322,6 +468,7 @@ impl RepoGitIndex {
             self.status_entries.push(RepoStatusEntry {
                 path,
                 is_delete: false,
+                is_untracked: true,
             });
         }
 
@@ -362,25 +509,109 @@ impl RepoGitIndex {
         let before_status_count = self.status_entries.len();
         let untracked =
             find_untracked_files(git, &self.ls_tree_hashes, &self.status_entries, prefixes)?;
-        for path in untracked {
+        self.unsupported_paths.extend(untracked.unsupported_paths);
+        self.unsupported_paths.sort();
+        self.unsupported_paths.dedup();
+        for path in untracked.paths {
             self.status_entries.push(RepoStatusEntry {
                 path,
                 is_delete: false,
+                is_untracked: true,
             });
         }
+        self.untracked_symlinks = untracked.symlink_paths;
+        self.untracked_symlinks.sort();
 
         self.status_entries.sort_by(|a, b| a.path.cmp(&b.path));
         self.untracked_entries_populated = true;
 
         debug!(
-            "populated repo git index with untracked files: added_count={}, status_count={}",
+            "populated repo git index with untracked files: added_count={}, \
+             untracked_symlinks={}, status_count={}",
             self.status_entries
                 .len()
                 .saturating_sub(before_status_count),
+            self.untracked_symlinks.len(),
             self.status_entries.len(),
         );
 
         Ok(())
+    }
+
+    /// Append untracked file names from the repo index to the dirty-hash
+    /// input. Returns `true` when there was any untracked entry to hash.
+    ///
+    /// Modified/deleted tracked files are intentionally omitted here: the diff
+    /// stream is the canonical input for tracked content changes. The repo
+    /// index may conservatively mark clean racy-git entries as modified so they
+    /// get content-hashed later, and those must not make a clean tree dirty.
+    /// When `Some(root_tree_hex)` is returned, the working tree provably has
+    /// no unstaged changes to tracked files: every stat-stale entry was
+    /// content-verified against the index under diff-safe conditions, and no
+    /// modified/deleted/special entries remain. The caller must additionally
+    /// confirm `root_tree_hex == HEAD^{tree}` (no staged changes) before
+    /// concluding that `git diff HEAD` would produce no output.
+    ///
+    /// `info_attributes_exists` is the caller's answer to whether
+    /// `$GIT_DIR/info/attributes` exists — attribute rules from there (like
+    /// any `.gitattributes`, which is checked here against tracked and
+    /// untracked entries) could impose conversions this code doesn't
+    /// interpret.
+    ///
+    /// `None` means nothing is proven — run the diff. Otherwise returns the
+    /// cache-tree root plus whether the caller must also verify that eol
+    /// conversion is inert (`core.autocrlf` off, no attribute sources
+    /// outside the repo) before trusting the proof.
+    pub fn tracked_diff_clean_root(
+        &self,
+        info_attributes_exists: bool,
+    ) -> Option<(&str, EolSensitivity)> {
+        if self.diff_skip_blocked || info_attributes_exists {
+            return None;
+        }
+        if self.status_entries.iter().any(|e| !e.is_untracked) {
+            return None;
+        }
+        // Untracked .gitattributes files affect git's conversion right now
+        // even though they're not in the index.
+        if self
+            .status_entries
+            .iter()
+            .any(|e| e.is_untracked && e.path.as_str().ends_with(".gitattributes"))
+        {
+            return None;
+        }
+        let sensitivity = if self.eol_sensitive {
+            EolSensitivity::RequiresInertEolConversion
+        } else {
+            EolSensitivity::ConfigIndependent
+        };
+        self.cache_tree_root
+            .as_deref()
+            .map(|root| (root, sensitivity))
+    }
+
+    pub fn append_dirty_status_to_hasher(&self, hasher: &mut sha2::Sha256) -> bool {
+        use sha2::Digest;
+
+        let mut has_untracked = false;
+        for entry in &self.status_entries {
+            if !entry.is_untracked {
+                continue;
+            }
+            has_untracked = true;
+            hasher.update(b"?\0");
+            hasher.update(entry.path.as_str().as_bytes());
+            hasher.update(b"\0");
+        }
+        for path in &self.untracked_symlinks {
+            has_untracked = true;
+            hasher.update(b"?\0");
+            hasher.update(path.as_str().as_bytes());
+            hasher.update(b"\0");
+        }
+
+        has_untracked
     }
 
     /// Extract hashes for a single package from the cached repo-wide data.
@@ -394,6 +625,14 @@ impl RepoGitIndex {
         &self,
         pkg_prefix: &RelativeUnixPathBuf,
     ) -> Result<(GitHashes, Vec<RelativeUnixPathBuf>), Error> {
+        if let Some(path) = self
+            .unsupported_paths
+            .iter()
+            .find(|path| path.is_within_prefix(pkg_prefix))
+        {
+            return Err(path.clone().into_error());
+        }
+
         let prefix_str = pkg_prefix.as_str();
         let prefix_is_empty = prefix_str.is_empty();
 
@@ -503,6 +742,29 @@ impl RepoGitIndex {
     }
 }
 
+struct WalkedPaths {
+    paths: Vec<RelativeUnixPathBuf>,
+    /// Untracked symlinks. Kept separate from `paths` because per-package
+    /// hashing intentionally ignores symlinks, while dirty-hash provenance
+    /// must still account for them (git treats symlinks as trackable).
+    symlink_paths: Vec<RelativeUnixPathBuf>,
+    unsupported_paths: Vec<UnsupportedGitPath>,
+}
+
+impl WalkedPaths {
+    fn new() -> Self {
+        Self {
+            paths: Vec::new(),
+            symlink_paths: Vec::new(),
+            unsupported_paths: Vec::new(),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.paths.is_empty() && self.symlink_paths.is_empty() && self.unsupported_paths.is_empty()
+    }
+}
+
 /// Walk the working tree to collect candidate files (all non-gitignored
 /// files within scope). This is the I/O-bound phase that can run without
 /// the git index.
@@ -518,6 +780,18 @@ pub fn walk_candidate_files(
     git_root: &std::path::Path,
     prefixes: Option<&[RelativeUnixPathBuf]>,
 ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+    let walked = walk_candidate_files_with_unsupported(git_root, prefixes)?;
+    if let Some(path) = walked.unsupported_paths.into_iter().next() {
+        return Err(path.into_error());
+    }
+
+    Ok(walked.paths)
+}
+
+fn walk_candidate_files_with_unsupported(
+    git_root: &std::path::Path,
+    prefixes: Option<&[RelativeUnixPathBuf]>,
+) -> Result<WalkedPaths, Error> {
     use std::sync::mpsc;
 
     use ignore::WalkBuilder;
@@ -525,7 +799,7 @@ pub fn walk_candidate_files(
     let root = std::sync::Arc::new(git_root.to_path_buf());
     let scope = std::sync::Arc::new(UntrackedScope::new(prefixes));
 
-    let (tx, rx) = mpsc::channel::<Vec<RelativeUnixPathBuf>>();
+    let (tx, rx) = mpsc::channel::<WalkedPaths>();
 
     let walker = WalkBuilder::new(root.as_path())
         .follow_links(false)
@@ -550,20 +824,15 @@ pub fn walk_candidate_files(
                     Ok(rel) => rel,
                     Err(_) => return false,
                 };
-                #[cfg(windows)]
-                let rel_path_owned = rel_path.to_string_lossy().replace('\\', "/");
-                #[cfg(windows)]
-                let rel_path = rel_path_owned.as_str();
-                #[cfg(not(windows))]
-                let rel_path = match rel_path.to_str() {
-                    Some(rel) => rel,
-                    None => return false,
-                };
+                let rel_path = path_to_git_path_bytes(rel_path);
 
                 if is_dir {
-                    scope.should_visit_dir(rel_path)
+                    scope.should_visit_dir_bytes(rel_path.as_ref())
                 } else {
-                    scope.should_consider_file(rel_path, entry.file_name() == ".gitignore")
+                    scope.should_consider_file_bytes(
+                        rel_path.as_ref(),
+                        entry.file_name() == ".gitignore",
+                    )
                 }
             }
         })
@@ -571,14 +840,18 @@ pub fn walk_candidate_files(
         .build_parallel();
 
     struct FlushOnDrop {
-        buf: Vec<RelativeUnixPathBuf>,
-        tx: mpsc::Sender<Vec<RelativeUnixPathBuf>>,
+        batch: WalkedPaths,
+        tx: mpsc::Sender<WalkedPaths>,
     }
 
     impl Drop for FlushOnDrop {
         fn drop(&mut self) {
-            if !self.buf.is_empty() {
-                let batch = std::mem::take(&mut self.buf);
+            if !self.batch.is_empty() {
+                let batch = WalkedPaths {
+                    paths: std::mem::take(&mut self.batch.paths),
+                    symlink_paths: std::mem::take(&mut self.batch.symlink_paths),
+                    unsupported_paths: std::mem::take(&mut self.batch.unsupported_paths),
+                };
                 let _ = self.tx.send(batch);
             }
         }
@@ -587,7 +860,7 @@ pub fn walk_candidate_files(
     walker.run(|| {
         let root = root.clone();
         let mut guard = FlushOnDrop {
-            buf: Vec::new(),
+            batch: WalkedPaths::new(),
             tx: tx.clone(),
         };
 
@@ -609,18 +882,10 @@ pub fn walk_candidate_files(
                 Err(_) => return ignore::WalkState::Continue,
             };
 
-            let unix_str = match rel_path.to_str() {
-                Some(s) => s,
-                None => return ignore::WalkState::Continue,
-            };
-
-            #[cfg(windows)]
-            let unix_str_owned = unix_str.replace('\\', "/");
-            #[cfg(windows)]
-            let unix_str: &str = &unix_str_owned;
-
-            if let Ok(path) = RelativeUnixPathBuf::new(unix_str) {
-                guard.buf.push(path);
+            match parse_path(rel_path, "working tree path") {
+                Ok(Ok(path)) => guard.batch.paths.push(path),
+                Ok(Err(path)) => guard.batch.unsupported_paths.push(path),
+                Err(_) => {}
             }
 
             ignore::WalkState::Continue
@@ -628,9 +893,10 @@ pub fn walk_candidate_files(
     });
     drop(tx);
 
-    let mut candidates: Vec<RelativeUnixPathBuf> = Vec::new();
+    let mut candidates = WalkedPaths::new();
     for batch in rx.iter() {
-        candidates.extend(batch);
+        candidates.paths.extend(batch.paths);
+        candidates.unsupported_paths.extend(batch.unsupported_paths);
     }
 
     Ok(candidates)
@@ -679,8 +945,8 @@ fn find_untracked_files(
     ls_tree_hashes: &SortedGitHashes,
     status_entries: &[RepoStatusEntry],
     prefixes: Option<&[RelativeUnixPathBuf]>,
-) -> Result<Vec<RelativeUnixPathBuf>, Error> {
-    use std::sync::mpsc;
+) -> Result<WalkedPaths, Error> {
+    use std::{collections::HashMap, sync::mpsc};
 
     use ignore::WalkBuilder;
 
@@ -692,7 +958,12 @@ fn find_untracked_files(
     // directory so patterns are scoped correctly (e.g., `dist/` in
     // `packages/ui/.gitignore` only matches under `packages/ui/`).
     let gitignore_matchers = {
-        let mut matchers: Vec<ignore::gitignore::Gitignore> = Vec::new();
+        use rayon::prelude::*;
+
+        let mut matchers: HashMap<
+            std::path::PathBuf,
+            std::sync::Arc<ignore::gitignore::Gitignore>,
+        > = HashMap::new();
 
         // Global gitignore + .git/info/exclude are rooted at the repo root
         let mut root_builder = ignore::gitignore::GitignoreBuilder::new(root.as_path());
@@ -712,8 +983,10 @@ fn find_untracked_files(
         // Collect .gitignore paths from both clean tracked files and
         // dirty (modified-but-tracked) files. A modified .gitignore
         // lands in status_entries instead of ls_tree_hashes, but its
-        // on-disk patterns must still be respected.
-        let gitignore_paths: Vec<&str> = ls_tree_hashes
+        // on-disk patterns must still be respected. Only files literally
+        // named `.gitignore` count; git attaches no meaning to files that
+        // merely end in that suffix (e.g. `foo.gitignore`).
+        let mut gitignore_paths: Vec<&str> = ls_tree_hashes
             .iter()
             .map(|(p, _)| p.as_str())
             .chain(
@@ -722,44 +995,63 @@ fn find_untracked_files(
                     .filter(|e| !e.is_delete)
                     .map(|e| e.path.as_str()),
             )
-            .filter(|s| s.ends_with(".gitignore"))
+            .filter(|s| *s == ".gitignore" || s.ends_with("/.gitignore"))
             .collect();
+        gitignore_paths.sort_unstable();
+        gitignore_paths.dedup();
 
-        for s in gitignore_paths {
+        let (root_gitignores, nested_gitignores): (Vec<&str>, Vec<&str>) = gitignore_paths
+            .into_iter()
+            .partition(|s| *s == ".gitignore");
+
+        for s in root_gitignores {
+            // Root .gitignore goes into the root builder alongside
+            // global and info/exclude rules
             let abs_path = root.join(s);
-            if !abs_path.exists() {
-                continue;
-            }
-            let gi_dir = abs_path.parent().unwrap_or(root.as_path());
-            if gi_dir == root.as_path() {
-                // Root .gitignore goes into the root builder alongside
-                // global and info/exclude rules
+            if abs_path.exists() {
                 let _ = root_builder.add(&abs_path);
                 has_root_rules = true;
-            } else {
-                // Nested .gitignore gets its own matcher scoped to its dir
+            }
+        }
+
+        // Nested .gitignore files each get their own matcher scoped to
+        // their containing directory. Building compiles globs, so spread
+        // it across threads.
+        let nested: Vec<(std::path::PathBuf, ignore::gitignore::Gitignore)> = nested_gitignores
+            .par_iter()
+            .filter_map(|s| {
+                let abs_path = root.join(s);
+                if !abs_path.exists() {
+                    return None;
+                }
+                let gi_dir = abs_path.parent()?;
                 let mut builder = ignore::gitignore::GitignoreBuilder::new(gi_dir);
                 let _ = builder.add(&abs_path);
-                if let Ok(gi) = builder.build()
-                    && !gi.is_empty()
-                {
-                    matchers.push(gi);
+                let gi = builder.build().ok()?;
+                if gi.is_empty() {
+                    return None;
                 }
-            }
+                Some((gi_dir.to_path_buf(), gi))
+            })
+            .collect();
+        for (dir, gi) in nested {
+            matchers.insert(dir, std::sync::Arc::new(gi));
         }
 
         if has_root_rules
             && let Ok(gi) = root_builder.build()
             && !gi.is_empty()
         {
-            matchers.insert(0, gi);
+            matchers.insert(root.as_path().to_path_buf(), std::sync::Arc::new(gi));
         }
 
         matchers
     };
     let gitignore_matchers = std::sync::Arc::new(gitignore_matchers);
-
-    let (tx, rx) = mpsc::channel::<Vec<RelativeUnixPathBuf>>();
+    let walk_generation = UNTRACKED_WALK_GENERATION
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        .wrapping_add(1);
+    let (tx, rx) = mpsc::channel::<WalkedPaths>();
 
     // Disable ALL per-directory probing. Gitignore rules are applied via
     // filter_entry using the pre-built matcher above.
@@ -786,48 +1078,75 @@ fn find_untracked_files(
                     Ok(rel) => rel,
                     Err(_) => return false,
                 };
-                #[cfg(windows)]
-                let rel_path_owned = rel_path.to_string_lossy().replace('\\', "/");
-                #[cfg(windows)]
-                let rel_path = rel_path_owned.as_str();
-                #[cfg(not(windows))]
-                let rel_path = match rel_path.to_str() {
-                    Some(rel) => rel,
-                    None => return false,
-                };
+                let rel_path = path_to_git_path_bytes(rel_path);
 
                 let in_scope = if is_dir {
-                    scope.should_visit_dir(rel_path)
+                    scope.should_visit_dir_bytes(rel_path.as_ref())
                 } else {
-                    scope.should_consider_file(rel_path, entry.file_name() == ".gitignore")
+                    scope.should_consider_file_bytes(
+                        rel_path.as_ref(),
+                        entry.file_name() == ".gitignore",
+                    )
                 };
                 if !in_scope {
                     return false;
                 }
 
-                // Check against all pre-built gitignore matchers. For
-                // directories, returning false prunes the entire subtree.
-                // Only check matchers whose root is a prefix of the entry
-                // path — a matcher scoped to packages/ui/ can't affect
-                // files under apps/web/.
-                !matchers.iter().any(|gi| {
-                    path.starts_with(gi.path())
-                        && gi.matched_path_or_any_parents(path, is_dir).is_ignore()
-                })
+                // Only ancestor .gitignore files can affect this entry. Git
+                // never lets a directory's own .gitignore match the directory
+                // itself, so the applicable matcher chain is determined
+                // entirely by the entry's parent directory — which the walker
+                // hands us in readdir batches. Memoize the chain per thread,
+                // keyed on the parent dir, so the ancestor walk (and its
+                // HashMap probes) runs once per directory instead of once per
+                // entry.
+                if matchers.is_empty() {
+                    return true;
+                }
+                let parent = path.parent().unwrap_or(root.as_path());
+                let result = CHAIN_MEMO.with(|memo| {
+                    let mut memo = memo.borrow_mut();
+                    let (memo_generation, memo_dir, chain) = &mut *memo;
+                    if *memo_generation != walk_generation || memo_dir.as_path() != parent {
+                        *memo_generation = walk_generation;
+                        memo_dir.clear();
+                        memo_dir.push(parent);
+                        ancestor_matcher_chain(&matchers, root.as_path(), parent, chain);
+                    }
+                    !is_ignored_by_matcher_chain(chain, path, is_dir)
+                });
+
+                // A directory whose own .gitignore matches everything (e.g. a
+                // lone `*`) can be pruned outright when that matcher has no
+                // whitelist patterns: every child would match the same
+                // catch-all, and a whitelist in a deeper .gitignore can't
+                // rescue anything because the intermediate directory itself
+                // gets ignored (git cannot re-include under an excluded
+                // directory). This avoids pointlessly reading directories
+                // that contribute nothing.
+                result
+                    && !(is_dir
+                        && matchers.get(path).is_some_and(|own| {
+                            own.num_whitelists() == 0 && own.matched(path, true).is_ignore()
+                        }))
             }
         })
         .threads(rayon::current_num_threads().min(8))
         .build_parallel();
 
     struct FlushOnDrop {
-        buf: Vec<RelativeUnixPathBuf>,
-        tx: mpsc::Sender<Vec<RelativeUnixPathBuf>>,
+        batch: WalkedPaths,
+        tx: mpsc::Sender<WalkedPaths>,
     }
 
     impl Drop for FlushOnDrop {
         fn drop(&mut self) {
-            if !self.buf.is_empty() {
-                let batch = std::mem::take(&mut self.buf);
+            if !self.batch.is_empty() {
+                let batch = WalkedPaths {
+                    paths: std::mem::take(&mut self.batch.paths),
+                    symlink_paths: std::mem::take(&mut self.batch.symlink_paths),
+                    unsupported_paths: std::mem::take(&mut self.batch.unsupported_paths),
+                };
                 let _ = self.tx.send(batch);
             }
         }
@@ -836,7 +1155,7 @@ fn find_untracked_files(
     walker.run(|| {
         let root = root.clone();
         let mut guard = FlushOnDrop {
-            buf: Vec::new(),
+            batch: WalkedPaths::new(),
             tx: tx.clone(),
         };
 
@@ -846,9 +1165,14 @@ fn find_untracked_files(
                 Err(_) => return ignore::WalkState::Continue,
             };
 
-            // Skip anything that isn't a regular file (directories,
-            // symlinks, sockets, FIFOs, device nodes).
-            if !entry.file_type().is_some_and(|ft| ft.is_file()) {
+            // Regular files feed per-package hashing. Symlinks are trackable
+            // by git and so count as untracked working-tree state, but are
+            // collected separately so hashing never sees them. Everything
+            // else (directories, sockets, FIFOs, device nodes) is skipped.
+            let file_type = entry.file_type();
+            let is_file = file_type.as_ref().is_some_and(|ft| ft.is_file());
+            let is_symlink = file_type.is_some_and(|ft| ft.is_symlink());
+            if !is_file && !is_symlink {
                 return ignore::WalkState::Continue;
             }
 
@@ -858,16 +1182,16 @@ fn find_untracked_files(
                 Err(_) => return ignore::WalkState::Continue,
             };
 
-            let unix_str = match rel_path.to_str() {
-                Some(s) => s,
-                None => return ignore::WalkState::Continue,
+            let path = match parse_path(rel_path, "working tree path") {
+                Ok(Ok(path)) => path,
+                Ok(Err(path)) => {
+                    guard.batch.unsupported_paths.push(path);
+                    return ignore::WalkState::Continue;
+                }
+                Err(_) => return ignore::WalkState::Continue,
             };
 
-            #[cfg(windows)]
-            let unix_str_owned = unix_str.replace('\\', "/");
-            #[cfg(windows)]
-            let unix_str: &str = &unix_str_owned;
-
+            let unix_str = path.as_str();
             let in_ls_tree = ls_tree_hashes
                 .binary_search_by(|(p, _)| p.as_str().cmp(unix_str))
                 .is_ok();
@@ -875,11 +1199,12 @@ fn find_untracked_files(
                 .binary_search_by(|e| e.path.as_str().cmp(unix_str))
                 .is_ok();
 
-            if !in_ls_tree
-                && !in_status
-                && let Ok(path) = RelativeUnixPathBuf::new(unix_str)
-            {
-                guard.buf.push(path);
+            if !in_ls_tree && !in_status {
+                if is_file {
+                    guard.batch.paths.push(path);
+                } else {
+                    guard.batch.symlink_paths.push(path);
+                }
             }
 
             ignore::WalkState::Continue
@@ -887,21 +1212,25 @@ fn find_untracked_files(
     });
     drop(tx);
 
-    let mut untracked: Vec<RelativeUnixPathBuf> = Vec::new();
+    let mut untracked = WalkedPaths::new();
     for batch in rx.iter() {
-        untracked.extend(batch);
+        untracked.paths.extend(batch.paths);
+        untracked.symlink_paths.extend(batch.symlink_paths);
+        untracked.unsupported_paths.extend(batch.unsupported_paths);
     }
 
     // Post-filter: check for untracked .gitignore files that we couldn't
     // know about during the walk. If any exist, build per-directory matchers
     // from them and remove files that should be ignored.
     let untracked_gitignores: Vec<&RelativeUnixPathBuf> = untracked
+        .paths
         .iter()
         .filter(|p| p.as_str().ends_with(".gitignore"))
         .collect();
 
     if !untracked_gitignores.is_empty() {
-        let mut extra_matchers: Vec<ignore::gitignore::Gitignore> = Vec::new();
+        let mut extra_matchers: HashMap<std::path::PathBuf, ignore::gitignore::Gitignore> =
+            HashMap::new();
         for gi_path in &untracked_gitignores {
             let abs = root.join(gi_path.as_str());
             let gi_dir = abs.parent().unwrap_or(root.as_path());
@@ -910,20 +1239,24 @@ fn find_untracked_files(
             if let Ok(gi) = builder.build()
                 && !gi.is_empty()
             {
-                extra_matchers.push(gi);
+                extra_matchers.insert(gi_dir.to_path_buf(), gi);
             }
         }
         if !extra_matchers.is_empty() {
-            untracked.retain(|p| {
+            let not_ignored = |p: &RelativeUnixPathBuf| {
                 if p.as_str().ends_with(".gitignore") {
                     return true;
                 }
                 let abs = root.join(p.as_str());
-                !extra_matchers.iter().any(|gi| {
-                    abs.starts_with(gi.path())
-                        && gi.matched_path_or_any_parents(&abs, false).is_ignore()
-                })
-            });
+                !is_ignored_by_indexed_gitignore_matchers(
+                    &extra_matchers,
+                    root.as_path(),
+                    &abs,
+                    false,
+                )
+            };
+            untracked.paths.retain(not_ignored);
+            untracked.symlink_paths.retain(not_ignored);
         }
     }
 
@@ -976,53 +1309,205 @@ impl UntrackedScope {
         }
     }
 
+    #[cfg(test)]
     fn should_visit_dir(&self, rel_path: &str) -> bool {
+        self.should_visit_dir_bytes(rel_path.as_bytes())
+    }
+
+    fn should_visit_dir_bytes(&self, rel_path: &[u8]) -> bool {
         if self.is_full_walk || rel_path.is_empty() {
             return true;
         }
 
         self.prefixes.iter().any(|prefix| {
+            let prefix = prefix.as_bytes();
             rel_path == prefix
-                || is_nested_path(rel_path, prefix)
-                || is_nested_path(prefix, rel_path)
+                || is_nested_path_bytes(rel_path, prefix)
+                || is_nested_path_bytes(prefix, rel_path)
         })
     }
 
+    #[cfg(test)]
     fn should_consider_file(&self, rel_path: &str, is_gitignore: bool) -> bool {
-        if self.is_full_walk || self.is_within_selected_prefix(rel_path) {
+        self.should_consider_file_bytes(rel_path.as_bytes(), is_gitignore)
+    }
+
+    fn should_consider_file_bytes(&self, rel_path: &[u8], is_gitignore: bool) -> bool {
+        if self.is_full_walk || self.is_within_selected_prefix_bytes(rel_path) {
             return true;
         }
 
-        is_gitignore && self.should_visit_dir(parent_path(rel_path))
+        is_gitignore && self.should_visit_dir_bytes(parent_path_bytes(rel_path))
     }
 
+    #[cfg(test)]
     fn is_within_selected_prefix(&self, rel_path: &str) -> bool {
+        self.is_within_selected_prefix_bytes(rel_path.as_bytes())
+    }
+
+    fn is_within_selected_prefix_bytes(&self, rel_path: &[u8]) -> bool {
         if self.is_full_walk {
             return true;
         }
 
-        self.prefixes
-            .iter()
-            .any(|prefix| rel_path == prefix || is_nested_path(rel_path, prefix))
+        self.prefixes.iter().any(|prefix| {
+            let prefix = prefix.as_bytes();
+            rel_path == prefix || is_nested_path_bytes(rel_path, prefix)
+        })
     }
 }
 
 fn is_nested_path(path: &str, prefix: &str) -> bool {
-    path.len() > prefix.len()
-        && path.starts_with(prefix)
-        && path.as_bytes().get(prefix.len()) == Some(&b'/')
+    is_nested_path_bytes(path.as_bytes(), prefix.as_bytes())
 }
 
-fn parent_path(path: &str) -> &str {
-    path.rsplit_once('/')
-        .map(|(parent, _)| parent)
-        .unwrap_or("")
+fn is_nested_path_bytes(path: &[u8], prefix: &[u8]) -> bool {
+    path.len() > prefix.len() && path.starts_with(prefix) && path.get(prefix.len()) == Some(&b'/')
+}
+
+/// Distinguishes matcher-chain memo entries between walks so a long-lived
+/// process (daemon, test harness) can never reuse a chain built from a
+/// previous walk's matchers.
+static UNTRACKED_WALK_GENERATION: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+thread_local! {
+    /// Per-thread memo for the untracked walk: (walk generation, parent dir,
+    /// matcher chain for that dir ordered deepest-first).
+    static CHAIN_MEMO: std::cell::RefCell<(
+        u64,
+        std::path::PathBuf,
+        Vec<std::sync::Arc<ignore::gitignore::Gitignore>>,
+    )> = const { std::cell::RefCell::new((0, std::path::PathBuf::new(), Vec::new())) };
+}
+
+/// Collect the gitignore matchers applicable to entries of `dir`, ordered
+/// deepest-first, into `chain` (cleared first).
+fn ancestor_matcher_chain(
+    matchers: &std::collections::HashMap<
+        std::path::PathBuf,
+        std::sync::Arc<ignore::gitignore::Gitignore>,
+    >,
+    root: &std::path::Path,
+    dir: &std::path::Path,
+    chain: &mut Vec<std::sync::Arc<ignore::gitignore::Gitignore>>,
+) {
+    chain.clear();
+    let mut cur = dir;
+    loop {
+        if let Some(matcher) = matchers.get(cur) {
+            chain.push(matcher.clone());
+        }
+        if cur == root {
+            break;
+        }
+        let Some(parent) = cur.parent() else {
+            break;
+        };
+        cur = parent;
+    }
+}
+
+/// Apply git's precedence rules to a chain of ancestor matchers ordered
+/// deepest-first: the first matcher with a verdict for `path` wins, so a
+/// whitelist in a nested .gitignore overrides an ignore rule in a parent.
+///
+/// Checking only `path` itself (not its parents) is sound here because the
+/// walker prunes ignored directories: every ancestor of a visited entry has
+/// already been ruled non-ignored, mirroring git's rule that files under an
+/// excluded directory cannot be re-included.
+fn is_ignored_by_matcher_chain(
+    chain: &[std::sync::Arc<ignore::gitignore::Gitignore>],
+    path: &std::path::Path,
+    is_dir: bool,
+) -> bool {
+    for matcher in chain {
+        match matcher.matched(path, is_dir) {
+            ignore::Match::None => continue,
+            ignore::Match::Ignore(_) => return true,
+            ignore::Match::Whitelist(_) => return false,
+        }
+    }
+    false
+}
+
+fn is_ignored_by_indexed_gitignore_matchers(
+    matchers: &std::collections::HashMap<std::path::PathBuf, ignore::gitignore::Gitignore>,
+    root: &std::path::Path,
+    path: &std::path::Path,
+    is_dir: bool,
+) -> bool {
+    let mut matcher_dir = if is_dir {
+        path
+    } else {
+        path.parent().unwrap_or(root)
+    };
+
+    loop {
+        if let Some(matcher) = matchers.get(matcher_dir)
+            && matcher
+                .matched_path_or_any_parents(path, is_dir)
+                .is_ignore()
+        {
+            return true;
+        }
+
+        if matcher_dir == root {
+            break;
+        }
+
+        let Some(parent) = matcher_dir.parent() else {
+            break;
+        };
+        matcher_dir = parent;
+    }
+
+    false
+}
+
+fn parent_path_bytes(path: &[u8]) -> &[u8] {
+    path.iter()
+        .rposition(|byte| *byte == b'/')
+        .map(|idx| &path[..idx])
+        .unwrap_or(b"")
+}
+
+/// Whether the clean-tree proof from [`RepoGitIndex::tracked_diff_clean_root`]
+/// additionally depends on git's eol conversion being inert.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EolSensitivity {
+    /// The proof holds under any git config.
+    ConfigIndependent,
+    /// The proof requires `core.autocrlf` to be unset/false and no attribute
+    /// sources outside the repo (`core.attributesFile`, global/system
+    /// attribute files).
+    RequiresInertEolConversion,
+}
+
+/// Whether an entry provably contributes nothing to `git diff HEAD`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DiffSafety {
+    /// Provable under any git config.
+    Safe,
+    /// Provable only if eol conversion is off (`core.autocrlf` unset/false
+    /// and no attribute sources outside the repo): a file with CRLFs whose
+    /// raw bytes match the index oid. Binary content is not exempt — a
+    /// forced `text` attribute from an external attributes file makes git
+    /// eol-convert even binary content.
+    SafeIfEolInert,
+    /// Not provable: content matched only after CRLF normalization, or the
+    /// executable bit changed (content-identical, but `git diff` reports
+    /// mode changes).
+    Unsafe,
 }
 
 enum EntryClassification {
     Clean {
         path: RelativeUnixPathBuf,
         oid: OidHash,
+        /// `Safe` for stat-fresh entries (git trusts the same stat cache);
+        /// verified entries carry the safety of their content match.
+        diff_safe: DiffSafety,
     },
     Modified {
         path: RelativeUnixPathBuf,
@@ -1030,13 +1515,123 @@ enum EntryClassification {
     Deleted {
         path: RelativeUnixPathBuf,
     },
+    Unsupported(UnsupportedGitPath),
+}
+
+/// Content-verify a stat-stale (or racy) index entry against its recorded
+/// oid. Returns `Clean` when the working-tree content still hashes to the
+/// index oid, `Modified` otherwise — including every case we can't verify
+/// (type changes, read errors, exotic modes), which downstream consumers
+/// re-hash or hand to `git diff` exactly as before this optimization.
+fn verify_candidate(
+    entry: &gix_index::Entry,
+    rel_path: RelativeUnixPathBuf,
+    abs_path: &turbopath::AbsoluteSystemPath,
+    fs_meta: &gix_index::fs::Metadata,
+    text_attr: crate::crlf::TextAttr,
+) -> EntryClassification {
+    use gix_index::entry::Mode;
+
+    let modified = |path| EntryClassification::Modified { path };
+
+    let mut hex_buf = [0u8; 40];
+    if hex::encode_to_slice(entry.id.as_bytes(), &mut hex_buf).is_err() {
+        return modified(rel_path);
+    }
+    let index_oid = OidHash::from_hex_buf(hex_buf);
+
+    match entry.mode {
+        Mode::SYMLINK => {
+            if !fs_meta.is_symlink() {
+                return modified(rel_path);
+            }
+            let Ok(target) = std::fs::read_link(abs_path.as_std_path()) else {
+                return modified(rel_path);
+            };
+            #[cfg(unix)]
+            let target_bytes = {
+                use std::os::unix::ffi::OsStrExt;
+                target.as_os_str().as_bytes().to_vec()
+            };
+            #[cfg(not(unix))]
+            let target_bytes = match target.to_str() {
+                Some(s) => s.as_bytes().to_vec(),
+                None => return modified(rel_path),
+            };
+            match crate::crlf::hash_bytes_as_blob(&target_bytes) {
+                Ok(oid) if oid == index_oid => EntryClassification::Clean {
+                    path: rel_path,
+                    oid,
+                    // Symlink blobs are the target string; no filters or
+                    // mode bits can diverge once type and target match.
+                    diff_safe: DiffSafety::Safe,
+                },
+                _ => modified(rel_path),
+            }
+        }
+        Mode::FILE | Mode::FILE_EXECUTABLE => {
+            if !fs_meta.is_file() || fs_meta.is_symlink() {
+                return modified(rel_path);
+            }
+            let Ok((oid, outcome)) = crate::hash_object::with_emfile_retry(|| {
+                crate::crlf::hash_file_for_verification(abs_path, text_attr)
+            }) else {
+                return modified(rel_path);
+            };
+            if oid != index_oid {
+                return modified(rel_path);
+            }
+
+            #[cfg(unix)]
+            let exec_matches = (entry.mode == Mode::FILE_EXECUTABLE) == fs_meta.is_executable();
+            // git ignores the executable bit where the filesystem can't
+            // represent it (core.fileMode=false, the default on Windows).
+            #[cfg(not(unix))]
+            let exec_matches = true;
+
+            // Safety of the raw-byte match against git's checkin conversion
+            // (these flags are only consulted when no `.gitattributes`
+            // exists anywhere — see the constructor and
+            // `tracked_diff_clean_root`):
+            // - `crlf_count == 0`: CRLF-free content is a fixed point of every eol/autocrlf
+            //   conversion — safe under any config. This covers binary files too: git's
+            //   autocrlf/`text=auto` detection refuses to convert binary content, and even
+            //   a forced `text` attribute only rewrites CRLFs, of which there are none.
+            // - content with CRLFs (text or binary): safe only if eol conversion is
+            //   provably inert. Binary content is exempt from autocrlf/`text=auto`, but a
+            //   *forced* `text` attribute (`* text`, as opposed to `text=auto`) makes git
+            //   eol-convert even binary content, and such a rule can come from a
+            //   global/system attributes file that isn't loaded here — deferred to a config
+            //   check at dirty-hash time.
+            let diff_safe = if !exec_matches || outcome.normalized {
+                DiffSafety::Unsafe
+            } else if outcome.crlf_count == 0 {
+                DiffSafety::Safe
+            } else {
+                DiffSafety::SafeIfEolInert
+            };
+
+            EntryClassification::Clean {
+                path: rel_path,
+                oid,
+                diff_safe,
+            }
+        }
+        // Anything exotic (sparse dir entries, unexpected modes) stays
+        // conservative.
+        _ => modified(rel_path),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::{
+        collections::{BTreeMap, HashMap},
+        sync::OnceLock,
+    };
 
-    use turbopath::RelativeUnixPathBuf;
+    use tempfile::TempDir;
+    use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
     use super::*;
 
@@ -1059,14 +1654,61 @@ mod tests {
             .map(|(p, is_delete)| RepoStatusEntry {
                 path: path(p),
                 is_delete,
+                is_untracked: false,
             })
             .collect();
         status_entries.sort_by(|a, b| a.path.cmp(&b.path));
         RepoGitIndex {
             ls_tree_hashes,
             status_entries,
+            unsupported_paths: Vec::new(),
+            untracked_symlinks: Vec::new(),
             untracked_entries_populated: true,
+            diff_skip_blocked: true,
+            eol_sensitive: false,
+            cache_tree_root: None,
         }
+    }
+
+    fn make_unpopulated_index(
+        ls_tree: Vec<(&str, &str)>,
+        status: Vec<(&str, bool)>,
+    ) -> RepoGitIndex {
+        let mut index = make_index(ls_tree, status);
+        index.untracked_entries_populated = false;
+        index
+    }
+
+    fn write_file(root: &std::path::Path, rel_path: &str, contents: &str) {
+        let full_path = root.join(rel_path);
+        std::fs::create_dir_all(full_path.parent().unwrap()).unwrap();
+        std::fs::write(full_path, contents).unwrap();
+    }
+
+    fn test_git_repo(root: &std::path::Path) -> GitRepo {
+        let root = AbsoluteSystemPathBuf::try_from(root).unwrap();
+        GitRepo {
+            root: root.clone(),
+            bin: root,
+            attrs: OnceLock::new(),
+            slowest_files: None,
+        }
+    }
+
+    fn add_gitignore(
+        root: &std::path::Path,
+        dir: &str,
+        patterns: &str,
+        matchers: &mut HashMap<std::path::PathBuf, ignore::gitignore::Gitignore>,
+    ) {
+        let dir = root.join(dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let gitignore = dir.join(".gitignore");
+        std::fs::write(&gitignore, patterns).unwrap();
+
+        let mut builder = ignore::gitignore::GitignoreBuilder::new(&dir);
+        builder.add(&gitignore);
+        matchers.insert(dir, builder.build().unwrap());
     }
 
     #[test]
@@ -1203,9 +1845,9 @@ mod tests {
             ("apps/web/package.json", "ddd"),
             ("apps/web/src/index.ts", "eee"),
             ("apps/web/src/utils.ts", "fff"),
-            ("packages/ui/button.tsx", "ggg"),
-            ("packages/ui/package.json", "hhh"),
-            ("root.json", "iii"),
+            ("packages/ui/button.tsx", "111"),
+            ("packages/ui/package.json", "222"),
+            ("root.json", "333"),
         ];
         let index = make_index(ls_tree_data.clone(), vec![]);
 
@@ -1256,6 +1898,196 @@ mod tests {
         assert_eq!(hashes.len(), 3);
         assert_eq!(*hashes.get(&path("a.ts")).unwrap(), *pad_hex("111"));
         assert!(to_hash.is_empty());
+    }
+
+    #[test]
+    fn test_indexed_gitignore_matchers_consult_ancestors_only() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        let mut matchers = HashMap::new();
+
+        add_gitignore(root, "", "root-ignore\n", &mut matchers);
+        add_gitignore(root, "packages/ui", "dist/\n", &mut matchers);
+        add_gitignore(root, "apps/web", "dist/\n", &mut matchers);
+
+        assert!(is_ignored_by_indexed_gitignore_matchers(
+            &matchers,
+            root,
+            &root.join("root-ignore"),
+            false,
+        ));
+        assert!(is_ignored_by_indexed_gitignore_matchers(
+            &matchers,
+            root,
+            &root.join("packages/ui/dist/index.js"),
+            false,
+        ));
+        assert!(!is_ignored_by_indexed_gitignore_matchers(
+            &matchers,
+            root,
+            &root.join("packages/core/dist/index.js"),
+            false,
+        ));
+    }
+
+    #[test]
+    fn test_walk_candidate_files_respects_prefixes_gitignore_and_empty_dirs() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+
+        write_file(root, ".gitignore", "*.log\nnode_modules/\n");
+        write_file(root, "packages/ui/.gitignore", "output/\n");
+        write_file(root, "packages/ui/src/button.tsx", "button");
+        write_file(root, "packages/ui/output/bundle.js", "ignored ui output");
+        write_file(root, "apps/web/output/bundle.js", "web output");
+        write_file(root, "apps/web/debug.log", "ignored log");
+        write_file(root, "packages/core/index.ts", "outside prefix");
+        std::fs::create_dir_all(root.join("packages/ui/empty")).unwrap();
+
+        let prefixes = [path("packages/ui"), path("apps/web")];
+        let mut candidates = walk_candidate_files(root, Some(&prefixes)).unwrap();
+        candidates.sort();
+
+        assert_eq!(
+            candidates,
+            vec![
+                path(".gitignore"),
+                path("apps/web/output/bundle.js"),
+                path("packages/ui/.gitignore"),
+                path("packages/ui/src/button.tsx"),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_find_untracked_files_uses_dirty_gitignore_status_entries() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        let git = test_git_repo(root);
+
+        write_file(root, ".gitignore", "node_modules/\n");
+        write_file(root, "pkg-a/.gitignore", "dist/\n");
+        write_file(root, "pkg-a/src/index.ts", "tracked");
+        write_file(root, "pkg-a/package.json", "{}");
+        write_file(root, "pkg-a/keep.ts", "untracked");
+        write_file(root, "pkg-a/node_modules/dep/index.js", "ignored by root");
+        write_file(root, "pkg-a/dist/out.js", "ignored by nested");
+
+        let index = make_index(
+            vec![("pkg-a/package.json", "aaa"), ("pkg-a/src/index.ts", "bbb")],
+            vec![(".gitignore", false), ("pkg-a/.gitignore", false)],
+        );
+
+        let prefixes = [path("pkg-a")];
+        let mut untracked = find_untracked_files(
+            &git,
+            &index.ls_tree_hashes,
+            &index.status_entries,
+            Some(&prefixes),
+        )
+        .unwrap()
+        .paths;
+        untracked.sort();
+
+        assert_eq!(untracked, vec![path("pkg-a/keep.ts")]);
+    }
+
+    #[test]
+    fn test_find_untracked_files_nested_whitelist_overrides_parent_ignore() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        let git = test_git_repo(root);
+
+        // Git gives patterns from deeper .gitignore files precedence over
+        // shallower ones: pkg/important.log is NOT ignored.
+        write_file(root, ".gitignore", "*.log\n");
+        write_file(root, "pkg/.gitignore", "!important.log\n");
+        write_file(root, "pkg/package.json", "{}");
+        write_file(root, "pkg/important.log", "untracked, whitelisted");
+        write_file(root, "pkg/debug.log", "ignored by root");
+        write_file(root, "other.log", "ignored by root");
+
+        let index = make_index(
+            vec![("pkg/package.json", "aaa")],
+            vec![(".gitignore", false), ("pkg/.gitignore", false)],
+        );
+
+        let mut untracked =
+            find_untracked_files(&git, &index.ls_tree_hashes, &index.status_entries, None)
+                .unwrap()
+                .paths;
+        untracked.sort();
+
+        assert_eq!(untracked, vec![path("pkg/important.log")]);
+    }
+
+    #[test]
+    fn test_find_untracked_files_catch_all_gitignore_dir() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        let git = test_git_repo(root);
+
+        // fixtures/.gitignore ignores everything inside; nothing under it is
+        // untracked (and the walk can prune the directory outright).
+        write_file(root, "fixtures/.gitignore", "*\n");
+        write_file(root, "fixtures/generated.js", "ignored");
+        write_file(root, "fixtures/deep/nested.js", "ignored");
+        write_file(root, "visible.ts", "untracked");
+
+        let index = make_index(vec![], vec![("fixtures/.gitignore", false)]);
+
+        let mut untracked =
+            find_untracked_files(&git, &index.ls_tree_hashes, &index.status_entries, None)
+                .unwrap()
+                .paths;
+        untracked.sort();
+
+        assert_eq!(untracked, vec![path("visible.ts")]);
+    }
+
+    #[test]
+    fn test_find_untracked_files_catch_all_gitignore_with_whitelist() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        let git = test_git_repo(root);
+
+        // A whitelist alongside a catch-all must prevent pruning: git keeps
+        // fixtures/keep.js untracked.
+        write_file(root, "fixtures/.gitignore", "*\n!keep.js\n");
+        write_file(root, "fixtures/keep.js", "untracked, whitelisted");
+        write_file(root, "fixtures/generated.js", "ignored");
+
+        let index = make_index(vec![], vec![("fixtures/.gitignore", false)]);
+
+        let mut untracked =
+            find_untracked_files(&git, &index.ls_tree_hashes, &index.status_entries, None)
+                .unwrap()
+                .paths;
+        untracked.sort();
+
+        assert_eq!(untracked, vec![path("fixtures/keep.js")]);
+    }
+
+    #[test]
+    fn test_find_untracked_files_ignores_suffix_named_gitignore_files() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        let git = test_git_repo(root);
+
+        // Only files literally named `.gitignore` carry ignore rules. A
+        // tracked template like `template.gitignore` must not be applied.
+        write_file(root, "pkg/template.gitignore", "*.log\n");
+        write_file(root, "pkg/debug.log", "untracked");
+
+        let index = make_index(vec![("pkg/template.gitignore", "aaa")], vec![]);
+
+        let mut untracked =
+            find_untracked_files(&git, &index.ls_tree_hashes, &index.status_entries, None)
+                .unwrap()
+                .paths;
+        untracked.sort();
+
+        assert_eq!(untracked, vec![path("pkg/debug.log")]);
     }
 
     #[test]
@@ -1492,5 +2324,48 @@ mod tests {
                 path("pkg/untracked.ts"),
             ]
         );
+    }
+
+    #[test]
+    fn test_populate_untracked_from_candidates_filters_known_paths_and_is_idempotent() {
+        let mut index = make_unpopulated_index(
+            vec![
+                ("pkg/clean.ts", "aaa"),
+                ("pkg/deleted.ts", "bbb"),
+                ("pkg/sub/clean.ts", "ccc"),
+            ],
+            vec![
+                ("other/dirty.ts", false),
+                ("pkg/deleted.ts", true),
+                ("pkg/dirty.ts", false),
+            ],
+        );
+
+        index.populate_untracked_from_candidates(vec![
+            path("pkg/new-b.ts"),
+            path("pkg/clean.ts"),
+            path("pkg/dirty.ts"),
+            path("pkg/deleted.ts"),
+            path("pkg/new-a.ts"),
+            path("other/new.ts"),
+        ]);
+
+        let (hashes, to_hash) = index.get_package_hashes(&path("pkg")).unwrap();
+        assert_eq!(hashes.len(), 2);
+        assert!(hashes.contains_key(&path("clean.ts")));
+        assert!(hashes.contains_key(&path("sub/clean.ts")));
+        assert!(!hashes.contains_key(&path("deleted.ts")));
+        assert_eq!(
+            to_hash,
+            vec![
+                path("pkg/dirty.ts"),
+                path("pkg/new-a.ts"),
+                path("pkg/new-b.ts"),
+            ]
+        );
+
+        index.populate_untracked_from_candidates(vec![path("pkg/new-c.ts")]);
+        let (_, to_hash_after_second_populate) = index.get_package_hashes(&path("pkg")).unwrap();
+        assert_eq!(to_hash_after_second_populate, to_hash);
     }
 }

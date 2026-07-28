@@ -65,7 +65,7 @@ Glob patterns for files to cache. **If omitted, nothing is cached.**
 
 ```json
 // Next.js
-"outputs": [".next/**", "!.next/cache/**"]
+"outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
 
 // Vite
 "outputs": ["dist/**"]

@@ -82,12 +82,12 @@ impl TelemetryConfig {
         // file and write a new one, otherwise return the error
         let config = match settings {
             Ok(settings) => settings.try_deserialize::<TelemetryConfigContents>()?,
-            Err(ConfigError::FileParse { .. }) => {
+            Err(err @ ConfigError::FileParse { .. }) => {
                 config_path
                     .remove_file()
                     .map_err(|e| ConfigError::Message(e.to_string()))?;
                 write_new_config(&config_path)?;
-                return Err(settings.unwrap_err());
+                return Err(err);
             }
             // Propagate other errors
             Err(err) => return Err(err),

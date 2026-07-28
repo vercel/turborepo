@@ -196,7 +196,7 @@ function renderEvents(
           textAnchor="middle"
           fill={colors.text}
           fontSize={11}
-          fontFamily="var(--font-mono, monospace)"
+          fontFamily="var(--font-geist-mono, monospace)"
         >
           {event.text}
         </text>
@@ -229,7 +229,7 @@ function renderEvents(
             textAnchor="middle"
             fill={colors.text}
             fontSize={11}
-            fontFamily="var(--font-mono, monospace)"
+            fontFamily="var(--font-geist-mono, monospace)"
           >
             {event.text}
           </text>
@@ -263,7 +263,7 @@ function renderEvents(
             fill={colors.text}
             fontSize={10}
             fontWeight={600}
-            fontFamily="var(--font-mono, monospace)"
+            fontFamily="var(--font-geist-mono, monospace)"
           >
             {event.kind.toUpperCase()}
             {event.label ? ` [${event.label}]` : ""}
@@ -395,7 +395,7 @@ export function SequenceDiagram({ diagram }: SequenceDiagramProps) {
                 fill={colors.text}
                 fontSize={12}
                 fontWeight={500}
-                fontFamily="var(--font-mono, monospace)"
+                fontFamily="var(--font-geist-mono, monospace)"
               >
                 {isActor ? `🧑 ${p.label}` : p.label}
               </text>
@@ -425,7 +425,7 @@ export function SequenceDiagram({ diagram }: SequenceDiagramProps) {
                 fill={colors.text}
                 fontSize={12}
                 fontWeight={500}
-                fontFamily="var(--font-mono, monospace)"
+                fontFamily="var(--font-geist-mono, monospace)"
               >
                 {p.label}
               </text>

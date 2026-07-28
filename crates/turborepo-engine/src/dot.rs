@@ -27,12 +27,11 @@ fn render_graph<N>(
     mut display_node: impl FnMut(&N) -> String,
     mut writer: impl io::Write,
 ) -> Result<(), io::Error> {
-    let mut get_node = |i| {
-        display_node(
-            graph
-                .node_weight(i)
-                .expect("node index should exist in graph"),
-        )
+    let mut get_node = |i| -> Result<String, io::Error> {
+        graph
+            .node_weight(i)
+            .map(&mut display_node)
+            .ok_or_else(|| io::Error::other("node index should exist in graph"))
     };
 
     // These are hardcoded writes from the Go side that we just copy
@@ -41,11 +40,11 @@ fn render_graph<N>(
     let mut edges = graph
         .edge_references()
         .map(|edge| {
-            let source = get_node(edge.source());
-            let target = get_node(edge.target());
-            format!("\t\t\"[root] {source}\" -> \"[root] {target}\"")
+            let source = get_node(edge.source())?;
+            let target = get_node(edge.target())?;
+            Ok(format!("\t\t\"[root] {source}\" -> \"[root] {target}\""))
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, io::Error>>()?;
     edges.sort();
 
     writer.write_all(edges.join("\n").as_bytes())?;

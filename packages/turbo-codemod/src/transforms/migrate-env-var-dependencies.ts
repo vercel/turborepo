@@ -5,7 +5,7 @@ import {
   getTurboConfigs,
   resolveTurboConfigPath
 } from "@turbo/utils";
-import type { Pipeline, SchemaV1 } from "@turbo/types";
+import type { PipelineV1, SchemaV1 } from "@turbo/types";
 import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { TransformerResults } from "../runner";
 import type { Transformer, TransformerArgs } from "../types";
@@ -60,7 +60,7 @@ export function migrateDependencies({
   return { env, deps };
 }
 
-export function migratePipeline(pipeline: Pipeline) {
+export function migratePipeline(pipeline: PipelineV1) {
   const { deps: dependsOn, env } = migrateDependencies({
     env: pipeline.env,
     deps: pipeline.dependsOn

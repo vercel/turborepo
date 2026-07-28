@@ -1,0 +1,18 @@
+---
+source: crates/turborepo/tests/final_hash_contract.rs
+expression: contract
+---
+[override]
+override-values#override-values-task hash=ca440a0f61cee7ea external=459c029558afe716 framework= envMode=strict
+
+[inherited]
+missing-workspace-config#missing-workspace-config-task hash=924463dcfeefce9e external=459c029558afe716 framework= envMode=strict
+
+[override-with-deps]
+override-values#override-values-task-with-deps hash=9b51bda96ea87896 external=459c029558afe716 framework= envMode=strict
+
+[config-change-initial]
+config-change#config-change-task hash=4fbfb44c77d14468 external=459c029558afe716 framework= envMode=strict
+
+[config-change-updated]
+config-change#config-change-task hash=01e59b7f88f8a211 external=459c029558afe716 framework= envMode=strict

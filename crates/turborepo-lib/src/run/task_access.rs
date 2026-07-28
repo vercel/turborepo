@@ -12,8 +12,7 @@ use turborepo_cache::AsyncCache;
 use turborepo_gitignore::ensure_turbo_is_gitignored;
 use turborepo_scm::SCM;
 use turborepo_task_executor::TaskAccessProvider;
-// Re-export from turborepo-turbo-json
-pub use turborepo_turbo_json::TASK_ACCESS_CONFIG_PATH;
+use turborepo_turbo_json::TASK_ACCESS_CONFIG_PATH;
 use turborepo_unescape::UnescapedString;
 
 use super::ConfigCache;
@@ -138,8 +137,44 @@ impl TaskAccessTraceFile {
             }
         }
 
+        for output in &self.outputs {
+            let output = output.strip_prefix('!').unwrap_or(output.as_str());
+            if is_windows_absolute_path(output) {
+                turborepo_log::warn(
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::TaskAccess),
+                    format!(
+                        "skipping automatic task caching - output generated outside of repo root \
+                         ({output})"
+                    ),
+                )
+                .emit();
+                return false;
+            }
+
+            let path = AbsoluteSystemPathBuf::new(output.to_string())
+                .unwrap_or_else(|_| AbsoluteSystemPathBuf::from_unknown(repo_root, output));
+            let relation = path.relation_to_path(repo_root);
+            if relation == PathRelation::Parent || relation == PathRelation::Divergent {
+                turborepo_log::warn(
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::TaskAccess),
+                    format!(
+                        "skipping automatic task caching - output generated outside of repo root \
+                         ({output})"
+                    ),
+                )
+                .emit();
+                return false;
+            }
+        }
+
         true
     }
+}
+
+fn is_windows_absolute_path(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    bytes.first() == Some(&b'\\')
+        || matches!(bytes, [drive, b':', ..] if drive.is_ascii_alphabetic())
 }
 
 #[derive(Clone)]
@@ -279,8 +314,13 @@ impl TaskAccess {
         }
 
         if let Some(config_cache) = &self.config_cache {
-            let traced_config =
-                RawTurboJson::from_task_access_trace(&self.trace_by_task.lock().unwrap());
+            let traced_config = {
+                let trace_by_task = self
+                    .trace_by_task
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                RawTurboJson::from_task_access_trace(&trace_by_task)
+            };
             if traced_config.is_some() {
                 // convert the traced_config to json and write the file to disk
                 let traced_config_json = serde_json::to_string_pretty(&traced_config)?;
@@ -311,5 +351,71 @@ impl TaskAccessProvider for TaskAccess {
 
     async fn save(&self) {
         TaskAccess::save(self).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::tempdir;
+
+    use super::*;
+
+    fn trace_with_outputs(outputs: Vec<UnescapedString>) -> TaskAccessTraceFile {
+        TaskAccessTraceFile {
+            accessed: TaskAccessTraceAccess {
+                network: false,
+                file_paths: Vec::new(),
+                env_var_keys: Vec::new(),
+            },
+            outputs,
+        }
+    }
+
+    #[test]
+    fn can_cache_allows_generated_outputs_inside_repo() {
+        let temp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let trace = trace_with_outputs(vec!["dist/**".into(), "apps/web/.next/**".into()]);
+
+        assert!(trace.can_cache(&repo_root));
+    }
+
+    #[test]
+    fn can_cache_rejects_accessed_file_outside_repo() {
+        let repo = tempdir().unwrap();
+        let outside = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo.path()).unwrap();
+        let outside_file = outside.path().join("secret.txt");
+        std::fs::write(&outside_file, b"secret").unwrap();
+        let trace = TaskAccessTraceFile {
+            accessed: TaskAccessTraceAccess {
+                network: false,
+                file_paths: vec![outside_file.to_string_lossy().into_owned().into()],
+                env_var_keys: Vec::new(),
+            },
+            outputs: Vec::new(),
+        };
+
+        assert!(!trace.can_cache(&repo_root));
+    }
+
+    #[test]
+    fn can_cache_rejects_generated_absolute_output_outside_repo() {
+        let repo = tempdir().unwrap();
+        let outside = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo.path()).unwrap();
+        let outside_output = outside.path().join("dist");
+        let trace = trace_with_outputs(vec![outside_output.to_string_lossy().into_owned().into()]);
+
+        assert!(!trace.can_cache(&repo_root));
+    }
+
+    #[test]
+    fn can_cache_rejects_generated_relative_output_that_traverses_outside_repo() {
+        let temp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let trace = trace_with_outputs(vec!["../outside/**".into()]);
+
+        assert!(!trace.can_cache(&repo_root));
     }
 }

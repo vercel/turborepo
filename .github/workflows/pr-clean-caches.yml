@@ -1,4 +1,8 @@
 name: Cleanup branch caches
+
+env:
+  TURBO_TELEMETRY_MESSAGE_DISABLED: "1"
+
 on:
   pull_request:
     types: [opened, closed, reopened, synchronize]
@@ -16,7 +20,7 @@ permissions:
 jobs:
   cleanup:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     if: ${{ github.ref != 'refs/heads/main' }}
     steps:
       - name: Cleanup

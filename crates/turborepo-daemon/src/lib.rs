@@ -20,6 +20,7 @@
 //! `_tx`/`_rx` suffixes indicate that this variable is respectively a `Sender`
 //! or `Receiver`.
 
+#![allow(unused_features, reason = "impl_trait_in_assoc_type is actually used")]
 #![feature(impl_trait_in_assoc_type)]
 #![deny(clippy::all)]
 #![allow(clippy::needless_lifetimes)]
@@ -33,14 +34,14 @@ mod default_timeout_layer;
 pub mod endpoint;
 mod server;
 
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 pub use client::{DaemonClient, DaemonError};
 pub use connector::{DaemonConnector, DaemonConnectorError};
 pub use server::{CloseReason, FileWatching, TurboGrpcService};
 use sha2::{Digest, Sha256};
 use tokio::sync::broadcast;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError};
 use turborepo_repository::package_graph::PackageName;
 
 /// Trait for watching package changes. Implemented by consumers who need
@@ -55,11 +56,10 @@ pub trait PackageChangesWatcher: Send + Sync {
 /// Arguments passed to a PackageChangesWatcher factory
 pub struct PackageChangesWatcherArgs {
     pub repo_root: AbsoluteSystemPathBuf,
-    pub file_events: turborepo_filewatch::OptionalWatch<
-        broadcast::Receiver<Result<notify::Event, turborepo_filewatch::NotifyError>>,
-    >,
+    pub file_events: turborepo_filewatch::WatchSource,
     pub hash_watcher: std::sync::Arc<turborepo_filewatch::hash_watcher::HashWatcher>,
     pub custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    pub allow_no_package_manager: bool,
 }
 
 /// Events that indicate package changes in the repository.
@@ -91,15 +91,60 @@ pub struct Paths {
 
 fn repo_hash(repo_root: &AbsoluteSystemPath) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(repo_root.to_string().as_bytes());
+    hasher.update(repo_hash_input(repo_root).as_bytes());
     hex::encode(&hasher.finalize()[..8])
 }
 
-fn daemon_file_root(repo_hash: &str) -> AbsoluteSystemPathBuf {
-    AbsoluteSystemPathBuf::new(std::env::temp_dir().to_str().expect("UTF-8 path"))
-        .expect("temp dir is valid")
+#[cfg(windows)]
+fn repo_hash_input(repo_root: &AbsoluteSystemPath) -> String {
+    let path = repo_root.to_string();
+    let mut chars = path.chars();
+
+    match (chars.next(), chars.next()) {
+        (Some(drive), Some(':')) if drive.is_ascii_alphabetic() => {
+            format!("{}:{}", drive.to_ascii_uppercase(), chars.as_str())
+        }
+        _ => path,
+    }
+}
+
+#[cfg(not(windows))]
+fn repo_hash_input(repo_root: &AbsoluteSystemPath) -> String {
+    repo_root.to_string()
+}
+
+#[cfg(unix)]
+fn daemon_file_root(repo_hash: &str) -> Result<AbsoluteSystemPathBuf, PathError> {
+    daemon_file_root_from_temp_dir(repo_hash, std::env::temp_dir())
+}
+
+#[cfg(unix)]
+fn daemon_file_root_from_temp_dir(
+    repo_hash: &str,
+    temp_dir: PathBuf,
+) -> Result<AbsoluteSystemPathBuf, PathError> {
+    let uid = unsafe { libc::geteuid() };
+    Ok(AbsoluteSystemPathBuf::try_from(temp_dir)?
+        .join_component(format!("turbod-{uid}").as_str())
+        .join_component(repo_hash))
+}
+
+#[cfg(windows)]
+fn daemon_file_root(repo_hash: &str) -> Result<AbsoluteSystemPathBuf, PathError> {
+    let root = std::env::var("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| std::env::temp_dir());
+
+    Ok(AbsoluteSystemPathBuf::try_from(root)?
         .join_component("turbod")
-        .join_component(repo_hash)
+        .join_component(repo_hash))
+}
+
+#[cfg(not(any(unix, windows)))]
+fn daemon_file_root(repo_hash: &str) -> Result<AbsoluteSystemPathBuf, PathError> {
+    Ok(AbsoluteSystemPathBuf::try_from(std::env::temp_dir())?
+        .join_component("turbod")
+        .join_component(repo_hash))
 }
 
 fn daemon_log_file_and_folder(
@@ -113,18 +158,36 @@ fn daemon_log_file_and_folder(
 }
 
 impl Paths {
-    pub fn from_repo_root(repo_root: &AbsoluteSystemPath) -> Self {
+    pub fn from_repo_root(repo_root: &AbsoluteSystemPath) -> Result<Self, PathError> {
         let repo_hash = repo_hash(repo_root);
-        let daemon_root = daemon_file_root(&repo_hash);
+        let daemon_root = daemon_file_root(&repo_hash)?;
         let (log_file, log_folder) = daemon_log_file_and_folder(repo_root, &repo_hash);
-        Self {
+        Ok(Self {
             pid_file: daemon_root.join_component("turbod.pid"),
             lock_file: daemon_root.join_component("turbod.lock"),
             sock_file: daemon_root.join_component("turbod.sock"),
             lsp_pid_file: daemon_root.join_component("lsp.pid"),
             log_file,
             log_folder,
-        }
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(unix)]
+    #[test]
+    fn daemon_file_root_rejects_non_utf8_temp_dir_without_panicking() {
+        use std::{ffi::OsString, os::unix::ffi::OsStringExt, path::PathBuf};
+
+        use turbopath::PathError;
+
+        let temp_dir = PathBuf::from(OsString::from_vec(b"/tmp/turbo-\xFF".to_vec()));
+
+        assert!(matches!(
+            super::daemon_file_root_from_temp_dir("repo-hash", temp_dir),
+            Err(PathError::FromPathBufError(_))
+        ));
     }
 }
 
@@ -157,6 +220,15 @@ pub mod proto {
                 PackageManager::Pnpm6 => Self::Pnpm6,
                 PackageManager::Pnpm9 => Self::Pnpm9,
                 PackageManager::Bun => Self::Bun,
+                // The wire format does not carry nub's underlying lockfile
+                // manager. Clients must call [`PackageManager::with_resolved_nub_lockfile`]
+                // after deserializing to re-resolve from disk.
+                PackageManager::Nub => Self::Nub {
+                    lockfile: Box::new(Self::Npm),
+                },
+                PackageManager::Aube => Self::Aube {
+                    lockfile: Box::new(Self::Npm),
+                },
             }
         }
     }
@@ -171,6 +243,8 @@ pub mod proto {
                 turborepo_repository::package_manager::PackageManager::Pnpm6 => Self::Pnpm6,
                 turborepo_repository::package_manager::PackageManager::Pnpm9 => Self::Pnpm9,
                 turborepo_repository::package_manager::PackageManager::Bun => Self::Bun,
+                turborepo_repository::package_manager::PackageManager::Nub { .. } => Self::Nub,
+                turborepo_repository::package_manager::PackageManager::Aube { .. } => Self::Aube,
             }
         }
     }
@@ -193,5 +267,22 @@ mod test {
 
         assert_eq!(hash, expected_hash);
         assert_eq!(hash.len(), 16);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn repo_hash_normalizes_drive_letter_case() {
+        let lower = AbsoluteSystemPathBuf::new("c:\\tmp\\turborepo").unwrap();
+        let upper = AbsoluteSystemPathBuf::new("C:\\tmp\\turborepo").unwrap();
+
+        assert_eq!(repo_hash(&lower), repo_hash(&upper));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn repo_hash_input_preserves_non_drive_paths() {
+        let repo_root = AbsoluteSystemPathBuf::new(r"\\server\share\turborepo").unwrap();
+
+        assert_eq!(super::repo_hash_input(&repo_root), repo_root.to_string());
     }
 }

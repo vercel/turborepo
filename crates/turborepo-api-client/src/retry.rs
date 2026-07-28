@@ -79,7 +79,10 @@ pub(crate) async fn make_retryable_request(
         sleep(std::time::Duration::from_secs(sleep_period)).await;
     }
 
-    Err(Error::TooManyFailures(Box::new(last_error.unwrap())))
+    match last_error {
+        Some(error) => Err(Error::TooManyFailures(Box::new(error))),
+        None => Err(Error::RetryExhaustedWithoutError),
+    }
 }
 
 /// A retry strategy. Note that error statuses and TOO_MANY_REQUESTS are always

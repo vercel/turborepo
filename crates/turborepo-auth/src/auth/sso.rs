@@ -6,6 +6,7 @@ use std::{
 
 use tracing::warn;
 use turborepo_api_client::{Client, TokenClient};
+use turborepo_types::SecretString;
 use turborepo_ui::{ColorConfig, start_spinner};
 use url::Url;
 
@@ -15,7 +16,11 @@ use super::login::{
 };
 use crate::{
     Error, LoginOptions, Token,
-    auth::{ExistingTokenSource, classify_existing_vercel_token, is_vercel},
+    auth::{
+        ExistingTokenSource, classify_existing_vercel_token, ensure_non_vercel_redirect_allowed,
+        ensure_trusted_vercel_api, generate_csrf_state, is_vercel,
+        should_attempt_vercel_token_refresh, should_skip_existing_token_for_login,
+    },
     device_flow::TokenSet,
     error, ui,
 };
@@ -136,7 +141,8 @@ async fn classify_existing_sso_token_with_recovery<T: Client + TokenClient>(
 /// 4. Validates that the resulting token has access to the requested team.
 ///
 /// For non-Vercel (self-hosted):
-/// 1. Opens browser to `{login_url}/api/auth/sso?teamId=...&next=localhost`.
+/// 1. Opens browser to
+///    `{login_url}/api/auth/sso?teamId=...&next=localhost&state=...`.
 /// 2. Receives token via localhost redirect.
 /// 3. Verifies the SSO token with the API.
 ///
@@ -150,32 +156,36 @@ pub async fn sso_login<T: Client + TokenClient>(
         api_client,
         color_config,
         login_url: login_url_configuration,
+        login_url_source,
+        api_url_source,
         sso_team,
         existing_token,
         force,
         sso_login_callback_port,
+        // SSO login validates team access via `is_valid_sso` instead.
+        linked_team_id: _,
+        linked_team_slug: _,
     } = *options;
 
     let sso_team = sso_team.ok_or(Error::EmptySSOTeam)?;
     let is_vercel_login = is_vercel(login_url_configuration);
+    if is_vercel_login {
+        ensure_trusted_vercel_api(api_client)?;
+    }
 
     // Check if token exists first. Must be there for the user and contain the
     // sso_team passed into this function.
     // For Vercel logins, --force is silently ignored.
     if !force || is_vercel_login {
         if let Some(token) = existing_token {
-            let token_source = if is_vercel_login {
-                classify_existing_vercel_token(token)?
-            } else {
-                ExistingTokenSource::Other
-            };
+            let token_source = classify_existing_vercel_token(token)?;
+            let skip_existing_token = should_skip_existing_token_for_login(
+                token_source,
+                is_vercel_login,
+                login_url_configuration,
+            );
 
-            if is_vercel_login
-                && matches!(
-                    token_source,
-                    ExistingTokenSource::TurboConfig | ExistingTokenSource::LegacyAuth
-                )
-            {
+            if is_vercel_login && should_attempt_vercel_token_refresh(token_source) {
                 match crate::auth::get_token_with_refresh_for_login().await {
                     Ok(Some(token_secret)) => {
                         if classify_existing_vercel_token(token_secret.expose())?
@@ -202,7 +212,7 @@ pub async fn sso_login<T: Client + TokenClient>(
                         warn!("Failed to load existing token for SSO, proceeding: {e}");
                     }
                 }
-            } else if token_source != ExistingTokenSource::LegacyAuth {
+            } else if !skip_existing_token && token_source != ExistingTokenSource::LegacyAuth {
                 let token_action = if is_vercel_login {
                     classify_existing_sso_token_with_recovery(
                         Token::existing(token.to_string()),
@@ -270,11 +280,18 @@ pub async fn sso_login<T: Client + TokenClient>(
     }
 
     let port = sso_login_callback_port.unwrap_or(DEFAULT_PORT);
-    let verification_token = sso_redirect(login_url_configuration, sso_team, port).await?;
+    let verification_token = sso_redirect(
+        api_client,
+        login_url_configuration,
+        login_url_source,
+        api_url_source,
+        sso_team,
+        port,
+    )
+    .await?;
 
     // Verify the SSO token with the API
-    let secret_verification_token =
-        turborepo_api_client::SecretString::new(verification_token.clone());
+    let secret_verification_token = SecretString::new(verification_token.clone());
 
     let token_name = make_token_name()?;
 
@@ -296,20 +313,29 @@ pub async fn sso_login<T: Client + TokenClient>(
 /// Non-Vercel SSO: open browser to `{login_url}/api/auth/sso` with
 /// `teamId`, `mode`, and `next` params, then wait for localhost redirect.
 /// This preserves the original SSO flow for self-hosted remote cache servers.
-async fn sso_redirect(
+async fn sso_redirect<T: Client>(
+    api_client: &T,
     login_url_configuration: &str,
+    login_url_source: Option<turborepo_types::ConfigurationSource>,
+    api_url_source: Option<turborepo_types::ConfigurationSource>,
     sso_team: &str,
     port: u16,
 ) -> Result<String, Error> {
-    let listener = TcpListener::bind(format!("{DEFAULT_HOST_NAME}:{port}"))
-        .map_err(Error::CallbackListenerFailed)?;
-    let port = listener.local_addr().unwrap().port();
-    let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{port}");
-
     let mut login_url =
         Url::parse(login_url_configuration).map_err(|_| error::Error::LoginUrlCannotBeABase {
             value: login_url_configuration.to_string(),
         })?;
+
+    ensure_non_vercel_redirect_allowed(&login_url, login_url_source, api_client, api_url_source)?;
+
+    let listener = TcpListener::bind(format!("{DEFAULT_HOST_NAME}:{port}"))
+        .map_err(Error::CallbackListenerFailed)?;
+    let port = listener
+        .local_addr()
+        .map_err(Error::CallbackListenerFailed)?
+        .port();
+    let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{port}");
+    let state = generate_csrf_state();
 
     login_url
         .path_segments_mut()
@@ -322,7 +348,8 @@ async fn sso_redirect(
         .query_pairs_mut()
         .append_pair("teamId", sso_team)
         .append_pair("mode", "login")
-        .append_pair("next", &redirect_url);
+        .append_pair("next", &redirect_url)
+        .append_pair("state", &state);
 
     println!(">>> Opening browser to {login_url}");
     let spinner = start_spinner("Waiting for your authorization...");
@@ -333,7 +360,7 @@ async fn sso_redirect(
     }
 
     let verification_token =
-        tokio::task::spawn_blocking(move || wait_for_sso_redirect(listener, None))
+        tokio::task::spawn_blocking(move || wait_for_sso_redirect(listener, &state))
             .await
             .map_err(|_| Error::CallbackTaskFailed)??;
 
@@ -346,13 +373,8 @@ async fn sso_redirect(
 /// other auxiliary requests before the real redirect arrives — looping
 /// prevents those from consuming the single-shot listener.
 ///
-/// If `expected_state` is provided, validates the CSRF state param. This is
-/// only used by tests right now; non-Vercel flows skip state validation since
-/// the remote server may not support it.
-fn wait_for_sso_redirect(
-    listener: TcpListener,
-    expected_state: Option<&str>,
-) -> Result<String, Error> {
+/// Validates the CSRF state param before accepting a callback token.
+fn wait_for_sso_redirect(listener: TcpListener, expected_state: &str) -> Result<String, Error> {
     listener
         .set_nonblocking(false)
         .map_err(Error::CallbackListenerFailed)?;
@@ -404,36 +426,31 @@ fn wait_for_sso_redirect(
             continue;
         }
 
-        // Validate CSRF state parameter if expected (Vercel flow only)
-        if let Some(expected) = expected_state {
-            match params.get("state") {
-                Some(returned_state) if returned_state == expected => {}
-                _ => {
-                    warn!("SSO redirect state parameter mismatch or missing");
-                    return Err(Error::CsrfStateMismatch);
-                }
+        match params.get("state") {
+            Some(returned_state) if returned_state == expected_state => {}
+            _ => {
+                warn!("SSO redirect state parameter mismatch or missing");
+                return Err(Error::CsrfStateMismatch);
             }
         }
 
         // Determine redirect location (matching vc's getNotificationUrl behavior)
         let redirect_location = if params.contains_key("loginError") {
-            let mut redirect_url =
-                Url::parse("https://vercel.com/notifications/cli-login-failed").expect("valid URL");
+            let mut redirect_url = Url::parse("https://vercel.com/notifications/cli-login-failed")?;
             for (k, v) in &params {
                 redirect_url.query_pairs_mut().append_pair(k, v);
             }
             redirect_url.to_string()
         } else if params.contains_key("ssoEmail") {
             let mut redirect_url =
-                Url::parse("https://vercel.com/notifications/cli-login-incomplete")
-                    .expect("valid URL");
+                Url::parse("https://vercel.com/notifications/cli-login-incomplete")?;
             for (k, v) in &params {
                 redirect_url.query_pairs_mut().append_pair(k, v);
             }
             redirect_url.to_string()
         } else {
-            let mut redirect_url = Url::parse("https://vercel.com/notifications/cli-login-success")
-                .expect("valid URL");
+            let mut redirect_url =
+                Url::parse("https://vercel.com/notifications/cli-login-success")?;
             if let Some(email) = params.get("email") {
                 redirect_url.query_pairs_mut().append_pair("email", email);
             }
@@ -496,8 +513,12 @@ mod tests {
 
     impl MockApiClient {
         fn new() -> Self {
+            Self::with_base_url("https://vercel.com/api")
+        }
+
+        fn with_base_url(base_url: &str) -> Self {
             Self {
-                base_url: String::new(),
+                base_url: base_url.to_string(),
             }
         }
     }
@@ -505,7 +526,7 @@ mod tests {
     impl Client for MockApiClient {
         async fn get_user(
             &self,
-            token: &turborepo_api_client::SecretString,
+            token: &SecretString,
         ) -> turborepo_api_client::Result<UserResponse> {
             if token.expose().is_empty() {
                 return Err(MockApiError::EmptyToken.into());
@@ -522,7 +543,7 @@ mod tests {
         }
         async fn get_teams(
             &self,
-            token: &turborepo_api_client::SecretString,
+            token: &SecretString,
         ) -> turborepo_api_client::Result<TeamsResponse> {
             if token.expose().is_empty() {
                 return Err(MockApiError::EmptyToken.into());
@@ -541,7 +562,7 @@ mod tests {
         }
         async fn get_team(
             &self,
-            token: &turborepo_api_client::SecretString,
+            token: &SecretString,
             team_id: &str,
         ) -> turborepo_api_client::Result<Option<Team>> {
             if token.expose() == "needs-sso-token" || team_id == "needs-sso-team" {
@@ -562,7 +583,7 @@ mod tests {
         }
         async fn verify_sso_token(
             &self,
-            token: &turborepo_api_client::SecretString,
+            token: &SecretString,
             _: &str,
         ) -> turborepo_api_client::Result<VerifiedSsoUser> {
             Ok(VerifiedSsoUser {
@@ -583,7 +604,7 @@ mod tests {
     impl TokenClient for MockApiClient {
         async fn get_metadata(
             &self,
-            token: &turborepo_api_client::SecretString,
+            token: &SecretString,
         ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
             if token.expose() == "stale-token" {
                 return Err(turborepo_api_client::Error::InvalidToken {
@@ -603,10 +624,7 @@ mod tests {
                 client_id: None,
             })
         }
-        async fn delete_token(
-            &self,
-            _token: &turborepo_api_client::SecretString,
-        ) -> turborepo_api_client::Result<()> {
+        async fn delete_token(&self, _token: &SecretString) -> turborepo_api_client::Result<()> {
             Ok(())
         }
     }
@@ -619,10 +637,14 @@ mod tests {
         let options = LoginOptions {
             color_config: &color_config,
             login_url: "https://api.vercel.com",
+            login_url_source: None,
+            api_url_source: None,
             api_client: &api_client,
             existing_token: None,
             sso_team: None,
             force: false,
+            linked_team_id: None,
+            linked_team_slug: None,
             sso_login_callback_port: None,
         };
 
@@ -638,16 +660,77 @@ mod tests {
         let options = LoginOptions {
             color_config: &color_config,
             login_url: "https://api.vercel.com",
+            login_url_source: None,
+            api_url_source: None,
             api_client: &api_client,
             existing_token: Some("existing-token"),
             sso_team: Some("my-team"),
             force: false,
+            linked_team_id: None,
+            linked_team_slug: None,
             sso_login_callback_port: None,
         };
 
         let (result, token_set) = sso_login(&options).await.unwrap();
         assert_matches!(result, Token::Existing(ref token) if token.expose() == "existing-token");
         assert!(token_set.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_vercel_sso_rejects_untrusted_api_url() {
+        let color_config = turborepo_ui::ColorConfig::new(false);
+        let api_client = MockApiClient::with_base_url("https://attacker.test/api");
+
+        let options = LoginOptions {
+            color_config: &color_config,
+            login_url: "https://vercel.com",
+            login_url_source: None,
+            api_url_source: None,
+            api_client: &api_client,
+            existing_token: Some("existing-token"),
+            sso_team: Some("my-team"),
+            force: false,
+            linked_team_id: None,
+            linked_team_slug: None,
+            sso_login_callback_port: None,
+        };
+
+        let result = sso_login(&options).await;
+
+        assert_matches!(
+            result,
+            Err(Error::UntrustedVercelApiUrl { ref api_url })
+                if api_url == "https://attacker.test/api"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_non_vercel_sso_rejects_repo_controlled_login_url() {
+        let color_config = turborepo_ui::ColorConfig::new(false);
+        let api_client = MockApiClient::new();
+
+        let options = LoginOptions {
+            login_url: "https://attacker.test",
+            login_url_source: Some(turborepo_types::ConfigurationSource::TurboJson),
+            api_url_source: None,
+            api_client: &api_client,
+            existing_token: None,
+            sso_team: Some("my-team"),
+            force: false,
+            sso_login_callback_port: None,
+            linked_team_id: None,
+            linked_team_slug: None,
+            color_config: &color_config,
+        };
+
+        let result = sso_login(&options).await;
+
+        assert_matches!(
+            result,
+            Err(Error::UntrustedNonVercelLoginUrlSource {
+                url_source: Some(turborepo_types::ConfigurationSource::TurboJson)
+            })
+        );
     }
 
     #[tokio::test]
@@ -709,13 +792,13 @@ mod tests {
             }
         });
 
-        let result = wait_for_sso_redirect(listener, Some(state));
+        let result = wait_for_sso_redirect(listener, state);
         handle.join().unwrap();
         assert_eq!(result.unwrap(), "my-sso-token");
     }
 
     #[test]
-    fn test_wait_for_sso_redirect_happy_path_without_state() {
+    fn test_wait_for_sso_redirect_rejects_missing_state() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
 
@@ -725,9 +808,9 @@ mod tests {
             stream.write_all(request.as_bytes()).unwrap();
         });
 
-        let result = wait_for_sso_redirect(listener, None);
+        let result = wait_for_sso_redirect(listener, "test-state");
         handle.join().unwrap();
-        assert_eq!(result.unwrap(), "my-sso-token");
+        assert_matches!(result, Err(Error::CsrfStateMismatch));
     }
 
     #[test]
@@ -756,7 +839,7 @@ mod tests {
             }
         });
 
-        let result = wait_for_sso_redirect(listener, Some(state));
+        let result = wait_for_sso_redirect(listener, state);
         handle.join().unwrap();
         assert_eq!(result.unwrap(), "my-sso-token");
     }
@@ -773,9 +856,9 @@ mod tests {
             stream.write_all(request.as_bytes()).unwrap();
         });
 
-        let result = wait_for_sso_redirect(listener, Some("correct-state"));
+        let result = wait_for_sso_redirect(listener, "correct-state");
         handle.join().unwrap();
-        assert!(result.is_err());
+        assert_matches!(result, Err(Error::CsrfStateMismatch));
     }
 
     #[test]
@@ -795,7 +878,7 @@ mod tests {
             }
         });
 
-        let result = wait_for_sso_redirect(listener, Some(state));
+        let result = wait_for_sso_redirect(listener, state);
         handle.join().unwrap();
         assert!(result.is_err());
     }

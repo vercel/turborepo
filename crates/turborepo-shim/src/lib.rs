@@ -196,11 +196,12 @@ mod tests {
     }
 
     #[test]
-    fn test_default_config_provider() {
+    fn test_default_config_provider() -> Result<(), Box<dyn std::error::Error>> {
         let provider = DefaultConfigProvider;
         let fake_root =
-            AbsoluteSystemPathBuf::new(if cfg!(windows) { "C:\\repo" } else { "/repo" }).unwrap();
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { "C:\\repo" } else { "/repo" })?;
         let config = provider.get_config(&fake_root, None);
         assert!(!config.no_update_notifier());
+        Ok(())
     }
 }

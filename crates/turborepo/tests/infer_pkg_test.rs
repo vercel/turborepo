@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+
 mod common;
 
 use common::{run_turbo, setup};
@@ -18,7 +20,7 @@ fn get_packages(output: &std::process::Output) -> Vec<String> {
 #[test]
 fn test_all_packages() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["build", "--dry=json"]);
     assert!(output.status.success());
@@ -28,7 +30,7 @@ fn test_all_packages() {
 #[test]
 fn test_glob_filter_packages_dir() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(
         tempdir.path(),
@@ -41,7 +43,7 @@ fn test_glob_filter_packages_dir() {
 #[test]
 fn test_name_glob_filter() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let output = run_turbo(tempdir.path(), &["build", "--dry=json", "-F", "*-app"]);
     assert!(output.status.success());
@@ -51,7 +53,7 @@ fn test_name_glob_filter() {
 #[test]
 fn test_infer_from_packages_subdir() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     // Run from packages/ with a relative filter
     let packages_dir = tempdir.path().join("packages");
@@ -63,7 +65,7 @@ fn test_infer_from_packages_subdir() {
 #[test]
 fn test_filter_sibling_directory() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let packages_dir = tempdir.path().join("packages");
     let output = run_turbo(&packages_dir, &["build", "--dry=json", "-F", "../apps/*"]);
@@ -74,7 +76,7 @@ fn test_filter_sibling_directory() {
 #[test]
 fn test_infer_from_package_dir() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     // Run from packages/util — should infer util as the package
     let util_dir = tempdir.path().join("packages/util");
@@ -86,7 +88,7 @@ fn test_infer_from_package_dir() {
 #[test]
 fn test_cwd_overrides_inference() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let util_dir = tempdir.path().join("packages/util");
     let output = run_turbo(&util_dir, &["build", "--cwd=../..", "--dry=json"]);
@@ -98,7 +100,7 @@ fn test_cwd_overrides_inference() {
 #[test]
 fn test_glob_filter_from_package_dir() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let util_dir = tempdir.path().join("packages/util");
     let output = run_turbo(&util_dir, &["build", "--dry=json", "-F", "../*"]);
@@ -109,7 +111,7 @@ fn test_glob_filter_from_package_dir() {
 #[test]
 fn test_name_glob_from_package_dir() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     let util_dir = tempdir.path().join("packages/util");
     let output = run_turbo(&util_dir, &["build", "--dry=json", "-F", "*nother"]);

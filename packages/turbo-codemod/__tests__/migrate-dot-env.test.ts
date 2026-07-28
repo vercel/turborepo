@@ -1,6 +1,8 @@
+import path from "node:path";
 import { setupTestFixtures } from "@turbo/test-utils";
 import { type Schema } from "@turbo/types";
 import { describe, it, expect } from "@jest/globals";
+import { ensureDirSync, writeJsonSync } from "fs-extra";
 import { transformer } from "../src/transforms/migrate-dot-env";
 
 describe("migrate-dot-env", () => {
@@ -125,6 +127,48 @@ describe("migrate-dot-env", () => {
         },
       }
     `);
+  });
+
+  it("does not migrate workspace configs outside the root", () => {
+    const { root, readJson, write } = useFixture({
+      fixture: "workspace-configs"
+    });
+    const outsideWorkspace = path.join(root, "..", "outside-workspace");
+    const outsideConfig = {
+      extends: ["//"],
+      tasks: {
+        build: {
+          dotEnv: [".env"]
+        }
+      }
+    };
+    ensureDirSync(outsideWorkspace);
+    writeJsonSync(path.join(outsideWorkspace, "turbo.json"), outsideConfig);
+    write(
+      "package.json",
+      JSON.stringify(
+        {
+          private: true,
+          workspaces: ["apps/*", "packages/*", "../outside-workspace"],
+          packageManager: "yarn@1.22.19"
+        },
+        null,
+        2
+      )
+    );
+
+    const result = transformer({
+      root,
+      options: { force: false, dryRun: false, print: false }
+    });
+
+    expect(readJson(path.join(outsideWorkspace, "turbo.json"))).toStrictEqual(
+      outsideConfig
+    );
+    expect(result.fatalError).toBeUndefined();
+    expect(result.changes).not.toHaveProperty(
+      "../outside-workspace/turbo.json"
+    );
   });
 
   it("migrates turbo.json dot-env - dry", () => {

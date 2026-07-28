@@ -185,12 +185,6 @@ pub enum UIMode {
     #[schemars(rename = "stream-with-experimental-timestamps")]
     #[value(name = "stream-with-experimental-timestamps")]
     StreamWithTimestamps,
-    /// Use the web user interface.
-    /// Note: This feature is undocumented, experimental, and not meant to be
-    /// used. It may change or be removed at any time.
-    #[schemars(skip)]
-    #[ts(skip)]
-    Web,
 }
 
 impl fmt::Display for UIMode {
@@ -199,7 +193,6 @@ impl fmt::Display for UIMode {
             UIMode::Tui => write!(f, "tui"),
             UIMode::Stream => write!(f, "stream"),
             UIMode::StreamWithTimestamps => write!(f, "stream-with-experimental-timestamps"),
-            UIMode::Web => write!(f, "web"),
         }
     }
 }
@@ -207,17 +200,6 @@ impl fmt::Display for UIMode {
 impl UIMode {
     pub fn use_tui(&self) -> bool {
         matches!(self, Self::Tui)
-    }
-
-    /// Returns true if the UI mode has a sender,
-    /// i.e. web or tui but not stream
-    pub fn has_sender(&self) -> bool {
-        matches!(self, Self::Tui | Self::Web)
-    }
-
-    /// Returns true if this UI mode should include timestamps in the prefix
-    pub fn should_include_timestamps(&self) -> bool {
-        matches!(self, Self::StreamWithTimestamps)
     }
 }
 
@@ -349,6 +331,17 @@ pub enum GraphOpts {
     File(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum ConfigurationSource {
+    Cli,
+    Environment,
+    OverrideEnvironment,
+    LocalConfig,
+    GlobalAuth,
+    GlobalConfig,
+    TurboJson,
+}
+
 /// API client configuration options.
 ///
 /// Contains all settings needed to connect to the Turborepo remote cache API,
@@ -357,6 +350,8 @@ pub enum GraphOpts {
 pub struct APIClientOpts {
     /// Base URL for the Turborepo API
     pub api_url: String,
+    /// Source that provided the API URL, if explicitly configured.
+    pub api_url_source: Option<ConfigurationSource>,
     /// Request timeout in seconds
     pub timeout: u64,
     /// Upload-specific timeout in seconds
@@ -372,6 +367,8 @@ pub struct APIClientOpts {
     pub team_slug: Option<String>,
     /// Login URL for authentication flow
     pub login_url: String,
+    /// Source that provided the login URL, if explicitly configured.
+    pub login_url_source: Option<ConfigurationSource>,
     /// Whether to use preflight requests
     pub preflight: bool,
     /// Port for SSO login callback (non-Vercel flows only)
@@ -537,12 +534,40 @@ pub struct IncrementalPartition {
 /// missing `inputs` key), affected detection treats all files in the
 /// package as inputs. This matches turbo's existing hashing behavior
 /// where an omitted `inputs` key means "hash everything."
-#[derive(Debug, PartialEq, Clone, Eq, Hash, Default)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub struct TaskInputs {
     /// Glob patterns for input files
     pub globs: Vec<String>,
     /// Set when $TURBO_DEFAULT$ is in inputs
     pub default: bool,
+    /// Glob patterns for files that should be hashed after task dependencies
+    /// complete.
+    pub jit_globs: Vec<String>,
+    /// Set when structured JIT inputs include default package files.
+    pub jit_default: bool,
+    pub dependency_outputs: Option<DependencyOutputsInput>,
+    /// Whether eager file hashing should run. This is false for JIT-only
+    /// inputs.
+    pub eager: bool,
+}
+
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
+pub struct DependencyOutputsInput {
+    pub from: Option<Vec<String>>,
+    pub globs: Vec<String>,
+}
+
+impl Default for TaskInputs {
+    fn default() -> Self {
+        Self {
+            globs: Vec::new(),
+            default: false,
+            jit_globs: Vec::new(),
+            jit_default: false,
+            dependency_outputs: None,
+            eager: true,
+        }
+    }
 }
 
 impl TaskInputs {
@@ -551,6 +576,10 @@ impl TaskInputs {
         Self {
             globs,
             default: false,
+            jit_globs: Vec::new(),
+            jit_default: false,
+            dependency_outputs: None,
+            eager: true,
         }
     }
 
@@ -558,6 +587,18 @@ impl TaskInputs {
     pub fn with_default(mut self, default: bool) -> Self {
         self.default = default;
         self
+    }
+
+    pub fn has_jit_inputs(&self) -> bool {
+        self.jit_default || !self.jit_globs.is_empty()
+    }
+
+    pub fn has_dependency_outputs(&self) -> bool {
+        self.dependency_outputs.is_some()
+    }
+
+    pub fn has_deferred_inputs(&self) -> bool {
+        self.has_jit_inputs() || self.has_dependency_outputs()
     }
 }
 
@@ -755,6 +796,85 @@ mod tests {
     }
 }
 
+/// Configuration for the experimental `experimentalCI` task key.
+///
+/// The key accepts either a boolean toggle or an object with arbitrary
+/// options. Turborepo does not interpret the contents; the value is parsed
+/// and carried through task resolution so that external tooling can read
+/// the fully resolved configuration (e.g. via `turbo query`).
+#[derive(Debug, PartialEq, Clone, Serialize)]
+#[serde(untagged)]
+pub enum ExperimentalCIConfig {
+    Enabled(bool),
+    Options(serde_json::Map<String, serde_json::Value>),
+}
+
+// `serde_json::Value` is not `Eq` because JSON numbers may be floats, but
+// values parsed from JSON text are never NaN, so equality is reflexive in
+// practice.
+impl Eq for ExperimentalCIConfig {}
+
+impl biome_deserialize::Deserializable for ExperimentalCIConfig {
+    fn deserialize(
+        value: &impl biome_deserialize::DeserializableValue,
+        name: &str,
+        diagnostics: &mut Vec<biome_deserialize::DeserializationDiagnostic>,
+    ) -> Option<Self> {
+        value.deserialize(ExperimentalCIConfigVisitor, name, diagnostics)
+    }
+}
+
+struct ExperimentalCIConfigVisitor;
+
+impl biome_deserialize::DeserializationVisitor for ExperimentalCIConfigVisitor {
+    type Output = ExperimentalCIConfig;
+
+    const EXPECTED_TYPE: biome_deserialize::VisitableType =
+        biome_deserialize::VisitableType::BOOL.union(biome_deserialize::VisitableType::MAP);
+
+    fn visit_bool(
+        self,
+        value: bool,
+        _range: biome_deserialize::TextRange,
+        _name: &str,
+        _diagnostics: &mut Vec<biome_deserialize::DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        Some(ExperimentalCIConfig::Enabled(value))
+    }
+
+    fn visit_map(
+        self,
+        members: impl Iterator<
+            Item = Option<(
+                impl biome_deserialize::DeserializableValue,
+                impl biome_deserialize::DeserializableValue,
+            )>,
+        >,
+        _range: biome_deserialize::TextRange,
+        _name: &str,
+        diagnostics: &mut Vec<biome_deserialize::DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        let entries = members
+            .filter_map(|entry| {
+                let (key, value) = entry?;
+                let key = <String as biome_deserialize::Deserializable>::deserialize(
+                    &key,
+                    "",
+                    diagnostics,
+                )?;
+                let value = <serde_json::Value as biome_deserialize::Deserializable>::deserialize(
+                    &value,
+                    "",
+                    diagnostics,
+                )?;
+                Some((key, value))
+            })
+            .collect();
+
+        Some(ExperimentalCIConfig::Options(entries))
+    }
+}
+
 /// Constructed from a RawTaskDefinition, this represents the fully resolved
 /// configuration for a task.
 #[derive(Debug, PartialEq, Clone, Eq)]
@@ -812,6 +932,29 @@ pub struct TaskDefinition {
     // tool-managed incremental artifacts to persist across runs via remote
     // cache, enabling faster re-execution on cache misses.
     pub incremental: Option<Vec<IncrementalPartition>>,
+
+    // Experimental CI configuration. Not interpreted by turborepo; carried
+    // through resolution so tooling can read it (e.g. via `turbo query`).
+    pub experimental_ci: Option<ExperimentalCIConfig>,
+
+    // The task's resolved `command` override, when one applies to this
+    // package. `None` means the toolchain resolves the command as usual;
+    // per-toolchain map defaults have already been fanned out to their
+    // packages by the engine builder.
+    pub command: Option<TaskCommandOverride>,
+}
+
+/// A task's resolved `command` override.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TaskCommandOverride {
+    /// Explicitly no command: the task is a no-op for this package.
+    OptOut,
+    /// Replaces the process argv the toolchain would have constructed: program
+    /// first, arguments after, executed directly with no shell. The toolchain
+    /// still owns the working directory and serial grouping, but its derived
+    /// inputs, outputs, and hash environment do not apply; turbo.json is
+    /// authoritative for the arbitrary command's task-level hash wiring.
+    Argv(Vec<String>),
 }
 
 impl Default for TaskDefinition {
@@ -831,6 +974,8 @@ impl Default for TaskDefinition {
             env_mode: Default::default(),
             with: Default::default(),
             incremental: Default::default(),
+            experimental_ci: Default::default(),
+            command: Default::default(),
         }
     }
 }
@@ -861,8 +1006,10 @@ pub fn task_log_filename(task_name: &str) -> String {
 /// assert_eq!(path.as_str(), ".turbo/turbo-build.log");
 /// ```
 pub fn sharable_workspace_relative_log_file(task_name: &str) -> RelativeUnixPathBuf {
-    let log_dir =
-        RelativeUnixPathBuf::new(LOG_DIR).expect("LOG_DIR should be a valid relative unix path");
+    let log_dir = match RelativeUnixPathBuf::new(LOG_DIR) {
+        Ok(log_dir) => log_dir,
+        Err(_) => unreachable!("LOG_DIR is a valid relative unix path"),
+    };
     log_dir.join_component(&task_log_filename(task_name))
 }
 
@@ -924,8 +1071,10 @@ pub trait TaskDefinitionExt {
 
 impl TaskDefinitionExt for TaskDefinition {
     fn workspace_relative_log_file(task_name: &str) -> AnchoredSystemPathBuf {
-        let log_dir = AnchoredSystemPath::new(LOG_DIR)
-            .expect("LOG_DIR should be a valid AnchoredSystemPathBuf");
+        let log_dir = match AnchoredSystemPath::new(LOG_DIR) {
+            Ok(log_dir) => log_dir,
+            Err(_) => unreachable!("LOG_DIR is a valid anchored system path"),
+        };
         log_dir.join_component(&task_log_filename(task_name))
     }
 
@@ -940,6 +1089,9 @@ impl TaskDefinitionExt for TaskDefinition {
         workspace_dir: &AnchoredSystemPath,
     ) -> TaskOutputs {
         let make_glob_repo_relative = |glob: &str| -> String {
+            if workspace_dir.as_str().is_empty() {
+                return glob.to_owned();
+            }
             let mut repo_relative_glob = workspace_dir.to_string();
             repo_relative_glob.push(std::path::MAIN_SEPARATOR);
             repo_relative_glob.push_str(glob);
@@ -1129,6 +1281,10 @@ pub struct HashTrackerCacheHitMetadata {
 pub trait TaskDefinitionHashInfo {
     /// Returns the list of environment variable patterns for this task
     fn env(&self) -> &[String];
+    /// Returns the task's resolved `command` override, if any. Participates
+    /// in the task hash: changing what a task runs must invalidate its
+    /// cached results.
+    fn command(&self) -> Option<&TaskCommandOverride>;
     /// Returns the pass-through environment variables
     fn pass_through_env(&self) -> Option<&[String]>;
     /// Returns the task inputs configuration
@@ -1142,6 +1298,10 @@ pub trait TaskDefinitionHashInfo {
 impl TaskDefinitionHashInfo for TaskDefinition {
     fn env(&self) -> &[String] {
         &self.env
+    }
+
+    fn command(&self) -> Option<&TaskCommandOverride> {
+        self.command.as_ref()
     }
 
     fn pass_through_env(&self) -> Option<&[String]> {

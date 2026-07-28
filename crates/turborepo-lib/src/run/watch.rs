@@ -23,7 +23,8 @@ use turborepo_filewatch::{
 use turborepo_repository::package_graph::PackageName;
 use turborepo_run_cache::{OutputWatcher, OutputWatcherError};
 use turborepo_scm::SCM;
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_scope::target_selector::InvalidSelectorError;
+use turborepo_signals::{listeners::get_signal, ShutdownReason, SignalHandler, SubscriberGuard};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{sender::UISender, LogSinks};
 
@@ -33,7 +34,7 @@ use crate::{
     engine::{EngineExt, TaskNode},
     get_version, opts,
     package_changes_watcher::PackageChangesWatcher,
-    run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
+    run::{self, builder::RunBuilder, Run},
 };
 
 #[derive(Debug)]
@@ -84,6 +85,8 @@ struct FileWatching {
     _package_watcher: Arc<PackageWatcher>,
     // Kept alive to maintain the watcher background task.
     _package_changes_watcher: PackageChangesWatcher,
+    // Used by startup-timeout diagnostics to report the slowest-to-hash files.
+    hash_watcher: Arc<HashWatcher>,
 }
 
 /// Adapts `GlobWatcher` to the `OutputWatcher` trait so it can be passed
@@ -149,8 +152,9 @@ pub struct WatchClient {
     base: CommandBase,
     telemetry: CommandEventBuilder,
     handler: SignalHandler,
+    shutdown_guard: Option<SubscriberGuard>,
     ui_sender: Option<UISender>,
-    ui_handle: Option<JoinHandle<Result<(), turborepo_ui::Error>>>,
+    ui_handle: Option<JoinHandle<()>>,
     experimental_write_cache: bool,
     query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
 }
@@ -158,6 +162,37 @@ pub struct WatchClient {
 struct RunHandle {
     stopper: run::RunStopper,
     run_task: JoinHandle<Result<i32, run::Error>>,
+}
+
+/// Format the slowest-to-hash files reported by the [`HashWatcher`] into a
+/// leading-newline hint for a stalled-startup message, with one file per line
+/// since the paths are long and hard to scan inline, e.g.:
+///
+/// ```text
+///  Slowest files to hash:
+///   foo.tmp (12.3s, still hashing)
+///   bar (4.1s)
+/// ```
+///
+/// Returns an empty string when nothing notable was recorded.
+fn slowest_files_hint(slowest: &[turborepo_scm::SlowestFile]) -> String {
+    use std::fmt::Write as _;
+
+    // Cap how many we list so the message stays readable.
+    const MAX_LISTED: usize = 3;
+    if slowest.is_empty() {
+        return String::new();
+    }
+    let mut hint = String::from(" Slowest files to hash:");
+    for f in slowest.iter().take(MAX_LISTED) {
+        let secs = f.duration.as_secs_f64();
+        if f.in_flight {
+            let _ = write!(hint, "\n  {} ({secs:.1}s, still hashing)", f.path);
+        } else {
+            let _ = write!(hint, "\n  {} ({secs:.1}s)", f.path);
+        }
+    }
+    hint
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -187,10 +222,11 @@ pub enum Error {
         span: SourceSpan,
     },
     #[error(
-        "Timed out waiting for the file watcher to become ready. Try running `turbo daemon clean` \
-         and retrying."
+        "Timed out after {0}s waiting for the file watcher to become ready. This usually means a \
+         large file is slowing the initial hash.{1}\nRemove or .gitignore it, or raise the limit \
+         with TURBO_WATCH_STARTUP_TIMEOUT (seconds)."
     )]
-    FileWatchingTimeout,
+    FileWatchingTimeout(u64, String),
     #[error("Failed to subscribe to signal handler. Shutting down.")]
     NoSignalHandler,
     #[error("Watch interrupted due to signal.")]
@@ -237,34 +273,51 @@ impl WatchClient {
         let watcher = Arc::new(FileSystemWatcher::new_with_default_cookie_dir(
             &base.repo_root,
         )?);
-        let recv = watcher.watch();
+        let source = watcher.source();
         let cookie_writer = CookieWriter::new(
             watcher.cookie_dir(),
             Duration::from_millis(100),
-            recv.clone(),
+            source.clone(),
         );
         let glob_watcher = Arc::new(GlobWatcher::new(
             base.repo_root.clone(),
             cookie_writer.clone(),
-            recv.clone(),
+            source.clone(),
         ));
         let package_watcher = Arc::new(
-            PackageWatcher::new(base.repo_root.clone(), recv.clone(), cookie_writer)
-                .map_err(|e| Error::PackageWatcher(format!("{e:?}")))?,
+            PackageWatcher::new(
+                base.repo_root.clone(),
+                source.clone(),
+                cookie_writer,
+                base.opts().repo_opts.allow_no_package_manager,
+            )
+            .map_err(|e| Error::PackageWatcher(format!("{e:?}")))?,
         );
         let scm = SCM::new(&base.repo_root);
         let hash_watcher = Arc::new(HashWatcher::new(
             base.repo_root.clone(),
             package_watcher.watch_discovery(),
-            recv.clone(),
+            source,
             scm,
         ));
+        // The watcher builds its own package graph; register the same
+        // toolchains a run would so it watches the same package set.
+        let mut extra_toolchains: Vec<
+            std::sync::Arc<dyn turborepo_repository::toolchain::Toolchain>,
+        > = Vec::new();
+        if crate::run::builder::cargo_enabled(&base.opts().future_flags) {
+            extra_toolchains.push(turborepo_repository::cargo::CargoToolchain::new(
+                base.repo_root.clone(),
+            ));
+        }
         let package_changes_watcher = PackageChangesWatcher::new(
             base.repo_root.clone(),
-            recv,
-            hash_watcher,
+            watcher.source(),
+            hash_watcher.clone(),
             custom_turbo_json_path,
             base.opts().run_opts.single_package,
+            base.opts().repo_opts.allow_no_package_manager,
+            extra_toolchains,
         );
 
         // Subscribe before building the Run so we don't miss the initial
@@ -276,6 +329,7 @@ impl WatchClient {
             glob_watcher: glob_watcher.clone(),
             _package_watcher: package_watcher,
             _package_changes_watcher: package_changes_watcher,
+            hash_watcher,
         };
 
         let output_watcher: Arc<dyn OutputWatcher> =
@@ -317,7 +371,7 @@ impl WatchClient {
 
         sinks.disable_for_tui();
 
-        let (ui_sender, ui_handle) = run.start_ui()?.unzip();
+        let (ui_sender, ui_handle) = run.start_ui(sinks.terminal.clone())?.unzip();
 
         if let Some(UISender::Tui(ref tui_sender)) = ui_sender {
             sinks.tui.connect(tui_sender.clone());
@@ -345,6 +399,7 @@ impl WatchClient {
             output_watcher,
             package_change_events,
             handler,
+            shutdown_guard: None,
             telemetry,
             experimental_write_cache,
             background_stoppers: Vec::new(),
@@ -364,13 +419,49 @@ impl WatchClient {
 
         // Wait for the initial Rediscover event, which signals that the file
         // watcher is ready. The PackageChangesWatcher emits this on startup.
-        let initial_event = tokio::time::timeout(std::time::Duration::from_secs(10), events.recv())
-            .await
-            .map_err(|_| Error::FileWatchingTimeout)?;
-        let initial_event = match initial_event {
-            Ok(event) => event,
-            Err(broadcast::error::RecvError::Closed) => return Err(Error::PackageChangeClosed),
-            Err(broadcast::error::RecvError::Lagged(_)) => return Err(Error::PackageChangeLagged),
+        // The initial scan (recursive watch setup + package graph build +
+        // hashing) can be slow when a large file or tree lives in the repo, so
+        // poll with a short per-attempt timeout and keep retrying up to a
+        // generous cap rather than failing on the first stall. The channel
+        // stays alive between attempts, so no events are lost.
+        const STARTUP_ATTEMPT: Duration = Duration::from_secs(10);
+        // Shared with the package-changes subscriber's inner wait so the inner
+        // timeout is never shorter than this outer cap.
+        let startup_cap =
+            Duration::from_secs(crate::package_changes_watcher::startup_timeout_secs());
+        let started = std::time::Instant::now();
+        let mut warned = false;
+        let initial_event = loop {
+            match tokio::time::timeout(STARTUP_ATTEMPT, events.recv()).await {
+                Ok(Ok(event)) => break event,
+                Ok(Err(broadcast::error::RecvError::Closed)) => {
+                    return Err(Error::PackageChangeClosed)
+                }
+                Ok(Err(broadcast::error::RecvError::Lagged(_))) => {
+                    return Err(Error::PackageChangeLagged)
+                }
+                Err(_) => {
+                    if started.elapsed() >= startup_cap {
+                        return Err(Error::FileWatchingTimeout(
+                            startup_cap.as_secs(),
+                            slowest_files_hint(&self._watching.hash_watcher.slowest_files()),
+                        ));
+                    }
+                    if !warned {
+                        warned = true;
+                        turborepo_log::warn(
+                            turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                            format!(
+                                "File watcher still initializing after {}s, likely a large file \
+                                 is slowing the initial hash.{}\nRetrying...",
+                                STARTUP_ATTEMPT.as_secs(),
+                                slowest_files_hint(&self._watching.hash_watcher.slowest_files())
+                            ),
+                        )
+                        .emit();
+                    }
+                }
+            }
         };
 
         let signal_subscriber = self.handler.subscribe().ok_or(Error::NoSignalHandler)?;
@@ -405,7 +496,9 @@ impl WatchClient {
             loop {
                 notify_run.notified().await;
                 let some_changed_packages = {
-                    let mut guard = pending_changes.lock().expect("poisoned lock");
+                    let mut guard = pending_changes
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
                     (!guard.is_empty()).then(|| std::mem::take(guard.deref_mut()))
                 };
 
@@ -415,8 +508,11 @@ impl WatchClient {
                     // builds of the same package and stale cache-hit signals.
                     debug!(?changed_packages, "processing changed packages");
                     match changed_packages {
-                        ChangedPackages::Some { ref packages, .. } => {
-                            let impacted = self.stop_impacted_tasks(packages).await;
+                        ChangedPackages::Some {
+                            ref packages,
+                            ref changed_files,
+                        } => {
+                            let impacted = self.stop_impacted_tasks(packages, changed_files).await;
                             if let ChangedPackages::Some {
                                 ref mut packages, ..
                             } = changed_packages
@@ -464,19 +560,15 @@ impl WatchClient {
             }
         };
 
-        select! {
+        let shutdown_guard = select! {
             biased;
-            _ = signal_subscriber.listen() => {
-                tracing::info!("shutting down");
-                Err(Error::SignalInterrupt)
-            }
-            result = event_fut => {
-                result
-            }
-            run_result = run_fut => {
-                run_result
-            }
-        }
+            guard = signal_subscriber.listen() => guard.ok(),
+            result = event_fut => return result,
+            run_result = run_fut => return run_result,
+        };
+        self.shutdown_guard = shutdown_guard;
+        tracing::info!("shutting down");
+        Err(Error::SignalInterrupt)
     }
 
     #[instrument(skip(changed_packages))]
@@ -485,7 +577,11 @@ impl WatchClient {
             PackageChangeEvent::Package {
                 name,
                 changed_files: files,
-            } => match changed_packages.lock().expect("poisoned lock").deref_mut() {
+            } => match changed_packages
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .deref_mut()
+            {
                 ChangedPackages::All => {
                     // Already rediscovering everything, ignore
                 }
@@ -498,41 +594,129 @@ impl WatchClient {
                 }
             },
             PackageChangeEvent::Rediscover => {
-                *changed_packages.lock().expect("poisoned lock") = ChangedPackages::All;
+                *changed_packages
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = ChangedPackages::All;
             }
         }
     }
 
     pub async fn shutdown(&mut self) {
+        let force_shutdown_timeout = Run::force_shutdown_timeout();
+        let graceful_shutdown = self.handler.shutdown_reason() == Some(ShutdownReason::Signal);
+        if graceful_shutdown {
+            Run::emit_shutdown_started_once(
+                self.run.shutdown_started_emitted.as_ref(),
+                force_shutdown_timeout,
+            );
+        }
+
+        let mut stoppers = self.background_stoppers.drain(..).collect::<Vec<_>>();
+        for stopper in &stoppers {
+            if graceful_shutdown {
+                stopper
+                    .shutdown(
+                        force_shutdown_timeout,
+                        Some(self.handler.subscribe_signals()),
+                    )
+                    .await;
+            } else {
+                stopper.stop().await;
+            }
+        }
+
+        for handle in self.active_runs.drain(..) {
+            let RunHandle { stopper, run_task } = handle;
+            if graceful_shutdown {
+                stopper
+                    .shutdown(
+                        force_shutdown_timeout,
+                        Some(self.handler.subscribe_signals()),
+                    )
+                    .await;
+            } else {
+                stopper.stop().await;
+            }
+            let _ = run_task.await;
+            stoppers.push(stopper);
+        }
+
+        if stoppers
+            .iter()
+            .any(|stopper| stopper.cache_writes_enabled())
+        {
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
+                "Finishing writing to cache...",
+            )
+            .emit();
+        }
+
+        for stopper in &stoppers {
+            stopper
+                .shutdown_cache(
+                    self.handler.shutdown_reason(),
+                    force_shutdown_timeout,
+                    Some(self.handler.subscribe_signals()),
+                )
+                .await;
+        }
+
         if let Some(sender) = &self.ui_sender {
             sender.stop().await;
         }
-        for stopper in self.background_stoppers.drain(..) {
-            stopper.stop().await;
+        // Render errors are logged by the watchdog inside `start_ui`.
+        if let Some(handle) = self.ui_handle.take() {
+            handle.await.ok();
         }
-        for handle in self.active_runs.drain(..) {
-            handle.stopper.stop().await;
-            let _ = handle.run_task.await;
-        }
+        self.shutdown_guard.take();
     }
 
-    async fn stop_impacted_tasks(&self, pkgs: &HashSet<PackageName>) -> HashSet<PackageName> {
+    async fn stop_impacted_tasks(
+        &self,
+        pkgs: &HashSet<PackageName>,
+        changed_files: &HashSet<AnchoredSystemPathBuf>,
+    ) -> HashSet<PackageName> {
         let engine = self.run.engine();
 
-        let impacted_nodes = engine.tasks_impacted_by_packages(pkgs);
+        let (task_ids, impacted_packages) =
+            if self.run.opts().future_flags.watch_using_task_inputs && !changed_files.is_empty() {
+                let filter = crate::task_change_detector::resolve_watch_task_filter(
+                    engine,
+                    self.run.pkg_dep_graph(),
+                    self.run.repo_root(),
+                    changed_files,
+                    &self.run.root_turbo_json().global_deps,
+                );
 
-        let task_ids: Vec<_> = impacted_nodes
-            .iter()
-            .filter_map(|node| match node {
-                TaskNode::Task(task_id) => Some(task_id.clone()),
-                TaskNode::Root => None,
-            })
-            .collect();
+                let impacted_packages: HashSet<PackageName> = filter
+                    .execution_tasks
+                    .iter()
+                    .map(|task_id| PackageName::from(task_id.package()))
+                    .collect();
 
-        let impacted_packages: HashSet<PackageName> = task_ids
-            .iter()
-            .map(|task_id| PackageName::from(task_id.package()))
-            .collect();
+                (
+                    filter.execution_tasks.into_iter().collect::<Vec<_>>(),
+                    impacted_packages,
+                )
+            } else {
+                let impacted_nodes = engine.tasks_impacted_by_packages(pkgs);
+
+                let task_ids: Vec<_> = impacted_nodes
+                    .iter()
+                    .filter_map(|node| match node {
+                        TaskNode::Task(task_id) => Some(task_id.clone()),
+                        TaskNode::Root => None,
+                    })
+                    .collect();
+
+                let impacted_packages: HashSet<PackageName> = task_ids
+                    .iter()
+                    .map(|task_id| PackageName::from(task_id.package()))
+                    .collect();
+
+                (task_ids, impacted_packages)
+            };
 
         debug!(
             ?pkgs,
@@ -923,5 +1107,51 @@ mod test {
             }
             ChangedPackages::All => panic!("expected Some"),
         }
+    }
+
+    #[test]
+    fn slowest_files_hint_empty_when_nothing_recorded() {
+        assert_eq!(super::slowest_files_hint(&[]), "");
+    }
+
+    #[test]
+    fn slowest_files_hint_lists_files_and_flags_in_flight() {
+        use std::time::Duration;
+
+        use turbopath::RelativeUnixPathBuf;
+        use turborepo_scm::SlowestFile;
+
+        fn path(s: &str) -> RelativeUnixPathBuf {
+            RelativeUnixPathBuf::new(s).unwrap()
+        }
+
+        let files = vec![
+            SlowestFile {
+                path: path("big.tmp"),
+                duration: Duration::from_millis(12300),
+                in_flight: true,
+            },
+            SlowestFile {
+                path: path("bar"),
+                duration: Duration::from_millis(4100),
+                in_flight: false,
+            },
+        ];
+        let hint = super::slowest_files_hint(&files);
+        assert!(hint.contains("big.tmp"), "got: {hint}");
+        assert!(hint.contains("still hashing"), "got: {hint}");
+        assert!(hint.contains("bar"), "got: {hint}");
+        assert!(hint.contains("12.3s"), "got: {hint}");
+        // One file per line: each listed file should be on its own line.
+        assert!(
+            hint.lines()
+                .any(|l| l.contains("big.tmp") && !l.contains("bar")),
+            "files should be on separate lines, got: {hint:?}"
+        );
+        assert!(
+            hint.lines()
+                .any(|l| l.contains("bar") && !l.contains("big.tmp")),
+            "files should be on separate lines, got: {hint:?}"
+        );
     }
 }

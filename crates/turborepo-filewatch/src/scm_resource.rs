@@ -33,11 +33,9 @@ impl SCMResource {
     }
 
     pub async fn acquire_scm(&self) -> SCMPermit<'_> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .expect("semaphore should not be closed");
+        let Ok(_permit) = self.semaphore.acquire().await else {
+            unreachable!("semaphore should not be closed")
+        };
         SCMPermit {
             scm: &self.scm,
             _permit,

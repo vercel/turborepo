@@ -70,16 +70,23 @@
 //! series in backends like Datadog that charge per unique series.
 //!
 //! **Always attached** (bounded cardinality):
-//! - `turbo.run.exit_code`, `turbo.version`, `turbo.scm.branch`
+//! - `turbo.run.exit_code`, `turbo.version`
 //! - `turbo.task.name`, `turbo.task.package`, `turbo.task.command`
-//! - `turbo.task.cache_status`, `turbo.task.cache_source`,
-//!   `turbo.task.exit_code`
+//! - `turbo.task.cache_status`
 //!
-//! **Gated by `run_attributes`** (unbounded — opt-in):
-//! - `turbo.run.id` — unique KSUID per invocation
-//! - `turbo.scm.revision` — full Git SHA, unique per commit
+//! **Attached when available** (bounded cardinality, omitted when the
+//! underlying value is missing):
+//! - `turbo.scm.branch`: omitted when SCM branch detection fails
+//! - `turbo.task.cache_source`: omitted on cache misses
+//! - `turbo.task.exit_code`: omitted when the task did not execute (for
+//!   example, on a cache hit)
 //!
-//! **Gated by `task_attributes`** (unbounded — opt-in):
+//! **Gated by `run_attributes`** (unbounded, opt-in):
+//! - `turbo.run.id`: unique KSUID per invocation
+//! - `turbo.scm.revision`: full Git SHA, unique per commit (also omitted when
+//!   SCM revision detection fails)
+//!
+//! **Gated by `task_attributes`** (unbounded, opt-in):
 //! - `turbo.task.id`, `turbo.task.hash`, `turbo.task.external_inputs_hash`
 
 use std::{
@@ -102,6 +109,24 @@ use opentelemetry_semantic_conventions::resource::SERVICE_NAME;
 use thiserror::Error;
 use tonic::metadata::{MetadataKey, MetadataMap, MetadataValue};
 use tracing::debug;
+
+const DURATION_HISTOGRAM_BOUNDARIES_MS: &[f64] = &[
+    100.0,
+    500.0,
+    1_000.0,
+    2_500.0,
+    5_000.0,
+    10_000.0,
+    15_000.0,
+    30_000.0,
+    60_000.0,
+    120_000.0,
+    300_000.0,
+    600_000.0,
+    900_000.0,
+    1_800_000.0,
+    3_600_000.0,
+];
 
 /// Protocol supported by the OTLP exporter.
 ///
@@ -530,6 +555,8 @@ fn create_instruments(meter: &Meter) -> Instruments {
     let run_duration = meter
         .f64_histogram("turbo.run.duration_ms")
         .with_description("Turborepo run duration in milliseconds")
+        .with_unit("ms")
+        .with_boundaries(DURATION_HISTOGRAM_BOUNDARIES_MS.to_vec())
         .build();
     let run_attempted = meter
         .u64_counter("turbo.run.tasks.attempted")
@@ -546,6 +573,8 @@ fn create_instruments(meter: &Meter) -> Instruments {
     let task_duration = meter
         .f64_histogram("turbo.task.duration_ms")
         .with_description("Task execution duration in milliseconds")
+        .with_unit("ms")
+        .with_boundaries(DURATION_HISTOGRAM_BOUNDARIES_MS.to_vec())
         .build();
     let task_cache = meter
         .u64_counter("turbo.task.cache.events")
@@ -743,6 +772,19 @@ mod tests {
             }
             _ => panic!("Expected InvalidHeader error"),
         }
+    }
+
+    #[test]
+    fn test_duration_histogram_boundaries_cover_build_durations() {
+        assert!(
+            DURATION_HISTOGRAM_BOUNDARIES_MS
+                .windows(2)
+                .all(|w| w[0] < w[1])
+        );
+        assert!(DURATION_HISTOGRAM_BOUNDARIES_MS.contains(&10_000.0));
+        assert!(DURATION_HISTOGRAM_BOUNDARIES_MS.contains(&120_000.0));
+        assert!(DURATION_HISTOGRAM_BOUNDARIES_MS.contains(&300_000.0));
+        assert_eq!(DURATION_HISTOGRAM_BOUNDARIES_MS.last(), Some(&3_600_000.0));
     }
 
     #[test]

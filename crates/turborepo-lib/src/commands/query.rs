@@ -97,7 +97,7 @@ pub(crate) fn escape_graphql_string(s: &str) -> String {
             '\u{0008}' => out.push_str("\\b"),
             '\u{000C}' => out.push_str("\\f"),
             c if c.is_control() => {
-                write!(out, "\\u{:04X}", c as u32).unwrap();
+                let _ = write!(out, "\\u{:04X}", c as u32);
             }
             c => out.push(c),
         }
@@ -136,7 +136,7 @@ impl AffectedArgs {
         self.push_package_filter(&mut args);
         if !args.is_empty() {
             let joined = args.join(", ");
-            write!(query, "({joined})").unwrap();
+            let _ = write!(query, "({joined})");
         }
         query.push_str(" { items { name path reason { __typename } } length } }");
         query
@@ -156,7 +156,7 @@ impl AffectedArgs {
         self.push_package_filter(&mut args);
         if !args.is_empty() {
             let joined = args.join(", ");
-            write!(query, "({joined})").unwrap();
+            let _ = write!(query, "({joined})");
         }
         query.push_str(
             " { items { name fullName package { name } reason { __typename } } length } }",
@@ -456,6 +456,25 @@ mod tests {
         assert!(q.starts_with("{ affectedPackages"), "{q}");
         assert!(q.contains(r#"base: "main""#), "{q}");
         assert!(q.contains(r#"head: "HEAD""#), "{q}");
+    }
+
+    #[test]
+    fn ref_arg_uses_env_when_cli_missing() {
+        assert_eq!(AffectedArgs::ref_arg(None, Some("main")), Some("main"));
+    }
+
+    #[test]
+    fn ref_arg_ignores_empty_env() {
+        assert_eq!(AffectedArgs::ref_arg(None, Some("")), None);
+    }
+
+    #[test]
+    fn ref_arg_prefers_cli_over_env() {
+        let cli = "HEAD".to_string();
+        assert_eq!(
+            AffectedArgs::ref_arg(Some(&cli), Some("main")),
+            Some("HEAD")
+        );
     }
 
     // -- escaping in context --

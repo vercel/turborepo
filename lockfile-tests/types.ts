@@ -6,13 +6,20 @@ export interface TestCase {
     filepath: string;
     packageManager: PackageManagerType;
     lockfileName: string;
-    frozenInstallCommand: string[];
     packageManagerVersion: string;
+    /**
+     * Additionally assert that every package in the (pruned) lockfile can
+     * resolve its declared dependencies to the correct version. Catches
+     * "stranded" transitive deps that `npm ci --dry-run` silently accepts.
+     */
+    validateResolution?: boolean;
   };
   targetWorkspace: {
     name: string;
   };
   label: string;
+  docker?: boolean;
+  production?: boolean;
   expectedFailure?: boolean;
 }
 
@@ -20,9 +27,9 @@ export interface TestResult {
   label: string;
   success: boolean;
   pruneSuccess: boolean;
-  installSuccess: boolean;
+  validationSuccess: boolean;
   pruneOutput?: string;
-  installOutput?: string;
+  validationOutput?: string;
   error?: string;
   durationMs: number;
 }

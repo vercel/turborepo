@@ -71,14 +71,29 @@ impl Extendable for ProcessedWith {
 
 impl Extendable for ProcessedInputs {
     fn extend(&mut self, other: Self) {
-        merge_field_vec!(self, other, globs);
-        // Handle the default flag specially
         if other.extends {
-            // When extending, OR the default flags
+            self.globs.extend(other.globs);
             self.default = self.default || other.default;
+            self.jit_globs.extend(other.jit_globs);
+            self.jit_default = self.jit_default || other.jit_default;
+            if other.dependency_outputs.is_some() {
+                self.dependency_outputs = other.dependency_outputs;
+            }
+            self.legacy_startup = self.legacy_startup || other.legacy_startup;
+            self.structured_startup = self.structured_startup || other.structured_startup;
+            self.structured_jit = self.structured_jit || other.structured_jit;
+            self.structured_dependency_outputs =
+                self.structured_dependency_outputs || other.structured_dependency_outputs;
         } else {
-            // When replacing, use the other's default
+            self.globs = other.globs;
             self.default = other.default;
+            self.jit_globs = other.jit_globs;
+            self.jit_default = other.jit_default;
+            self.dependency_outputs = other.dependency_outputs;
+            self.legacy_startup = other.legacy_startup;
+            self.structured_startup = other.structured_startup;
+            self.structured_jit = other.structured_jit;
+            self.structured_dependency_outputs = other.structured_dependency_outputs;
         }
         self.extends = other.extends;
     }
@@ -148,6 +163,11 @@ impl ProcessedTaskDefinition {
         set_field!(self, other, interactive);
         set_field!(self, other, env_mode);
         set_field!(self, other, incremental);
+        set_field!(self, other, experimental_ci);
+        // A command is atomic: the most specific definition's whole value
+        // wins (array, opt-out, or map — maps never deep-merge, and
+        // `$TURBO_EXTENDS$` is rejected at processing time).
+        set_field!(self, other, command);
     }
 }
 
@@ -178,7 +198,7 @@ mod test {
                 .unwrap(),
             ),
             inputs: Some(
-                ProcessedInputs::new(
+                ProcessedInputs::new_legacy(
                     vec![Spanned::new(UnescapedString::from("src/**"))],
                     &FutureFlags::default(),
                 )
@@ -199,6 +219,8 @@ mod test {
             env_mode: None,
             with: None,
             incremental: None,
+            experimental_ci: None,
+            command: None,
         }
     }
 
@@ -216,7 +238,7 @@ mod test {
                 .unwrap(),
             ),
             inputs: Some(
-                ProcessedInputs::new(
+                ProcessedInputs::new_legacy(
                     vec![Spanned::new(UnescapedString::from("lib/**"))],
                     &FutureFlags::default(),
                 )
@@ -237,6 +259,8 @@ mod test {
             env_mode: None,
             with: None,
             incremental: None,
+            experimental_ci: None,
+            command: None,
         }
     }
 
@@ -257,7 +281,56 @@ mod test {
             env_mode: None,
             with: None,
             incremental: None,
+            experimental_ci: None,
+            command: None,
         }
+    }
+
+    #[test]
+    fn test_command_merges_atomically() {
+        use crate::processed::ProcessedCommand;
+
+        let argv = |items: &[&str]| {
+            ProcessedCommand::Argv(Spanned::new(
+                items.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            ))
+        };
+        let map = |entries: &[(&str, &[&str])]| {
+            ProcessedCommand::PerToolchain(Spanned::new(
+                entries
+                    .iter()
+                    .map(|(k, v)| {
+                        (
+                            k.to_string(),
+                            v.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            ))
+        };
+
+        // More specific definition's whole value wins: argv replaced by
+        // opt-out, map replaced by argv — never appended or deep-merged.
+        let mut base = create_base_task();
+        base.command = Some(argv(&["cargo", "test"]));
+        let mut other = create_base_task();
+        other.command = Some(ProcessedCommand::OptOut(Spanned::new(())));
+        base.merge(other);
+        assert!(matches!(base.command, Some(ProcessedCommand::OptOut(_))));
+
+        let mut base = create_base_task();
+        base.command = Some(map(&[("rust", &["cargo", "test"])]));
+        let mut other = create_base_task();
+        other.command = Some(argv(&["vitest", "run"]));
+        base.merge(other.clone());
+        assert_eq!(base.command, other.command);
+
+        // A definition without `command` inherits it untouched.
+        let mut base = create_base_task();
+        base.command = Some(argv(&["vitest"]));
+        let expected = base.command.clone();
+        base.merge(create_base_task());
+        assert_eq!(base.command, expected);
     }
 
     #[test]
@@ -357,7 +430,7 @@ mod test {
         let second = ProcessedTaskDefinition {
             persistent: Some(Spanned::new(false)),
             inputs: Some(
-                ProcessedInputs::new(
+                ProcessedInputs::new_legacy(
                     vec![Spanned::new(UnescapedString::from("src/**"))],
                     &FutureFlags::default(),
                 )
@@ -487,6 +560,13 @@ mod test {
         ProcessedInputs {
             globs: vec![],
             default: false,
+            jit_globs: vec![],
+            jit_default: false,
+            dependency_outputs: None,
+            legacy_startup: false,
+            structured_startup: false,
+            structured_jit: false,
+            structured_dependency_outputs: false,
             extends: false,
         }
     }
@@ -495,6 +575,13 @@ mod test {
         ProcessedInputs {
             globs: vec![],
             default: true,
+            jit_globs: vec![],
+            jit_default: false,
+            dependency_outputs: None,
+            legacy_startup: true,
+            structured_startup: false,
+            structured_jit: false,
+            structured_dependency_outputs: false,
             extends: true,
         }
     }
@@ -511,6 +598,39 @@ mod test {
             globs: vec![],
             extends: true,
         }
+    }
+
+    #[test]
+    fn test_merge_experimental_ci_package_overrides_root() {
+        use turborepo_types::ExperimentalCIConfig;
+
+        let root = ProcessedTaskDefinition {
+            experimental_ci: Some(Spanned::new(ExperimentalCIConfig::Enabled(true))),
+            ..Default::default()
+        };
+
+        // A package configuration without the key inherits the root value.
+        let package_without_key = ProcessedTaskDefinition {
+            cache: Some(Spanned::new(false)),
+            ..Default::default()
+        };
+        let result =
+            ProcessedTaskDefinition::from_iter(vec![root.clone(), package_without_key.clone()]);
+        assert_eq!(result.experimental_ci, root.experimental_ci);
+
+        // A package configuration with the key replaces the root value.
+        let mut options = serde_json::Map::new();
+        options.insert("provider".to_string(), serde_json::Value::from("github"));
+        options.insert("attempts".to_string(), serde_json::Value::from(3));
+        let package_with_key = ProcessedTaskDefinition {
+            experimental_ci: Some(Spanned::new(ExperimentalCIConfig::Options(options.clone()))),
+            ..Default::default()
+        };
+        let result = ProcessedTaskDefinition::from_iter(vec![root, package_with_key]);
+        assert_eq!(
+            result.experimental_ci,
+            Some(Spanned::new(ExperimentalCIConfig::Options(options)))
+        );
     }
 
     #[test]

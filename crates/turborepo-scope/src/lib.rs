@@ -8,6 +8,8 @@
 //! Extracted from turborepo-lib to reduce coupling.
 
 #![deny(clippy::all)]
+#![cfg_attr(not(test), deny(clippy::expect_used, clippy::unwrap_used))]
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 // Allow large error types - ResolutionError contains ChangeMapError which is 128+ bytes.
 // Boxing would complicate error handling without significant benefit for a CLI tool.
 #![allow(clippy::result_large_err)]
@@ -29,7 +31,7 @@ use turborepo_repository::{
     package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
-pub use turborepo_types::{FilterMode, ScopeOpts};
+use turborepo_types::{FilterMode, ScopeOpts};
 
 /// Resolve which packages should be included in the run based on scope options.
 ///

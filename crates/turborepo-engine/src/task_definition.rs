@@ -96,6 +96,7 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
         let inputs = processed
             .inputs
             .map(|inputs| TaskInputs::from_processed(inputs, path_to_repo_root))
+            .transpose()?
             .unwrap_or_default();
 
         let pass_through_env = processed.pass_through_env.map(|env| env.vars);
@@ -123,6 +124,12 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
             env_mode: processed.env_mode.map(|mode| *mode.as_inner()),
             with,
             incremental,
+            experimental_ci: processed.experimental_ci.map(Spanned::into_inner),
+            // Deliberately not converted here: the engine builder resolves
+            // the override across the whole chain (scoped vs unscoped
+            // positions, toolchain fan-out) and sets it afterward. See
+            // `resolve_command_override`.
+            command: None,
         })
     }
 
@@ -192,6 +199,7 @@ mod tests {
         let mut inputs = TaskInputs {
             globs: vec!["src/**".to_string()],
             default: false,
+            ..Default::default()
         };
 
         prepend_global_inputs(
@@ -237,6 +245,7 @@ mod tests {
         let mut inputs = TaskInputs {
             globs: vec!["**".to_string()],
             default: false,
+            ..Default::default()
         };
 
         prepend_global_inputs(
@@ -258,6 +267,7 @@ mod tests {
         let mut inputs = TaskInputs {
             globs: vec!["src/**".to_string()],
             default: false,
+            ..Default::default()
         };
         let original = inputs.clone();
 

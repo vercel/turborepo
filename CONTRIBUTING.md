@@ -6,6 +6,7 @@ Thank you for your interest in contributing to Turborepo!
 - [Building Turborepo](#building-turborepo)
   - [TLS Implementation](#tls-implementation)
 - [Running tests](#running-tests)
+- [Running Rust checks](#running-rust-checks)
 - [Manually testing `turbo`](#manually-testing-turbo)
   - [Repositories to test with](#repositories-to-test-with)
 - [Debugging tips](#debugging-tips)
@@ -29,6 +30,7 @@ You will need to have these dependencies installed on your machine to work on th
 - [pnpm](https://pnpm.io/) v10
 - [protoc](https://grpc.io/docs/protoc-installation/)
 - [capnp](https://capnproto.org)
+- [Zig](https://ziglang.org/download/) 0.15.2 or newer — required to build `libghostty-vt` for the TUI (`libghostty-vt-sys`). The `zig` binary must be on your `PATH` when running `cargo build`.
 
 ### Optional dependencies
 
@@ -109,6 +111,16 @@ cargo test -p <module>
   ```bash
   cargo test -p turbo --test force_test
   ```
+
+## Running Rust checks
+
+Run Clippy with:
+
+```bash
+cargo lint
+```
+
+Rust targets deny `.unwrap()`, `.unwrap_err()`, `.unwrap_none()`, and `.expect()` by default. Tests are exempt from that panic-extraction policy, but still linted for other Clippy warnings. Existing implementation-code violations are temporarily allowed at crate roots while they are removed incrementally.
 
 ## Manually testing `turbo`
 
@@ -207,15 +219,23 @@ In the event of a crash, Rust's crash logs will be written to your temp director
 
 The architecture of the Terminal UI makes for a tricky debugging experience. Because the UI writes to the console through `stdout` in a specific way, using `println!()` statements won't work as expected.
 
-Instead, use `eprintln!()` to print to `stdout` and output `stdout` to a file:
+Instead, use `eprintln!()` to print to `stderr` and redirect `stderr` to a file:
 
 ```bash
 # devturbo is an alias to the debug binary of `turbo` in this case
-devturbo run build --ui=tui --skip-infer 2&> ~/tmp/logs.txt
+devturbo run build --ui=tui --skip-infer 2> ~/tmp/logs.txt
 ```
 
 > [!IMPORTANT]
 > The `--skip-infer` flag is required so that `turbo` doesn't try to use a locally installed binary of `turbo`. Forgetting to use this flag will cause `devturbo` to defer to the binary installed into the repository rather than the one you're developing.
+
+On Linux, the black-box Terminal UI tests run as part of the standard Rust suite. Run them directly with:
+
+```bash
+cargo nextest run --package turbo --test tui_test
+```
+
+Known TUI regressions are marked ignored. Reproduce them with `--run-ignored ignored-only`.
 
 ## Publishing `turbo` to the npm registry
 

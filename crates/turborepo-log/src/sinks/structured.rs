@@ -102,30 +102,34 @@ impl JsonArrayFile {
             std::fs::create_dir_all(parent)?;
         }
 
-        // Reject symlinks to prevent symlink-following attacks.
-        if path.exists() {
-            let meta = path.symlink_metadata()?;
-            if meta.file_type().is_symlink() {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::AlreadyExists,
-                    format!(
-                        "refusing to write structured log to symlink: {}",
-                        path.display()
-                    ),
-                ));
-            }
-        }
-
         let mut opts = OpenOptions::new();
-        opts.write(true).create(true).truncate(true);
+        opts.write(true).create(true);
 
         #[cfg(unix)]
         {
             use std::os::unix::fs::OpenOptionsExt;
             opts.mode(0o600);
+            opts.custom_flags(libc::O_NOFOLLOW);
         }
 
-        let mut file = opts.open(path)?;
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+
+            use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT;
+
+            opts.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+        }
+
+        let mut file = opts
+            .open(path)
+            .map_err(|error| map_open_error(path, error))?;
+        if file.metadata()?.file_type().is_symlink() {
+            return Err(symlink_error(path));
+        }
+
+        file.set_len(0)?;
+        file.seek(SeekFrom::Start(0))?;
         file.write_all(b"[\n]\n")?;
 
         Ok(Self {
@@ -161,6 +165,27 @@ impl JsonArrayFile {
 
         Ok(())
     }
+}
+
+fn symlink_error(path: &Path) -> std::io::Error {
+    std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        format!(
+            "refusing to write structured log to symlink: {}",
+            path.display()
+        ),
+    )
+}
+
+fn map_open_error(path: &Path, error: std::io::Error) -> std::io::Error {
+    #[cfg(unix)]
+    {
+        if error.raw_os_error() == Some(libc::ELOOP) {
+            return symlink_error(path);
+        }
+    }
+
+    error
 }
 
 // Messages sent from emit/task_output threads to the writer thread.
@@ -559,10 +584,23 @@ mod tests {
     }
 
     #[test]
+    fn json_array_file_truncates_existing_regular_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("existing.json");
+        std::fs::write(&path, r#"[{"stale":true}]"#).unwrap();
+
+        let _file = JsonArrayFile::create(&path).unwrap();
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content, "[\n]\n");
+    }
+
+    #[cfg(any(unix, windows))]
+    #[test]
     fn json_array_file_rejects_symlinks() {
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("real.json");
-        std::fs::write(&target, "").unwrap();
+        std::fs::write(&target, "do not overwrite").unwrap();
         let link = dir.path().join("link.json");
         #[cfg(unix)]
         std::os::unix::fs::symlink(&target, &link).unwrap();
@@ -573,6 +611,30 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("symlink"));
+        assert_eq!(
+            std::fs::read_to_string(&target).unwrap(),
+            "do not overwrite"
+        );
+    }
+
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn json_array_file_rejects_dangling_symlinks() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("missing.json");
+        let link = dir.path().join("link.json");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_file(&target, &link).unwrap();
+
+        let result = JsonArrayFile::create(&link);
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("symlink"));
+        assert!(!target.exists());
+        assert!(link.symlink_metadata().unwrap().file_type().is_symlink());
     }
 
     #[cfg(unix)]

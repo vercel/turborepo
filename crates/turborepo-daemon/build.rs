@@ -11,9 +11,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         return Ok(());
-    } else {
-        tonic_build_result.expect("tonic_build command");
     }
+
+    tonic_build_result?;
 
     Ok(())
 }

@@ -322,18 +322,25 @@ impl NpmLockfile {
             candidates.entry(hoisted_key).or_default().push(key.clone());
         }
 
-        let to_rehoist: Vec<(String, String)> = candidates
+        let mut to_rehoist: Vec<(String, String)> = candidates
             .into_iter()
             .filter_map(|(hoisted_key, nested_keys)| {
                 if nested_keys.len() == 1 {
-                    Some((nested_keys.into_iter().next().unwrap(), hoisted_key))
+                    nested_keys
+                        .into_iter()
+                        .next()
+                        .map(|nested_key| (nested_key, hoisted_key))
                 } else {
                     None
                 }
             })
             .collect();
+        // Candidates come from HashMap iteration; sort so relocation placement
+        // decisions below don't depend on hash ordering.
+        // See https://github.com/vercel/turborepo/issues/13321
+        to_rehoist.sort();
 
-        for (nested_key, hoisted_key) in to_rehoist {
+        for (nested_key, hoisted_key) in &to_rehoist {
             // Remove old hoisted entry and its sub-deps.
             let old_prefix = format!("{hoisted_key}/");
             let old_sub: Vec<String> = pruned
@@ -344,10 +351,10 @@ impl NpmLockfile {
             for k in old_sub {
                 pruned.remove(&k);
             }
-            pruned.remove(&hoisted_key);
+            pruned.remove(hoisted_key);
 
             // Promote nested entry.
-            if let Some(pkg) = pruned.remove(&nested_key) {
+            if let Some(pkg) = pruned.remove(nested_key) {
                 pruned.insert(hoisted_key.clone(), pkg);
             }
 
@@ -366,6 +373,176 @@ impl NpmLockfile {
                 }
             }
         }
+
+        // Promoting a package changes its position in the tree, so any of its
+        // transitive deps that were resolved through workspace-nested siblings
+        // (e.g. `apps/app-a/node_modules/mime`) are no longer reachable from
+        // the new hoisted position. Walk each promoted package's dependency
+        // closure and relocate any stranded versions.
+        //
+        // This runs as a separate pass after all promotions: a relocation can
+        // copy a sibling to the root slot and remove its nested source, and if
+        // that sibling were itself a still-pending promotion candidate, the
+        // interleaved processing would remove the root entry and then find
+        // nothing left to promote, dropping the package entirely.
+        // See https://github.com/vercel/turborepo/issues/13321
+        for (nested_key, hoisted_key) in &to_rehoist {
+            let mut visited = std::collections::HashSet::new();
+            Self::relocate_stranded_closure(
+                pruned,
+                original_packages,
+                nested_key,
+                hoisted_key,
+                &mut visited,
+            );
+        }
+    }
+
+    /// After a workspace-nested package has been promoted to the hoisted
+    /// position, its transitive dependencies that previously resolved through
+    /// workspace-nested siblings can become unreachable: Node's resolution only
+    /// walks upward, so a package now at `node_modules/send` cannot reach
+    /// `apps/app-a/node_modules/mime`.
+    ///
+    /// This walks the promoted package's dependency closure (using the original
+    /// lockfile as the source of truth for which version each dependency must
+    /// resolve to) and, for every dependency that no longer resolves to the
+    /// correct version, copies that version from the original lockfile to a
+    /// position the promoted package can reach — hoisted to the root slot when
+    /// it's free, otherwise nested directly under the promoted package.
+    /// See https://github.com/vercel/turborepo/issues/13109
+    fn relocate_stranded_closure(
+        pruned: &mut HashMap<String, NpmPackage>,
+        original: &HashMap<String, NpmPackage>,
+        original_key: &str,
+        new_key: &str,
+        visited: &mut std::collections::HashSet<String>,
+    ) {
+        if !visited.insert(new_key.to_string()) {
+            return;
+        }
+
+        // The authoritative dependency list comes from the original lockfile.
+        let Some(pkg) = original.get(original_key) else {
+            return;
+        };
+        let dep_names: Vec<String> = pkg.dep_keys().cloned().collect();
+
+        for dep in dep_names {
+            // The version this dependency resolved to in the original tree.
+            let Some((orig_dep_key, Some(orig_version))) =
+                Self::resolve_in_map(original, original_key, &dep)
+            else {
+                // No concrete resolution (missing/optional dep or a workspace
+                // link without a version) — nothing to relocate.
+                continue;
+            };
+
+            // What it currently resolves to from the new (pruned) position.
+            if let Some((pruned_dep_key, Some(pruned_version))) =
+                Self::resolve_in_map(pruned, new_key, &dep)
+                && pruned_version == orig_version
+            {
+                // Already reachable and correct — descend to validate the
+                // dependency's own closure.
+                Self::relocate_stranded_closure(
+                    pruned,
+                    original,
+                    &orig_dep_key,
+                    &pruned_dep_key,
+                    visited,
+                );
+                continue;
+            }
+
+            // Missing or wrong version. Place the correct version where the
+            // promoted package can reach it: hoist to the root slot if free,
+            // otherwise nest directly under the promoted package.
+            let hoisted = format!("node_modules/{dep}");
+            let placement = if pruned.contains_key(&hoisted) {
+                format!("{new_key}/node_modules/{dep}")
+            } else {
+                hoisted
+            };
+
+            // Copy the dependency and its nested subtree from the original
+            // lockfile to the new placement.
+            if let Some(entry) = original.get(&orig_dep_key) {
+                pruned.insert(placement.clone(), entry.clone());
+            }
+            let orig_sub_prefix = format!("{orig_dep_key}/node_modules/");
+            let new_sub_prefix = format!("{placement}/node_modules/");
+            for (k, v) in original.iter() {
+                if let Some(rest) = k.strip_prefix(&orig_sub_prefix) {
+                    pruned.insert(format!("{new_sub_prefix}{rest}"), v.clone());
+                }
+            }
+
+            // Remove the original nested location only if no remaining package
+            // still resolves to it. Sibling consumers in the same workspace can
+            // share that nested copy even after this package is promoted.
+            if orig_dep_key != placement
+                && !Self::is_resolved_by_any_consumer(pruned, &orig_dep_key)
+            {
+                pruned.remove(&orig_dep_key);
+                let strand_prefix = format!("{orig_dep_key}/node_modules/");
+                let strays: Vec<String> = pruned
+                    .keys()
+                    .filter(|k| k.starts_with(&strand_prefix))
+                    .cloned()
+                    .collect();
+                for s in strays {
+                    pruned.remove(&s);
+                }
+            }
+
+            // Descend into the relocated dependency.
+            Self::relocate_stranded_closure(pruned, original, &orig_dep_key, &placement, visited);
+        }
+    }
+
+    fn is_resolved_by_any_consumer(packages: &HashMap<String, NpmPackage>, dep_key: &str) -> bool {
+        let Some(dep_name) = dep_key.rsplit_once("node_modules/").map(|(_, name)| name) else {
+            return false;
+        };
+
+        packages.iter().any(|(consumer_key, pkg)| {
+            pkg.dep_keys().any(|dep| {
+                dep == dep_name
+                    && Self::resolve_in_map(packages, consumer_key, dep)
+                        .is_some_and(|(resolved_key, _)| resolved_key == dep_key)
+            })
+        })
+    }
+
+    /// Resolve a dependency name within an arbitrary packages map by walking up
+    /// the node_modules hierarchy from `key`, mirroring Node's resolution.
+    /// Returns the resolved key and its version (if the entry has one).
+    fn resolve_in_map(
+        packages: &HashMap<String, NpmPackage>,
+        key: &str,
+        dep: &str,
+    ) -> Option<(String, Option<String>)> {
+        // First candidate: nested directly under the current package.
+        let nested = format!("{key}/node_modules/{dep}");
+        if let Some(entry) = packages.get(&nested) {
+            return Some((nested, entry.version.clone()));
+        }
+
+        // Walk up the node_modules hierarchy.
+        let mut curr = Some(key);
+        while let Some(k) = curr {
+            let parent = Self::npm_path_parent(k);
+            let candidate = match parent {
+                Some(p) => format!("{p}node_modules/{dep}"),
+                None => format!("node_modules/{dep}"),
+            };
+            if let Some(entry) = packages.get(&candidate) {
+                return Some((candidate, entry.version.clone()));
+            }
+            curr = parent;
+        }
+        None
     }
 
     /// Resolve a dependency name by walking up the node_modules hierarchy,
@@ -438,13 +615,7 @@ impl NpmLockfile {
     fn npm_path_parent(key: &str) -> Option<&str> {
         key.rsplit_once("node_modules/")
             .map(|(first, _)| first)
-            .and_then(|parent| {
-                if parent.is_empty() {
-                    None
-                } else {
-                    Some(parent)
-                }
-            })
+            .filter(|&parent| !parent.is_empty())
     }
 }
 
@@ -458,27 +629,6 @@ impl NpmPackage {
     }
 }
 
-pub fn npm_subgraph(
-    contents: &[u8],
-    workspace_packages: &[String],
-    packages: &[String],
-) -> Result<Vec<u8>, Error> {
-    let lockfile = NpmLockfile::load(contents)?;
-    let pruned_lockfile = lockfile.subgraph(workspace_packages, packages)?;
-    let new_contents = pruned_lockfile.encode()?;
-
-    Ok(new_contents)
-}
-
-pub fn npm_global_change(prev_contents: &[u8], curr_contents: &[u8]) -> Result<bool, Error> {
-    let prev_lockfile = NpmLockfile::load(prev_contents)?;
-    let curr_lockfile = NpmLockfile::load(curr_contents)?;
-
-    Ok(
-        prev_lockfile.lockfile_version != curr_lockfile.lockfile_version
-            || prev_lockfile.other.get("requires") != curr_lockfile.other.get("requires"),
-    )
-}
 #[cfg(test)]
 mod test {
     use super::*;
@@ -821,6 +971,298 @@ mod test {
             reparsed.packages.contains_key("node_modules/eslint"),
             "root devDep eslint should be preserved"
         );
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/13109
+    //
+    // When the full monorepo has two incompatible versions of a shared
+    // transitive dep — one hoisted to root, the other workspace-nested — and
+    // the workspace-nested package gets promoted to root during pruning, its
+    // workspace-nested transitive deps (siblings under the workspace's
+    // node_modules, not under the package itself) must follow it so they remain
+    // reachable.
+    //
+    // Here app-1 forces send@1.2.1 + mime@3.0.0 (root devDep) to root, while
+    // app-2 needs send@0.17.2 which requires mime@1.6.0. mime@1.6.0 lives at
+    // `apps/app-2/node_modules/mime`. Pruning to app-2 drops send@1.2.1 and
+    // promotes send@0.17.2 to `node_modules/send`; mime@1.6.0 must move to a
+    // position where the promoted send can resolve it (here nested under send,
+    // since `node_modules/mime` is still occupied by the root devDep 3.0.0).
+    // The original nested copy must remain when another app-2 dependency still
+    // resolves to it.
+    #[test]
+    fn test_subgraph_relocates_stranded_promoted_deps() {
+        let json = r#"{
+            "lockfileVersion": 3,
+            "requires": true,
+            "packages": {
+                "": {
+                    "name": "monorepo",
+                    "workspaces": ["apps/*"],
+                    "devDependencies": {
+                        "legacy": "^2.0.0",
+                        "mime": "^3.0.0"
+                    }
+                },
+                "node_modules/app-1": {
+                    "resolved": "apps/app-1",
+                    "link": true
+                },
+                "node_modules/app-2": {
+                    "resolved": "apps/app-2",
+                    "link": true
+                },
+                "node_modules/destroy": {
+                    "version": "1.0.4"
+                },
+                "node_modules/mime": {
+                    "version": "3.0.0"
+                },
+                "node_modules/legacy": {
+                    "version": "2.0.0"
+                },
+                "node_modules/send": {
+                    "version": "1.2.1",
+                    "dependencies": { "encodeurl": "^2.0.0" }
+                },
+                "node_modules/send/node_modules/encodeurl": {
+                    "version": "2.0.0"
+                },
+                "node_modules/encodeurl": {
+                    "version": "1.0.2"
+                },
+                "apps/app-1": {
+                    "version": "1.0.0",
+                    "dependencies": { "send": "^1.0.0" }
+                },
+                "apps/app-2": {
+                    "version": "1.0.0",
+                    "dependencies": {
+                        "legacy": "^1.0.0",
+                        "send": "^0.17.0"
+                    }
+                },
+                "apps/app-2/node_modules/legacy": {
+                    "version": "1.0.0",
+                    "dependencies": { "mime": "1.6.0" }
+                },
+                "apps/app-2/node_modules/mime": {
+                    "version": "1.6.0"
+                },
+                "apps/app-2/node_modules/send": {
+                    "version": "0.17.2",
+                    "dependencies": {
+                        "destroy": "~1.0.4",
+                        "encodeurl": "~1.0.2",
+                        "mime": "1.6.0"
+                    }
+                }
+            }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+
+        // Pruning to app-2: the root workspace keeps its mime@3.0.0 devDep and
+        // app-2 pulls in send@0.17.2's closure (mime@1.6.0 nested, destroy and
+        // encodeurl@1.0.2 hoisted).
+        let workspace_packages = vec!["apps/app-2".to_string()];
+        let packages = vec![
+            "node_modules/destroy".to_string(),
+            "node_modules/legacy".to_string(),
+            "node_modules/mime".to_string(),
+            "node_modules/encodeurl".to_string(),
+            "apps/app-2/node_modules/legacy".to_string(),
+            "apps/app-2/node_modules/mime".to_string(),
+            "apps/app-2/node_modules/send".to_string(),
+        ];
+
+        let pruned = lockfile.subgraph(&workspace_packages, &packages).unwrap();
+        let encoded = pruned.encode().unwrap();
+        let reparsed: NpmLockfile = NpmLockfile::load(&encoded).unwrap();
+
+        // send@0.17.2 was promoted to the hoisted slot (the root version 1.2.1
+        // was only needed by the now-pruned app-1).
+        assert_eq!(
+            reparsed
+                .packages
+                .get("node_modules/send")
+                .and_then(|p| p.version.as_deref()),
+            Some("0.17.2"),
+            "send@0.17.2 should be promoted to node_modules/send"
+        );
+
+        // mime@1.6.0 must be reachable from the promoted send. node_modules/mime
+        // is still occupied by the root devDep (3.0.0), so it must be nested
+        // directly under send rather than stranded under apps/app-2.
+        assert_eq!(
+            reparsed
+                .packages
+                .get("node_modules/send/node_modules/mime")
+                .and_then(|p| p.version.as_deref()),
+            Some("1.6.0"),
+            "send@0.17.2's mime@1.6.0 must be relocated where send can resolve it"
+        );
+        assert_eq!(
+            reparsed
+                .packages
+                .get("apps/app-2/node_modules/mime")
+                .and_then(|p| p.version.as_deref()),
+            Some("1.6.0"),
+            "the shared apps/app-2/node_modules/mime copy must remain for sibling consumers"
+        );
+        assert_eq!(
+            reparsed
+                .packages
+                .get("apps/app-2/node_modules/legacy")
+                .and_then(|p| p.version.as_deref()),
+            Some("1.0.0"),
+            "legacy@1.0.0 should remain nested and resolve apps/app-2/node_modules/mime"
+        );
+
+        // The root devDependency mime@3.0.0 must be preserved untouched.
+        assert_eq!(
+            reparsed
+                .packages
+                .get("node_modules/mime")
+                .and_then(|p| p.version.as_deref()),
+            Some("3.0.0"),
+            "root devDep mime@3.0.0 should be preserved"
+        );
+
+        // Hoisted deps that already resolve correctly must stay put.
+        assert!(
+            reparsed.packages.contains_key("node_modules/destroy"),
+            "hoisted destroy@1.0.4 should be reachable from send"
+        );
+
+        // No part of the old root send@1.2.1 subtree should linger.
+        assert!(
+            !reparsed
+                .packages
+                .contains_key("node_modules/send/node_modules/encodeurl"),
+            "old send@1.2.1's nested encodeurl@2.0.0 should be gone"
+        );
+        // send@0.17.2 wants encodeurl@~1.0.2, which is the hoisted 1.0.2.
+        assert_eq!(
+            reparsed
+                .packages
+                .get("node_modules/encodeurl")
+                .and_then(|p| p.version.as_deref()),
+            Some("1.0.2"),
+            "hoisted encodeurl@1.0.2 (what send@0.17.2 needs) should remain"
+        );
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/13321
+    //
+    // The original lockfile has dev-only hoisted copies of send/http-errors/
+    // fresh at the root, and the app workspace has its own nested copies of
+    // all three (send@1.2.1 depending on the nested http-errors@2.0.1 and
+    // fresh@2.0.0). Pruning to the app makes all three nested entries rehoist
+    // candidates. Candidate processing order used to come from HashMap
+    // iteration, and relocate_stranded_closure ran interleaved with
+    // promotions: if send was promoted first, its relocation moved the nested
+    // http-errors/fresh to the root and removed the nested sources, then the
+    // still-queued http-errors/fresh candidates removed the root entries and
+    // found nothing left to promote — dropping the packages entirely.
+    //
+    // Run the prune repeatedly since the old failure depended on hash order.
+    #[test]
+    fn test_subgraph_rehoist_is_deterministic_and_complete() {
+        let json = r#"{
+            "lockfileVersion": 3,
+            "requires": true,
+            "packages": {
+                "": {
+                    "name": "monorepo",
+                    "workspaces": ["apps/*"],
+                    "devDependencies": {
+                        "fresh": "0.5.2",
+                        "http-errors": "2.0.0",
+                        "send": "0.19.0"
+                    }
+                },
+                "node_modules/app": {
+                    "resolved": "apps/app",
+                    "link": true
+                },
+                "node_modules/fresh": {
+                    "version": "0.5.2",
+                    "dev": true
+                },
+                "node_modules/http-errors": {
+                    "version": "2.0.0",
+                    "dev": true
+                },
+                "node_modules/send": {
+                    "version": "0.19.0",
+                    "dev": true,
+                    "dependencies": {
+                        "fresh": "0.5.2",
+                        "http-errors": "2.0.0"
+                    }
+                },
+                "apps/app": {
+                    "version": "1.0.0",
+                    "dependencies": { "send": "^1.2.1" }
+                },
+                "apps/app/node_modules/fresh": {
+                    "version": "2.0.0"
+                },
+                "apps/app/node_modules/http-errors": {
+                    "version": "2.0.1"
+                },
+                "apps/app/node_modules/send": {
+                    "version": "1.2.1",
+                    "dependencies": {
+                        "fresh": "^2.0.0",
+                        "http-errors": "^2.0.0"
+                    }
+                }
+            }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/app".to_string()];
+        let packages = vec![
+            "apps/app/node_modules/send".to_string(),
+            "apps/app/node_modules/http-errors".to_string(),
+            "apps/app/node_modules/fresh".to_string(),
+        ];
+
+        let mut first_encoded: Option<Vec<u8>> = None;
+        for run in 0..32 {
+            let pruned = lockfile.subgraph(&workspace_packages, &packages).unwrap();
+            let encoded = pruned.encode().unwrap();
+            let reparsed: NpmLockfile = NpmLockfile::load(&encoded).unwrap();
+
+            // The promoted send@1.2.1 must always be able to resolve its
+            // production deps at their correct versions.
+            for (key, version) in [
+                ("node_modules/send", "1.2.1"),
+                ("node_modules/http-errors", "2.0.1"),
+                ("node_modules/fresh", "2.0.0"),
+            ] {
+                assert_eq!(
+                    reparsed
+                        .packages
+                        .get(key)
+                        .and_then(|p| p.version.as_deref()),
+                    Some(version),
+                    "run {run}: expected {key}@{version} in pruned lockfile"
+                );
+            }
+
+            // The pruned output must be byte-for-byte identical across runs.
+            match &first_encoded {
+                None => first_encoded = Some(encoded),
+                Some(first) => assert_eq!(
+                    first, &encoded,
+                    "run {run}: pruned lockfile differs between runs"
+                ),
+            }
+        }
     }
 
     #[test]

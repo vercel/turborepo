@@ -1,4 +1,8 @@
 name: JS Package Tests
+
+env:
+  TURBO_TELEMETRY_MESSAGE_DISABLED: "1"
+
 on:
   pull_request:
 
@@ -10,15 +14,15 @@ permissions:
   contents: read
 
 jobs:
-  find-changes:
-    name: Find path changes
+  release-pr:
+    name: Validate release PR
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read
     outputs:
       is-release-pr: ${{ steps.check.outputs.is-release-pr }}
-      js-packages: ${{ steps.filter.outputs.js-packages }}
     steps:
       - name: Check if automated release PR
         id: check
@@ -28,6 +32,8 @@ jobs:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -45,6 +51,12 @@ jobs:
             exit 0
           fi
 
+          if [[ "$PR_HEAD_REPO" != "$REPOSITORY" || ! "$PR_HEAD_REF" =~ ^staging-[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "is-release-pr=false" >> "$GITHUB_OUTPUT"
+            echo "Not a release PR branch (head: $PR_HEAD_REPO:$PR_HEAD_REF)"
+            exit 0
+          fi
+
           CHANGED_FILES=$(gh api --paginate "repos/${REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename')
           if [[ -z "$CHANGED_FILES" ]]; then
             echo "::error::Unable to determine changed files for release PR"
@@ -54,7 +66,7 @@ jobs:
           echo "Changed files in release PR:"
           printf '%s\n' "$CHANGED_FILES"
 
-          ALLOWED_PATTERN="^(version\.txt|.*/package\.json|package\.json|Cargo\.toml|Cargo\.lock|.*/Cargo\.toml|CHANGELOG.*|pnpm-lock\.yaml)$"
+          ALLOWED_PATTERN="^(version\.txt|.*/package\.json|package\.json|Cargo\.toml|Cargo\.lock|.*/Cargo\.toml|CHANGELOG.*|pnpm-lock\.yaml|skills/turborepo/SKILL\.md|skills/turborepo/references/best-practices/structure\.md|skills/turborepo/references/configuration/RULE\.md|skills/turborepo/references/environment/RULE\.md|skills/turborepo/references/environment/gotchas\.md)$"
           INVALID_FILES=""
           while IFS= read -r file; do
             if [[ -n "$file" && ! "$file" =~ $ALLOWED_PATTERN ]]; then
@@ -63,52 +75,24 @@ jobs:
           done <<< "$CHANGED_FILES"
 
           if [[ -n "$INVALID_FILES" ]]; then
-            echo "::error::Release PR contains unexpected files that are not version-related:"
+            echo "::error::Release PR contains unexpected files that are not generated release updates:"
             printf '%s\n' "$INVALID_FILES"
-            echo "::error::Release PRs should only modify version.txt, package.json, Cargo.toml, Cargo.lock, CHANGELOG, or pnpm-lock.yaml"
+            echo "::error::Release PRs should only modify version.txt, package.json, Cargo.toml, Cargo.lock, CHANGELOG, pnpm-lock.yaml, or generated Turborepo skill files"
             exit 1
           fi
 
           echo "is-release-pr=true" >> "$GITHUB_OUTPUT"
-          echo "Release PR content validation passed - only version-related files changed"
-
-      - name: Checkout
-        if: steps.check.outputs.is-release-pr != 'true'
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-
-      - name: Check path changes
-        if: steps.check.outputs.is-release-pr != 'true'
-        id: filter
-        run: |
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            git fetch origin ${{ github.base_ref }}
-            BASE_COMMIT="origin/${{ github.base_ref }}"
-            HEAD_COMMIT="HEAD"
-          else
-            BASE_COMMIT="${{ github.event.before }}"
-            HEAD_COMMIT="${{ github.event.after }}"
-          fi
-
-          JS_PATTERNS="^(package\.json|pnpm-workspace\.yaml|pnpm-lock\.yaml|version\.txt|packages/|\.github/actions/|\.github/workflows/test-js-packages\.yml)"
-          CHANGED_FILES=$(git diff --name-only $BASE_COMMIT $HEAD_COMMIT)
-          JS_CHANGES=$(echo "$CHANGED_FILES" | grep -E "$JS_PATTERNS" || true)
-
-          if [ -n "$JS_CHANGES" ]; then
-            echo "js-packages=true" >> $GITHUB_OUTPUT
-            echo "JS package changes detected"
-          else
-            echo "js-packages=false" >> $GITHUB_OUTPUT
-            echo "No JS package changes"
-          fi
+          echo "Release PR content validation passed - only generated release files changed"
 
   js_packages:
     name: "(${{matrix.os.name}}, Node ${{matrix.node-version}})"
-    needs: find-changes
-    if: needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.js-packages == 'true'
-    timeout-minutes: 30
+    needs: release-pr
+    if: needs.release-pr.outputs.is-release-pr != 'true'
+    timeout-minutes: 15
     runs-on: ${{ matrix.os.runner }}
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -123,69 +107,62 @@ jobs:
           - 22
           - 24
     env:
-      TURBO_CACHE: local:rw
+      TURBO_CACHE: ${{ github.event.pull_request.head.repo.full_name == github.repository && 'remote:rw' || 'local:rw' }}
 
     steps:
-      # on main -> current + prev commit
-      # pr -> pr commits + base commit
-      - name: Determine fetch depth
-        id: fetch-depth
-        run: |
-          echo "depth=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> $GITHUB_OUTPUT
-
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          ref: ${{ github.ref }}
-          fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: "Setup Node"
-        uses: ./.github/actions/setup-node
-        with:
-          node-version: ${{ matrix.node-version }}
-        env:
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+      - parallel:
+          - name: Set up Turborepo Remote Cache
+            if: github.event.pull_request.head.repo.full_name == github.repository
+            uses: vercel/setup-turborepo-remote-cache-action@3df3d75a5268bbe2a4ee66048f56f3a86d6e21b7 # main
+            with:
+              team: ${{ vars.TURBO_TEAM }}
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+          - name: "Setup Node"
+            uses: ./.github/actions/setup-node
+            with:
+              node-version: ${{ matrix.node-version }}
+            env:
+              PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+          - name: Install Bun
+            uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
       - name: Run tests
         # We manually set TURBO_API to an empty string to override Hetzner env
-        # We filter out turborepo-repository because it's a native package and needs
-        # to run when turbo core changes. This job (`js_packages`) does not run on turborpeo core
-        # changes, and we don't want to enable that beahvior for _all_ our JS packages.
+        # @turbo/repository has its own native build matrix in the Test workflow.
         run: |
-          TURBO_API= turbo run check-types test build package-checks --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+          TURBO_API= turbo run check-types test build package-checks --affected --filter="./packages/*" --filter="!@turbo/repository" --color --env-mode=strict
         env:
           NODE_VERSION: ${{ matrix.node-version }}
 
   summary:
     name: JS Test Summary
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     if: always()
     needs:
-      - find-changes
+      - release-pr
       - js_packages
     steps:
-      - name: Fail if change detection failed
-        if: needs.find-changes.result != 'success'
+      - name: Fail if release PR validation failed
+        if: needs.release-pr.result != 'success'
         run: exit 1
 
       - name: Skip for release PR
-        if: needs.find-changes.outputs.is-release-pr == 'true'
+        if: needs.release-pr.outputs.is-release-pr == 'true'
         run: echo "Release PR detected - skipping tests (code already tested on main)"
 
-      - name: Skip - no JS changes
-        if: needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.js-packages != 'true'
-        run: echo "No JS package changes detected - skipping tests"
-
       - name: Compute info
-        if: needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.js-packages == 'true'
+        if: needs.release-pr.outputs.is-release-pr != 'true'
         run: |
           cancelled=false
           failure=false

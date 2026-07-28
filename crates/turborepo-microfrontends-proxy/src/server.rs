@@ -102,13 +102,19 @@ impl ProxyServer {
 
     pub async fn run(self) -> Result<(), ProxyError> {
         let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
-
         let listener = TcpListener::bind(addr)
             .await
             .map_err(|e| ProxyError::BindError {
                 port: self.port,
                 source: e,
             })?;
+
+        self.run_with_listener(listener).await
+    }
+
+    #[doc(hidden)]
+    pub async fn run_with_listener(self, listener: TcpListener) -> Result<(), ProxyError> {
+        let addr = listener.local_addr()?;
 
         info!(
             "Turborepo microfrontends proxy listening on http://{}",

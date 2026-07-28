@@ -76,7 +76,7 @@ impl TurboState {
         include_str!("../../../version.txt")
             .lines()
             .next()
-            .expect("Failed to read version from version.txt")
+            .unwrap_or_default()
     }
 }
 

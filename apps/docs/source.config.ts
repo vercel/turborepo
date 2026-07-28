@@ -4,18 +4,16 @@ import {
   transformerNotationHighlight,
   transformerNotationWordHighlight
 } from "@shikijs/transformers";
-import remarkMermaid from "./components/diagram/remark-mermaid";
-import rehypeStripHeadingJsx from "./lib/rehype-strip-heading-jsx";
 import {
-  defineConfig,
-  defineDocs,
-  frontmatterSchema,
-  metaSchema
-} from "fumadocs-mdx/config";
-import lastModified from "fumadocs-mdx/plugins/last-modified";
+  defineGeistdocsSourceConfig,
+  geistShikiTheme,
+  geistdocsFrontmatterSchema,
+  geistdocsMetaSchema
+} from "@vercel/geistdocs/source-config";
+import { defineDocs } from "fumadocs-mdx/config";
 import type { ShikiTransformer } from "shiki";
-import { createCssVariablesTheme } from "shiki";
 import { z } from "zod";
+import rehypeStripHeadingJsx from "./lib/rehype-strip-heading-jsx";
 
 const transformerAddLanguage: ShikiTransformer = {
   name: "add-language-attribute",
@@ -31,83 +29,20 @@ const transformerAddLanguage: ShikiTransformer = {
 export const docs = defineDocs({
   dir: "content/docs",
   docs: {
-    schema: frontmatterSchema.extend({
-      product: z.string().optional(),
-      url: z
-        .string()
-        .regex(/^\/.*/, { message: "url must start with a slash" })
-        .optional(),
-      type: z
-        .enum([
-          "conceptual", // Explains what something is and why it exists. Architecture, mental models, design decisions.
-          "guide", // Walks through how to accomplish a goal. Tutorials, getting started, workflows.
-          "reference", // Lookup-oriented, exhaustive details. API docs, config options, function signatures.
-          "troubleshooting", // Diagnoses problems and solutions. FAQs, errors, known issues, debugging guides.
-          "integration", // Connects multiple systems. 3rd-party setup, plugins, webhooks, migrations.
-          "overview" // High-level introductions. Landing pages, changelogs, release notes.
-        ])
-        .optional(),
-      prerequisites: z
-        .array(
-          z.string().regex(/^\/.*/, {
-            message: "prerequisites must start with a slash"
-          })
-        )
-        .optional(),
-      related: z
-        .array(
-          z
-            .string()
-            .regex(/^\/.*/, { message: "related must start with a slash" })
-        )
-        .optional(),
-      summary: z.string().optional()
-    }),
+    schema: geistdocsFrontmatterSchema,
     postprocess: {
       includeProcessedMarkdown: true
     }
   },
   meta: {
-    schema: metaSchema
+    schema: geistdocsMetaSchema
   }
 });
 
 export const { docs: blogDocs, meta: blogMeta } = defineDocs({
   dir: "content/blog",
   docs: {
-    schema: frontmatterSchema
-      .extend({
-        product: z.string().optional(),
-        url: z
-          .string()
-          .regex(/^\/.*/, { message: "url must start with a slash" })
-          .optional(),
-        type: z
-          .enum([
-            "conceptual", // Explains what something is and why it exists. Architecture, mental models, design decisions.
-            "guide", // Walks through how to accomplish a goal. Tutorials, getting started, workflows.
-            "reference", // Lookup-oriented, exhaustive details. API docs, config options, function signatures.
-            "troubleshooting", // Diagnoses problems and solutions. FAQs, errors, known issues, debugging guides.
-            "integration", // Connects multiple systems. 3rd-party setup, plugins, webhooks, migrations.
-            "overview" // High-level introductions. Landing pages, changelogs, release notes.
-          ])
-          .optional(),
-        prerequisites: z
-          .array(
-            z.string().regex(/^\/.*/, {
-              message: "prerequisites must start with a slash"
-            })
-          )
-          .optional(),
-        related: z
-          .array(
-            z
-              .string()
-              .regex(/^\/.*/, { message: "related must start with a slash" })
-          )
-          .optional(),
-        summary: z.string().optional()
-      })
+    schema: geistdocsFrontmatterSchema
       .extend({
         description: z.string(),
         date: z.string(),
@@ -125,45 +60,12 @@ export const { docs: blogDocs, meta: blogMeta } = defineDocs({
 export const { docs: externalBlogDocs, meta: externalBlogMeta } = defineDocs({
   dir: "content/external-blog",
   docs: {
-    schema: frontmatterSchema
-      .extend({
-        product: z.string().optional(),
-        url: z
-          .string()
-          .regex(/^\/.*/, { message: "url must start with a slash" })
-          .optional(),
-        type: z
-          .enum([
-            "conceptual", // Explains what something is and why it exists. Architecture, mental models, design decisions.
-            "guide", // Walks through how to accomplish a goal. Tutorials, getting started, workflows.
-            "reference", // Lookup-oriented, exhaustive details. API docs, config options, function signatures.
-            "troubleshooting", // Diagnoses problems and solutions. FAQs, errors, known issues, debugging guides.
-            "integration", // Connects multiple systems. 3rd-party setup, plugins, webhooks, migrations.
-            "overview" // High-level introductions. Landing pages, changelogs, release notes.
-          ])
-          .optional(),
-        prerequisites: z
-          .array(
-            z.string().regex(/^\/.*/, {
-              message: "prerequisites must start with a slash"
-            })
-          )
-          .optional(),
-        related: z
-          .array(
-            z
-              .string()
-              .regex(/^\/.*/, { message: "related must start with a slash" })
-          )
-          .optional(),
-        summary: z.string().optional()
-      })
-      .extend({
-        description: z.string(),
-        date: z.string(),
-        isExternal: z.literal(true),
-        href: z.string()
-      })
+    schema: geistdocsFrontmatterSchema.extend({
+      description: z.string(),
+      date: z.string(),
+      isExternal: z.literal(true),
+      href: z.string()
+    })
   }
 });
 
@@ -174,59 +76,21 @@ export const { docs: openapiDocs, meta: openapiMeta } = defineDocs({
 export const { docs: extraDocs, meta: extraMeta } = defineDocs({
   dir: "content/extra",
   docs: {
-    schema: frontmatterSchema
-      .extend({
-        product: z.string().optional(),
-        url: z
-          .string()
-          .regex(/^\/.*/, { message: "url must start with a slash" })
-          .optional(),
-        type: z
-          .enum([
-            "conceptual", // Explains what something is and why it exists. Architecture, mental models, design decisions.
-            "guide", // Walks through how to accomplish a goal. Tutorials, getting started, workflows.
-            "reference", // Lookup-oriented, exhaustive details. API docs, config options, function signatures.
-            "troubleshooting", // Diagnoses problems and solutions. FAQs, errors, known issues, debugging guides.
-            "integration", // Connects multiple systems. 3rd-party setup, plugins, webhooks, migrations.
-            "overview" // High-level introductions. Landing pages, changelogs, release notes.
-          ])
-          .optional(),
-        prerequisites: z
-          .array(
-            z.string().regex(/^\/.*/, {
-              message: "prerequisites must start with a slash"
-            })
-          )
-          .optional(),
-        related: z
-          .array(
-            z
-              .string()
-              .regex(/^\/.*/, { message: "related must start with a slash" })
-          )
-          .optional(),
-        summary: z.string().optional()
-      })
-      .extend({
-        description: z.string()
-      })
+    schema: geistdocsFrontmatterSchema.extend({
+      description: z.string()
+    })
   }
 });
 
-const theme = createCssVariablesTheme({
-  name: "css-variables",
-  variablePrefix: "--shiki-",
-  variableDefaults: {}
-});
-
-export default defineConfig({
+export default defineGeistdocsSourceConfig({
   mdxOptions: {
-    remarkPlugins: [remarkMermaid],
     rehypePlugins: [rehypeStripHeadingJsx],
     rehypeCodeOptions: {
+      // defineGeistdocsSourceConfig sets these at runtime; repeated here to
+      // satisfy the fumadocs RehypeCodeOptions type, which requires themes.
       themes: {
-        light: theme,
-        dark: theme
+        light: geistShikiTheme,
+        dark: geistShikiTheme
       },
       transformers: [
         transformerNotationHighlight({ matchAlgorithm: "v3" }),
@@ -236,6 +100,5 @@ export default defineConfig({
         transformerAddLanguage
       ]
     }
-  },
-  plugins: [lastModified()]
+  }
 });

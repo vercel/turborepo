@@ -253,7 +253,8 @@ To ensure file outputs are cached when you run `build`, add `storybook-static` t
     "build": {
       "outputs": [
         ".next/**",
-        "!.next/cache/**"
+        "!.next/cache/**",
+        "!.next/dev/**",
 +       "storybook-static/**"
       ]
     }
@@ -378,7 +379,7 @@ To prevent this, exclude stories from the inputs to your `build` task in your ro
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "!**/*.stories.{tsx,jsx,mdx}"], // [!code highlight]
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "build:storybook": {} // [!code highlight]
   }

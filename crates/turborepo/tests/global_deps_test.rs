@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+
 mod common;
 
 use std::fs;
@@ -7,7 +9,7 @@ use common::{run_turbo, setup};
 #[test]
 fn test_global_deps_change_causes_cache_miss() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "global_deps", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "global_deps", "npm@10.5.0", false).unwrap();
 
     // First build: cache miss
     let output1 = run_turbo(

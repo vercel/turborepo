@@ -2,6 +2,7 @@ use tracing::error;
 use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::TokenClient;
 use turborepo_dirs::{config_dir, vercel_config_dir};
+use turborepo_types::SecretString;
 use turborepo_ui::{GREY, cprintln};
 
 use crate::{
@@ -20,9 +21,7 @@ pub async fn logout<T: TokenClient>(options: &LogoutOptions<T>) -> Result<(), Er
 }
 
 impl<T: TokenClient> LogoutOptions<T> {
-    fn token_at_path(
-        path: &AbsoluteSystemPath,
-    ) -> Result<Option<turborepo_api_client::SecretString>, Error> {
+    fn token_at_path(path: &AbsoluteSystemPath) -> Result<Option<SecretString>, Error> {
         match Token::from_file(path) {
             Ok(token) => Ok(Some(token.into_inner().clone())),
             Err(Error::TokenNotFound) => Ok(None),
@@ -146,19 +145,19 @@ mod tests {
     impl Client for MockApiClient {
         async fn get_user(
             &self,
-            _token: &turborepo_api_client::SecretString,
+            _token: &SecretString,
         ) -> turborepo_api_client::Result<UserResponse> {
             unimplemented!("get_user")
         }
         async fn get_teams(
             &self,
-            _token: &turborepo_api_client::SecretString,
+            _token: &SecretString,
         ) -> turborepo_api_client::Result<TeamsResponse> {
             unimplemented!("get_teams")
         }
         async fn get_team(
             &self,
-            _token: &turborepo_api_client::SecretString,
+            _token: &SecretString,
             _team_id: &str,
         ) -> turborepo_api_client::Result<Option<Team>> {
             unimplemented!("get_team")
@@ -168,7 +167,7 @@ mod tests {
         }
         async fn verify_sso_token(
             &self,
-            token: &turborepo_api_client::SecretString,
+            token: &SecretString,
             _: &str,
         ) -> turborepo_api_client::Result<VerifiedSsoUser> {
             Ok(VerifiedSsoUser {
@@ -185,10 +184,7 @@ mod tests {
     }
 
     impl TokenClient for MockApiClient {
-        async fn delete_token(
-            &self,
-            _token: &turborepo_api_client::SecretString,
-        ) -> turborepo_api_client::Result<()> {
+        async fn delete_token(&self, _token: &SecretString) -> turborepo_api_client::Result<()> {
             if self.succeed_delete_request {
                 Ok(())
             } else {
@@ -201,7 +197,7 @@ mod tests {
         }
         async fn get_metadata(
             &self,
-            _token: &turborepo_api_client::SecretString,
+            _token: &SecretString,
         ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
             unimplemented!("get_metadata")
         }

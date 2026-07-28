@@ -10,31 +10,46 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs::OpenOptions,
     io::Write,
-    sync::LazyLock,
 };
 
 pub use config::{BoundariesConfig, Permissions, Rule, RulesMap};
-use globwalk::Settings;
+use globwalk::{Settings, ValidatedGlob};
 use indicatif::ProgressBar;
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
 use oxc_ast::ast::Comment;
+use oxc_span::Span;
+use oxc_syntax::module_record::ModuleRecord;
 use rayon::prelude::*;
-use regex::Regex;
 pub use tags::{ProcessedPermissions, ProcessedRule, ProcessedRulesMap};
 use thiserror::Error;
 use tracing::{debug_span, info_span};
-use turbo_trace::{ImportTraceType, Tracer, find_imports};
+use turbo_trace::{ImportResult, ImportTraceType, ImportType, Tracer, find_imports};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_log::Subsystem;
-use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName, PackageNode};
+use turborepo_repository::{
+    package_graph::{PackageGraph, PackageGraphNodeKind, PackageInfo, PackageName, PackageNode},
+    toolchain::ToolchainId,
+};
 use turborepo_ui::{BOLD_GREEN, BOLD_RED, ColorConfig, color};
 use unrs_resolver::Resolver;
 
 use crate::imports::DependencyLocations;
 
+#[derive(Clone)]
+pub struct PackageScope<'a> {
+    pub name: PackageName,
+    pub directory: &'a turbopath::AnchoredSystemPath,
+    pub kind: PackageGraphNodeKind,
+    pub toolchain: &'a ToolchainId,
+}
+
 pub trait PackageGraphProvider: Send + Sync {
-    fn packages(&self) -> Box<dyn Iterator<Item = (&PackageName, &PackageInfo)> + '_>;
+    /// Authoritative scopes. Implementations must not derive these facts from
+    /// compatibility manifests.
+    fn package_scopes(&self) -> Box<dyn Iterator<Item = PackageScope<'_>> + '_>;
+    /// Phase 2 compatibility payload used only for dependency information.
+    fn package_info(&self, name: &PackageName) -> Option<&PackageInfo>;
     fn immediate_dependencies(&self, node: &PackageNode) -> Option<HashSet<&PackageNode>>;
     fn dependencies(&self, node: &PackageNode) -> Box<dyn Iterator<Item = &PackageNode> + '_>;
     fn ancestors(&self, node: &PackageNode) -> Box<dyn Iterator<Item = &PackageNode> + '_>;
@@ -45,8 +60,20 @@ pub trait PackageGraphProvider: Send + Sync {
 }
 
 impl PackageGraphProvider for PackageGraph {
-    fn packages(&self) -> Box<dyn Iterator<Item = (&PackageName, &PackageInfo)> + '_> {
-        Box::new(self.packages())
+    fn package_scopes(&self) -> Box<dyn Iterator<Item = PackageScope<'_>> + '_> {
+        Box::new(self.node_views().filter_map(|(node, view)| match node {
+            PackageNode::Workspace(name) => Some(PackageScope {
+                name,
+                directory: view.directory()?,
+                kind: view.kind(),
+                toolchain: view.toolchain()?,
+            }),
+            PackageNode::Root => None,
+        }))
+    }
+
+    fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {
+        PackageGraph::package_info(self, name)
     }
 
     fn immediate_dependencies(&self, node: &PackageNode) -> Option<HashSet<&PackageNode>> {
@@ -207,12 +234,16 @@ pub enum BoundariesDiagnostic {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
+    #[error("missing Phase 2 compatibility payload for package `{0}`")]
+    MissingCompatibilityPayload(PackageName),
     #[error("file `{0}` does not have a parent directory")]
     NoParentDir(AbsoluteSystemPathBuf),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
     Lockfiles(#[from] turborepo_lockfiles::Error),
+    #[error(transparent)]
+    Glob(#[from] globwalk::GlobError),
     #[error(transparent)]
     GlobWalk(#[from] globwalk::WalkError),
     #[error("failed to read file: {0}")]
@@ -233,9 +264,28 @@ impl BoundariesDiagnostic {
     }
 }
 
-static PACKAGE_NAME_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$").unwrap()
-});
+fn is_valid_package_name_segment(segment: &str) -> bool {
+    let Some((first, rest)) = segment.as_bytes().split_first() else {
+        return false;
+    };
+
+    matches!(*first, b'a'..=b'z' | b'0'..=b'9' | b'-' | b'~')
+        && rest
+            .iter()
+            .all(|byte| matches!(byte, b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~'))
+}
+
+fn is_valid_package_name(package_name: &str) -> bool {
+    if let Some(scoped_name) = package_name.strip_prefix('@') {
+        let Some((scope, name)) = scoped_name.split_once('/') else {
+            return false;
+        };
+
+        is_valid_package_name_segment(scope) && is_valid_package_name_segment(name)
+    } else {
+        is_valid_package_name_segment(package_name)
+    }
+}
 
 /// Maximum number of warnings to show
 const MAX_WARNINGS: usize = 16;
@@ -293,6 +343,32 @@ impl BoundariesResult {
     }
 }
 
+fn find_dynamic_imports(module_record: &ModuleRecord, source: &str) -> Vec<ImportResult> {
+    module_record
+        .dynamic_imports
+        .iter()
+        .filter_map(|dynamic_import| {
+            let request_span = dynamic_import.module_request;
+            let request = source.get(request_span.start as usize..request_span.end as usize)?;
+            let allocator = oxc_allocator::Allocator::default();
+            let parsed =
+                oxc_parser::Parser::new(&allocator, request, oxc_span::SourceType::default())
+                    .parse();
+            let literal = &parsed.program.directives.first()?.expression;
+
+            Some(ImportResult {
+                specifier: literal.value.to_string(),
+                span: Span::new(
+                    request_span.start + literal.span.start,
+                    request_span.start + literal.span.end,
+                ),
+                statement_span: dynamic_import.span,
+                import_type: ImportType::Value,
+            })
+        })
+        .collect()
+}
+
 /// Parse a file with oxc, returning both imports and comments.
 ///
 /// We parse directly here (rather than using `turbo_trace::parse_file`) because
@@ -308,7 +384,8 @@ fn parse_with_comments(
     if ret.panicked {
         return None;
     }
-    let imports = find_imports(&ret.module_record, &ret.program.body, ImportTraceType::All);
+    let mut imports = find_imports(&ret.module_record, &ret.program.body, ImportTraceType::All);
+    imports.extend(find_dynamic_imports(&ret.module_record, source));
     let comments: Vec<Comment> = ret.program.comments.iter().copied().collect();
     Some((imports, comments))
 }
@@ -363,7 +440,7 @@ impl BoundariesChecker {
     /// against declared dependencies.
     fn is_potential_package_name(import: &str) -> bool {
         let base = imports::get_package_name(import);
-        PACKAGE_NAME_REGEX.is_match(base)
+        is_valid_package_name(base)
     }
 
     /// Patch a file with boundaries-ignore comments
@@ -430,7 +507,7 @@ impl BoundariesChecker {
     {
         let _span = info_span!("check_boundaries").entered();
         let rules_map = Self::get_processed_rules_map(ctx.root_boundaries_config);
-        let packages: Vec<_> = ctx.pkg_dep_graph.packages().collect();
+        let packages: Vec<_> = ctx.pkg_dep_graph.package_scopes().collect();
         let mut result = BoundariesResult::default();
 
         {
@@ -454,10 +531,20 @@ impl BoundariesChecker {
 
         let packages_to_check: Vec<_> = packages
             .into_iter()
-            .filter(|(name, _)| {
-                ctx.filtered_pkgs.contains(name) && !matches!(name, PackageName::Root)
+            .filter(|scope| {
+                matches!(scope.name, PackageName::Other(_))
+                    && ctx.filtered_pkgs.contains(&scope.name)
+                    && scope.kind == PackageGraphNodeKind::Package
+                    && scope.toolchain == &ToolchainId::JAVASCRIPT
             })
-            .collect();
+            .map(|scope| {
+                let info = ctx
+                    .pkg_dep_graph
+                    .package_info(&scope.name)
+                    .ok_or_else(|| Error::MissingCompatibilityPayload(scope.name.clone()))?;
+                Ok((scope.name, info, scope.directory))
+            })
+            .collect::<Result<_, Error>>()?;
 
         let progress = if show_progress {
             println!("Checking packages...");
@@ -471,11 +558,12 @@ impl BoundariesChecker {
             turborepo_rayon_compat::block_in_place(|| {
                 packages_to_check
                     .par_iter()
-                    .map(|(package_name, package_info)| {
+                    .map(|(package_name, package_info, package_directory)| {
                         let pkg_result = Self::check_package(
                             ctx,
                             package_name,
                             package_info,
+                            package_directory,
                             &rules_map,
                             &global_implicit_dependencies,
                         );
@@ -510,6 +598,7 @@ impl BoundariesChecker {
         ctx: &BoundariesContext<'_, G, T>,
         package_name: &PackageName,
         package_info: &PackageInfo,
+        package_directory: &turbopath::AnchoredSystemPath,
         tag_rules: &Option<ProcessedRulesMap>,
         global_implicit_dependencies: &HashMap<String, Spanned<()>>,
     ) -> Result<BoundariesResult, Error>
@@ -525,6 +614,7 @@ impl BoundariesChecker {
             ctx,
             package_name,
             package_info,
+            package_directory,
             &implicit_dependencies,
             global_implicit_dependencies,
         )?;
@@ -552,6 +642,7 @@ impl BoundariesChecker {
         ctx: &BoundariesContext<'_, G, T>,
         package_name: &PackageName,
         package_info: &PackageInfo,
+        package_directory: &turbopath::AnchoredSystemPath,
         implicit_dependencies: &HashMap<String, Spanned<()>>,
         global_implicit_dependencies: &HashMap<String, Spanned<()>>,
     ) -> Result<BoundariesResult, Error>
@@ -560,7 +651,7 @@ impl BoundariesChecker {
         T: TurboJsonProvider,
     {
         let _span = info_span!("check_package_files", package = %package_name).entered();
-        let package_root = ctx.repo_root.resolve(package_info.package_path());
+        let package_root = ctx.repo_root.resolve(package_directory);
         let internal_dependencies = ctx
             .pkg_dep_graph
             .immediate_dependencies(&PackageNode::Workspace(package_name.to_owned()))
@@ -568,19 +659,23 @@ impl BoundariesChecker {
 
         let files = {
             let _span = info_span!("globwalk", package = %package_name).entered();
+            let include_patterns: [ValidatedGlob; 8] = [
+                "**/*.js".parse()?,
+                "**/*.jsx".parse()?,
+                "**/*.ts".parse()?,
+                "**/*.tsx".parse()?,
+                "**/*.cjs".parse()?,
+                "**/*.mjs".parse()?,
+                "**/*.svelte".parse()?,
+                "**/*.vue".parse()?,
+            ];
+            let exclude_patterns: [ValidatedGlob; 2] =
+                ["node_modules/**".parse()?, "**/node_modules/**".parse()?];
+
             globwalk::globwalk_with_settings(
                 &package_root,
-                &[
-                    "**/*.js".parse().unwrap(),
-                    "**/*.jsx".parse().unwrap(),
-                    "**/*.ts".parse().unwrap(),
-                    "**/*.tsx".parse().unwrap(),
-                    "**/*.cjs".parse().unwrap(),
-                    "**/*.mjs".parse().unwrap(),
-                    "**/*.svelte".parse().unwrap(),
-                    "**/*.vue".parse().unwrap(),
-                ],
-                &["**/node_modules/**".parse().unwrap()],
+                &include_patterns,
+                &exclude_patterns,
                 globwalk::WalkType::Files,
                 Settings::default().ignore_nested_packages(),
             )?
@@ -709,7 +804,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_package_name_regex() {
+    fn finds_string_literal_dynamic_imports() {
+        let source = r#"
+            import("../package-b/index.ts");
+            import('@repo/package-b');
+            import(packageName);
+        "#;
+        let tmp = tempfile::tempdir().unwrap();
+        let path = AbsoluteSystemPath::new(tmp.path().to_str().unwrap())
+            .unwrap()
+            .join_component("index.ts");
+
+        let (imports, _) = parse_with_comments(&path, source).unwrap();
+        let specifiers: HashSet<_> = imports
+            .iter()
+            .map(|import| import.specifier.as_str())
+            .collect();
+
+        assert_eq!(imports.len(), 2);
+        assert!(specifiers.contains("../package-b/index.ts"));
+        assert!(specifiers.contains("@repo/package-b"));
+        assert!(
+            imports
+                .iter()
+                .all(|import| import.import_type == ImportType::Value)
+        );
+    }
+
+    #[test]
+    fn test_potential_package_name() {
         assert!(BoundariesChecker::is_potential_package_name("lodash"));
         assert!(BoundariesChecker::is_potential_package_name(
             "@scope/package"
@@ -776,17 +899,80 @@ mod tests {
     // Minimal mock providers for integration tests
     struct MockGraph {
         packages: Vec<(PackageName, PackageInfo)>,
+        aggregates: HashSet<PackageName>,
+        authoritative_directories: HashMap<PackageName, turbopath::AnchoredSystemPathBuf>,
+        missing_payloads: HashSet<PackageName>,
     }
 
     impl MockGraph {
         fn new(packages: Vec<(PackageName, PackageInfo)>) -> Self {
-            Self { packages }
+            let authoritative_directories = packages
+                .iter()
+                .map(|(name, _)| {
+                    (
+                        name.clone(),
+                        turbopath::AnchoredSystemPathBuf::from_raw(format!(
+                            "packages/{}",
+                            name.as_str()
+                        ))
+                        .unwrap(),
+                    )
+                })
+                .collect();
+            Self {
+                packages,
+                aggregates: HashSet::new(),
+                authoritative_directories,
+                missing_payloads: HashSet::new(),
+            }
+        }
+
+        fn with_aggregate(mut self, name: PackageName) -> Self {
+            self.aggregates.insert(name);
+            self
+        }
+
+        fn with_directory(mut self, name: PackageName, directory: &str) -> Self {
+            self.authoritative_directories.insert(
+                name,
+                turbopath::AnchoredSystemPathBuf::from_raw(directory).unwrap(),
+            );
+            self
+        }
+
+        fn without_payload(mut self, name: PackageName) -> Self {
+            self.missing_payloads.insert(name);
+            self
         }
     }
 
     impl PackageGraphProvider for MockGraph {
-        fn packages(&self) -> Box<dyn Iterator<Item = (&PackageName, &PackageInfo)> + '_> {
-            Box::new(self.packages.iter().map(|(n, i)| (n, i)))
+        fn package_scopes(&self) -> Box<dyn Iterator<Item = PackageScope<'_>> + '_> {
+            Box::new(self.packages.iter().map(|(name, _)| {
+                PackageScope {
+                    name: name.clone(),
+                    directory: self
+                        .authoritative_directories
+                        .get(name)
+                        .map(|path| path.as_ref())
+                        .expect("mock package must have an authoritative directory"),
+                    kind: if self.aggregates.contains(name) {
+                        PackageGraphNodeKind::Aggregate
+                    } else {
+                        PackageGraphNodeKind::Package
+                    },
+                    toolchain: &ToolchainId::JAVASCRIPT,
+                }
+            }))
+        }
+
+        fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {
+            if self.missing_payloads.contains(name) {
+                return None;
+            }
+            self.packages
+                .iter()
+                .find_map(|(candidate, info)| (candidate == name).then_some(info))
         }
 
         fn immediate_dependencies(&self, _: &PackageNode) -> Option<HashSet<&PackageNode>> {
@@ -835,6 +1021,12 @@ mod tests {
         for pkg in &["pkg-a", "pkg-b"] {
             let pkg_dir = repo_root.join_components(&["packages", pkg]);
             std::fs::create_dir_all(pkg_dir.as_std_path()).unwrap();
+            std::fs::create_dir_all(
+                pkg_dir
+                    .join_components(&["node_modules", "dep"])
+                    .as_std_path(),
+            )
+            .unwrap();
             std::fs::write(
                 pkg_dir.join_component("package.json").as_std_path(),
                 format!(r#"{{"name": "{pkg}"}}"#),
@@ -845,6 +1037,13 @@ mod tests {
                 "import './local';\n",
             )
             .unwrap();
+            std::fs::write(
+                pkg_dir
+                    .join_components(&["node_modules", "dep", "index.ts"])
+                    .as_std_path(),
+                "import 'missing';\n",
+            )
+            .unwrap();
         }
 
         let packages = vec![
@@ -852,24 +1051,18 @@ mod tests {
                 PackageName::Other("pkg-a".into()),
                 PackageInfo {
                     package_json: Default::default(),
-                    package_json_path: turbopath::AnchoredSystemPathBuf::from_raw(
-                        "packages/pkg-a/package.json",
-                    )
-                    .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
+                    ..Default::default()
                 },
             ),
             (
                 PackageName::Other("pkg-b".into()),
                 PackageInfo {
                     package_json: Default::default(),
-                    package_json_path: turbopath::AnchoredSystemPathBuf::from_raw(
-                        "packages/pkg-b/package.json",
-                    )
-                    .unwrap(),
                     unresolved_external_dependencies: None,
                     transitive_dependencies: None,
+                    ..Default::default()
                 },
             ),
         ];
@@ -899,6 +1092,107 @@ mod tests {
             "local imports should not produce diagnostics, got: {:?}",
             result.diagnostics.len()
         );
+    }
+
+    #[test]
+    fn check_boundaries_excludes_aggregate_scopes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let aggregate_name = PackageName::Other("cargo-workspace".into());
+        let graph = MockGraph::new(vec![(
+            aggregate_name.clone(),
+            PackageInfo {
+                ..Default::default()
+            },
+        )])
+        .with_aggregate(aggregate_name.clone());
+        let filtered = HashSet::from([aggregate_name]);
+        let result = BoundariesChecker::check_boundaries(
+            &BoundariesContext {
+                repo_root,
+                pkg_dep_graph: &graph,
+                turbo_json_provider: &MockTurboJson,
+                root_boundaries_config: None,
+                filtered_pkgs: &filtered,
+            },
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(result.packages_checked, 0);
+        assert_eq!(result.files_checked, 0);
+    }
+
+    #[test]
+    fn authoritative_package_missing_compatibility_payload_fails_closed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let package_name = PackageName::Other("authoritative-web".into());
+        let graph = MockGraph::new(vec![(
+            package_name.clone(),
+            PackageInfo {
+                ..Default::default()
+            },
+        )])
+        .without_payload(package_name.clone());
+        let filtered = HashSet::from([package_name.clone()]);
+
+        let result = BoundariesChecker::check_boundaries(
+            &BoundariesContext {
+                repo_root,
+                pkg_dep_graph: &graph,
+                turbo_json_provider: &MockTurboJson,
+                root_boundaries_config: None,
+                filtered_pkgs: &filtered,
+            },
+            false,
+        );
+        let Err(error) = result else {
+            panic!("missing compatibility payload must fail closed");
+        };
+
+        assert!(matches!(
+            error,
+            Error::MissingCompatibilityPayload(name) if name == package_name
+        ));
+    }
+
+    #[test]
+    fn check_boundaries_scans_authoritative_package_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let package_name = PackageName::Other("web".into());
+        repo_root
+            .join_components(&["actual", "web"])
+            .create_dir_all()
+            .unwrap();
+        repo_root
+            .join_components(&["actual", "web", "index.ts"])
+            .create_with_contents("export {};\n")
+            .unwrap();
+        let graph = MockGraph::new(vec![(
+            package_name.clone(),
+            PackageInfo {
+                ..Default::default()
+            },
+        )])
+        .with_directory(package_name.clone(), "actual/web");
+        let filtered = HashSet::from([package_name]);
+
+        let result = BoundariesChecker::check_boundaries(
+            &BoundariesContext {
+                repo_root,
+                pkg_dep_graph: &graph,
+                turbo_json_provider: &MockTurboJson,
+                root_boundaries_config: None,
+                filtered_pkgs: &filtered,
+            },
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(result.packages_checked, 1);
+        assert_eq!(result.files_checked, 1);
     }
 
     #[test]

@@ -45,6 +45,36 @@ pub struct ExecutionSummary<'a> {
     pub exit_code: i32,
 }
 
+/// Totals for reuse below the task boundary: work units a tool running
+/// inside a task fetched from (hits) or had to rebuild (misses) via the
+/// incremental cache. Toolchain-agnostic — for Rust this is sccache
+/// compile units served through the Remote Cache; other toolchains can
+/// contribute the same shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IncrementalCacheSummary {
+    pub hits: u64,
+    pub misses: u64,
+}
+
+/// The summary footer's "Incremental cache" line: reuse below the task
+/// boundary. `None` — and therefore absent from the output — unless the
+/// run actually exchanged work units: a repo that never engaged
+/// incremental caching should not see the line at all.
+fn incremental_cache_line(
+    ui: ColorConfig,
+    incremental_cache: Option<IncrementalCacheSummary>,
+) -> Option<(&'static str, String)> {
+    let incremental = incremental_cache.filter(|s| s.hits + s.misses > 0)?;
+    Some((
+        "Incremental cache",
+        format!(
+            "{}, {} misses",
+            color!(ui, BOLD, "{} hits", incremental.hits),
+            incremental.misses,
+        ),
+    ))
+}
+
 impl<'a> ExecutionSummary<'a> {
     pub fn new(
         command: String,
@@ -77,6 +107,7 @@ impl<'a> ExecutionSummary<'a> {
         ui: ColorConfig,
         path: AbsoluteSystemPathBuf,
         failed_tasks: Vec<&T>,
+        incremental_cache: Option<IncrementalCacheSummary>,
     ) {
         let maybe_full_turbo = if self.cached == self.attempted && self.attempted > 0 {
             match std::env::var("TERM_PROGRAM").as_deref() {
@@ -114,6 +145,10 @@ impl<'a> ExecutionSummary<'a> {
                 ),
             ),
         ];
+
+        if let Some(line) = incremental_cache_line(ui, incremental_cache) {
+            line_data.insert(2, line);
+        }
 
         if path.exists() {
             line_data.push(("Summary", path.to_string()));
@@ -474,8 +509,41 @@ mod test {
 
     use super::*;
 
+    #[test]
+    fn test_incremental_cache_line_conditional() {
+        // strip_ansi: label/value text is what users see uncolored.
+        let ui = ColorConfig::new(true);
+
+        // No incremental caching attempted: no line.
+        assert!(incremental_cache_line(ui, None).is_none());
+
+        // Attempted, but no work units exchanged (e.g. every task was a
+        // task-cache hit and no tool ever ran): still no line.
+        assert!(
+            incremental_cache_line(ui, Some(IncrementalCacheSummary { hits: 0, misses: 0 }))
+                .is_none()
+        );
+
+        // Real traffic renders, misses included even when zero.
+        let (label, value) = incremental_cache_line(
+            ui,
+            Some(IncrementalCacheSummary {
+                hits: 407,
+                misses: 12,
+            }),
+        )
+        .unwrap();
+        assert_eq!(label, "Incremental cache");
+        assert_eq!(value, "407 hits, 12 misses");
+
+        let (_, value) =
+            incremental_cache_line(ui, Some(IncrementalCacheSummary { hits: 0, misses: 3 }))
+                .unwrap();
+        assert_eq!(value, "0 hits, 3 misses");
+    }
+
     #[tokio::test]
-    async fn test_multiple_tasks() {
+    async fn test_multiple_tasks() -> Result<(), Box<dyn std::error::Error>> {
         let summary = ExecutionTracker::new();
         let foo = TaskId::new("foo", "build");
         let bar = TaskId::new("bar", "build");
@@ -511,42 +579,72 @@ mod test {
             }));
         }
         for task in tasks {
-            task.await.unwrap();
+            task.await?;
         }
 
-        let state = summary.finish().await.unwrap();
+        let state = summary.finish().await?;
         assert_eq!(state.attempted, 4);
         assert_eq!(state.cached, 1);
         assert_eq!(state.failed, 1);
         assert_eq!(state.success, 1);
-        let foo_state = state.tasks.iter().find(|task| task.task_id == foo).unwrap();
-        assert_eq!(foo_state.execution.as_ref().unwrap().exit_code, Some(0));
-        let bar_state = state.tasks.iter().find(|task| task.task_id == bar).unwrap();
-        assert_eq!(bar_state.execution.as_ref().unwrap().exit_code, Some(0));
-        let baz_state = state.tasks.iter().find(|task| task.task_id == baz).unwrap();
-        assert_eq!(baz_state.execution.as_ref().unwrap().exit_code, Some(1));
+        let Some(foo_state) = state.tasks.iter().find(|task| task.task_id == foo) else {
+            panic!("foo task should be present");
+        };
+        assert_eq!(
+            foo_state
+                .execution
+                .as_ref()
+                .map(|execution| execution.exit_code),
+            Some(Some(0))
+        );
+        let Some(bar_state) = state.tasks.iter().find(|task| task.task_id == bar) else {
+            panic!("bar task should be present");
+        };
+        assert_eq!(
+            bar_state
+                .execution
+                .as_ref()
+                .map(|execution| execution.exit_code),
+            Some(Some(0))
+        );
+        let Some(baz_state) = state.tasks.iter().find(|task| task.task_id == baz) else {
+            panic!("baz task should be present");
+        };
+        assert_eq!(
+            baz_state
+                .execution
+                .as_ref()
+                .map(|execution| execution.exit_code),
+            Some(Some(1))
+        );
         let boo_state = state.tasks.iter().find(|task| task.task_id == boo);
         assert!(
             boo_state.is_none(),
             "canceling doesn't produce execution data"
         );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_timing() {
+    async fn test_timing() -> Result<(), Box<dyn std::error::Error>> {
         let summary = ExecutionTracker::new();
         let tracker = summary.task_tracker(TaskId::new("foo", "build"));
         let post_construction_time = Local::now().timestamp_millis();
         let sleep_duration = Duration::milliseconds(5);
-        tokio::time::sleep(sleep_duration.to_std().unwrap()).await;
+        tokio::time::sleep(sleep_duration.to_std()?).await;
 
         let tracker = tracker.start().await;
 
-        tokio::time::sleep(sleep_duration.to_std().unwrap()).await;
+        tokio::time::sleep(sleep_duration.to_std()?).await;
         tracker.build_succeeded(0).await;
-        let mut state = summary.finish().await.unwrap();
+        let mut state = summary.finish().await?;
         assert_eq!(state.tasks.len(), 1);
-        let summary = state.tasks.pop().unwrap().execution.unwrap();
+        let Some(task_state) = state.tasks.pop() else {
+            panic!("task state should exist");
+        };
+        let Some(summary) = task_state.execution else {
+            panic!("task execution should exist");
+        };
         assert!(
             post_construction_time < summary.start_time,
             "tracker start time should start when start is called"
@@ -555,6 +653,7 @@ mod test {
             summary.start_time + sleep_duration.num_milliseconds() <= summary.end_time,
             "tracker end should be at least as long as the time between calls"
         );
+        Ok(())
     }
 
     #[test_case(
@@ -577,15 +676,20 @@ mod test {
         json!({ "startTime": 123, "endTime": 234, "exitCode": 1, "error": "cannot find anything" })
         ; "failure"
     )]
-    fn test_serialization(value: impl serde::Serialize, expected: serde_json::Value) {
-        assert_eq!(serde_json::to_value(value).unwrap(), expected);
+    fn test_serialization(
+        value: impl serde::Serialize,
+        expected: serde_json::Value,
+    ) -> Result<(), serde_json::Error> {
+        assert_eq!(serde_json::to_value(value)?, expected);
+        Ok(())
     }
 
     // Verifies that failed tasks can be identified directly from TaskState,
     // without needing the full TaskSummary machinery. This is the data path
     // the optimized (non-summary) finish will use.
     #[tokio::test]
-    async fn test_failed_tasks_identifiable_from_task_state() {
+    async fn test_failed_tasks_identifiable_from_task_state()
+    -> Result<(), Box<dyn std::error::Error>> {
         let summary = ExecutionTracker::new();
         let success_task = TaskId::new("app", "build");
         let fail_task = TaskId::new("lib", "build");
@@ -611,10 +715,10 @@ mod test {
             }));
         }
         for h in handles {
-            h.await.unwrap();
+            h.await?;
         }
 
-        let state = summary.finish().await.unwrap();
+        let state = summary.finish().await?;
 
         // TaskState.execution carries enough info to identify failures
         let failed: Vec<&TaskState> = state
@@ -630,6 +734,7 @@ mod test {
         assert_eq!(state.failed, 1);
         assert_eq!(state.success, 1);
         assert_eq!(state.cached, 1);
+        Ok(())
     }
 
     // Verifies ExecutionSummary computes successful() correctly from SummaryState

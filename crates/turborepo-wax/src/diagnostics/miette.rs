@@ -106,18 +106,19 @@ fn diagnose<'i, 't>(
         .chain(
             token::literals(tokenized.tokens())
                 .filter(|(_, literal)| literal.is_semantic_literal())
-                .map(|(component, literal)| {
-                    Box::new(SemanticLiteralWarning {
+                .filter_map(|(component, literal)| {
+                    let span = component
+                        .tokens()
+                        .iter()
+                        .map(|token| *token.annotation())
+                        .reduce(|left, right| left.union(&right))
+                        .map(SourceSpan::from)?;
+
+                    Some(Box::new(SemanticLiteralWarning {
                         expression: tokenized.expression().clone(),
                         literal: literal.text().clone(),
-                        span: component
-                            .tokens()
-                            .iter()
-                            .map(|token| *token.annotation())
-                            .reduce(|left, right| left.union(&right))
-                            .map(SourceSpan::from)
-                            .expect("no tokens in component"),
-                    }) as BoxedDiagnostic
+                        span,
+                    }) as BoxedDiagnostic)
                 }),
         )
         .chain(

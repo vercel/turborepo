@@ -13,7 +13,7 @@ import {
   DownloadError,
   logger
 } from "@turbo/utils";
-import { tryGitInit, removeGitDirectory } from "../../utils/git";
+import { tryGitInit } from "../../utils/git";
 import { transforms } from "../../transforms";
 import { TransformError } from "../../transforms/errors";
 import { isDefaultExample } from "../../utils/is-default-example";
@@ -296,10 +296,6 @@ export async function create(
     if (tryGitInit(root)) {
       info("Initialized a git repository.");
     }
-  } else {
-    // User explicitly doesn't want git - remove any .git directory
-    // (e.g., if the example template came with one)
-    removeGitDirectory(root);
   }
 
   opts.telemetry?.trackCommandStatus({ command: "create", status: "end" });

@@ -7,6 +7,7 @@ use turborepo_auth::{
     TURBO_AUTH_FILE, TURBO_TOKEN_DIR,
 };
 use turborepo_telemetry::events::command::{CommandEventBuilder, LoginMethod};
+use turborepo_types::SecretString;
 
 use crate::commands::CommandBase;
 
@@ -24,6 +25,8 @@ pub enum Error {
     NoCacheAccess,
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error(transparent)]
+    SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
     TurboJsonParse(#[from] crate::turbo_json::parser::Error),
 }
@@ -57,11 +60,15 @@ async fn sso_login(base: &mut CommandBase, sso_team: &str, force: bool) -> Resul
     let api_client: APIClient = base.api_client()?;
     let color_config = base.color_config;
     let login_url_config = base.opts.api_client_opts.login_url.to_string();
+    let login_url_source = base.opts.api_client_opts.login_url_source;
+    let api_url_source = base.opts.api_client_opts.api_url_source;
     let sso_login_callback_port = base.opts.api_client_opts.sso_login_callback_port;
     let options = LoginOptions {
         existing_token: base.opts.api_client_opts.token.as_ref().map(|t| t.expose()),
         sso_team: Some(sso_team),
         force,
+        login_url_source,
+        api_url_source,
         sso_login_callback_port,
         ..LoginOptions::new(&color_config, &login_url_config, &api_client)
     };
@@ -79,11 +86,19 @@ async fn login_no_sso(base: &mut CommandBase, force: bool) -> Result<(), Error> 
     let api_client: APIClient = base.api_client()?;
     let color_config = base.color_config;
     let login_url_config = base.opts.api_client_opts.login_url.to_string();
+    let login_url_source = base.opts.api_client_opts.login_url_source;
+    let api_url_source = base.opts.api_client_opts.api_url_source;
     let existing_token = base.opts.api_client_opts.token.as_ref().map(|t| t.expose());
+    let linked_team_id = base.opts.api_client_opts.team_id.as_deref();
+    let linked_team_slug = base.opts.api_client_opts.team_slug.as_deref();
 
     let options = LoginOptions {
         existing_token,
         force,
+        login_url_source,
+        api_url_source,
+        linked_team_id,
+        linked_team_slug,
         ..LoginOptions::new(&color_config, &login_url_config, &api_client)
     };
 
@@ -140,14 +155,13 @@ fn write_token(
         Some(ts) => {
             let now_secs = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .expect("Time went backwards")
-                .as_secs();
+                .map_or(0, |duration| duration.as_secs());
             AuthTokens {
                 token: Some(token),
                 refresh_token: ts
                     .refresh_token
                     .as_ref()
-                    .map(|rt| turborepo_api_client::SecretString::new(rt.clone())),
+                    .map(|rt| SecretString::new(rt.clone())),
                 expires_at: Some(now_secs + ts.expires_in),
             }
         }
@@ -212,12 +226,8 @@ mod tests {
 
         let turbo_auth_path = config_root.join_components(&[TURBO_TOKEN_DIR, TURBO_AUTH_FILE]);
         AuthTokens {
-            token: Some(turborepo_api_client::SecretString::new(
-                "vca_stale_token".to_owned(),
-            )),
-            refresh_token: Some(turborepo_api_client::SecretString::new(
-                "stale_refresh_token".to_owned(),
-            )),
+            token: Some(SecretString::new("vca_stale_token".to_owned())),
+            refresh_token: Some(SecretString::new("stale_refresh_token".to_owned())),
             expires_at: Some(4_102_444_800),
         }
         .write_to_config_file(&turbo_auth_path)

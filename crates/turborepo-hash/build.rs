@@ -9,9 +9,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("cargo:warning=capnpc failed, but continuing with rust-analyzer");
         }
         return Ok(());
-    } else {
-        capnpc_result.expect("schema compiler command");
     }
+
+    capnpc_result?;
 
     Ok(())
 }

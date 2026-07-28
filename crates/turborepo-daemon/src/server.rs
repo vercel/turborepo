@@ -31,7 +31,7 @@ use turborepo_filewatch::{
     globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
     hash_watcher::{Error as HashWatcherError, HashSpec, HashWatcher, InputGlobs},
     package_watcher::{PackageWatchError, PackageWatcher},
-    FileSystemWatcher, WatchError,
+    FileSystemWatcher, WatchError, WatchScope,
 };
 use turborepo_repository::package_manager;
 use turborepo_scm::SCM;
@@ -48,6 +48,7 @@ pub enum CloseReason {
     Timeout,
     Shutdown,
     WatcherClosed,
+    WatcherSetupError(WatchError),
     ServerClosed,
     Interrupt,
     SocketOpenError(SocketOpenError),
@@ -64,6 +65,7 @@ pub struct FileWatching<W: PackageChangesWatcher + 'static> {
     pub package_changes_watcher: OnceLock<Arc<W>>,
     pub hash_watcher: Arc<HashWatcher>,
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    allow_no_package_manager: bool,
     package_changes_watcher_factory: Arc<dyn Fn(PackageChangesWatcherArgs) -> W + Send + Sync>,
 }
 
@@ -86,6 +88,7 @@ impl<W: PackageChangesWatcher + 'static> Clone for FileWatching<W> {
             package_changes_watcher: new_package_changes_watcher,
             hash_watcher: self.hash_watcher.clone(),
             custom_turbo_json_path: self.custom_turbo_json_path.clone(),
+            allow_no_package_manager: self.allow_no_package_manager,
             package_changes_watcher_factory: self.package_changes_watcher_factory.clone(),
         }
     }
@@ -138,33 +141,39 @@ impl<W: PackageChangesWatcher + 'static> FileWatching<W> {
     pub fn new<F>(
         repo_root: AbsoluteSystemPathBuf,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+        allow_no_package_manager: bool,
         package_changes_watcher_factory: F,
     ) -> Result<FileWatching<W>, WatchError>
     where
         F: Fn(PackageChangesWatcherArgs) -> W + Send + Sync + 'static,
     {
         let watcher = Arc::new(FileSystemWatcher::new_with_default_cookie_dir(&repo_root)?);
-        let recv = watcher.watch();
+        let source = watcher.source();
 
         let cookie_writer = CookieWriter::new(
             watcher.cookie_dir(),
             Duration::from_millis(100),
-            recv.clone(),
+            source.clone(),
         );
         let glob_watcher = Arc::new(GlobWatcher::new(
             repo_root.clone(),
             cookie_writer.clone(),
-            recv.clone(),
+            source.clone(),
         ));
         let package_watcher = Arc::new(
-            PackageWatcher::new(repo_root.clone(), recv.clone(), cookie_writer)
-                .map_err(|e| WatchError::Setup(format!("{e:?}")))?,
+            PackageWatcher::new(
+                repo_root.clone(),
+                source.clone(),
+                cookie_writer,
+                allow_no_package_manager,
+            )
+            .map_err(|e| WatchError::Setup(format!("{e:?}")))?,
         );
         let scm = SCM::new(&repo_root);
         let hash_watcher = Arc::new(HashWatcher::new(
             repo_root.clone(),
             package_watcher.watch_discovery(),
-            recv.clone(),
+            source,
             scm,
         ));
 
@@ -176,6 +185,7 @@ impl<W: PackageChangesWatcher + 'static> FileWatching<W> {
             package_changes_watcher: OnceLock::new(),
             hash_watcher,
             custom_turbo_json_path,
+            allow_no_package_manager,
             package_changes_watcher_factory: Arc::new(package_changes_watcher_factory),
         })
     }
@@ -183,12 +193,12 @@ impl<W: PackageChangesWatcher + 'static> FileWatching<W> {
     pub fn get_or_init_package_changes_watcher(&self) -> Arc<W> {
         self.package_changes_watcher
             .get_or_init(|| {
-                let recv = self.watcher.watch();
                 let args = PackageChangesWatcherArgs {
                     repo_root: self.repo_root.clone(),
-                    file_events: recv,
+                    file_events: self.watcher.source(),
                     hash_watcher: self.hash_watcher.clone(),
                     custom_turbo_json_path: self.custom_turbo_json_path.clone(),
+                    allow_no_package_manager: self.allow_no_package_manager,
                 };
                 Arc::new((self.package_changes_watcher_factory)(args))
             })
@@ -213,6 +223,7 @@ where
     timeout: Duration,
     external_shutdown: S,
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    allow_no_package_manager: bool,
     package_changes_watcher_factory: Arc<dyn Fn(PackageChangesWatcherArgs) -> W + Send + Sync>,
 }
 
@@ -233,6 +244,7 @@ where
         timeout: Duration,
         external_shutdown: S,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+        allow_no_package_manager: bool,
         package_changes_watcher_factory: F,
     ) -> Self
     where
@@ -247,6 +259,7 @@ where
             timeout,
             external_shutdown,
             custom_turbo_json_path,
+            allow_no_package_manager,
             package_changes_watcher_factory: Arc::new(package_changes_watcher_factory),
         }
     }
@@ -258,6 +271,7 @@ where
             repo_root,
             timeout,
             custom_turbo_json_path,
+            allow_no_package_manager,
             package_changes_watcher_factory,
         } = self;
 
@@ -267,13 +281,17 @@ where
         let (trigger_shutdown, mut shutdown_signal) = mpsc::channel::<()>(1);
 
         let factory = package_changes_watcher_factory.clone();
-        let (service, exit_root_watch, watch_root_handle) = TurboGrpcServiceInner::new(
+        let (service, exit_root_watch, watch_root_handle) = match TurboGrpcServiceInner::new(
             repo_root.clone(),
             trigger_shutdown,
             paths.log_file,
             custom_turbo_json_path,
+            allow_no_package_manager,
             move |args| (factory)(args),
-        );
+        ) {
+            Ok(inner) => inner,
+            Err(err) => return Ok(CloseReason::WatcherSetupError(err)),
+        };
 
         let running = Arc::new(AtomicBool::new(true));
         let (_pid_lock, stream) =
@@ -341,6 +359,15 @@ struct TurboGrpcServiceInner<W: PackageChangesWatcher + 'static> {
     package_watcher: Arc<PackageWatcher>,
 }
 
+type TurboGrpcServiceInnerInit<W> = Result<
+    (
+        TurboGrpcServiceInner<W>,
+        oneshot::Sender<()>,
+        JoinHandle<Result<(), WatchError>>,
+    ),
+    WatchError,
+>;
+
 // we have a grpc service that uses watching package discovery, and where the
 // watching package hasher also uses watching package discovery as well as
 // falling back to a local package hasher
@@ -350,21 +377,18 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
         trigger_shutdown: mpsc::Sender<()>,
         log_file: AbsoluteSystemPathBuf,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+        allow_no_package_manager: bool,
         package_changes_watcher_factory: F,
-    ) -> (
-        Self,
-        oneshot::Sender<()>,
-        JoinHandle<Result<(), WatchError>>,
-    )
+    ) -> TurboGrpcServiceInnerInit<W>
     where
         F: Fn(PackageChangesWatcherArgs) -> W + Send + Sync + 'static,
     {
         let file_watching = FileWatching::new(
             repo_root.clone(),
             custom_turbo_json_path,
+            allow_no_package_manager,
             package_changes_watcher_factory,
-        )
-        .unwrap();
+        )?;
 
         tracing::debug!("initing package discovery");
         // Note that we're cloning the Arc, not the package watcher itself
@@ -381,7 +405,7 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
             root_watch_exit_signal,
         ));
 
-        (
+        Ok((
             TurboGrpcServiceInner {
                 package_watcher,
                 shutdown: trigger_shutdown,
@@ -392,7 +416,7 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
             },
             exit_root_watch,
             watch_root_handle,
-        )
+        ))
     }
 
     async fn trigger_shutdown(&self) {
@@ -413,7 +437,10 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
             .watch_globs(hash.clone(), glob_set, REQUEST_TIMEOUT)
             .await?;
         {
-            let mut times_saved = self.times_saved.lock().expect("times saved lock poisoned");
+            let mut times_saved = self
+                .times_saved
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             times_saved.insert(hash, time_saved);
         }
         Ok(())
@@ -425,7 +452,10 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
         candidates: HashSet<String>,
     ) -> Result<(HashSet<String>, u64), RpcError> {
         let time_saved = {
-            let times_saved = self.times_saved.lock().expect("times saved lock poisoned");
+            let times_saved = self
+                .times_saved
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             times_saved.get(hash.as_str()).copied().unwrap_or_default()
         };
         let changed_globs = self
@@ -469,9 +499,13 @@ async fn watch_root<W: PackageChangesWatcher + 'static>(
     trigger_shutdown: mpsc::Sender<()>,
     mut exit_signal: oneshot::Receiver<()>,
 ) -> Result<(), WatchError> {
+    let watched_root = root.clone();
     let mut recv_events = filewatching_access
         .watcher
-        .subscribe()
+        .source()
+        .subscribe(WatchScope::predicate(move |path| {
+            path == watched_root.as_std_path()
+        }))
         .await
         // we can only encounter an error here if the file watcher is closed (a recv error)
         .map_err(|_| WatchError::Setup("file watching shut down".to_string()))?;
@@ -493,7 +527,7 @@ async fn watch_root<W: PackageChangesWatcher + 'static>(
                     // before triggering a shutdown
                     Ok(event) if event.paths.iter().any(|p| p == (&root as &AbsoluteSystemPath)) => !root.exists(),
                     Ok(_) => false,
-                    Err(_) => true
+                    Err(error) => !error.is_invalidation()
                 };
                 if should_trigger_shutdown {
                     warn!("Root watcher triggering shutdown");
@@ -883,7 +917,7 @@ mod test {
             .unwrap();
 
         let repo_root = path.join_component("repo");
-        let paths = Paths::from_repo_root(&repo_root);
+        let paths = Paths::from_repo_root(&repo_root).unwrap();
         tracing::info!("start");
 
         let (tx, rx) = oneshot::channel::<CloseReason>();
@@ -895,6 +929,7 @@ mod test {
             Duration::from_secs(60 * 60),
             exit_signal,
             None,
+            false,
             MockPackageChangesWatcher::new,
         );
 
@@ -942,7 +977,7 @@ mod test {
             .unwrap();
 
         let repo_root = path.join_component("repo");
-        let paths = Paths::from_repo_root(&repo_root);
+        let paths = Paths::from_repo_root(&repo_root).unwrap();
 
         let now = Instant::now();
         let (_tx, rx) = oneshot::channel::<CloseReason>();
@@ -954,6 +989,7 @@ mod test {
             Duration::from_millis(10),
             exit_signal,
             None,
+            false,
             MockPackageChangesWatcher::new,
         );
 
@@ -1002,7 +1038,7 @@ mod test {
             .join_component("package-lock.json")
             .create_with_contents("")
             .unwrap();
-        let paths = Paths::from_repo_root(&repo_root);
+        let paths = Paths::from_repo_root(&repo_root).unwrap();
 
         let (_tx, rx) = oneshot::channel::<CloseReason>();
         let exit_signal = rx.map(|_result| CloseReason::Interrupt);
@@ -1013,6 +1049,7 @@ mod test {
             Duration::from_secs(60 * 60),
             exit_signal,
             None,
+            false,
             MockPackageChangesWatcher::new,
         );
 

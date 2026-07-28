@@ -27,7 +27,7 @@ pub enum Error {
     CallbackTimeout,
     #[error("login callback task panicked or was cancelled")]
     CallbackTaskFailed,
-    #[error("CSRF state parameter mismatch on SSO redirect")]
+    #[error("CSRF state parameter mismatch on login callback")]
     CsrfStateMismatch,
     #[error("login callback returned an error from the remote server")]
     LoginCallbackError,
@@ -41,6 +41,29 @@ pub enum Error {
     FailedToFetchUser(#[source] turborepo_api_client::Error),
     #[error("url is invalid: {0}")]
     InvalidUrl(#[from] url::ParseError),
+    #[error(
+        "Vercel login requires a trusted Vercel API URL, but `apiUrl` is configured to \
+         \"{api_url}\""
+    )]
+    UntrustedVercelApiUrl { api_url: String },
+    #[error(
+        "Refusing to open non-Vercel `loginUrl` from {url_source:?}. Re-run with `--login <url>` \
+         or set `TURBO_LOGIN` if you trust this remote cache."
+    )]
+    UntrustedNonVercelLoginUrlSource {
+        url_source: Option<turborepo_types::ConfigurationSource>,
+    },
+    #[error(
+        "Refusing non-Vercel login because `apiUrl` is from {url_source:?}. Re-run with `--api \
+         <url>` or set `TURBO_API` if you trust this remote cache."
+    )]
+    UntrustedNonVercelApiUrlSource {
+        url_source: Option<turborepo_types::ConfigurationSource>,
+    },
+    #[error("non-Vercel `loginUrl` must use HTTPS, except for localhost development URLs")]
+    UntrustedNonVercelLoginUrlScheme,
+    #[error("non-Vercel `loginUrl` must not include a username or password")]
+    LoginUrlIncludesCredentials,
 
     #[error("failed to validate sso token")]
     FailedToValidateSSOToken(#[source] turborepo_api_client::Error),

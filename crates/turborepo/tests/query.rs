@@ -87,7 +87,7 @@ fn test_trace() -> Result<(), anyhow::Error> {
 #[test]
 fn test_trace_on_monorepo() -> Result<(), anyhow::Error> {
     insta::with_settings!({ filters => vec![(r"\\\\", "/")]}, {
-        check_json_output!(
+        check_json_output!(@install
             "turbo_trace_monorepo",
             "npm@10.5.0",
             "query",

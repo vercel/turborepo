@@ -438,7 +438,8 @@ mod test {
     use tempfile::tempdir;
     use turbopath::AnchoredSystemPath;
     use turborepo_analytics::start_analytics;
-    use turborepo_api_client::{APIAuth, APIClient, SecretString};
+    use turborepo_api_client::{APIAuth, APIClient};
+    use turborepo_types::SecretString;
     use turborepo_vercel_api_mock::start_test_server;
 
     use super::*;
@@ -533,6 +534,50 @@ mod test {
         }
 
         analytics_handle.close_with_timeout().await;
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn put_allows_file_through_internal_symlinked_parent() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let app_dir = repo_root_path
+            .join_component("packages")
+            .join_component("app");
+        app_dir.create_dir_all()?;
+
+        let actual_dist = app_dir.join_component("actual-dist");
+        actual_dist.create_dir_all()?;
+        actual_dist
+            .join_component("file.txt")
+            .create_with_contents("hello")?;
+        app_dir
+            .join_component("dist")
+            .symlink_to_dir("actual-dist")?;
+        let log_dir = app_dir.join_component(".turbo");
+        log_dir.create_dir_all()?;
+        log_dir
+            .join_component("turbo-build.log")
+            .create_with_contents("log")?;
+
+        let cache = FSCache::new(
+            Utf8Path::new("cache"),
+            repo_root_path,
+            None,
+            LazyScmState::resolved(None),
+        )?;
+        let files = vec![
+            AnchoredSystemPathBuf::from_raw("packages/app/.turbo/turbo-build.log")?,
+            AnchoredSystemPathBuf::from_raw("packages/app/dist")?,
+            AnchoredSystemPathBuf::from_raw("packages/app/dist/file.txt")?,
+        ];
+
+        cache.put(repo_root_path, "symlinked-parent", &files, 50)?;
+        let result = cache.fetch(repo_root_path, "symlinked-parent")?;
+
+        assert!(result.is_some());
+
         Ok(())
     }
 

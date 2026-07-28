@@ -12,6 +12,7 @@ use turborepo_api_client::{
     APIAuth, APIClient, CacheClient, Response,
     analytics::{self, AnalyticsEvent},
 };
+use turborepo_types::SecretString;
 
 use crate::{
     CacheError, CacheHitMetadata, CacheOpts, CacheSource, LazyScmState,
@@ -22,10 +23,7 @@ use crate::{
 
 pub type UploadMap = HashMap<String, UploadProgressQuery<10, 100>>;
 
-fn replace_api_auth_token(
-    api_auth: &mut APIAuth,
-    token: turborepo_api_client::SecretString,
-) -> bool {
+fn replace_api_auth_token(api_auth: &mut APIAuth, token: SecretString) -> bool {
     if api_auth.token.expose() == token.expose() {
         return false;
     }
@@ -149,14 +147,22 @@ impl HTTPCache {
         Fut: std::future::Future<Output = Result<T, turborepo_api_client::Error>>,
     {
         // Try the operation with the current token
-        let api_auth = self.api_auth.lock().unwrap().clone();
+        let api_auth = self
+            .api_auth
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
         match operation(api_auth.clone()).await {
             Ok(result) => Ok(result),
             Err(turborepo_api_client::Error::UnknownStatus { code, .. }) if code == "forbidden" => {
                 // Try to refresh the token
                 if self.try_refresh_token().await {
                     // Retry the operation with the refreshed token
-                    let refreshed_auth = self.api_auth.lock().unwrap().clone();
+                    let refreshed_auth = self
+                        .api_auth
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .clone();
                     operation(refreshed_auth)
                         .await
                         .map_err(|err| Self::convert_api_error(hash, err))
@@ -221,7 +227,9 @@ impl HTTPCache {
                 let (progress, query) = UploadProgress::<10, 100, _>::new(stream, Some(body_len));
 
                 {
-                    let mut uploads = uploads_ref.lock().unwrap();
+                    let mut uploads = uploads_ref
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
                     uploads.insert(hash.to_string(), query);
                 }
 
@@ -468,7 +476,8 @@ mod test {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_analytics::start_analytics;
-    use turborepo_api_client::{APIClient, SecretString, analytics};
+    use turborepo_api_client::{APIClient, analytics};
+    use turborepo_types::SecretString;
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{

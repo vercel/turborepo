@@ -4,11 +4,24 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { PackageManagerType, TestCase, TestResult } from "../types";
 
+interface ExecResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
+interface LockfileValidationCommand {
+  command: string;
+  env?: Record<string, string>;
+  acceptsFailure?: (result: ExecResult) => boolean;
+  verifyLockfileUnchanged?: boolean;
+}
+
 function exec(
   command: string,
   cwd: string,
   env?: Record<string, string>
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+): Promise<ExecResult> {
   return new Promise((resolve) => {
     execCb(
       command,
@@ -41,6 +54,16 @@ function exec(
   });
 }
 
+function combinedOutput(result: ExecResult): string {
+  return [result.stdout, result.stderr].filter(Boolean).join("\n");
+}
+
+function readLockfile(cwd: string, lockfileName: string): Buffer | null {
+  const lockfilePath = path.join(cwd, lockfileName);
+  if (!fs.existsSync(lockfilePath)) return null;
+  return fs.readFileSync(lockfilePath);
+}
+
 function copyDirSync(src: string, dest: string): void {
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
@@ -54,25 +77,76 @@ function copyDirSync(src: string, dest: string): void {
   }
 }
 
-function lightweightValidationCommand(
+function lockfileValidationCommand(
   pm: PackageManagerType,
-  frozenInstallCommand: string[]
-): string {
+  cwd: string,
+  validateResolution = false
+): LockfileValidationCommand {
   switch (pm) {
     case "pnpm": {
-      return "pnpm install --frozen-lockfile --lockfile-only";
+      // Offline mode proves the frozen lockfile is accepted before pnpm can
+      // fetch missing tarballs into the empty validation store.
+      const storeDir = path.join(cwd, ".pnpm-validation-store");
+      fs.rmSync(storeDir, { recursive: true, force: true });
+      fs.mkdirSync(storeDir, { recursive: true });
+
+      return {
+        command:
+          "pnpm install --frozen-lockfile --ignore-scripts --offline --store-dir ./.pnpm-validation-store",
+        acceptsFailure(result) {
+          const output = combinedOutput(result);
+          return (
+            (output.includes("Lockfile is up to date") ||
+              output.includes("Already up to date")) &&
+            output.includes("ERR_PNPM_NO_OFFLINE_TARBALL")
+          );
+        }
+      };
     }
     case "npm": {
-      return "npm install --package-lock-only --ignore-scripts";
+      // `npm ci --dry-run` proves the lockfile is in sync with the
+      // package.json files, but it mirrors the lockfile's tree verbatim and
+      // won't notice a transitive dep that was pruned into an unreachable
+      // position. When requested, `npm ls --all` additionally walks the tree
+      // and fails (ELSPROBLEMS) if any package can't resolve a declared dep.
+      // See https://github.com/vercel/turborepo/issues/13109
+      const ci = "npm ci --dry-run --ignore-scripts --no-audit --no-fund";
+      return {
+        command: validateResolution
+          ? `${ci} && npm ls --package-lock-only --all`
+          : ci
+      };
     }
     case "yarn": {
-      return "yarn install --frozen-lockfile --ignore-scripts";
+      // Yarn Classic has no lockfile-only mode. With an empty offline cache,
+      // reaching the fetch step proves resolution accepted the lockfile.
+      const cacheFolder = path.join(cwd, ".yarn-offline-cache");
+      fs.rmSync(cacheFolder, { recursive: true, force: true });
+      fs.mkdirSync(cacheFolder, { recursive: true });
+
+      return {
+        command:
+          "yarn install --frozen-lockfile --ignore-scripts --offline --cache-folder ./.yarn-offline-cache",
+        acceptsFailure(result) {
+          const output = combinedOutput(result);
+          return (
+            output.includes("[2/4] Fetching packages") &&
+            output.includes("Can't make a request in offline mode")
+          );
+        }
+      };
     }
     case "yarn-berry": {
-      return "yarn install --immutable --mode=skip-build";
+      return {
+        command: "yarn install --mode=update-lockfile",
+        verifyLockfileUnchanged: true
+      };
     }
     case "bun": {
-      return frozenInstallCommand.join(" ");
+      return {
+        command: "bun install --frozen-lockfile",
+        env: { BUN_CONFIG_SKIP_INSTALL_PACKAGES: "1" }
+      };
     }
   }
 }
@@ -205,26 +279,26 @@ export class LocalRunner {
         console.log
       );
 
-      const validationCmd = lightweightValidationCommand(
+      const validation = lockfileValidationCommand(
         fixture.packageManager,
-        fixture.frozenInstallCommand
+        tmpDir,
+        fixture.validateResolution
       );
       console.log(
-        `[${fixture.filename}] Validating fixture (${validationCmd})...`
+        `[${fixture.filename}] Validating fixture (${validation.command})...`
       );
-      const result = await exec(validationCmd, tmpDir, {
-        PATH: fullPath,
-        COREPACK_ENABLE_STRICT: "0"
-      });
+      const validationResult = await this.runLockfileValidation(
+        fixture,
+        tmpDir,
+        fullPath,
+        validation
+      );
 
-      if (result.exitCode !== 0) {
-        const output = [result.stdout, result.stderr]
-          .filter(Boolean)
-          .join("\n");
+      if (validationResult.error) {
         return (
-          `INVALID FIXTURE: frozen install fails on unpruned original (exit ${result.exitCode}).\n` +
+          `INVALID FIXTURE: lockfile validation fails on unpruned original.\n` +
           `This means the fixture's package.jsons don't match its lockfile.\n` +
-          `Fix the fixture or rebuild it from a real repo.\n\n${output}`
+          `Fix the fixture or rebuild it from a real repo.\n\n${validationResult.error}`
         );
       }
 
@@ -233,6 +307,59 @@ export class LocalRunner {
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  }
+
+  private async runLockfileValidation(
+    fixture: TestCase["fixture"],
+    cwd: string,
+    fullPath: string,
+    validation: LockfileValidationCommand
+  ): Promise<{ output: string; error: string | null }> {
+    const before = readLockfile(cwd, fixture.lockfileName);
+    if (before === null) {
+      return {
+        output: "",
+        error: `Lockfile not found before validation: ${fixture.lockfileName}`
+      };
+    }
+
+    const result = await exec(validation.command, cwd, {
+      PATH: fullPath,
+      COREPACK_ENABLE_STRICT: "0",
+      ...validation.env
+    });
+    const output = combinedOutput(result);
+    const success =
+      result.exitCode === 0 || (validation.acceptsFailure?.(result) ?? false);
+
+    if (!success) {
+      return {
+        output,
+        error: `Lockfile validation failed (exit ${result.exitCode}).\n\n${output}`
+      };
+    }
+
+    if (validation.verifyLockfileUnchanged) {
+      const after = readLockfile(cwd, fixture.lockfileName);
+      if (after === null) {
+        return {
+          output,
+          error: `Lockfile not found after validation: ${fixture.lockfileName}`
+        };
+      }
+
+      if (!before.equals(after)) {
+        return {
+          output,
+          error:
+            `Lockfile validation changed ${fixture.lockfileName}.\n` +
+            "The lockfile is not valid for the current package.json files.\n\n" +
+            output
+        };
+      }
+    }
+
+    return { output, error: null };
   }
 
   /**
@@ -280,7 +407,7 @@ export class LocalRunner {
           label: tc.label,
           success: false,
           pruneSuccess: false,
-          installSuccess: false,
+          validationSuccess: false,
           error: validationError,
           durationMs: 0
         });
@@ -300,7 +427,6 @@ export class LocalRunner {
         turboBinaryPath,
         console.log
       );
-      const installCmd = fixture.frozenInstallCommand.join(" ");
 
       // Git init once for all workspace targets
       await exec(
@@ -324,18 +450,19 @@ export class LocalRunner {
           label,
           success: false,
           pruneSuccess: false,
-          installSuccess: false,
+          validationSuccess: false,
           durationMs: 0
         };
 
         try {
           // turbo prune
-          log(`[${label}] turbo prune ${targetWorkspace.name}`);
-          const pruneResult = await exec(
-            `turbo prune ${targetWorkspace.name}`,
-            tmpDir,
-            { PATH: fullPath }
-          );
+          const pruneCommand = `turbo prune ${targetWorkspace.name}${
+            tc.docker ? " --docker" : ""
+          }${tc.production ? " --production" : ""}`;
+          log(`[${label}] ${pruneCommand}`);
+          const pruneResult = await exec(pruneCommand, tmpDir, {
+            PATH: fullPath
+          });
 
           result.pruneOutput = [pruneResult.stdout, pruneResult.stderr]
             .filter(Boolean)
@@ -352,30 +479,37 @@ export class LocalRunner {
           result.pruneSuccess = true;
           log(`[${label}] Prune succeeded`);
 
-          // Frozen install in pruned output
-          const outDir = path.join(tmpDir, "out");
-          log(`[${label}] ${installCmd} (in out/)`);
+          // Validate the pruned lockfile without downloading packages.
+          const outDir = tc.docker
+            ? path.join(tmpDir, "out", "json")
+            : path.join(tmpDir, "out");
+          const outLabel = tc.docker ? "out/json" : "out";
+          const validation = lockfileValidationCommand(
+            fixture.packageManager,
+            outDir,
+            fixture.validateResolution
+          );
+          log(
+            `[${label}] ${validation.command} (lockfile validation in ${outLabel}/)`
+          );
 
-          const installResult = await exec(installCmd, outDir, {
-            PATH: fullPath,
-            COREPACK_ENABLE_STRICT: "0"
-          });
+          const validationResult = await this.runLockfileValidation(
+            fixture,
+            outDir,
+            fullPath,
+            validation
+          );
+          result.validationOutput = validationResult.output;
 
-          result.installOutput = [installResult.stdout, installResult.stderr]
-            .filter(Boolean)
-            .join("\n");
-
-          if (installResult.exitCode !== 0) {
-            log(
-              `[${label}] FROZEN INSTALL FAILED (exit ${installResult.exitCode})`
-            );
-            result.error = `Frozen install failed:\n${result.installOutput}`;
+          if (validationResult.error) {
+            log(`[${label}] LOCKFILE VALIDATION FAILED`);
+            result.error = validationResult.error;
             result.durationMs = Date.now() - startTime;
             results.push(result);
             continue;
           }
 
-          result.installSuccess = true;
+          result.validationSuccess = true;
           result.success = true;
           log(`[${label}] PASSED`);
         } catch (err) {

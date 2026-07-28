@@ -111,7 +111,7 @@ We'll be using `build` and `check-types` tasks in this guide but you can replace
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "check-types": {
       "dependsOn": ["^check-types"]
@@ -196,9 +196,9 @@ Add `.turbo` to your `.gitignore` file. The `turbo` CLI uses these folders for p
 
 </Step>
 <Step>
-### Add a `packageManager` field to root `package.json`
+### Add `devEngines.packageManager` to root `package.json`
 
-Turborepo optimizes your repository using information from your package manager. To declare which package manager you're using, add a [`packageManager`](https://nodejs.org/api/packages.html#packagemanager) field to your root `package.json` if you don't have one already.
+Turborepo optimizes your repository using information from your package manager. To declare which package manager you're using, add `devEngines.packageManager` to your root `package.json` if you don't have a package manager declaration already. The legacy top-level [`packageManager`](https://nodejs.org/api/packages.html#packagemanager) field is also supported.
 
 <PackageManagerTabs>
 
@@ -206,7 +206,12 @@ Turborepo optimizes your repository using information from your package manager.
 
 ```diff title="package.json"
 {
-+  "packageManager": "pnpm@10.0.0"
++  "devEngines": {
++    "packageManager": {
++      "name": "pnpm",
++      "version": "10.0.0"
++    }
++  }
 }
 ```
 
@@ -216,7 +221,12 @@ Turborepo optimizes your repository using information from your package manager.
 
 ```diff title="package.json"
 {
-+  "packageManager": "yarn@1.22.19"
++  "devEngines": {
++    "packageManager": {
++      "name": "yarn",
++      "version": "1.22.19"
++    }
++  }
 }
 ```
 
@@ -226,7 +236,12 @@ Turborepo optimizes your repository using information from your package manager.
 
 ```diff title="package.json"
 {
-+  "packageManager": "npm@8.5.0"
++  "devEngines": {
++    "packageManager": {
++      "name": "npm",
++      "version": "8.5.0"
++    }
++  }
 }
 ```
 
@@ -236,7 +251,12 @@ Turborepo optimizes your repository using information from your package manager.
 
 ```diff title="package.json"
 {
-+  "packageManager": "bun@1.2.0"
++  "devEngines": {
++    "packageManager": {
++      "name": "bun",
++      "version": "1.2.0"
++    }
++  }
 }
 ```
 
@@ -247,8 +267,8 @@ Turborepo optimizes your repository using information from your package manager.
 <Callout type="info">
   Depending on your repository, you may need to use the
   [`dangerouslyDisablePackageManagerCheck`](/docs/reference/configuration#dangerouslydisablepackagemanagercheck)
-  while migrating or in situations where you can't use the `packageManager` key
-  yet.
+  while migrating or in situations where you can't use a package manager
+  declaration yet.
 </Callout>
 
 </Step>

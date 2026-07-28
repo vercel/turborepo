@@ -20,6 +20,13 @@ use crate::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPath,
 };
 
+fn clean_utf8_path(path: Utf8PathBuf) -> Utf8PathBuf {
+    match Utf8PathBuf::from_path_buf(path.as_std_path().clean()) {
+        Ok(cleaned) => cleaned,
+        Err(_) => path,
+    }
+}
+
 /// Models how two paths relate to each other
 #[derive(Debug, PartialEq, Eq)]
 pub enum PathRelation {
@@ -237,14 +244,7 @@ impl AbsoluteSystemPath {
     /// Intended for joining literals or obviously single-token strings
     pub fn join_component(&self, segment: &str) -> AbsoluteSystemPathBuf {
         debug_assert!(!segment.contains(std::path::MAIN_SEPARATOR));
-        AbsoluteSystemPathBuf(
-            self.0
-                .join(segment)
-                .as_std_path()
-                .clean()
-                .try_into()
-                .unwrap(),
-        )
+        AbsoluteSystemPathBuf(clean_utf8_path(self.0.join(segment)))
     }
 
     /// Intended for joining a path composed of literals
@@ -254,14 +254,9 @@ impl AbsoluteSystemPath {
                 .iter()
                 .any(|segment| segment.contains(std::path::MAIN_SEPARATOR))
         );
-        AbsoluteSystemPathBuf(
-            self.0
-                .join(segments.join(std::path::MAIN_SEPARATOR_STR))
-                .as_std_path()
-                .clean()
-                .try_into()
-                .unwrap(),
-        )
+        AbsoluteSystemPathBuf(clean_utf8_path(
+            self.0.join(segments.join(std::path::MAIN_SEPARATOR_STR)),
+        ))
     }
 
     pub fn as_str(&self) -> &str {
@@ -270,18 +265,28 @@ impl AbsoluteSystemPath {
 
     pub fn join_unix_path(&self, unix_path: impl AsRef<RelativeUnixPath>) -> AbsoluteSystemPathBuf {
         let tail = unix_path.as_ref().to_system_path_buf();
-        AbsoluteSystemPathBuf(
-            self.0
-                .join(tail)
-                .as_std_path()
-                .clean()
-                // The unwrap here should never panic as `try_into` will only panic if
-                // - path isn't absolute: self is already absolute, appending to it won't change
-                //   that
-                // - path isn't valid utf8: self and unix_path are both utf8 already
-                .try_into()
-                .expect("joined path is absolute and valid utf8"),
-        )
+        AbsoluteSystemPathBuf(match self.0.join(tail).as_std_path().clean().try_into() {
+            Ok(path) => path,
+            Err(err) => panic!("joined path is absolute and valid utf8: {err:?}"),
+        })
+    }
+
+    /// Joins a normalized relative Unix path without resolving `.` or `..`.
+    /// Use `join_unix_path` unless the caller knows the path is normalized.
+    pub fn join_unix_path_unchecked(
+        &self,
+        unix_path: impl AsRef<RelativeUnixPath>,
+    ) -> AbsoluteSystemPathBuf {
+        #[cfg(unix)]
+        {
+            AbsoluteSystemPathBuf(self.0.join(unix_path.as_ref().as_str()))
+        }
+
+        #[cfg(windows)]
+        {
+            let tail = unix_path.as_ref().to_system_path_buf();
+            AbsoluteSystemPathBuf(self.0.join(tail))
+        }
     }
 
     /// Note: This does not handle resolutions, so `../` in a path won't
@@ -394,8 +399,10 @@ impl AbsoluteSystemPath {
             "expected absolute path to start with root/prefix"
         );
 
-        AbsoluteSystemPathBuf::new(stack.into_iter().collect::<Utf8PathBuf>())
-            .expect("collapsed path should be absolute")
+        match AbsoluteSystemPathBuf::new(stack.into_iter().collect::<Utf8PathBuf>()) {
+            Ok(path) => path,
+            Err(err) => panic!("collapsed path should be absolute: {err:?}"),
+        }
     }
 
     // TODO: consider consolidating with `relation_to_path` below

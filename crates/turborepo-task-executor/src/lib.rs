@@ -26,7 +26,7 @@ mod visitor;
 
 pub use command::{
     CommandFactory, CommandProvider, CommandProviderError, MicroFrontendProxyProvider,
-    PackageGraphCommandProvider, PackageInfoProvider,
+    ToolchainCommandProvider,
 };
 pub use exec::{
     DryRunExecutor, ExecOutcome, HashTrackerProvider, InternalError, SuccessOutcome,
@@ -36,11 +36,10 @@ pub use output::{StdWriter, TaskOutput};
 use serde::Serialize;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_task_id::TaskId;
-// Re-export StopExecution from turborepo-types for convenience
-pub use turborepo_types::StopExecution;
 use turborepo_types::{ContinueMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, UIMode};
 pub use visitor::{
-    EngineExecutor, EngineMessage, EngineProvider, TaskCallback, TaskHashProvider, turbo_regex,
+    EngineExecutor, EngineMessage, EngineProvider, TaskCallback, TaskHashProvider,
+    command_invokes_turbo,
 };
 
 /// Configuration for task execution.

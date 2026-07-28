@@ -127,16 +127,6 @@ impl PackageTaskEventBuilder {
         self
     }
 
-    pub fn track_scm_mode(&self, method: &str) -> &Self {
-        self.track(Event {
-            key: "scm_mode".to_string(),
-            value: method.to_string(),
-            is_sensitive: EventType::NonSensitive,
-            send_in_ci: false,
-        });
-        self
-    }
-
     // errors
     pub fn track_error(&self, error: TrackedErrors) -> &Self {
         self.track(Event {

@@ -67,11 +67,11 @@ Additionally, a `name` field will be added to any `package.json` in the Workspac
 
 <Step>
 
-### Add a `packageManager` field to root `package.json`
+### Add `devEngines.packageManager` to root `package.json`
 
-[The `packageManager` field](https://nodejs.org/api/packages.html#packagemanager) is a convention from the Node.js ecosystem that defines which package manager is expected to be used in the Workspace.
+The `devEngines.packageManager` field declares which package manager is expected to be used in the Workspace. The legacy top-level [`packageManager`](https://nodejs.org/api/packages.html#packagemanager) field is also supported for backwards compatibility.
 
-Turborepo 2.0 requires that your Workspace define this field as a way to improve the stability and behavioral predictability of your codebase. If you do not have one already, add this field to your root `package.json`:
+Turborepo 2.0 requires that your Workspace define a package manager declaration as a way to improve the stability and behavioral predictability of your codebase. If you do not have one already, add this field to your root `package.json`:
 
 <PackageManagerTabs>
 
@@ -79,7 +79,12 @@ Turborepo 2.0 requires that your Workspace define this field as a way to improve
 
 ```diff title="./package.json"
 {
-+ "packageManager": "pnpm@9.2.0"
++ "devEngines": {
++   "packageManager": {
++     "name": "pnpm",
++     "version": "9.2.0"
++   }
++ }
 }
 ```
 
@@ -89,7 +94,12 @@ Turborepo 2.0 requires that your Workspace define this field as a way to improve
 
 ```diff title="./package.json"
 {
-+ "packageManager": "yarn@1.22.19"
++ "devEngines": {
++   "packageManager": {
++     "name": "yarn",
++     "version": "1.22.19"
++   }
++ }
 }
 ```
 
@@ -99,7 +109,12 @@ Turborepo 2.0 requires that your Workspace define this field as a way to improve
 
 ```diff title="./package.json"
 {
-+ "packageManager": "npm@10.8.1"
++ "devEngines": {
++   "packageManager": {
++     "name": "npm",
++     "version": "10.8.1"
++   }
++ }
 }
 ```
 
@@ -109,7 +124,12 @@ Turborepo 2.0 requires that your Workspace define this field as a way to improve
 
 ```diff title="./package.json"
 {
-+ "packageManager": "bun@1.2.0"
++ "devEngines": {
++   "packageManager": {
++     "name": "bun",
++     "version": "1.2.0"
++   }
++ }
 }
 ```
 

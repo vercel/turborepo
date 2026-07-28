@@ -44,7 +44,7 @@ export function Snippet({ code, className }: SnippetProps) {
       >
         <span className="flex items-center justify-center">
           {copied ? (
-            <Check size={16} className="text-green-600" />
+            <Check size={16} className="text-green-700" />
           ) : (
             <Copy size={16} className="text-muted-foreground" />
           )}

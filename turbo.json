@@ -2,6 +2,10 @@
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
   "noUpdateNotifier": true,
+  "futureFlags": {
+    "experimentalCargoWorkspaces": true,
+    "experimentalTaskCommand": true
+  },
   // The following are used by tools such as pnpm, gh actions to setup pnpm, etc.
   "globalPassThroughEnv": [
     "Path",
@@ -34,11 +38,47 @@
       // actually need to build before running tests.
       "dependsOn": ["^build"]
     },
+    // The Rust workspace tests run through nextest with per-test process
+    // isolation. Some tests read root-level config and integration fixtures
+    // outside the Cargo workspace, so declare them explicitly.
+    // Excludes mirror the CI invocations: turborepo-lsp, schema-gen, and
+    // napi need extra build environments.
+    "turborepo-crates#test": {
+      "dependsOn": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/version.txt",
+        "$TURBO_ROOT$/.config/nextest.toml",
+        "$TURBO_ROOT$/.config/insta.yaml",
+        "$TURBO_ROOT$/turborepo-tests/integration/**"
+      ],
+      "command": [
+        "cargo",
+        "nextest",
+        "run",
+        "--workspace",
+        "--exclude",
+        "turborepo-lsp",
+        "--exclude",
+        "turborepo-schema-gen",
+        "--exclude",
+        "turborepo-napi",
+        "--no-fail-fast"
+      ]
+    },
 
     // docs lint task runs fumadocs-mdx to generate types before oxlint
     "docs#lint": {},
     "//#quality": {
-      "dependsOn": ["//#lint", "//#format", "//#check:toml", "docs#lint"]
+      "dependsOn": [
+        "//#lint",
+        "//#format",
+        "//#check:toml",
+        "docs#lint",
+        "docs#check-types",
+        "docs#check-links",
+        "docs#check-openapi"
+      ]
     },
     "//#lint": {
       "inputs": ["!pnpm-lock.yaml"]
@@ -71,7 +111,27 @@
       ],
       "dependsOn": ["^build"]
     },
-    "build:test-archive": {},
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "env": ["AI_GATEWAY_API_KEY"]
+    },
+    // These entrypoints embed files outside every crate directory, so the
+    // automatic crate-closure hashing cannot see them. $TURBO_DEFAULT$ keeps
+    // the automatic inputs and appends the external files.
+    "turbo#build": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/version.txt",
+        "$TURBO_ROOT$/packages/turbo-types/src/json/frameworks.json"
+      ]
+    },
+    "turborepo-lsp#build": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/turbo-types/src/json/frameworks.json"
+      ]
+    },
     "package-checks": {
       "dependsOn": ["package:types"]
     },

@@ -20,7 +20,9 @@ const notifyUpdate = createNotifyUpdate({
         root: process.cwd()
       });
       if (packageManager === "yarn") {
-        const available = await getAvailablePackageManagers();
+        const available = await getAvailablePackageManagers({
+          projectRoot: process.cwd()
+        });
         const yarnVersion = available.yarn;
         if (yarnVersion && gte(yarnVersion, "2.0.0")) {
           return "yarn dlx @turbo/codemod";
@@ -28,6 +30,10 @@ const notifyUpdate = createNotifyUpdate({
         return "yarn global add @turbo/codemod";
       } else if (packageManager === "pnpm") {
         return "pnpm i -g @turbo/codemod";
+      } else if (packageManager === "nub") {
+        return "nub add -g @turbo/codemod";
+      } else if (packageManager === "aube") {
+        return "aube add -g @turbo/codemod";
       }
       return "npm i -g @turbo/codemod";
     } catch {

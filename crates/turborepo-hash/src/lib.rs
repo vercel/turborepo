@@ -4,25 +4,20 @@
 //! deterministic serialization across languages and platforms, then applies
 //! xxHash64 for fast hashing.
 
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 mod oid_hash;
 mod traits;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt, sync::Arc};
 
-use capnp::message::{Builder, HeapAllocator};
+use capnp::{
+    message::{Builder, HeapAllocator},
+    traits::{Owned, SetterInput},
+};
 pub use oid_hash::OidHash;
 pub use traits::TurboHash;
-// Re-export for backward compatibility. New code should import from `turborepo_types`.
-#[deprecated(
-    since = "2.4.0",
-    note = "Import `EnvMode` directly from `turborepo_types` instead"
-)]
-pub use turborepo_types::EnvMode;
-#[deprecated(
-    since = "2.4.0",
-    note = "Import `TaskOutputs` directly from `turborepo_types` instead"
-)]
-pub use turborepo_types::TaskOutputs;
+use turborepo_types::{EnvMode, TaskOutputs};
 
 #[allow(dead_code)]
 mod proto_capnp {
@@ -75,18 +70,24 @@ pub struct TaskHashable<'a> {
     pub resolved_env_vars: EnvVarPairs,
     pub pass_through_env: &'a [String],
     pub env_mode: EnvMode,
+
+    // The task's resolved `command` override: the argv when one applies
+    // (empty otherwise), plus whether the task is an explicit opt-out.
+    // Changing what a task runs must invalidate its cached results.
+    pub command_override: &'a [String],
+    pub command_opt_out: bool,
 }
 
 impl TaskHashable<'_> {
     /// Calculate the task hash, applying env_mode rules.
     ///
     /// In Loose mode, pass_through_env is cleared before hashing.
-    pub fn calculate_task_hash(mut self) -> String {
+    pub fn calculate_task_hash(mut self) -> Result<String, Error> {
         if matches!(self.env_mode, EnvMode::Loose) {
             self.pass_through_env = &[];
         }
 
-        self.hash()
+        self.try_hash()
     }
 }
 
@@ -117,6 +118,60 @@ pub struct FileHashes(pub Vec<(turbopath::RelativeUnixPathBuf, OidHash)>);
 /// This is needed due to Rust's orphan rule - we can't implement From
 /// for two foreign types (TaskOutputs and Builder).
 pub struct HashableTaskOutputs(pub TaskOutputs);
+
+#[derive(Debug)]
+pub enum Error {
+    MessageSize(capnp::Error),
+    Canonicalize(capnp::Error),
+    ReadTaskOutputs(capnp::Error),
+    SetTaskOutputs(capnp::Error),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MessageSize(err) => {
+                write!(f, "unable to calculate Cap'n Proto message size: {err}")
+            }
+            Self::Canonicalize(err) => {
+                write!(f, "unable to canonicalize Cap'n Proto message: {err}")
+            }
+            Self::ReadTaskOutputs(err) => {
+                write!(f, "unable to read Cap'n Proto task outputs: {err}")
+            }
+            Self::SetTaskOutputs(err) => write!(f, "unable to set Cap'n Proto task outputs: {err}"),
+        }
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::MessageSize(err)
+            | Self::Canonicalize(err)
+            | Self::ReadTaskOutputs(err)
+            | Self::SetTaskOutputs(err) => Some(err),
+        }
+    }
+}
+
+pub trait HashableMessage {
+    fn into_builder(self) -> Result<Builder<HeapAllocator>, Error>;
+}
+
+fn canonical_builder<T: Owned>(
+    size: capnp::Result<capnp::MessageSize>,
+    value: impl SetterInput<T>,
+) -> Result<Builder<HeapAllocator>, Error> {
+    let size = size.map_err(Error::MessageSize)?.word_count + 1;
+
+    let mut canon_builder = Builder::new(HeapAllocator::default().first_segment_words(size as u32));
+    canon_builder
+        .set_root_canonical::<T>(value)
+        .map_err(Error::Canonicalize)?;
+
+    Ok(canon_builder)
+}
 
 impl From<TaskOutputs> for HashableTaskOutputs {
     fn from(value: TaskOutputs) -> Self {
@@ -154,8 +209,9 @@ impl From<HashableTaskOutputs> for Builder<HeapAllocator> {
     }
 }
 
-impl From<LockFilePackages> for Builder<HeapAllocator> {
-    fn from(LockFilePackages(packages): LockFilePackages) -> Self {
+impl HashableMessage for LockFilePackages {
+    fn into_builder(self) -> Result<Builder<HeapAllocator>, Error> {
+        let LockFilePackages(packages) = self;
         let mut message = ::capnp::message::TypedBuilder::<
             proto_capnp::lock_file_packages::Owned,
             HeapAllocator,
@@ -173,25 +229,16 @@ impl From<LockFilePackages> for Builder<HeapAllocator> {
             }
         }
 
-        // We're okay to unwrap here because we haven't hit the nesting
-        // limit and the message will not have cycles.
-        let size = builder
-            .total_size()
-            .expect("unable to calculate total size")
-            .word_count
-            + 1; // + 1 to solve an off by one error inside capnp
-        let mut canon_builder =
-            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
-        canon_builder
-            .set_root_canonical(builder.reborrow_as_reader())
-            .expect("can't fail");
-
-        canon_builder
+        canonical_builder::<proto_capnp::lock_file_packages::Owned>(
+            builder.total_size(),
+            builder.reborrow_as_reader(),
+        )
     }
 }
 
-impl<'a> From<LockFilePackagesRef<'a>> for Builder<HeapAllocator> {
-    fn from(LockFilePackagesRef(packages): LockFilePackagesRef<'a>) -> Self {
+impl HashableMessage for LockFilePackagesRef<'_> {
+    fn into_builder(self) -> Result<Builder<HeapAllocator>, Error> {
+        let LockFilePackagesRef(packages) = self;
         let mut message = ::capnp::message::TypedBuilder::<
             proto_capnp::lock_file_packages::Owned,
             HeapAllocator,
@@ -209,25 +256,16 @@ impl<'a> From<LockFilePackagesRef<'a>> for Builder<HeapAllocator> {
             }
         }
 
-        // We're okay to unwrap here because we haven't hit the nesting
-        // limit and the message will not have cycles.
-        let size = builder
-            .total_size()
-            .expect("unable to calculate total size")
-            .word_count
-            + 1; // + 1 to solve an off by one error inside capnp
-        let mut canon_builder =
-            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
-        canon_builder
-            .set_root_canonical(builder.reborrow_as_reader())
-            .expect("can't fail");
-
-        canon_builder
+        canonical_builder::<proto_capnp::lock_file_packages::Owned>(
+            builder.total_size(),
+            builder.reborrow_as_reader(),
+        )
     }
 }
 
-impl From<FileHashes> for Builder<HeapAllocator> {
-    fn from(FileHashes(file_hashes): FileHashes) -> Self {
+impl HashableMessage for FileHashes {
+    fn into_builder(self) -> Result<Builder<HeapAllocator>, Error> {
+        let FileHashes(file_hashes) = self;
         debug_assert!(
             file_hashes.windows(2).all(|w| w[0].0 <= w[1].0),
             "FileHashes inner Vec must be sorted by key"
@@ -251,25 +289,16 @@ impl From<FileHashes> for Builder<HeapAllocator> {
             }
         }
 
-        // We're okay to unwrap here because we haven't hit the nesting
-        // limit and the message will not have cycles.
-        let size = builder
-            .total_size()
-            .expect("unable to calculate total size")
-            .word_count
-            + 1; // + 1 to solve an off by one error inside capnp
-        let mut canon_builder =
-            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
-        canon_builder
-            .set_root_canonical(builder.reborrow_as_reader())
-            .expect("can't fail");
-
-        canon_builder
+        canonical_builder::<proto_capnp::file_hashes::Owned>(
+            builder.total_size(),
+            builder.reborrow_as_reader(),
+        )
     }
 }
 
-impl From<&FileHashes> for Builder<HeapAllocator> {
-    fn from(FileHashes(file_hashes): &FileHashes) -> Self {
+impl HashableMessage for &FileHashes {
+    fn into_builder(self) -> Result<Builder<HeapAllocator>, Error> {
+        let FileHashes(file_hashes) = self;
         debug_assert!(
             file_hashes.windows(2).all(|w| w[0].0 <= w[1].0),
             "FileHashes inner Vec must be sorted by key"
@@ -293,25 +322,16 @@ impl From<&FileHashes> for Builder<HeapAllocator> {
             }
         }
 
-        // We're okay to unwrap here because we haven't hit the nesting
-        // limit and the message will not have cycles.
-        let size = builder
-            .total_size()
-            .expect("unable to calculate total size")
-            .word_count
-            + 1; // + 1 to solve an off by one error inside capnp
-        let mut canon_builder =
-            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
-        canon_builder
-            .set_root_canonical(builder.reborrow_as_reader())
-            .expect("can't fail");
-
-        canon_builder
+        canonical_builder::<proto_capnp::file_hashes::Owned>(
+            builder.total_size(),
+            builder.reborrow_as_reader(),
+        )
     }
 }
 
-impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
-    fn from(task_hashable: TaskHashable) -> Self {
+impl HashableMessage for TaskHashable<'_> {
+    fn into_builder(self) -> Result<Builder<HeapAllocator>, Error> {
+        let task_hashable = self;
         let mut message =
             ::capnp::message::TypedBuilder::<proto_capnp::task_hashable::Owned>::new_default();
         let mut builder = message.init_root();
@@ -331,9 +351,12 @@ impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
 
         {
             let output_builder: Builder<_> = HashableTaskOutputs(task_hashable.outputs).into();
+            let output_reader = output_builder
+                .get_root_as_reader()
+                .map_err(Error::ReadTaskOutputs)?;
             builder
-                .set_outputs(output_builder.get_root_as_reader().unwrap())
-                .unwrap();
+                .set_outputs(output_reader)
+                .map_err(Error::SetTaskOutputs)?;
         }
 
         {
@@ -379,25 +402,34 @@ impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
             }
         }
 
-        // We're okay to unwrap here because we haven't hit the nesting
-        // limit and the message will not have cycles.
-        let size = builder
-            .total_size()
-            .expect("unable to calculate total size")
-            .word_count
-            + 1; // + 1 to solve an off by one error inside capnp
-        let mut canon_builder =
-            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
-        canon_builder
-            .set_root_canonical(builder.reborrow_as_reader())
-            .expect("can't fail");
+        // Only written when set: an explicitly initialized empty list is a
+        // non-null pointer in capnp, encoded differently from the default
+        // null pointer. Canonical form truncates trailing default-valued
+        // fields, so guarding here keeps every existing task hash stable —
+        // only tasks that actually use a `command` override hash
+        // differently.
+        if !task_hashable.command_override.is_empty() {
+            let mut command_override_builder = builder
+                .reborrow()
+                .init_command_override(task_hashable.command_override.len() as u32);
+            for (i, arg) in task_hashable.command_override.iter().enumerate() {
+                command_override_builder.set(i as u32, arg);
+            }
+        }
+        if task_hashable.command_opt_out {
+            builder.set_command_opt_out(true);
+        }
 
-        canon_builder
+        canonical_builder::<proto_capnp::task_hashable::Owned>(
+            builder.total_size(),
+            builder.reborrow_as_reader(),
+        )
     }
 }
 
-impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
-    fn from(hashable: GlobalHashable) -> Self {
+impl HashableMessage for GlobalHashable<'_> {
+    fn into_builder(self) -> Result<Builder<HeapAllocator>, Error> {
+        let hashable = self;
         let mut message =
             ::capnp::message::TypedBuilder::<proto_capnp::global_hashable::Owned>::new_default();
 
@@ -482,20 +514,10 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
         builder.set_framework_inference(hashable.framework_inference);
         builder.set_global_configuration(hashable.global_configuration);
 
-        // We're okay to unwrap here because we haven't hit the nesting
-        // limit and the message will not have cycles.
-        let size = builder
-            .total_size()
-            .expect("unable to calculate total size")
-            .word_count
-            + 1; // + 1 to solve an off by one error inside capnp
-        let mut canon_builder =
-            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
-        canon_builder
-            .set_root_canonical(builder.reborrow_as_reader())
-            .expect("can't fail");
-
-        canon_builder
+        canonical_builder::<proto_capnp::global_hashable::Owned>(
+            builder.total_size(),
+            builder.reborrow_as_reader(),
+        )
     }
 }
 
@@ -530,6 +552,8 @@ mod test {
             resolved_env_vars: vec![],
             pass_through_env: &["pass_thru_env".to_string()],
             env_mode: EnvMode::Loose,
+            command_override: &[],
+            command_opt_out: false,
         };
 
         assert_eq!(task_hashable.hash(), "1f8b13161f57fca1");
@@ -557,12 +581,43 @@ mod test {
             resolved_env_vars: vec![],
             pass_through_env: &["pass_thru_env".to_string()],
             env_mode: EnvMode::Strict,
+            command_override: &[],
+            command_opt_out: false,
         };
 
         let hash = task_hashable.hash();
         assert!(!hash.is_empty());
         // Pin the hash so any serialization change is caught
         assert_eq!(hash, "7676d7bb7c86d257");
+    }
+
+    #[test]
+    fn loose_mode_ignores_pass_through_env() {
+        let calculate = |pass_through_env: &[String]| {
+            TaskHashable {
+                global_hash: "global_hash",
+                task_dependency_hashes: vec![],
+                package_dir: None,
+                hash_of_files: "hash_of_files",
+                external_deps_hash: None,
+                task: "task",
+                outputs: TaskOutputs::default(),
+                pass_through_args: &[],
+                env: &[],
+                resolved_env_vars: vec![],
+                pass_through_env,
+                env_mode: EnvMode::Loose,
+                command_override: &[],
+                command_opt_out: false,
+            }
+            .calculate_task_hash()
+            .unwrap()
+        };
+
+        assert_eq!(
+            calculate(&[]),
+            calculate(&["SHOULD_NOT_AFFECT_HASH".to_string()])
+        );
     }
 
     #[test]

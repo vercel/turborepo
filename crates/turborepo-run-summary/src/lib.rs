@@ -14,7 +14,8 @@ mod tracker;
 
 pub use duration::TurboDuration;
 pub use execution::{
-    ExecutionSummary, ExecutionTracker, SummaryState, TaskState, TaskSummaryInfo, TaskTracker,
+    ExecutionSummary, ExecutionTracker, IncrementalCacheSummary, SummaryState, TaskState,
+    TaskSummaryInfo, TaskTracker,
 };
 pub use global_hash::{GlobalEnvConfiguration, GlobalEnvVarSummary, GlobalHashSummary};
 pub use observability::Handle as ObservabilityHandle;
@@ -25,11 +26,3 @@ pub use task::{
 };
 pub use task_factory::{Error as TaskFactoryError, TaskSummaryFactory, get_external_deps_hash};
 pub use tracker::{Error, RunSummary, RunTracker, SinglePackageRunSummary};
-// Re-export traits from turborepo-types for convenience
-// These traits are defined in turborepo-types to enable proper dependency direction:
-// infrastructure crates (turborepo-engine, turborepo-task-hash) can implement these
-// traits without depending on this crate.
-pub use turborepo_types::{
-    EngineInfo, GlobalHashInputs, HashTrackerCacheHitMetadata, HashTrackerDetailedMap,
-    HashTrackerInfo, RunOptsInfo,
-};

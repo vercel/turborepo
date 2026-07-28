@@ -9,9 +9,10 @@ license = "MIT"
 # This is for the convenience of running daily dev workflows, i.e running
 # `cargo xxx` without explicitly specifying features.
 default = ["rustls-tls"]
-native-tls = ["turborepo-lib/native-tls"]
-rustls-tls = ["turborepo-lib/rustls-tls"]
+native-tls = ["turborepo-lib/native-tls", "turborepo-lsp/native-tls"]
+rustls-tls = ["turborepo-lib/rustls-tls", "turborepo-lsp/rustls-tls"]
 pprof = ["turborepo-lib/pprof"]
+heap-dhat = ["dep:dhat", "turborepo-lib/heap-dhat"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [build-dependencies]
@@ -30,18 +31,34 @@ serde_json = { workspace = true }
 tempfile = { workspace = true }
 which = { workspace = true }
 
-[[bin]]
-name = "echo_args"
-path = "../../turborepo-tests/helpers/echo_args.rs"
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+terminal-control = "=0.6.0"
 
 [lints]
 workspace = true
 
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
+dhat = { workspace = true, optional = true }
 miette.workspace = true
+sccache = { workspace = true }
 turborepo-lib = { workspace = true, default-features = false }
+turborepo-lsp = { workspace = true, default-features = false }
 turborepo-query = { workspace = true }
 turborepo-query-api = { workspace = true }
+turborepo-repository = { workspace = true }
 turborepo-signals = { workspace = true }
 turborepo-ui = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_System_Console",
+] }
+
+# Not enabled on Windows: libmimalloc-sys compiles against the dynamic CRT
+# (the workspace default) while libghostty-vt-sys ships static-CRT objects,
+# and MSVC's /failifmismatch rejects linking both. Revisit if the Windows
+# CRT choice is ever unified.
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+mimalloc = { workspace = true }

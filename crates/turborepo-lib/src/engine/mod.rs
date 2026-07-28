@@ -10,9 +10,8 @@ pub use turborepo_engine::{
     Built, ExecuteError, ExecutionOptions, Message, TaskDefinitionInfo, TaskNode,
 };
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_task_id::TaskId;
 use turborepo_types::{TaskDefinition, UIMode};
-// Keep backward compatibility type alias
-pub type Error = BuilderError;
 
 /// Type alias for Engine specialized with TaskDefinition.
 /// This allows existing code to continue using `Engine` without type
@@ -72,6 +71,32 @@ pub trait EngineExt {
     ) -> Result<(), Vec<ValidateError>>;
 }
 
+pub(crate) fn task_has_command(
+    engine: &Engine<Built>,
+    package_graph: &PackageGraph,
+    task: &TaskId<'static>,
+) -> bool {
+    if task.task() == "proxy" {
+        return true;
+    }
+
+    let Some(context) = package_graph.package_task_context(&PackageName::from(task.package()))
+    else {
+        return false;
+    };
+    match engine
+        .task_definition(task)
+        .and_then(|definition| definition.command.as_ref())
+    {
+        Some(turborepo_types::TaskCommandOverride::Argv(_)) => true,
+        Some(turborepo_types::TaskCommandOverride::OptOut) => false,
+        None => context
+            .toolchain()
+            .and_then(|id| package_graph.toolchains().get(id))
+            .is_some_and(|toolchain| toolchain.defines_task(&context, task.task())),
+    }
+}
+
 impl EngineExt for Engine<Built> {
     fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String> {
         self.tasks()
@@ -79,17 +104,22 @@ impl EngineExt for Engine<Built> {
                 TaskNode::Root => None,
                 TaskNode::Task(task) => Some(task),
             })
-            .filter_map(|task| {
-                let pkg_name = PackageName::from(task.package());
-                let json = pkg_graph.package_json(&pkg_name)?;
-                // TODO: delegate to command factory to filter down tasks to those that will
-                // have a runnable command.
-                (task.task() == "proxy" || json.command(task.task()).is_some())
-                    .then(|| task.to_string())
+            .filter(|task| {
+                // Ask the package's toolchain whether the task resolves to a
+                // runnable command — the same authority execution uses. For
+                // JS packages this is the package.json scripts lookup; for
+                // Cargo packages it consults the verb tables, so toolchain
+                // tasks appear in the TUI task list. A resolved `command`
+                // override is authoritative in both directions: an argv
+                // executes even where the toolchain defines nothing, and an
+                // opt-out never executes even where it does.
+                task_has_command(self, pkg_graph, task)
             })
+            .map(ToString::to_string)
             .collect()
     }
 
+    #[allow(clippy::expect_used)]
     fn validate(
         &self,
         package_graph: &PackageGraph,
@@ -103,11 +133,11 @@ impl EngineExt for Engine<Built> {
             .task_graph()
             .node_indices()
             .map(|node_index| {
-                let TaskNode::Task(task_id) = self
+                let task_node = self
                     .task_graph()
                     .node_weight(node_index)
-                    .expect("graph should contain weight for node index")
-                else {
+                    .expect("graph should contain weight for node index");
+                let TaskNode::Task(task_id) = task_node else {
                     // No need to check the root node if that's where we are.
                     return Ok(false);
                 };
@@ -116,11 +146,11 @@ impl EngineExt for Engine<Built> {
                     .task_graph()
                     .neighbors_directed(node_index, petgraph::Direction::Outgoing)
                 {
-                    let TaskNode::Task(dep_id) = self
+                    let dep_node = self
                         .task_graph()
                         .node_weight(dep_index)
-                        .expect("index comes from iterating the graph and must be present")
-                    else {
+                        .expect("index comes from iterating the graph and must be present");
+                    let TaskNode::Task(dep_id) = dep_node else {
                         // No need to check the root node
                         continue;
                     };
@@ -156,9 +186,12 @@ impl EngineExt for Engine<Built> {
                 }
 
                 // check if the package for the task has that task in its package.json
-                let info = package_graph
-                    .package_info(&PackageName::from(task_id.package().to_string()))
-                    .expect("package graph should contain workspace info for task package");
+                let package_name = PackageName::from(task_id.package().to_string());
+                let info = package_graph.package_info(&package_name).ok_or_else(|| {
+                    ValidateError::MissingPackageJson {
+                        package: task_id.package().to_string(),
+                    }
+                })?;
 
                 let package_has_task = info
                     .package_json
@@ -231,7 +264,6 @@ mod test {
 
     use std::collections::{BTreeMap, HashSet};
 
-    use tempfile::TempDir;
     use turbopath::AbsoluteSystemPath;
     use turborepo_errors::Spanned;
     use turborepo_repository::{
@@ -242,9 +274,9 @@ mod test {
 
     use super::*;
 
-    struct DummyDiscovery<'a>(&'a TempDir);
+    struct DummyDiscovery(turbopath::AbsoluteSystemPathBuf);
 
-    impl<'a> PackageDiscovery for DummyDiscovery<'a> {
+    impl PackageDiscovery for DummyDiscovery {
         async fn discover_packages(
             &self,
         ) -> Result<
@@ -255,7 +287,7 @@ mod test {
             let workspaces = [("a", true), ("b", true), ("c", false)]
                 .into_iter()
                 .map(|(name, had_build)| {
-                    let path = AbsoluteSystemPath::from_std_path(self.0.path()).unwrap();
+                    let path = &self.0;
                     let package_json = path.join_component(&format!("{}.json", name));
 
                     let scripts = if had_build {
@@ -302,6 +334,75 @@ mod test {
         }
     }
 
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_tasks_with_command_asks_toolchains() {
+        // The TUI task list must come from the same authority execution
+        // uses: the package's toolchain. JS packages resolve via
+        // package.json scripts; Cargo packages resolve via the toolchain's
+        // verb tables — no scripts anywhere.
+        let tmp = tempfile::TempDir::with_prefix("tasks_with_command").unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+
+        // A minimal Cargo workspace with one binary crate.
+        root.join_component("Cargo.toml")
+            .create_with_contents(
+                "[workspace]\nmembers = [\"crates/*\"]\nresolver = \
+                 \"2\"\n\n[workspace.metadata]\nname = \"acme\"\n",
+            )
+            .unwrap();
+        let crate_dir = root.join_components(&["crates", "my-crate"]);
+        crate_dir.join_component("src").create_dir_all().unwrap();
+        crate_dir
+            .join_component("Cargo.toml")
+            .create_with_contents(
+                "[package]\nname = \"my-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            )
+            .unwrap();
+        crate_dir
+            .join_components(&["src", "main.rs"])
+            .create_with_contents("fn main() {}\n")
+            .unwrap();
+        root.join_component("Cargo.lock")
+            .create_with_contents(
+                "version = 4\n\n[[package]]\nname = \"my-crate\"\nversion = \"0.1.0\"\n",
+            )
+            .unwrap();
+
+        let mut engine: Engine<Building> = Engine::new();
+        for (package, task) in [
+            // JS package with a build script (DummyDiscovery gives "a" one).
+            ("a", "build"),
+            // JS package without any scripts.
+            ("c", "build"),
+            // The synthetic Cargo workspace package.
+            ("acme", "test"),
+            // A binary crate.
+            ("my-crate", "build"),
+        ] {
+            let task_id = TaskId::new(package, task);
+            engine.get_index(&task_id);
+            engine.add_definition(task_id, TaskDefinition::default());
+        }
+        let engine = engine.seal();
+
+        let graph = PackageGraph::builder(root, PackageJson::default())
+            .with_package_discovery(DummyDiscovery(
+                turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+            ))
+            .with_toolchain(turborepo_repository::cargo::CargoToolchain::new(
+                root.to_owned(),
+            ))
+            .build()
+            .await
+            .unwrap();
+
+        let mut tasks = engine.tasks_with_command(&graph);
+        tasks.sort();
+        // "c#build" is absent: no script defines it. Both Cargo tasks are
+        // present without any package.json involvement.
+        assert_eq!(tasks, vec!["a#build", "acme#test", "my-crate#build"]);
+    }
+
     #[tokio::test]
     async fn issue_4291() {
         // we had an issue where our engine validation would reject running persistent
@@ -333,7 +434,9 @@ mod test {
             AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
             PackageJson::default(),
         )
-        .with_package_discovery(DummyDiscovery(&tmp));
+        .with_package_discovery(DummyDiscovery(
+            turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+        ));
 
         let graph = graph_builder.build().await.unwrap();
 
@@ -385,7 +488,9 @@ mod test {
             AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
             PackageJson::default(),
         )
-        .with_package_discovery(DummyDiscovery(&tmp));
+        .with_package_discovery(DummyDiscovery(
+            turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+        ));
 
         let graph = graph_builder.build().await.unwrap();
 
@@ -418,12 +523,92 @@ mod test {
             AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
             PackageJson::default(),
         )
-        .with_package_discovery(DummyDiscovery(&tmp));
+        .with_package_discovery(DummyDiscovery(
+            turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+        ));
 
         let graph = graph_builder.build().await.unwrap();
 
         assert!(engine.validate(&graph, 1, UIMode::Stream, false).is_ok());
         assert!(engine.validate(&graph, 1, UIMode::Stream, true).is_err());
+    }
+
+    #[tokio::test]
+    async fn validation_rejects_dependency_on_persistent_task() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let mut engine: Engine<Building> = Engine::new();
+
+        let build = TaskId::new("a", "build");
+        let dev = TaskId::new("a", "dev");
+        let build_idx = engine.get_index(&build);
+        let dev_idx = engine.get_index(&dev);
+        engine.add_definition(build.clone(), TaskDefinition::default());
+        engine.add_definition(
+            dev.clone(),
+            TaskDefinition {
+                persistent: true,
+                ..Default::default()
+            },
+        );
+        engine.task_graph_mut().add_edge(build_idx, dev_idx, ());
+        engine.connect_to_root(&dev);
+        let engine = engine.seal();
+
+        let graph = PackageGraph::builder(
+            AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
+            PackageJson::default(),
+        )
+        .with_package_discovery(DummyDiscovery(
+            turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+        ))
+        .build()
+        .await
+        .unwrap();
+
+        let errors = engine
+            .validate(&graph, 10, UIMode::Stream, true)
+            .expect_err("persistent dependency should be rejected");
+
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidateError::DependencyOnPersistentTask { persistent_task, dependant, .. }
+                if persistent_task == "a#dev" && dependant == "a#build"
+        )));
+    }
+
+    #[tokio::test]
+    async fn validation_allows_dependency_on_persistent_task_without_script() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let mut engine: Engine<Building> = Engine::new();
+
+        let build = TaskId::new("a", "build");
+        let dev = TaskId::new("c", "dev");
+        let build_idx = engine.get_index(&build);
+        let dev_idx = engine.get_index(&dev);
+        engine.add_definition(build.clone(), TaskDefinition::default());
+        engine.add_definition(
+            dev.clone(),
+            TaskDefinition {
+                persistent: true,
+                ..Default::default()
+            },
+        );
+        engine.task_graph_mut().add_edge(build_idx, dev_idx, ());
+        engine.connect_to_root(&dev);
+        let engine = engine.seal();
+
+        let graph = PackageGraph::builder(
+            AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
+            PackageJson::default(),
+        )
+        .with_package_discovery(DummyDiscovery(
+            turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap(),
+        ))
+        .build()
+        .await
+        .unwrap();
+
+        engine.validate(&graph, 10, UIMode::Stream, true).unwrap();
     }
 
     #[tokio::test]

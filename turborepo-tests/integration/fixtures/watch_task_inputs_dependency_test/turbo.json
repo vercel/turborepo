@@ -1,0 +1,15 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "watchUsingTaskInputs": true
+  },
+  "tasks": {
+    "dev": {
+      "dependsOn": ["^dev"],
+      "cache": false
+    },
+    "app#dev": {
+      "persistent": true
+    }
+  }
+}

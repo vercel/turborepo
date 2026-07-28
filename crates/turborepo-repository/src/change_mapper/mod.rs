@@ -262,23 +262,65 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
             }
         }
 
+        self.add_toolchain_affected_packages(&mut changed_packages);
         PackageChanges::Some(changed_packages)
+    }
+
+    fn add_toolchain_affected_packages(
+        &self,
+        changed_packages: &mut HashMap<WorkspacePackage, PackageInclusionReason>,
+    ) {
+        let directly_changed: Vec<_> = changed_packages
+            .keys()
+            .map(|package| package.name.clone())
+            .collect();
+        for dependency in directly_changed {
+            let Some(context) = self.pkg_graph.package_task_context(&dependency) else {
+                continue;
+            };
+            let Some(toolchain_id) = context.toolchain() else {
+                continue;
+            };
+            let Some(toolchain) = self.pkg_graph.toolchains().get(toolchain_id) else {
+                continue;
+            };
+            for affected in toolchain.additional_affected_packages(dependency.as_str()) {
+                let name = PackageName::Other(affected);
+                let Some(context) = self.pkg_graph.package_task_context(&name) else {
+                    continue;
+                };
+                changed_packages
+                    .entry(WorkspacePackage {
+                        name,
+                        path: context.directory().to_owned(),
+                    })
+                    .or_insert_with(|| PackageInclusionReason::DependencyChanged {
+                        dependency: dependency.clone(),
+                    });
+            }
+        }
     }
 
     fn get_changed_packages_from_lockfile(
         &self,
         lockfile_content: &[u8],
     ) -> Result<Vec<ExternalDependencyChange>, ChangeMapError> {
-        let yarnrc = if matches!(self.pkg_graph.package_manager(), PackageManager::Berry) {
+        let yarnrc = if matches!(
+            self.pkg_graph.package_manager(),
+            Some(PackageManager::Berry)
+        ) {
             Some(yarnrc::YarnRc::from_file(self.pkg_graph.repo_root())?)
         } else {
             None
         };
-        let previous_lockfile = self.pkg_graph.package_manager().parse_lockfile(
-            self.pkg_graph.root_package_json(),
-            lockfile_content,
-            yarnrc,
-        )?;
+        let Some(package_manager) = self.pkg_graph.package_manager() else {
+            return Ok(Vec::new());
+        };
+        let Some(root_package_json) = self.pkg_graph.root_package_json() else {
+            return Ok(Vec::new());
+        };
+        let previous_lockfile =
+            package_manager.parse_lockfile(root_package_json, lockfile_content, yarnrc)?;
 
         let additional_packages = self
             .pkg_graph
@@ -310,6 +352,8 @@ pub enum ChangeMapError {
     Yarnrc(#[from] yarnrc::Error),
     #[error("No lockfile")]
     NoLockfile,
+    #[error("Missing compatibility payload for package {0}")]
+    MissingPackagePayload(PackageName),
     #[error("Lockfile error: {0}")]
     Lockfile(turborepo_lockfiles::Error),
 }
@@ -318,6 +362,7 @@ impl From<ChangedPackagesError> for ChangeMapError {
     fn from(value: ChangedPackagesError) -> Self {
         match value {
             ChangedPackagesError::NoLockfile => Self::NoLockfile,
+            ChangedPackagesError::MissingPackagePayload(name) => Self::MissingPackagePayload(name),
             ChangedPackagesError::Lockfile(e) => Self::Lockfile(e),
         }
     }

@@ -24,7 +24,7 @@ use package_graph::{Edge, PackageGraph};
 pub use server::run_server;
 use tokio::select;
 use turbo_trace::TraceError;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 pub use turborepo_query_api::{
     AffectedPackagesError, BoundariesFuture, QueryErrorLocation, QueryResult, QueryRun,
     SCHEMA_QUERY,
@@ -48,6 +48,8 @@ pub enum Error {
     NoSignalHandler,
     #[error("File `{0}` not found.")]
     FileNotFound(String),
+    #[error("File `{0}` is outside the repository root.")]
+    FileOutsideRepository(String),
     #[error("Package not found: {0}")]
     PackageNotFound(PackageName),
     #[error("Failed to serialize result: {0}")]
@@ -69,11 +71,6 @@ impl From<io::Error> for Error {
 }
 impl From<turbopath::PathError> for Error {
     fn from(e: turbopath::PathError) -> Self {
-        Error::Api(e.into())
-    }
-}
-impl From<turborepo_ui::Error> for Error {
-    fn from(e: turborepo_ui::Error) -> Self {
         Error::Api(e.into())
     }
 }
@@ -382,7 +379,7 @@ impl PackagePredicate {
     fn check_has(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
         match (field, &value.0) {
             (PackageFields::Name, Value::String(name)) => pkg.get_name().as_str() == name,
-            (PackageFields::TaskName, Value::String(name)) => pkg.get_tasks().contains_key(name),
+            (PackageFields::TaskName, Value::String(name)) => pkg.get_task_names().contains(name),
             _ => false,
         }
     }
@@ -593,6 +590,33 @@ struct ChangedTask {
     task: task::RepositoryTask,
 }
 
+fn resolve_file_path(
+    repo_root: &AbsoluteSystemPath,
+    path: String,
+) -> Result<AbsoluteSystemPathBuf, Error> {
+    let abs_path = AbsoluteSystemPathBuf::from_unknown(repo_root, path);
+
+    confine_file_path(repo_root, abs_path)
+}
+
+pub(crate) fn confine_file_path(
+    repo_root: &AbsoluteSystemPath,
+    abs_path: AbsoluteSystemPathBuf,
+) -> Result<AbsoluteSystemPathBuf, Error> {
+    if !abs_path.exists() {
+        return Err(Error::FileNotFound(abs_path.to_string()));
+    }
+
+    let real_repo_root = repo_root.to_realpath()?;
+    let real_path = abs_path.to_realpath()?;
+
+    if !real_repo_root.contains(&real_path) {
+        return Err(Error::FileOutsideRepository(abs_path.to_string()));
+    }
+
+    Ok(real_path)
+}
+
 #[Object]
 impl RepositoryQuery {
     async fn affected_packages(
@@ -655,12 +679,19 @@ impl RepositoryQuery {
             .collect::<Result<Vec<_>, Error>>()?
             .into_iter()
             .filter(|ct| {
-                let has_script = ct.task.script.is_some();
+                let executes = ct.task.executes();
                 let task_ok = tasks.as_ref().is_none_or(|names| {
-                    names.is_empty() || names.iter().any(|n| n.as_str() == ct.task.name)
+                    if names.is_empty() {
+                        true
+                    } else {
+                        let full_name = format!("{}#{}", ct.task.package.get_name(), ct.task.name);
+                        names
+                            .iter()
+                            .any(|n| n.as_str() == ct.task.name || n == &full_name)
+                    }
                 });
                 let package_ok = filter.as_ref().is_none_or(|f| f.check(&ct.task.package));
-                has_script && task_ok && package_ok
+                executes && task_ok && package_ok
             })
             .collect();
 
@@ -710,11 +741,7 @@ impl RepositoryQuery {
     }
 
     async fn file(&self, path: String) -> Result<file::File, Error> {
-        let abs_path = AbsoluteSystemPathBuf::from_unknown(self.run.repo_root(), path);
-
-        if !abs_path.exists() {
-            return Err(Error::FileNotFound(abs_path.to_string()));
-        }
+        let abs_path = resolve_file_path(self.run.repo_root(), path)?;
 
         file::File::new(self.run.clone(), abs_path)
     }
@@ -725,8 +752,8 @@ impl RepositoryQuery {
             let mut packages = self
                 .run
                 .pkg_dep_graph()
-                .packages()
-                .map(|(name, _)| Package::new(self.run.clone(), name.clone()))
+                .package_scope_directories()
+                .map(|(name, _)| Package::new(self.run.clone(), name))
                 .collect::<Result<Array<_>, _>>()?;
             packages.sort_by(|a, b| a.get_name().cmp(b.get_name()));
             return Ok(packages);
@@ -735,8 +762,8 @@ impl RepositoryQuery {
         let mut packages = self
             .run
             .pkg_dep_graph()
-            .packages()
-            .map(|(name, _)| Package::new(self.run.clone(), name.clone()))
+            .package_scope_directories()
+            .map(|(name, _)| Package::new(self.run.clone(), name))
             .filter(|pkg| pkg.as_ref().is_ok_and(|pkg| filter.check(pkg)))
             .collect::<Result<Array<_>, _>>()?;
         packages.sort_by(|a, b| a.get_name().cmp(b.get_name()));
@@ -746,9 +773,12 @@ impl RepositoryQuery {
 
     async fn external_dependencies(&self) -> Result<Array<ExternalPackage>, Error> {
         let pkg_dep_graph = self.run.pkg_dep_graph();
-        let all_package_names: Vec<_> = pkg_dep_graph.packages().map(|(name, _)| name).collect();
+        let all_package_names: Vec<_> = pkg_dep_graph
+            .package_scope_directories()
+            .map(|(name, _)| name)
+            .collect();
         let mut packages = pkg_dep_graph
-            .transitive_external_dependencies(all_package_names)
+            .transitive_external_dependencies(all_package_names.iter())
             .into_iter()
             .map(|pkg| ExternalPackage::new(self.run.clone(), pkg.clone()))
             .collect::<Array<_>>();
@@ -805,7 +835,7 @@ pub async fn run_query_server(run: Arc<dyn QueryRun>, signal: SignalHandler) -> 
             println!("Shutting down GraphQL server");
             return Ok(());
         }
-        result = server::run_server(None, run) => {
+        result = server::run_server(run) => {
             result?;
         }
     }
@@ -858,4 +888,74 @@ pub async fn execute_query(
         result_json,
         errors,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use turbopath::AbsoluteSystemPath;
+
+    use super::{resolve_file_path, Error};
+
+    #[test]
+    fn resolve_file_path_allows_repo_relative_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let file = tmp.path().join("package.json");
+        fs::write(&file, "{}").unwrap();
+
+        let resolved = resolve_file_path(root, "package.json".to_string()).unwrap();
+        let expected = AbsoluteSystemPath::from_std_path(&file)
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+
+        assert_eq!(resolved, expected);
+    }
+
+    #[test]
+    fn resolve_file_path_rejects_absolute_files_outside_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let outside_file = outside.path().join("secret.txt");
+        fs::write(&outside_file, "secret").unwrap();
+
+        let err = resolve_file_path(root, outside_file.to_string_lossy().to_string()).unwrap_err();
+
+        assert!(matches!(err, Error::FileOutsideRepository(_)));
+    }
+
+    #[test]
+    fn resolve_file_path_rejects_relative_traversal_outside_repo() {
+        let parent = tempfile::tempdir().unwrap();
+        let repo = parent.path().join("repo");
+        fs::create_dir(&repo).unwrap();
+        let outside_file = parent.path().join("secret.txt");
+        fs::write(&outside_file, "secret").unwrap();
+        let root = AbsoluteSystemPath::from_std_path(&repo).unwrap();
+
+        let err = resolve_file_path(root, "../secret.txt".to_string()).unwrap_err();
+
+        assert!(matches!(err, Error::FileOutsideRepository(_)));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolve_file_path_rejects_symlink_escape() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let outside_file = outside.path().join("secret.txt");
+        let link = tmp.path().join("link.txt");
+        fs::write(&outside_file, "secret").unwrap();
+        symlink(&outside_file, &link).unwrap();
+
+        let err = resolve_file_path(root, "link.txt".to_string()).unwrap_err();
+
+        assert!(matches!(err, Error::FileOutsideRepository(_)));
+    }
 }

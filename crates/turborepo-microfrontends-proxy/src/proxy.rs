@@ -4,6 +4,7 @@ use http_body_util::{BodyExt, Full};
 use hyper::{
     Request, Response, StatusCode,
     body::{Bytes, Incoming},
+    header::{CONTENT_TYPE, HeaderValue},
 };
 use tracing::{debug, error};
 
@@ -182,24 +183,17 @@ fn create_generic_error_response(error: ProxyError) -> Response<BoxedBody> {
 </html>"#
     );
 
-    Response::builder()
-        .status(status)
-        .header("Content-Type", "text/html; charset=utf-8")
-        .body(
-            Full::new(Bytes::from(body_text))
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
-                .boxed(),
-        )
-        .unwrap_or_else(|_| {
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(
-                    Full::new(Bytes::from("Internal Server Error"))
-                        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
-                        .boxed(),
-                )
-                .unwrap()
-        })
+    let mut response = Response::new(
+        Full::new(Bytes::from(body_text))
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+            .boxed(),
+    );
+    *response.status_mut() = status;
+    response.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("text/html; charset=utf-8"),
+    );
+    response
 }
 
 #[cfg(test)]

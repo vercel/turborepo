@@ -7,9 +7,7 @@ use std::{
 
 use chrono::Local;
 use tracing::Instrument;
-use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPathBuf,
-};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle};
 use turborepo_api_client::{APIAuth, APIClient, CacheClient, SharedHttpClient};
 use turborepo_cache::{AsyncCache, CacheScmState, LazyScmState};
@@ -24,31 +22,68 @@ use turborepo_repository::{
 };
 use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
+use turborepo_scope::filter::ResolutionError;
+use turborepo_shim::TurboState;
 use turborepo_signals::SignalHandler;
-use turborepo_task_id::TaskName;
+use turborepo_task_id::{TaskId, TaskName};
 use turborepo_telemetry::events::{
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
     repo::{RepoEventBuilder, RepoType},
     EventBuilder, TrackedErrors,
 };
-use turborepo_types::UIMode;
+use turborepo_types::{FilterMode, UIMode};
 use turborepo_ui::ColorConfig;
 use turborepo_vercel_api::CachingStatusResponse;
 use url::Url;
 
+type FilteredPackages = (
+    HashMap<PackageName, PackageInclusionReason>,
+    FilterMode,
+    HashSet<PackageName>,
+);
+
+#[derive(Default)]
+struct TaskEntrypointSelection {
+    candidates: HashSet<TaskId<'static>>,
+    selected: HashSet<TaskId<'static>>,
+    excluded: HashSet<TaskId<'static>>,
+    orchestration: HashMap<String, HashSet<TaskId<'static>>>,
+}
+
 use crate::{
     commands::CommandBase,
-    engine::{Engine, EngineBuilder, EngineExt},
+    engine::{task_has_command, Engine, EngineBuilder, EngineExt},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     run::{
         scope, task_access::TaskAccess, Error, RemoteCacheStatus, RemoteCacheUnavailableReason,
         Run, RunCache,
     },
-    shim::TurboState,
     turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
 };
+
+fn project_task_io_environment(
+    toolchains: &turborepo_repository::toolchain::ToolchainRegistry,
+    environment: &EnvironmentVariableMap,
+) -> Result<
+    HashMap<
+        turborepo_repository::toolchain::ToolchainId,
+        turborepo_repository::toolchain::TaskIOEnvironment,
+    >,
+    turborepo_env::Error,
+> {
+    toolchains
+        .iter()
+        .map(|toolchain| {
+            let selected = environment.from_wildcards(toolchain.task_io_env_vars())?;
+            Ok((
+                toolchain.id(),
+                turborepo_repository::toolchain::TaskIOEnvironment::new(selected.into_inner()),
+            ))
+        })
+        .collect()
+}
 
 pub struct RunBuilder {
     processes: ProcessManager,
@@ -184,6 +219,7 @@ impl RunBuilder {
         )
     }
 
+    #[tracing::instrument(skip_all)]
     async fn resolve_remote_cache_status(
         &self,
         preflight_handle: Option<
@@ -287,39 +323,17 @@ impl RunBuilder {
         }
     }
 
-    fn package_prefix_for_repo_index(
+    /// The scan prefix for untracked-file discovery: the repo root anchored
+    /// to the git root. When the repo is nested inside a larger git
+    /// repository this restricts the scan to the repo's subtree; when the
+    /// two coincide it is empty and the scan walks the whole repository.
+    /// Every package lives under the repo root (enforced at discovery), so
+    /// this single prefix covers exactly what per-package prefixes used to.
+    fn repo_prefix_for_repo_index(
         repo_root: &AbsoluteSystemPath,
         index_root: &AbsoluteSystemPath,
-        package_dir: &AnchoredSystemPath,
-    ) -> Result<RelativeUnixPathBuf, Error> {
-        let full_package_dir = repo_root.resolve(package_dir);
-        Ok(index_root.anchor(&full_package_dir)?.to_unix())
-    }
-
-    fn all_package_prefixes(
-        pkg_dep_graph: &PackageGraph,
-        scm: &SCM,
-    ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
-        let repo_root = pkg_dep_graph.repo_root();
-        let index_root = scm.git_root().unwrap_or(repo_root);
-        let mut prefixes = pkg_dep_graph
-            .packages()
-            .filter_map(|(name, _)| pkg_dep_graph.package_dir(name))
-            .map(|package_dir| {
-                Self::package_prefix_for_repo_index(repo_root, index_root, package_dir)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let root_dependency_prefixes = pkg_dep_graph
-            .root_internal_package_dependencies_paths()
-            .into_iter()
-            .map(|package_dir| {
-                Self::package_prefix_for_repo_index(repo_root, index_root, package_dir)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        prefixes.extend(root_dependency_prefixes);
-
-        Ok(prefixes)
+    ) -> Result<RelativeUnixPathBuf, turbopath::PathError> {
+        Ok(index_root.anchor(repo_root)?.to_unix())
     }
 
     /// Resolve the set of packages that should participate in this run.
@@ -330,33 +344,49 @@ impl RunBuilder {
     /// - **No filter** (`AllPackages`): root tasks defined in `turbo.json` are
     ///   included automatically.
     /// - **Exclude-only** (`ExcludeOnly`): semantically "all packages minus
-    ///   excluded ones" — root tasks are still included unless the root package
-    ///   itself was explicitly excluded (e.g. `--filter=!//`).
+    ///   excluded ones" — root tasks are still included unless the root Turbo
+    ///   namespace itself was explicitly excluded (e.g. `--filter=!//` or
+    ///   `--filter=!{.}`). Root-directory syntax addresses this namespace even
+    ///   when no root JavaScript package exists.
     /// - **Explicit selection** (`ExplicitSelection`): the user opted into
     ///   specific packages — root tasks are not auto-injected.
     ///
     /// When `AllPackages` is active and every requested task uses
     /// `package#task` syntax, the set is narrowed to only the referenced
     /// packages.
-    pub fn calculate_filtered_packages(
+    pub(crate) fn calculate_filtered_packages(
         repo_root: &AbsoluteSystemPath,
         opts: &Opts,
         pkg_dep_graph: &PackageGraph,
         scm: &SCM,
         root_turbo_json: &TurboJson,
-    ) -> Result<HashMap<PackageName, PackageInclusionReason>, Error> {
+    ) -> Result<FilteredPackages, Error> {
         let (mut filtered_pkgs, filter_mode) = scope::resolve_packages(
             &opts.scope_opts,
             repo_root,
             pkg_dep_graph,
             scm,
             root_turbo_json,
-        )?;
+        )
+        .map_err(|err| match err {
+            // A filter that names a Rust crate is a likely mistake when the
+            // repository has a Cargo workspace but Cargo package support is
+            // not enabled; point at the opt-in.
+            ResolutionError::NoPackagesMatchedWithName(name)
+                if !cargo_enabled(&opts.future_flags)
+                    && repo_root
+                        .join_component(turborepo_repository::cargo::CARGO_TOML)
+                        .exists() =>
+            {
+                Error::PackageMayBeCargoCrate { name }
+            }
+            err => Error::Scope(err),
+        })?;
 
         let should_include_root_tasks = match filter_mode {
-            scope::FilterMode::AllPackages => true,
-            scope::FilterMode::ExcludeOnly { root_excluded } => !root_excluded,
-            scope::FilterMode::ExplicitSelection => false,
+            FilterMode::AllPackages => true,
+            FilterMode::ExcludeOnly { root_excluded } => !root_excluded,
+            FilterMode::ExplicitSelection => false,
         };
 
         if should_include_root_tasks {
@@ -378,7 +408,7 @@ impl RunBuilder {
             }
         }
 
-        if matches!(filter_mode, scope::FilterMode::AllPackages) {
+        if matches!(filter_mode, FilterMode::AllPackages) {
             // When all tasks use package#task syntax, we can narrow the package
             // set to only the referenced packages rather than the entire monorepo.
             let task_names: Vec<TaskName> = opts
@@ -398,6 +428,8 @@ impl RunBuilder {
             }
         }
 
+        let unqualified_entrypoint_packages = filtered_pkgs.keys().cloned().collect();
+
         // Packages referenced by `pkg#task` CLI args are direct task graph
         // entry points regardless of --filter. Add them to filtered_pkgs so
         // the engine builder iterates their workspace.
@@ -412,7 +444,7 @@ impl RunBuilder {
             }
         }
 
-        Ok(filtered_pkgs)
+        Ok((filtered_pkgs, filter_mode, unqualified_entrypoint_packages))
     }
 
     #[tracing::instrument(skip(self, signal_handler))]
@@ -423,7 +455,7 @@ impl RunBuilder {
     ) -> Result<(Run, Option<AnalyticsHandle>), Error> {
         tracing::trace!(
             platform = %TurboState::platform_name(),
-            start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
+            start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |duration| duration.as_micros()),
             turbo_version = %TurboState::version(),
             numcpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),
             "performing run on {:?}",
@@ -431,16 +463,60 @@ impl RunBuilder {
         );
         let start_at = Local::now();
 
-        let scm_task = {
+        // SCM detection, the tracked repo index, and untracked-file discovery
+        // all run on one background task, overlapping package graph and
+        // engine construction. The SCM handle is sent back as soon as it
+        // exists so the main flow never waits behind the scans.
+        //
+        // Untracked discovery historically waited for the package graph to
+        // compute package prefixes, but the scan scope was always exactly
+        // the repo-root subtree: every package lives under the repo root
+        // (enforced at discovery), the root package's prefix is always in
+        // the set, and `UntrackedScope` deduplicates nested prefixes.
+        // Scanning the repo-root prefix directly is equivalent and needs
+        // nothing from the graph.
+        let (scm_tx, scm_rx) = tokio::sync::oneshot::channel();
+        let repo_index_task = {
             let repo_root = self.repo_root.clone();
             let git_root = self.opts.git_root.clone();
-            tokio::task::spawn_blocking(move || match git_root {
-                Some(root) => SCM::new_with_git_root(&repo_root, root),
-                None => SCM::new(&repo_root),
+            tokio::task::spawn_blocking(move || {
+                let scm = match git_root {
+                    Some(root) => SCM::new_with_git_root(&repo_root, root),
+                    None => SCM::new(&repo_root),
+                };
+                // The tracked half of the repo index only needs `.git/index`.
+                let tracked_index = {
+                    let _span = tracing::info_span!("build_tracked_repo_index_gix").entered();
+                    scm.build_tracked_repo_index_eager()
+                };
+                let _ = scm_tx.send(scm.clone());
+                tracked_index.map(|mut index| {
+                    let _span = tracing::info_span!("populate_repo_index_untracked").entered();
+                    let index_root = scm.git_root().unwrap_or(&repo_root);
+                    match Self::repo_prefix_for_repo_index(&repo_root, index_root) {
+                        Ok(repo_prefix) => {
+                            if let Err(e) =
+                                scm.populate_repo_index_untracked(&mut index, &[repo_prefix])
+                            {
+                                tracing::debug!("failed to populate untracked files: {e}");
+                            }
+                        }
+                        Err(e) => {
+                            tracing::debug!(
+                                "failed to compute repo prefix for untracked files: {e}"
+                            );
+                        }
+                    }
+                    index
+                })
             })
         };
-        let package_json_path = self.repo_root.join_component("package.json");
-        let root_package_json = PackageJson::load(&package_json_path)?;
+        // A pure Cargo workspace (experimentalCargoWorkspaces, no root
+        // package.json) has no JavaScript root manifest. A *missing* file is
+        // only tolerated in that mode; a malformed one always fails, and a
+        // missing one without Cargo support keeps the original hard error.
+        let root_package_json =
+            load_root_package_json(&self.repo_root, cargo_enabled(&self.opts.future_flags))?;
         let run_telemetry = GenericEventBuilder::new().with_parent(&telemetry);
         let repo_telemetry =
             RepoEventBuilder::new(&self.repo_root.to_string()).with_parent(&telemetry);
@@ -477,9 +553,28 @@ impl RunBuilder {
         }
 
         let mut pkg_dep_graph = {
-            let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
-                .with_single_package_mode(self.opts.run_opts.single_package)
-                .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
+            let mut builder =
+                PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
+                    .with_single_package_mode(self.opts.run_opts.single_package)
+                    .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager)
+                    // Transitive closures compute on a background thread while
+                    // microfrontends config, turbo.json preloading, and other
+                    // package-list consumers run. Joined by the
+                    // `ensure_transitive_closures` call before package filtering,
+                    // the earliest possible consumer (`--affected` with a changed
+                    // lockfile compares closures).
+                    .defer_transitive_closures(true)
+                    // External dependency hashes are computed on the same
+                    // background thread, straight from the sorted closures, so
+                    // task hashing and run summaries read them as fields.
+                    .with_closure_hasher(std::sync::Arc::new(
+                        turborepo_task_hash::hash_sorted_closures,
+                    ));
+            if cargo_enabled(&self.opts.future_flags) {
+                builder = builder.with_toolchain(turborepo_repository::cargo::CargoToolchain::new(
+                    self.repo_root.to_owned(),
+                ));
+            }
 
             let graph = builder
                 .build()
@@ -505,32 +600,27 @@ impl RunBuilder {
             }
         };
 
-        repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().name().to_string());
+        if let Some(package_manager) = pkg_dep_graph.package_manager() {
+            repo_telemetry.track_package_manager(package_manager.name().to_string());
+        }
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
 
-        // Build the repo index by reading .git/index directly via gix-index
-        // (fast, in-process, no subprocess spawns) then running a scoped
-        // parallel walk for untracked file discovery. This replaces the
-        // subprocess approach (ls-tree + diff-index + ls-files race) which
-        // burned ~500ms of CPU on background threads.
-        let scm = scm_task
-            .instrument(tracing::info_span!("scm_task_await"))
-            .await
-            .expect("detecting scm panicked");
-        let all_prefixes = Self::all_package_prefixes(&pkg_dep_graph, &scm)?;
-        let repo_index_task = if all_prefixes.is_empty() {
-            None
-        } else {
-            let scm = scm.clone();
-            Some(tokio::task::spawn_blocking(move || {
-                let _span = tracing::info_span!("build_repo_index_gix").entered();
-                let mut index = scm.build_tracked_repo_index_eager()?;
-                if let Err(e) = scm.populate_repo_index_untracked(&mut index, &all_prefixes) {
-                    tracing::debug!("failed to populate untracked files: {e}");
+        // The SCM handle arrives as soon as detection and the tracked index
+        // build finish; the untracked scan continues in the background and
+        // is joined just before the first repo-index consumer.
+        let scm = {
+            let _span = tracing::info_span!("scm_task_await").entered();
+            match scm_rx.await {
+                Ok(scm) => scm,
+                Err(_) => {
+                    // The sender only drops without sending if the SCM task
+                    // panicked; that panic surfaces when the repo-index task
+                    // is joined below. Detect inline so the run reaches that
+                    // point.
+                    SCM::new(&self.repo_root)
                 }
-                Some(index)
-            }))
+            }
         };
         let micro_frontend_configs = {
             let _span = tracing::info_span!("micro_frontends_from_disk").entered();
@@ -561,11 +651,14 @@ impl RunBuilder {
                 let token = auth.token.clone();
                 let team_id = auth.team_id.clone();
                 let team_slug = auth.team_slug.clone();
-                Some(tokio::spawn(async move {
-                    client
-                        .get_caching_status(&token, team_id.as_deref(), team_slug.as_deref())
-                        .await
-                }))
+                Some(tokio::spawn(
+                    async move {
+                        client
+                            .get_caching_status(&token, team_id.as_deref(), team_slug.as_deref())
+                            .await
+                    }
+                    .instrument(tracing::info_span!("remote_cache_preflight")),
+                ))
             } else {
                 None
             }
@@ -577,31 +670,22 @@ impl RunBuilder {
             .api_auth
             .as_ref()
             .filter(|auth| auth.is_linked())
-            .map(|auth| {
-                let api_client = api_client
+            .and_then(|auth| {
+                api_client
                     .clone()
-                    .expect("linked analytics require a resolved API client");
-                start_analytics(auth.clone(), api_client)
+                    .map(|api_client| start_analytics(auth.clone(), api_client))
             })
             .unzip();
 
         let scm_state = LazyScmState::new();
-        {
-            let scm_state = scm_state.clone();
+        let scm_state_task = {
             let scm = scm.clone();
             let repo_root = self.repo_root.clone();
             tokio::task::spawn_blocking(move || {
-                let _span = tracing::info_span!("capture_scm_state").entered();
-                let sha = scm.get_current_sha(&repo_root).ok();
-                let dirty_hash = scm.get_dirty_hash();
-                let state = if sha.is_some() || dirty_hash.is_some() {
-                    Some(CacheScmState { sha, dirty_hash })
-                } else {
-                    None
-                };
-                scm_state.resolve(state);
-            });
-        }
+                let _span = tracing::info_span!("capture_scm_sha").entered();
+                scm.get_current_sha(&repo_root).ok()
+            })
+        };
 
         let async_cache = {
             let _span = tracing::info_span!("async_cache_new").entered();
@@ -611,7 +695,7 @@ impl RunBuilder {
                 api_client.clone(),
                 self.api_auth.clone(),
                 analytics_sender,
-                scm_state,
+                scm_state.clone(),
             )?
         };
 
@@ -622,13 +706,18 @@ impl RunBuilder {
 
         let turbo_json_loader = {
             let _span = tracing::info_span!("turbo_json_loader_setup").entered();
-            if TaskAccess::check_enabled(&self.repo_root) {
+            if let (Some(root_package_json), true) = (
+                root_package_json.as_ref(),
+                TaskAccess::check_enabled(&self.repo_root),
+            ) {
                 UnifiedTurboJsonLoader::task_access(
                     reader,
                     root_turbo_json_path.clone(),
                     root_package_json.clone(),
                 )
-            } else if is_single_package {
+            } else if let (Some(root_package_json), true) =
+                (root_package_json.as_ref(), is_single_package)
+            {
                 UnifiedTurboJsonLoader::single_package(
                     reader,
                     root_turbo_json_path.clone(),
@@ -638,23 +727,40 @@ impl RunBuilder {
             // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
             (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
             {
+                let package_scripts = pkg_dep_graph
+                    .package_task_contexts()
+                    .map(|context| {
+                        let package = context.package().clone();
+                        let info = context.package_info();
+                        if context.requires_compatibility_payload() && info.is_none() {
+                            return Err(Error::MissingPackagePayload(package));
+                        }
+                        Ok((
+                            package,
+                            info.into_iter()
+                                .flat_map(|info| info.package_json.scripts.keys().cloned())
+                                .collect(),
+                        ))
+                    })
+                    .collect::<Result<_, Error>>()?;
                 UnifiedTurboJsonLoader::workspace_no_turbo_json(
                     reader,
-                    pkg_dep_graph.packages(),
+                    pkg_dep_graph.package_scope_directories(),
+                    package_scripts,
                     micro_frontend_configs.clone(),
                 )
             } else if let Some(micro_frontends) = &micro_frontend_configs {
                 UnifiedTurboJsonLoader::workspace_with_microfrontends(
                     reader,
                     root_turbo_json_path.clone(),
-                    pkg_dep_graph.packages(),
+                    pkg_dep_graph.package_scope_directories(),
                     micro_frontends.clone(),
                 )
             } else {
                 UnifiedTurboJsonLoader::workspace(
                     reader,
                     root_turbo_json_path.clone(),
-                    pkg_dep_graph.packages(),
+                    pkg_dep_graph.package_scope_directories(),
                 )
             }
         };
@@ -678,7 +784,28 @@ impl RunBuilder {
             turbo_json_loader.preload_all();
         });
 
-        let filtered_pkgs = {
+        // Package filtering reads transitive closures only when a git-based
+        // selector may compare lockfile closures: `--affected`, or a
+        // `--filter` containing a git range (bracket syntax). Joining the
+        // background closure computation here in only those cases lets the
+        // common run keep overlapping it with filtering and engine
+        // construction; the unconditional join below runs before the first
+        // universal consumer (task hashing).
+        let scope_may_read_closures = self.opts.scope_opts.affected_range.is_some()
+            || self
+                .opts
+                .scope_opts
+                .filter_patterns
+                .iter()
+                .any(|pattern| pattern.contains('['));
+        if scope_may_read_closures {
+            crate::rayon_compat::block_in_place(|| {
+                let _span = tracing::info_span!("ensure_transitive_closures").entered();
+                pkg_dep_graph.ensure_transitive_closures();
+            });
+        }
+
+        let (filtered_pkgs, filter_mode, unqualified_entrypoint_packages) = {
             let _span = tracing::info_span!("calculate_filtered_packages").entered();
             Self::calculate_filtered_packages(
                 &self.repo_root,
@@ -688,6 +815,36 @@ impl RunBuilder {
                 &root_turbo_json,
             )?
         };
+        // The root Turbo task namespace exists independently of a root
+        // JavaScript package scope. Non-root namespaces, including aggregate
+        // scopes, come from authoritative repository knowledge.
+        let task_namespace_packages: Vec<_> = std::iter::once(PackageName::Root)
+            .chain(
+                pkg_dep_graph
+                    .package_scope_directories()
+                    .map(|(name, _)| name)
+                    .filter(|name| name != &PackageName::Root),
+            )
+            .collect();
+        let mut scoped_entrypoint_exclusions = self.task_entrypoint_exclusions(
+            &pkg_dep_graph,
+            unqualified_entrypoint_packages.iter(),
+            task_namespace_packages.iter(),
+            &filter_mode,
+        );
+        let explicitly_requested_tasks: HashSet<_> = self
+            .opts
+            .run_opts
+            .tasks
+            .iter()
+            .filter_map(|task| {
+                TaskName::from(task.as_str())
+                    .task_id()
+                    .map(TaskId::into_owned)
+            })
+            .collect();
+        scoped_entrypoint_exclusions
+            .retain(|task_id| !explicitly_requested_tasks.contains(task_id));
 
         // When filterUsingTasks is active, --affected is handled by the
         // same task-level filter rather than a separate codepath.
@@ -699,17 +856,28 @@ impl RunBuilder {
             && self.opts.scope_opts.affected_range.is_some()
             && self.opts.future_flags.affected_using_task_inputs;
 
-        let needs_all_packages = use_task_level_affected || use_task_level_filter;
+        let use_watch_task_level_filter = self
+            .changed_files_for_watch
+            .as_ref()
+            .is_some_and(|changed_files| !changed_files.is_empty())
+            && self.opts.future_flags.watch_using_task_inputs;
 
-        // When task-level filtering is active, the engine must contain tasks
-        // for ALL packages so that $TURBO_ROOT$ inputs in packages not flagged
-        // by the package-level scope resolution are still matched.
-        // The task-level filter (below) does the pruning.
+        let needs_all_packages = use_task_level_affected
+            || use_task_level_filter
+            || use_watch_task_level_filter
+            || self.add_all_tasks;
+        let entrypoint_exclusions = if needs_all_packages {
+            HashSet::new()
+        } else {
+            scoped_entrypoint_exclusions
+        };
+
+        // When task-level filtering or add_all_tasks is active, the engine must
+        // contain tasks for ALL packages so that tasks in packages not flagged
+        // by package-level scope resolution can still be matched. The
+        // task-level filter (below) does the pruning when needed.
         let all_pkgs: Vec<PackageName> = if needs_all_packages {
-            pkg_dep_graph
-                .packages()
-                .map(|(name, _)| name.clone())
-                .collect()
+            task_namespace_packages
         } else {
             Vec::new()
         };
@@ -723,7 +891,9 @@ impl RunBuilder {
             &pkg_dep_graph,
             &root_turbo_json,
             engine_pkgs,
+            &entrypoint_exclusions,
             &turbo_json_loader,
+            &env_at_execution_start,
         )?;
 
         let task_access = {
@@ -747,12 +917,26 @@ impl RunBuilder {
                 &pkg_dep_graph,
                 &root_turbo_json,
                 engine_pkgs,
+                &entrypoint_exclusions,
                 &turbo_json_loader,
+                &env_at_execution_start,
             )?;
         }
 
         // Task-level filter: resolve --filter and/or --affected against the task graph.
         if use_task_level_filter {
+            let task_entrypoints = self
+                .opts
+                .future_flags
+                .strict_task_entrypoint_selection
+                .then(|| {
+                    self.command_task_entrypoints(
+                        &engine,
+                        &pkg_dep_graph,
+                        &all_pkgs.iter().cloned().collect(),
+                    )
+                });
+            let excluded_entrypoints = HashSet::new();
             let selectors: Vec<turborepo_scope::TargetSelector> = self
                 .opts
                 .scope_opts
@@ -760,7 +944,7 @@ impl RunBuilder {
                 .iter()
                 .map(|p| p.parse())
                 .collect::<Result<_, _>>()
-                .map_err(turborepo_scope::ResolutionError::from)?;
+                .map_err(ResolutionError::from)?;
 
             let affected_constraint =
                 if let Some(affected_range) = &self.opts.scope_opts.affected_range {
@@ -776,10 +960,33 @@ impl RunBuilder {
                     None
                 };
 
-            engine = super::task_filter::filter_engine_to_tasks(
+            let package_tasks: HashSet<_> = self
+                .opts
+                .run_opts
+                .tasks
+                .iter()
+                .filter_map(|task| {
+                    TaskName::from(task.as_str())
+                        .task_id()
+                        .map(TaskId::into_owned)
+                })
+                .collect();
+            engine = super::task_filter::filter_engine_to_tasks_with_inclusions(
                 engine,
                 &selectors,
-                affected_constraint.as_ref(),
+                super::task_filter::TaskFilterConstraints {
+                    affected: affected_constraint.as_ref(),
+                    always_include: &package_tasks,
+                    entrypoints: task_entrypoints
+                        .as_ref()
+                        .map(|selection| &selection.candidates),
+                    excluded_entrypoints: task_entrypoints
+                        .as_ref()
+                        .map_or(&excluded_entrypoints, |selection| &selection.excluded),
+                    orchestration_entrypoints: task_entrypoints
+                        .as_ref()
+                        .map(|selection| &selection.orchestration),
+                },
                 &pkg_dep_graph,
                 &scm,
                 &self.repo_root,
@@ -795,6 +1002,27 @@ impl RunBuilder {
                 &root_turbo_json,
                 &scm,
             )?;
+        }
+
+        if needs_all_packages {
+            engine = self.select_engine_task_entrypoints(engine, &pkg_dep_graph, &filter_mode);
+        }
+
+        if self.opts.future_flags.strict_task_entrypoint_selection
+            && !use_task_level_filter
+            && !self.add_all_tasks
+        {
+            let task_entrypoints = self.command_task_entrypoints(
+                &engine,
+                &pkg_dep_graph,
+                &unqualified_entrypoint_packages,
+            );
+            engine = super::task_filter::retain_strict_task_graph(
+                engine,
+                &pkg_dep_graph,
+                task_entrypoints.selected,
+                &task_entrypoints.orchestration,
+            );
         }
 
         // Validate after all filtering so the persistent task count reflects
@@ -857,13 +1085,48 @@ impl RunBuilder {
                 });
                 observability::Handle::try_init(opts, token)
             });
-        let repo_index = Arc::new(match repo_index_task {
-            Some(repo_index_task) => repo_index_task
-                .instrument(tracing::info_span!("repo_index_untracked_await"))
-                .await
-                .expect("scoping repo index panicked"),
-            None => None,
+        // The untracked-file scan keeps running in the background;
+        // `execute_visitor` awaits it right before file hashing. Deferring
+        // the barrier lets everything between `Run` construction and
+        // hashing overlap the scan.
+        let repo_index = crate::run::PendingRepoIndex::new(repo_index_task);
+
+        {
+            let scm_state = scm_state.clone();
+            let scm = scm.clone();
+            let repo_index = repo_index.clone();
+            tokio::spawn(
+                async move {
+                    let sha = scm_state_task.await.ok().flatten();
+                    let repo_index = repo_index.get().await;
+                    let dirty_hash =
+                        tokio::task::spawn_blocking(move || match repo_index.as_ref() {
+                            Some(repo_index) => scm.get_dirty_hash_from_repo_index(repo_index),
+                            None => scm.get_dirty_hash(),
+                        })
+                        .await
+                        .ok()
+                        .flatten();
+                    let state = if sha.is_some() || dirty_hash.is_some() {
+                        Some(CacheScmState { sha, dirty_hash })
+                    } else {
+                        None
+                    };
+                    scm_state.resolve(state);
+                }
+                .instrument(tracing::info_span!("capture_scm_state")),
+            );
+        }
+
+        // Unconditional join point for the background transitive-closure
+        // computation (idempotent when the conditional join above already
+        // ran). The graph is immutable once inside `Run`, and its first
+        // closure consumer (external dependency hashing) runs shortly after.
+        crate::rayon_compat::block_in_place(|| {
+            let _span = tracing::info_span!("ensure_transitive_closures").entered();
+            pkg_dep_graph.ensure_transitive_closures();
         });
+
         Ok((
             Run {
                 version: self.version,
@@ -875,6 +1138,7 @@ impl RunBuilder {
                 repo_root: self.repo_root,
                 opts: Arc::new(self.opts),
                 api_auth: self.api_auth,
+                api_client,
                 env_at_execution_start,
                 filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
                 pkg_dep_graph: Arc::new(pkg_dep_graph),
@@ -918,7 +1182,7 @@ impl RunBuilder {
             .scope_opts
             .affected_range
             .as_ref()
-            .expect("caller verified affected_range is Some");
+            .ok_or(Error::MissingAffectedRange)?;
         let maybe_changed_files = scm.changed_files(
             &self.repo_root,
             from_ref.as_deref(),
@@ -962,13 +1226,194 @@ impl RunBuilder {
         }
     }
 
+    fn task_entrypoint_exclusions<'a>(
+        &self,
+        pkg_dep_graph: &PackageGraph,
+        candidates: impl Iterator<Item = &'a PackageName>,
+        exclusion_candidates: impl Iterator<Item = &'a PackageName>,
+        filter_mode: &FilterMode,
+    ) -> HashSet<TaskId<'static>> {
+        let candidates: Vec<_> = candidates.cloned().collect();
+        let exclusion_candidates: Vec<_> = exclusion_candidates.cloned().collect();
+        self.opts
+            .run_opts
+            .tasks
+            .iter()
+            .map(|requested| TaskName::from(requested.as_str()))
+            .filter(|task| task.package().is_none())
+            .flat_map(|task| {
+                self.task_entrypoint_exclusions_for_task(
+                    pkg_dep_graph,
+                    &task,
+                    &candidates,
+                    &exclusion_candidates,
+                    filter_mode,
+                )
+            })
+            .collect()
+    }
+
+    fn command_task_entrypoints(
+        &self,
+        engine: &Engine,
+        pkg_dep_graph: &PackageGraph,
+        candidate_packages: &HashSet<PackageName>,
+    ) -> TaskEntrypointSelection {
+        let mut selection = TaskEntrypointSelection::default();
+
+        for requested in &self.opts.run_opts.tasks {
+            let task = TaskName::from(requested.as_str());
+            if let Some(task_id) = task.task_id().map(TaskId::into_owned) {
+                if engine.task_definition(&task_id).is_some() {
+                    selection.candidates.insert(task_id.clone());
+                    selection.selected.insert(task_id.clone());
+                    if !task_has_command(engine, pkg_dep_graph, &task_id) {
+                        selection
+                            .orchestration
+                            .entry(task.to_string())
+                            .or_default()
+                            .insert(task_id);
+                    }
+                }
+                continue;
+            }
+
+            let has_command = pkg_dep_graph.package_task_contexts().any(|context| {
+                context
+                    .toolchain()
+                    .and_then(|id| pkg_dep_graph.toolchains().get(id))
+                    .is_some_and(|toolchain| toolchain.defines_task(&context, task.task()))
+            }) || engine.task_ids().any(|task_id| {
+                task_id.task() == task.task() && task_has_command(engine, pkg_dep_graph, task_id)
+            });
+
+            for package in candidate_packages {
+                let task_id = TaskId::new(package.as_ref(), task.task()).into_owned();
+                if engine.task_definition(&task_id).is_none() {
+                    continue;
+                }
+
+                selection.candidates.insert(task_id.clone());
+                if !has_command || task_has_command(engine, pkg_dep_graph, &task_id) {
+                    selection.selected.insert(task_id.clone());
+                    if !has_command {
+                        selection
+                            .orchestration
+                            .entry(task.task().to_string())
+                            .or_default()
+                            .insert(task_id);
+                    }
+                } else {
+                    selection.excluded.insert(task_id);
+                }
+            }
+        }
+
+        selection
+    }
+
+    fn task_entrypoint_exclusions_for_task(
+        &self,
+        pkg_dep_graph: &PackageGraph,
+        task: &TaskName,
+        candidates: &[PackageName],
+        exclusion_candidates: &[PackageName],
+        filter_mode: &FilterMode,
+    ) -> HashSet<TaskId<'static>> {
+        let mut exclusions = HashSet::new();
+        for toolchain in pkg_dep_graph.toolchains().iter() {
+            let toolchain_id = toolchain.id();
+            let candidate_names: Vec<_> = candidates
+                .iter()
+                .filter(|name| {
+                    pkg_dep_graph
+                        .package_toolchain(name)
+                        .is_some_and(|candidate_toolchain| candidate_toolchain == &toolchain_id)
+                })
+                .map(|name| name.as_str().to_string())
+                .collect();
+            let prefer_workspace = match filter_mode {
+                FilterMode::AllPackages => true,
+                FilterMode::ExcludeOnly { .. } => false,
+                FilterMode::ExplicitSelection => candidate_names.len() == 1,
+            };
+            let Some(selected) =
+                toolchain.select_task_entrypoints(task.task(), &candidate_names, prefer_workspace)
+            else {
+                continue;
+            };
+            let selected: HashSet<_> = selected.into_iter().collect();
+            exclusions.extend(
+                exclusion_candidates
+                    .iter()
+                    .filter(|name| {
+                        pkg_dep_graph
+                            .package_toolchain(name)
+                            .is_some_and(|candidate_toolchain| candidate_toolchain == &toolchain_id)
+                    })
+                    .map(|name| name.as_str().to_string())
+                    .filter(|name| !selected.contains(name))
+                    .map(|name| TaskId::new(&name, task.task()).into_owned()),
+            );
+        }
+        exclusions
+    }
+
+    fn select_engine_task_entrypoints(
+        &self,
+        engine: Engine,
+        pkg_dep_graph: &PackageGraph,
+        filter_mode: &FilterMode,
+    ) -> Engine {
+        let package_tasks: HashSet<_> = self
+            .opts
+            .run_opts
+            .tasks
+            .iter()
+            .filter_map(|task| {
+                TaskName::from(task.as_str())
+                    .task_id()
+                    .map(TaskId::into_owned)
+            })
+            .collect();
+        let mut exclusions = HashSet::new();
+        for requested in &self.opts.run_opts.tasks {
+            let task = TaskName::from(requested.as_str());
+            if task.package().is_some() {
+                continue;
+            }
+            let candidates: Vec<_> = engine
+                .task_ids()
+                .filter(|task_id| {
+                    task_id.task() == task.task() && !package_tasks.contains(*task_id)
+                })
+                .map(|task_id| PackageName::from(task_id.package()))
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect();
+            exclusions.extend(self.task_entrypoint_exclusions_for_task(
+                pkg_dep_graph,
+                &task,
+                &candidates,
+                &candidates,
+                filter_mode,
+            ));
+        }
+        if exclusions.is_empty() {
+            return engine;
+        }
+        engine.remove_tasks(&exclusions)
+    }
+
     #[tracing::instrument(skip_all)]
     fn build_engine<'a>(
         &self,
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
         filtered_pkgs: impl Iterator<Item = &'a PackageName>,
+        entrypoint_exclusions: &HashSet<TaskId<'static>>,
         turbo_json_loader: &impl turborepo_engine::TurboJsonLoader,
+        environment: &EnvironmentVariableMap,
     ) -> Result<Engine, Error> {
         let tasks = self.opts.run_opts.tasks.iter().map(|task| {
             // TODO: Pull span info from command
@@ -981,6 +1426,9 @@ impl RunBuilder {
         } else {
             Vec::new()
         };
+        let task_io_environment =
+            project_task_io_environment(pkg_dep_graph.toolchains(), environment)
+                .map_err(Error::Env)?;
         let mut builder = EngineBuilder::new(
             &self.repo_root,
             pkg_dep_graph,
@@ -989,9 +1437,16 @@ impl RunBuilder {
         )
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
         .with_tasks_only(self.opts.run_opts.only)
+        .with_entrypoint_exclusions(entrypoint_exclusions.clone())
         .with_workspaces(filtered_pkgs.cloned().collect())
         .with_future_flags(self.opts.future_flags)
         .with_global_deps(global_deps_for_task_inputs)
+        .with_global_env(root_turbo_json.global_env.clone())
+        .with_task_io_context(
+            self.opts.run_opts.pass_through_args.clone(),
+            self.opts.run_opts.tasks.clone(),
+            task_io_environment,
+        )
         .with_tasks(tasks);
 
         if self.add_all_tasks {
@@ -1014,30 +1469,20 @@ impl RunBuilder {
         // the file).
         let watch_task_filtered = if let Some(ref changed_files) = self.changed_files_for_watch {
             if self.opts.future_flags.watch_using_task_inputs && !changed_files.is_empty() {
-                // Only consider files that still exist on disk. Editor temp
-                // files (vim 4913, *~ backups, etc.) are created and deleted
-                // within the same watcher batch. The hash algorithm only sees
-                // files that exist, so input matching should too.
-                let existing_files: std::collections::HashSet<_> = changed_files
-                    .iter()
-                    .filter(|f| self.repo_root.resolve(f).exists())
-                    .cloned()
-                    .collect();
-
-                let total_tasks = engine.task_ids().count();
-                let affected_tasks = crate::task_change_detector::affected_task_ids(
+                let filter = crate::task_change_detector::resolve_watch_task_filter(
                     &engine,
                     pkg_dep_graph,
-                    &existing_files,
+                    &self.repo_root,
+                    changed_files,
                     &root_turbo_json.global_deps,
                 );
                 tracing::info!(
-                    total_tasks,
-                    affected_tasks = affected_tasks.len(),
-                    changed_files = existing_files.len(),
+                    total_tasks = engine.task_ids().count(),
+                    affected_tasks = filter.directly_affected.len(),
+                    changed_files = filter.existing_files.len(),
                     "watch task-level input filtering complete"
                 );
-                engine = engine.retain_affected_tasks(&affected_tasks);
+                engine = engine.retain_watch_affected_tasks(&filter.directly_affected);
                 true
             } else {
                 false
@@ -1058,6 +1503,33 @@ impl RunBuilder {
     }
 }
 
+/// Whether experimental Cargo package support is enabled, via
+/// `futureFlags.experimentalCargoWorkspaces` in the root turbo.json. The
+/// future flag is the only switch: it is repo-level configuration, so every
+/// invoker sees the same package graph.
+pub(crate) fn cargo_enabled(future_flags: &turborepo_turbo_json::FutureFlags) -> bool {
+    future_flags.experimental_cargo_workspaces
+}
+
+pub(crate) fn load_root_package_json(
+    repo_root: &AbsoluteSystemPath,
+    cargo_enabled: bool,
+) -> Result<Option<PackageJson>, package_json::Error> {
+    match PackageJson::load(&repo_root.join_component("package.json")) {
+        Ok(package_json) => Ok(Some(package_json)),
+        Err(package_json::Error::Io(io))
+            if io.kind() == ErrorKind::NotFound
+                && cargo_enabled
+                && repo_root
+                    .join_component(turborepo_repository::cargo::CARGO_TOML)
+                    .exists() =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error),
+    }
+}
+
 fn origins_match(url1: &str, url2: &str) -> bool {
     let (Ok(url1), Ok(url2)) = (Url::parse(url1), Url::parse(url2)) else {
         return false;
@@ -1075,46 +1547,213 @@ fn has_userinfo(url: &Url) -> bool {
 }
 
 #[cfg(test)]
+mod task_io_context_tests {
+    use std::{collections::HashMap, sync::Arc};
+
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_env::EnvironmentVariableMap;
+    use turborepo_hash::TaskHashable;
+    use turborepo_repository::{
+        cargo::CargoToolchain,
+        toolchain::{
+            DiscoverPackagesFuture, DiscoveredPackages, Toolchain, ToolchainId, ToolchainRegistry,
+        },
+    };
+    use turborepo_types::EnvMode;
+
+    use super::project_task_io_environment;
+
+    struct Stub {
+        id: ToolchainId,
+        environment: Vec<&'static str>,
+    }
+
+    impl Toolchain for Stub {
+        fn id(&self) -> ToolchainId {
+            self.id.clone()
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async { Ok(DiscoveredPackages::default()) })
+        }
+
+        fn task_command(
+            &self,
+            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
+            _task: &str,
+            _pass_through_args: Option<&[String]>,
+            _override_command: Option<&[String]>,
+        ) -> Result<
+            Option<turborepo_repository::toolchain::TaskCommand>,
+            turborepo_repository::toolchain::Error,
+        > {
+            Ok(None)
+        }
+
+        fn task_display_command(
+            &self,
+            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
+            _task: &str,
+        ) -> Option<String> {
+            None
+        }
+
+        fn defines_task(
+            &self,
+            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
+            _task: &str,
+        ) -> bool {
+            false
+        }
+
+        fn watch_spec(&self) -> turborepo_repository::toolchain::WatchSpec {
+            turborepo_repository::toolchain::WatchSpec::default()
+        }
+
+        fn prune_plan(
+            &self,
+            _kept_packages: &[String],
+        ) -> Result<
+            Option<turborepo_repository::toolchain::PrunePlan>,
+            turborepo_repository::toolchain::Error,
+        > {
+            Ok(None)
+        }
+
+        fn task_io_env_vars(&self) -> &[&str] {
+            &self.environment
+        }
+    }
+
+    #[test]
+    fn projection_is_isolated_per_toolchain() {
+        let alpha = ToolchainId::new("alpha");
+        let beta = ToolchainId::new("beta");
+        let mut toolchains = ToolchainRegistry::new();
+        toolchains
+            .register(Arc::new(Stub {
+                id: alpha.clone(),
+                environment: vec!["ALPHA_*"],
+            }))
+            .unwrap();
+        toolchains
+            .register(Arc::new(Stub {
+                id: beta.clone(),
+                environment: vec!["BETA_KEY"],
+            }))
+            .unwrap();
+        let environment = EnvironmentVariableMap::from(HashMap::from([
+            ("ALPHA_TARGET".to_string(), "alpha".to_string()),
+            ("BETA_KEY".to_string(), "beta".to_string()),
+            ("UNDECLARED_SECRET".to_string(), "secret".to_string()),
+        ]));
+
+        let projected = project_task_io_environment(&toolchains, &environment).unwrap();
+        assert_eq!(projected.len(), 2);
+        let alpha_environment = projected.get(&alpha).unwrap();
+        assert_eq!(alpha_environment.get("ALPHA_TARGET"), Some("alpha"));
+        assert_eq!(alpha_environment.get("BETA_KEY"), None);
+        assert_eq!(alpha_environment.get("UNDECLARED_SECRET"), None);
+        let beta_environment = projected.get(&beta).unwrap();
+        assert_eq!(beta_environment.get("BETA_KEY"), Some("beta"));
+        assert_eq!(beta_environment.get("ALPHA_TARGET"), None);
+        assert_eq!(beta_environment.get("UNDECLARED_SECRET"), None);
+    }
+
+    #[test]
+    fn cargo_projection_keeps_only_rustup_selection_environment() {
+        let root = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(root.path()).unwrap();
+        let mut toolchains = ToolchainRegistry::new();
+        toolchains.register(CargoToolchain::new(root)).unwrap();
+        let environment = EnvironmentVariableMap::from(HashMap::from([
+            ("RUSTUP_HOME".to_string(), "/rustup".to_string()),
+            ("RUSTUP_TOOLCHAIN".to_string(), "stable-host".to_string()),
+            (
+                "RUSTUP_DIST_SERVER".to_string(),
+                "https://example.invalid".to_string(),
+            ),
+        ]));
+
+        let projected = project_task_io_environment(&toolchains, &environment).unwrap();
+        let cargo = projected.get(&ToolchainId::RUST).unwrap();
+        assert_eq!(cargo.get("RUSTUP_HOME"), Some("/rustup"));
+        assert_eq!(cargo.get("RUSTUP_TOOLCHAIN"), Some("stable-host"));
+        assert_eq!(cargo.get("RUSTUP_DIST_SERVER"), None);
+    }
+
+    fn projected_task_hash(layout: &str, secret: &str) -> String {
+        let alpha = ToolchainId::new("alpha");
+        let mut toolchains = ToolchainRegistry::new();
+        toolchains
+            .register(Arc::new(Stub {
+                id: alpha.clone(),
+                environment: vec!["ALPHA_*"],
+            }))
+            .unwrap();
+        let environment = EnvironmentVariableMap::from(HashMap::from([
+            ("ALPHA_TARGET".to_string(), layout.to_string()),
+            ("UNDECLARED_SECRET".to_string(), secret.to_string()),
+        ]));
+        let projected = project_task_io_environment(&toolchains, &environment).unwrap();
+        let layout = projected
+            .get(&alpha)
+            .and_then(|environment| environment.get("ALPHA_TARGET"))
+            .unwrap();
+        let declared = vec!["ALPHA_*".to_string()];
+
+        TaskHashable {
+            global_hash: "global",
+            task_dependency_hashes: Vec::new(),
+            hash_of_files: "files",
+            external_deps_hash: None,
+            package_dir: None,
+            task: "build",
+            outputs: Default::default(),
+            pass_through_args: &[],
+            env: &declared,
+            resolved_env_vars: vec![format!("ALPHA_TARGET={layout}")],
+            pass_through_env: &[],
+            env_mode: EnvMode::Strict,
+            command_override: &[],
+            command_opt_out: false,
+        }
+        .calculate_task_hash()
+        .unwrap()
+    }
+
+    #[test]
+    fn projected_declared_environment_changes_task_hash_only() {
+        let baseline = projected_task_hash("one", "secret-one");
+        assert_ne!(baseline, projected_task_hash("two", "secret-one"));
+        assert_eq!(baseline, projected_task_hash("one", "secret-two"));
+    }
+}
+
+#[cfg(test)]
 mod package_prefix_tests {
     use super::*;
 
     #[test]
-    fn repo_index_prefixes_are_git_root_relative_for_nested_turbo_root() {
+    fn repo_index_prefix_is_git_root_relative_for_nested_turbo_root() {
         let tmp = tempfile::tempdir().unwrap();
         let git_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
         let repo_root = git_root.join_component("downloaded-app");
 
-        let root_package = AnchoredSystemPath::new("").unwrap();
-        let workspace_package = AnchoredSystemPath::new("packages/web").unwrap();
-
         assert_eq!(
-            RunBuilder::package_prefix_for_repo_index(&repo_root, &git_root, root_package).unwrap(),
+            RunBuilder::repo_prefix_for_repo_index(&repo_root, &git_root).unwrap(),
             RelativeUnixPathBuf::new("downloaded-app").unwrap()
-        );
-        assert_eq!(
-            RunBuilder::package_prefix_for_repo_index(&repo_root, &git_root, workspace_package)
-                .unwrap(),
-            RelativeUnixPathBuf::new("downloaded-app/packages/web").unwrap()
         );
     }
 
     #[test]
-    fn repo_index_prefixes_stay_repo_relative_when_git_root_matches_turbo_root() {
+    fn repo_index_prefix_is_empty_when_git_root_matches_turbo_root() {
         let tmp = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
 
-        let root_package = AnchoredSystemPath::new("").unwrap();
-        let workspace_package = AnchoredSystemPath::new("packages/web").unwrap();
-
         assert_eq!(
-            RunBuilder::package_prefix_for_repo_index(&repo_root, &repo_root, root_package)
-                .unwrap(),
+            RunBuilder::repo_prefix_for_repo_index(&repo_root, &repo_root).unwrap(),
             RelativeUnixPathBuf::new("").unwrap()
-        );
-        assert_eq!(
-            RunBuilder::package_prefix_for_repo_index(&repo_root, &repo_root, workspace_package)
-                .unwrap(),
-            RelativeUnixPathBuf::new("packages/web").unwrap()
         );
     }
 }

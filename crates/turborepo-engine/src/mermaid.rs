@@ -43,24 +43,21 @@ fn render_graph<W: io::Write>(
         },
         false => |node: &TaskNode| node.to_string(),
     };
+    let get_node = |i| -> Result<String, io::Error> {
+        graph
+            .node_weight(i)
+            .map(display_node)
+            .ok_or_else(|| io::Error::other("node index should exist in graph"))
+    };
 
     let mut edges = graph
         .edge_references()
         .map(|e| {
-            (
-                display_node(
-                    graph
-                        .node_weight(e.source())
-                        .expect("node index should exist in graph"),
-                ),
-                display_node(
-                    graph
-                        .node_weight(e.target())
-                        .expect("node index should exist in graph"),
-                ),
-            )
+            let source = get_node(e.source())?;
+            let target = get_node(e.target())?;
+            Ok((source, target))
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, io::Error>>()?;
     edges.sort();
 
     writeln!(writer, "graph TD")?;

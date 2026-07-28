@@ -4,7 +4,6 @@
   "ignorePatterns": [
     "build/",
     "crates/",
-    "cli/",
     "examples/",
     "packages/eslint-plugin-turbo/__fixtures__",
     "packages/create-turbo/templates",
@@ -149,6 +148,12 @@
     "unicorn/prefer-ternary": "off"
   },
   "overrides": [
+    {
+      "files": ["apps/agents/agent/**/*.ts"],
+      "rules": {
+        "unicorn/filename-case": "off"
+      }
+    },
     {
       "files": [
         "**/*.{test,spec}.{ts,tsx,js,jsx}",

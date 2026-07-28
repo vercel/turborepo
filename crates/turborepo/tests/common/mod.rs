@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 #![allow(dead_code)]
 
 pub mod setup;
@@ -27,21 +28,49 @@ pub fn turbo_output_filters() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
+/// Env keys in the test process that can carry real turbo configuration
+/// into spawned turbo children — TURBO_TEAM/TURBO_TOKEN exported by CI
+/// credential steps, the paired RUSTC_WRAPPER used by turbo's embedded
+/// sccache, VERCEL_ARTIFACTS_* on Vercel builds, or a developer's local
+/// settings. Tests assert against turbo's defaults, so every harness that
+/// spawns turbo must remove these before applying its own vars;
+/// per-test overrides (explicit env sets after removal) still win because
+/// later ops on a key replace earlier ones.
+pub fn ambient_turbo_env_keys() -> Vec<std::ffi::OsString> {
+    std::env::vars_os()
+        .map(|(key, _)| key)
+        .filter(|key| {
+            let key = key.to_string_lossy();
+            key.starts_with("TURBO_")
+                || key == "RUSTC_WRAPPER"
+                || key == "VERCEL_ARTIFACTS_OWNER"
+                || key == "VERCEL_ARTIFACTS_TOKEN"
+        })
+        .collect()
+}
+
 /// Return a pre-configured `Command` for the turbo binary with all standard
 /// env var suppression applied. Callers can chain `.arg()`, `.env()`, etc.
 /// before calling `.output()`.
 pub fn turbo_command(test_dir: &Path) -> assert_cmd::Command {
     let mut cmd = assert_cmd::Command::cargo_bin("turbo").expect("turbo binary not found");
+    let corepack_dir = setup::corepack_dir_for_test_dir(test_dir);
+    if corepack_dir.exists() {
+        cmd.env("PATH", setup::prepend_to_path(&corepack_dir))
+            .env("COREPACK_HOME", setup::corepack_home());
+    }
+    for key in ambient_turbo_env_keys() {
+        cmd.env_remove(&key);
+    }
     cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
         .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
         .env("DO_NOT_TRACK", "1")
         .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
-        // Corepack intercepts package manager calls (yarn, pnpm) and can
+        // Corepack intercepts package manager calls (npm, yarn, pnpm) and can
         // prompt for download confirmation, which hangs in non-interactive CI.
-        // The test setup pre-warms the corepack cache via `corepack prepare`
-        // so the correct version is available locally without network access.
-        // DOWNLOAD_PROMPT=0 is a safety net in case the cache is somehow cold.
+        // Tests that need Corepack pre-warm its cache during setup. This env
+        // var is a safety net in case the cache is somehow cold.
         .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
         .env_remove("CI")
         .env_remove("GITHUB_ACTIONS")
@@ -345,21 +374,24 @@ pub fn setup_fixture(
     fixture: &str,
     package_manager: &str,
     test_dir: &Path,
+    install: bool,
 ) -> Result<(), anyhow::Error> {
-    setup::setup_integration_test(test_dir, fixture, package_manager, true)
+    setup::setup_integration_test(test_dir, fixture, package_manager, install)
 }
 
 /// Executes a command and snapshots the output as JSON.
 ///
 /// Takes fixture, package manager, and command, and sets of arguments.
 /// Creates a snapshot file for each set of arguments.
-/// Note that the command must return valid JSON
+/// Note that the command must return valid JSON.
+/// Defaults to skipping dependency installation; use `@install` when module
+/// resolution requires `node_modules`.
 #[macro_export]
 macro_rules! check_json_output {
-    ($fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?],)*) => {
+    (@with_install $install:expr, $fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?],)*) => {
         {
             let tempdir = tempfile::tempdir()?;
-            $crate::common::setup_fixture($fixture, $package_manager, tempdir.path())?;
+            $crate::common::setup_fixture($fixture, $package_manager, tempdir.path(), $install)?;
             $(
                 let mut command = $crate::common::turbo_command(tempdir.path());
                 command
@@ -393,5 +425,11 @@ macro_rules! check_json_output {
                 });
             )*
         }
+    };
+    (@install $fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?],)*) => {
+        $crate::check_json_output!(@with_install true, $fixture, $package_manager, $command, $($name => [$($query),*],)*)
+    };
+    ($fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?],)*) => {
+        $crate::check_json_output!(@with_install false, $fixture, $package_manager, $command, $($name => [$($query),*],)*)
     }
 }

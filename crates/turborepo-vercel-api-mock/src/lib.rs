@@ -32,7 +32,6 @@ pub const EXPECTED_TEAM_NAME: &str = "expected_team_name";
 pub const EXPECTED_TEAM_CREATED_AT: u64 = 0;
 
 pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
-pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
 
 pub const EXPECTED_CLIENT_ID: &str = "cl_kyUx2zVvA4MGptBohkmtYHJly2XltXzD";
 
@@ -138,22 +137,37 @@ pub async fn start_test_server(
                 |Path(hash): Path<String>, headers: HeaderMap, body: Body| async move {
                     let root_path = put_tempdir_ref.path();
                     let file_path = root_path.join(&hash);
-                    let mut file = OpenOptions::new()
+                    let mut file = match OpenOptions::new()
                         .append(true)
                         .create(true)
                         .open(&file_path)
-                        .unwrap();
+                    {
+                        Ok(file) => file,
+                        Err(err) => {
+                            return (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                format!("failed to open artifact file: {err}"),
+                            )
+                                .into_response();
+                        }
+                    };
 
-                    let duration = headers
+                    let Some(duration) = headers
                         .get("x-artifact-duration")
                         .and_then(|header_value| header_value.to_str().ok())
                         .and_then(|duration| duration.parse::<u32>().ok())
-                        .expect("x-artifact-duration header is missing");
+                    else {
+                        return (
+                            StatusCode::BAD_REQUEST,
+                            "x-artifact-duration header is missing",
+                        )
+                            .into_response();
+                    };
 
-                    assert!(
-                        headers.get(CONTENT_LENGTH).is_some(),
-                        "expected to get content-length"
-                    );
+                    if headers.get(CONTENT_LENGTH).is_none() {
+                        return (StatusCode::BAD_REQUEST, "content-length header is missing")
+                            .into_response();
+                    }
 
                     let mut durations_map = put_durations_ref.lock().await;
                     durations_map.insert(hash.clone(), duration);
@@ -173,11 +187,26 @@ pub async fn start_test_server(
 
                     let mut body_stream = body.into_data_stream();
                     while let Some(item) = body_stream.next().await {
-                        let chunk = item.unwrap();
-                        file.write_all(&chunk).unwrap();
+                        let chunk = match item {
+                            Ok(chunk) => chunk,
+                            Err(err) => {
+                                return (
+                                    StatusCode::BAD_REQUEST,
+                                    format!("failed to read artifact body: {err}"),
+                                )
+                                    .into_response();
+                            }
+                        };
+                        if let Err(err) = file.write_all(&chunk) {
+                            return (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                format!("failed to write artifact body: {err}"),
+                            )
+                                .into_response();
+                        }
                     }
 
-                    (StatusCode::CREATED, Json(hash))
+                    (StatusCode::CREATED, Json(hash)).into_response()
                 },
             ),
         )
@@ -197,20 +226,28 @@ pub async fn start_test_server(
                     .unwrap_or(0);
                 let mut headers = HeaderMap::new();
 
-                headers.insert(
-                    "x-artifact-duration",
-                    HeaderValue::from_str(&duration.to_string()).unwrap(),
-                );
+                headers.insert("x-artifact-duration", HeaderValue::from(duration));
 
                 if let Some((sha, dirty_hash)) = get_metadata_ref.lock().await.get(&hash).cloned() {
                     if let Some(sha) = sha {
-                        headers.insert("x-artifact-sha", HeaderValue::from_str(&sha).unwrap());
+                        let Ok(value) = HeaderValue::from_str(&sha) else {
+                            return (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                HeaderMap::new(),
+                                Vec::new(),
+                            );
+                        };
+                        headers.insert("x-artifact-sha", value);
                     }
                     if let Some(dirty_hash) = dirty_hash {
-                        headers.insert(
-                            "x-artifact-dirty-hash",
-                            HeaderValue::from_str(&dirty_hash).unwrap(),
-                        );
+                        let Ok(value) = HeaderValue::from_str(&dirty_hash) else {
+                            return (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                HeaderMap::new(),
+                                Vec::new(),
+                            );
+                        };
+                        headers.insert("x-artifact-dirty-hash", value);
                     }
                 }
 
@@ -226,21 +263,21 @@ pub async fn start_test_server(
                     return (StatusCode::NOT_FOUND, headers);
                 };
 
-                headers.insert(
-                    "x-artifact-duration",
-                    HeaderValue::from_str(&duration.to_string()).unwrap(),
-                );
+                headers.insert("x-artifact-duration", HeaderValue::from(duration));
 
                 if let Some((sha, dirty_hash)) = head_metadata_ref.lock().await.get(&hash).cloned()
                 {
                     if let Some(sha) = sha {
-                        headers.insert("x-artifact-sha", HeaderValue::from_str(&sha).unwrap());
+                        let Ok(value) = HeaderValue::from_str(&sha) else {
+                            return (StatusCode::INTERNAL_SERVER_ERROR, HeaderMap::new());
+                        };
+                        headers.insert("x-artifact-sha", value);
                     }
                     if let Some(dirty_hash) = dirty_hash {
-                        headers.insert(
-                            "x-artifact-dirty-hash",
-                            HeaderValue::from_str(&dirty_hash).unwrap(),
-                        );
+                        let Ok(value) = HeaderValue::from_str(&dirty_hash) else {
+                            return (StatusCode::INTERNAL_SERVER_ERROR, HeaderMap::new());
+                        };
+                        headers.insert("x-artifact-dirty-hash", value);
                     }
                 }
 
@@ -266,7 +303,10 @@ pub async fn start_test_server(
             "/preflight/absolute-location",
             options(|| async {
                 let mut headers = HeaderMap::new();
-                headers.insert("Location", "http://example.com/about".parse().unwrap());
+                headers.insert(
+                    "Location",
+                    HeaderValue::from_static("http://example.com/about"),
+                );
 
                 headers
             }),
@@ -275,7 +315,7 @@ pub async fn start_test_server(
             "/preflight/relative-location",
             options(|| async {
                 let mut headers = HeaderMap::new();
-                headers.insert("Location", "/about/me".parse().unwrap());
+                headers.insert("Location", HeaderValue::from_static("/about/me"));
 
                 headers
             }),
@@ -286,9 +326,9 @@ pub async fn start_test_server(
                 let mut headers = HeaderMap::new();
                 headers.insert(
                     "Access-Control-Allow-Headers",
-                    "Authorization, Location, Access-Control-Allow-Headers"
-                        .parse()
-                        .unwrap(),
+                    HeaderValue::from_static(
+                        "Authorization, Location, Access-Control-Allow-Headers",
+                    ),
                 );
 
                 headers
@@ -300,7 +340,7 @@ pub async fn start_test_server(
                 let mut headers = HeaderMap::new();
                 headers.insert(
                     "Access-Control-Allow-Headers",
-                    "x-authorization-foo, Location".parse().unwrap(),
+                    HeaderValue::from_static("x-authorization-foo, Location"),
                 );
 
                 headers
@@ -310,7 +350,10 @@ pub async fn start_test_server(
             "/preflight/wildcard-allow-auth",
             options(|| async {
                 let mut headers = HeaderMap::new();
-                headers.insert("Access-Control-Allow-Headers", "*".parse().unwrap());
+                headers.insert(
+                    "Access-Control-Allow-Headers",
+                    HeaderValue::from_static("*"),
+                );
 
                 headers
             }),

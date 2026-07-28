@@ -112,10 +112,11 @@ pub fn resolve_configuration_for_shim(
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::OsString;
+    use std::{ffi::OsString, fs};
 
     use tempfile::TempDir;
     use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_types::LogOrder;
 
     use super::{cli_overrides_from_args, resolve_configuration_with_overrides};
     use crate::{
@@ -133,6 +134,29 @@ mod tests {
         let overrides = cli_overrides_from_args(&args).unwrap();
 
         assert_eq!(overrides.no_update_notifier, Some(true));
+    }
+
+    #[test]
+    fn test_cli_overrides_capture_log_order() {
+        let args = parse_args(&["turbo", "run", "build", "--log-order", "stream"]);
+        let overrides = cli_overrides_from_args(&args).unwrap();
+
+        assert_eq!(overrides.log_order, Some(LogOrder::Stream));
+    }
+
+    #[test]
+    fn test_cli_force_override_parses_optional_boolean() {
+        for (args, expected) in [
+            (vec!["turbo", "run", "build"], None),
+            (vec!["turbo", "run", "build", "--force"], Some(true)),
+            (vec!["turbo", "run", "build", "--force=true"], Some(true)),
+            (vec!["turbo", "run", "build", "--force=false"], Some(false)),
+        ] {
+            let args = parse_args(&args);
+            let overrides = cli_overrides_from_args(&args).unwrap();
+
+            assert_eq!(overrides.force, expected);
+        }
     }
 
     #[test]
@@ -171,5 +195,49 @@ mod tests {
         .unwrap();
 
         assert!(merged.no_update_notifier());
+    }
+
+    #[test]
+    fn test_cli_log_order_overrides_local_config() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        fs::create_dir_all(repo_root.join_component(".turbo").as_std_path()).unwrap();
+        repo_root
+            .join_components(&[".turbo", "config.json"])
+            .create_with_contents(r#"{"logOrder": "grouped"}"#)
+            .unwrap();
+
+        let merged = resolve_configuration_with_overrides(
+            &repo_root,
+            ConfigurationOptions {
+                log_order: Some(LogOrder::Stream),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(merged.log_order(), LogOrder::Stream);
+    }
+
+    #[test]
+    fn test_cli_force_overrides_lower_precedence_config() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        fs::create_dir_all(repo_root.join_component(".turbo").as_std_path()).unwrap();
+        repo_root
+            .join_components(&[".turbo", "config.json"])
+            .create_with_contents(r#"{"force": true}"#)
+            .unwrap();
+
+        let merged = resolve_configuration_with_overrides(
+            &repo_root,
+            ConfigurationOptions {
+                force: Some(false),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert!(!merged.force());
     }
 }

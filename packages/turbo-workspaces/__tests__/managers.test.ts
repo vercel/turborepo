@@ -16,6 +16,16 @@ import {
 
 jest.mock("execa", () => jest.fn());
 
+type PackageJsonWithDevEngines = PackageJson & {
+  devEngines?: {
+    packageManager?: {
+      name: string;
+      version: string;
+    };
+    [key: string]: unknown;
+  };
+};
+
 describe("managers", () => {
   const { useFixture } = setupTestFixtures({
     directory: path.join(__dirname, "../")
@@ -40,9 +50,9 @@ describe("managers", () => {
     it.each(generateCreateMatrix())(
       "creates $manager project from $project $type project (interactive=$interactive, dry=$dry)",
       async ({ project, manager, type, interactive, dry }) => {
-        expect.assertions(2);
-
-        const { root } = useFixture({ fixture: `./${project}/${type}` });
+        const { root, readJson } = useFixture({
+          fixture: `./${project}/${type}`
+        });
         const testProject = await MANAGERS[project].read({
           workspaceRoot: root
         });
@@ -67,6 +77,14 @@ describe("managers", () => {
           await expect(
             MANAGERS[manager].detect({ workspaceRoot: root })
           ).resolves.toEqual(true);
+          const packageJson = readJson<PackageJsonWithDevEngines>(
+            path.join(root, "package.json")
+          );
+          expect(packageJson?.packageManager).toBeUndefined();
+          expect(packageJson?.devEngines?.packageManager).toEqual({
+            name: manager,
+            version: "1.2.3"
+          });
         }
       }
     );
@@ -109,7 +127,9 @@ describe("managers", () => {
           expect(fs.existsSync(project.paths.nodeModules)).toEqual(dry);
         }
 
-        const packageJson = readJson<PackageJson>(project.paths.packageJson);
+        const packageJson = readJson<PackageJsonWithDevEngines>(
+          project.paths.packageJson
+        );
         if (dry) {
           expect(packageJson?.packageManager).toBeDefined();
           expect(packageJson?.packageManager?.split("@")[0]).toEqual(
@@ -136,6 +156,7 @@ describe("managers", () => {
           }
         } else {
           expect(packageJson?.packageManager).toBeUndefined();
+          expect(packageJson?.devEngines?.packageManager).toBeUndefined();
           if (fixtureType === "monorepo") {
             expect(packageJson?.workspaces).toBeUndefined();
 
@@ -152,6 +173,74 @@ describe("managers", () => {
         }
       }
     );
+
+    it("removes matching declarations and preserves declarations for other managers", async () => {
+      const { root, readJson, write } = useFixture({
+        fixture: "./npm/monorepo"
+      });
+      const packageJsonPath = path.join(root, "package.json");
+      const packageJson = readJson<PackageJsonWithDevEngines>(packageJsonPath);
+      if (!packageJson) {
+        throw new Error("expected package.json fixture");
+      }
+      packageJson.packageManager = "pnpm@9.12.3";
+      packageJson.devEngines = {
+        ...packageJson.devEngines,
+        packageManager: {
+          name: "bun",
+          version: "1.1.0"
+        }
+      };
+      write(packageJsonPath, JSON.stringify(packageJson, null, 2));
+
+      const project = await MANAGERS.npm.read({ workspaceRoot: root });
+      await MANAGERS.npm.remove({
+        project,
+        to: { name: "pnpm", version: "9.12.3" },
+        logger: new Logger({ interactive: false, dry: false }),
+        options: { interactive: false, dry: false }
+      });
+
+      const updatedPackageJson =
+        readJson<PackageJsonWithDevEngines>(packageJsonPath);
+      expect(updatedPackageJson?.packageManager).toEqual("pnpm@9.12.3");
+      expect(updatedPackageJson?.devEngines?.packageManager).toEqual({
+        name: "bun",
+        version: "1.1.0"
+      });
+    });
+
+    it("removes both matching declaration fields", async () => {
+      const { root, readJson, write } = useFixture({
+        fixture: "./npm/monorepo"
+      });
+      const packageJsonPath = path.join(root, "package.json");
+      const packageJson = readJson<PackageJsonWithDevEngines>(packageJsonPath);
+      if (!packageJson) {
+        throw new Error("expected package.json fixture");
+      }
+      packageJson.devEngines = {
+        ...packageJson.devEngines,
+        packageManager: {
+          name: "npm",
+          version: "10.5.0"
+        }
+      };
+      write(packageJsonPath, JSON.stringify(packageJson, null, 2));
+
+      const project = await MANAGERS.npm.read({ workspaceRoot: root });
+      await MANAGERS.npm.remove({
+        project,
+        to: { name: "pnpm", version: "9.12.3" },
+        logger: new Logger({ interactive: false, dry: false }),
+        options: { interactive: false, dry: false }
+      });
+
+      const updatedPackageJson =
+        readJson<PackageJsonWithDevEngines>(packageJsonPath);
+      expect(updatedPackageJson?.packageManager).toBeUndefined();
+      expect(updatedPackageJson?.devEngines?.packageManager).toBeUndefined();
+    });
   });
 
   describe("read", () => {

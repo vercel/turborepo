@@ -5,7 +5,7 @@ import {
   getTurboConfigs,
   resolveTurboConfigPath
 } from "@turbo/utils";
-import type { SchemaV1, RootSchemaV1, Pipeline } from "@turbo/types";
+import type { SchemaV1, RootSchemaV1, PipelineV1 } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { TransformerResults } from "../runner";
@@ -23,7 +23,7 @@ type ExperimentalRootSchema = Omit<RootSchemaV1, "pipeline"> & {
   pipeline: Record<string, ExperimentalPipeline>;
 };
 
-type ExperimentalPipeline = Pipeline & {
+type ExperimentalPipeline = PipelineV1 & {
   experimentalPassThroughEnv?: null | Array<string>;
 };
 

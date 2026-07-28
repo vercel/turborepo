@@ -144,10 +144,10 @@ impl TurborepoMfeConfig {
             return Ok(None);
         };
         let mut config = Self::from_str_with_mfe_dep(&contents, path.as_str(), has_mfe_dependency)?;
-        config.filename = path
-            .file_name()
-            .expect("microfrontends config should not be root")
-            .to_owned();
+        let Some(file_name) = path.file_name() else {
+            return Err(Error::InvalidConfigPath(path.to_string()));
+        };
+        config.filename = file_name.to_owned();
         config.set_path(package_dir);
         Ok(Some(config))
     }
@@ -350,10 +350,10 @@ impl Config {
             return Ok(None);
         };
         let mut config = Config::from_str(&contents, path.as_str())?;
-        config.filename = path
-            .file_name()
-            .expect("microfrontends config should not be root")
-            .to_owned();
+        let Some(file_name) = path.file_name() else {
+            return Err(Error::InvalidConfigPath(path.to_string()));
+        };
+        config.filename = file_name.to_owned();
         config.set_path(package_dir);
         Ok(Some(config))
     }

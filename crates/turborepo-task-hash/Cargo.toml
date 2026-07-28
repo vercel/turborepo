@@ -33,7 +33,12 @@ turborepo-types = { workspace = true }
 tokio = { workspace = true, features = ["time", "rt"] }
 
 [dev-dependencies]
+dunce = { workspace = true }
+serde_json = { workspace = true }
 tempfile = { workspace = true }
+turborepo-repository = { path = "../turborepo-repository", features = [
+  "test-util",
+] }
 
 [features]
 default = []

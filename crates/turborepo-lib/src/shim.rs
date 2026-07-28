@@ -1,8 +1,7 @@
 //! Shim module for turborepo-lib.
 //!
 //! This module provides the integration between the `turborepo-shim` crate and
-//! `turborepo-lib`. It implements the traits required by the shim and
-//! re-exports types for backward compatibility.
+//! `turborepo-lib`. It implements the traits required by the shim.
 
 use std::sync::Arc;
 
@@ -11,13 +10,9 @@ use shared_child::SharedChild;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::inference::RepoState;
-// Re-export types from turborepo-shim for backward compatibility.
-// These exports are used by other parts of turborepo-lib and external code.
-#[allow(unused_imports)]
-pub use turborepo_shim::{turbo_version_has_shim, ShimArgs, TurboState, INVOCATION_DIR_ENV_VAR};
 use turborepo_shim::{
-    ChildSpawner, ConfigProvider, ShimConfigurationOptions, ShimResult, ShimRuntime, TurboRunner,
-    VersionProvider,
+    ChildSpawner, ConfigProvider, ShimArgs, ShimConfigurationOptions, ShimResult, ShimRuntime,
+    TurboRunner, VersionProvider,
 };
 use turborepo_ui::ColorConfig;
 
@@ -212,6 +207,17 @@ pub fn run(query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>) -> R
 
     // Parse args to get verbosity and color config for the subscriber
     let args = ShimArgs::parse().map_err(turborepo_shim::Error::from)?;
+
+    #[cfg(feature = "heap-dhat")]
+    if let Some(heap_profile_file) = args.heap_profile_file() {
+        crate::heap_profile::start_global(heap_profile_file);
+    }
+
+    #[cfg(not(feature = "heap-dhat"))]
+    if args.heap_profile_file().is_some() {
+        eprintln!("turbo: --heap requires a binary built with the heap-dhat feature");
+    }
+
     let color_config = args.color_config();
     let subscriber = TurboSubscriber::new_with_verbosity(args.verbosity, &color_config);
 

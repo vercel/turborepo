@@ -69,6 +69,8 @@ pub enum Error {
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
+    TurboJson(#[from] turborepo_turbo_json::Error),
+    #[error(transparent)]
     #[diagnostic(transparent)]
     Watch(#[from] watch::Error),
     #[error("Devtools error: {0}")]
@@ -79,6 +81,8 @@ pub enum Error {
     SignalListener(#[from] turborepo_signals::listeners::Error),
     #[error(transparent)]
     Dialoguer(#[from] dialoguer::Error),
+    #[error("Failed to build Tokio runtime: {0}")]
+    Runtime(#[source] std::io::Error),
 }
 
 const MAX_CHARS_PER_TASK_LINE: usize = 100;

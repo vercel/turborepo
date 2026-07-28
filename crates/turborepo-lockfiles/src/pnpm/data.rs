@@ -1,10 +1,18 @@
 use std::{any::Any, borrow::Cow, collections::BTreeMap};
 
+use rustc_hash::FxHashMap;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
 
 use super::{Error, LockfileVersion, SupportedLockfileVersion, dep_path::DepPath};
+
+// A child module of `data` so it can construct the private lockfile structs.
+// The file lives at `data_fast_parse.rs` instead of the default
+// `data/fast_parse.rs` because the repo-root .gitignore ignores any path
+// segment named `data`.
+#[path = "data_fast_parse.rs"]
+mod fast_parse;
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
@@ -43,9 +51,23 @@ pub struct PnpmLockfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshots: Option<Snapshots>,
     #[serde(skip)]
-    dependency_index: BTreeMap<String, BTreeMap<String, String>>,
+    dependency_index: FxHashMap<String, DepIndexEntry>,
     #[serde(skip_serializing_if = "Option::is_none")]
     time: Option<Map<String, String>>,
+}
+
+/// Per-key lookup entry built once after parse so the hot resolution paths
+/// (`has_package`, `package_version`, `all_dependencies`) are O(1) hash
+/// probes instead of `BTreeMap` walks over long dependency-path keys.
+///
+/// `deps` stays a `BTreeMap` deliberately: its iteration order feeds the
+/// closure walk and must be deterministic across processes.
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
+struct DepIndexEntry {
+    deps: BTreeMap<String, String>,
+    in_packages: bool,
+    in_snapshots: bool,
+    version: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -197,6 +219,7 @@ pub struct PackageResolution {
     // tarball -> none
     // directory -> 'directory'
     // git repository -> 'git'
+    // runtime (pnpm devEngines download) -> 'variations'
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     type_field: Option<String>,
     // Tarball fields
@@ -212,6 +235,14 @@ pub struct PackageResolution {
     repo: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     commit: Option<String>,
+    // Catch-all for resolution shapes we don't model with dedicated fields.
+    // The `runtime:` protocol (pnpm `devEngines.runtime` with
+    // `onFail: "download"`) emits a `type: variations` resolution whose
+    // `variants` list nests full per-platform binary resolutions. Without an
+    // opaque passthrough here those fields would be silently dropped when the
+    // pruned lockfile is re-serialized.
+    #[serde(flatten)]
+    other: Map<String, serde_yaml_ng::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -229,6 +260,26 @@ struct LockfileSettings {
 
 impl PnpmLockfile {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, crate::Error> {
+        // Machine-generated pnpm lockfiles parse on a fast event-driven path
+        // (~2x the scanner throughput of the serde path). Inputs outside its
+        // supported YAML subset — and malformed inputs — return `None` and
+        // take the serde path below, which either handles them (e.g. multi-
+        // document lockfiles) or reports a proper error.
+        if let Some(mut this) = fast_parse::parse(bytes) {
+            this.cached_version = this.compute_version();
+            this.build_dependency_index();
+            return Ok(this);
+        }
+
+        tracing::debug!("pnpm lockfile outside fast-parse subset; using serde path");
+        Self::from_bytes_via_serde(bytes)
+    }
+
+    /// The serde-based parse path. Handles everything the fast path doesn't
+    /// (multi-document lockfiles, exotic YAML) and produces proper errors
+    /// for malformed input. Also serves as the correctness oracle for the
+    /// fast path in tests.
+    fn from_bytes_via_serde(bytes: &[u8]) -> Result<Self, crate::Error> {
         let mut documents = serde_yaml_ng::Deserializer::from_slice(bytes).peekable();
         let mut leading_documents = Vec::new();
 
@@ -303,17 +354,27 @@ impl PnpmLockfile {
     }
 
     fn build_dependency_index(&mut self) {
-        let mut index = BTreeMap::new();
+        let capacity = self.snapshots.as_ref().map_or(0, |s| s.len())
+            + self.packages.as_ref().map_or(0, |p| p.len());
+        let mut index: FxHashMap<String, DepIndexEntry> =
+            FxHashMap::with_capacity_and_hasher(capacity, Default::default());
         if let Some(snapshots) = &self.snapshots {
             for (key, snapshot) in snapshots {
-                index.insert(key.clone(), snapshot.dependencies());
+                let entry = index.entry(key.clone()).or_default();
+                entry.deps = snapshot.dependencies();
+                entry.in_snapshots = true;
             }
         }
         if let Some(packages) = &self.packages {
-            for (key, entry) in packages {
-                index
-                    .entry(key.clone())
-                    .or_insert_with(|| entry.snapshot.dependencies());
+            for (key, package) in packages {
+                let entry = index.entry(key.clone()).or_default();
+                // Snapshot dependency maps take priority, matching the
+                // previous insert-then-or_insert construction order.
+                if !entry.in_snapshots {
+                    entry.deps = package.snapshot.dependencies();
+                }
+                entry.in_packages = true;
+                entry.version = package.version.clone();
             }
         }
         self.dependency_index = index;
@@ -325,22 +386,46 @@ impl PnpmLockfile {
             .and_then(|packages| packages.get(key))
     }
 
+    fn package_key_for_snapshot(&self, snapshot_key: &str) -> Result<String, crate::Error> {
+        let dp = DepPath::parse(self.version(), snapshot_key).map_err(Error::from)?;
+        Ok(self.format_key(dp.name, dp.version))
+    }
+
     fn has_package(&self, key: &str) -> bool {
+        let Some(entry) = self.dependency_index.get(key) else {
+            return false;
+        };
         match self.version() {
-            SupportedLockfileVersion::V5 | SupportedLockfileVersion::V6 => {
-                self.packages.as_ref().map(|pkgs| pkgs.contains_key(key))
-            }
-            SupportedLockfileVersion::V7AndV9 => {
-                self.snapshots.as_ref().map(|snaps| snaps.contains_key(key))
-            }
+            SupportedLockfileVersion::V5 | SupportedLockfileVersion::V6 => entry.in_packages,
+            SupportedLockfileVersion::V7AndV9 => entry.in_snapshots,
         }
-        .unwrap_or_default()
     }
 
     fn package_version(&self, key: &str) -> Option<&str> {
-        let pkgs = self.packages.as_ref()?;
-        let pkg = pkgs.get(key)?;
-        pkg.version.as_deref()
+        let entry = self.dependency_index.get(key)?;
+        if !entry.in_packages {
+            return None;
+        }
+        entry.version.as_deref()
+    }
+
+    /// Reconstruct the workspace -> (name -> specifier) map from importer
+    /// entries. Production callers derive this from package.jsons; tests
+    /// use the importers so lockfile fixtures are self-contained.
+    #[cfg(test)]
+    pub(crate) fn test_workspaces(&self) -> std::collections::HashMap<String, Map<String, String>> {
+        self.importers
+            .iter()
+            .map(|(path, importer)| {
+                let mut deps = Map::new();
+                for name in importer.dependencies.all_dependency_names() {
+                    if let Some((specifier, _)) = importer.dependencies.find_resolution(name) {
+                        deps.insert(name.to_string(), specifier.to_string());
+                    }
+                }
+                (path.clone(), deps)
+            })
+            .collect()
     }
 
     fn get_workspace(&self, workspace_path: &str) -> Result<&ProjectSnapshot, crate::Error> {
@@ -440,13 +525,30 @@ impl PnpmLockfile {
         key_buf: &mut String,
     ) -> Result<Option<&'a str>, crate::Error> {
         let importer = self.get_workspace(workspace_path)?;
+        Ok(self.resolution_ladder(
+            importer.dependencies.find_resolution(name),
+            name,
+            specifier,
+            key_buf,
+        ))
+    }
 
-        let Some((resolved_specifier, resolved_version)) =
-            importer.dependencies.find_resolution(name)
-        else {
-            return Ok(self
+    /// The specifier-resolution decision ladder, parameterized over the
+    /// importer's `(specifier, version)` entry for `name` (if any). Shared
+    /// by workspace-scoped resolution and the global transitive-edge
+    /// resolver, which evaluates it against every distinct importer entry
+    /// to prove workspace independence.
+    fn resolution_ladder<'a>(
+        &'a self,
+        resolution: Option<(&'a str, &'a str)>,
+        name: &str,
+        specifier: &'a str,
+        key_buf: &mut String,
+    ) -> Option<&'a str> {
+        let Some((resolved_specifier, resolved_version)) = resolution else {
+            return self
                 .has_package_by_parts(name, specifier, key_buf)
-                .then_some(specifier));
+                .then_some(specifier);
         };
 
         let override_specifier = self.apply_overrides(name, specifier);
@@ -454,15 +556,21 @@ impl PnpmLockfile {
         // Prefer the original specifier if it already matches a snapshot,
         // so overrides don't corrupt resolved peer-dep variants.
         if override_specifier != specifier && self.has_package_by_parts(name, specifier, key_buf) {
-            return Ok(Some(specifier));
+            return Some(specifier);
         }
 
         if resolved_specifier == override_specifier {
-            Ok(Some(resolved_version))
+            Some(resolved_version)
+        } else if self.has_package_by_parts(name, specifier, key_buf) {
+            Some(specifier)
+        } else if resolved_specifier == resolved_version
+            && self.has_package_by_parts(name, resolved_version, key_buf)
+        {
+            Some(resolved_version)
         } else if self.has_package_by_parts(name, override_specifier, key_buf) {
-            Ok(Some(override_specifier))
+            Some(override_specifier)
         } else {
-            Ok(None)
+            None
         }
     }
 
@@ -475,13 +583,22 @@ impl PnpmLockfile {
         for dependency in pruned_packages.keys() {
             let dp = DepPath::parse(self.version(), dependency.as_str())?;
 
-            let patch_key = format!("{}@{}", dp.name, dp.version);
-            if let Some(patch) = patches.get(&patch_key).filter(|patch| {
+            let hash_matches = |patch: &PatchFile| {
                 // In V7 patch hash isn't included in packages key, so no need to check
                 matches!(self.version(), SupportedLockfileVersion::V7AndV9)
                     || dp.patch_hash() == Some(patch.hash())
-            }) {
+            };
+
+            let patch_key = format!("{}@{}", dp.name, dp.version);
+            if let Some(patch) = patches.get(&patch_key).filter(|patch| hash_matches(patch)) {
                 pruned_patches.insert(patch_key, patch.clone());
+                continue;
+            }
+
+            if let Some((range_key, patch)) = Self::find_version_range_patch(patches, &dp)
+                && hash_matches(patch)
+            {
+                pruned_patches.insert(range_key.clone(), patch.clone());
                 continue;
             }
 
@@ -491,6 +608,31 @@ impl PnpmLockfile {
             }
         }
         Ok(pruned_patches)
+    }
+
+    /// pnpm allows patch keys to target a semver range, e.g. `foo@^2.0.0` or
+    /// `foo@<=2.1.0`. Returns the first patch whose range matches the
+    /// dependency's version.
+    fn find_version_range_patch<'a>(
+        patches: &'a Map<String, PatchFile>,
+        dp: &DepPath,
+    ) -> Option<(&'a String, &'a PatchFile)> {
+        let version = Version::parse(dp.version).ok()?;
+        patches.iter().find(|(key, _)| {
+            let Some(range) = key
+                .strip_prefix(dp.name)
+                .and_then(|rest| rest.strip_prefix('@'))
+            else {
+                return false;
+            };
+            // A bare version key is an exact match in pnpm (handled by the
+            // direct lookup above), not a caret range like VersionReq would
+            // treat it.
+            if Version::parse(range).is_ok() {
+                return false;
+            }
+            semver::VersionReq::parse(range).is_ok_and(|req| req.matches(&version))
+        })
     }
 
     // Create a projection of all fields in the lockfile that could affect all
@@ -512,23 +654,21 @@ impl PnpmLockfile {
     ) -> Result<(Packages, Option<Snapshots>), crate::Error> {
         let mut pruned_packages = BTreeMap::new();
         if let Some(snapshots) = self.snapshots.as_ref() {
-            let mut pruned_snapshots = BTreeMap::new();
+            let mut pruned_snapshots = Some(BTreeMap::new());
             for package in packages {
-                let entry = snapshots
-                    .get(package.as_str())
-                    .ok_or_else(|| crate::Error::MissingPackage(package.clone()))?;
-                pruned_snapshots.insert(package.clone(), entry.clone());
+                if !snapshots.contains_key(package.as_str()) {
+                    return Err(crate::Error::MissingPackage(package.clone()));
+                }
 
-                // Remove peer suffix to find the key for the package entry
-                let dp = DepPath::parse(self.version(), package.as_str()).map_err(Error::from)?;
-                let package_key = self.format_key(dp.name, dp.version);
-                let entry = self
-                    .get_packages(&package_key)
-                    .ok_or_else(|| crate::Error::MissingPackage(package_key.clone()))?;
-                pruned_packages.insert(package_key, entry.clone());
+                let package_key = self.package_key_for_snapshot(package.as_str())?;
+                if self.get_packages(&package_key).is_none() {
+                    return Err(crate::Error::MissingPackage(package_key));
+                }
+
+                self.retain_package(package, &mut pruned_packages, &mut pruned_snapshots)?;
             }
 
-            return Ok((pruned_packages, Some(pruned_snapshots)));
+            return Ok((pruned_packages, pruned_snapshots));
         }
 
         for package in packages {
@@ -538,6 +678,53 @@ impl PnpmLockfile {
             pruned_packages.insert(package.clone(), entry.clone());
         }
         Ok((pruned_packages, None))
+    }
+
+    fn retain_package(
+        &self,
+        key: &str,
+        pruned_packages: &mut Packages,
+        pruned_snapshots: &mut Option<Snapshots>,
+    ) -> Result<(), crate::Error> {
+        if let Some(snapshots) = self.snapshots.as_ref() {
+            let Some(snapshot) = snapshots.get(key) else {
+                return Ok(());
+            };
+
+            if let Some(pruned_snapshots) = pruned_snapshots.as_mut()
+                && pruned_snapshots
+                    .insert(key.to_string(), snapshot.clone())
+                    .is_some()
+            {
+                return Ok(());
+            }
+
+            let package_key = self.package_key_for_snapshot(key)?;
+            if let Some(package) = self.get_packages(&package_key) {
+                pruned_packages
+                    .entry(package_key)
+                    .or_insert_with(|| package.clone());
+            }
+
+            for (dep_name, dep_version) in snapshot.dependencies() {
+                let dep_key = if self.has_package(&dep_version) {
+                    dep_version
+                } else {
+                    self.format_key(&dep_name, &dep_version)
+                };
+                self.retain_package(&dep_key, pruned_packages, pruned_snapshots)?;
+            }
+
+            return Ok(());
+        }
+
+        if let Some(package) = self.get_packages(key) {
+            pruned_packages
+                .entry(key.to_string())
+                .or_insert_with(|| package.clone());
+        }
+
+        Ok(())
     }
 }
 
@@ -613,7 +800,7 @@ impl crate::Lockfile for PnpmLockfile {
         Ok(self
             .dependency_index
             .get(key)
-            .map(std::borrow::Cow::Borrowed))
+            .map(|entry| std::borrow::Cow::Borrowed(&entry.deps)))
     }
 
     fn subgraph(
@@ -648,7 +835,18 @@ impl crate::Lockfile for PnpmLockfile {
             .and_then(|s| s.inject_workspace_packages)
             .unwrap_or(false);
 
+        // Importers are preserved verbatim, so their full dependency closures must be
+        // retained to keep the pruned lockfile valid for frozen installs.
         for importer in importers.values() {
+            for dependency in importer.dependencies.all_dependency_names() {
+                let Some((_, version)) = importer.dependencies.find_resolution(dependency) else {
+                    continue;
+                };
+
+                let key = self.format_key(dependency, version);
+                self.retain_package(&key, &mut pruned_packages, &mut pruned_snapshots)?;
+            }
+
             let injected_deps: Vec<_> = importer
                 .dependencies
                 .all_dependency_names()
@@ -675,9 +873,14 @@ impl crate::Lockfile for PnpmLockfile {
                 }
 
                 let key = self.format_key(dependency, version);
+                let package_key = if self.snapshots.is_some() {
+                    self.package_key_for_snapshot(&key)?
+                } else {
+                    key.clone()
+                };
 
-                if let Some(entry) = self.get_packages(&key) {
-                    pruned_packages.insert(key.clone(), entry.clone());
+                if let Some(entry) = self.get_packages(&package_key) {
+                    pruned_packages.insert(package_key, entry.clone());
                 }
 
                 if let Some(snapshots) = self.snapshots.as_ref()
@@ -720,7 +923,7 @@ impl crate::Lockfile for PnpmLockfile {
             .map(|patches| self.prune_patches(patches, &pruned_packages))
             .transpose()?;
 
-        Ok(Box::new(Self {
+        let mut pruned = Self {
             leading_documents: self.leading_documents.clone(),
             importers,
             packages: match pruned_packages.is_empty() {
@@ -736,12 +939,16 @@ impl crate::Lockfile for PnpmLockfile {
             package_extensions_checksum: self.package_extensions_checksum.clone(),
             patched_dependencies: patches,
             snapshots: pruned_snapshots,
-            dependency_index: BTreeMap::new(),
+            dependency_index: FxHashMap::default(),
             time: None,
             settings: self.settings.clone(),
             pnpmfile_checksum: self.pnpmfile_checksum.clone(),
             catalogs: self.catalogs.clone(),
-        }))
+        };
+        // The pruned lockfile must be queryable like a parsed one
+        // (has_package/all_dependencies consult the index).
+        pruned.build_dependency_index();
+        Ok(Box::new(pruned))
     }
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
@@ -813,6 +1020,79 @@ impl crate::Lockfile for PnpmLockfile {
             // the delimiter between name and version
             Some(package.key.strip_prefix('/')?.to_owned())
         }
+    }
+
+    fn transitive_edge_resolver(&self) -> Option<Box<dyn crate::TransitiveEdgeResolver + '_>> {
+        let any_workspace = self.importers.keys().next()?;
+        // Importer entries are the only workspace-varying input to
+        // `resolution_ladder`. Group the distinct `(specifier, version)`
+        // entries per dependency name so the resolver can prove (per edge)
+        // that every importer resolves it identically.
+        let mut importer_entries: rustc_hash::FxHashMap<&str, Vec<(&str, &str)>> =
+            rustc_hash::FxHashMap::default();
+        for importer in self.importers.values() {
+            for name in importer.dependencies.all_dependency_names() {
+                if let Some(entry) = importer.dependencies.find_resolution(name) {
+                    let entries = importer_entries.entry(name).or_default();
+                    if !entries.contains(&entry) {
+                        entries.push(entry);
+                    }
+                }
+            }
+        }
+        Some(Box::new(PnpmEdgeResolver {
+            lockfile: self,
+            any_workspace,
+            importer_entries,
+        }))
+    }
+}
+
+/// Proves per-edge workspace independence for the shared closure DP.
+///
+/// pnpm resolution consults the importer only through
+/// `find_resolution(name)` inside [`PnpmLockfile::resolution_ladder`]. An
+/// edge's resolution is therefore uniform across workspaces iff the ladder
+/// produces the same outcome for the no-entry case and for every distinct
+/// importer entry for that name. When it does, the edge resolves through
+/// the ordinary `resolve_package` path with an arbitrary importer, so the
+/// fast path shares the exact production resolution code.
+struct PnpmEdgeResolver<'a> {
+    lockfile: &'a PnpmLockfile,
+    any_workspace: &'a str,
+    importer_entries: rustc_hash::FxHashMap<&'a str, Vec<(&'a str, &'a str)>>,
+}
+
+impl crate::TransitiveEdgeResolver for PnpmEdgeResolver<'_> {
+    fn resolve_edge(
+        &self,
+        name: &str,
+        version: &str,
+    ) -> Result<crate::TransitiveEdgeResolution, crate::Error> {
+        // `resolve_package`'s key short-circuit never consults the
+        // importer; the ladder only needs checking when it misses.
+        if !self.lockfile.has_package(version)
+            && let Some(entries) = self.importer_entries.get(name)
+        {
+            let mut key_buf = String::new();
+            let agnostic = self
+                .lockfile
+                .resolution_ladder(None, name, version, &mut key_buf);
+            for &(specifier, resolved) in entries {
+                let outcome = self.lockfile.resolution_ladder(
+                    Some((specifier, resolved)),
+                    name,
+                    version,
+                    &mut key_buf,
+                );
+                if outcome != agnostic {
+                    return Ok(crate::TransitiveEdgeResolution::WorkspaceSensitive);
+                }
+            }
+        }
+        Ok(crate::TransitiveEdgeResolution::Global(
+            crate::Lockfile::resolve_package(self.lockfile, self.any_workspace, name, version)?,
+        ))
     }
 }
 
@@ -1105,6 +1385,59 @@ importers:
     }
 
     #[test]
+    fn test_subgraph_preserves_aliased_dependency_targets() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+importers:
+
+  .: {}
+
+  apps/web:
+    dependencies:
+      pretty-format:
+        specifier: 30.2.0
+        version: 30.2.0
+
+packages:
+
+  pretty-format@30.2.0:
+    resolution: {integrity: sha512-abc}
+
+  react-is@19.2.8:
+    resolution: {integrity: sha512-def}
+
+snapshots:
+
+  pretty-format@30.2.0:
+    dependencies:
+      react-is-19: react-is@19.2.8
+
+  react-is@19.2.8: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+        let pruned = lockfile
+            .subgraph(
+                &["apps/web".to_string()],
+                &["pretty-format@30.2.0".to_string()],
+            )
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should have packages");
+        let snapshots = pruned_lockfile
+            .snapshots
+            .as_ref()
+            .expect("should have snapshots");
+
+        assert!(packages.contains_key("react-is@19.2.8"));
+        assert!(snapshots.contains_key("react-is@19.2.8"));
+    }
+
+    #[test]
     fn test_subgraph_preserves_leading_pnpm_v11_documents() {
         let yaml = pnpm_v11_lockfile("11.0.0-rc.0");
         let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
@@ -1128,6 +1461,129 @@ importers:
             !pruned_lockfile.importers.contains_key("apps/docs"),
             "pruned lockfile should still trim workspaces from the final document"
         );
+    }
+
+    #[test]
+    fn test_pnpm_v9_resolves_override_rewritten_importer_versions() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: false
+  excludeLinksFromLockfile: false
+
+overrides:
+  ms@>=2.1.0: 2.0.0
+  picomatch@>=3.0.0 <4: 3.0.2
+
+importers:
+
+  .: {}
+
+  apps/web-inrange:
+    dependencies:
+      picomatch:
+        specifier: 3.0.2
+        version: 3.0.2
+
+  apps/web-override:
+    dependencies:
+      ms:
+        specifier: 2.0.0
+        version: 2.0.0
+
+packages:
+
+  ms@2.0.0:
+    resolution: {integrity: sha512-abc}
+
+  picomatch@3.0.2:
+    resolution: {integrity: sha512-def}
+
+snapshots:
+
+  ms@2.0.0: {}
+
+  picomatch@3.0.2: {}
+"#;
+
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let in_range = lockfile
+            .resolve_package("apps/web-inrange", "picomatch", "^3.0.1")
+            .unwrap()
+            .expect("override-rewritten in-range specifier should resolve");
+        assert_eq!(in_range.key, "picomatch@3.0.2");
+
+        let out_of_range = lockfile
+            .resolve_package("apps/web-override", "ms", "^2.1.3")
+            .unwrap()
+            .expect("override-rewritten out-of-range specifier should resolve");
+        assert_eq!(out_of_range.key, "ms@2.0.0");
+    }
+
+    #[test]
+    fn test_pnpm_keeps_transitive_exact_version_when_importer_has_same_dep() {
+        let yaml = r#"lockfileVersion: 5.4
+
+importers:
+  packages/a:
+    specifiers:
+      ci-info: ^2.0.0
+      is-ci: ^3.0.1
+    dependencies:
+      ci-info: 2.0.0
+      is-ci: 3.0.1
+
+packages:
+  /ci-info/2.0.0:
+    resolution: {integrity: sha512-abc}
+
+  /ci-info/3.7.1:
+    resolution: {integrity: sha512-def}
+
+  /is-ci/3.0.1:
+    resolution: {integrity: sha512-ghi}
+    dependencies:
+      ci-info: 3.7.1
+"#;
+
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let transitive = lockfile
+            .resolve_package("packages/a", "ci-info", "3.7.1")
+            .unwrap()
+            .expect("transitive exact version should resolve independently of importer range");
+        assert_eq!(transitive.key, "/ci-info/3.7.1");
+
+        let yaml = r#"lockfileVersion: '9.0'
+
+importers:
+  apps/api:
+    dependencies:
+      express:
+        specifier: 4.21.2
+        version: 4.21.2
+
+packages:
+  express@4.21.2:
+    resolution: {integrity: sha512-abc}
+
+  express@5.1.0:
+    resolution: {integrity: sha512-def}
+
+snapshots:
+  express@4.21.2: {}
+
+  express@5.1.0: {}
+"#;
+
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let transitive = lockfile
+            .resolve_package("apps/api", "express", "5.1.0")
+            .unwrap()
+            .expect("transitive exact version should resolve independently of importer exact dep");
+        assert_eq!(transitive.key, "express@5.1.0");
     }
 
     #[test]
@@ -1392,8 +1848,9 @@ snapshots:
         assert!(snapshots.contains_key("is-number@6.0.0"));
         assert!(snapshots.contains_key("lodash@4.17.21"));
 
-        // prettier should NOT be in the pruned lockfile (it's root-only)
-        assert!(!packages.contains_key("prettier@3.5.3"));
+        // Root importer dependencies must remain installable with a frozen lockfile.
+        assert!(packages.contains_key("prettier@3.5.3"));
+        assert!(snapshots.contains_key("prettier@3.5.3"));
     }
 
     #[test]
@@ -1501,6 +1958,79 @@ snapshots:
             packages.contains_key("is-odd@3.0.1"),
             "pruned should have is-odd in packages via transitive deps"
         );
+    }
+
+    #[test]
+    fn test_subgraph_with_injected_workspace_peer_variant() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+  injectWorkspacePackages: true
+
+importers:
+
+  .: {}
+
+  apps/my-app:
+    dependencies:
+      '@repo/shared':
+        specifier: workspace:*
+        version: file:packages/shared(react@17.0.2)
+      react:
+        specifier: 17.0.2
+        version: 17.0.2
+    dependenciesMeta:
+      '@repo/shared':
+        injected: true
+
+  packages/shared:
+    dependencies:
+      react:
+        specifier: '*'
+        version: 17.0.2
+
+packages:
+
+  '@repo/shared@file:packages/shared':
+    resolution: {directory: packages/shared, type: directory}
+    peerDependencies:
+      react: '*'
+
+  react@17.0.2:
+    resolution: {integrity: sha512-abc}
+
+snapshots:
+
+  '@repo/shared@file:packages/shared(react@17.0.2)':
+    dependencies:
+      react: 17.0.2
+
+  react@17.0.2: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/my-app".to_string(), "packages/shared".to_string()];
+        let resolved_packages = vec!["react@17.0.2".to_string()];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should have packages");
+        let snapshots = pruned_lockfile
+            .snapshots
+            .as_ref()
+            .expect("should have snapshots");
+
+        assert!(packages.contains_key("@repo/shared@file:packages/shared"));
+        assert!(snapshots.contains_key("@repo/shared@file:packages/shared(react@17.0.2)"));
     }
 
     #[test]
@@ -1616,6 +2146,282 @@ snapshots:
         // The importer for apps/my-app should retain dependenciesMeta
         let importer = pruned_lockfile.importers.get("apps/my-app").unwrap();
         assert!(importer.dependencies_meta.is_some());
+    }
+
+    #[test]
+    fn test_subgraph_keeps_peer_resolved_importer_dependency() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+importers:
+
+  .: {}
+
+  packages/backend:
+    optionalDependencies:
+      '@nestjs/throttler':
+        specifier: ^6.5.0
+        version: 6.5.0(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)
+
+packages:
+
+  '@nestjs/throttler@6.5.0':
+    resolution: {integrity: sha512-aaa}
+    peerDependencies:
+      '@nestjs/common': ^7.0.0 || ^8.0.0 || ^9.0.0 || ^10.0.0 || ^11.0.0
+      '@nestjs/core': ^7.0.0 || ^8.0.0 || ^9.0.0 || ^10.0.0 || ^11.0.0
+      reflect-metadata: ^0.1.13 || ^0.2.0
+
+  '@nestjs/common@11.1.26':
+    resolution: {integrity: sha512-bbb}
+
+  '@nestjs/core@11.1.26':
+    resolution: {integrity: sha512-ccc}
+
+  reflect-metadata@0.2.2:
+    resolution: {integrity: sha512-ddd}
+
+  rxjs@7.8.2:
+    resolution: {integrity: sha512-eee}
+
+snapshots:
+
+  '@nestjs/throttler@6.5.0(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)':
+    dependencies:
+      '@nestjs/common': 11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core': 11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      reflect-metadata: 0.2.2
+
+  '@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2)':
+    dependencies:
+      reflect-metadata: 0.2.2
+      rxjs: 7.8.2
+
+  '@nestjs/core@11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2)':
+    dependencies:
+      '@nestjs/common': 11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      reflect-metadata: 0.2.2
+      rxjs: 7.8.2
+
+  reflect-metadata@0.2.2: {}
+
+  rxjs@7.8.2: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["packages/backend".to_string()];
+        let resolved_packages = vec!["rxjs@7.8.2".to_string()];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should have packages");
+        let snapshots = pruned_lockfile
+            .snapshots
+            .as_ref()
+            .expect("should have snapshots");
+        let throttler_snapshot = "@nestjs/throttler@6.5.0(@nestjs/common@11.1.26(reflect-metadata@\
+                                  0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26(@nestjs/common@11.1.\
+                                  26(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.\
+                                  2)(rxjs@7.8.2))(reflect-metadata@0.2.2)";
+
+        assert!(packages.contains_key("@nestjs/throttler@6.5.0"));
+        assert!(snapshots.contains_key(throttler_snapshot));
+        assert!(
+            snapshots.contains_key("@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2)")
+        );
+        assert!(snapshots.contains_key(
+            "@nestjs/core@11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.\
+             2))(reflect-metadata@0.2.2)(rxjs@7.8.2)"
+        ));
+    }
+
+    #[test]
+    fn test_subgraph_does_not_keep_unreferenced_patched_dependencies() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+patchedDependencies:
+  is-odd@3.0.1:
+    hash: abc
+    path: patches/is-odd@3.0.1.patch
+
+importers:
+
+  .: {}
+
+  apps/web:
+    dependencies:
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
+
+  packages/other:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+
+packages:
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-aaa}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-bbb}
+    patched: true
+
+snapshots:
+
+  lodash@4.17.21: {}
+
+  is-odd@3.0.1: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/web".to_string()];
+        let resolved_packages = vec!["lodash@4.17.21".to_string()];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should have packages");
+
+        assert!(packages.contains_key("lodash@4.17.21"));
+        assert!(!packages.contains_key("is-odd@3.0.1"));
+        assert_eq!(pruned_lockfile.patched_dependencies, Some(BTreeMap::new()));
+    }
+
+    /// Regression test for https://github.com/vercel/turborepo/issues/13301
+    ///
+    /// pnpm supports semver ranges in `patchedDependencies` keys (e.g.
+    /// `is-odd@<=3.0.1`). Patches whose range matches a package in the pruned
+    /// closure must be kept.
+    #[test]
+    fn test_subgraph_keeps_version_range_patched_dependencies() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+patchedDependencies:
+  is-odd@<=3.0.1:
+    hash: abc
+    path: patches/is-odd.patch
+  '@scope/pkg@^1.0.0':
+    hash: def
+    path: patches/scope-pkg.patch
+  lodash@>=5.0.0:
+    hash: ghi
+    path: patches/lodash.patch
+
+importers:
+
+  .: {}
+
+  apps/web:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+      '@scope/pkg':
+        specifier: 1.2.3
+        version: 1.2.3
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
+
+packages:
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-bbb}
+    patched: true
+
+  '@scope/pkg@1.2.3':
+    resolution: {integrity: sha512-ccc}
+    patched: true
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-aaa}
+
+snapshots:
+
+  is-odd@3.0.1: {}
+
+  '@scope/pkg@1.2.3': {}
+
+  lodash@4.17.21: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/web".to_string()];
+        let resolved_packages = vec![
+            "is-odd@3.0.1".to_string(),
+            "@scope/pkg@1.2.3".to_string(),
+            "lodash@4.17.21".to_string(),
+        ];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+        let patches = pruned_lockfile
+            .patched_dependencies
+            .as_ref()
+            .expect("should have patched dependencies");
+
+        assert!(patches.contains_key("is-odd@<=3.0.1"));
+        assert!(patches.contains_key("@scope/pkg@^1.0.0"));
+        // lodash@4.17.21 does not satisfy >=5.0.0
+        assert!(!patches.contains_key("lodash@>=5.0.0"));
+    }
+
+    /// A bare version patch key is an exact match in pnpm, not a caret range.
+    /// `is-odd@3.0.0` must not apply to `is-odd@3.0.1`.
+    #[test]
+    fn test_subgraph_does_not_treat_exact_patch_key_as_range() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+patchedDependencies:
+  is-odd@3.0.0:
+    hash: abc
+    path: patches/is-odd.patch
+
+importers:
+
+  .: {}
+
+  apps/web:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+
+packages:
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-bbb}
+
+snapshots:
+
+  is-odd@3.0.1: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        let pruned = lockfile
+            .subgraph(&["apps/web".to_string()], &["is-odd@3.0.1".to_string()])
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+        assert_eq!(pruned_lockfile.patched_dependencies, Some(BTreeMap::new()));
     }
 
     /// Regression test for https://github.com/vercel/turborepo/issues/12252
@@ -2163,7 +2969,7 @@ snapshots:
     }
 
     #[test]
-    fn test_subgraph_backfills_missing_workspace_importers() {
+    fn test_subgraph_backfills_importers_and_retains_root_dependencies() {
         // Workspace packages with no dependencies may be absent from the
         // lockfile's importers section. The pruned lockfile must still include
         // them so that pnpm --frozen-lockfile doesn't consider the lockfile
@@ -2210,7 +3016,8 @@ snapshots:
         );
 
         let workspace_packages = vec!["packages/config".to_string()];
-        let resolved_packages = vec!["is-number@6.0.0".to_string(), "is-odd@3.0.1".to_string()];
+        // Root devDependencies are not part of the selected workspace's closure.
+        let resolved_packages = vec![];
         let pruned = lockfile
             .subgraph(&workspace_packages, &resolved_packages)
             .unwrap();
@@ -2235,5 +3042,188 @@ snapshots:
 
         // Root importer should still be present.
         assert!(pruned_lockfile.importers.contains_key("."));
+
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should retain root dependency packages");
+        let snapshots = pruned_lockfile
+            .snapshots
+            .as_ref()
+            .expect("should retain root dependency snapshots");
+        for dependency in ["is-odd@3.0.1", "is-number@6.0.0"] {
+            assert!(
+                packages.contains_key(dependency),
+                "should retain {dependency} package"
+            );
+            assert!(
+                snapshots.contains_key(dependency),
+                "should retain {dependency} snapshot"
+            );
+        }
+    }
+
+    // A lockfile using pnpm's `runtime:` protocol (devEngines.runtime with
+    // onFail: "download"). The root importer references `node@runtime:22.0.0`,
+    // which pnpm records with a `type: variations` resolution whose `variants`
+    // list nests full per-platform binary resolutions.
+    // Reproduces https://github.com/vercel/turborepo/issues/13403
+    const PNPM_RUNTIME_LOCKFILE: &str = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      node:
+        specifier: runtime:22.0.0
+        version: runtime:22.0.0
+
+  apps/web:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+
+packages:
+
+  is-number@6.0.0:
+    resolution: {integrity: sha512-abc}
+    engines: {node: '>=0.10.0'}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+    engines: {node: '>=4'}
+
+  node@runtime:22.0.0:
+    resolution:
+      type: variations
+      variants:
+        - resolution:
+            archive: tarball
+            bin:
+              node: bin/node
+            integrity: sha256-6pbTSc+qZ6qHzuqj5bUskWf3rDAv2NH/Fi0HhencB4U=
+            type: binary
+            url: https://nodejs.org/download/release/v22.0.0/node-v22.0.0-darwin-arm64.tar.gz
+          targets:
+            - cpu: arm64
+              os: darwin
+        - resolution:
+            archive: tarball
+            bin:
+              node: bin/node
+            integrity: sha256-HTVHImvn5ZrO7lx9Aan4/BjeZ+AVxaFdjPOFtuAtBis=
+            type: binary
+            url: https://nodejs.org/download/release/v22.0.0/node-v22.0.0-linux-arm64.tar.gz
+          targets:
+            - cpu: arm64
+              os: linux
+        - resolution:
+            archive: zip
+            bin:
+              node: node.exe
+            integrity: sha256-N2Ehz0a9PAJcXmetrhkK/14l0zoLWPvA2GUtczULOPA=
+            prefix: node-v22.0.0-win-arm64
+            type: binary
+            url: https://nodejs.org/download/release/v22.0.0/node-v22.0.0-win-arm64.zip
+          targets:
+            - cpu: arm64
+              os: win32
+    version: 22.0.0
+    hasBin: true
+
+snapshots:
+
+  is-number@6.0.0: {}
+
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+
+  node@runtime:22.0.0: {}
+"#;
+
+    #[test]
+    fn test_runtime_resolution_variants_round_trip() {
+        // The `type: variations` resolution with its nested `variants` list
+        // must survive a parse -> serialize round-trip. Without an opaque
+        // passthrough the `variants` array is silently dropped.
+        let lockfile = PnpmLockfile::from_bytes(PNPM_RUNTIME_LOCKFILE.as_bytes()).unwrap();
+        let encoded = lockfile.encode().unwrap();
+        let contents = String::from_utf8(encoded.clone()).unwrap();
+
+        assert!(
+            contents.contains("type: variations"),
+            "resolution type should be preserved"
+        );
+        assert!(
+            contents.contains("variants:"),
+            "the variants list must not be dropped"
+        );
+        assert!(
+            contents.contains("node-v22.0.0-linux-arm64.tar.gz"),
+            "nested variant resolutions must be preserved"
+        );
+
+        // Re-parsing yields an identical lockfile (full structural fidelity).
+        let reparsed = PnpmLockfile::from_bytes(&encoded).unwrap();
+        assert_eq!(lockfile, reparsed);
+    }
+
+    #[test]
+    fn test_subgraph_preserves_runtime_package_and_snapshot() {
+        // `turbo prune` must keep the `node@runtime:22.0.0` package and
+        // snapshot entries. pnpm synthesizes them from devEngines.runtime, so
+        // they are not part of turbo's package graph and never appear in the
+        // resolved closure passed to `subgraph`; only the importer reference
+        // is preserved. Dropping the entries leaves the pruned lockfile
+        // inconsistent and breaks `pnpm install --frozen-lockfile`.
+        let lockfile = PnpmLockfile::from_bytes(PNPM_RUNTIME_LOCKFILE.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["apps/web".to_string()];
+        let resolved_packages = vec!["is-number@6.0.0".to_string(), "is-odd@3.0.1".to_string()];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_contents = String::from_utf8(pruned_bytes.clone()).unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should have packages");
+        let snapshots = pruned_lockfile
+            .snapshots
+            .as_ref()
+            .expect("should have snapshots");
+
+        assert!(
+            packages.contains_key("node@runtime:22.0.0"),
+            "pruned lockfile must retain node@runtime:22.0.0 in packages"
+        );
+        assert!(
+            snapshots.contains_key("node@runtime:22.0.0"),
+            "pruned lockfile must retain node@runtime:22.0.0 in snapshots"
+        );
+
+        // The importer reference and the retained package must stay in sync.
+        assert!(
+            pruned_contents.contains("runtime:22.0.0"),
+            "importer runtime reference should be preserved"
+        );
+        assert!(
+            pruned_contents.contains("variants:"),
+            "the retained runtime package must keep its variants list"
+        );
+
+        // Regular closure packages are still pruned normally.
+        assert!(packages.contains_key("is-odd@3.0.1"));
+        assert!(packages.contains_key("is-number@6.0.0"));
     }
 }

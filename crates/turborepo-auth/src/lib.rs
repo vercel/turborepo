@@ -1,4 +1,3 @@
-#![feature(cow_is_borrowed)]
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
@@ -10,13 +9,16 @@ pub(crate) mod device_flow;
 mod error;
 mod ui;
 
+use std::time::Duration;
+
 pub use auth::*;
 pub use device_flow::TokenSet;
 pub use error::Error;
 use serde::Deserialize;
 use turbopath::AbsoluteSystemPath;
-use turborepo_api_client::{CacheClient, Client, SecretString, TokenClient};
+use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_json_rewrite::{set_path, unset_path};
+use turborepo_types::SecretString;
 use turborepo_vercel_api::{User, token::ResponseTokenMetadata};
 
 pub struct TeamInfo<'a> {
@@ -35,6 +37,8 @@ const VERCEL_OAUTH_INTROSPECT_URL: &str = "https://api.vercel.com/login/oauth/to
 const DEFAULT_TOKEN_EXPIRY_SECS: u64 = 8 * 60 * 60; // 8 hours
 const TOKEN_EXCHANGE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:token-exchange";
 const ACCESS_TOKEN_SUBJECT_TYPE: &str = "urn:ietf:params:oauth:token-type:access_token";
+const AUTH_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const AUTH_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Default)]
 pub struct AuthTokens {
@@ -64,6 +68,20 @@ fn auth_tokens_from_oauth_response(
                     .unwrap_or(DEFAULT_TOKEN_EXPIRY_SECS),
         ),
     }
+}
+
+pub(crate) fn build_auth_http_client() -> Result<reqwest::Client, Error> {
+    build_auth_http_client_with_timeout(AUTH_CONNECT_TIMEOUT, AUTH_REQUEST_TIMEOUT)
+}
+
+fn build_auth_http_client_with_timeout(
+    connect_timeout: Duration,
+    request_timeout: Duration,
+) -> Result<reqwest::Client, Error> {
+    Ok(reqwest::Client::builder()
+        .connect_timeout(connect_timeout)
+        .timeout(request_timeout)
+        .build()?)
 }
 
 /// Token.
@@ -155,18 +173,16 @@ impl Token {
 
     /// Checks if the token is still valid. The checks ran are:
     /// 1. If the token is active.
-    /// 2. If the token has access to the cache.
-    ///     - If the token is forbidden from accessing the cache, we consider it
-    ///       invalid.
-    /// 3. We are able to fetch the user associated with the token.
+    /// 2. We are able to fetch the user associated with the token (only when
+    ///    `valid_message_fn` is provided).
+    ///
+    /// This validates token activity and user identity only. It does NOT
+    /// verify team or cache access; use `has_cache_access` for that.
     ///
     /// ## Arguments
     /// * `client` - The client to use for API calls.
     /// * `valid_message_fn` - An optional callback that gets called if the
     ///   token is valid. It will be passed the user's email.
-    ///
-    /// This validates token activity and user identity only. Cache access is
-    /// checked later when the cache is actually used.
     // TODO(voz): This should do a `get_user` or `get_teams` instead of the caller
     // doing it. The reason we don't do it here is because the caller
     // needs to do printing and requires the user struct, which we don't want to
@@ -354,16 +370,14 @@ fn current_unix_time() -> u128 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_millis()
+        .map_or(0, |duration| duration.as_millis())
 }
 
 pub(crate) fn current_unix_time_secs() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_secs()
+        .map_or(0, |duration| duration.as_secs())
 }
 
 // As of the time of writing, this should always be true, since a token that
@@ -454,7 +468,7 @@ impl AuthTokens {
             .as_ref()
             .ok_or_else(|| Error::TokenNotFound)?;
 
-        let client = reqwest::Client::new();
+        let client = build_auth_http_client()?;
 
         // Introspect the refresh token to discover its client_id
         let client_id = Self::introspect_client_id(&client, refresh_token).await?;
@@ -495,7 +509,7 @@ impl AuthTokens {
 
     async fn exchange_token_with_url(&self, token_url: &str) -> Result<AuthTokens, Error> {
         let subject_token = self.token.as_ref().ok_or(Error::TokenNotFound)?;
-        let client = reqwest::Client::new();
+        let client = build_auth_http_client()?;
         let params = [
             ("grant_type", TOKEN_EXCHANGE_GRANT_TYPE),
             ("client_id", crate::device_flow::TURBOREPO_CLIENT_ID),
@@ -573,7 +587,7 @@ impl AuthTokens {
 
 #[cfg(test)]
 mod tests {
-    use std::backtrace::Backtrace;
+    use std::{backtrace::Backtrace, time::Duration};
 
     use httpmock::prelude::*;
     use insta::assert_snapshot;
@@ -587,6 +601,29 @@ mod tests {
     use url::Url;
 
     use super::*;
+
+    #[tokio::test]
+    async fn test_auth_http_client_times_out_stalled_response() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (_socket, _) = listener.accept().await.unwrap();
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        });
+
+        let client =
+            build_auth_http_client_with_timeout(Duration::from_secs(5), Duration::from_millis(50))
+                .unwrap();
+
+        let err = client
+            .get(format!("http://{addr}"))
+            .send()
+            .await
+            .expect_err("stalled response should time out");
+
+        server.abort();
+        assert!(err.is_timeout(), "expected timeout error, got {err}");
+    }
 
     // Shared mock client that can be reused across tests
     struct MockUserClient {

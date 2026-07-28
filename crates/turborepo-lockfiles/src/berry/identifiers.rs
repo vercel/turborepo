@@ -1,32 +1,7 @@
-use std::{borrow::Cow, fmt, sync::OnceLock};
+use std::{borrow::Cow, fmt};
 
-use regex::Regex;
+use regex::regex;
 use thiserror::Error;
-
-fn ident() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"^(?:@([^/]+?)/)?([^@/]+)$").unwrap())
-}
-
-fn descriptor() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"^(?:@([^/]+?)/)?([^@/]+?)(?:@(.+))$").unwrap())
-}
-
-fn patch_ref() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"patch:(.+)#(?:\./)?([^:]+)(?:::)?.*$").unwrap())
-}
-
-fn multikey() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r" *, *").unwrap())
-}
-
-fn builtin() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"^(?:optional!)?builtin<([^>]+)>$").unwrap())
-}
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -84,7 +59,9 @@ impl<'a> TryFrom<&'a str> for Ident<'a> {
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         let make_err = || Error::Ident(value.to_string());
-        let captures = ident().captures(value).ok_or_else(make_err)?;
+        let captures = regex!(r"^(?:@([^/]+?)/)?([^@/]+)$")
+            .captures(value)
+            .ok_or_else(make_err)?;
         let scope = captures.get(1).map(|m| Cow::Borrowed(m.as_str()));
         let name = Cow::Borrowed(captures.get(2).map(|m| m.as_str()).ok_or_else(make_err)?);
         Ok(Self { scope, name })
@@ -105,7 +82,9 @@ impl<'a> TryFrom<&'a str> for Descriptor<'a> {
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         let make_err = || Error::Descriptor(value.to_string());
-        let captures = descriptor().captures(value).ok_or_else(make_err)?;
+        let captures = regex!(r"^(?:@([^/]+?)/)?([^@/]+?)(?:@(.+))$")
+            .captures(value)
+            .ok_or_else(make_err)?;
         let scope = captures.get(1).map(|m| Cow::Borrowed(m.as_str()));
         let name = Cow::Borrowed(captures.get(2).map(|m| m.as_str()).ok_or_else(make_err)?);
         let range = Cow::Borrowed(captures.get(3).map(|m| m.as_str()).ok_or_else(make_err)?);
@@ -129,7 +108,7 @@ impl<'a> Descriptor<'a> {
 
     /// Extracts all descriptors that are present in a lockfile entry key
     pub fn from_lockfile_key(key: &'a str) -> impl Iterator<Item = Result<Descriptor<'a>, Error>> {
-        multikey().split(key).map(Descriptor::try_from)
+        key.split(',').map(str::trim).map(Descriptor::try_from)
     }
 
     /// Removes the protocol from a version range
@@ -204,7 +183,7 @@ impl<'a> Locator<'a> {
     }
 
     pub fn from_patch_reference(patch_reference: &'a str) -> Option<Self> {
-        let caps = patch_ref().captures(patch_reference)?;
+        let caps = regex!(r"patch:(.+)#(?:\./)?([^:]+)(?:::)?.*$").captures(patch_reference)?;
         let capture_group = caps.get(1)?;
         let Locator { ident, reference } = Locator::try_from(capture_group.as_str()).ok()?;
         // This might seem like a special case hack, but this is what yarn does
@@ -220,7 +199,7 @@ impl<'a> Locator<'a> {
     }
 
     pub fn is_patch_builtin(patch: &str) -> bool {
-        patch.starts_with('~') || builtin().is_match(patch)
+        patch.starts_with('~') || regex!(r"^(?:optional!)?builtin<([^>]+)>$").is_match(patch)
     }
 
     pub fn is_workspace_path(&self, workspace_path: &str) -> bool {
@@ -238,7 +217,7 @@ impl<'a> Locator<'a> {
     }
 
     pub fn patch_file(&self) -> Option<&str> {
-        patch_ref()
+        regex!(r"patch:(.+)#(?:\./)?([^:]+)(?:::)?.*$")
             .captures(&self.reference)
             .and_then(|caps| caps.get(2))
             .map(|m| {

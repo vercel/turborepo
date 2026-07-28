@@ -2,33 +2,11 @@
 //!
 //! This module parses filter strings into structured selectors.
 
-use std::{str::FromStr, sync::LazyLock};
+use std::str::FromStr;
 
-use regex::Regex;
+use regex::regex;
 use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;
-
-/// Regex for parsing target selector syntax.
-///
-/// Syntax: `[name_pattern]{directory}[git_range]`
-///
-/// Examples:
-/// - `"foo"` → name_pattern="foo"
-/// - `"{packages/*}"` → directory="packages/*"
-/// - `"[HEAD~1]"` → git_range from HEAD~1
-/// - `"foo{src}[main]"` → all three components
-///
-/// Pattern breakdown:
-/// - `(?P<name>...)` - Package name/pattern (cannot start with `.` or contain
-///   `{}[]`)
-/// - `(\{(?P<directory>[^}]*)\})?` - Optional directory in curly braces
-/// - `(?P<commits>(?:\.{3})?\[[^\]]*\])?` - Optional git range in square
-///   brackets, optionally prefixed with `...` for match_dependencies
-static SELECTOR_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"^(?P<name>[^.](?:[^{}\[\]]*[^{}\[\].])?)?(\{(?P<directory>[^}]*)})?(?P<commits>(?:\.{3})?\[[^\]]*\])?$"
-    ).expect("selector regex is statically validated")
-});
 
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct GitRange {
@@ -103,7 +81,19 @@ impl FromStr for TargetSelector {
 
         // We explicitly allow empty git ranges so we can return a more targeted error
         // below
-        let captures = SELECTOR_REGEX.captures(selector);
+        //
+        // Regex for parsing target selector syntax.
+        // Syntax: `[name_pattern]{directory}[git_range]`
+        // Pattern breakdown:
+        // - `(?P<name>...)` - Package name/pattern (cannot start with `.` or contain
+        //   `{}[]`)
+        // - `(\{(?P<directory>[^}]*)\})?` - Optional directory in curly braces
+        // - `(?P<commits>(?:\.{3})?\[[^\]]*\])?` - Optional git range in square
+        //   brackets, optionally prefixed with `...` for match_dependencies
+        let captures = regex!(
+            r"^(?P<name>[^.](?:[^{}\[\]]*[^{}\[\].])?)?(\{(?P<directory>[^}]*)})?(?P<commits>(?:\.{3})?\[[^\]]*\])?$"
+        )
+        .captures(selector);
 
         let captures = match captures {
             Some(captures) => captures,
@@ -147,7 +137,7 @@ impl FromStr for TargetSelector {
                 let clean_directory = path_clean::clean(std::path::Path::new(directory.as_str()))
                     .into_os_string()
                     .into_string()
-                    .expect("directory was valid utf8 before cleaning");
+                    .map_err(|_| InvalidSelectorError::InvalidAnchoredPath(directory.clone()))?;
                 parent_dir = Some(
                     AnchoredSystemPathBuf::try_from(clean_directory.as_str())
                         .map_err(|_| InvalidSelectorError::InvalidAnchoredPath(directory))?,
@@ -170,7 +160,7 @@ impl FromStr for TargetSelector {
             let commits_str = commits_str
                 .strip_prefix('[')
                 .and_then(|s| s.strip_suffix(']'))
-                .expect("regex guarantees square brackets");
+                .ok_or_else(|| InvalidSelectorError::InvalidGitRange(commits_str.to_string()))?;
             if commits_str.is_empty() {
                 return Err(InvalidSelectorError::InvalidGitRange(
                     commits_str.to_string(),
@@ -265,11 +255,11 @@ pub fn is_selector_by_location(
         let cleaned_selector = path_clean::clean(std::path::Path::new(raw_selector))
             .into_os_string()
             .into_string()
-            .expect("raw selector was valid utf8");
-        Some(
+            .map_err(|_| InvalidSelectorError::InvalidAnchoredPath(raw_selector.to_string()));
+        Some(cleaned_selector.and_then(|cleaned_selector| {
             AnchoredSystemPathBuf::try_from(cleaned_selector.as_str())
-                .map_err(|_| InvalidSelectorError::InvalidAnchoredPath(raw_selector.to_string())),
-        )
+                .map_err(|_| InvalidSelectorError::InvalidAnchoredPath(raw_selector.to_string()))
+        }))
     } else {
         None
     }

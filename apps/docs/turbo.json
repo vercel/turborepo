@@ -6,14 +6,12 @@
       "env": [
         "TINYBIRD_TIME_SAVED_TOKEN",
         "ENABLE_EXPERIMENTAL_COREPACK",
-        "FLAGS",
-        "FLAGS_SECRET",
         "OG_IMAGE_SECRET",
         "UPSTASH_REDIS_REST_URL",
         "UPSTASH_REDIS_REST_TOKEN"
       ],
       "inputs": ["$TURBO_DEFAULT$", "content/**"],
-      "outputs": [".next/**", "!.next/cache/**"],
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"],
       "dependsOn": ["^build", "schema", "collect-examples-data"]
     },
     "dev": {
@@ -32,7 +30,10 @@
       "cache": false
     },
     "check-links": {
-      "inputs": ["content/**/*.mdx", "../../link-checker/src/**"],
+      "inputs": [
+        "content/**/*.mdx",
+        "$TURBO_ROOT$/docs/link-checker/src/**"
+      ],
       "cache": false
     },
     "check-types": {

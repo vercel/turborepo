@@ -13,7 +13,7 @@ use thiserror::Error;
 use tokio::{sync::mpsc, time::timeout};
 use tonic::transport::Endpoint;
 use tracing::debug;
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use super::{proto::turbod_client::TurbodClient, DaemonClient, Paths};
 use crate::DaemonError;
@@ -47,6 +47,9 @@ pub enum DaemonConnectorError {
 
     #[error("unable to use pid file: {0}")]
     PidFile(#[from] PidFileError),
+
+    #[error("unable to construct daemon paths: {0}")]
+    Path(#[from] turbopath::PathError),
 }
 
 #[derive(Error, Debug)]
@@ -66,8 +69,9 @@ pub struct DaemonConnector {
     /// in the event of a version mismatch).
     pub can_kill_server: bool,
     pub paths: Paths,
+    repo_root: AbsoluteSystemPathBuf,
     /// Optional custom turbo.json path to watch
-    pub custom_turbo_json_path: Option<turbopath::AbsoluteSystemPathBuf>,
+    pub custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
 }
 
 impl DaemonConnector {
@@ -75,22 +79,23 @@ impl DaemonConnector {
         can_start_server: bool,
         can_kill_server: bool,
         repo_root: &AbsoluteSystemPath,
-        custom_turbo_json_path: Option<turbopath::AbsoluteSystemPathBuf>,
-    ) -> Self {
-        let paths = Paths::from_repo_root(repo_root);
-        Self {
+        custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    ) -> Result<Self, DaemonConnectorError> {
+        let paths = Paths::from_repo_root(repo_root)?;
+        Ok(Self {
             can_start_server,
             can_kill_server,
             paths,
+            repo_root: repo_root.to_owned(),
             custom_turbo_json_path,
-        }
+        })
     }
 
-    const CONNECT_RETRY_MAX: usize = 3;
+    const CONNECT_RETRY_MAX: usize = 5;
     const CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
     const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
-    const SOCKET_TIMEOUT: Duration = Duration::from_secs(1);
-    const SOCKET_ERROR_WAIT: Duration = Duration::from_millis(50);
+    const SOCKET_TIMEOUT: Duration = Duration::from_secs(5);
+    const SOCKET_ERROR_WAIT: Duration = Duration::from_millis(100);
 
     /// Attempt, with retries, to:
     /// 1. find (or start) the daemon process
@@ -158,27 +163,18 @@ impl DaemonConnector {
             }
             None if self.can_start_server => {
                 debug!("no pid found, starting daemon");
-                Self::start_daemon(&self.custom_turbo_json_path).await
+                self.start_daemon().await
             }
             None => Err(DaemonConnectorError::NotRunning),
         }
     }
 
     /// Starts the daemon process, returning its PID.
-    async fn start_daemon(
-        custom_turbo_json_path: &Option<turbopath::AbsoluteSystemPathBuf>,
-    ) -> Result<sysinfo::Pid, DaemonConnectorError> {
+    async fn start_daemon(&self) -> Result<sysinfo::Pid, DaemonConnectorError> {
         let binary_path =
             std::env::current_exe().map_err(|e| DaemonConnectorError::Fork(e.into()))?;
-        // this creates a new process group for the given command
-        // in a cross platform way, directing all output to /dev/null
-        let mut command = tokio::process::Command::new(binary_path);
-        command.arg("--skip-infer").arg("daemon");
-
-        // Pass custom turbo.json path if specified
-        if let Some(path) = custom_turbo_json_path {
-            command.arg("--turbo-json-path").arg(path.as_str());
-        }
+        let mut command =
+            Self::daemon_command(binary_path, &self.repo_root, &self.custom_turbo_json_path);
 
         let mut group = command
             .stderr(Stdio::null())
@@ -193,6 +189,24 @@ impl DaemonConnector {
             .id()
             .map(|id| sysinfo::Pid::from(id as usize))
             .ok_or(DaemonConnectorError::Fork(ForkError::Exited))
+    }
+
+    fn daemon_command(
+        binary_path: impl AsRef<OsStr>,
+        repo_root: &AbsoluteSystemPath,
+        custom_turbo_json_path: &Option<AbsoluteSystemPathBuf>,
+    ) -> tokio::process::Command {
+        let mut command = tokio::process::Command::new(binary_path);
+        command
+            .current_dir(repo_root.as_std_path())
+            .arg("--skip-infer")
+            .arg("daemon");
+
+        if let Some(path) = custom_turbo_json_path {
+            command.arg("--turbo-json-path").arg(path.as_str());
+        }
+
+        command
     }
 
     /// Gets a connection to given path
@@ -218,6 +232,7 @@ impl DaemonConnector {
             let path = path.clone();
             async move {
                 let stream = tokio::net::UnixStream::connect(path.as_path()).await?;
+                super::endpoint::authorize_peer(&stream)?;
                 Ok::<_, std::io::Error>(hyper_util::rt::TokioIo::new(stream))
             }
         };
@@ -225,13 +240,15 @@ impl DaemonConnector {
         #[cfg(target_os = "windows")]
         let make_service = move |_| {
             let path = path.clone();
-            async move { win(path) }
+            async move {
+                super::endpoint::validate_socket_owner(&path)?;
+                win(path)
+            }
         };
 
         // note, this endpoint is just a placeholder. the actual path is passed in via
         // make_service
-        Endpoint::try_from("http://[::]:50051")
-            .expect("this is a valid uri")
+        Endpoint::from_static("http://[::]:50051")
             .timeout(Self::CONNECT_TIMEOUT)
             .connect_with_connector(tower::service_fn(make_service))
             .await
@@ -415,7 +432,7 @@ async fn wait_for_file(
     // this can only fail if the channel has been closed, which will
     // always happen either after this call ends, or after this future
     // is cancelled
-    rx.recv().await.expect("will receive a message");
+    let _ = rx.recv().await;
 
     Ok(())
 }
@@ -458,7 +475,7 @@ mod test {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
 
-        let connector = DaemonConnector::new(false, false, &repo_root, None);
+        let connector = DaemonConnector::new(false, false, &repo_root, None).unwrap();
         connector.paths.pid_file.ensure_dir().unwrap();
         connector
             .paths
@@ -476,7 +493,7 @@ mod test {
     async fn handles_missing_server_connect() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, false, &repo_root, None);
+        let connector = DaemonConnector::new(false, false, &repo_root, None).unwrap();
 
         assert_matches!(
             connector.connect().await,
@@ -484,11 +501,45 @@ mod test {
         );
     }
 
+    #[test]
+    fn daemon_command_uses_repo_root_as_current_dir() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        let mut command = DaemonConnector::daemon_command("turbo", &repo_root, &None);
+        let command = command.as_std_mut();
+
+        assert_eq!(command.get_current_dir(), Some(repo_root.as_std_path()));
+        assert_eq!(
+            command.get_args().collect::<Vec<_>>(),
+            vec![OsStr::new("--skip-infer"), OsStr::new("daemon")]
+        );
+    }
+
+    #[test]
+    fn daemon_command_passes_custom_turbo_json_path() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        let custom_turbo_json_path = Some(repo_root.join_component("custom-turbo.json"));
+        let mut command =
+            DaemonConnector::daemon_command("turbo", &repo_root, &custom_turbo_json_path);
+        let command = command.as_std_mut();
+
+        assert_eq!(
+            command.get_args().collect::<Vec<_>>(),
+            vec![
+                OsStr::new("--skip-infer"),
+                OsStr::new("daemon"),
+                OsStr::new("--turbo-json-path"),
+                OsStr::new(custom_turbo_json_path.as_ref().unwrap().as_str()),
+            ]
+        );
+    }
+
     #[tokio::test]
     async fn handles_kill_dead_server_missing_pid() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, false, &repo_root, None);
+        let connector = DaemonConnector::new(false, false, &repo_root, None).unwrap();
 
         assert_matches!(
             connector.kill_dead_server(Pid::from(usize::MAX)).await,
@@ -500,7 +551,7 @@ mod test {
     async fn handles_kill_dead_server_missing_process() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, false, &repo_root, None);
+        let connector = DaemonConnector::new(false, false, &repo_root, None).unwrap();
 
         connector.paths.pid_file.ensure_dir().unwrap();
         connector
@@ -526,7 +577,7 @@ mod test {
     async fn handles_kill_dead_server_wrong_process() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, false, &repo_root, None);
+        let connector = DaemonConnector::new(false, false, &repo_root, None).unwrap();
 
         let proc = tokio::process::Command::new(NODE_EXE)
             .stdout(Stdio::null())
@@ -564,7 +615,7 @@ mod test {
     async fn handles_kill_dead_server() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, true, &repo_root, None);
+        let connector = DaemonConnector::new(false, true, &repo_root, None).unwrap();
 
         let proc = tokio::process::Command::new(NODE_EXE)
             .stdout(Stdio::null())
@@ -705,7 +756,7 @@ mod test {
 
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, false, &repo_root, None);
+        let connector = DaemonConnector::new(false, false, &repo_root, None).unwrap();
 
         let mut client = Endpoint::try_from("http://[::]:50051")
             .expect("this is a valid uri")

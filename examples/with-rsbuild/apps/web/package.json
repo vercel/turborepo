@@ -1,0 +1,26 @@
+{
+  "name": "web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "tsc && rsbuild build",
+    "preview": "rsbuild preview",
+    "lint": "rslint src"
+  },
+  "dependencies": {
+    "@repo/ui": "workspace:*",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@repo/rslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@rsbuild/core": "^2.0.7",
+    "@rsbuild/plugin-react": "^2.0.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.9.3"
+  }
+}

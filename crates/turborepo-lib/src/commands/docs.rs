@@ -27,8 +27,10 @@ fn validate_version(version_str: &str) -> Result<(), Error> {
         reason: e.to_string(),
     })?;
 
-    let min_version =
-        parse_version(MIN_DOCS_VERSION).expect("MIN_DOCS_VERSION should be a valid semver version");
+    let min_version = parse_version(MIN_DOCS_VERSION).map_err(|e| Error::InvalidVersion {
+        version: MIN_DOCS_VERSION.to_string(),
+        reason: e.to_string(),
+    })?;
 
     if version < min_version {
         return Err(Error::VersionTooOld {

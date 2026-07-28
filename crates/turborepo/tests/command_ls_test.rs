@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+
 mod common;
 
 use common::{run_turbo, setup};
@@ -14,6 +16,27 @@ fn test_ls_all_packages() {
     assert!(stdout.contains("another"));
     assert!(stdout.contains("my-app"));
     assert!(stdout.contains("util"));
+}
+
+#[test]
+fn test_ls_json_preserves_package_paths_and_order() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["ls", "--output", "json"]);
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        json["packages"],
+        serde_json::json!({
+            "count": 3,
+            "items": [
+                { "name": "another", "path": "packages/another" },
+                { "name": "my-app", "path": "apps/my-app" },
+                { "name": "util", "path": "packages/util" }
+            ]
+        })
+    );
 }
 
 #[test]

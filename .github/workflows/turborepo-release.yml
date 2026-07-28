@@ -5,11 +5,13 @@
 # 1. Create a staging branch (acts as a lock to prevent concurrent releases)
 # 2. Run some smoke tests on that branch
 # 3. Build the Rust binary
-# 4. Publish JS packages to npm (including turbo itself)
-# 5. Create the git tag (only after npm publish succeeds)
-# 6. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
-# 7. Create a release branch and open a PR
-# 8. On failure, cleanup the staging branch and release tag automatically
+# 4. Sign and notarize macOS binaries
+# 5. Publish JS packages to npm
+# 6. Create the git tag (only after npm publish succeeds)
+# 7. Publish the VS Code extension from the release tag
+# 8. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
+# 9. Create a release branch and open a PR, even if VS Code publishing fails
+# 10. On failure before npm publishing starts, cleanup the staging branch
 #
 # Canary releases run on an hourly schedule.
 # Manual releases are triggered via workflow_dispatch.
@@ -21,6 +23,7 @@ name: Release
 
 env:
   CARGO_PROFILE_RELEASE_LTO: true
+  TURBO_TELEMETRY_MESSAGE_DISABLED: "1"
   HUSKY: "0"
   RELEASE_TURBO_CLI: true # TODO: do we need this?
 
@@ -120,7 +123,7 @@ jobs:
           # Uses the GitHub API instead of a full clone to avoid fetching entire repo history.
           LAST_VERSION_COMMIT=$(gh api "repos/${{ github.repository }}/commits?path=version.txt&per_page=1" --jq '.[0].sha')
           CHANGES=$(gh api "repos/${{ github.repository }}/compare/${LAST_VERSION_COMMIT}...${{ github.sha }}" \
-            --jq '[.files[].filename | select(startswith("crates/") or startswith("packages/") or startswith("cli/"))] | length')
+            --jq '[.files[].filename | select(startswith("crates/") or startswith("packages/"))] | length')
 
           if [ "$CHANGES" = "0" ]; then
             echo "Skipping: No relevant changes since last release (${LAST_VERSION_COMMIT:0:12})"
@@ -142,6 +145,12 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       previous-tag: ${{ steps.previous-tag.outputs.tag }}
     steps:
+      - name: Ensure release runs from default branch
+        if: ${{ github.ref_name != github.event.repository.default_branch }}
+        run: |
+          echo "::error::Release workflow must run from the default branch."
+          exit 1
+
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ inputs.sha || github.sha }}
@@ -158,43 +167,48 @@ jobs:
             exit 1
           fi
 
-      - uses: ./.github/actions/setup-node
-        with:
-          enable-corepack: false
+      - parallel:
+          - name: Setup Node
+            uses: ./.github/actions/setup-node
+            with:
+              enable-corepack: false
 
-      - name: Get base SHA
-        id: base-sha
-        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          - name: Get base SHA
+            id: base-sha
+            run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Get previous tag
-        id: previous-tag
-        env:
-          INCREMENT: ${{ github.event_name == 'schedule' && 'prerelease' || inputs.increment }}
-        run: |
-          # For minor/major releases, compare against the previous minor/major
-          # release (vX.Y.0) so notes include all patches since then.
-          # For patch releases, compare against the latest stable tag.
-          # For canary releases, compare against the latest canary tag.
-          if [[ "$INCREMENT" == "minor" || "$INCREMENT" == "major" ]]; then
-            PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
-              | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
-              | grep -v canary | grep -E 'v[0-9]+\.[0-9]+\.0$' | sort -V | tail -n 1)
-          elif [[ "$INCREMENT" == "patch" ]]; then
-            PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
-              | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
-              | grep -v canary | sort -V | tail -n 1)
-          else
-            PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*-canary.*' \
-              | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
-              | sort -V | tail -n 1)
-            if [ -z "$PREV_TAG" ]; then
-              PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
-                | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
-                | grep -v canary | sort -V | tail -n 1)
-            fi
-          fi
-          echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
-          echo "Previous tag: $PREV_TAG"
+          - name: Get previous tag
+            id: previous-tag
+            env:
+              INCREMENT: ${{ github.event_name == 'schedule' && 'prerelease' || inputs.increment }}
+            run: |
+              # For minor/major releases, compare against the previous minor/major
+              # release (vX.Y.0) so notes include all patches since then.
+              # For patch releases, compare against the latest stable tag.
+              # For canary releases, compare against the latest canary tag.
+              if [[ "$INCREMENT" == "minor" || "$INCREMENT" == "major" ]]; then
+                PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
+                  | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+                  | grep -v canary | grep -E 'v[0-9]+\.[0-9]+\.0$' | sort -V | tail -n 1)
+              elif [[ "$INCREMENT" == "patch" ]]; then
+                PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
+                  | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+                  | grep -v canary | sort -V | tail -n 1)
+              else
+                PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*-canary.*' \
+                  | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+                  | sort -V | tail -n 1)
+                if [ -z "$PREV_TAG" ]; then
+                  PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
+                    | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+                    | grep -v canary | sort -V | tail -n 1)
+                fi
+              fi
+              echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
+              echo "Previous tag: $PREV_TAG"
+
+      - name: Build release tool
+        run: pnpm --filter @turbo/releaser build
 
       - name: Clear stale staging branch (if requested)
         if: ${{ inputs.clear-staging-branch }}
@@ -207,7 +221,11 @@ jobs:
           echo ""
 
           # Calculate what version we're about to release so we know which staging branch to delete
-          ./scripts/version.js "$INCREMENT" "$TAG_OVERRIDE"
+          VERSION_ARGS=(--version-path version.txt --increment "$INCREMENT")
+          if [ -n "$TAG_OVERRIDE" ]; then
+            VERSION_ARGS+=(--tag-override "$TAG_OVERRIDE")
+          fi
+          packages/turbo-releaser/dist/index.js version "${VERSION_ARGS[@]}"
           VERSION=$(head -n 1 version.txt)
 
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
@@ -240,7 +258,11 @@ jobs:
             exit 1
           fi
 
-          ./scripts/version.js "$INCREMENT" "$TAG_OVERRIDE"
+          VERSION_ARGS=(--version-path version.txt --increment "$INCREMENT")
+          if [ -n "$TAG_OVERRIDE" ]; then
+            VERSION_ARGS+=(--tag-override "$TAG_OVERRIDE")
+          fi
+          packages/turbo-releaser/dist/index.js version "${VERSION_ARGS[@]}"
           VERSION=$(head -n 1 version.txt)
 
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
@@ -265,15 +287,18 @@ jobs:
           cat version.txt
 
       - name: Prepare stage branch
-        run: |
-          cd cli && make prepare-stage-release
+        run: packages/turbo-releaser/dist/index.js prepare-stage --repo-root . --version-path version.txt
 
       - name: Commit stage branch
         id: stage
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd cli && make commit-stage-release
+          VERSION=$(head -n 1 version.txt)
+          node scripts/create-github-api-commit.mjs \
+            --branch "staging-${VERSION}" \
+            --message "publish ${VERSION} to registry" \
+            --all-tracked
           echo "stage-branch=$(git branch --show-current)" >> $GITHUB_OUTPUT
 
   # TODO: Re-enable Rust unit tests once flakiness is resolved.
@@ -316,16 +341,16 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          rust: "false"
-          capnproto: "false"
-          node-extra-flags: "--no-frozen-lockfile"
+      - parallel:
+          - name: Setup Node
+            uses: ./.github/actions/setup-node
+            with:
+              extra-flags: "--no-frozen-lockfile"
+            env:
+              PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+          - name: Install Bun
+            uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
@@ -333,7 +358,7 @@ jobs:
           turbo-version: ${{ inputs.ci-tag-override || '' }}
 
       - name: Run JS Package Tests
-        run: turbo run check-types test --filter="./packages/*" --filter="!turborepo-repository" --color
+        run: turbo run check-types test --filter="./packages/*" --filter="!@turbo/repository" --color
 
   build-rust:
     name: "Build Rust"
@@ -343,21 +368,23 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          - host: macos-14
+          - host: macos-15-xlarge
             target: "x86_64-apple-darwin"
-          - host: macos-14
+          - host: macos-15-xlarge
             target: "aarch64-apple-darwin"
           - host: ubuntu-24.04
             target: "x86_64-unknown-linux-musl"
             setup: "sudo apt-get update && sudo apt-get install -y build-essential clang lldb llvm libclang-dev curl musl-tools sudo unzip"
           - host: ubuntu-24.04
             target: "aarch64-unknown-linux-musl"
-            rust-build-env: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
+            # clang sees glibc 2.39 headers when compiling aws-lc-sys C code,
+            # but the final static link uses musl, which only exports the base symbols.
+            rust-build-env: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld -Clink-arg=--defsym=__isoc23_sscanf=sscanf -Clink-arg=--defsym=__isoc23_strtol=strtol"'
             setup: "sudo apt-get update && sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
           - host: windows-2022
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.settings.host }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout repo
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -366,23 +393,27 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
-      - name: Setup Protoc
-        uses: ./.github/actions/setup-protoc
-        with:
-          version: "26.x"
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - parallel:
+          - name: Setup Protoc
+            uses: ./.github/actions/setup-protoc
+            with:
+              version: "26.x"
+              github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup capnproto
-        uses: ./.github/actions/setup-capnproto
+          - name: Setup capnproto
+            uses: ./.github/actions/setup-capnproto
 
-      - name: Rust Setup
-        uses: actions-rust-lang/setup-rust-toolchain@2b1f5e9b395427c92ee4e3331786ca3c37afe2d7 # v1
-        with:
-          target: ${{ matrix.settings.target }}
-          # needed to not make it override the defaults
-          rustflags: ""
-          # we want more specific settings
-          cache: false
+          - name: Rust Setup
+            uses: actions-rust-lang/setup-rust-toolchain@2b1f5e9b395427c92ee4e3331786ca3c37afe2d7 # v1
+            with:
+              target: ${{ matrix.settings.target }}
+              # needed to not make it override the defaults
+              rustflags: ""
+              # we want more specific settings
+              cache: false
+
+          - name: Setup Zig
+            uses: ./.github/actions/setup-zig
 
       - name: Build Setup
         if: ${{ matrix.settings.setup }}
@@ -390,6 +421,100 @@ jobs:
 
       - name: Build
         run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo -p turbo --target ${{ matrix.settings.target }}
+
+      - name: Install rcodesign
+        if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
+        run: cargo install apple-codesign --version 0.29.0 --locked
+
+      - parallel:
+          - name: Write Apple signing certificate
+            if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
+            shell: bash
+            env:
+              APPLE_CERT_DATA: ${{ secrets.APPLE_CERT_DATA }}
+              APPLE_CERT_PATH: ${{ runner.temp }}/apple-certificate.p12
+            run: |
+              set -euo pipefail
+              umask 077
+              if [[ -z "$APPLE_CERT_DATA" ]]; then
+                echo "::error::APPLE_CERT_DATA secret is empty or unavailable"
+                exit 1
+              fi
+              printf '%s' "$APPLE_CERT_DATA" | base64 --decode > "$APPLE_CERT_PATH"
+              chmod 600 "$APPLE_CERT_PATH"
+              if [[ ! -s "$APPLE_CERT_PATH" ]]; then
+                echo "::error::Decoded Apple certificate is empty"
+                exit 1
+              fi
+              echo "APPLE_CERT_PATH=$APPLE_CERT_PATH" >> "$GITHUB_ENV"
+
+          - name: Write Apple notarization API key
+            if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
+            shell: bash
+            env:
+              APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+              APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api-key.json
+            run: |
+              set -euo pipefail
+              umask 077
+              if [[ -z "$APPLE_API_KEY" ]]; then
+                echo "::error::APPLE_API_KEY secret is empty or unavailable"
+                exit 1
+              fi
+              printf '%s' "$APPLE_API_KEY" | base64 --decode > "$APPLE_API_KEY_PATH"
+              chmod 600 "$APPLE_API_KEY_PATH"
+              if [[ ! -s "$APPLE_API_KEY_PATH" ]]; then
+                echo "::error::Decoded Apple API key is empty"
+                exit 1
+              fi
+              echo "APPLE_API_KEY_PATH=$APPLE_API_KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Sign macOS binary
+        if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
+        shell: bash
+        env:
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          TURBO_APPLE_SIGNING_IDENTIFIER: com.vercel.turbo
+        run: |
+          set -euo pipefail
+          if [[ -z "$APPLE_CERT_PASSWORD" ]]; then
+            echo "::error::APPLE_CERT_PASSWORD secret is empty or unavailable"
+            exit 1
+          fi
+          bin="target/${{ matrix.settings.target }}/release-turborepo/turbo"
+          rcodesign sign \
+            --for-notarization \
+            --binary-identifier "$TURBO_APPLE_SIGNING_IDENTIFIER" \
+            --p12-file "$APPLE_CERT_PATH" \
+            --p12-password "$APPLE_CERT_PASSWORD" \
+            "$bin"
+
+          codesign --verify --strict --verbose=2 "$bin"
+          requirement=$(codesign -dr - "$bin" 2>&1)
+          printf '%s\n' "$requirement"
+          expected_identifier="identifier \"$TURBO_APPLE_SIGNING_IDENTIFIER\""
+          if [[ "$requirement" != *"$expected_identifier"* ]]; then
+            echo "::error::Expected designated requirement to contain $expected_identifier"
+            exit 1
+          fi
+
+      - name: Notarize macOS binary
+        if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="target/${{ matrix.settings.target }}/release-turborepo/turbo"
+          zip_path="$RUNNER_TEMP/turbo-${{ matrix.settings.target }}.zip"
+          ditto -c -k --keepParent "$bin" "$zip_path"
+          rcodesign notary-submit \
+            --api-key-file "$APPLE_API_KEY_PATH" \
+            --wait \
+            "$zip_path"
+
+      - name: Remove Apple signing files
+        if: ${{ always() && contains(matrix.settings.target, 'apple-darwin') }}
+        shell: bash
+        run: rm -f "${APPLE_CERT_PATH:-}" "${APPLE_API_KEY_PATH:-}"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -409,54 +534,73 @@ jobs:
     # TODO: Add rust-smoke-test back to needs and if-condition when re-enabled.
     needs: [stage, build-rust, js-smoke-test]
     if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.js-smoke-test.result == 'success' }}
+    outputs:
+      publish-started: ${{ steps.publish-state.outputs.started }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
+          fetch-depth: 2
           filter: blob:none
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-node
-        with:
-          enable-corepack: false
-          extra-flags: "--no-frozen-lockfile"
+      - parallel:
+          - name: Setup Node
+            uses: ./.github/actions/setup-node
+            with:
+              enable-corepack: false
+              extra-flags: "--no-frozen-lockfile"
 
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-        with:
-          turbo-version: ${{ inputs.ci-tag-override || '' }}
+          - name: Download Rust artifacts
+            uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+            with:
+              path: rust-artifacts
 
-      - name: Download Rust artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          path: rust-artifacts
+      - parallel:
+          - name: Install Global Turbo
+            uses: ./.github/actions/install-global-turbo
+            with:
+              turbo-version: ${{ inputs.ci-tag-override || '' }}
 
-      - name: Move Rust artifacts into place
-        run: |
-          mv rust-artifacts/turbo-aarch64-apple-darwin cli/dist-darwin-arm64
-          mv rust-artifacts/turbo-aarch64-unknown-linux-musl cli/dist-linux-arm64
-          cp -r rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-arm64
-          mv rust-artifacts/turbo-x86_64-unknown-linux-musl cli/dist-linux-x64
-          mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-x64
-          mv rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-x64
+          - name: Move Rust artifacts into place
+            run: |
+              mkdir release-artifacts
+              mv rust-artifacts/turbo-aarch64-apple-darwin release-artifacts/dist-darwin-arm64
+              mv rust-artifacts/turbo-aarch64-unknown-linux-musl release-artifacts/dist-linux-arm64
+              cp -r rust-artifacts/turbo-x86_64-pc-windows-msvc release-artifacts/dist-windows-arm64
+              mv rust-artifacts/turbo-x86_64-unknown-linux-musl release-artifacts/dist-linux-x64
+              mv rust-artifacts/turbo-x86_64-apple-darwin release-artifacts/dist-darwin-x64
+              mv rust-artifacts/turbo-x86_64-pc-windows-msvc release-artifacts/dist-windows-x64
 
       - name: Ensure npm version
         run: npm install -g npm@11.5.1
 
+      - name: Build release tool
+        run: turbo run build --filter=@turbo/releaser
+
+      - name: Mark publishing started
+        if: ${{ !inputs.dry_run }}
+        id: publish-state
+        run: echo "started=true" >> "$GITHUB_OUTPUT"
+
       - name: Perform Release
         run: |
-          SKIP_FLAG=""
+          RELEASE_ARGS=()
           if [ "${{ inputs.dry_run }}" = "true" ]; then
-            SKIP_FLAG="--skip-publish"
+            RELEASE_ARGS+=("--skip-publish")
           fi
-          cd cli && make publish-turbo SKIP_PUBLISH=$SKIP_FLAG
+          packages/turbo-releaser/dist/index.js publish \
+            --repo-root . \
+            --artifacts-dir release-artifacts \
+            --version-path version.txt \
+            "${RELEASE_ARGS[@]}"
 
       # Upload published artifacts in case they are needed for debugging later
       - name: Upload Artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: turbo-combined
-          path: cli/dist
+          path: release-artifacts/dist
 
   create-release-tag:
     name: "Create Release Tag"
@@ -473,12 +617,20 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
+      - uses: ./.github/actions/setup-node
+        with:
+          enable-corepack: false
+          extra-flags: "--no-frozen-lockfile"
+
+      - name: Build release tool
+        run: pnpm --filter @turbo/releaser build
+
       - name: Create and push release tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh auth setup-git
-          cd cli && make create-release-tag
+          packages/turbo-releaser/dist/index.js tag --repo-root . --version-path version.txt
 
       - name: Create GitHub Release
         env:
@@ -486,6 +638,20 @@ jobs:
           VERSION: ${{ needs.stage.outputs.version }}
           PREVIOUS_TAG: ${{ needs.stage.outputs.previous-tag }}
         run: |
+          EXPECTED_SHA=$(git rev-parse HEAD)
+          for ATTEMPT in {1..24}; do
+            REMOTE_SHA=$(gh api "repos/${{ github.repository }}/git/ref/tags/v${VERSION}" --jq '.object.sha' 2>/dev/null || true)
+            if [ "$REMOTE_SHA" = "$EXPECTED_SHA" ]; then
+              echo "Tag v${VERSION} is visible through the GitHub API."
+              break
+            fi
+            if [ "$ATTEMPT" -eq 24 ]; then
+              echo "::error::Tag v${VERSION} did not resolve to ${EXPECTED_SHA} through the GitHub API after 2 minutes. Last observed SHA: ${REMOTE_SHA:-missing}."
+              exit 1
+            fi
+            sleep 5
+          done
+
           PRERELEASE_FLAG=""
           if [[ "$VERSION" == *"-canary."* ]]; then
             PRERELEASE_FLAG=("--prerelease")
@@ -498,23 +664,28 @@ jobs:
             NOTES_START_TAG_FLAG=("--notes-start-tag" "$PREVIOUS_TAG")
           fi
 
-          gh release create "v${VERSION}" \
-            --title "Turborepo v${VERSION}" \
-            --generate-notes \
-            "${NOTES_START_TAG_FLAG[@]}" \
-            "${PRERELEASE_FLAG[@]}"
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            echo "GitHub release v${VERSION} already exists. Skipping."
+          else
+            gh release create "v${VERSION}" \
+              --title "Turborepo v${VERSION}" \
+              --generate-notes \
+              "${NOTES_START_TAG_FLAG[@]}" \
+              "${PRERELEASE_FLAG[@]}"
+          fi
 
   publish-vscode-extension:
-    name: "Package VS Code Extension"
-    needs: [stage, create-release-tag, create-release-pr]
-    if: ${{ always() && needs.create-release-tag.result == 'success' && needs.create-release-pr.result == 'success' && !inputs.dry_run }}
+    name: "Publish VS Code Extension"
+    needs: [stage, js-smoke-test, create-release-tag]
+    if: ${{ always() && needs.stage.result == 'success' && needs.js-smoke-test.result == 'success' && needs.create-release-tag.result == 'success' && !inputs.dry_run }}
     permissions:
       contents: read
     uses: ./.github/workflows/lsp.yml
     with:
-      publish: false
-      dry_run: true
+      publish: true
+      dry_run: false
       ref: v${{ needs.stage.outputs.version }}
+    secrets: inherit
 
   alias-versioned-docs:
     name: "Alias Versioned Docs"
@@ -535,17 +706,18 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
-      - name: Get version and compute subdomain
-        id: version
-        run: |
-          VERSION=$(head -n 1 version.txt)
-          # Transform version to valid subdomain (replace dots with dashes, prepend v)
-          SUBDOMAIN=$(echo "v${VERSION}" | tr '.' '-')
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "subdomain=${SUBDOMAIN}" >> $GITHUB_OUTPUT
+      - parallel:
+          - name: Get version and compute subdomain
+            id: version
+            run: |
+              VERSION=$(head -n 1 version.txt)
+              # Transform version to valid subdomain (replace dots with dashes, prepend v)
+              SUBDOMAIN=$(echo "v${VERSION}" | tr '.' '-')
+              echo "version=${VERSION}" >> $GITHUB_OUTPUT
+              echo "subdomain=${SUBDOMAIN}" >> $GITHUB_OUTPUT
 
-      - name: Install Vercel CLI
-        run: npm install -g vercel@53.1.0
+          - name: Install Vercel CLI
+            run: npm install -g vercel@53.1.0
 
       - name: Find Vercel deployment for SHA
         id: find-deployment
@@ -636,6 +808,9 @@ jobs:
           enable-corepack: false
           extra-flags: "--no-frozen-lockfile"
 
+      - name: Build release tool
+        run: pnpm --filter @turbo/releaser build
+
       - name: Commit lockfile if updated by install
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -658,7 +833,9 @@ jobs:
           if [ "$TAG" = "latest" ]; then
             VERSION="${{ needs.stage.outputs.version }}"
             echo "Stable release detected (${VERSION}). Bumping to next prepatch canary..."
-            ./scripts/version.js prepatch
+            packages/turbo-releaser/dist/index.js version \
+              --version-path version.txt \
+              --increment prepatch
             cat version.txt
             echo "updated=true" >> $GITHUB_OUTPUT
             echo "version=${VERSION}" >> $GITHUB_OUTPUT
@@ -748,6 +925,7 @@ jobs:
       ${{
         always()
         && needs.stage.result == 'success'
+        && needs.npm-publish.outputs.publish-started != 'true'
         && (
           needs.build-rust.result == 'failure'
           || needs.js-smoke-test.result == 'failure'

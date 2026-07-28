@@ -8,7 +8,9 @@ const MAX_RETRIES: u32 = 10;
 const BASE_DELAY_MS: u64 = 10;
 const MAX_DELAY_MS: u64 = 1000;
 
-fn with_emfile_retry<T>(f: impl Fn() -> Result<T, std::io::Error>) -> Result<T, std::io::Error> {
+pub(crate) fn with_emfile_retry<T>(
+    f: impl Fn() -> Result<T, std::io::Error>,
+) -> Result<T, std::io::Error> {
     for attempt in 0..MAX_RETRIES {
         match f() {
             Ok(v) => return Ok(v),
@@ -45,6 +47,7 @@ pub(crate) fn hash_objects(
     to_hash: Vec<RelativeUnixPathBuf>,
     hashes: &mut GitHashes,
     cached_attrs: Option<&crate::crlf::GitAttrs>,
+    slowest_files: Option<&std::sync::Arc<crate::SlowestFiles>>,
 ) -> Result<(), Error> {
     let pkg_prefix = git_root.anchor(pkg_path).ok().map(|a| a.to_unix());
 
@@ -67,9 +70,11 @@ pub(crate) fn hash_objects(
                     _ => crate::crlf::TextAttr::Unspecified,
                 };
 
+                let _guard = slowest_files.map(|sf| sf.start(filename.clone()));
                 let hash_result = with_emfile_retry(|| {
                     crate::crlf::hash_file_maybe_normalized(&full_file_path, text_attr)
                 });
+                drop(_guard);
 
                 match hash_result {
                     Ok(hash) => {
@@ -87,12 +92,7 @@ pub(crate) fn hash_objects(
                                 )
                                 .to_unix()
                             });
-                        let mut hex_buf = [0u8; 40];
-                        hex::encode_to_slice(hash.as_bytes(), &mut hex_buf).unwrap();
-                        Ok(Some((
-                            package_relative_path,
-                            OidHash::from_hex_buf(hex_buf),
-                        )))
+                        Ok(Some((package_relative_path, hash)))
                     }
                     Err(e) => {
                         // Gracefully skip non-regular files (symlinks, sockets,
@@ -177,7 +177,7 @@ mod test {
             let expected_hashes = GitHashes::from_iter(file_hashes);
             let mut hashes = GitHashes::new();
             let to_hash = expected_hashes.keys().map(|k| pkg_prefix.join(k)).collect();
-            hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None).unwrap();
+            hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None, None).unwrap();
             assert_eq!(hashes, expected_hashes);
         }
 
@@ -197,7 +197,7 @@ mod test {
                 .collect();
 
             let mut hashes = GitHashes::new();
-            let result = hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None);
+            let result = hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None, None);
             assert!(result.is_err());
         }
     }
@@ -268,7 +268,7 @@ mod test {
             .map(|(name, _)| RelativeUnixPathBuf::new(*name).unwrap())
             .collect();
         let mut actual = GitHashes::new();
-        hash_objects(&tmp_path, &tmp_path, to_hash, &mut actual, None).unwrap();
+        hash_objects(&tmp_path, &tmp_path, to_hash, &mut actual, None, None).unwrap();
 
         assert_eq!(actual, expected, "blob hashes must match git hash-object");
     }

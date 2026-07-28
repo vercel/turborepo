@@ -54,7 +54,7 @@ function DiagramNode({ data }: { data: DiagramNodeData }) {
         border: "1.5px solid var(--diagram-node-border)",
         color: "var(--diagram-text)",
         fontSize: 13,
-        fontFamily: "var(--font-mono, monospace)",
+        fontFamily: "var(--font-geist-mono, monospace)",
         lineHeight: 1.3,
         textAlign: "center"
       }}

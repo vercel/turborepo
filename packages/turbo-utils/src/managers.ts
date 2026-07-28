@@ -1,9 +1,28 @@
+import fs from "node:fs";
 import os from "node:os";
+import path from "node:path";
 import type { Options } from "execa";
 import execa from "execa";
 import type { PackageManager } from "./types";
 
 const EXEC_TIMEOUT = 5000;
+const SEMVER_VERSION = "\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?";
+const PACKAGE_MANAGER_VERSION = new RegExp(`(?<version>${SEMVER_VERSION})`);
+const YARN_PACKAGE_MANAGER_VERSION = new RegExp(
+  `^yarn@(?<version>${SEMVER_VERSION})(?:\\+[0-9A-Za-z.-]+)?$`
+);
+const YARN_RELEASE_PATH_VERSION = new RegExp(
+  `^(?:\\./)?\\.yarn/releases/yarn-(?<version>${SEMVER_VERSION})\\.cjs$`
+);
+
+interface PackageManagerDetectionOptions {
+  projectRoot?: string;
+}
+
+interface ProjectYarnMetadata {
+  version?: string;
+  hasProjectYarnConfig: boolean;
+}
 
 async function exec(command: string, args: Array<string> = [], opts?: Options) {
   // run the check from tmpdir to avoid corepack conflicting -
@@ -23,48 +42,191 @@ async function exec(command: string, args: Array<string> = [], opts?: Options) {
   }
 }
 
-export async function getAvailablePackageManagers(): Promise<
-  Record<PackageManager, string | undefined>
-> {
-  const [yarn, npm, pnpm, bun] = await Promise.all([
-    // Yarn berry doesn't have a global bin so this checks from the repo root
-    // If the repo uses berry, it will return it's specified version
-    exec("yarnpkg", ["--version"], { cwd: "." }),
-    exec("npm", ["--version"]),
-    exec("pnpm", ["--version"]),
-    exec("bun", ["--version"])
-  ]);
+function parsePackageManagerVersion(output: string | undefined) {
+  return output?.match(PACKAGE_MANAGER_VERSION)?.groups?.version;
+}
+
+function readFile(filePath: string): string | undefined {
+  try {
+    return fs.readFileSync(filePath, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+function readPackageManager(projectRoot: string): string | undefined {
+  const packageJson = readFile(path.join(projectRoot, "package.json"));
+  if (!packageJson) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(packageJson) as { packageManager?: unknown };
+    return typeof parsed.packageManager === "string"
+      ? parsed.packageManager
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseYarnPath(yarnRc: string): string | undefined {
+  const yarnPathLine = yarnRc
+    .split(/\r?\n/)
+    .find((line) => /^\s*yarnPath\s*:/.test(line));
+  if (!yarnPathLine) {
+    return undefined;
+  }
+
+  const value = yarnPathLine.replace(/^\s*yarnPath\s*:\s*/, "").trim();
+  if (!value) {
+    return undefined;
+  }
+
+  if (value.startsWith('"')) {
+    const match = value.match(/^"((?:[^"\\]|\\.)*)"/);
+    if (!match) {
+      return undefined;
+    }
+    try {
+      return JSON.parse(`"${match[1]}"`) as string;
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (value.startsWith("'")) {
+    const match = value.match(/^'((?:[^']|'')*)'/);
+    return match?.[1].replaceAll("''", "'");
+  }
+
+  return value.replace(/\s+#.*$/, "").trim() || undefined;
+}
+
+function getYarnReleasePathVersion(yarnPath: string): string | undefined {
+  return yarnPath.match(YARN_RELEASE_PATH_VERSION)?.groups?.version;
+}
+
+function getYarnReleasePath(version: string): string {
+  return `.yarn/releases/yarn-${version}.cjs`;
+}
+
+function getProjectYarnMetadata(projectRoot: string): ProjectYarnMetadata {
+  const packageManager = readPackageManager(projectRoot);
+  const packageManagerVersion = packageManager?.match(
+    YARN_PACKAGE_MANAGER_VERSION
+  )?.groups?.version;
+
+  if (packageManager?.startsWith("yarn@")) {
+    return {
+      version: packageManagerVersion,
+      hasProjectYarnConfig: true
+    };
+  }
+
+  const yarnRc = readFile(path.join(projectRoot, ".yarnrc.yml"));
+  const yarnPath = yarnRc ? parseYarnPath(yarnRc) : undefined;
+  if (!yarnPath) {
+    return { hasProjectYarnConfig: false };
+  }
 
   return {
-    yarn,
-    pnpm,
-    npm,
-    bun
+    version: getYarnReleasePathVersion(yarnPath),
+    hasProjectYarnConfig: true
   };
 }
 
-export async function getPackageManagersBinPaths(): Promise<
-  Record<PackageManager, string | undefined>
-> {
-  const [yarn, npm, pnpm, bun] = await Promise.all([
-    // yarn berry doesn't have a global bin so we check from within the repo
-    exec("yarnpkg", ["--version"], { cwd: "." }).then((version) => {
-      if (version && !version.startsWith("1.")) {
-        return `.yarn/releases/yarn-${version}.cjs`;
-        // yarn 1
-      } else if (version) {
-        return exec("yarn", ["global", "bin"]);
-      }
-    }),
+async function getYarnVersion(projectRoot: string) {
+  const metadata = getProjectYarnMetadata(projectRoot);
+  if (metadata.hasProjectYarnConfig) {
+    return metadata.version;
+  }
+
+  return exec("yarnpkg", ["--version"]);
+}
+
+async function getYarnBinPath(projectRoot: string) {
+  const metadata = getProjectYarnMetadata(projectRoot);
+  if (metadata.hasProjectYarnConfig) {
+    if (!metadata.version) {
+      return undefined;
+    }
+
+    if (!metadata.version.startsWith("1.")) {
+      return getYarnReleasePath(metadata.version);
+    }
+
+    return exec("yarn", ["global", "bin"]);
+  }
+
+  const version = await exec("yarnpkg", ["--version"]);
+  if (version && !version.startsWith("1.")) {
+    return getYarnReleasePath(version);
+  } else if (version) {
+    return exec("yarn", ["global", "bin"]);
+  }
+}
+
+async function getNubBinPath() {
+  const nubBinaryPath = await exec("which", ["nub"]);
+  if (!nubBinaryPath) {
+    return undefined;
+  }
+
+  return path.dirname(nubBinaryPath);
+}
+
+async function getAubeBinPath() {
+  const aubeBinaryPath = await exec("which", ["aube"]);
+  if (!aubeBinaryPath) {
+    return undefined;
+  }
+
+  return path.dirname(aubeBinaryPath);
+}
+
+export async function getAvailablePackageManagers(
+  options: PackageManagerDetectionOptions = {}
+): Promise<Record<PackageManager, string | undefined>> {
+  const projectRoot = options.projectRoot ?? process.cwd();
+  const [yarn, npm, pnpm, bun, nub, aube] = await Promise.all([
+    getYarnVersion(projectRoot),
+    exec("npm", ["--version"]),
+    exec("pnpm", ["--version"]),
+    exec("bun", ["--version"]),
+    exec("nub", ["--version"]),
+    exec("aube", ["--version"])
+  ]);
+
+  return {
+    yarn: parsePackageManagerVersion(yarn),
+    pnpm: parsePackageManagerVersion(pnpm),
+    npm: parsePackageManagerVersion(npm),
+    bun: parsePackageManagerVersion(bun),
+    nub: parsePackageManagerVersion(nub),
+    aube: parsePackageManagerVersion(aube)
+  };
+}
+
+export async function getPackageManagersBinPaths(
+  options: PackageManagerDetectionOptions = {}
+): Promise<Record<PackageManager, string | undefined>> {
+  const projectRoot = options.projectRoot ?? process.cwd();
+  const [yarn, npm, pnpm, bun, nub, aube] = await Promise.all([
+    getYarnBinPath(projectRoot),
     exec("npm", ["config", "get", "prefix"]),
     exec("pnpm", ["bin", "--global"]),
-    exec("bun", ["pm", "--g", "bin"])
+    exec("bun", ["pm", "--g", "bin"]),
+    getNubBinPath(),
+    getAubeBinPath()
   ]);
 
   return {
     yarn,
     pnpm,
     npm,
-    bun
+    bun,
+    nub,
+    aube
   };
 }

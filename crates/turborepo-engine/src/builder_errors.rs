@@ -81,7 +81,11 @@ impl InvalidTaskNameError {
     code(missing_root_task_in_turbo_json),
     url(
             "{}/messages/{}",
-            TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)
+            TURBO_SITE,
+            self.code().map_or_else(
+                || "missing-root-task-in-turbo-json".to_string(),
+                |code| code.to_string().to_case(Case::Kebab),
+            )
     )
 )]
 pub struct MissingRootTaskInTurboJsonError {

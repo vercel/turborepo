@@ -85,3 +85,35 @@ impl Handle {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use turborepo_config::{ExperimentalObservabilityOptions, ExperimentalOtelOptions};
+
+    use super::Handle;
+
+    #[test]
+    fn try_init_returns_none_when_otel_disabled() {
+        let options = ExperimentalObservabilityOptions {
+            otel: Some(ExperimentalOtelOptions {
+                enabled: Some(false),
+                endpoint: Some("https://localhost:4318".to_string()),
+                ..Default::default()
+            }),
+        };
+
+        assert!(Handle::try_init(&options, None).is_none());
+    }
+
+    #[test]
+    fn try_init_returns_none_when_endpoint_missing() {
+        let options = ExperimentalObservabilityOptions {
+            otel: Some(ExperimentalOtelOptions {
+                enabled: Some(true),
+                ..Default::default()
+            }),
+        };
+
+        assert!(Handle::try_init(&options, None).is_none());
+    }
+}

@@ -13,6 +13,8 @@ pub enum Error {
     ReqwestError(#[from] reqwest::Error),
     #[error("Skipping HTTP Request. Too many failures have occurred.\nLast error: {0}")]
     TooManyFailures(#[from] Box<reqwest::Error>),
+    #[error("Skipping HTTP Request. Too many failures have occurred without an error response.")]
+    RetryExhaustedWithoutError,
     #[error("Unable to set up TLS.")]
     TlsError(#[source] reqwest::Error),
     #[error("HTTP client initialization was cancelled (runtime shutting down)")]

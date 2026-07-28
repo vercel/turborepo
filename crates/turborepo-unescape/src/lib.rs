@@ -28,6 +28,12 @@ impl AsRef<str> for UnescapedString {
     }
 }
 
+impl UnescapedString {
+    pub fn from_escaped(value: String) -> Result<Self, serde_json::Error> {
+        unescape_str(value).map(Self)
+    }
+}
+
 impl Deref for UnescapedString {
     type Target = String;
 

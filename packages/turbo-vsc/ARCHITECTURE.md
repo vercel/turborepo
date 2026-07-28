@@ -9,7 +9,6 @@ You're here! The client is the side that runs in VSCode. It is essentially
 an entry point into the LSP but there are a few other things it manages
 mostly for convenience sake.
 
-- basic syntax highlighting for the pipeline gradient
 - discovery and installation of global / local turbo
 - toolbar item to enable / disable the daemon
 - some editor commands

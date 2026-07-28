@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 use std::{path::PathBuf, time::Duration};
 
 use futures::{StreamExt, join};

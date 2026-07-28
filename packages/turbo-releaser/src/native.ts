@@ -21,6 +21,14 @@ export const nodeOSLookup: Record<SupportedOS, ReadonlyArray<NpmOs>> = {
   windows: ["win32"]
 };
 
+export function getNativePackageName(
+  packagePrefix: string,
+  { os, arch }: Platform
+) {
+  const separator = packagePrefix.startsWith("@") ? "/" : "-";
+  return `${packagePrefix}${separator}${os}-${archToHuman[arch]}`;
+}
+
 const templateDir = path.join(__dirname, "..", "template");
 
 async function generateNativePackage({
@@ -63,9 +71,8 @@ async function generateNativePackage({
 
   console.log("Generating package.json...");
   const isScoped = packagePrefix.startsWith("@");
-  const separator = isScoped ? "/" : "-";
   const packageJson: Record<string, unknown> = {
-    name: `${packagePrefix}${separator}${os}-${archToHuman[arch]}`,
+    name: getNativePackageName(packagePrefix, platform),
     version,
     description:
       description ||
@@ -112,4 +119,4 @@ function resolveOutputDir(outputDir: string, outputBaseDir: string) {
 
 // Exported asn an object instead of export keyword, so that these functions
 // can be mocked in tests.
-export default { generateNativePackage, archToHuman };
+export default { generateNativePackage, getNativePackageName, archToHuman };

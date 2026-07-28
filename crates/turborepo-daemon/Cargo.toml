@@ -44,6 +44,15 @@ serde_json = { workspace = true }
 [target.'cfg(target_os = "windows")'.dependencies]
 uds_windows = "1.1.0"
 async-io = "2"
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_System_Threading",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [build-dependencies]
 tonic-prost-build = "0.14"

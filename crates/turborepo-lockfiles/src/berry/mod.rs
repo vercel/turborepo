@@ -34,12 +34,19 @@ pub enum Error {
     Resolutions(#[from] resolution::Error),
     #[error("Unable to find entry for {0}")]
     MissingPackageForLocator(Locator<'static>),
+    #[error("Unable to find descriptors for patch locator {0}")]
+    MissingDescriptorsForPatchLocator(Locator<'static>),
     #[error("Unable to find any locator for {0}")]
     MissingLocator(Descriptor<'static>),
     #[error("Descriptor collision {descriptor} and {other}")]
     DescriptorCollision {
         descriptor: Descriptor<'static>,
         other: String,
+    },
+    #[error("Unable to parse patch descriptor {descriptor} for patch locator {locator}")]
+    InvalidPatchDescriptor {
+        descriptor: Box<Descriptor<'static>>,
+        locator: Box<Locator<'static>>,
     },
     #[error("Unable to parse as patch reference: {0}")]
     InvalidPatchReference(String),
@@ -51,6 +58,8 @@ pub enum Error {
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
 type CatalogMap = Map<String, Map<String, String>>;
+type PackageExtensionMap = Map<String, Map<String, String>>;
+type ManifestParts = (Map<Resolution, String>, CatalogMap, PackageExtensionMap);
 
 #[derive(Debug)]
 pub struct BerryLockfile {
@@ -61,8 +70,10 @@ pub struct BerryLockfile {
     locator_package: Map<Locator<'static>, BerryPackage>,
     // Map of regular locators to patch locators that apply to them
     patches: Map<Locator<'static>, Locator<'static>>,
-    // Descriptors that come from default package extensions that ship with berry
+    // Descriptors that come from package extensions.
     extensions: HashSet<Descriptor<'static>>,
+    // Project-defined package extensions and the descriptors they inject.
+    project_extensions: Vec<(Descriptor<'static>, Vec<Descriptor<'static>>)>,
     // Package overrides
     overrides: Map<Resolution, String>,
     // Map from workspace paths to package locators
@@ -102,7 +113,7 @@ struct BerryPackage {
     conditions: Option<String>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, Default, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Copy)]
 struct DependencyMeta {
     optional: Option<bool>,
     unplugged: Option<bool>,
@@ -116,6 +127,18 @@ pub struct BerryManifest {
     catalog: Option<Map<String, String>>,
     // Yarn 4+ catalog support - named catalogs
     catalogs: Option<Map<String, Map<String, String>>>,
+    // Dependencies injected by project-level packageExtensions.
+    package_extensions: Option<Map<String, Map<String, String>>>,
+}
+
+fn builtin_dependency_extension_is_needed(
+    descriptor: &Descriptor,
+    package_names: &HashSet<String>,
+) -> bool {
+    // https://github.com/yarnpkg/berry/blob/master/packages/yarnpkg-extensions/sources/index.ts
+    descriptor.ident.to_string() == "@babel/types"
+        && descriptor.range == "npm:^7.8.3"
+        && package_names.contains("@babel/parser")
 }
 
 impl BerryLockfile {
@@ -159,10 +182,10 @@ impl BerryLockfile {
             }
         }
 
-        let (overrides, catalogs) = if let Some(manifest) = manifest {
+        let (overrides, catalogs, package_extensions) = if let Some(manifest) = manifest {
             manifest.into_parts()?
         } else {
-            (Map::new(), Map::new())
+            (Map::new(), Map::new(), Map::new())
         };
 
         let mut this = Self {
@@ -173,11 +196,13 @@ impl BerryLockfile {
             patches,
             overrides,
             extensions: Default::default(),
+            project_extensions: Vec::new(),
             workspace_path_to_locator,
             catalogs: Arc::new(catalogs),
         };
 
         this.populate_extensions()?;
+        this.populate_project_extensions(package_extensions)?;
 
         Ok(this)
     }
@@ -213,6 +238,58 @@ impl BerryLockfile {
                 .into_iter()
                 .map(|desc| desc.clone().into_owned()),
         );
+        Ok(())
+    }
+
+    fn populate_project_extensions(
+        &mut self,
+        package_extensions: Map<String, Map<String, String>>,
+    ) -> Result<(), Error> {
+        for (selector, dependencies) in package_extensions {
+            let selector = Descriptor::try_from(selector.as_str())?.into_owned();
+            let dependencies = dependencies
+                .into_iter()
+                .map(|(name, range)| {
+                    let mut descriptor = Descriptor::new(&name, &range)?;
+                    if descriptor.protocol().is_none()
+                        && let Some(range) = self.resolver.get(&descriptor)
+                    {
+                        descriptor.range = range.to_string().into();
+                    }
+                    Ok(descriptor.into_owned())
+                })
+                .collect::<Result<Vec<_>, Error>>()?;
+            self.project_extensions.push((selector, dependencies));
+        }
+        Ok(())
+    }
+
+    fn add_extension_descriptor(
+        &self,
+        descriptor: &Descriptor<'static>,
+        resolutions: &mut Map<Descriptor<'static>, Locator<'static>>,
+    ) -> Result<(), Error> {
+        let locator = self
+            .resolutions
+            .get(descriptor)
+            .ok_or_else(|| Error::MissingLocator(descriptor.to_owned()))?;
+        resolutions.insert(descriptor.clone(), locator.clone());
+
+        let mut queue = vec![locator.clone()];
+        while let Some(locator) = queue.pop() {
+            if let Some(package) = self.locator_package.get(&locator) {
+                for (name, range) in package.dependencies.iter().flatten() {
+                    if let Ok(dependency) = self.resolve_dependency(&locator, name, range)
+                        && let Some(dependency_locator) = self.resolutions.get(&dependency)
+                        && !resolutions.contains_key(&dependency)
+                    {
+                        resolutions.insert(dependency, dependency_locator.clone());
+                        queue.push(dependency_locator.clone());
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -348,13 +425,18 @@ impl BerryLockfile {
         for patch in patches.values() {
             let patch_descriptors = reverse_lookup
                 .get(patch)
-                .unwrap_or_else(|| panic!("Unable to find {patch} in reverse lookup"));
+                .ok_or_else(|| Error::MissingDescriptorsForPatchLocator(patch.clone()))?;
 
             // For each patch descriptor we extract the primary descriptor that each patch
             // descriptor targets and check if that descriptor is present in the
             // pruned map and add it if it is present
             for patch_descriptor in patch_descriptors {
-                let version = patch_descriptor.primary_version().unwrap();
+                let version = patch_descriptor.primary_version().ok_or_else(|| {
+                    Error::InvalidPatchDescriptor {
+                        descriptor: Box::new((*patch_descriptor).clone()),
+                        locator: Box::new(patch.clone()),
+                    }
+                })?;
                 let primary_descriptor = Descriptor {
                     ident: patch_descriptor.ident.clone(),
                     range: version.into(),
@@ -366,78 +448,93 @@ impl BerryLockfile {
             }
         }
 
-        // Include extension descriptors only when the package they were
-        // injected into is present in the pruned graph. Extensions come from
-        // Yarn's built-in packageExtensions (plugin-compat), which inject
-        // invisible dependencies into certain packages. The lockfile stores
-        // resolution entries for these injected deps but doesn't record which
-        // package triggered them.
-        //
-        // We approximate the association by checking if any package in the
-        // pruned transitive closure depends on a package whose name matches
-        // the extension's ident (or, for @types/* extensions, the unscoped
-        // name). This works because packageExtensions typically add @types/X
-        // to packages that depend on X, or add package Y to packages that
-        // logically need Y.
+        // Package extension dependencies aren't recorded on the package they extend.
+        // Match their descriptors against reachable peer requirements so merged
+        // lockfile entries retain only the ranges Yarn will reconstruct. Yarn's
+        // @types extensions don't necessarily correspond to peer requirements,
+        // so retain those when their unscoped package is a reachable
+        // dependency.
         {
-            // Collect all dependency names from packages in the pruned closure
-            let mut dep_names_in_closure: HashSet<String> = HashSet::new();
+            let mut dependency_names = HashSet::new();
+            let mut package_names = HashSet::new();
+            let mut peer_descriptors = HashSet::new();
+            let mut reachable_locators = Vec::new();
             for key in packages {
-                if let Ok(pkg_locator) = Locator::try_from(key.as_str())
-                    && let Some(pkg) = self.locator_package.get(&pkg_locator)
+                if let Ok(package_locator) = Locator::try_from(key.as_str())
+                    && let Some(package) = self.locator_package.get(&package_locator)
                 {
-                    for (name, _) in pkg.dependencies.iter().flatten() {
-                        dep_names_in_closure.insert(name.to_string());
+                    reachable_locators.push(package_locator.clone());
+                    package_names.insert(package_locator.ident.to_string());
+                    for (name, _) in package.dependencies.iter().flatten() {
+                        dependency_names.insert(name.as_str());
+                    }
+                    for (name, range) in package.peer_dependencies.iter().flatten() {
+                        peer_descriptors.insert(self.resolve_dependency(
+                            &package_locator,
+                            name,
+                            range,
+                        )?);
                     }
                 }
             }
-            // Also include dep names from workspace packages
-            for (locator, package) in &self.locator_package {
+            for (package_locator, package) in &self.locator_package {
                 if workspace_packages
                     .iter()
-                    .map(|s| s.as_str())
+                    .map(|path| path.as_str())
                     .chain(iter::once("."))
-                    .any(|path| locator.is_workspace_path(path))
+                    .any(|path| package_locator.is_workspace_path(path))
                 {
+                    reachable_locators.push(package_locator.clone());
                     for (name, _) in package.dependencies.iter().flatten() {
-                        dep_names_in_closure.insert(name.to_string());
+                        dependency_names.insert(name.as_str());
+                    }
+                    for (name, range) in package.peer_dependencies.iter().flatten() {
+                        peer_descriptors.insert(self.resolve_dependency(
+                            package_locator,
+                            name,
+                            range,
+                        )?);
                     }
                 }
+            }
+
+            let project_extension_descriptors = self
+                .project_extensions
+                .iter()
+                .filter(|(selector, _)| {
+                    let Ok(range) = node_semver::Range::parse(Descriptor::strip_protocol(
+                        selector.range.as_ref(),
+                    )) else {
+                        return false;
+                    };
+                    reachable_locators.iter().any(|locator| {
+                        locator.ident == selector.ident
+                            && self
+                                .locator_package
+                                .get(locator)
+                                .and_then(|package| {
+                                    node_semver::Version::parse(&package.version).ok()
+                                })
+                                .is_some_and(|version| range.satisfies(&version))
+                    })
+                })
+                .flat_map(|(_, dependencies)| dependencies)
+                .collect::<HashSet<_>>();
+
+            for descriptor in project_extension_descriptors {
+                self.add_extension_descriptor(descriptor, &mut resolutions)?;
             }
 
             for descriptor in &self.extensions {
-                let locator = self
-                    .resolutions
-                    .get(descriptor)
-                    .ok_or_else(|| Error::MissingLocator(descriptor.to_owned()))?;
-
                 let ident = descriptor.ident.to_string();
-
-                // For @types/X extensions, check if X is a dep in the closure.
-                // For other extensions, check if the ident itself is a dep.
-                let search_name = ident.strip_prefix("@types/").unwrap_or(&ident);
-
-                let needed = dep_names_in_closure.contains(search_name)
-                    || dep_names_in_closure.contains(&ident);
+                let needed = peer_descriptors.contains(descriptor)
+                    || ident
+                        .strip_prefix("@types/")
+                        .is_some_and(|name| dependency_names.contains(name))
+                    || builtin_dependency_extension_is_needed(descriptor, &package_names);
 
                 if needed {
-                    resolutions.insert(descriptor.clone(), locator.clone());
-                    // Include transitive deps of the extension locator
-                    let mut queue = vec![locator.clone()];
-                    while let Some(loc) = queue.pop() {
-                        if let Some(pkg) = self.locator_package.get(&loc) {
-                            for (name, range) in pkg.dependencies.iter().flatten() {
-                                if let Ok(dep_desc) =
-                                    self.resolve_dependency(&loc, name, range.as_ref())
-                                    && let Some(dep_loc) = self.resolutions.get(&dep_desc)
-                                    && !resolutions.contains_key(&dep_desc)
-                                {
-                                    resolutions.insert(dep_desc, dep_loc.clone());
-                                    queue.push(dep_loc.clone());
-                                }
-                            }
-                        }
-                    }
+                    self.add_extension_descriptor(descriptor, &mut resolutions)?;
                 }
             }
         }
@@ -451,6 +548,7 @@ impl BerryLockfile {
             locator_package: self.locator_package.clone(),
             resolver: self.resolver.clone(),
             extensions: self.extensions.clone(),
+            project_extensions: self.project_extensions.clone(),
             overrides: self.overrides.clone(),
             workspace_path_to_locator: self.workspace_path_to_locator.clone(),
             catalogs: Arc::clone(&self.catalogs),
@@ -570,7 +668,7 @@ impl Lockfile for BerryLockfile {
 
         let mut map = std::collections::BTreeMap::new();
         for (name, version) in package.dependencies.iter().flatten() {
-            let mut dependency = Descriptor::new(name, version.as_ref()).unwrap();
+            let mut dependency = Descriptor::new(name, version.as_ref()).map_err(Error::from)?;
             for (resolution, reference) in &self.overrides {
                 if let Some(override_dependency) =
                     resolution.reduce_dependency(reference, &dependency, &locator)
@@ -620,7 +718,7 @@ impl Lockfile for BerryLockfile {
     }
 
     fn turbo_version(&self) -> Option<String> {
-        let turbo_ident = Ident::try_from("turbo").expect("'turbo' is valid identifier");
+        let turbo_ident = Ident::try_from("turbo").ok()?;
         let key = self
             .locator_package
             .keys()
@@ -642,6 +740,16 @@ impl Lockfile for BerryLockfile {
 
 impl LockfileData {
     pub fn from_bytes(s: &[u8]) -> Result<Self, Error> {
+        // Single-pass fast path for the machine-generated subset. Falls
+        // back to serde for anything it declines — including semantic
+        // errors (missing metadata/resolution), so error reporting stays
+        // on the serde path.
+        if let Ok(text) = std::str::from_utf8(s)
+            && let Some(entries) = de::fast_parse::parse(text)
+            && let Ok(data) = Self::try_from(entries)
+        {
+            return Ok(data);
+        }
         serde_yaml_ng::from_slice(s).map_err(Error::from)
     }
 }
@@ -660,7 +768,22 @@ impl BerryManifest {
             resolutions,
             catalog,
             catalogs,
+            package_extensions: None,
         }
+    }
+
+    pub fn with_package_extensions<I, D>(mut self, package_extensions: I) -> Self
+    where
+        I: IntoIterator<Item = (String, D)>,
+        D: IntoIterator<Item = (String, String)>,
+    {
+        self.package_extensions = Some(
+            package_extensions
+                .into_iter()
+                .map(|(selector, dependencies)| (selector, dependencies.into_iter().collect()))
+                .collect(),
+        );
+        self
     }
 
     pub fn with_resolutions<I>(resolutions: I) -> Self
@@ -670,7 +793,7 @@ impl BerryManifest {
         Self::new(resolutions, None, None)
     }
 
-    pub fn into_parts(self) -> Result<(Map<Resolution, String>, CatalogMap), Error> {
+    pub fn into_parts(self) -> Result<ManifestParts, Error> {
         let overrides = self
             .resolutions
             .map(|resolutions| {
@@ -692,29 +815,12 @@ impl BerryManifest {
             catalogs.insert("default".to_string(), default_catalog);
         }
 
-        Ok((overrides, catalogs))
+        Ok((
+            overrides,
+            catalogs,
+            self.package_extensions.unwrap_or_default(),
+        ))
     }
-}
-
-pub fn berry_subgraph(
-    contents: &[u8],
-    workspace_packages: &[String],
-    packages: &[String],
-    resolutions: Option<HashMap<String, String>>,
-) -> Result<Vec<u8>, crate::Error> {
-    let manifest = resolutions.map(BerryManifest::with_resolutions);
-    let data = LockfileData::from_bytes(contents)?;
-    let lockfile = BerryLockfile::new(data, manifest)?;
-    let pruned_lockfile = lockfile.subgraph(workspace_packages, packages)?;
-    let new_contents = pruned_lockfile.encode()?;
-    Ok(new_contents)
-}
-
-pub fn berry_global_change(prev_contents: &[u8], curr_contents: &[u8]) -> Result<bool, Error> {
-    let prev_data = LockfileData::from_bytes(prev_contents)?;
-    let curr_data = LockfileData::from_bytes(curr_contents)?;
-    Ok(prev_data.metadata.cache_key != curr_data.metadata.cache_key
-        || prev_data.metadata.version != curr_data.metadata.version)
 }
 
 #[cfg(test)]
@@ -847,6 +953,76 @@ mod test {
     }
 
     #[test]
+    fn test_prune_preserves_babel_parser_package_extension() {
+        let yaml = r#"__metadata:
+  version: 8
+  cacheKey: 10c0
+
+"app@workspace:packages/app":
+  version: 0.0.0-use.local
+  resolution: "app@workspace:packages/app"
+  dependencies:
+    "@babel/template": "npm:^7.28.6"
+  languageName: unknown
+  linkType: soft
+
+"@babel/parser@npm:^7.28.6":
+  version: 7.29.0
+  resolution: "@babel/parser@npm:7.29.0"
+  languageName: node
+  linkType: hard
+
+"@babel/template@npm:^7.28.6":
+  version: 7.29.0
+  resolution: "@babel/template@npm:7.29.0"
+  dependencies:
+    "@babel/parser": "npm:^7.28.6"
+    "@babel/types": "npm:^7.28.6"
+  languageName: node
+  linkType: hard
+
+"@babel/types@npm:^7.28.6, @babel/types@npm:^7.8.3":
+  version: 7.29.0
+  resolution: "@babel/types@npm:7.29.0"
+  languageName: node
+  linkType: hard
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+"#;
+
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+        let with_parser = lockfile
+            .subgraph(
+                &["packages/app".to_string()],
+                &[
+                    "@babel/parser@npm:7.29.0".to_string(),
+                    "@babel/template@npm:7.29.0".to_string(),
+                    "@babel/types@npm:7.29.0".to_string(),
+                ],
+            )
+            .unwrap();
+        let without_parser = lockfile
+            .subgraph(&[], &["@babel/types@npm:7.29.0".to_string()])
+            .unwrap();
+
+        assert!(
+            String::from_utf8(with_parser.encode().unwrap())
+                .unwrap()
+                .contains("@babel/types@npm:^7.8.3")
+        );
+        assert!(
+            !String::from_utf8(without_parser.encode().unwrap())
+                .unwrap()
+                .contains("@babel/types@npm:^7.8.3")
+        );
+    }
+
+    #[test]
     fn test_prune_with_patch_resolution() {
         // Regression test for https://github.com/vercel/turborepo/issues/3273
         // Berry lockfiles with patched dependencies via resolutions should
@@ -974,6 +1150,117 @@ mod test {
     }
 
     #[test]
+    fn test_prune_with_missing_patch_descriptor_returns_error() {
+        let yaml = r#"__metadata:
+  version: 6
+  cacheKey: 8c0
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"lodash@npm:4.17.21":
+  version: 4.17.21
+  resolution: "lodash@npm:4.17.21"
+  checksum: abc123
+  languageName: node
+  linkType: hard
+
+"lodash@patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash.patch::locator=root%40workspace%3A.":
+  version: 4.17.21
+  resolution: "lodash@patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash.patch::version=4.17.21&hash=abc123&locator=root%40workspace%3A."
+  checksum: def456
+  languageName: node
+  linkType: hard
+"#;
+
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+        let pruned = lockfile
+            .subgraph(&[], &["lodash@npm:4.17.21".to_string()])
+            .unwrap();
+
+        let err = pruned
+            .subgraph(&[], &["lodash@npm:4.17.21".to_string()])
+            .unwrap_err();
+        assert!(matches!(err, Error::MissingDescriptorsForPatchLocator(_)));
+    }
+
+    #[test]
+    fn test_prune_with_malformed_patch_descriptor_returns_error() {
+        let yaml = r#"__metadata:
+  version: 6
+  cacheKey: 8c0
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"lodash@npm:4.17.21":
+  version: 4.17.21
+  resolution: "lodash@npm:4.17.21"
+  checksum: abc123
+  languageName: node
+  linkType: hard
+
+"lodash@npm:not-a-patch-descriptor":
+  version: 4.17.21
+  resolution: "lodash@patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash.patch::version=4.17.21&hash=abc123&locator=root%40workspace%3A."
+  checksum: def456
+  languageName: node
+  linkType: hard
+"#;
+
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+
+        let err = lockfile
+            .subgraph(&[], &["lodash@npm:4.17.21".to_string()])
+            .unwrap_err();
+        assert!(matches!(err, Error::InvalidPatchDescriptor { .. }));
+    }
+
+    #[test]
+    fn test_all_dependencies_with_invalid_descriptor_returns_error() {
+        let yaml = r#"__metadata:
+  version: 6
+  cacheKey: 8c0
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"a@workspace:packages/a":
+  version: 0.0.0-use.local
+  resolution: "a@workspace:packages/a"
+  languageName: unknown
+  linkType: soft
+"#;
+
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let mut lockfile = BerryLockfile::new(data, None).unwrap();
+        let locator = Locator::try_from("a@workspace:packages/a")
+            .unwrap()
+            .as_owned();
+        let package = lockfile.locator_package.get_mut(&locator).unwrap();
+        package.dependencies = Some(Map::from([(
+            "bad/name".to_string(),
+            "npm:^1.0.0".to_string(),
+        )]));
+
+        let err = lockfile
+            .all_dependencies("a@workspace:packages/a")
+            .unwrap_err();
+        assert!(matches!(err, crate::Error::Berry(Error::Identifiers(_))));
+    }
+
+    #[test]
     fn test_berry_manifest_into_parts_merges_correctly() {
         let mut default_catalog = Map::new();
         default_catalog.insert("lodash".to_string(), "^4.17.21".to_string());
@@ -988,9 +1275,11 @@ mod test {
             resolutions: None,
             catalog: Some(default_catalog),
             catalogs: Some(named_catalogs),
+            package_extensions: None,
         };
 
-        let (overrides, all_catalogs) = manifest.into_parts().unwrap();
+        let (overrides, all_catalogs, package_extensions) = manifest.into_parts().unwrap();
+        assert!(package_extensions.is_empty());
 
         // No resolutions, so overrides should be empty
         assert!(overrides.is_empty());

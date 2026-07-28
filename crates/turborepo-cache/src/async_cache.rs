@@ -43,7 +43,7 @@ impl AsyncCache {
         analytics_recorder: Option<AnalyticsSender>,
         scm_state: LazyScmState,
     ) -> Result<AsyncCache, CacheError> {
-        let max_workers = opts.workers.try_into().expect("usize is smaller than u32");
+        let max_workers = usize::try_from(opts.workers).unwrap_or(usize::MAX);
         let real_cache = Arc::new(CacheMultiplexer::new(
             opts,
             repo_root,
@@ -74,7 +74,9 @@ impl AsyncCache {
                         duration,
                         files,
                     } => {
-                        let permit = semaphore.clone().acquire_owned().await.unwrap();
+                        let Ok(permit) = semaphore.clone().acquire_owned().await else {
+                            break;
+                        };
                         let real_cache = real_cache.clone();
                         let warnings = warnings.clone();
                         let worker_span = tracing::span!(Level::TRACE, "cache worker: cache PUT");
@@ -237,7 +239,8 @@ mod tests {
     use futures::future::try_join_all;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_api_client::{APIAuth, APIClient, SecretString};
+    use turborepo_api_client::{APIAuth, APIClient};
+    use turborepo_types::SecretString;
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{

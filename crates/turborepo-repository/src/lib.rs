@@ -6,15 +6,19 @@
 //! `@turbo/repository` NPM package can avoid depending on the entire Turborepo
 //! binary.
 
-#![feature(error_generic_member_access)]
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![allow(clippy::result_large_err)]
+#![allow(clippy::expect_used, clippy::unwrap_used)]
 
+pub mod cargo;
 pub mod change_mapper;
 pub mod discovery;
 pub mod inference;
+mod knowledge;
+mod manifest_parser;
 pub mod package_graph;
 pub mod package_json;
 pub mod package_manager;
+pub mod toolchain;
 pub mod workspaces;

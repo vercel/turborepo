@@ -47,7 +47,8 @@ describe("create-turbo", () => {
     { packageManager: "yarn" },
     { packageManager: "npm" },
     { packageManager: "pnpm" },
-    { packageManager: "bun" }
+    { packageManager: "bun" },
+    { packageManager: "nub" }
   ])(
     "outputs expected console messages when using $packageManager (option)",
     async ({ packageManager }) => {
@@ -61,7 +62,9 @@ describe("create-turbo", () => {
           npm: "8.19.2",
           yarn: "1.22.10",
           pnpm: "7.22.2",
-          bun: "1.0.1"
+          bun: "1.0.1",
+          nub: "0.1.0",
+          aube: "0.1.0"
         });
 
       const mockCreateProject = jest
@@ -141,7 +144,9 @@ describe("create-turbo", () => {
     { packageManager: "yarn" },
     { packageManager: "npm" },
     { packageManager: "pnpm" },
-    { packageManager: "bun" }
+    { packageManager: "bun" },
+    { packageManager: "nub" },
+    { packageManager: "aube" }
   ])(
     "outputs expected console messages when using $packageManager (arg)",
     async ({ packageManager }) => {
@@ -155,7 +160,9 @@ describe("create-turbo", () => {
           npm: "8.19.2",
           yarn: "1.22.10",
           pnpm: "7.22.2",
-          bun: "1.0.1"
+          bun: "1.0.1",
+          nub: "0.1.0",
+          aube: "0.1.0"
         });
 
       const mockCreateProject = jest
@@ -239,7 +246,9 @@ describe("create-turbo", () => {
         npm: "8.19.2",
         yarn: "1.22.10",
         pnpm: "7.22.2",
-        bun: "1.0.1"
+        bun: "1.0.1",
+        nub: "0.1.0",
+        aube: "0.1.0"
       });
 
     const mockCreateProject = jest
@@ -292,7 +301,7 @@ describe("create-turbo", () => {
     mockSpawnSync.mockRestore();
   });
 
-  it("does not initialize git and removes .git directory when --no-git flag is used", async () => {
+  it("does not initialize git or remove .git directory when --no-git flag is used", async () => {
     const { root } = useFixture({ fixture: "create-turbo-no-git" });
     const packageManager = "npm";
 
@@ -302,7 +311,9 @@ describe("create-turbo", () => {
         npm: "8.19.2",
         yarn: "1.22.10",
         pnpm: "7.22.2",
-        bun: "1.0.1"
+        bun: "1.0.1",
+        nub: "0.1.0",
+        aube: "0.1.0"
       });
 
     const mockCreateProject = jest
@@ -333,13 +344,7 @@ describe("create-turbo", () => {
         signal: null
       });
 
-    const mockTryGitInit = jest
-      .spyOn(gitUtils, "tryGitInit")
-      .mockReturnValue(true);
-
-    const mockRemoveGitDirectory = jest
-      .spyOn(gitUtils, "removeGitDirectory")
-      .mockReturnValue(true);
+    const mockTryGitInit = jest.spyOn(gitUtils, "tryGitInit");
 
     await create(root as CreateCommandArgument, {
       packageManager,
@@ -350,17 +355,16 @@ describe("create-turbo", () => {
     });
 
     expect(mockTryGitInit).not.toHaveBeenCalled();
-    expect(mockRemoveGitDirectory).toHaveBeenCalledWith(root);
+    expect(mockSpawnSync).not.toHaveBeenCalled();
 
     mockAvailablePackageManagers.mockRestore();
     mockCreateProject.mockRestore();
     mockGetWorkspaceDetails.mockRestore();
     mockSpawnSync.mockRestore();
     mockTryGitInit.mockRestore();
-    mockRemoveGitDirectory.mockRestore();
   });
 
-  it("initializes git and does not remove .git directory when --no-git flag is not used", async () => {
+  it("initializes git when --no-git flag is not used", async () => {
     const { root } = useFixture({ fixture: "create-turbo-with-git" });
     const packageManager = "npm";
 
@@ -370,7 +374,9 @@ describe("create-turbo", () => {
         npm: "8.19.2",
         yarn: "1.22.10",
         pnpm: "7.22.2",
-        bun: "1.0.1"
+        bun: "1.0.1",
+        nub: "0.1.0",
+        aube: "0.1.0"
       });
 
     const mockCreateProject = jest
@@ -403,10 +409,6 @@ describe("create-turbo", () => {
 
     const mockTryGitInit = jest
       .spyOn(gitUtils, "tryGitInit")
-      .mockReturnValue(true);
-
-    const mockRemoveGitDirectory = jest
-      .spyOn(gitUtils, "removeGitDirectory")
       .mockReturnValue(true);
 
     await create(root as CreateCommandArgument, {
@@ -418,13 +420,11 @@ describe("create-turbo", () => {
     });
 
     expect(mockTryGitInit).toHaveBeenCalledWith(root);
-    expect(mockRemoveGitDirectory).not.toHaveBeenCalled();
 
     mockAvailablePackageManagers.mockRestore();
     mockCreateProject.mockRestore();
     mockGetWorkspaceDetails.mockRestore();
     mockSpawnSync.mockRestore();
     mockTryGitInit.mockRestore();
-    mockRemoveGitDirectory.mockRestore();
   });
 });

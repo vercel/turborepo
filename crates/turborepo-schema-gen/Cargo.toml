@@ -9,6 +9,9 @@ description = "JSON Schema and TypeScript type generator for turbo.json configur
 name = "turbo-schema-gen"
 path = "src/main.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 # Schema generation
 schemars = { workspace = true }

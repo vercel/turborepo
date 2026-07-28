@@ -10,11 +10,11 @@ export default function NotFound() {
 
   return (
     <main className="mx-auto mt-8 flex w-full min-w-0 max-w-6xl flex-col gap-4 px-6 pt-14 md:px-12">
-      <div className="w-screen-lg mx-auto mb-16 w-full border-b border-gray-400 border-opacity-20 pb-8 pt-4">
+      <div className="w-screen-lg mx-auto mb-16 w-full border-b border-gray-alpha-400 pb-8 pt-4">
         <h1 className="mb-6 mt-2 text-center text-4xl font-bold leading-tight tracking-tight text-slate-900 dark:text-slate-100 lg:text-5xl">
           Blog post not found
         </h1>
-        <p className="text-center text-gray-600 dark:text-gray-400">
+        <p className="text-center text-gray-900">
           The blog post you are looking for does not exist. Here are some recent
           posts:
         </p>

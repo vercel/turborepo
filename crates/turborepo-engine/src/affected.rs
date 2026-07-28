@@ -25,6 +25,10 @@ use crate::{Built, Engine};
 static DEFAULT_TASK_INPUTS: TaskInputs = TaskInputs {
     globs: Vec::new(),
     default: true,
+    jit_globs: Vec::new(),
+    jit_default: false,
+    dependency_outputs: None,
+    eager: true,
 };
 
 /// Returns the set of tasks whose input globs match at least one changed file.
@@ -170,6 +174,7 @@ mod tests {
             inputs: TaskInputs {
                 globs: globs.iter().map(|s| s.to_string()).collect(),
                 default,
+                ..Default::default()
             },
             ..Default::default()
         }

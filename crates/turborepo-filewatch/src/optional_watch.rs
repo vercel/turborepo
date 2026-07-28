@@ -52,7 +52,10 @@ impl<T> std::ops::Deref for SomeRef<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        self.0.as_ref().expect("checked")
+        match self.0.as_ref() {
+            Some(value) => value,
+            None => unreachable!("checked"),
+        }
     }
 }
 

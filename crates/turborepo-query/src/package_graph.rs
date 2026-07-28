@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_graphql::{Object, SimpleObject};
 use itertools::Itertools;
-use turborepo_repository::package_graph::{PackageName, PackageNode};
+use turborepo_repository::package_graph::{DependencyKind, PackageName, PackageNode};
 
 use crate::{package::Package, Array, Error, PackagePredicate, QueryRun};
 
@@ -32,6 +32,30 @@ impl PackageGraph {
 pub(crate) struct Edge {
     source: String,
     target: String,
+    kind: DependencyKindGraphQL,
+}
+
+#[derive(Debug, Clone, SimpleObject, Hash, PartialEq, Eq)]
+pub(crate) struct DependencyKindGraphQL {
+    kind: String,
+}
+
+impl From<DependencyKind> for DependencyKindGraphQL {
+    fn from(kind: DependencyKind) -> Self {
+        Self {
+            kind: match kind {
+                DependencyKind::Production => "production".to_string(),
+                DependencyKind::Development => "development".to_string(),
+                DependencyKind::Peer { optional } => {
+                    if optional {
+                        "optionalPeer".to_string()
+                    } else {
+                        "peer".to_string()
+                    }
+                }
+            },
+        }
+    }
 }
 
 #[Object]
@@ -128,6 +152,7 @@ impl PackageGraph {
                         return Some(Edge {
                             source: source_node.as_package_name().to_string(),
                             target: target_node.as_package_name().to_string(),
+                            kind: edge.weight.into(),
                         });
                     }
                 }
@@ -140,6 +165,7 @@ impl PackageGraph {
                 Some(Edge {
                     source: source_node.as_package_name().to_string(),
                     target: target_node.as_package_name().to_string(),
+                    kind: edge.weight.into(),
                 })
             })
             .dedup()

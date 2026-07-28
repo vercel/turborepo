@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+
 mod common;
 
 use std::fs;
@@ -6,7 +8,7 @@ use common::{run_turbo, setup};
 
 fn setup_and_run(args: &[&str]) -> (tempfile::TempDir, std::process::Output) {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
     let output = run_turbo(tempdir.path(), args);
     assert!(output.status.success());
     (tempdir, output)
@@ -18,6 +20,18 @@ fn assert_valid_trace_and_markdown(dir: &std::path::Path, trace_name: &str) {
     let trace_contents = fs::read_to_string(&trace_path).unwrap();
     let _: serde_json::Value =
         serde_json::from_str(&trace_contents).expect("trace file should be valid JSON");
+    assert!(
+        trace_contents.contains(r#""name":"resolve_remote_cache_status""#),
+        "expected profile to cover remote cache status resolution"
+    );
+    assert!(
+        trace_contents.contains(r#""name":"log_flush""#),
+        "expected profile to cover log flushing"
+    );
+    assert!(
+        trace_contents.contains(r#""name":"signal_handler_close""#),
+        "expected profile to cover signal handler shutdown"
+    );
 
     let md_path = dir.join(format!("{trace_name}.md"));
     assert!(md_path.exists(), "{trace_name}.md should exist");
@@ -84,4 +98,21 @@ fn test_anon_profile_generates_valid_trace() {
 fn test_anon_profile_default_filename() {
     let (tempdir, _) = setup_and_run(&["build", "--anon-profile"]);
     assert_default_profile_files_exist(tempdir.path());
+}
+
+#[test]
+fn test_profile_no_tasks_generates_markdown() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+    let output = run_turbo(tempdir.path(), &["run", "--profile=no-tasks.trace"]);
+    assert_eq!(output.status.code(), Some(1));
+
+    let trace_path = tempdir.path().join("no-tasks.trace");
+    assert!(trace_path.exists(), "no-tasks.trace should exist");
+    let trace_contents = fs::read_to_string(&trace_path).unwrap();
+    let _: serde_json::Value =
+        serde_json::from_str(&trace_contents).expect("trace file should be valid JSON");
+
+    let md_path = tempdir.path().join("no-tasks.trace.md");
+    assert!(md_path.exists(), "no-tasks.trace.md should exist");
 }

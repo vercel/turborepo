@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+
 mod common;
 
 use std::path::Path;
@@ -113,6 +115,9 @@ fn test_monorepo_env_var_in_summary() -> Result<(), anyhow::Error> {
 
     let config_dir = tempfile::tempdir()?;
     let mut cmd = assert_cmd::Command::cargo_bin("turbo")?;
+    for key in common::ambient_turbo_env_keys() {
+        cmd.env_remove(&key);
+    }
     cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
         .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
@@ -173,7 +178,7 @@ fn test_monorepo_no_changes_packages() -> Result<(), anyhow::Error> {
 #[test]
 fn test_single_package_dry_json() -> Result<(), anyhow::Error> {
     let tempdir = tempfile::tempdir()?;
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true)?;
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false)?;
     let json = turbo_dry_json(tempdir.path(), &["run", "build", "--dry=json"])?;
 
     insta::with_settings!({ filters => vec![(r"\\\\", "/")] }, {
@@ -212,7 +217,7 @@ fn test_single_package_no_change() -> Result<(), anyhow::Error> {
 #[test]
 fn test_single_package_no_config() -> Result<(), anyhow::Error> {
     let tempdir = tempfile::tempdir()?;
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true)?;
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false)?;
 
     // Remove turbo.json and commit
     std::fs::remove_file(tempdir.path().join("turbo.json"))?;
@@ -244,7 +249,7 @@ fn test_single_package_no_config() -> Result<(), anyhow::Error> {
 #[test]
 fn test_single_package_with_deps() -> Result<(), anyhow::Error> {
     let tempdir = tempfile::tempdir()?;
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true)?;
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false)?;
     let json = turbo_dry_json(tempdir.path(), &["run", "test", "--dry=json"])?;
 
     insta::with_settings!({ filters => vec![(r"\\\\", "/")] }, {

@@ -1,6 +1,6 @@
 use std::{env, future::Future, sync::Arc};
 
-use tracing::error;
+use tracing::Instrument;
 use turborepo_api_client::SharedHttpClient;
 use turborepo_log::StructuredLogSink;
 use turborepo_query_api::QueryServer;
@@ -29,11 +29,17 @@ where
             // Keep the run future alive so the TUI can continue rendering task
             // output until shutdown drains and the UI closes cleanly.
             let result = (&mut run_fut).await;
-            handler.done().await;
+            handler
+                .done()
+                .instrument(tracing::info_span!("signal_handler_done"))
+                .await;
             RunOutcome::Interrupted(result)
         }
         result = &mut run_fut => {
-            handler.close().await;
+            handler
+                .close()
+                .instrument(tracing::info_span!("signal_handler_close"))
+                .await;
             RunOutcome::Completed(result)
         }
     }
@@ -133,7 +139,11 @@ pub async fn run(
 
         let (sender, handle) = {
             let _span = tracing::info_span!("start_ui").entered();
-            run.start_ui()?.unzip()
+            // The TUI needs a handle to the terminal sink so it can re-enable
+            // streamed output when the user toggles out of the alternate
+            // screen, and its watchdog restores streamed output if the
+            // render thread exits mid-run.
+            run.start_ui(sinks.terminal.clone())?.unzip()
         };
 
         if let Some(UISender::Tui(ref tui_sender)) = sender {
@@ -163,15 +173,15 @@ pub async fn run(
             analytics_handle.close_with_timeout().await;
         }
 
-        // We only stop if it's the TUI, for the web UI we don't need to stop
         if let Some(UISender::Tui(sender)) = sender {
             sender.stop().await;
         }
 
+        // Wait for TUI cleanup (terminal restoration, task persistence)
+        // before printing anything else; render errors are logged by the
+        // watchdog inside `start_ui`.
         if let Some(handle) = handle {
-            if let Err(e) = handle.await.expect("render thread panicked") {
-                error!("error encountered rendering tui: {e}");
-            }
+            handle.await.ok();
         }
 
         if let Some(path) = subscriber.stderr_redirect_path() {
@@ -185,7 +195,10 @@ pub async fn run(
         RunOutcome::Completed(result) | RunOutcome::Interrupted(result) => result,
     };
 
-    turborepo_log::flush();
+    {
+        let _span = tracing::info_span!("log_flush").entered();
+        turborepo_log::flush();
+    }
     result
 }
 

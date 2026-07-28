@@ -1,10 +1,17 @@
 use std::{fmt, path::Path};
 
-use camino::{Utf8Component, Utf8Path};
+use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use path_clean::PathClean;
 use serde::Serialize;
 
 use crate::{AnchoredSystemPathBuf, PathError, PathRelation, RelativeUnixPathBuf};
+
+fn clean_utf8_path(path: Utf8PathBuf) -> Utf8PathBuf {
+    match Utf8PathBuf::from_path_buf(path.as_std_path().clean()) {
+        Ok(cleaned) => cleaned,
+        Err(_) => path,
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Hash)]
 #[serde(transparent)]
@@ -113,18 +120,12 @@ impl AnchoredSystemPath {
                 .iter()
                 .any(|segment| segment.contains(std::path::MAIN_SEPARATOR))
         );
-        AnchoredSystemPathBuf(
-            self.0
-                .join(segments.join(std::path::MAIN_SEPARATOR_STR))
-                .as_std_path()
-                .clean()
-                .try_into()
-                .unwrap(),
-        )
+        let joined = self.0.join(segments.join(std::path::MAIN_SEPARATOR_STR));
+        AnchoredSystemPathBuf(clean_utf8_path(joined))
     }
 
     pub fn clean(&self) -> AnchoredSystemPathBuf {
-        AnchoredSystemPathBuf(self.0.as_std_path().clean().try_into().unwrap())
+        AnchoredSystemPathBuf(clean_utf8_path(self.0.to_owned()))
     }
 
     /// relation_to_path does a lexical comparison of path components to

@@ -2,6 +2,10 @@
   "extends": ["//"],
   "tasks": {
     "check-lockfiles": {
+      // The harness runs the turbo binary from target/; depending on the
+      // crate's build task guarantees it exists and re-runs this check
+      // whenever the binary's transitive Rust sources change.
+      "dependsOn": ["turbo#build"],
       "passThroughEnv": ["VERCEL_TOKEN"]
     }
   }

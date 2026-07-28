@@ -1,0 +1,24 @@
+{
+  "name": "@repo/ui",
+  "version": "0.0.0",
+  "exports": {
+    ".": "./index.ts",
+    "./counter": "./components/counter.tsx",
+    "./header": "./components/header.tsx"
+  },
+  "license": "MIT",
+  "scripts": {
+    "lint": "rslint ."
+  },
+  "dependencies": {
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@repo/rslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "5.9.3"
+  }
+}

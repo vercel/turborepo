@@ -20,10 +20,12 @@ fn is_wsl() -> bool {
 
 pub async fn run(base: CommandBase) {
     let system = System::new_all();
-    let connector = DaemonConnector::new(false, false, &base.repo_root, None);
-    let daemon_status = match connector.connect().await {
-        Ok(_status) => "Running",
-        Err(DaemonConnectorError::NotRunning) => "Not running",
+    let daemon_status = match DaemonConnector::new(false, false, &base.repo_root, None) {
+        Ok(connector) => match connector.connect().await {
+            Ok(_status) => "Running",
+            Err(DaemonConnectorError::NotRunning) => "Not running",
+            Err(_e) => "Error getting status",
+        },
         Err(_e) => "Error getting status",
     };
     let package_manager = PackageJson::load(&base.repo_root.join_component("package.json"))

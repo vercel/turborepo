@@ -302,7 +302,9 @@ impl ResolvedConfigurationOptions for EnvVars {
 
         let output = ConfigurationOptions {
             api_url: self.output_map.get("api_url").cloned(),
+            api_url_source: None,
             login_url: self.output_map.get("login_url").cloned(),
+            login_url_source: None,
             team_slug: self.output_map.get("team_slug").cloned(),
             team_id: self.output_map.get("team_id").cloned(),
             token: self.output_map.get("token").cloned(),
@@ -460,6 +462,19 @@ mod test {
             Some(AbsoluteSystemPathBuf::new(root_turbo_json).unwrap())
         );
         assert_eq!(config.concurrency, Some("50%".to_owned()));
+    }
+
+    #[test]
+    fn test_log_order_stream_env_setting() {
+        let mut env: HashMap<OsString, OsString> = HashMap::new();
+        env.insert("turbo_log_order".into(), "stream".into());
+
+        let config = EnvVars::new(&env)
+            .unwrap()
+            .get_configuration_options(&ConfigurationOptions::default())
+            .unwrap();
+
+        assert_eq!(config.log_order(), LogOrder::Stream);
     }
 
     #[test]

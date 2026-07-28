@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+
 mod common;
 
 use common::{run_turbo, setup};
@@ -5,7 +7,7 @@ use common::{run_turbo, setup};
 #[test]
 fn test_single_package_build_npm() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false).unwrap();
 
     // First run: cache miss
     let output = run_turbo(tempdir.path(), &["run", "build"]);
@@ -32,7 +34,7 @@ fn test_single_package_build_npm() {
 #[test]
 fn test_single_package_build_yarn() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "single_package", "yarn@1.22.17", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "single_package", "yarn@1.22.17", false).unwrap();
 
     // First run: cache miss
     let output = run_turbo(tempdir.path(), &["run", "build"]);

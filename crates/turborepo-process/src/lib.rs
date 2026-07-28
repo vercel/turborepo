@@ -9,6 +9,7 @@
 //! As of now, the manager will execute futures in a random order, and
 //! must be either `wait`ed on or `stop`ped to drive state.
 
+#![cfg_attr(windows, feature(windows_process_extensions_show_window))]
 #![deny(clippy::all)]
 
 mod child;
@@ -19,7 +20,7 @@ mod job_object;
 use std::{
     collections::HashMap,
     io::{self, IsTerminal},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, MutexGuard},
     time::Duration,
 };
 
@@ -28,7 +29,7 @@ use tokio::task::JoinSet;
 use tracing::{debug, trace};
 use turborepo_task_id::TaskId;
 
-pub use self::child::{Child, ChildExit};
+pub use self::child::{Child, ChildExit, ChildStdin};
 
 /// A process manager that is responsible for spawning and managing child
 /// processes. When the manager is Open, new child processes can be spawned
@@ -38,6 +39,10 @@ pub use self::child::{Child, ChildExit};
 pub struct ProcessManager {
     state: Arc<Mutex<ProcessManagerInner>>,
     use_pty: bool,
+    // Captured before the TUI may put stdout in raw mode. Reapply it to child
+    // PTYs so task processes do not inherit TUI-specific terminal settings.
+    #[cfg(unix)]
+    pty_termios: Option<libc::termios>,
 }
 
 #[derive(Debug)]
@@ -62,6 +67,12 @@ pub struct PtySize {
 }
 
 impl ProcessManager {
+    fn lock_state(&self) -> MutexGuard<'_, ProcessManagerInner> {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     pub fn new(use_pty: bool) -> Self {
         debug!("spawning children with pty: {use_pty}");
         Self {
@@ -71,6 +82,8 @@ impl ProcessManager {
                 size: None,
             })),
             use_pty,
+            #[cfg(unix)]
+            pty_termios: use_pty.then(capture_stdout_termios).flatten(),
         }
     }
 
@@ -83,7 +96,7 @@ impl ProcessManager {
     }
 
     pub fn running_task_ids(&self) -> Vec<String> {
-        let lock = self.state.lock().expect("lock poisoned");
+        let lock = self.lock_state();
         let mut task_ids = lock
             .children
             .iter()
@@ -130,13 +143,24 @@ impl ProcessManager {
             .then(|| command.label())
             .unwrap_or_default();
         trace!("acquiring lock for spawning {label}");
-        let mut lock = self.state.lock().unwrap();
+        let mut lock = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         trace!("acquired lock for spawning {label}");
         if lock.is_closing {
             debug!("process manager closing");
             return None;
         }
         let pty_size = self.use_pty.then(|| lock.pty_size()).flatten();
+        #[cfg(unix)]
+        let child = child::Child::spawn_with_termios(
+            command,
+            child::ShutdownStyle::Graceful(Some(stop_timeout)),
+            pty_size,
+            self.pty_termios,
+        );
+        #[cfg(not(unix))]
         let child = child::Child::spawn(
             command,
             child::ShutdownStyle::Graceful(Some(stop_timeout)),
@@ -152,9 +176,13 @@ impl ProcessManager {
         Some(child)
     }
 
-    /// Stop the process manager, closing all child processes. On posix
-    /// systems this will send a SIGINT, and on windows it will just kill
-    /// the process immediately.
+    /// Stop the process manager, closing all child processes. On posix systems
+    /// this will send SIGINT to the process group for non-PTY children and to
+    /// the direct child for PTY children. On Windows, children spawned under
+    /// ConPTY receive a Ctrl-C keystroke via the pseudoconsole input; other
+    /// children share turbo's console and are expected to receive console
+    /// Ctrl-C events directly, with a force kill after the child stop
+    /// timeout as the fallback.
     pub async fn stop(&self) {
         self.close(CloseMode::Stop).await
     }
@@ -175,7 +203,7 @@ impl ProcessManager {
     /// the entire process manager.
     pub async fn stop_tasks(&self, task_ids: &[TaskId<'static>]) {
         let children_to_stop: Vec<_> = {
-            let mut lock = self.state.lock().expect("not poisoned");
+            let mut lock = self.lock_state();
 
             // If we're closing, return early - close() will stop all children and they
             // should report Shutdown. By checking is_closing under the lock, we ensure
@@ -229,7 +257,7 @@ impl ProcessManager {
         let mut set = JoinSet::new();
 
         {
-            let mut lock = self.state.lock().expect("not poisoned");
+            let mut lock = self.lock_state();
             lock.is_closing = true;
 
             for child in lock.children.values().flatten() {
@@ -260,18 +288,25 @@ impl ProcessManager {
         }
 
         {
-            let mut lock = self.state.lock().expect("not poisoned");
+            let mut lock = self.lock_state();
             lock.children.clear();
         }
     }
 
     pub fn set_pty_size(&self, rows: u16, cols: u16) {
-        self.state.lock().expect("not poisoned").size = Some(PtySize { rows, cols });
+        self.lock_state().size = Some(PtySize { rows, cols });
     }
 
     pub fn is_closing(&self) -> bool {
-        self.state.lock().expect("not poisoned").is_closing
+        self.lock_state().is_closing
     }
+}
+
+#[cfg(unix)]
+fn capture_stdout_termios() -> Option<libc::termios> {
+    let mut termios = std::mem::MaybeUninit::<libc::termios>::uninit();
+    let result = unsafe { libc::tcgetattr(libc::STDOUT_FILENO, termios.as_mut_ptr()) };
+    (result == 0).then(|| unsafe { termios.assume_init() })
 }
 
 impl ProcessManagerInner {
@@ -697,5 +732,65 @@ mod test {
         wait_for_process_to_exit(grandchild_pid).await;
 
         let _ = fs::remove_file(pid_file);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_successful_task_cleans_up_long_lived_worker_after_output_drain() {
+        let manager = ProcessManager::new(false);
+        let marker_file = std::env::temp_dir().join(format!(
+            "turbo-normal-exit-marker-never-{}",
+            std::process::id()
+        ));
+        let pid_file = std::env::temp_dir().join(format!(
+            "turbo-normal-exit-worker-never-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&marker_file);
+        let _ = fs::remove_file(&pid_file);
+
+        let mut command = Command::new("node");
+        command.args([
+            std::ffi::OsString::from("./test/scripts/normal_exit_worker.js"),
+            marker_file.as_os_str().to_os_string(),
+            pid_file.as_os_str().to_os_string(),
+            std::ffi::OsString::from("never"),
+        ]);
+        let mut child = manager
+            .spawn(command, Duration::from_secs(30), test_task_id())
+            .unwrap()
+            .unwrap();
+
+        let mut worker_pid = None;
+        for _ in 0..50 {
+            if let Ok(contents) = fs::read_to_string(&pid_file)
+                && let Ok(pid) = contents.trim().parse::<libc::pid_t>()
+            {
+                worker_pid = Some(pid);
+                break;
+            }
+            sleep(Duration::from_millis(20)).await;
+        }
+        let worker_pid = worker_pid.expect("worker pid file should have been written");
+
+        assert!(
+            process_exists(worker_pid),
+            "worker process {worker_pid} should be alive before output drain"
+        );
+
+        let mut output = Vec::new();
+        let exit = tokio::time::timeout(
+            Duration::from_secs(5),
+            child.wait_with_piped_outputs(&mut output),
+        )
+        .await
+        .expect("successful output drain should not hang on a long-lived worker")
+        .expect("output drain should succeed");
+
+        let _ = fs::remove_file(&marker_file);
+        let _ = fs::remove_file(&pid_file);
+
+        assert_eq!(exit, Some(ChildExit::Finished(Some(0))));
+        wait_for_process_to_exit(worker_pid).await;
     }
 }

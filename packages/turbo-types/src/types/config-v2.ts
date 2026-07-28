@@ -135,7 +135,7 @@ export interface RootSchema extends BaseSchema {
   concurrency?: string;
 
   /**
-   * Disable check for `packageManager` in root `package.json`
+   * Disable package manager declaration checks in root `package.json`.
    *
    * This is highly discouraged as it leaves `turbo` dependent on system
    * configuration to infer the correct package manager.
@@ -293,6 +293,15 @@ export interface FutureFlags {
    */
   filterUsingTasks?: boolean;
   /**
+   * Select requested task entrypoints according to whether the task resolves
+   * a command in the repository. When any package can run a requested task,
+   * packages without a command are skipped as entrypoints. Tasks with no
+   * command anywhere remain available for graph-only orchestration.
+   *
+   * @defaultValue `false`
+   */
+  strictTaskEntrypointSelection?: boolean;
+  /**
    * Move global configuration keys under a top-level `global` key.
    *
    * When enabled, keys like `globalDependencies`, `globalEnv`, `ui`,
@@ -303,6 +312,33 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   globalConfiguration?: boolean;
+  /**
+   * Treat the crates of a Cargo workspace as Turborepo packages.
+   *
+   * When enabled, Rust crates are discovered via `cargo metadata` and
+   * participate in the package graph: they resolve in `--filter`
+   * expressions, propagate `--affected`, and appear in `turbo query`.
+   * Filtered builds execute each selected crate. Unfiltered builds prefer
+   * entrypoints, falling back to libraries when no entrypoints exist.
+   * Entrypoints also expose `run` and `dev`. The `test`, `check`, `clippy`/`lint`, `bench`, and
+   * `doc`/`docs` tasks are selectable per crate with `--filter`. An
+   * unfiltered run executes one workspace-wide Cargo verification command;
+   * filtered runs use the selected crates, or the workspace command when the
+   * workspace package is selected directly.
+   *
+   * All crates implicitly register `build` and the verification tasks;
+   * entrypoints with one binary also register `run` and `dev`. The workspace
+   * package registers the verification tasks. Normal task definitions
+   * configure or override these defaults, and package configuration can
+   * exclude them with `extends: false`.
+   *
+   * Task caching uses Cargo-derived inputs and caches entrypoint build
+   * deliverables. Library builds default to uncached. This feature is
+   * experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalCargoWorkspaces?: boolean;
 }
 
 export interface GlobalConfig {
@@ -366,7 +402,7 @@ export interface GlobalConfig {
   concurrency?: string;
 
   /**
-   * Disable check for `packageManager` in root `package.json`.
+   * Disable package manager declaration checks in root `package.json`.
    *
    * @defaultValue `false`
    */
@@ -425,6 +461,24 @@ export interface GlobalConfig {
    * @defaultValue `false`
    */
   noUpdateNotifier?: boolean;
+}
+
+export interface StartupInput {
+  mode: "startup";
+  globs?: Array<string>;
+  withDefaults?: boolean;
+}
+
+export interface JitInput {
+  mode: "jit";
+  globs?: Array<string>;
+  withDefaults?: boolean;
+}
+
+export interface DependencyOutputsInput {
+  mode: "dependencyOutputs";
+  from?: Array<string>;
+  globs?: Array<string>;
 }
 
 export interface Pipeline {
@@ -518,7 +572,7 @@ export interface Pipeline {
    *
    * @defaultValue `[]`
    */
-  inputs?: Array<string>;
+  inputs?: Array<string | StartupInput | JitInput | DependencyOutputsInput>;
 
   /**
    * Output mode for the task.

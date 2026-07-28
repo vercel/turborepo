@@ -22,12 +22,20 @@ export const GET = async (
   });
 
   for (const page of source.getPages(lang)) {
+    // The geistdocs source bundle erases the collection's frontmatter typing;
+    // narrow structurally to the fields this feed needs.
+    const data = page.data as {
+      description?: string;
+      lastModified?: Date;
+      title?: string;
+    };
+
     feed.addItem({
       id: page.url,
-      title: page.data.title,
-      description: page.data.description,
+      title: data.title ?? page.url,
+      description: data.description,
       link: `${baseUrl}${page.url}`,
-      date: new Date(page.data.lastModified ?? new Date()),
+      date: new Date(data.lastModified ?? new Date()),
       author: [
         {
           name: "Vercel"

@@ -1,7 +1,7 @@
 //! Package scope resolution.
 //!
 //! This module delegates to the `turborepo_scope` crate for all scope
-//! resolution logic. Re-exports are provided for backward compatibility.
+//! resolution logic.
 
 use std::collections::HashMap;
 
@@ -11,7 +11,8 @@ use turborepo_repository::{
     package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
-pub use turborepo_scope::{filter::ResolutionError, target_selector, FilterMode, ScopeOpts};
+use turborepo_scope::filter::ResolutionError;
+use turborepo_types::{FilterMode, ScopeOpts};
 
 use crate::turbo_json::TurboJson;
 

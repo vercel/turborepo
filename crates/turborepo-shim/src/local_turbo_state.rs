@@ -319,25 +319,28 @@ mod test {
         assert_eq!(turbo_version_has_shim(version), expected);
     }
 
-    fn create_mock_turbo_install(root: &AbsoluteSystemPath, package_path: &[&str], version: &str) {
+    fn create_mock_turbo_install(
+        root: &AbsoluteSystemPath,
+        package_path: &[&str],
+        version: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let binary_name = TurboState::binary_name();
 
         let mut bin_components: Vec<&str> = package_path.to_vec();
         bin_components.extend_from_slice(&["bin", binary_name]);
         let bin_file = root.join_components(&bin_components);
-        bin_file.ensure_dir().unwrap();
-        bin_file.create_with_contents("").unwrap();
+        bin_file.ensure_dir()?;
+        bin_file.create_with_contents("")?;
 
         let mut json_components: Vec<&str> = package_path.to_vec();
         json_components.push("package.json");
         let json_file = root.join_components(&json_components);
-        json_file.ensure_dir().unwrap();
-        json_file
-            .create_with_contents(format!(
-                r#"{{"name": "test-turbo", "version": "{}"}}"#,
-                version,
-            ))
-            .unwrap();
+        json_file.ensure_dir()?;
+        json_file.create_with_contents(format!(
+            r#"{{"name": "test-turbo", "version": "{}"}}"#,
+            version,
+        ))?;
+        Ok(())
     }
 
     fn scoped_path() -> Vec<&'static str> {
@@ -352,53 +355,64 @@ mod test {
     }
 
     #[test]
-    fn test_infer_hoisted_scoped() {
-        let tmpdir = TempDir::with_prefix("turbo_infer").unwrap();
-        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+    fn test_infer_hoisted_scoped() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = TempDir::with_prefix("turbo_infer")?;
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
         let nm = root.join_component("node_modules");
 
-        create_mock_turbo_install(&nm, &scoped_path(), "2.0.0");
+        create_mock_turbo_install(&nm, &scoped_path(), "2.0.0")?;
 
-        let result = LocalTurboState::infer(root).unwrap();
+        let Some(result) = LocalTurboState::infer(root) else {
+            panic!("local turbo state should be inferred");
+        };
         assert_eq!(result.version(), "2.0.0");
+        Ok(())
     }
 
     #[test]
-    fn test_infer_hoisted_legacy_fallback() {
-        let tmpdir = TempDir::with_prefix("turbo_infer").unwrap();
-        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+    fn test_infer_hoisted_legacy_fallback() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = TempDir::with_prefix("turbo_infer")?;
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
         let nm = root.join_component("node_modules");
 
-        create_mock_turbo_install(&nm, &legacy_path(), "1.9.0");
+        create_mock_turbo_install(&nm, &legacy_path(), "1.9.0")?;
 
-        let result = LocalTurboState::infer(root).unwrap();
+        let Some(result) = LocalTurboState::infer(root) else {
+            panic!("local turbo state should be inferred");
+        };
         assert_eq!(result.version(), "1.9.0");
+        Ok(())
     }
 
     #[test]
-    fn test_infer_scoped_preferred_over_legacy() {
-        let tmpdir = TempDir::with_prefix("turbo_infer").unwrap();
-        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+    fn test_infer_scoped_preferred_over_legacy() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = TempDir::with_prefix("turbo_infer")?;
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
         let nm = root.join_component("node_modules");
 
-        create_mock_turbo_install(&nm, &scoped_path(), "3.0.0");
-        create_mock_turbo_install(&nm, &legacy_path(), "2.0.0");
+        create_mock_turbo_install(&nm, &scoped_path(), "3.0.0")?;
+        create_mock_turbo_install(&nm, &legacy_path(), "2.0.0")?;
 
-        let result = LocalTurboState::infer(root).unwrap();
+        let Some(result) = LocalTurboState::infer(root) else {
+            panic!("local turbo state should be inferred");
+        };
         assert_eq!(result.version(), "3.0.0");
+        Ok(())
     }
 
     #[test]
-    fn test_infer_empty_dir_returns_none() {
-        let tmpdir = TempDir::with_prefix("turbo_infer").unwrap();
-        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+    fn test_infer_empty_dir_returns_none() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = TempDir::with_prefix("turbo_infer")?;
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
         assert!(LocalTurboState::infer(root).is_none());
+        Ok(())
     }
 
     #[test]
-    fn test_infer_malformed_package_json_continues_search() {
-        let tmpdir = TempDir::with_prefix("turbo_infer").unwrap();
-        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+    fn test_infer_malformed_package_json_continues_search() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let tmpdir = TempDir::with_prefix("turbo_infer")?;
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
         let nm = root.join_component("node_modules");
 
         let scoped = scoped_path();
@@ -408,27 +422,30 @@ mod test {
         let mut bin_components: Vec<&str> = scoped.clone();
         bin_components.extend_from_slice(&["bin", binary_name]);
         let bin_file = nm.join_components(&bin_components);
-        bin_file.ensure_dir().unwrap();
-        bin_file.create_with_contents("").unwrap();
+        bin_file.ensure_dir()?;
+        bin_file.create_with_contents("")?;
 
         let mut json_components: Vec<&str> = scoped.clone();
         json_components.push("package.json");
         let json_file = nm.join_components(&json_components);
-        json_file.ensure_dir().unwrap();
-        json_file.create_with_contents("not valid json").unwrap();
+        json_file.ensure_dir()?;
+        json_file.create_with_contents("not valid json")?;
 
         // Create valid legacy install
-        create_mock_turbo_install(&nm, &legacy_path(), "1.8.0");
+        create_mock_turbo_install(&nm, &legacy_path(), "1.8.0")?;
 
         // Should fall through to legacy despite scoped binary existing
-        let result = LocalTurboState::infer(root).unwrap();
+        let Some(result) = LocalTurboState::infer(root) else {
+            panic!("local turbo state should be inferred");
+        };
         assert_eq!(result.version(), "1.8.0");
+        Ok(())
     }
 
     #[test]
-    fn test_infer_unplugged_scoped() {
-        let tmpdir = TempDir::with_prefix("turbo_infer").unwrap();
-        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+    fn test_infer_unplugged_scoped() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = TempDir::with_prefix("turbo_infer")?;
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
 
         // Berry unplugged dirs use `{identity}-npm-{version}-{hash}`.
         // For @turbo/linux-64 → @turbo-linux-64-npm-2.1.0-abc123
@@ -437,25 +454,31 @@ mod test {
 
         let unplugged_nm =
             root.join_components(&[".yarn", "unplugged", &unplugged_dir_name, "node_modules"]);
-        create_mock_turbo_install(&unplugged_nm, &scoped_path(), "2.1.0");
+        create_mock_turbo_install(&unplugged_nm, &scoped_path(), "2.1.0")?;
 
-        let result = LocalTurboState::infer(root).unwrap();
+        let Some(result) = LocalTurboState::infer(root) else {
+            panic!("local turbo state should be inferred");
+        };
         assert_eq!(result.version(), "2.1.0");
+        Ok(())
     }
 
     #[test]
-    fn test_infer_unplugged_legacy() {
-        let tmpdir = TempDir::with_prefix("turbo_infer").unwrap();
-        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+    fn test_infer_unplugged_legacy() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = TempDir::with_prefix("turbo_infer")?;
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
 
         let platform_package_name = TurboState::platform_package_name();
         let unplugged_dir_name = format!("{}-npm-1.9.0-def456", platform_package_name);
 
         let unplugged_nm =
             root.join_components(&[".yarn", "unplugged", &unplugged_dir_name, "node_modules"]);
-        create_mock_turbo_install(&unplugged_nm, &legacy_path(), "1.9.0");
+        create_mock_turbo_install(&unplugged_nm, &legacy_path(), "1.9.0")?;
 
-        let result = LocalTurboState::infer(root).unwrap();
+        let Some(result) = LocalTurboState::infer(root) else {
+            panic!("local turbo state should be inferred");
+        };
         assert_eq!(result.version(), "1.9.0");
+        Ok(())
     }
 }

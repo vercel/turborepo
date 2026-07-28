@@ -30,10 +30,13 @@ turborepo-scm = { workspace = true }
 turborepo-task-id = { workspace = true }
 turborepo-types = { workspace = true }
 turborepo-ui = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
 test-case = { workspace = true }
+turborepo-repository = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true

@@ -5,7 +5,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 use tonic::{Code, IntoRequest, Status};
 use tracing::info;
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, PathError};
 use turborepo_types::TaskInputs;
 
 use super::{
@@ -241,8 +241,14 @@ pub enum DaemonError {
     #[error("failed to setup cookie dir {1}: {0}")]
     CookieDir(io::Error, AbsoluteSystemPathBuf),
 
+    #[error("unable to construct daemon paths: {0}")]
+    Path(#[from] PathError),
+
     #[error("failed to determine package manager: {0}")]
     PackageManager(#[from] turborepo_repository::package_manager::Error),
+
+    #[error("failed to setup file watching: {0}")]
+    WatcherSetup(#[from] turborepo_filewatch::WatchError),
 
     #[error("`tail` is not installed. Please install it to use this feature.")]
     TailNotInstalled,

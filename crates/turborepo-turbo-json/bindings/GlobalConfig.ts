@@ -43,7 +43,7 @@ passThroughEnv?: Array<string>,
  */
 ui?: UI, 
 /**
- * Disable check for `packageManager` in root `package.json`.
+ * Disable package manager declaration checks in root `package.json`.
  */
 dangerouslyDisablePackageManagerCheck?: boolean, 
 /**

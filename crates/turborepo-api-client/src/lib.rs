@@ -7,18 +7,17 @@
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
 
-use std::{backtrace::Backtrace, env, future::Future, sync::LazyLock, time::Duration};
+use std::{backtrace::Backtrace, env, future::Future, time::Duration};
 #[cfg(feature = "rustls-tls")]
 use std::{io::Cursor, path::Path};
 
-use regex::Regex;
 pub use reqwest::Response;
 use reqwest::{Body, Method, RequestBuilder, StatusCode};
 #[cfg(feature = "rustls-tls")]
 use rustls_pemfile::{self, Item};
 use serde::Deserialize;
 use turborepo_ci::{Vendor, is_ci};
-pub use turborepo_types::SecretString;
+use turborepo_types::SecretString;
 use turborepo_vercel_api::{
     APIError, CachingStatus, CachingStatusResponse, PreflightResponse, Team, TeamsResponse, User,
     UserResponse, VerificationResponse, VerifiedSsoUser,
@@ -33,13 +32,30 @@ mod error;
 mod retry;
 mod shared_http_client;
 pub mod telemetry;
+#[cfg(feature = "rustls-tls")]
+mod tls;
 
 pub use bytes::Bytes;
 pub use shared_http_client::SharedHttpClient;
 pub use tokio_stream::Stream;
 
-static AUTHORIZATION_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)(?:^|,) *authorization *(?:,|$)").unwrap());
+fn allows_authorization_header(allowed_headers: &str) -> bool {
+    allowed_headers == "*"
+        || allowed_headers
+            .split(',')
+            .any(|header| header.trim().eq_ignore_ascii_case("authorization"))
+}
+
+fn response_error(response: Response, status: StatusCode) -> Error {
+    match response.error_for_status() {
+        Ok(response) => Error::UnknownStatus {
+            code: status.to_string(),
+            message: format!("request to {} returned unexpected status", response.url()),
+            backtrace: Backtrace::capture(),
+        },
+        Err(err) => err.into(),
+    }
+}
 
 pub trait Client {
     fn get_user(&self, token: &SecretString) -> impl Future<Output = Result<UserResponse>> + Send;
@@ -530,7 +546,7 @@ impl TokenClient for APIClient {
                     url: self.make_url(endpoint)?.to_string(),
                 })
             }
-            _ => Err(response.error_for_status().unwrap_err().into()),
+            _ => Err(response_error(response, status)),
         }
     }
 
@@ -589,7 +605,7 @@ impl TokenClient for APIClient {
                     url: self.make_url(endpoint)?.to_string(),
                 })
             }
-            _ => Err(response.error_for_status().unwrap_err().into()),
+            _ => Err(response_error(response, status)),
         }
     }
 }
@@ -667,6 +683,12 @@ impl APIClient {
         connect_timeout: Option<Duration>,
         #[allow(unused_variables)] native_roots: bool,
     ) -> Result<reqwest::Client> {
+        // Make sure rustls can verify P-521 certificate chains before we build
+        // any client. ring (rustls' default provider) cannot, which breaks
+        // remote caches sitting behind P-521 issuers. See `tls.rs`.
+        #[cfg(feature = "rustls-tls")]
+        tls::ensure_crypto_provider();
+
         let build = |#[allow(unused_variables)] use_native: bool| {
             let mut builder = reqwest::Client::builder();
             #[cfg(feature = "rustls-tls")]
@@ -874,7 +896,7 @@ impl APIClient {
             .get("Access-Control-Allow-Headers")
             .map_or("", |h| h.to_str().unwrap_or(""));
 
-        let allow_auth = allowed_headers == "*" || AUTHORIZATION_REGEX.is_match(allowed_headers);
+        let allow_auth = allows_authorization_header(allowed_headers);
 
         Ok(PreflightResponse {
             location,

@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 #![cfg(feature = "walk")]
 
 use std::{collections::HashSet, path::PathBuf};

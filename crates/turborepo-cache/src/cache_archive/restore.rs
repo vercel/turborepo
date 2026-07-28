@@ -143,7 +143,9 @@ impl<'a> CacheReader<'a> {
             let processed_sourcename =
                 canonicalize_linkname(anchor, &processed_name, processed_name.as_path())?;
             // symlink must have a linkname
-            let linkname = entry.link_name()?.expect("symlink without linkname");
+            let linkname = entry
+                .link_name()?
+                .ok_or_else(|| CacheError::LinkTargetNotOnHeader(Backtrace::capture()))?;
 
             let processed_linkname = canonicalize_linkname(anchor, &processed_name, &linkname)?;
 
@@ -217,8 +219,17 @@ mod tests {
             path: &'static str,
             body: Vec<u8>,
         },
+        FileWithMode {
+            path: &'static str,
+            body: Vec<u8>,
+            mode: u32,
+        },
         Directory {
             path: &'static str,
+        },
+        DirectoryWithMode {
+            path: &'static str,
+            mode: u32,
         },
         Symlink {
             link_path: &'static str,
@@ -239,11 +250,25 @@ mod tests {
                         header.set_mode(0o644);
                         builder.append_data(&mut header, path, &body[..]).unwrap();
                     }
+                    RawTarEntry::FileWithMode { path, body, mode } => {
+                        let mut header = Header::new_gnu();
+                        header.set_size(body.len() as u64);
+                        header.set_entry_type(tar::EntryType::Regular);
+                        header.set_mode(*mode);
+                        builder.append_data(&mut header, path, &body[..]).unwrap();
+                    }
                     RawTarEntry::Directory { path } => {
                         let mut header = Header::new_gnu();
                         header.set_entry_type(tar::EntryType::Directory);
                         header.set_size(0);
                         header.set_mode(0o755);
+                        builder.append_data(&mut header, path, empty()).unwrap();
+                    }
+                    RawTarEntry::DirectoryWithMode { path, mode } => {
+                        let mut header = Header::new_gnu();
+                        header.set_entry_type(tar::EntryType::Directory);
+                        header.set_size(0);
+                        header.set_mode(*mode);
                         builder.append_data(&mut header, path, empty()).unwrap();
                     }
                     RawTarEntry::Symlink {
@@ -323,6 +348,22 @@ mod tests {
         // End-of-archive: two 512-byte blocks of zeros
         buf.write_all(&[0u8; 1024]).unwrap();
 
+        buf
+    }
+
+    fn generate_tar_with_symlink(link_path: &str, link_target: &str) -> Vec<u8> {
+        let mut buf = Vec::new();
+        {
+            let mut builder = tar::Builder::new(&mut buf);
+            let mut header = Header::new_gnu();
+            header.set_entry_type(tar::EntryType::Symlink);
+            header.set_size(0);
+            header.set_mode(0o777);
+            builder
+                .append_link(&mut header, link_path, link_target)
+                .unwrap();
+            builder.into_inner().unwrap();
+        }
         buf
     }
 
@@ -466,6 +507,162 @@ mod tests {
     }
 
     #[test]
+    fn restore_preserves_broken_symlink_that_stays_inside_anchor() -> Result<()> {
+        let tar_bytes = generate_tar_with_symlink("missing-link", "missing-target");
+
+        let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+        let output_dir = tempdir()?;
+        let output_dir_path = output_dir.path().to_string_lossy();
+        let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+        let (restored, _) = reader.restore(anchor, None)?;
+
+        assert_eq!(
+            restored,
+            into_anchored_system_path_vec(vec!["missing-link"])
+        );
+        assert_eq!(
+            fs::read_link(output_dir.path().join("missing-link"))?,
+            Path::new("missing-target")
+        );
+        assert!(!output_dir.path().join("missing-target").exists());
+
+        Ok(())
+    }
+
+    #[test]
+    fn restore_allows_archive_symlink_that_resolves_inside_anchor_via_parent() -> Result<()> {
+        let input_dir = tempdir()?;
+        let archive_path = generate_tar(
+            &input_dir,
+            &[
+                TarFile::Directory {
+                    path: AnchoredSystemPathBuf::from_raw("src/runtime").unwrap(),
+                },
+                TarFile::Directory {
+                    path: AnchoredSystemPathBuf::from_raw("dist").unwrap(),
+                },
+                TarFile::Symlink {
+                    link_path: AnchoredSystemPathBuf::from_raw("dist/runtime").unwrap(),
+                    link_target: AnchoredSystemPathBuf::from_raw("../src/runtime").unwrap(),
+                },
+            ],
+        )?;
+
+        let output_dir = tempdir()?;
+        let output_dir_path = output_dir.path().to_string_lossy();
+        let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+        let mut reader = CacheReader::open(&archive_path)?;
+        reader.restore(anchor, None)?;
+
+        let runtime = output_dir.path().join("dist/runtime");
+        assert!(runtime.symlink_metadata()?.is_symlink());
+        assert_eq!(fs::read_link(runtime)?, Path::new("../src/runtime"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn restore_rejects_archive_symlink_to_parent_directory_without_followup_entry() -> Result<()> {
+        let tar_bytes = generate_tar_with_symlink("escape", "..");
+
+        let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+        let output_dir = tempdir()?;
+        let output_dir_path = output_dir.path().to_string_lossy();
+        let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+        let result = reader.restore(anchor, None);
+
+        assert!(
+            result.is_err(),
+            "symlink target outside anchor should be rejected"
+        );
+        assert!(!output_dir.path().join("escape").exists());
+
+        Ok(())
+    }
+
+    #[test]
+    fn restore_rejects_archive_symlink_to_absolute_unix_path() -> Result<()> {
+        let outside = tempdir()?;
+        let outside_file = outside.path().join("target");
+        fs::write(&outside_file, b"outside")?;
+        let tar_bytes = generate_tar_with_symlink("escape", &outside_file.to_string_lossy());
+
+        let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+        let output_dir = tempdir()?;
+        let output_dir_path = output_dir.path().to_string_lossy();
+        let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+        let result = reader.restore(anchor, None);
+
+        assert!(
+            result.is_err(),
+            "absolute symlink target outside anchor should be rejected"
+        );
+        assert!(!output_dir.path().join("escape").exists());
+
+        Ok(())
+    }
+
+    #[test]
+    fn restore_rejects_archive_symlink_to_windows_absolute_path() -> Result<()> {
+        let tar_bytes = generate_tar_with_symlink("escape", "C:\\Users\\turbo\\outside");
+
+        let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+        let output_dir = tempdir()?;
+        let output_dir_path = output_dir.path().to_string_lossy();
+        let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+        let result = reader.restore(anchor, None);
+
+        assert!(
+            result.is_err(),
+            "Windows absolute symlink target should be rejected on every platform"
+        );
+        assert!(!output_dir.path().join("escape").exists());
+
+        Ok(())
+    }
+
+    #[test]
+    fn restore_regular_file_replaces_final_symlink_instead_of_following_it() -> Result<()> {
+        let input_dir = tempdir()?;
+        let archive_path = generate_tar(
+            &input_dir,
+            &[TarFile::File {
+                path: AnchoredSystemPathBuf::from_raw("dist/index.js").unwrap(),
+                body: b"safe output".to_vec(),
+            }],
+        )?;
+
+        let outside_dir = tempdir()?;
+        let outside_target = outside_dir.path().join("target.js");
+        fs::write(&outside_target, b"do not overwrite")?;
+        let outside_target = AbsoluteSystemPathBuf::try_from(outside_target.as_path())?;
+
+        let output_dir = tempdir()?;
+        let output_dir_path = output_dir.path().to_string_lossy();
+        let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+        anchor.join_component("dist").create_dir_all()?;
+        let restored_file = anchor.join_components(&["dist", "index.js"]);
+        restored_file.symlink_to_file(outside_target.as_str())?;
+
+        let mut cache_reader = CacheReader::open(&archive_path)?;
+        cache_reader.restore(anchor, None)?;
+
+        assert_eq!(fs::read(outside_target.as_path())?, b"do not overwrite");
+        assert!(
+            !restored_file.symlink_metadata()?.is_symlink(),
+            "final symlink should be replaced by a regular file"
+        );
+        assert_eq!(fs::read(restored_file.as_path())?, b"safe output");
+
+        Ok(())
+    }
+
+    #[test]
     fn test_name_traversal() -> Result<()> {
         let uncompressed_tar = include_bytes!("../../fixtures/name-traversal.tar");
         let compressed_tar = include_bytes!("../../fixtures/name-traversal.tar.zst");
@@ -483,6 +680,43 @@ mod tests {
                 "Invalid file path: path is malformed: ../escape"
             );
         }
+
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn restore_rejects_chained_symlink_escape() -> Result<()> {
+        let base_dir = tempdir()?;
+        let output_dir = base_dir.path().join("repo");
+        let outside_file = base_dir.path().join("pwned");
+        let tar = generate_raw_tar(&[
+            RawTarEntry::Directory { path: "sub" },
+            RawTarEntry::Symlink {
+                link_path: "sub/up",
+                link_target: "..",
+            },
+            RawTarEntry::Symlink {
+                link_path: "escape",
+                link_target: "sub/up/..",
+            },
+            RawTarEntry::File {
+                path: "escape/pwned",
+                body: b"should not escape".to_vec(),
+            },
+        ]);
+
+        let output_dir_path = output_dir.to_string_lossy();
+        let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+        let mut reader = CacheReader::from_reader(&tar[..], false)?;
+
+        let result = reader.restore(anchor, None);
+
+        assert!(result.is_err());
+        assert!(
+            !outside_file.exists(),
+            "chained symlink restore must not write outside anchor"
+        );
 
         Ok(())
     }
@@ -1659,6 +1893,96 @@ mod tests {
                 !parent.join("payload").exists(),
                 "TOCTOU attack should not allow writing outside anchor"
             );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_directory_restore_does_not_chmod_through_symlink() -> Result<()> {
+            use std::os::unix::fs::PermissionsExt;
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+            let target = anchor.join_component("target");
+            target.create_dir_all()?;
+            fs::set_permissions(target.as_path(), fs::Permissions::from_mode(0o700))?;
+
+            let tar = generate_raw_tar(&[
+                RawTarEntry::Symlink {
+                    link_path: "link",
+                    link_target: "target",
+                },
+                RawTarEntry::Directory { path: "link" },
+            ]);
+
+            let mut reader = CacheReader::from_reader(&tar[..], false)?;
+            reader.restore(anchor, None)?;
+
+            let mode = target.symlink_metadata()?.permissions().mode() & 0o777;
+            assert_eq!(
+                mode, 0o700,
+                "directory restore must not chmod symlink target"
+            );
+            assert!(
+                anchor
+                    .join_component("link")
+                    .symlink_metadata()?
+                    .is_symlink()
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_restore_regular_file_strips_special_mode_bits() -> Result<()> {
+            use std::os::unix::fs::PermissionsExt;
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+            let tar = generate_raw_tar(&[RawTarEntry::FileWithMode {
+                path: "helper",
+                body: b"payload".to_vec(),
+                mode: 0o7755,
+            }]);
+
+            let mut reader = CacheReader::from_reader(&tar[..], false)?;
+            reader.restore(anchor, None)?;
+
+            let mode = anchor
+                .join_component("helper")
+                .symlink_metadata()?
+                .permissions()
+                .mode()
+                & 0o7777;
+            assert_eq!(mode & 0o7000, 0);
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_restore_directory_strips_special_mode_bits() -> Result<()> {
+            use std::os::unix::fs::PermissionsExt;
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+            let tar = generate_raw_tar(&[RawTarEntry::DirectoryWithMode {
+                path: "dist",
+                mode: 0o7755,
+            }]);
+
+            let mut reader = CacheReader::from_reader(&tar[..], false)?;
+            reader.restore(anchor, None)?;
+
+            let mode = anchor
+                .join_component("dist")
+                .symlink_metadata()?
+                .permissions()
+                .mode()
+                & 0o7777;
+            assert_eq!(mode & 0o7000, 0);
 
             Ok(())
         }
