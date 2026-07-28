@@ -354,10 +354,7 @@ pub trait Toolchain: Send + Sync {
         &self,
         context: &crate::package_graph::PackageTaskContext<'_>,
         task: &str,
-    ) -> Option<String> {
-        let _ = (context, task);
-        None
-    }
+    ) -> Option<String>;
 
     /// Whether the package itself *authors* a definition for `task` — a
     /// package.json script, written by the package's owner. Distinct from
@@ -406,10 +403,7 @@ pub trait Toolchain: Send + Sync {
         &self,
         context: &crate::package_graph::PackageTaskContext<'_>,
         task: &str,
-    ) -> bool {
-        let _ = (context, task);
-        false
-    }
+    ) -> bool;
 
     /// Defaults this toolchain supplies for `task` when turbo.json does not
     /// configure the corresponding field. Explicit user configuration always
@@ -503,18 +497,13 @@ pub trait Toolchain: Send + Sync {
     /// How filesystem events relate to this toolchain in watch mode:
     /// workspace-definition files whose change requires rediscovery, and
     /// build-byproduct directories whose events must be ignored.
-    fn watch_spec(&self) -> WatchSpec {
-        WatchSpec::default()
-    }
+    fn watch_spec(&self) -> WatchSpec;
 
     /// What `turbo prune` must carry for this toolchain so the pruned
     /// repository is self-contained, given the names of this toolchain's
     /// packages already selected for the pruned output. `None` means the
     /// toolchain contributes nothing beyond the packages themselves.
-    fn prune_plan(&self, kept_packages: &[String]) -> Result<Option<PrunePlan>, Error> {
-        let _ = kept_packages;
-        Ok(None)
-    }
+    fn prune_plan(&self, kept_packages: &[String]) -> Result<Option<PrunePlan>, Error>;
 
     /// Called after the pruned output is fully written, with its root
     /// directory. Toolchains may polish their own files in place (e.g.
@@ -1411,6 +1400,30 @@ mod tests {
                 _pass_through_args: Option<&[String]>,
                 _override_command: Option<&[String]>,
             ) -> Result<Option<TaskCommand>, Error> {
+                Ok(None)
+            }
+
+            fn task_display_command(
+                &self,
+                _context: &crate::package_graph::PackageTaskContext<'_>,
+                _task: &str,
+            ) -> Option<String> {
+                None
+            }
+
+            fn defines_task(
+                &self,
+                _context: &crate::package_graph::PackageTaskContext<'_>,
+                _task: &str,
+            ) -> bool {
+                false
+            }
+
+            fn watch_spec(&self) -> WatchSpec {
+                WatchSpec::default()
+            }
+
+            fn prune_plan(&self, _kept_packages: &[String]) -> Result<Option<PrunePlan>, Error> {
                 Ok(None)
             }
         }

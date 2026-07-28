@@ -1341,6 +1341,33 @@ mod test {
         ) -> Result<Option<crate::toolchain::TaskCommand>, crate::toolchain::Error> {
             Ok(None)
         }
+
+        fn task_display_command(
+            &self,
+            _context: &crate::package_graph::PackageTaskContext<'_>,
+            _task: &str,
+        ) -> Option<String> {
+            None
+        }
+
+        fn defines_task(
+            &self,
+            _context: &crate::package_graph::PackageTaskContext<'_>,
+            _task: &str,
+        ) -> bool {
+            false
+        }
+
+        fn watch_spec(&self) -> crate::toolchain::WatchSpec {
+            crate::toolchain::WatchSpec::default()
+        }
+
+        fn prune_plan(
+            &self,
+            _kept_packages: &[String],
+        ) -> Result<Option<crate::toolchain::PrunePlan>, crate::toolchain::Error> {
+            Ok(None)
+        }
     }
 
     struct PackageWithoutRootToolchain {
@@ -1373,6 +1400,33 @@ mod test {
             _pass_through_args: Option<&[String]>,
             _override_command: Option<&[String]>,
         ) -> Result<Option<crate::toolchain::TaskCommand>, crate::toolchain::Error> {
+            Ok(None)
+        }
+
+        fn task_display_command(
+            &self,
+            _context: &crate::package_graph::PackageTaskContext<'_>,
+            _task: &str,
+        ) -> Option<String> {
+            None
+        }
+
+        fn defines_task(
+            &self,
+            _context: &crate::package_graph::PackageTaskContext<'_>,
+            _task: &str,
+        ) -> bool {
+            false
+        }
+
+        fn watch_spec(&self) -> crate::toolchain::WatchSpec {
+            crate::toolchain::WatchSpec::default()
+        }
+
+        fn prune_plan(
+            &self,
+            _kept_packages: &[String],
+        ) -> Result<Option<crate::toolchain::PrunePlan>, crate::toolchain::Error> {
             Ok(None)
         }
     }

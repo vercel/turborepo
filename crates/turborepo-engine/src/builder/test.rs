@@ -155,6 +155,36 @@ impl Toolchain for AggregateToolchain {
     > {
         Ok(None)
     }
+
+    fn task_display_command(
+        &self,
+        _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
+        _task: &str,
+    ) -> Option<String> {
+        None
+    }
+
+    fn defines_task(
+        &self,
+        _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
+        _task: &str,
+    ) -> bool {
+        false
+    }
+
+    fn watch_spec(&self) -> turborepo_repository::toolchain::WatchSpec {
+        turborepo_repository::toolchain::WatchSpec::default()
+    }
+
+    fn prune_plan(
+        &self,
+        _kept_packages: &[String],
+    ) -> Result<
+        Option<turborepo_repository::toolchain::PrunePlan>,
+        turborepo_repository::toolchain::Error,
+    > {
+        Ok(None)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -224,12 +254,34 @@ impl Toolchain for StubIOToolchain {
         Ok(None)
     }
 
+    fn task_display_command(
+        &self,
+        _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
+        _task: &str,
+    ) -> Option<String> {
+        None
+    }
+
     fn defines_task(
         &self,
         _package: &turborepo_repository::package_graph::PackageTaskContext<'_>,
         task: &str,
     ) -> bool {
         matches!(task, "build" | "test")
+    }
+
+    fn watch_spec(&self) -> turborepo_repository::toolchain::WatchSpec {
+        turborepo_repository::toolchain::WatchSpec::default()
+    }
+
+    fn prune_plan(
+        &self,
+        _kept_packages: &[String],
+    ) -> Result<
+        Option<turborepo_repository::toolchain::PrunePlan>,
+        turborepo_repository::toolchain::Error,
+    > {
+        Ok(None)
     }
 
     fn derives_task_io(
