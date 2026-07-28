@@ -18,7 +18,17 @@
     },
     "test": {
       "dependsOn": ["build"],
-      "command": ["node", "--import", "tsx", "--test", "__tests__/*.test.ts"]
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "__tests__/affected-packages.test.ts",
+        "__tests__/exports.test.ts",
+        "__tests__/find-packages.test.ts",
+        "__tests__/lockfile-packages.test.ts",
+        "__tests__/workspace.test.ts"
+      ]
     },
     "package": {
       "cache": false,

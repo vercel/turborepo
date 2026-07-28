@@ -6,7 +6,22 @@
       "outputs": ["dist"]
     },
     "test": {
-      "command": ["node", "--import", "tsx", "--test", "src/*.test.ts"]
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "src/e2e.test.ts",
+        "src/native.test.ts",
+        "src/npm.test.ts",
+        "src/operations.test.ts",
+        "src/packager.test.ts",
+        "src/publish.test.ts",
+        "src/stage.test.ts",
+        "src/tag.test.ts",
+        "src/version-command.test.ts",
+        "src/version.test.ts"
+      ]
     },
     "lint:prettier": {
       "command": [

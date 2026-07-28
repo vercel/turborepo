@@ -3,7 +3,15 @@
   "extends": ["//"],
   "tasks": {
     "test": {
-      "command": ["node", "--import", "tsx", "--test", "src/*.test.ts"]
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "src/client.test.ts",
+        "src/config.test.ts",
+        "src/utils.test.ts"
+      ]
     },
     "lint:prettier": {
       "command": [
