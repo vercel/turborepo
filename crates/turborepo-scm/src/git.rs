@@ -498,7 +498,7 @@ impl GitRepo {
                     eprintln!("Resolved base ref from GitHub Actions event: {github_base_ref}");
                     return Ok(github_base_ref);
                 }
-                Err(local_error) if self.resolve_remote_base_refs => {
+                Err(local_error) if self.github_actions_remote_base_ref_fallback => {
                     let remote_ref = format!("origin/{github_base_ref}");
                     match self
                         .execute_git_command(&["rev-parse", "--end-of-options", &remote_ref], "")
@@ -523,9 +523,7 @@ impl GitRepo {
             return Err(Error::UnableToResolveRef);
         }
 
-        default_base_ref(self.resolve_remote_base_refs, |branch| {
-            self.execute_git_command(&["rev-parse", branch], "").is_ok()
-        })
+        default_base_ref(|branch| self.execute_git_command(&["rev-parse", branch], "").is_ok())
     }
 
     fn changed_files(
@@ -646,18 +644,13 @@ impl GitRepo {
     }
 }
 
-fn default_base_ref(
-    resolve_remote_base_refs: bool,
-    mut branch_exists: impl FnMut(&str) -> bool,
-) -> Result<String, Error> {
-    for branch in ["main", "master"] {
-        if branch_exists(branch) {
-            return Ok(branch.to_string());
-        }
-        let remote_ref = format!("origin/{branch}");
-        if resolve_remote_base_refs && branch_exists(&remote_ref) {
-            return Ok(remote_ref);
-        }
+fn default_base_ref(mut branch_exists: impl FnMut(&str) -> bool) -> Result<String, Error> {
+    if branch_exists("main") {
+        return Ok("main".to_string());
+    }
+
+    if branch_exists("master") {
+        return Ok("master".to_string());
     }
 
     Err(Error::UnableToResolveRef)
@@ -1271,19 +1264,17 @@ mod tests {
 
     #[test]
     fn test_default_base_ref_resolution() {
-        for (resolve_remote_base_refs, branches, expected) in [
-            (false, vec!["main"], Some("main")),
-            (false, vec!["master"], Some("master")),
-            (false, vec!["origin/main"], None),
-            (true, vec!["origin/main"], Some("origin/main")),
-            (true, vec!["origin/master"], Some("origin/master")),
-            (true, vec!["master", "origin/main"], Some("origin/main")),
-            (true, vec!["main", "origin/main"], Some("main")),
-            (true, vec!["ziltoid"], None),
+        for (branches, expected) in [
+            (vec!["main"], Some("main")),
+            (vec!["master"], Some("master")),
+            (vec!["origin/main"], None),
+            (vec!["ziltoid"], None),
+            (vec!["ziltoid", "main"], Some("main")),
+            (vec!["ziltoid", "master"], Some("master")),
+            (vec!["ziltoid", "master", "main"], Some("main")),
         ] {
             let branches = HashSet::<&str>::from_iter(branches);
-            let actual =
-                default_base_ref(resolve_remote_base_refs, |branch| branches.contains(branch)).ok();
+            let actual = default_base_ref(|branch| branches.contains(branch)).ok();
 
             assert_eq!(actual.as_deref(), expected);
         }
@@ -1315,8 +1306,11 @@ mod tests {
             git.resolve_base(None, github_env()),
             Err(Error::UnableToResolveRef)
         );
-
-        git.resolve_remote_base_refs = true;
+        git.github_actions_remote_base_ref_fallback = true;
+        assert_matches!(
+            git.resolve_base(None, CIEnv::none()),
+            Err(Error::UnableToResolveRef)
+        );
         assert_eq!(
             git.resolve_base(None, github_env())?,
             "origin/main".to_string()
@@ -1334,7 +1328,7 @@ mod tests {
         commit_file(&repo_path, Path::new("todo.txt"), None);
 
         let mut git = GitRepo::find(&root).unwrap();
-        git.resolve_remote_base_refs = true;
+        git.github_actions_remote_base_ref_fallback = true;
         let env = CIEnv {
             is_github_actions: true,
             github_base_ref: Ok("missing".to_string()),
@@ -2432,7 +2426,7 @@ mod tests {
             root: root.to_owned(),
             bin,
             attrs: std::sync::OnceLock::new(),
-            resolve_remote_base_refs: false,
+            github_actions_remote_base_ref_fallback: false,
             slowest_files: None,
         }
     }

@@ -783,11 +783,11 @@ mod tests {
     }
 
     #[test]
-    fn test_deserialize_future_flags_resolve_remote_base_refs() {
+    fn test_deserialize_future_flags_github_actions_remote_base_ref_fallback() {
         let json = r#"{
             "tasks": {},
             "futureFlags": {
-                "resolveRemoteBaseRefs": true
+                "githubActionsRemoteBaseRefFallback": true
             }
         }"#;
 
@@ -804,11 +804,15 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .as_inner()
-                .resolve_remote_base_refs
+                .github_actions_remote_base_ref_fallback
         );
 
         let turbo_json = TurboJson::try_from(raw_turbo_json).unwrap();
-        assert!(turbo_json.future_flags.resolve_remote_base_refs);
+        assert!(
+            turbo_json
+                .future_flags
+                .github_actions_remote_base_ref_fallback
+        );
     }
 
     #[test]

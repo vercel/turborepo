@@ -330,8 +330,8 @@
           "default": false,
           "type": "boolean"
         },
-        "resolveRemoteBaseRefs": {
-          "description": "Fall back to `origin/<branch>` when an inferred base branch is not available as a local ref. This supports detached checkouts in CI where only remote-tracking refs are present.",
+        "githubActionsRemoteBaseRefFallback": {
+          "description": "When GitHub Actions reports a base branch that is not available as a local ref, fall back to `origin/<branch>`. This supports detached checkouts where only remote-tracking refs are present.",
           "default": false,
           "type": "boolean"
         },

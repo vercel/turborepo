@@ -769,13 +769,13 @@ export interface FutureFlags {
    */
   affectedUsingTaskInputs?: boolean;
   /**
-   * Fall back to `origin/<branch>` when an inferred base branch is not
-   * available as a local ref. This supports detached checkouts in CI where
-   * only remote-tracking refs are present.
+   * When GitHub Actions reports a base branch that is not available as a
+   * local ref, fall back to `origin/<branch>`. This supports detached
+   * checkouts where only remote-tracking refs are present.
    *
    * @defaultValue `false`
    */
-  resolveRemoteBaseRefs?: boolean;
+  githubActionsRemoteBaseRefFallback?: boolean;
   /**
    * Use task-level `inputs` globs to determine which tasks to re-run when
    * files change in `turbo watch`. When enabled, only tasks whose declared

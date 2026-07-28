@@ -362,23 +362,21 @@ In this example, if only `README.md` changed in a package, `build` would not run
   selected, regardless of individual task `inputs`.
 </Callout>
 
-#### `resolveRemoteBaseRefs`
+#### `githubActionsRemoteBaseRefFallback`
 
 Default: `false`
 
-Fall back to `origin/<branch>` when an inferred base branch is not available as a local ref. This is useful in CI environments that use detached checkouts and only create remote-tracking refs.
+When GitHub Actions reports a pull request's base branch but that branch is not available as a local ref, fall back to `origin/<branch>`. This supports detached checkouts created by `actions/checkout`, where the base branch may only exist as a remote-tracking ref.
 
-Local refs continue to take precedence. This flag only affects inferred base refs, including the base branch reported by GitHub Actions and the default `main` or `master` branch. Explicit refs provided through `TURBO_SCM_BASE` are used unchanged.
+Local refs continue to take precedence. This flag only affects base refs inferred from GitHub Actions. Explicit refs provided through `TURBO_SCM_BASE` and default `main` or `master` resolution are unchanged.
 
 ```jsonc title="./turbo.json"
 {
   "futureFlags": {
-    "resolveRemoteBaseRefs": true,
+    "githubActionsRemoteBaseRefFallback": true,
   },
 }
 ```
-
-For example, when GitHub Actions reports `main` as the pull request base but the checkout only contains `origin/main`, Turborepo will use `origin/main` for `--affected` comparisons.
 
 #### `watchUsingTaskInputs`
 

@@ -231,7 +231,7 @@ pub struct GitRepo {
     root: AbsoluteSystemPathBuf,
     bin: AbsoluteSystemPathBuf,
     attrs: OnceLock<Option<crlf::GitAttrs>>,
-    resolve_remote_base_refs: bool,
+    github_actions_remote_base_ref_fallback: bool,
     /// Optional recorder for the slowest-to-hash files. Set by long-running
     /// consumers (the file watcher) so they can diagnose a stalled startup.
     slowest_files: Option<std::sync::Arc<SlowestFiles>>,
@@ -251,7 +251,7 @@ impl Clone for GitRepo {
             root: self.root.clone(),
             bin: self.bin.clone(),
             attrs: OnceLock::new(),
-            resolve_remote_base_refs: self.resolve_remote_base_refs,
+            github_actions_remote_base_ref_fallback: self.github_actions_remote_base_ref_fallback,
             slowest_files: self.slowest_files.clone(),
         }
     }
@@ -286,7 +286,7 @@ impl GitRepo {
             root,
             bin,
             attrs: OnceLock::new(),
-            resolve_remote_base_refs: false,
+            github_actions_remote_base_ref_fallback: false,
             slowest_files: None,
         })
     }
@@ -358,7 +358,7 @@ impl SCM {
                 root: git_root,
                 bin,
                 attrs: OnceLock::new(),
-                resolve_remote_base_refs: false,
+                github_actions_remote_base_ref_fallback: false,
                 slowest_files: None,
             }),
             Err(e) => {
@@ -371,9 +371,9 @@ impl SCM {
         }
     }
 
-    pub fn with_remote_base_ref_fallback(mut self, enabled: bool) -> Self {
+    pub fn with_github_actions_remote_base_ref_fallback(mut self, enabled: bool) -> Self {
         if let SCM::Git(git) = &mut self {
-            git.resolve_remote_base_refs = enabled;
+            git.github_actions_remote_base_ref_fallback = enabled;
         }
         self
     }

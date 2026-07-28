@@ -479,13 +479,18 @@ impl RunBuilder {
         let repo_index_task = {
             let repo_root = self.repo_root.clone();
             let git_root = self.opts.git_root.clone();
-            let resolve_remote_base_refs = self.opts.future_flags.resolve_remote_base_refs;
+            let github_actions_remote_base_ref_fallback = self
+                .opts
+                .future_flags
+                .github_actions_remote_base_ref_fallback;
             tokio::task::spawn_blocking(move || {
                 let scm = match git_root {
                     Some(root) => SCM::new_with_git_root(&repo_root, root),
                     None => SCM::new(&repo_root),
                 }
-                .with_remote_base_ref_fallback(resolve_remote_base_refs);
+                .with_github_actions_remote_base_ref_fallback(
+                    github_actions_remote_base_ref_fallback,
+                );
                 // The tracked half of the repo index only needs `.git/index`.
                 let tracked_index = {
                     let _span = tracing::info_span!("build_tracked_repo_index_gix").entered();
