@@ -516,27 +516,33 @@ impl Run {
     // Used to print a list of potential tasks to run. Obeys the `--filter` flag
     pub fn get_potential_tasks(&self) -> Result<BTreeMap<String, Vec<String>>, Error> {
         let mut tasks = BTreeMap::new();
-        for (name, info) in self.pkg_dep_graph.packages() {
+        for context in self.pkg_dep_graph.package_task_contexts() {
+            let name = context.package();
             if !self.filtered_pkgs.contains(name) {
                 continue;
             }
-            for task_name in info.package_json.scripts.keys() {
+            let package_info = context.package_info();
+            if context.requires_compatibility_payload() && package_info.is_none() {
+                return Err(Error::MissingPackagePayload(name.clone()));
+            }
+            for task_name in package_info
+                .into_iter()
+                .flat_map(|info| info.package_json.scripts.keys())
+            {
                 tasks
                     .entry(task_name.clone())
                     .or_insert_with(Vec::new)
                     .push(name.to_string())
             }
-            if let Some(context) = self.pkg_dep_graph.package_task_context(name) {
-                if let Some(toolchain) = context
-                    .toolchain()
-                    .and_then(|id| self.pkg_dep_graph.toolchains().get(id))
-                {
-                    for task_name in toolchain.registered_tasks(&context) {
-                        tasks
-                            .entry(task_name)
-                            .or_insert_with(Vec::new)
-                            .push(name.to_string());
-                    }
+            if let Some(toolchain) = context
+                .toolchain()
+                .and_then(|id| self.pkg_dep_graph.toolchains().get(id))
+            {
+                for task_name in toolchain.registered_tasks(&context) {
+                    tasks
+                        .entry(task_name)
+                        .or_insert_with(Vec::new)
+                        .push(name.to_string());
                 }
             }
         }
@@ -1219,8 +1225,9 @@ impl Run {
                     s.spawn(|_| {
                         let _span =
                             tracing::info_span!("compute_external_deps_hashes_task").entered();
-                        external_deps_hashes =
-                            Some(compute_external_deps_hashes(self.pkg_dep_graph.packages()));
+                        external_deps_hashes = Some(compute_external_deps_hashes(
+                            self.pkg_dep_graph.package_task_contexts(),
+                        ));
                     });
                 }
             });
@@ -1235,6 +1242,7 @@ impl Run {
             internal_deps_result.ok_or(Error::InternalDepsTaskIncomplete)??;
         let global_file_inputs =
             global_file_result.ok_or(Error::GlobalFileHashTaskIncomplete)??;
+        let external_deps_hashes = external_deps_hashes.transpose()?;
 
         let root_external_dependencies_hash = is_monorepo.then(|| {
             root_workspace
@@ -1317,7 +1325,7 @@ impl Run {
             external_deps_hashes,
             compile_cache_endpoint,
         )
-        .await;
+        .await?;
 
         if self.opts.run_opts.dry_run.is_some() {
             visitor.dry_run();

@@ -741,14 +741,21 @@ impl RunBuilder {
             (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
             {
                 let package_scripts = pkg_dep_graph
-                    .packages()
-                    .map(|(package, info)| {
-                        (
-                            package.clone(),
-                            info.package_json.scripts.keys().cloned().collect(),
-                        )
+                    .package_task_contexts()
+                    .map(|context| {
+                        let package = context.package().clone();
+                        let info = context.package_info();
+                        if context.requires_compatibility_payload() && info.is_none() {
+                            return Err(Error::MissingPackagePayload(package));
+                        }
+                        Ok((
+                            package,
+                            info.into_iter()
+                                .flat_map(|info| info.package_json.scripts.keys().cloned())
+                                .collect(),
+                        ))
                     })
-                    .collect();
+                    .collect::<Result<_, Error>>()?;
                 UnifiedTurboJsonLoader::workspace_no_turbo_json(
                     reader,
                     pkg_dep_graph.package_scope_directories(),
@@ -1284,19 +1291,14 @@ impl RunBuilder {
                 continue;
             }
 
-            let has_command = pkg_dep_graph
-                .packages()
-                .filter_map(|(name, _)| pkg_dep_graph.package_task_context(name))
-                .any(|context| {
-                    context
-                        .toolchain()
-                        .and_then(|id| pkg_dep_graph.toolchains().get(id))
-                        .is_some_and(|toolchain| toolchain.defines_task(&context, task.task()))
-                })
-                || engine.task_ids().any(|task_id| {
-                    task_id.task() == task.task()
-                        && task_has_command(engine, pkg_dep_graph, task_id)
-                });
+            let has_command = pkg_dep_graph.package_task_contexts().any(|context| {
+                context
+                    .toolchain()
+                    .and_then(|id| pkg_dep_graph.toolchains().get(id))
+                    .is_some_and(|toolchain| toolchain.defines_task(&context, task.task()))
+            }) || engine.task_ids().any(|task_id| {
+                task_id.task() == task.task() && task_has_command(engine, pkg_dep_graph, task_id)
+            });
 
             for package in candidate_packages {
                 let task_id = TaskId::new(package.as_ref(), task.task()).into_owned();

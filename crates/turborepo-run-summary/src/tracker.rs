@@ -491,9 +491,9 @@ impl<'a> RunSummary<'a> {
                     continue;
                 }
                 let dir = pkg_dep_graph
-                    .package_info(pkg)
+                    .package_task_context(pkg)
                     .ok_or_else(|| Error::MissingWorkspace((*pkg).to_owned()))?
-                    .package_path();
+                    .directory();
 
                 writeln!(tab_writer, "{pkg}\t{dir}")?;
             }

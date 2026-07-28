@@ -231,7 +231,7 @@ impl<'a> Visitor<'a> {
         micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
         external_deps_hashes: Option<HashMap<String, String>>,
         compile_cache_endpoint: Option<CompileCacheEndpoint>,
-    ) -> Self {
+    ) -> Result<Self, Error> {
         let (task_hasher, color_cache, grouping_layer) = {
             let _span = tracing::info_span!("visitor_new").entered();
             let mut task_hasher = TaskHasher::new(
@@ -250,8 +250,9 @@ impl<'a> Visitor<'a> {
             match external_deps_hashes {
                 Some(cache) => task_hasher.set_external_deps_hash_cache(cache),
                 None => crate::rayon_compat::block_in_place(|| {
-                    task_hasher.precompute_external_deps_hashes(package_graph.packages());
-                }),
+                    task_hasher
+                        .precompute_external_deps_hashes(package_graph.package_task_contexts())
+                })?,
             }
 
             let color_cache = ColorSelector::default();
@@ -278,7 +279,7 @@ impl<'a> Visitor<'a> {
             }
         }
 
-        Self {
+        Ok(Self {
             color_cache,
             dry: false,
             global_env_mode: run_opts.env_mode,
@@ -299,7 +300,7 @@ impl<'a> Visitor<'a> {
             warnings: Default::default(),
             micro_frontends_configs,
             compile_cache_endpoint,
-        }
+        })
     }
 
     /// Pre-compute task hashes and execution environments for all tasks in

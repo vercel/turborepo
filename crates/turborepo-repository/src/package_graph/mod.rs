@@ -600,6 +600,25 @@ impl PackageGraph {
         })
     }
 
+    /// Iterates every authoritative Turbo task namespace.
+    ///
+    /// The root namespace is always first and present exactly once, including
+    /// in repositories without a root JavaScript scope. All other identities
+    /// follow authoritative repository observation order; compatibility
+    /// payload entries cannot add or remove namespaces from this iterator.
+    pub fn package_task_contexts(&self) -> impl Iterator<Item = PackageTaskContext<'_>> + '_ {
+        std::iter::once(PackageName::Root)
+            .chain(
+                self.knowledge
+                    .scopes()
+                    .map(|scope| PackageName::Other(scope.identity().to_owned())),
+            )
+            .map(|package| match self.package_task_context(&package) {
+                Some(context) => context,
+                None => unreachable!("authoritative package name must resolve to a task context"),
+            })
+    }
+
     /// Test hook for exercising knowledge-backed consumers without a
     /// compatibility projection.
     #[cfg(any(test, feature = "test-util"))]
@@ -630,6 +649,19 @@ impl PackageGraph {
             return false;
         };
         package_info.package_json.name = name.map(turborepo_errors::Spanned::new);
+        true
+    }
+
+    #[cfg(any(test, feature = "test-util"))]
+    pub fn set_compatibility_toolchain_for_test(
+        &mut self,
+        package: &PackageName,
+        toolchain: crate::toolchain::ToolchainId,
+    ) -> bool {
+        let Some(package_info) = self.packages.get_mut(package) else {
+            return false;
+        };
+        package_info.toolchain = toolchain;
         true
     }
 
@@ -2581,6 +2613,51 @@ version = "0.1.0"
             pkg_graph
                 .remove_package_info_for_test(&PackageName::Root)
                 .is_some()
+        );
+        assert!(pkg_graph.remove_package_info_for_test(&app_name).is_some());
+        let contexts = pkg_graph.package_task_contexts().collect::<Vec<_>>();
+        assert_eq!(
+            contexts.first().map(|context| context.package()),
+            Some(&PackageName::Root)
+        );
+        assert_eq!(
+            contexts
+                .iter()
+                .filter(|context| context.package() == &PackageName::Root)
+                .count(),
+            1
+        );
+        assert!(contexts.iter().any(|context| {
+            context.package() == &app_name && context.kind() == PackageTaskContextKind::Package
+        }));
+        assert!(contexts.iter().any(|context| {
+            context.package() == &PackageName::from("acme")
+                && context.kind() == PackageTaskContextKind::Aggregate
+        }));
+        for enumerated in &contexts {
+            let point = pkg_graph
+                .package_task_context(enumerated.package())
+                .expect("enumerated authoritative name must support point lookup");
+            assert_eq!(enumerated.package(), point.package());
+            assert_eq!(enumerated.repository_root(), point.repository_root());
+            assert_eq!(enumerated.directory(), point.directory());
+            assert_eq!(enumerated.kind(), point.kind());
+            assert_eq!(enumerated.toolchain(), point.toolchain());
+            assert_eq!(
+                enumerated.requires_compatibility_payload(),
+                point.requires_compatibility_payload()
+            );
+            assert_eq!(
+                enumerated.package_info().map(std::ptr::from_ref),
+                point.package_info().map(std::ptr::from_ref)
+            );
+        }
+        assert!(
+            contexts
+                .iter()
+                .find(|context| context.package() == &app_name)
+                .is_some_and(|context| context.package_info().is_none()),
+            "removing compatibility payload must not remove the package namespace"
         );
         let root_without_payload = pkg_graph
             .package_task_context(&PackageName::Root)

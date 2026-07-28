@@ -30,9 +30,7 @@ use turborepo_env::{
 };
 use turborepo_frameworks::{Framework, Slug as FrameworkSlug, infer_framework};
 use turborepo_hash::{FileHashes, LockFilePackagesRef, TaskHashable, TurboHash};
-use turborepo_repository::package_graph::{
-    PackageGraph, PackageInfo, PackageName, PackageTaskContext,
-};
+use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageTaskContext};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{generic::GenericEventBuilder, task::PackageTaskEventBuilder};
@@ -296,15 +294,22 @@ impl PackageInputsHashes {
 /// built without a closure hasher.
 #[tracing::instrument(skip_all)]
 pub fn compute_external_deps_hashes<'b>(
-    workspaces: impl Iterator<Item = (&'b PackageName, &'b PackageInfo)>,
-) -> HashMap<String, String> {
+    workspaces: impl Iterator<Item = PackageTaskContext<'b>>,
+) -> Result<HashMap<String, String>, Error> {
     workspaces
-        .map(|(name, info)| {
+        .map(|context| {
+            let info = context.package_info();
+            if context.requires_compatibility_payload() && info.is_none() {
+                return Err(Error::MissingPackagePayload(context.package().clone()));
+            }
             let hash = info
-                .external_deps_hash
-                .clone()
-                .unwrap_or_else(|| get_external_deps_hash(&info.transitive_dependencies));
-            (name.as_str().to_owned(), hash)
+                .map(|info| {
+                    info.external_deps_hash
+                        .clone()
+                        .unwrap_or_else(|| get_external_deps_hash(&info.transitive_dependencies))
+                })
+                .unwrap_or_default();
+            Ok((context.package().as_str().to_owned(), hash))
         })
         .collect()
 }
@@ -406,12 +411,13 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
     #[tracing::instrument(skip_all)]
     pub fn precompute_external_deps_hashes<'b>(
         &mut self,
-        workspaces: impl Iterator<Item = (&'b PackageName, &'b PackageInfo)>,
-    ) {
+        workspaces: impl Iterator<Item = PackageTaskContext<'b>>,
+    ) -> Result<(), Error> {
         if self.run_opts.single_package() {
-            return;
+            return Ok(());
         }
-        self.external_deps_hash_cache = compute_external_deps_hashes(workspaces);
+        self.external_deps_hash_cache = compute_external_deps_hashes(workspaces)?;
+        Ok(())
     }
 
     /// Install an externally computed dependency-hash cache (see
@@ -1251,6 +1257,35 @@ mod test {
             .unwrap()
     }
 
+    fn monorepo_context_hash(
+        graph: &PackageGraph,
+        package: PackageName,
+        precompute_external: bool,
+    ) -> String {
+        let task_id = TaskId::new(package.as_str(), "build").into_owned();
+        let definition = TaskDefinition::default();
+        let opts = TestRunOpts {
+            single_package: false,
+        };
+        let env = EnvironmentVariableMap::default();
+        let mut hasher = task_hasher(&task_id, &opts, &env, graph.repo_root());
+        if precompute_external {
+            hasher
+                .precompute_external_deps_hashes(graph.package_task_contexts())
+                .unwrap();
+        }
+        hasher
+            .calculate_task_hash(
+                &task_id,
+                &definition,
+                EnvMode::Strict,
+                &graph.package_task_context(&package).unwrap(),
+                &[],
+                PackageTaskEventBuilder::new(package.as_str(), "build"),
+            )
+            .unwrap()
+    }
+
     #[tokio::test]
     async fn task_hash_uses_identity_bound_context_and_rejects_mismatch() {
         let tmp = tempdir().unwrap();
@@ -1331,6 +1366,10 @@ mod test {
         assert!(matches!(error, Error::MissingPackagePayload(name) if name == package));
         assert!(matches!(
             hasher.insert_deferred_hash(&task_id, &definition, EnvMode::Strict, &context),
+            Err(Error::MissingPackagePayload(name)) if name == package
+        ));
+        assert!(matches!(
+            compute_external_deps_hashes(graph.package_task_contexts()),
             Err(Error::MissingPackagePayload(name)) if name == package
         ));
     }
@@ -1564,6 +1603,75 @@ mod test {
             "f296efc7e9b4061a",
             "Cargo aggregate hash bytes changed"
         );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn external_hash_precompute_preserves_compatibility_bytes() {
+        let js_tmp = tempdir().unwrap();
+        let js_root =
+            AbsoluteSystemPathBuf::new(js_tmp.path().to_string_lossy().to_string()).unwrap();
+        let js_graph = javascript_graph(&js_root).await;
+        let js_cache = compute_external_deps_hashes(js_graph.package_task_contexts()).unwrap();
+        assert_eq!(
+            js_cache,
+            HashMap::from([
+                ("//".to_string(), String::new()),
+                ("app".to_string(), String::new()),
+                ("other".to_string(), String::new()),
+            ])
+        );
+
+        let cargo_tmp = tempdir().unwrap();
+        // dunce: `cargo metadata` reports plain (non-verbatim) paths on
+        // Windows, so the fixture root must be plain too.
+        let cargo_root = AbsoluteSystemPathBuf::new(
+            dunce::canonicalize(cargo_tmp.path())
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+        )
+        .unwrap();
+        let cargo_graph = cargo_graph(&cargo_root).await;
+        let cargo_cache =
+            compute_external_deps_hashes(cargo_graph.package_task_contexts()).unwrap();
+        let (external_hash, app_task_hash, workspace_task_hash) = match std::env::consts::OS {
+            "macos" => ("2ccf3983a6195c83", "16148055db78eed5", "3adbee17ca01f306"),
+            "linux" => ("9fae73876995db4d", "bed5df30b6563a22", "a5d3d2445a0e2df2"),
+            "windows" => ("538ddb6706883af6", "9d061b914e2d64aa", "af00aca4864ca739"),
+            os => panic!("add exact Cargo compatibility hashes for {os}"),
+        };
+        assert_eq!(
+            cargo_cache,
+            HashMap::from([
+                ("//".to_string(), String::new()),
+                ("cargo-app".to_string(), external_hash.to_string()),
+                ("cargo-workspace".to_string(), external_hash.to_string()),
+            ])
+        );
+
+        for (graph, package, expected) in [
+            (&js_graph, PackageName::Root, "f952e84c0fa1b4b7"),
+            (&js_graph, PackageName::from("app"), "ba33476f1a197a76"),
+            (&cargo_graph, PackageName::Root, "f952e84c0fa1b4b7"),
+        ] {
+            assert_eq!(
+                monorepo_context_hash(graph, package.clone(), false),
+                expected
+            );
+            assert_eq!(monorepo_context_hash(graph, package, true), expected);
+        }
+
+        for (package, expected) in [
+            ("cargo-app", app_task_hash),
+            ("cargo-workspace", workspace_task_hash),
+        ] {
+            let package = PackageName::from(package);
+            assert_eq!(
+                monorepo_context_hash(&cargo_graph, package.clone(), false),
+                expected
+            );
+            assert_eq!(monorepo_context_hash(&cargo_graph, package, true), expected);
+        }
     }
 
     #[test]
