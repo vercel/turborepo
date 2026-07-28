@@ -334,8 +334,16 @@ fn test_cargo_packages_in_task_graph() {
     // The bin crate is an entrypoint: it executes a real cargo command.
     let app_build = task("app#build").expect("app#build in graph");
     assert_eq!(app_build["command"], "cargo build --package=app --locked");
-    assert_eq!(app_build["directory"], "crates/app");
-    assert_eq!(app_build["logFile"], "crates/app/.turbo/turbo-build.log");
+    let app_directory = Path::new("crates").join("app");
+    assert_eq!(
+        app_build["directory"].as_str().map(Path::new),
+        Some(app_directory.as_path())
+    );
+    let app_log = app_directory.join(".turbo").join("turbo-build.log");
+    assert_eq!(
+        app_build["logFile"].as_str().map(Path::new),
+        Some(app_log.as_path())
+    );
     // Unfiltered builds select entrypoint crates; Cargo builds their library
     // dependency closures without a redundant package-scoped process.
     assert!(task("lib-a#build").is_none());
@@ -1728,8 +1736,16 @@ fn test_pure_cargo_workspace_dry_run_has_no_package_json() {
     // The bin crate is an entrypoint: it executes a real cargo command.
     let app_build = task("app#build").expect("app#build in graph");
     assert_eq!(app_build["command"], "cargo build --package=app --locked");
-    assert_eq!(app_build["directory"], "crates/app");
-    assert_eq!(app_build["logFile"], "crates/app/.turbo/turbo-build.log");
+    let app_directory = Path::new("crates").join("app");
+    assert_eq!(
+        app_build["directory"].as_str().map(Path::new),
+        Some(app_directory.as_path())
+    );
+    let app_log = app_directory.join(".turbo").join("turbo-build.log");
+    assert_eq!(
+        app_build["logFile"].as_str().map(Path::new),
+        Some(app_log.as_path())
+    );
     assert_eq!(
         json["packages"],
         serde_json::json!(["acme", "app", "lib-a"])
@@ -2169,7 +2185,11 @@ fn test_cargo_tasks_are_registered_without_task_configuration() {
             format!("cargo {subcommand} --workspace --locked")
         );
         assert_eq!(definition["directory"], "");
-        assert_eq!(definition["logFile"], format!(".turbo/turbo-{task}.log"));
+        let log_file = Path::new(".turbo").join(format!("turbo-{task}.log"));
+        assert_eq!(
+            definition["logFile"].as_str().map(Path::new),
+            Some(log_file.as_path())
+        );
         assert_eq!(json["packages"], serde_json::json!(["acme"]));
     }
 }

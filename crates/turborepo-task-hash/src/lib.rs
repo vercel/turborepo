@@ -1622,8 +1622,10 @@ mod test {
         );
 
         let cargo_tmp = tempdir().unwrap();
+        // dunce: `cargo metadata` reports plain (non-verbatim) paths on
+        // Windows, so the fixture root must be plain too.
         let cargo_root = AbsoluteSystemPathBuf::new(
-            std::fs::canonicalize(cargo_tmp.path())
+            dunce::canonicalize(cargo_tmp.path())
                 .unwrap()
                 .to_string_lossy()
                 .to_string(),

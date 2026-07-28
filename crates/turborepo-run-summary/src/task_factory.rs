@@ -300,7 +300,7 @@ pub fn get_external_deps_hash(
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, sync::Arc};
+    use std::{collections::HashMap, path::Path, sync::Arc};
 
     use serde_json::json;
     use tempfile::tempdir;
@@ -448,10 +448,15 @@ mod tests {
 
         let summary = factory.task_summary(task_id, None).unwrap();
         assert_eq!(summary.shared.command, "echo build");
-        assert_eq!(summary.shared.directory.as_deref(), Some("packages/app"));
+        let app_directory = Path::new("packages").join("app");
         assert_eq!(
-            summary.shared.log_file.as_deref(),
-            Some("packages/app/.turbo/turbo-build.log")
+            summary.shared.directory.as_deref().map(Path::new),
+            Some(app_directory.as_path())
+        );
+        let app_log = app_directory.join(".turbo").join("turbo-build.log");
+        assert_eq!(
+            summary.shared.log_file.as_deref().map(Path::new),
+            Some(app_log.as_path())
         );
         assert_eq!(
             summary.shared.hash_of_external_dependencies,
