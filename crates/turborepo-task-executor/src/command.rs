@@ -648,7 +648,7 @@ mod tests {
         let tempdir = tempfile::tempdir().unwrap();
         let repo_root =
             AbsoluteSystemPathBuf::new(tempdir.path().to_string_lossy().to_string()).unwrap();
-        let package_dir = tempdir.path().join("apps/site/web");
+        let package_dir = tempdir.path().join("apps").join("site").join("web");
         fs::create_dir_all(&package_dir).unwrap();
 
         (tempdir, repo_root, package_dir)
