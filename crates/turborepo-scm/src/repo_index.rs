@@ -1691,6 +1691,7 @@ mod tests {
             root: root.clone(),
             bin: root,
             attrs: OnceLock::new(),
+            resolve_remote_base_refs: false,
             slowest_files: None,
         }
     }

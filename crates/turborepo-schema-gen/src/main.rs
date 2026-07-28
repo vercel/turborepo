@@ -769,6 +769,14 @@ export interface FutureFlags {
    */
   affectedUsingTaskInputs?: boolean;
   /**
+   * Fall back to `origin/<branch>` when an inferred base branch is not
+   * available as a local ref. This supports detached checkouts in CI where
+   * only remote-tracking refs are present.
+   *
+   * @defaultValue `false`
+   */
+  resolveRemoteBaseRefs?: boolean;
+  /**
    * Use task-level `inputs` globs to determine which tasks to re-run when
    * files change in `turbo watch`. When enabled, only tasks whose declared
    * inputs match the changed files are re-executed, rather than re-running
