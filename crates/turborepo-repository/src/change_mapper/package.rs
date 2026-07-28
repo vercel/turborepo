@@ -4,9 +4,7 @@ use wax::{BuildError, Program};
 
 use crate::{
     change_mapper::{AllPackageChangeReason, PackageInclusionReason},
-    package_graph::{
-        PackageGraph, PackageGraphNodeKind, PackageName, PackageNode, WorkspacePackage,
-    },
+    package_graph::{PackageGraph, PackageName, PackageTaskContextKind, WorkspacePackage},
     package_manager::PackageManager,
 };
 
@@ -65,19 +63,16 @@ impl PackageChangeMapper for DefaultPackageChangeMapper<'_> {
     fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping {
         let package = self
             .pkg_dep_graph
-            .node_views()
-            .filter_map(|(node, view)| {
-                let PackageNode::Workspace(name @ PackageName::Other(_)) = node else {
-                    return None;
-                };
-                let package_path = view.directory()?;
-                (view.kind() == PackageGraphNodeKind::Package
+            .package_task_contexts()
+            .filter_map(|context| {
+                let package_path = context.directory();
+                (context.kind() == PackageTaskContextKind::Package
                     // A package whose directory is the repo root would
                     // vacuously match every file. Only the Root package may
                     // claim root-level files, via the fallback.
                     && package_path.components().next().is_some()
                     && Self::is_file_in_package(file, package_path))
-                .then_some((name, package_path))
+                .then_some((context.package().clone(), package_path))
             })
             .max_by(|(left_name, left_path), (right_name, right_path)| {
                 left_path
@@ -287,13 +282,17 @@ mod tests {
             }
         }
 
-        let graph = PackageGraphBuilder::new(root, PackageJson::default())
+        let mut graph = PackageGraphBuilder::new(root, PackageJson::default())
             .with_package_discovery(NestedDiscovery {
                 parent_manifest,
                 child_manifest,
             })
             .build()
             .await?;
+        assert!(graph.set_package_json_path_for_test(
+            &crate::package_graph::PackageName::from("child"),
+            AnchoredSystemPathBuf::from_raw("stale/package.json")?,
+        ));
         let file = AnchoredSystemPathBuf::from_raw(
             ["packages", "parent", "child", "src", "index.ts"].join(std::path::MAIN_SEPARATOR_STR),
         )?;

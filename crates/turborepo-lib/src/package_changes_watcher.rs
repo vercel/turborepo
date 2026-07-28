@@ -1,6 +1,7 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    io::ErrorKind,
     ops::DerefMut,
     sync::{Arc, RwLock},
 };
@@ -18,8 +19,8 @@ use turborepo_repository::{
     change_mapper::{
         ChangeMapper, GlobalDepsPackageChangeMapper, LockfileContents, PackageChanges,
     },
-    package_graph::{PackageGraph, PackageGraphBuilder, PackageName, WorkspacePackage},
-    package_json::PackageJson,
+    package_graph::{PackageGraph, PackageName, WorkspacePackage},
+    package_json::{self, PackageJson},
     toolchain::{Toolchain, WatchSpec},
 };
 use turborepo_scm::GitHashes;
@@ -152,6 +153,45 @@ fn ancestors_is_ignored(
 struct RepoState {
     root_turbo_json: Option<TurboJson>,
     pkg_dep_graph: PackageGraph,
+}
+
+struct PackageHashBaseline {
+    path: AnchoredSystemPathBuf,
+    hashes: Arc<GitHashes>,
+}
+
+fn load_root_package_json(
+    repo_root: &AbsoluteSystemPathBuf,
+    allow_missing_for_cargo: bool,
+) -> Result<Option<PackageJson>, package_json::Error> {
+    match PackageJson::load(&repo_root.join_component("package.json")) {
+        Ok(package_json) => Ok(Some(package_json)),
+        Err(package_json::Error::Io(error))
+            if error.kind() == ErrorKind::NotFound && allow_missing_for_cargo =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn baseline_matches(
+    baseline: Option<&PackageHashBaseline>,
+    path: &AnchoredSystemPath,
+    hashes: &GitHashes,
+) -> bool {
+    baseline.is_some_and(|baseline| {
+        baseline.path.as_str() == path.as_str() && baseline.hashes.as_ref() == hashes
+    })
+}
+
+fn hash_scopes(pkg_dep_graph: &PackageGraph) -> impl Iterator<Item = WorkspacePackage> + '_ {
+    pkg_dep_graph
+        .package_task_contexts()
+        .map(|context| WorkspacePackage {
+            name: context.package().clone(),
+            path: context.directory().to_owned(),
+        })
 }
 
 /// The result of classifying a batch of changed files.
@@ -359,8 +399,10 @@ impl Subscriber {
             .repository_ignore()
             .unwrap_or_else(|| RepositoryIgnore::new(repo_root.as_std_path()));
         let mut watch_spec = WatchSpec::default();
-        for toolchain in &extra_toolchains {
-            watch_spec.extend(toolchain.watch_spec());
+        if !single_package {
+            for toolchain in &extra_toolchains {
+                watch_spec.extend(toolchain.watch_spec());
+            }
         }
 
         Subscriber {
@@ -379,15 +421,30 @@ impl Subscriber {
     }
 
     async fn initialize_repo_state(&self) -> Option<RepoState> {
-        let Ok(root_package_json) =
-            PackageJson::load(&self.repo_root.join_component("package.json"))
-        else {
-            tracing::debug!("no package.json found, package watcher not available");
-            return None;
-        };
-        let mut builder = PackageGraphBuilder::new(&self.repo_root, root_package_json.clone())
-            .with_single_package_mode(self.single_package)
-            .with_allow_no_package_manager(self.allow_no_package_manager);
+        let cargo_registered = self
+            .extra_toolchains
+            .iter()
+            .any(|toolchain| toolchain.id() == turborepo_repository::toolchain::ToolchainId::RUST);
+        let allow_missing_for_cargo = cargo_registered
+            && self
+                .repo_root
+                .join_component(turborepo_repository::cargo::CARGO_TOML)
+                .exists();
+        let root_package_json =
+            match load_root_package_json(&self.repo_root, allow_missing_for_cargo) {
+                Ok(package_json) => package_json,
+                Err(error) => {
+                    tracing::debug!(
+                        ?error,
+                        "root package.json not available, package watcher not available"
+                    );
+                    return None;
+                }
+            };
+        let mut builder =
+            PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
+                .with_single_package_mode(self.single_package)
+                .with_allow_no_package_manager(self.allow_no_package_manager);
         for toolchain in &self.extra_toolchains {
             builder = builder.with_toolchain(toolchain.clone());
         }
@@ -417,14 +474,18 @@ impl Subscriber {
         };
 
         let reader = TurboJsonReader::new(self.repo_root.clone());
-        let root_turbo_json = if self.single_package {
-            UnifiedTurboJsonLoader::single_package(reader, config_path, root_package_json)
-        } else {
-            UnifiedTurboJsonLoader::workspace(
+        let root_turbo_json = match (self.single_package, root_package_json) {
+            (true, Some(root_package_json)) => {
+                UnifiedTurboJsonLoader::single_package(reader, config_path, root_package_json)
+            }
+            // A native-only graph still has Turbo's root task namespace, but
+            // it does not have a root JavaScript scope to synthesize config
+            // from. Workspace loading preserves that distinction.
+            _ => UnifiedTurboJsonLoader::workspace(
                 reader,
                 config_path,
                 pkg_dep_graph.package_scope_directories(),
-            )
+            ),
         }
         .load(&PackageName::Root)
         .ok()
@@ -433,8 +494,7 @@ impl Subscriber {
         *self
             .watch_spec
             .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) =
-            pkg_dep_graph.toolchains().watch_spec();
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = pkg_dep_graph.active_watch_spec();
 
         Some(RepoState {
             root_turbo_json,
@@ -444,13 +504,18 @@ impl Subscriber {
 
     async fn is_same_hash(
         &self,
+        pkg_dep_graph: &PackageGraph,
         pkg: &WorkspacePackage,
-        package_file_hashes: &mut HashMap<AnchoredSystemPathBuf, Arc<GitHashes>>,
+        package_file_hashes: &mut HashMap<PackageName, PackageHashBaseline>,
     ) -> bool {
+        let Some(context) = pkg_dep_graph.package_task_context(&pkg.name) else {
+            return false;
+        };
+        let package_path = context.directory().to_owned();
         let Ok(hash) = self
             .hash_watcher
             .get_file_hashes(HashSpec {
-                package_path: pkg.path.clone(),
+                package_path: package_path.clone(),
                 // TODO: Support inputs
                 inputs: InputGlobs::Default,
             })
@@ -459,20 +524,50 @@ impl Subscriber {
             return false;
         };
 
-        let old_hash = package_file_hashes.get(&pkg.path);
-
-        if old_hash
-            .map(|old_hash| old_hash.as_ref() != hash.as_ref())
-            .unwrap_or(true)
-        {
-            package_file_hashes.insert(pkg.path.clone(), hash);
+        let same = baseline_matches(
+            package_file_hashes.get(&pkg.name),
+            &package_path,
+            hash.as_ref(),
+        );
+        package_file_hashes.insert(
+            pkg.name.clone(),
+            PackageHashBaseline {
+                path: package_path,
+                hashes: hash,
+            },
+        );
+        if !same {
             return false;
         }
-
-        package_file_hashes.insert(pkg.path.clone(), hash);
         tracing::debug!("hashes are the same, no need to rerun");
 
         true
+    }
+
+    async fn hash_baseline(
+        &self,
+        pkg_dep_graph: &PackageGraph,
+    ) -> HashMap<PackageName, PackageHashBaseline> {
+        let mut hashes = HashMap::new();
+        for package in hash_scopes(pkg_dep_graph) {
+            if let Ok(hash) = self
+                .hash_watcher
+                .get_file_hashes(HashSpec {
+                    package_path: package.path.clone(),
+                    inputs: InputGlobs::Default,
+                })
+                .await
+            {
+                hashes.insert(
+                    package.name,
+                    PackageHashBaseline {
+                        path: package.path,
+                        hashes: hash,
+                    },
+                );
+            }
+        }
+        hashes
     }
 
     /// Send a Rediscover event and reinitialize repo state. Returns the new
@@ -619,23 +714,7 @@ impl Subscriber {
             // this, the first file change for each package would always be
             // treated as "new" (no old hash to compare against), causing
             // spurious rebuilds from build output writes on the initial run.
-            let mut package_file_hashes = HashMap::new();
-            for (name, info) in repo_state.pkg_dep_graph.packages() {
-                let pkg = WorkspacePackage {
-                    name: name.clone(),
-                    path: info.package_path().to_owned(),
-                };
-                if let Ok(hash) = self
-                    .hash_watcher
-                    .get_file_hashes(HashSpec {
-                        package_path: pkg.path.clone(),
-                        inputs: InputGlobs::Default,
-                    })
-                    .await
-                {
-                    package_file_hashes.insert(pkg.path, hash);
-                }
-            }
+            let mut package_file_hashes = self.hash_baseline(&repo_state.pkg_dep_graph).await;
 
             let mut change_mapper = match repo_state.get_change_mapper() {
                 Some(change_mapper) => change_mapper,
@@ -733,7 +812,14 @@ impl Subscriber {
 
                         let changed_files = Arc::new(changed_files);
                         for pkg in filtered_pkgs {
-                            if !self.is_same_hash(&pkg, &mut package_file_hashes).await {
+                            if !self
+                                .is_same_hash(
+                                    &repo_state.pkg_dep_graph,
+                                    &pkg,
+                                    &mut package_file_hashes,
+                                )
+                                .await
+                            {
                                 let _ = self.package_change_events_tx.send(
                                     PackageChangeEvent::Package {
                                         name: pkg.name.clone(),
@@ -775,16 +861,19 @@ mod test {
         hash_watcher::HashWatcher, NotifyError, OptionalWatch, WatchEventSender, WatchSource,
     };
     use turborepo_repository::{
+        cargo::CargoToolchain,
         change_mapper::{ChangeMapper, GlobalDepsPackageChangeMapper, PackageChanges},
-        package_graph::{PackageGraph, PackageGraphBuilder},
+        package_graph::{PackageGraph, PackageGraphBuilder, PackageName, PackageTaskContextKind},
         package_json::PackageJson,
-        toolchain::WatchSpec,
+        toolchain::{Toolchain, WatchSpec},
     };
-    use turborepo_scm::SCM;
+    use turborepo_scm::{GitHashes, SCM};
 
     use super::{
-        ancestors_is_ignored, classify_changed_files, is_in_git_folder, ChangedFiles,
-        FileChangeAction, PackageChangeEvent, PackageChangesWatcher, RepositoryIgnore, CONFIG_FILE,
+        ancestors_is_ignored, baseline_matches, classify_changed_files, hash_scopes,
+        is_in_git_folder, load_root_package_json, ChangedFiles, FileChangeAction,
+        PackageChangeEvent, PackageChangesWatcher, PackageHashBaseline, RepositoryIgnore,
+        Subscriber, CONFIG_FILE,
     };
 
     fn anchored(s: &str) -> AnchoredSystemPathBuf {
@@ -830,6 +919,295 @@ mod test {
             .build()
             .await
             .unwrap()
+    }
+
+    fn write_cargo_workspace(repo_root: &AbsoluteSystemPathBuf) {
+        repo_root
+            .join_component("Cargo.toml")
+            .create_with_contents(
+                b"[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n\n[workspace.metadata]\nname = \"native\"\n",
+            )
+            .unwrap();
+        let crate_dir = repo_root.join_components(&["crates", "app"]);
+        crate_dir.create_dir_all().unwrap();
+        crate_dir
+            .join_component("Cargo.toml")
+            .create_with_contents(
+                b"[package]\nname = \"native-app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            )
+            .unwrap();
+        let src = crate_dir.join_components(&["src", "main.rs"]);
+        src.ensure_dir().unwrap();
+        src.create_with_contents(b"fn main() {}\n").unwrap();
+        repo_root
+            .join_component("Cargo.lock")
+            .create_with_contents(
+                b"version = 4\n\n[[package]]\nname = \"native-app\"\nversion = \"0.1.0\"\n",
+            )
+            .unwrap();
+    }
+
+    fn canonical_temp_root(tmp: &tempfile::TempDir) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string())
+            .unwrap()
+            .to_realpath()
+            .unwrap()
+    }
+
+    fn test_subscriber(
+        repo_root: &AbsoluteSystemPathBuf,
+        single_package: bool,
+        extra_toolchains: Vec<Arc<dyn Toolchain>>,
+    ) -> Subscriber {
+        let (_file_events_tx, file_events) = WatchSource::channel_for_root(repo_root.as_std_path());
+        let (_discovery_tx, discovery_rx) = watch::channel(None);
+        let (_hash_events_tx, hash_events) = WatchSource::channel_for_root(repo_root.as_std_path());
+        Subscriber::new(
+            repo_root.clone(),
+            file_events,
+            broadcast::channel(8).0,
+            Arc::new(HashWatcher::new(
+                repo_root.clone(),
+                discovery_rx,
+                hash_events,
+                SCM::new(repo_root),
+            )),
+            None,
+            single_package,
+            false,
+            extra_toolchains,
+        )
+    }
+
+    async fn initialize_test_state(
+        repo_root: &AbsoluteSystemPathBuf,
+        extra_toolchains: Vec<Arc<dyn Toolchain>>,
+    ) -> Option<super::RepoState> {
+        test_subscriber(repo_root, false, extra_toolchains)
+            .initialize_repo_state()
+            .await
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn initializes_pure_cargo_and_preserves_root_and_aggregate_scopes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = canonical_temp_root(&tmp);
+        write_cargo_workspace(&repo_root);
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(b"{\"tasks\":{\"build\":{}}}")
+            .unwrap();
+
+        let state = initialize_test_state(&repo_root, vec![CargoToolchain::new(repo_root.clone())])
+            .await
+            .expect("native toolchain permits an absent root package.json");
+        assert!(!state.pkg_dep_graph.has_root_javascript_scope());
+        assert!(state.root_turbo_json.is_some());
+        assert_eq!(
+            state.pkg_dep_graph.active_watch_spec(),
+            turborepo_repository::cargo::watch_spec()
+        );
+
+        let scopes: Vec<_> = hash_scopes(&state.pkg_dep_graph).collect();
+        assert_eq!(scopes.first().unwrap().name, PackageName::Root);
+        assert!(scopes.iter().any(|scope| {
+            scope.name.as_ref() == "native"
+                && scope.path.as_str().is_empty()
+                && state
+                    .pkg_dep_graph
+                    .package_task_context(&scope.name)
+                    .is_some_and(|context| context.kind() == PackageTaskContextKind::Aggregate)
+        }));
+        assert!(scopes.iter().any(|scope| {
+            scope.name.as_ref() == "native-app" && scope.path.to_unix().as_str() == "crates/app"
+        }));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn initializes_mixed_javascript_and_cargo_graph() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = canonical_temp_root(&tmp);
+        write_cargo_workspace(&repo_root);
+        repo_root
+            .join_component("package.json")
+            .create_with_contents(
+                br#"{"name":"root","packageManager":"npm@10.0.0","workspaces":["packages/*"]}"#,
+            )
+            .unwrap();
+        repo_root
+            .join_component("package-lock.json")
+            .create_with_contents(br#"{"lockfileVersion":3}"#)
+            .unwrap();
+        let js_dir = repo_root.join_components(&["packages", "web"]);
+        js_dir.create_dir_all().unwrap();
+        js_dir
+            .join_component("package.json")
+            .create_with_contents(br#"{"name":"web"}"#)
+            .unwrap();
+
+        let state = initialize_test_state(&repo_root, vec![CargoToolchain::new(repo_root.clone())])
+            .await
+            .expect("mixed graph initializes");
+        let names: HashSet<_> = hash_scopes(&state.pkg_dep_graph)
+            .map(|scope| scope.name)
+            .collect();
+        for expected in ["//", "web", "native-app", "native"] {
+            assert!(
+                names.contains(&PackageName::from(expected)),
+                "missing {expected}"
+            );
+        }
+        assert!(state.pkg_dep_graph.has_root_javascript_scope());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn optional_root_requires_cargo_manifest_but_not_workspace_mode() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = canonical_temp_root(&tmp);
+        assert!(
+            initialize_test_state(&repo_root, vec![CargoToolchain::new(repo_root.clone())])
+                .await
+                .is_none(),
+            "registered Cargo without a root Cargo.toml must not permit a missing package.json"
+        );
+
+        write_cargo_workspace(&repo_root);
+        let subscriber = test_subscriber(
+            &repo_root,
+            true,
+            vec![CargoToolchain::new(repo_root.clone())],
+        );
+        let state = subscriber
+            .initialize_repo_state()
+            .await
+            .expect("single-package mode permits a Cargo-backed missing package.json");
+        let contexts: Vec<_> = state.pkg_dep_graph.package_task_contexts().collect();
+        assert_eq!(contexts.len(), 1);
+        assert_eq!(contexts[0].package(), &PackageName::Root);
+        assert!(!state.pkg_dep_graph.has_root_javascript_scope());
+        assert_eq!(
+            state.pkg_dep_graph.active_watch_spec(),
+            WatchSpec::default()
+        );
+        assert_eq!(
+            *subscriber
+                .watch_spec
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+            WatchSpec::default(),
+            "inactive Cargo must not contribute watch markers in single-package mode"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn malformed_manifests_still_fail_initialization() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = canonical_temp_root(&tmp);
+        write_cargo_workspace(&repo_root);
+
+        repo_root
+            .join_component("package.json")
+            .create_with_contents(b"{")
+            .unwrap();
+        assert!(load_root_package_json(&repo_root, true).is_err());
+        assert!(
+            initialize_test_state(&repo_root, vec![CargoToolchain::new(repo_root.clone())])
+                .await
+                .is_none()
+        );
+
+        repo_root.join_component("package.json").remove().unwrap();
+        repo_root
+            .join_component("Cargo.toml")
+            .create_with_contents(b"[workspace")
+            .unwrap();
+        assert!(
+            initialize_test_state(&repo_root, vec![CargoToolchain::new(repo_root.clone())])
+                .await
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn stale_baseline_never_suppresses_new_or_relocated_package() {
+        let hashes = Arc::new(GitHashes::default());
+        let baseline = PackageHashBaseline {
+            path: anchored("packages/old"),
+            hashes: hashes.clone(),
+        };
+        assert!(baseline_matches(
+            Some(&baseline),
+            &anchored("packages/old"),
+            hashes.as_ref()
+        ));
+        assert!(!baseline_matches(
+            Some(&baseline),
+            &anchored("packages/new"),
+            hashes.as_ref()
+        ));
+        assert!(!baseline_matches(
+            None,
+            &anchored("packages/new"),
+            hashes.as_ref()
+        ));
+    }
+
+    #[tokio::test]
+    async fn single_package_ignores_registered_cargo_watch_spec() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = canonical_temp_root(&tmp);
+        repo_root
+            .join_component("package.json")
+            .create_with_contents(
+                br#"{"name":"root","packageManager":"npm@10.0.0","scripts":{"build":"echo"}}"#,
+            )
+            .unwrap();
+        repo_root
+            .join_component("package-lock.json")
+            .create_with_contents(br#"{"lockfileVersion":3}"#)
+            .unwrap();
+        write_cargo_workspace(&repo_root);
+
+        let subscriber = test_subscriber(
+            &repo_root,
+            true,
+            vec![CargoToolchain::new(repo_root.clone())],
+        );
+        assert_eq!(
+            *subscriber
+                .watch_spec
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+            WatchSpec::default()
+        );
+        let state = subscriber
+            .initialize_repo_state()
+            .await
+            .expect("single-package JavaScript graph initializes");
+        let active_spec = state.pkg_dep_graph.active_watch_spec();
+        assert!(!active_spec
+            .definition_file_names
+            .iter()
+            .any(|name| name == "Cargo.toml"));
+        assert!(!active_spec
+            .ignore_prefixes
+            .iter()
+            .any(|prefix| prefix == "target"));
+        assert_eq!(active_spec, WatchSpec::default());
+        assert_eq!(
+            *subscriber
+                .watch_spec
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+            WatchSpec::default()
+        );
+        assert_eq!(
+            state
+                .pkg_dep_graph
+                .package_task_context(&PackageName::Root)
+                .and_then(|context| context.toolchain()),
+            Some(&turborepo_repository::toolchain::ToolchainId::JAVASCRIPT)
+        );
     }
 
     /// Reusable fixture for `classify_changed_files` tests. Holds a tempdir,
@@ -1462,8 +1840,8 @@ mod test {
             .unwrap();
 
         let pkg_names: Vec<_> = pkg_graph
-            .packages()
-            .map(|(name, _)| name.to_string())
+            .package_task_contexts()
+            .map(|context| context.package().to_string())
             .collect();
         assert!(
             pkg_names.iter().any(|n| n == "a"),
@@ -1745,8 +2123,8 @@ mod test {
             .unwrap();
 
         let pkg_names: Vec<_> = pkg_graph
-            .packages()
-            .map(|(name, _)| name.to_string())
+            .package_task_contexts()
+            .map(|context| context.package().to_string())
             .collect();
         assert!(
             pkg_names.iter().any(|n| n == "//"),

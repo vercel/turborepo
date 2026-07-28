@@ -63,9 +63,8 @@ pub struct PackageGraph {
     /// `dependencies` and `ancestors` consult them on every call; the set is
     /// invariant once the graph is built.
     root_internal_dependencies: OnceLock<HashSet<PackageNode>>,
-    /// The toolchains that contributed packages to this graph. The single
-    /// lookup path for toolchain concerns after graph construction (command
-    /// resolution, summaries).
+    /// Toolchains registered during graph construction. Authoritative contexts
+    /// determine which registrations were active for a particular concern.
     toolchains: crate::toolchain::ToolchainRegistry,
 }
 
@@ -481,9 +480,26 @@ impl PackageGraph {
         self.package_manager.as_ref()
     }
 
-    /// The toolchains that contributed packages to this graph.
+    /// Toolchains registered during graph construction.
     pub fn toolchains(&self) -> &crate::toolchain::ToolchainRegistry {
         &self.toolchains
+    }
+
+    /// The watch behavior of toolchains that contributed at least one
+    /// authoritative execution scope to this graph. Registered toolchains
+    /// that were inactive (notably extras in single-package mode) are omitted.
+    pub fn active_watch_spec(&self) -> crate::toolchain::WatchSpec {
+        let active: HashSet<_> = self
+            .package_task_contexts()
+            .filter_map(|context| context.toolchain().cloned())
+            .collect();
+        let mut watch_spec = crate::toolchain::WatchSpec::default();
+        for toolchain in self.toolchains.iter() {
+            if active.contains(&toolchain.id()) {
+                watch_spec.extend(toolchain.watch_spec());
+            }
+        }
+        watch_spec
     }
 
     pub fn repo_root(&self) -> &AbsoluteSystemPath {
