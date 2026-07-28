@@ -1814,10 +1814,13 @@ mod tests {
         };
 
         let context = prune.package_context(&web).unwrap();
-        assert_eq!(context.directory().as_str(), "packages/web");
+        assert_eq!(context.directory().to_unix().as_str(), "packages/web");
         assert_eq!(context.toolchain(), Some(&ToolchainId::JAVASCRIPT));
         let definition_path = prune.package_definition_path(&context).unwrap();
-        assert_eq!(definition_path.as_str(), "packages/web/package.json");
+        assert_eq!(
+            definition_path.to_unix().as_str(),
+            "packages/web/package.json"
+        );
         let payload = prune.required_package_payload(&context).unwrap();
         prune
             .copy_workspace(
