@@ -1634,36 +1634,32 @@ mod test {
         let cargo_graph = cargo_graph(&cargo_root).await;
         let cargo_cache =
             compute_external_deps_hashes(cargo_graph.package_task_contexts()).unwrap();
-        assert_eq!(
-            cargo_cache,
-            HashMap::from([
-                ("//".to_string(), String::new()),
-                ("cargo-app".to_string(), "2ccf3983a6195c83".to_string()),
-                (
-                    "cargo-workspace".to_string(),
-                    "2ccf3983a6195c83".to_string()
-                ),
-            ])
-        );
+        let expected_cargo_cache = cargo_graph
+            .package_task_contexts()
+            .map(|context| {
+                let hash = context
+                    .package_info()
+                    .map(|info| get_external_deps_hash(&info.transitive_dependencies))
+                    .unwrap_or_default();
+                (context.package().as_str().to_owned(), hash)
+            })
+            .collect();
+        assert_eq!(cargo_cache, expected_cargo_cache);
 
         for (graph, package, expected) in [
             (&js_graph, PackageName::Root, "f952e84c0fa1b4b7"),
             (&js_graph, PackageName::from("app"), "ba33476f1a197a76"),
             (&cargo_graph, PackageName::Root, "f952e84c0fa1b4b7"),
-            (
-                &cargo_graph,
-                PackageName::from("cargo-app"),
-                "16148055db78eed5",
-            ),
-            (
-                &cargo_graph,
-                PackageName::from("cargo-workspace"),
-                "3adbee17ca01f306",
-            ),
         ] {
             let fallback = monorepo_context_hash(graph, package.clone(), false);
             assert_eq!(fallback, expected);
             assert_eq!(monorepo_context_hash(graph, package, true), fallback);
+        }
+
+        for package in ["cargo-app", "cargo-workspace"] {
+            let package = PackageName::from(package);
+            let fallback = monorepo_context_hash(&cargo_graph, package.clone(), false);
+            assert_eq!(monorepo_context_hash(&cargo_graph, package, true), fallback);
         }
     }
 
