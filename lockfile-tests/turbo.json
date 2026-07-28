@@ -1,6 +1,9 @@
 {
   "extends": ["//"],
   "tasks": {
+    "check-types": {
+      "command": null
+    },
     "check-lockfiles": {
       // The harness runs the turbo binary from target/; depending on the
       // crate's build task guarantees it exists and re-runs this check

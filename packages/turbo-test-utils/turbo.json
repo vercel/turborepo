@@ -2,9 +2,6 @@
   "$schema": "../../docs/public/schema.json",
   "extends": ["//"],
   "tasks": {
-    "check-types": {
-      "command": ["pnpm", "exec", "tsc", "--noEmit"]
-    },
     "lint:prettier": {
       "command": [
         "pnpm",

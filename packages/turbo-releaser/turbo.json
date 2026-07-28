@@ -5,9 +5,6 @@
       "dependsOn": ["^build"],
       "outputs": ["dist"]
     },
-    "check-types": {
-      "command": ["pnpm", "exec", "tsc", "--noEmit"]
-    },
     "test": {
       "command": ["node", "--import", "tsx", "--test", "src/*.test.ts"]
     },

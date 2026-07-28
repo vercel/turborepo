@@ -10,9 +10,6 @@
       "dependsOn": ["^build"],
       "command": ["pnpm", "exec", "tsdown"]
     },
-    "check-types": {
-      "command": ["pnpm", "exec", "tsc", "--noEmit"]
-    },
     "lint:prettier": {
       "command": [
         "pnpm",

@@ -111,7 +111,19 @@
       "dependsOn": ["//#lint:fix", "//#format:fix", "//#fix:toml"]
     },
     "check-types": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "command": {
+        "javascript": ["pnpm", "exec", "tsc", "--noEmit"]
+      }
+    },
+    "@turbo/tsconfig#check-types": {
+      "command": null
+    },
+    "@repo/docs-link-checker#check-types": {
+      "command": null
+    },
+    "eslint-config-turbo#check-types": {
+      "command": null
     },
     "check-openapi": {},
     "//#build:ts": {

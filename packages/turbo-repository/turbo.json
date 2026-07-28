@@ -2,6 +2,9 @@
   "$schema": "../../docs/public/schema.json",
   "extends": ["//"],
   "tasks": {
+    "check-types": {
+      "command": null
+    },
     "build": {
       // The napi crate's build task is a hash-only dependency: it invalidates
       // this task whenever the crate's transitive Rust sources change without

@@ -8,8 +8,7 @@
       "command": ["node", "scripts/embed-templates.mjs"]
     },
     "check-types": {
-      "dependsOn": ["^build", "build:embed"],
-      "command": ["pnpm", "exec", "tsc", "--noEmit"]
+      "dependsOn": ["^build", "build:embed"]
     },
     "test": {
       "dependsOn": ["build"],
