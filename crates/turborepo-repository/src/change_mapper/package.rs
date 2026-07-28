@@ -282,17 +282,13 @@ mod tests {
             }
         }
 
-        let mut graph = PackageGraphBuilder::new(root, PackageJson::default())
+        let graph = PackageGraphBuilder::new(root, PackageJson::default())
             .with_package_discovery(NestedDiscovery {
                 parent_manifest,
                 child_manifest,
             })
             .build()
             .await?;
-        assert!(graph.set_package_json_path_for_test(
-            &crate::package_graph::PackageName::from("child"),
-            AnchoredSystemPathBuf::from_raw("stale/package.json")?,
-        ));
         let file = AnchoredSystemPathBuf::from_raw(
             ["packages", "parent", "child", "src", "index.ts"].join(std::path::MAIN_SEPARATOR_STR),
         )?;

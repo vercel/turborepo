@@ -3778,17 +3778,12 @@ release: 1.96.0-nightly\n",
         assert_eq!(roots.len(), 1);
     }
 
-    fn package_info(name: &str, manifest_rel: &str) -> crate::package_graph::PackageInfo {
+    fn package_info(name: &str) -> crate::package_graph::PackageInfo {
         crate::package_graph::PackageInfo {
             package_json: PackageJson {
                 name: Some(Spanned::new(name.to_string())),
                 ..Default::default()
             },
-            package_json_path: turbopath::AnchoredSystemPathBuf::from_raw(
-                manifest_rel.replace('/', std::path::MAIN_SEPARATOR_STR),
-            )
-            .unwrap(),
-            toolchain: ToolchainId::RUST,
             ..Default::default()
         }
     }
@@ -3817,8 +3812,7 @@ release: 1.96.0-nightly\n",
         // Discovery records the per-package details command resolution uses.
         toolchain.discover_packages().await.unwrap();
 
-        let mut stale_package = package_info("stale-name", "stale/Cargo.toml");
-        stale_package.toolchain = ToolchainId::JAVASCRIPT;
+        let stale_package = package_info("stale-name");
         let app_context = task_context(&root, "app", "crates/app", Some(&stale_package));
         let lib_a_context = task_context(&root, "lib-a", "crates/lib-a", None);
         let workspace_context = task_context(&root, "fixture-ws", "", Some(&stale_package));
@@ -4005,7 +3999,7 @@ release: 1.96.0-nightly\n",
         let toolchain = CargoToolchain::new(root.clone());
         toolchain.discover_packages().await.unwrap();
 
-        let stale_package = package_info("stale-name", "stale/Cargo.toml");
+        let stale_package = package_info("stale-name");
         let lib_a_context = task_context(&root, "lib-a", "crates/lib-a", Some(&stale_package));
         let workspace_context = task_context(&root, "fixture-ws", "", Some(&stale_package));
 
@@ -4050,9 +4044,9 @@ release: 1.96.0-nightly\n",
         let toolchain = CargoToolchain::new(root.clone());
         toolchain.discover_packages().await.unwrap();
 
-        let app = package_info("app", "crates/app/Cargo.toml");
-        let lib_a = package_info("lib-a", "crates/lib-a/Cargo.toml");
-        let workspace = package_info("fixture-ws", "Cargo.toml");
+        let app = package_info("app");
+        let lib_a = package_info("lib-a");
+        let workspace = package_info("fixture-ws");
         let app_ctx = task_context(&root, "app", "crates/app", Some(&app));
         let lib_ctx = task_context(&root, "lib-a", "crates/lib-a", Some(&lib_a));
         let workspace_ctx = task_context(&root, "fixture-ws", "", Some(&workspace));

@@ -44,6 +44,15 @@ pub struct GraphState {
     pub turbo_version: String,
 }
 
+/// Package and task graphs produced from one repository generation.
+#[derive(Debug, Clone)]
+pub struct GraphData {
+    /// Serializable package graph from the generation.
+    pub package_graph: PackageGraphData,
+    /// Serializable task graph derived from that same generation.
+    pub task_graph: TaskGraphData,
+}
+
 /// Package dependency graph in a serializable format
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -111,21 +120,20 @@ pub enum TaskGraphError {
     BuildError(String),
 }
 
-/// Trait for building task graphs.
+/// Builds both protocol graphs from one repository generation.
 ///
-/// This trait allows the core turbo library to provide its own implementation
-/// of task graph building, ensuring consistency with the actual `turbo run`
-/// task graph logic.
+/// This is an intentional pre-1.0 API evolution from the former task-only
+/// builder: package and task views must never come from different generations.
 ///
-/// The devtools server will call this trait to build task graphs when files
-/// change, rather than using its own simplified logic.
-pub trait TaskGraphBuilder: Send + Sync {
-    /// Build the task graph for the given repository.
+/// The devtools server calls this trait when files change rather than running
+/// independent package discovery.
+pub trait RepositoryGraphBuilder: Send + Sync {
+    /// Build both graphs for the repository.
     ///
     /// This should use the same logic as `turbo run` to build the task graph,
     /// including proper resolution of `dependsOn`, topological dependencies,
     /// and task inheritance from turbo.json files.
-    fn build_task_graph(
+    fn build_graphs(
         &self,
-    ) -> Pin<Box<dyn Future<Output = Result<TaskGraphData, TaskGraphError>> + Send + '_>>;
+    ) -> Pin<Box<dyn Future<Output = Result<GraphData, TaskGraphError>> + Send + '_>>;
 }

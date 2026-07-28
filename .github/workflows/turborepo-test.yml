@@ -233,7 +233,6 @@ jobs:
 
           - name: Restore Cargo target
             id: cargo-target-restore
-            if: matrix.os.name == 'ubuntu'
             uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
             with:
               path: target
@@ -272,12 +271,12 @@ jobs:
       - name: Run tests
         timeout-minutes: 20
         env:
-          FORCE_ARG: ${{ matrix.os.name == 'ubuntu' && github.event_name == 'push' && steps.cargo-target-restore.outputs.cache-matched-key == '' && '--force' || '' }}
+          FORCE_ARG: ${{ github.event_name == 'push' && steps.cargo-target-restore.outputs.cache-matched-key == '' && '--force' || '' }}
         run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream $FORCE_ARG -- --partition hash:${{ matrix.shard }}/2
         shell: bash
 
       - name: Save Cargo target
-        if: matrix.os.name == 'ubuntu' && matrix.shard == 1 && github.event_name == 'push' && steps.cargo-target-restore.outputs.cache-hit != 'true'
+        if: matrix.shard == 1 && github.event_name == 'push' && steps.cargo-target-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: target

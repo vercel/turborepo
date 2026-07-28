@@ -78,10 +78,10 @@ pub enum Error {
         path: AbsoluteSystemPathBuf,
         repository_root: AbsoluteSystemPathBuf,
     },
-    #[error("missing compatibility projection for discovered scope {name}")]
-    MissingCompatibilityProjection { name: String },
-    #[error("compatibility projection {name} has no authoritative discovered scope")]
-    UnexpectedCompatibilityProjection { name: String },
+    #[error("missing compatibility payload for discovered scope {name}")]
+    MissingCompatibilityPayload { name: String },
+    #[error("compatibility payload {name} has no authoritative discovered scope")]
+    UnexpectedCompatibilityPayload { name: String },
     #[error("repository package knowledge was not constructed")]
     MissingRepositoryKnowledge,
     #[error(transparent)]
@@ -388,7 +388,7 @@ struct BuildState<'a, S, T> {
 }
 
 struct PackageGraphAssembler {
-    workspaces: HashMap<PackageName, PackageInfo>,
+    package_payloads: HashMap<PackageName, PackageInfo>,
     workspace_graph: Graph<PackageNode, DependencyKind>,
     root_node_index: NodeIndex,
     root_workspace_index: NodeIndex,
@@ -396,7 +396,7 @@ struct PackageGraphAssembler {
 }
 
 struct PackageGraphAssembly {
-    workspaces: HashMap<PackageName, PackageInfo>,
+    package_payloads: HashMap<PackageName, PackageInfo>,
     workspace_graph: Graph<PackageNode, DependencyKind>,
     root_node_index: NodeIndex,
     root_workspace_index: NodeIndex,
@@ -404,9 +404,11 @@ struct PackageGraphAssembly {
 }
 
 impl PackageGraphAssembler {
-    fn new(root_package_info: PackageInfo) -> Self {
-        let mut workspaces = HashMap::new();
-        workspaces.insert(PackageName::Root, root_package_info);
+    fn new(root_package_info: Option<PackageInfo>) -> Self {
+        let mut package_payloads = HashMap::new();
+        if let Some(root_package_info) = root_package_info {
+            package_payloads.insert(PackageName::Root, root_package_info);
+        }
 
         let mut workspace_graph = Graph::new();
         let root_node_index = workspace_graph.add_node(PackageNode::Root);
@@ -423,7 +425,7 @@ impl PackageGraphAssembler {
         node_lookup.insert(root_workspace, root_workspace_index);
 
         Self {
-            workspaces,
+            package_payloads,
             workspace_graph,
             root_node_index,
             root_workspace_index,
@@ -432,30 +434,17 @@ impl PackageGraphAssembler {
     }
 
     fn reserve(&mut self, additional: usize) {
-        self.workspaces.reserve(additional);
+        self.package_payloads.reserve(additional);
         self.node_lookup.reserve(additional);
     }
 
-    fn add_package(&mut self, name: PackageName, info: PackageInfo) -> Result<(), Error> {
-        match self.workspaces.entry(name) {
-            std::collections::hash_map::Entry::Vacant(vacant) => {
-                let name = vacant.key().clone();
-                vacant.insert(info);
-                let node = PackageNode::Workspace(name);
-                let idx = self.workspace_graph.add_node(node.clone());
-                self.node_lookup.insert(node, idx);
-                Ok(())
-            }
-            std::collections::hash_map::Entry::Occupied(occupied) => {
-                let existing_path = occupied.get().package_json_path.to_string();
-                let name = occupied.key().to_string();
-                Err(Error::DuplicateWorkspace {
-                    name,
-                    path: info.package_json_path.to_string(),
-                    existing_path,
-                })
-            }
+    fn add_scope(&mut self, name: PackageName, info: Option<PackageInfo>) {
+        if let Some(info) = info {
+            self.package_payloads.insert(name.clone(), info);
         }
+        let node = PackageNode::Workspace(name);
+        let idx = self.workspace_graph.add_node(node.clone());
+        self.node_lookup.insert(node, idx);
     }
 
     fn add_knowledge(
@@ -468,35 +457,35 @@ impl PackageGraphAssembler {
 
         for package in knowledge.packages() {
             let name = package.identity();
-            let mut info = compatibility.remove(name).ok_or_else(|| {
-                Error::MissingCompatibilityProjection {
-                    name: name.to_string(),
-                }
-            })?;
-            info.package_json_path = package.definition_path().to_owned();
-            info.toolchain = package.toolchain().clone();
-            self.add_package(PackageName::Other(name.to_string()), info)?;
+            self.add_scope(
+                PackageName::Other(name.to_string()),
+                Some(compatibility.remove(name).ok_or_else(|| {
+                    Error::MissingCompatibilityPayload {
+                        name: name.to_string(),
+                    }
+                })?),
+            );
         }
         for aggregate in knowledge.aggregate_scopes() {
             let name = aggregate.identity();
-            let mut info = compatibility.remove(name).ok_or_else(|| {
-                Error::MissingCompatibilityProjection {
-                    name: name.to_string(),
-                }
-            })?;
-            info.package_json_path = aggregate.definition_path().to_owned();
-            info.toolchain = aggregate.toolchain().clone();
-            self.add_package(PackageName::Other(name.to_string()), info)?;
+            self.add_scope(
+                PackageName::Other(name.to_string()),
+                Some(compatibility.remove(name).ok_or_else(|| {
+                    Error::MissingCompatibilityPayload {
+                        name: name.to_string(),
+                    }
+                })?),
+            );
         }
         if let Some(name) = compatibility.keys().next() {
-            return Err(Error::UnexpectedCompatibilityProjection { name: name.clone() });
+            return Err(Error::UnexpectedCompatibilityPayload { name: name.clone() });
         }
         Ok(())
     }
 
     fn finish(self) -> PackageGraphAssembly {
         PackageGraphAssembly {
-            workspaces: self.workspaces,
+            package_payloads: self.package_payloads,
             workspace_graph: self.workspace_graph,
             root_node_index: self.root_node_index,
             root_workspace_index: self.root_workspace_index,
@@ -542,14 +531,10 @@ where
         // registered nor queried for a package manager. The graph is built
         // entirely from the extra toolchains (Cargo).
         let no_javascript = root_package_json.is_none();
-        let root_package_info = PackageInfo {
-            // The root node always needs a descriptor; a pure Cargo workspace
-            // has none, so it gets an empty one. The graph's public
-            // `root_package_json()` still reports `None` (see below).
-            package_json: root_package_json.clone().unwrap_or_default(),
-            package_json_path: AnchoredSystemPathBuf::from_raw("package.json")?,
+        let root_package_info = root_package_json.clone().map(|package_json| PackageInfo {
+            package_json,
             ..Default::default()
-        };
+        });
         let assembler = PackageGraphAssembler::new(root_package_info);
 
         // The discovery strategy is shared (via the JavaScript toolchain)
@@ -607,8 +592,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             manifest_path,
             external_dependencies,
         } = package.into_parts();
-        let relative_json_path =
-            AnchoredSystemPathBuf::relative_path_between(self.repo_root, &manifest_path);
         // Toolchain-resolved external identities (e.g. Cargo's per-crate
         // lockfile closures), in the sorted representation the JS lockfile
         // phase produces. That phase later fills this for JavaScript
@@ -622,8 +605,6 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
         });
         let entry = PackageInfo {
             package_json: json,
-            package_json_path: relative_json_path,
-            toolchain: toolchain.clone(),
             transitive_dependencies,
             ..Default::default()
         };
@@ -788,7 +769,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             }
         };
         let PackageGraphAssembly {
-            workspaces,
+            package_payloads,
             workspace_graph,
             root_node_index,
             root_workspace_index,
@@ -817,7 +798,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             root_workspace_index,
             node_lookup,
             root_package_json,
-            packages: workspaces,
+            package_payloads,
             lockfile: lockfile.map(Arc::from),
             package_manager,
             knowledge,
@@ -855,15 +836,18 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
         let split_deps = {
             use rayon::prelude::*;
             self.assembler
-                .workspaces
+                .package_payloads
                 .par_iter()
                 .map(|(name, entry)| {
+                    let Some(definition_path) = scope_definition_path(knowledge, name) else {
+                        unreachable!("validated payload must have authoritative scope knowledge")
+                    };
                     (
                         name.clone(),
                         Dependencies::new(
                             self.repo_root,
-                            &entry.package_json_path,
-                            &self.assembler.workspaces,
+                            definition_path,
+                            &self.assembler.package_payloads,
                             link_workspace_packages,
                             entry.package_json.dependencies_with_kind(),
                             &path_index,
@@ -876,7 +860,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
         for (name, deps) in split_deps {
             let entry = self
                 .assembler
-                .workspaces
+                .package_payloads
                 .get_mut(&name)
                 .expect("workspace present in ");
             let Dependencies { internal, external } = deps;
@@ -921,15 +905,11 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
         match self.lockfile.take() {
             Some(lockfile) => Ok(lockfile),
             None => {
-                let lockfile = package_manager.read_lockfile(
-                    self.repo_root,
-                    self.assembler
-                        .workspaces
-                        .get(&PackageName::Root)
-                        .as_ref()
-                        .map(|e| &e.package_json)
-                        .expect("root workspace should have json"),
-                )?;
+                let root_package_json = self
+                    .root_package_json
+                    .as_ref()
+                    .expect("JavaScript package manager requires a root package.json");
+                let lockfile = package_manager.read_lockfile(self.repo_root, root_package_json)?;
                 Ok(lockfile)
             }
         }
@@ -1035,6 +1015,18 @@ fn scope_directory_and_toolchain<'a>(
     }
 }
 
+fn scope_definition_path<'a>(
+    knowledge: &'a RepositoryKnowledge,
+    name: &PackageName,
+) -> Option<&'a AnchoredSystemPath> {
+    match name {
+        PackageName::Root => knowledge
+            .root_javascript_scope()
+            .map(|scope| scope.definition_path()),
+        PackageName::Other(name) => knowledge.scope(name).map(|scope| scope.definition_path()),
+    }
+}
+
 impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
     fn all_external_dependencies(
         &self,
@@ -1044,7 +1036,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             .as_deref()
             .ok_or(Error::MissingRepositoryKnowledge)?;
         self.assembler
-            .workspaces
+            .package_payloads
             .iter()
             // Only JavaScript packages participate in the JS lockfile's
             // external-dependency closures. This map is keyed by directory,
@@ -1096,7 +1088,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             .knowledge
             .as_deref()
             .ok_or(Error::MissingRepositoryKnowledge)?;
-        for (name, entry) in &mut self.assembler.workspaces {
+        for (name, entry) in &mut self.assembler.package_payloads {
             // Mirror of the filter in all_external_dependencies: a non-JS
             // package sharing a directory with a JS package must not steal
             // its closure.
@@ -1196,7 +1188,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             Error::MissingRepositoryKnowledge,
         )))?;
         let PackageGraphAssembly {
-            workspaces,
+            package_payloads,
             workspace_graph,
             root_node_index,
             root_workspace_index,
@@ -1208,7 +1200,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
             root_workspace_index,
             node_lookup,
             root_package_json,
-            packages: workspaces,
+            package_payloads,
             package_manager,
             lockfile: arc_lockfile,
             knowledge,
@@ -1228,7 +1220,7 @@ struct Dependencies {
 impl Dependencies {
     pub fn new<'a, I: IntoIterator<Item = (&'a String, &'a String, DependencyKind)>>(
         repo_root: &AbsoluteSystemPath,
-        workspace_json_path: &AnchoredSystemPathBuf,
+        workspace_json_path: &AnchoredSystemPath,
         workspaces: &HashMap<PackageName, PackageInfo>,
         link_workspace_packages: bool,
         dependencies: I,
@@ -1544,26 +1536,16 @@ mod test {
             assert_eq!(app_view.toolchain(), Some(&ToolchainId::JAVASCRIPT));
             assert_eq!(graph.node_views().count(), 4);
 
-            for package in knowledge.packages() {
-                let graph_name = PackageName::from(package.identity());
-                assert_eq!(graph.package_dir(&graph_name), Some(package.directory()));
-                assert_eq!(
-                    graph
-                        .package_info(&graph_name)
-                        .expect("knowledge package is assembled into the graph")
-                        .package_json_path(),
-                    package.definition_path()
-                );
-            }
-
             let mut packages = graph
-                .packages()
-                .map(|(name, info)| {
+                .package_task_contexts()
+                .map(|context| {
+                    let definition = graph
+                        .package_definition_path(context.package())
+                        .map(|path| path.to_unix().to_string());
                     (
-                        name.as_str().to_string(),
-                        info.package_path().to_unix().to_string(),
-                        info.package_json_path().to_unix().to_string(),
-                        info.package_name(),
+                        context.package().as_str().to_string(),
+                        context.directory().to_unix().to_string(),
+                        definition,
                     )
                 })
                 .collect::<Vec<_>>();
@@ -1575,20 +1557,17 @@ mod test {
                     (
                         "//".to_string(),
                         "".to_string(),
-                        "package.json".to_string(),
-                        root_name.map(str::to_string),
+                        Some("package.json".to_string()),
                     ),
                     (
                         "@scope/nested".to_string(),
                         "packages/group/nested".to_string(),
-                        "packages/group/nested/package.json".to_string(),
-                        Some("@scope/nested".to_string()),
+                        Some("packages/group/nested/package.json".to_string()),
                     ),
                     (
                         "app".to_string(),
                         "apps/app".to_string(),
-                        "apps/app/package.json".to_string(),
-                        Some("app".to_string()),
+                        Some("apps/app/package.json".to_string()),
                     ),
                 ]
             );
@@ -1623,9 +1602,9 @@ mod test {
         );
         assert_eq!(retained_generation.packages().count(), 0);
 
-        let packages = graph.packages().collect::<Vec<_>>();
-        assert_eq!(packages.len(), 1);
-        assert_eq!(packages[0].0, &PackageName::Root);
+        let contexts = graph.package_task_contexts().collect::<Vec<_>>();
+        assert_eq!(contexts.len(), 1);
+        assert_eq!(contexts[0].package(), &PackageName::Root);
         assert_eq!(
             graph
                 .package_dir(&PackageName::Root)
@@ -1635,12 +1614,8 @@ mod test {
             ""
         );
         assert_eq!(
-            packages[0].1.package_json_path().to_unix().to_string(),
-            "package.json"
-        );
-        assert_eq!(
-            packages[0].1.package_name().as_deref(),
-            Some("user-facing-root-name")
+            graph.package_definition_path(&PackageName::Root),
+            Some(AnchoredSystemPath::new("package.json").unwrap())
         );
     }
 

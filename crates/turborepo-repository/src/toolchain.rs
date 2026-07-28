@@ -1252,11 +1252,6 @@ mod tests {
                 "scripts": { "build": "next build", "empty": "" }
             }))
             .unwrap(),
-            // Identity/path/toolchain are deliberately stale compatibility
-            // fields. Command framing must come from `context`.
-            package_json_path: turbopath::AnchoredSystemPathBuf::from_raw("stale/package.json")
-                .unwrap(),
-            toolchain: ToolchainId::RUST,
             ..Default::default()
         };
         let package_directory = turbopath::AnchoredSystemPath::new("apps/web").unwrap();
