@@ -1586,6 +1586,94 @@ fn test_prune_docker_layout_for_cargo() {
     );
 }
 
+#[test]
+fn test_prune_pure_cargo_workspace_layouts() {
+    for docker in [false, true] {
+        let tempdir = cargo_tempdir();
+        setup_cargo_pure_workspace(tempdir.path());
+        let mut args = vec!["prune", "app"];
+        if docker {
+            args.push("--docker");
+        }
+
+        let output = run_turbo(tempdir.path(), &args);
+        assert_command_success(&output, "pure Cargo prune");
+
+        let out = tempdir.path().join("out");
+        let (full, manifests) = if docker {
+            (out.join("full"), out.join("json"))
+        } else {
+            (out.clone(), out.clone())
+        };
+        for path in [
+            "Cargo.toml",
+            "Cargo.lock",
+            "crates/app/Cargo.toml",
+            "crates/lib-a/Cargo.toml",
+        ] {
+            assert!(manifests.join(path).exists(), "missing {path}: {out:?}");
+        }
+        assert!(full.join("crates/app/src/main.rs").exists());
+        assert!(full.join("crates/lib-a/src/lib.rs").exists());
+        assert!(!out.join("package.json").exists());
+        assert!(!full.join("package.json").exists());
+        assert!(!manifests.join("package.json").exists());
+        for lockfile in [
+            "package-lock.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            "bun.lock",
+        ] {
+            assert!(!out.join(lockfile).exists(), "unexpected JS lockfile");
+            assert!(!full.join(lockfile).exists(), "unexpected JS lockfile");
+            assert!(!manifests.join(lockfile).exists(), "unexpected JS lockfile");
+        }
+    }
+}
+
+#[test]
+fn test_prune_pure_cargo_rejects_malformed_package_json() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_pure_workspace(tempdir.path());
+    fs::write(tempdir.path().join("package.json"), "{").unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "app"]);
+    assert!(
+        !output.status.success(),
+        "malformed package.json must not be treated as absent"
+    );
+}
+
+#[test]
+fn test_prune_missing_package_json_requires_cargo_feature() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_pure_workspace(tempdir.path());
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{ "tasks": { "build": {} } }"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "app"]);
+    assert!(
+        !output.status.success(),
+        "missing package.json must fail without Cargo support"
+    );
+}
+
+#[test]
+fn test_prune_missing_package_json_requires_root_cargo_manifest() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_pure_workspace(tempdir.path());
+    fs::remove_file(tempdir.path().join("Cargo.toml")).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "app"]);
+    assert!(
+        !output.status.success(),
+        "missing package.json must fail without a root Cargo.toml"
+    );
+}
+
 /// A JS-only target in a mixed repo prunes exactly as before: no crates, no
 /// Cargo workspace files.
 #[test]
