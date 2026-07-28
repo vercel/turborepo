@@ -1634,32 +1634,43 @@ mod test {
         let cargo_graph = cargo_graph(&cargo_root).await;
         let cargo_cache =
             compute_external_deps_hashes(cargo_graph.package_task_contexts()).unwrap();
-        let expected_cargo_cache = cargo_graph
-            .package_task_contexts()
-            .map(|context| {
-                let hash = context
-                    .package_info()
-                    .map(|info| get_external_deps_hash(&info.transitive_dependencies))
-                    .unwrap_or_default();
-                (context.package().as_str().to_owned(), hash)
-            })
-            .collect();
-        assert_eq!(cargo_cache, expected_cargo_cache);
+        let (external_hash, app_task_hash, workspace_task_hash) = match std::env::consts::OS {
+            "macos" => ("2ccf3983a6195c83", "16148055db78eed5", "3adbee17ca01f306"),
+            "linux" => ("9fae73876995db4d", "bed5df30b6563a22", "a5d3d2445a0e2df2"),
+            "windows" => ("538ddb6706883af6", "9d061b914e2d64aa", "af00aca4864ca739"),
+            os => panic!("add exact Cargo compatibility hashes for {os}"),
+        };
+        assert_eq!(
+            cargo_cache,
+            HashMap::from([
+                ("//".to_string(), String::new()),
+                ("cargo-app".to_string(), external_hash.to_string()),
+                ("cargo-workspace".to_string(), external_hash.to_string()),
+            ])
+        );
 
         for (graph, package, expected) in [
             (&js_graph, PackageName::Root, "f952e84c0fa1b4b7"),
             (&js_graph, PackageName::from("app"), "ba33476f1a197a76"),
             (&cargo_graph, PackageName::Root, "f952e84c0fa1b4b7"),
         ] {
-            let fallback = monorepo_context_hash(graph, package.clone(), false);
-            assert_eq!(fallback, expected);
-            assert_eq!(monorepo_context_hash(graph, package, true), fallback);
+            assert_eq!(
+                monorepo_context_hash(graph, package.clone(), false),
+                expected
+            );
+            assert_eq!(monorepo_context_hash(graph, package, true), expected);
         }
 
-        for package in ["cargo-app", "cargo-workspace"] {
+        for (package, expected) in [
+            ("cargo-app", app_task_hash),
+            ("cargo-workspace", workspace_task_hash),
+        ] {
             let package = PackageName::from(package);
-            let fallback = monorepo_context_hash(&cargo_graph, package.clone(), false);
-            assert_eq!(monorepo_context_hash(&cargo_graph, package, true), fallback);
+            assert_eq!(
+                monorepo_context_hash(&cargo_graph, package.clone(), false),
+                expected
+            );
+            assert_eq!(monorepo_context_hash(&cargo_graph, package, true), expected);
         }
     }
 
