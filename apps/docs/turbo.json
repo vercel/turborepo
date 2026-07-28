@@ -23,11 +23,21 @@
       "dependsOn": ["@turbo/types#build"],
       "inputs": ["scripts/copy-json-schema.ts"],
       "outputs": ["public/schema*.json"],
-      "env": []
+      "env": [],
+      "command": [
+        "node",
+        "--experimental-strip-types",
+        "scripts/copy-json-schema.ts"
+      ]
     },
 
     "collect-examples-data": {
-      "cache": false
+      "cache": false,
+      "command": [
+        "node",
+        "--experimental-strip-types",
+        "scripts/collect-examples-data.ts"
+      ]
     },
     "check-links": {
       "inputs": [
@@ -37,7 +47,41 @@
       "cache": false
     },
     "check-types": {
-      "dependsOn": ["collect-examples-data"]
+      "dependsOn": ["collect-examples-data", "check-types:mdx"],
+      "command": ["pnpm", "exec", "tsc", "--noEmit"]
+    },
+    "check-types:next": {
+      "cache": false,
+      "command": ["pnpm", "exec", "next", "typegen"]
+    },
+    "check-types:mdx": {
+      "cache": false,
+      "dependsOn": ["check-types:next"],
+      "command": ["pnpm", "exec", "fumadocs-mdx"]
+    },
+    "lint": {
+      "command": ["pnpm", "exec", "fumadocs-mdx"]
+    },
+    "check-openapi": {
+      "command": [
+        "node",
+        "--experimental-strip-types",
+        "scripts/generate-openapi-docs.ts",
+        "--check"
+      ]
+    },
+    "generate:openapi": {
+      "cache": false,
+      "command": [
+        "node",
+        "--experimental-strip-types",
+        "scripts/generate-openapi-docs.ts"
+      ]
+    },
+    "translate": {
+      "cache": false,
+      "interactive": true,
+      "command": ["npx", "@vercel/geistdocs", "translate"]
     }
   }
 }

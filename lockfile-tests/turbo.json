@@ -6,7 +6,8 @@
       // crate's build task guarantees it exists and re-runs this check
       // whenever the binary's transitive Rust sources change.
       "dependsOn": ["turbo#build"],
-      "passThroughEnv": ["VERCEL_TOKEN"]
+      "passThroughEnv": ["VERCEL_TOKEN"],
+      "command": ["pnpm", "exec", "tsx", "check-lockfiles.ts"]
     }
   }
 }

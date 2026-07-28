@@ -3,6 +3,9 @@
   "tasks": {
     "build": {
       "outputs": [".eve/**", ".vercel/**"]
+    },
+    "check-types": {
+      "command": ["pnpm", "exec", "tsgo"]
     }
   }
 }

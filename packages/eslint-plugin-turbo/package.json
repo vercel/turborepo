@@ -24,12 +24,6 @@
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "scripts": {
-    "test": "jest",
-    "build": "tsdown && tsc -p tsconfig.build.json",
-    "check-types": "tsc --noEmit",
-    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
-  },
   "dependencies": {
     "dotenv": "16.0.3"
   },

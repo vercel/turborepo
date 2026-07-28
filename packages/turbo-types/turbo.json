@@ -6,24 +6,83 @@
     "topo": {},
     "build": {
       "outputs": ["schemas/**"],
-      "dependsOn": ["^topo"]
+      "dependsOn": ["^topo"],
+      "command": ["pnpm", "exec", "tsc"]
+    },
+    "lint:prettier": {
+      "command": ["pnpm", "exec", "prettier", "-c", ".", "--cache"]
     },
     "copy-schema": {
       "dependsOn": ["build"],
-      "outputs": ["$TURBO_ROOT$/packages/turbo/schema.json"]
+      "outputs": ["$TURBO_ROOT$/packages/turbo/schema.json"],
+      "command": ["cp", "schemas/schema.json", "../turbo/schema.json"]
     },
     // Both schema tasks shell out to the turborepo-schema-gen crate;
     // depending on its build task guarantees the binary exists and re-runs
     // them whenever the generator's Rust sources change.
     "generate-schema": {
-      "dependsOn": ["turborepo-schema-gen#build"],
+      "dependsOn": ["generate-schema:json", "generate-schema:typescript"],
       // Writes generated files into the source tree, so it is not a
       // cacheable artifact producer.
-      "cache": false
+      "cache": false,
+      "command": [
+        "pnpm",
+        "exec",
+        "oxfmt",
+        "schemas/schema.json",
+        "src/types/config-v2.ts"
+      ]
+    },
+    "generate-schema:json": {
+      "dependsOn": ["turborepo-schema-gen#build"],
+      "cache": false,
+      "command": [
+        "cargo",
+        "run",
+        "-p",
+        "turborepo-schema-gen",
+        "--",
+        "schema",
+        "-o",
+        "schemas/schema.json"
+      ]
+    },
+    "generate-schema:typescript": {
+      "dependsOn": ["turborepo-schema-gen#build"],
+      "cache": false,
+      "command": [
+        "cargo",
+        "run",
+        "-p",
+        "turborepo-schema-gen",
+        "--",
+        "typescript",
+        "-o",
+        "src/types/config-v2.ts"
+      ]
     },
     "verify-schema": {
       "dependsOn": ["turborepo-schema-gen#build"],
-      "cache": false
+      "cache": false,
+      "command": [
+        "cargo",
+        "run",
+        "-p",
+        "turborepo-schema-gen",
+        "--",
+        "verify",
+        "--schema",
+        "schemas/schema.json",
+        "--typescript",
+        "src/types/config-v2.ts"
+      ]
+    },
+    "package:types": {
+      "command": ["pnpm", "exec", "attw", "--profile", "node16", "--pack"]
+    },
+    "generate-schema:legacy": {
+      "cache": false,
+      "command": ["pnpm", "exec", "tsx", "scripts/generate-schema.ts"]
     }
   }
 }

@@ -20,12 +20,6 @@
   "publishConfig": {
     "access": "public"
   },
-  "scripts": {
-    "build": "tsdown && tsc -p tsconfig.build.json",
-    "build:embed": "node scripts/embed-templates.mjs",
-    "test": "jest",
-    "check-types": "tsc --noEmit"
-  },
   "dependencies": {
     "@inquirer/prompts": "^7.10.1",
     "esbuild": "^0.28.1"

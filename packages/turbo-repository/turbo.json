@@ -10,10 +10,17 @@
       // longer participates in the hash.
       "dependsOn": ["turborepo-napi#build"],
       "env": ["NODE_VERSION", "RUSTFLAGS"],
-      "outputs": ["js/dist/**/*", "native/**/*"]
+      "outputs": ["js/dist/**/*", "native/**/*"],
+      "command": ["bash", "scripts/build.sh", "--dts", "../js/index.d.ts"]
     },
     "test": {
-      "dependsOn": ["build"]
+      "dependsOn": ["build"],
+      "command": ["node", "--import", "tsx", "--test", "__tests__/*.test.ts"]
+    },
+    "package": {
+      "cache": false,
+      "dependsOn": ["build"],
+      "command": ["node", "scripts/publish.mjs"]
     }
   }
 }

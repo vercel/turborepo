@@ -3,17 +3,9 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "dependsOn": ["build:bundle"],
-      "command": ["pnpm", "exec", "tsc", "-p", "tsconfig.build.json"]
-    },
-    "build:bundle": {
-      "cache": false,
-      "dependsOn": ["^build"],
       "command": ["pnpm", "exec", "tsdown"]
     },
     "test": {
-      "dependsOn": ["build"],
-      "passThroughEnv": ["!CI"],
       "command": ["pnpm", "exec", "jest"]
     },
     "check-types": {
