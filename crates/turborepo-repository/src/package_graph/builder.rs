@@ -956,6 +956,8 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             .map(|identity| (identity, native_relationships.remove(identity)))
             .collect();
         debug_assert!(native_relationships.is_empty());
+        // Release the map's retained capacity before parallel classification allocates
+        // results.
         drop(native_relationships);
         // Classification is read-only and remains parallel across packages.
         // RelationshipKnowledge sorts the indexed results before retaining
